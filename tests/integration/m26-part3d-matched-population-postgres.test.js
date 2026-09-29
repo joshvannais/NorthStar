@@ -57,6 +57,24 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         missingFixed.release();
       }
 
+      const missingFixedPolicy = await f.ownerPool.connect();
+      try {
+        await missingFixedPolicy.query('BEGIN');
+        await missingFixedPolicy.query(`ALTER FUNCTION
+          public.canonical_forecast_price_flow_fixed_research_review(
+            uuid,uuid,text,uuid,uuid)
+          RENAME TO canonical_forecast_price_flow_fixed_review_missing_for_test`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          missingFixedPolicy, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow('Runtime database role privilege verification failed');
+        await missingFixedPolicy.query('ROLLBACK');
+      } catch (error) {
+        await missingFixedPolicy.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        missingFixedPolicy.release();
+      }
+
       const missingSelectedOrigin = await f.ownerPool.connect();
       try {
         await missingSelectedOrigin.query('BEGIN');
@@ -223,6 +241,104 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
             owner.authSessionId]);
         expect(nullLag.rows[0].value).toMatchObject({
           state: 'research_review_unavailable',
+          reason: 'source_observation_lag_unverified' });
+
+        const fixedArgs = [f.org, owner.actorUserId, owner.actorAccessRole,
+          owner.authSessionId, key()];
+        await client.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_matched_population_at_anchor(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            anchor_run_value uuid)
+          RETURNS jsonb LANGUAGE sql VOLATILE AS $$
+            SELECT jsonb_build_object(
+              'state','matched_population_observed',
+              'anchorRunId',anchor_run_value,
+              'items','[]'::jsonb,
+              'sourceEventDiversityVerified',TRUE,
+              'distinctSourceEventDays',60)
+          $$`);
+        const fixedMissing = await client.query(
+          'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+          fixedArgs);
+        expect(fixedMissing.rows[0].value).toMatchObject({
+          state: 'fixed_research_review_unavailable',
+          reason: 'matched_population_incomplete',
+          productionPromotionEligible: false });
+        await client.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_matched_population_at_anchor(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            anchor_run_value uuid)
+          RETURNS jsonb LANGUAGE sql VOLATILE AS $$
+            SELECT jsonb_build_object(
+              'state','matched_population_observed',
+              'anchorRunId',anchor_run_value,
+              'completeRegisteredPopulation',to_jsonb('true'::text),
+              'sourceEventDiversityVerified',to_jsonb('true'::text),
+              'distinctSourceEventDays',to_jsonb('60'::text),
+              'items',(SELECT jsonb_agg('{}'::jsonb)
+                FROM generate_series(1,60)))
+          $$`);
+        const fixedMistyped = await client.query(
+          'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+          fixedArgs);
+        expect(fixedMistyped.rows[0].value).toMatchObject({
+          state: 'fixed_research_review_unavailable',
+          reason: 'matched_population_incomplete' });
+        await client.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_matched_population_at_anchor(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            anchor_run_value uuid)
+          RETURNS jsonb LANGUAGE sql VOLATILE AS $$
+            SELECT jsonb_build_object(
+              'state','matched_population_observed',
+              'anchorRunId',anchor_run_value,
+              'completeRegisteredPopulation',TRUE,
+              'sourceEventDiversityVerified',TRUE,
+              'distinctSourceEventDays',60,
+              'items',(SELECT jsonb_agg(jsonb_build_object(
+                'state','matched_algorithms_observed',
+                'actualPairStatus','paired',
+                'horizonEnd','2026-01-01T00:00:00.000000Z',
+                'baseActual',jsonb_build_object(
+                  'state','pair_actual_known'),
+                'candidateActual',jsonb_build_object(
+                  'state','pair_actual_known')))
+                FROM generate_series(1,60)))
+          $$`);
+        const fixedNullLag = await client.query(
+          'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+          fixedArgs);
+        expect(fixedNullLag.rows[0].value).toMatchObject({
+          state: 'fixed_research_review_unavailable',
+          reason: 'source_observation_lag_unverified' });
+        await client.query(`CREATE OR REPLACE FUNCTION
+          public.canonical_forecast_price_flow_matched_population_at_anchor(
+            org uuid,actor uuid,role_value text,session_value uuid,
+            anchor_run_value uuid)
+          RETURNS jsonb LANGUAGE sql VOLATILE AS $$
+            SELECT jsonb_build_object(
+              'state','matched_population_observed',
+              'anchorRunId',anchor_run_value,
+              'completeRegisteredPopulation',TRUE,
+              'sourceEventDiversityVerified',TRUE,
+              'distinctSourceEventDays',60,
+              'items',(SELECT jsonb_agg(jsonb_build_object(
+                'state','matched_algorithms_observed',
+                'actualPairStatus','paired',
+                'horizonEnd','not-a-timestamp',
+                'baseActual',jsonb_build_object(
+                  'state','pair_actual_known',
+                  'observedThrough','2026-01-01T00:00:00.000Z'),
+                'candidateActual',jsonb_build_object(
+                  'state','pair_actual_known',
+                  'observedThrough','2026-01-01T00:00:00.000Z')))
+                FROM generate_series(1,60)))
+          $$`);
+        const fixedMalformedLag = await client.query(
+          'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+          fixedArgs);
+        expect(fixedMalformedLag.rows[0].value).toMatchObject({
+          state: 'fixed_research_review_unavailable',
           reason: 'source_observation_lag_unverified' });
         await client.query('ROLLBACK');
       } catch (error) {
@@ -655,6 +771,17 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
       expect(fixedReview.rows[0].value).toMatchObject({
         state: 'matched_population_observed', anchorRunId: runIds[59],
         completeRegisteredPopulation: true });
+      const fixedPolicy = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+        [...args, runIds[59]]);
+      expect(fixedPolicy.rows[0].value).toMatchObject({
+        state: 'fixed_research_review_ready',
+        anchorRunId: runIds[59],
+        comparisonDigest: (await f.ownerPool.query(
+          'SELECT public.canonical_completion_digest($1::jsonb) digest',
+          [fixedReview.rows[0].value])).rows[0].digest,
+        researchOnly: true, productionPromotionEligible: false,
+        forecastServingEnabled: false });
       for (const table of [
         'canonical_forecast_price_ordered_receipts',
         'canonical_forecast_price_decision_orders',
@@ -690,6 +817,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         expect(staleCommitWitness.rows[0].value).toMatchObject({
           sourceEventDiversityVerified: false,
           distinctSourceEventDays: 59 });
+        const staleFixedPolicy = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+          [...args, runIds[59]]);
+        expect(staleFixedPolicy.rows[0].value).toMatchObject({
+          state: 'fixed_research_review_unavailable',
+          reason: 'matched_population_incomplete',
+          productionPromotionEligible: false });
         await f.ownerPool.query(`UPDATE
           canonical_forecast_price_decision_commit_observations
           SET observed_at=$3 WHERE organization_id=$1 AND decision_id=$2`,
@@ -704,6 +838,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         expect(missingCommitWitness.rows[0].value).toMatchObject({
           sourceEventDiversityVerified: false,
           distinctSourceEventDays: 59 });
+        const missingFixedPolicy = await f.runtimePool.query(
+          'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+          [...args, runIds[59]]);
+        expect(missingFixedPolicy.rows[0].value).toMatchObject({
+          state: 'fixed_research_review_unavailable',
+          reason: 'matched_population_incomplete',
+          productionPromotionEligible: false });
       } finally {
         await f.ownerPool.query(`INSERT INTO
           canonical_forecast_price_decision_commit_observations(
@@ -724,6 +865,11 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         [...args, runIds[59]]);
       expect(restoredFixedReview.rows[0].value.completeRegisteredPopulation)
         .toBe(true);
+      const restoredFixedPolicy = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+        [...args, runIds[59]]);
+      expect(restoredFixedPolicy.rows[0].value.state)
+        .toBe('fixed_research_review_ready');
       const forgedDirect = await f.runtimePool.query(
         'SELECT public.canonical_forecast_price_flow_research_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
         [...args, owner.csrfToken, key(), 0, 'select_candidate',
@@ -1111,6 +1257,13 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         [...args, runIds[59]]);
       expect(changedFixedReview.rows[0].value.completeRegisteredPopulation)
         .toBe(false);
+      const changedFixedPolicy = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_fixed_research_review($1,$2,$3,$4,$5) value',
+        [...args, runIds[59]]);
+      expect(changedFixedPolicy.rows[0].value).toMatchObject({
+        state: 'fixed_research_review_unavailable',
+        reason: 'matched_population_incomplete',
+        productionPromotionEligible: false });
       const changedOrigin = await request(f.app).post(selectedOriginRoute)
         .set(owner.session.headers).set('Idempotency-Key', key())
         .send(selectedOriginBody);

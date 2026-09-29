@@ -1586,6 +1586,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_matched_population_at_anchor(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_matched_population_at_anchor(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_research_review(uuid,uuid,text,uuid)') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_selections FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_research_key FROM %I', runtime_role);
@@ -2742,6 +2745,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND COALESCE(has_function_privilege($1,
             to_regprocedure('public.canonical_forecast_price_flow_matched_population_at_anchor(uuid,uuid,text,uuid,uuid)'),
             'EXECUTE'),FALSE)
+          AND COALESCE(has_function_privilege($1,
+            to_regprocedure('public.canonical_forecast_price_flow_fixed_research_review(uuid,uuid,text,uuid,uuid)'),
+            'EXECUTE'),FALSE)
           AND (to_regclass('public.canonical_forecast_price_flow_research_selections') IS NULL OR (
             NOT has_table_privilege($1,'public.canonical_forecast_price_flow_research_selections','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_research_key','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -3320,6 +3326,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('187_canonical_forecast_price_flow_research
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('188_canonical_forecast_price_flow_research_selected_origin.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('189_canonical_forecast_price_flow_research_selection_activation.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('190_canonical_forecast_price_flow_fixed_review_population.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('191_canonical_forecast_price_flow_fixed_research_review.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

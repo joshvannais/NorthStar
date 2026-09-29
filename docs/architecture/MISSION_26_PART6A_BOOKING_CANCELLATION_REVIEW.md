@@ -2,7 +2,7 @@
 
 Status: local, isolated and unreleased. Full Part 6A remains open.
 
-Migration 161 lets a paid owner or admin with current write/CSRF authority
+Migration 162 lets a paid owner or admin with current write/CSRF authority
 explicitly cancel an earlier human
 commercial booking review for the same tenant. The append-only row records
 the prior review, reviewer, reason and immutable estimate, acceptance, price

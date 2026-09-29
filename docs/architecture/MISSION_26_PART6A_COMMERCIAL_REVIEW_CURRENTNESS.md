@@ -2,7 +2,7 @@
 
 Status: isolated and unreleased. Full Part 6A remains open.
 
-Migration 160 adds a paid owner/admin, tenant-private read of the immutable
+Migration 161 adds a paid owner/admin, tenant-private read of the immutable
 first-booking review recorded by migration 159. It holds the tenant commercial
 source lock while comparing the review with the accepted issued version, any
 later same-opportunity customer acceptance or revocation, and the latest
@@ -21,9 +21,9 @@ projection remains future scale work.
 The positive state means only that these **recorded** inputs still agree at
 read time. It returns no booked-work amount and leaves first actual booking,
 historical coverage, booked-work verification and forecasting false.
-Migration 161 adds an explicit cancellation review write and this reader
+Migration 162 adds an explicit cancellation review write and this reader
 returns `booking_cancelled` for that row. It does not cancel Mission 22
-scheduling. Migration 162 adds a correction review write; a newer review
+scheduling. Migration 163 adds a correction review write; a newer review
 supersedes the old one. Complete changed-source correction proof, the full
 paid/demo frontend journey, complete source periods, off-platform activity,
 release and live validation remain

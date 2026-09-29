@@ -11,7 +11,7 @@ unverified.
 The source must be an explicit owner/admin review with current write/CSRF
 authority, scoped to one tenant,
 appointment, accepted issued estimate version and scheduling approval. A review
-records the reviewer, reason, and immutable source references. Migration 159
+records the reviewer, reason, and immutable source references. Migration 160
 implements only the first human booking review. It requires one earlier
 accepted version with no competing later same-opportunity acceptance, the
 latest approved price, latest observed human scheduling approval and a
@@ -28,10 +28,10 @@ approved price, and appointment status under the existing source locks. It
 rejects ambiguous accepted links, a revoked link, a changed price decision,
 an unrelated or stale scheduling approval, and a second first review. A later
 Mission 24 decision, customer revocation, or Mission 22 scheduling change
-may make the stored review stale. Migration 160 adds a guarded currentness
-reader, but this candidate never returns booked-work value. Migration 161
+may make the stored review stale. Migration 161 adds a guarded currentness
+reader, but this candidate never returns booked-work value. Migration 162
 adds a separate explicit human cancellation of an earlier review; it does
-not cancel the Mission 22 appointment. Migration 162 adds a separate
+not cancel the Mission 22 appointment. Migration 163 adds a separate
 append-only human correction. Off-platform bookings and cancellations are
 not established by these migrations.
 

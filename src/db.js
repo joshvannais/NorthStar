@@ -3295,7 +3295,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('184_canonical_forecast_price_flow_determin
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('185_canonical_forecast_price_flow_matched_algorithms.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('186_canonical_forecast_price_flow_matched_population.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('187_canonical_forecast_price_flow_research_selection.sql');
-REVIEWED_MIGRATION_TIMEOUT_FILES.add('203_canonical_forecast_price_flow_research_selected_origin.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('188_canonical_forecast_price_flow_research_selected_origin.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

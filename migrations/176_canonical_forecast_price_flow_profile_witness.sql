@@ -135,7 +135,7 @@ DECLARE saved public.canonical_forecast_price_flow_saved_origins%ROWTYPE;
  profile_proof public.canonical_forecast_price_flow_profile_witnesses%ROWTYPE;
  profile_anchor public.canonical_forecast_profile_effective_anchors%ROWTYPE;
  profile_activation public.canonical_forecast_profile_effective_activations%ROWTYPE;
- latest_recorded TIMESTAMPTZ; source_asof TEXT;
+ latest_recorded TIMESTAMPTZ; source_asof TEXT; origin_asof TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
   RAISE EXCEPTION 'Read committed required for price-flow pair source'
@@ -161,6 +161,8 @@ BEGIN
   WHERE organization_id=org AND anchor_id=profile_proof.profile_anchor_id;
  source_asof:=to_char(date_trunc('milliseconds',source_row.captured_at)
   AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+ origin_asof:=to_char(date_trunc('milliseconds',saved.saved_at)
+  AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
  IF source_row.id IS NULL OR origin_proof.run_id IS NULL OR
   profile_proof.run_id IS NULL OR
   profile_anchor.id IS NULL OR profile_activation.anchor_id IS NULL OR
@@ -172,7 +174,7 @@ BEGIN
   profile_proof.observed_at>=saved.horizon_start OR
   origin_proof.proof->>'savedReceiptDigest' IS DISTINCT FROM saved.receipt_digest OR
   saved.output->>'sourceSnapshotDigest' IS DISTINCT FROM rtrim(source_row.snapshot_digest) OR
-  saved.output->>'asOf' IS DISTINCT FROM source_asof OR
+  saved.output->>'asOf' IS DISTINCT FROM origin_asof OR
   saved.output->'horizon'->>'startsAt' IS DISTINCT FROM
    to_char(saved.horizon_start AT TIME ZONE 'UTC',
     'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') OR

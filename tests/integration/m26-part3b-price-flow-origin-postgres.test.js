@@ -389,6 +389,11 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(pairSource.rows[0].value).toMatchObject({
         state: 'pair_source_verified', runId, profileAnchorId,
         profileProofDigest: profileWitness.body.data.proofDigest });
+      expect(pairSource.rows[0].value.output.asOf)
+        .toBe(pairSource.rows[0].value.savedAt);
+      expect(new Date(pairSource.rows[0].value.sourceSnapshotAsOf).getTime())
+        .toBeLessThanOrEqual(new Date(
+          pairSource.rows[0].value.output.asOf).getTime());
       expect(sha256(pairSource.rows[0].value.output))
         .toBe(origin.body.data.outputDigest);
       const deniedWitness = await request(f.app)

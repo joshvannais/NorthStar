@@ -251,7 +251,7 @@ DECLARE prior public.canonical_forecast_price_flow_research_selections%ROWTYPE;
  review_value JSONB; key_hash TEXT; request_hash TEXT;
  selected_version TEXT; prior_version TEXT;
  saved public.canonical_forecast_price_flow_research_selections%ROWTYPE;
- expected_challenge JSONB;
+ secret BYTEA; expected_token TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
     role_value NOT IN ('owner','admin') OR
@@ -330,12 +330,24 @@ BEGIN
   RETURN jsonb_build_object('state','research_selection_unavailable',
    'reason','review_source_changed','forecastServingEnabled',FALSE);
  END IF;
- expected_challenge:=public.canonical_forecast_price_flow_research_challenge(
-  org,actor,role_value,session_value,csrf,expected_revision,action_value,
-  candidate_version,reverses_value,reason_value);
- IF expected_challenge->>'state' IS DISTINCT FROM
-      'research_challenge_ready' OR
-    expected_challenge->>'reviewToken' IS DISTINCT FROM review_token_value THEN
+ -- Validate the challenge against the guarded review already completed in
+ -- this transaction. Calling the challenge endpoint function here would run
+ -- the bounded population review again under the same statement timeout.
+ SELECT key_bytes INTO secret
+  FROM public.canonical_forecast_price_flow_research_key WHERE singleton=TRUE;
+ IF secret IS NULL THEN
+  RAISE EXCEPTION 'Research challenge key unavailable'
+   USING ERRCODE='23514';
+ END IF;
+ expected_token:=public.canonical_forecast_price_flow_research_mac(
+  jsonb_build_object(
+  'version','m26-selected-m24-research-challenge-v1',
+  'organizationId',org,'actorUserId',actor,'sessionId',session_value,
+  'expectedRevision',expected_revision,'action',action_value,
+  'candidateVersion',candidate_version,'reversesEventId',reverses_value,
+  'reason',reason_value,
+  'comparisonDigest',review_value->>'comparisonDigest')::text,secret);
+ IF expected_token IS DISTINCT FROM review_token_value THEN
   RETURN jsonb_build_object('state','research_selection_unavailable',
    'reason','review_challenge_invalid','forecastServingEnabled',FALSE);
  END IF;

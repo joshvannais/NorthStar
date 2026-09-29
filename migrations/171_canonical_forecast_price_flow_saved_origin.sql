@@ -42,6 +42,22 @@ CREATE TRIGGER canonical_forecast_price_flow_origins_immutable
 -- Serialize profile activation with origin capture. Without this shared lock,
 -- an activation could obtain an earlier row clock, commit after the origin,
 -- and later appear to have been available when the forecast was saved.
+-- ACCESS EXCLUSIVE drains every legacy activation-table reader/writer before
+-- installing the trigger, while the trigger covers calls that entered the old
+-- function body but resume their INSERT after this migration commits.
+LOCK TABLE public.canonical_forecast_profile_effective_activations
+ IN ACCESS EXCLUSIVE MODE;
+CREATE FUNCTION public.canonical_forecast_profile_activation_order_lock()
+RETURNS TRIGGER LANGUAGE plpgsql
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  'm26:profile-effective-source:'||NEW.organization_id::text,0));
+ RETURN NEW;
+END $$;
+CREATE TRIGGER canonical_forecast_profile_activation_order_lock
+ BEFORE INSERT ON public.canonical_forecast_profile_effective_activations
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_forecast_profile_activation_order_lock();
 CREATE OR REPLACE FUNCTION public.canonical_forecast_profile_effective_anchor_activate(
  org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,anchor_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -241,11 +257,15 @@ END $$;
 REVOKE ALL ON TABLE public.canonical_forecast_price_flow_saved_origins FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_origin_immutable()
  FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_profile_activation_order_lock()
+ FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_capture_price_flow_origin(
  UUID,UUID,TEXT,UUID,TEXT,TEXT,UUID,TEXT,TIMESTAMPTZ,TIMESTAMPTZ)
  FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
  REVOKE ALL ON TABLE public.canonical_forecast_price_flow_saved_origins
+  FROM northstar_app_runtime;
+ REVOKE ALL ON FUNCTION public.canonical_forecast_profile_activation_order_lock()
   FROM northstar_app_runtime;
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_origin(
   UUID,UUID,TEXT,UUID,TEXT,TEXT,UUID,TEXT,TIMESTAMPTZ,TIMESTAMPTZ)

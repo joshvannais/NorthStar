@@ -1569,6 +1569,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_saved_origins') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL ON TABLE public.canonical_forecast_price_flow_saved_origins FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_origin_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_profile_activation_order_lock() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid,text,timestamptz,timestamptz) TO %I', runtime_role);
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_flow_origin_activations') IS NOT NULL THEN
@@ -2650,6 +2651,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_profile_witnesses','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_evaluations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_flow_origin_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_profile_activation_order_lock()','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_capture_price_flow_origin(uuid,uuid,text,uuid,text,text,uuid,text,timestamptz,timestamptz)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_activate_price_flow_origin(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_price_flow_origin_read(uuid,uuid,text,uuid,uuid)','EXECUTE')

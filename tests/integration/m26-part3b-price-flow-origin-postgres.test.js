@@ -162,21 +162,24 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           confirmed: true });
       expect(profile.status).toBe(201);
       const profileAnchorId = profile.body.data.anchorId;
-      const profileActivationWriter = await f.runtimePool.connect();
+      // Simulate the INSERT tail of a migration-169 activation call that was
+      // already executing when migration 171 replaced the function. The new
+      // table trigger must serialize even this legacy body with origin save.
+      const profileActivationWriter = await f.ownerPool.connect();
       const profileRaceOriginWriter = await f.runtimePool.connect();
       try {
         await profileActivationWriter.query(
           'BEGIN ISOLATION LEVEL READ COMMITTED');
         await profileRaceOriginWriter.query(
           'BEGIN ISOLATION LEVEL READ COMMITTED');
-        const profileActivation = (await profileActivationWriter.query(
-          'SELECT public.canonical_forecast_profile_effective_anchor_activate($1,$2,$3,$4,$5,$6) value',
-          [f.org, owner().actorUserId, owner().actorAccessRole,
-            owner().authSessionId, owner().csrfToken, profileAnchorId]))
-          .rows[0].value;
-        expect(profileActivation).toMatchObject({
-          state: 'profile_effective_activation_recorded', replayed: false,
-        });
+        const profileActivation = await profileActivationWriter.query(
+          `INSERT INTO canonical_forecast_profile_effective_activations(
+             organization_id,anchor_id,observed_at,actor_user_id,auth_session_id)
+           VALUES($1,$2,clock_timestamp(),$3,$4)
+           RETURNING anchor_id`,
+          [f.org, profileAnchorId, owner().actorUserId,
+            owner().authSessionId]);
+        expect(profileActivation.rows[0].anchor_id).toBe(profileAnchorId);
         let raceOriginSettled = false;
         const raceOrigin = profileRaceOriginWriter.query(
           'SELECT public.canonical_forecast_capture_price_flow_origin($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',

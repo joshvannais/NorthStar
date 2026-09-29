@@ -206,7 +206,7 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
             SELECT output FROM canonical_forecast_price_flow_saved_origins
             WHERE organization_id=$1 AND id=$2`, [f.org, runIds[index]]);
           const output = { ...current.rows[0].output,
-            asOf: utc(capturedAt),
+            asOf: utc(savedAt),
             sourceSnapshotDigest: changedSource.rows[0].digest,
             horizon: { startsAt: utc(horizon), endsAt: utc(horizonEnd),
               grain: 'day' },

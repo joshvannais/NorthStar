@@ -25,6 +25,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+const SQL_MILLISECOND_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const instant = value => typeof value === 'string' && INSTANT.test(value);
 
 function calendarAuthority(rawProfile) {
@@ -961,7 +962,11 @@ function createForecastPriceHistoryRouter(options = {}) {
     if (source?.state !== 'pair_source_verified' ||
         source.runId !== runId ||
         !UUID.test(source.profileAnchorId || '') ||
-        !DIGEST.test(source.profileProofDigest || '')) {
+        !DIGEST.test(source.profileProofDigest || '') ||
+        !SQL_MILLISECOND_INSTANT.test(source.savedAt || '') ||
+        !SQL_MILLISECOND_INSTANT.test(source.sourceSnapshotAsOf || '') ||
+        (source.latestSourceRecordedAt !== null &&
+          !SQL_MILLISECOND_INSTANT.test(source.latestSourceRecordedAt || ''))) {
       throw new Error('Invalid guarded price-flow source');
     }
     const output = normalizeForecastOutput(source.output);
@@ -1333,7 +1338,10 @@ function createForecastPriceHistoryRouter(options = {}) {
             diversity.distinctSourceEventCount > 60) {
           throw new Error('Invalid guarded source-event diversity');
         }
+        const distinctSourceSnapshotCount = new Set(runs.map(run =>
+          run.sourceSnapshotAsOf)).size;
         const policy = assessCompletePriceFlowEvaluation({ ...window,
+          distinctSourceSnapshotCount,
           sourceEventDiversityVerified:
             diversity.sourceEventDiversityVerified === true,
           distinctSourceEventCount: diversity.distinctSourceEventCount }, backtest,

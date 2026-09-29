@@ -20,6 +20,7 @@ function fixture(count) {
     windowStart: iso(start), windowEnd: iso(start + 60 * day),
     storedOriginCount: count, matchingContextCount: count,
     excludedContextCount: 0,
+    distinctSourceSnapshotCount: 1,
     origins: comparisons.map(item => ({ runId: item.forecastRunId,
       eligibility: 'matching_context' })),
   };
@@ -76,7 +77,7 @@ describe('Mission 26 Part 3C fixed supported-source evaluation window', () => {
 
   test('distinct capture times alone cannot qualify source-event diversity', () => {
     const complete = fixture(60);
-    complete.measurement.originCount = 60;
+    complete.window.distinctSourceSnapshotCount = 60;
     const result = assess(complete);
     expect(result.sampleSufficiency).toMatchObject({
       state: 'unavailable', reason: 'source_event_diversity_unverified' });
@@ -89,7 +90,7 @@ describe('Mission 26 Part 3C fixed supported-source evaluation window', () => {
     expect(result.drift).not.toHaveProperty('reviewAction');
     expect(result.realAccuracyAvailable).toBe(false);
     const sourceProven = fixture(60);
-    sourceProven.measurement.originCount = 60;
+    sourceProven.window.distinctSourceSnapshotCount = 60;
     sourceProven.window.sourceEventDiversityVerified = true;
     sourceProven.window.distinctSourceEventCount = 60;
     const reviewed = assess(sourceProven);
@@ -100,7 +101,7 @@ describe('Mission 26 Part 3C fixed supported-source evaluation window', () => {
       reviewAction: 'human_review_required',
       empiricalDriftVerdictAvailable: false });
     const late = fixture(60);
-    late.measurement.originCount = 60;
+    late.window.distinctSourceSnapshotCount = 60;
     late.backtest.comparisons[0].outcomeCutoff = iso(start + 63 * day);
     expect(assess(late).sampleSufficiency.reason)
       .toBe('source_observation_lag_unverified');

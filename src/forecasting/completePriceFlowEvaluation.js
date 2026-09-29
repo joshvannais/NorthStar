@@ -30,6 +30,9 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
       backtest.calculationVersion !== 'm26_price_flow_carry_forward_v1' ||
       !Array.isArray(backtest.comparisons) ||
       measurement?.backtestDigest !== backtest.digest ||
+      !Number.isInteger(window.distinctSourceSnapshotCount) ||
+      window.distinctSourceSnapshotCount < 0 ||
+      window.distinctSourceSnapshotCount > 60 ||
       !referenceMeasurement || !laterMeasurement) invalid();
   const startsAt = Date.parse(window.windowStart);
   const endsAt = Date.parse(window.windowEnd);
@@ -67,9 +70,9 @@ function assessCompletePriceFlowEvaluation(window, backtest, measurement,
     !contextChanged && eligibleRows.length === 60 &&
     measurement.comparisonCount === 60;
   const everyOutcomePaired = pairedByHalf[0] === 30 && pairedByHalf[1] === 30;
-  // asOf distinguishes capture times, not source-event states. Repeated
-  // captures of unchanged M24 decisions cannot establish independence.
-  const distinctCaptureInstants = measurement.originCount === 60;
+  // A saved origin's asOf is its own immutable cutoff. Snapshot diversity must
+  // use the separately verified source receipt capture time instead.
+  const distinctCaptureInstants = window.distinctSourceSnapshotCount === 60;
   const sourceEventDiversityVerified =
     window.sourceEventDiversityVerified === true &&
     window.distinctSourceEventCount === 60;

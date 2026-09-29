@@ -156,7 +156,7 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
             SELECT output FROM canonical_forecast_price_flow_saved_origins
             WHERE organization_id=$1 AND id=$2`, [f.org, runIds[index]]);
           const output = { ...current.rows[0].output,
-            asOf: utc(sourceCaptured), sourceSnapshotDigest: sourceDigest,
+            asOf: utc(savedAt), sourceSnapshotDigest: sourceDigest,
             horizon: { startsAt: utc(horizon), endsAt: utc(horizonEnd),
               grain: 'day' } };
           const changed = await f.ownerPool.query(`
@@ -364,10 +364,10 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
           WHERE id=$1 RETURNING rtrim(snapshot_digest) digest`,
         [changedSource.body.data.snapshotId, reboundCapture]);
         const currentRun = await f.ownerPool.query(`
-          SELECT output FROM canonical_forecast_price_flow_saved_origins
+          SELECT output,saved_at FROM canonical_forecast_price_flow_saved_origins
           WHERE organization_id=$1 AND id=$2`, [f.org, reboundRunId]);
         const output = { ...currentRun.rows[0].output,
-          asOf: utc(reboundCapture),
+          asOf: utc(currentRun.rows[0].saved_at),
           sourceSnapshotDigest: reboundSource.rows[0].digest,
           value: { kind: 'point', amount: '1400.00' },
           evidenceCoverage: { included: 1, excluded: 0, missing: 0,

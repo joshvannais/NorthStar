@@ -55,6 +55,20 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
           'Runtime database role privilege verification failed');
         await leaked.query(`REVOKE EXECUTE ON FUNCTION
           canonical_forecast_price_flow_registered_insert() FROM PUBLIC`);
+        await leaked.query(`GRANT SELECT ON
+          canonical_forecast_price_flow_research_selections TO PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(`REVOKE SELECT ON
+          canonical_forecast_price_flow_research_selections FROM PUBLIC`);
+        await leaked.query(`GRANT EXECUTE ON FUNCTION
+          canonical_forecast_price_flow_research_mac(text,bytea) TO PUBLIC`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
+          { runtimeRole: f.roles.runtime })).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+        await leaked.query(`REVOKE EXECUTE ON FUNCTION
+          canonical_forecast_price_flow_research_mac(text,bytea) FROM PUBLIC`);
         await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
           { runtimeRole: f.roles.runtime })).resolves.toBeUndefined();
         await leaked.query('ROLLBACK');
@@ -439,9 +453,145 @@ realPostgres('Mission 26 Part 3D matched algorithm population', () => {
         expect(busyPopulation.status).toBe(409);
         expect(busyPopulation.body.error.category).toBe(
           'FORECAST_SOURCE_BUSY');
+        const busyResearchReview = await request(f.app)
+          .get(`${root}/algorithm-research-review`)
+          .set('Cookie', owner.session.headers.Cookie);
+        expect(busyResearchReview.status).toBe(409);
+        expect(busyResearchReview.body.error.category).toBe(
+          'FORECAST_SOURCE_BUSY');
       } finally {
         await heldActualWriter.query('ROLLBACK').catch(() => {});
         heldActualWriter.release();
       }
+      const reviewRoute = `${root}/algorithm-research-review`;
+      const selectionRoute = `${root}/algorithm-research-selections`;
+      const reviewed = await request(f.app).get(reviewRoute)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(reviewed.status).toBe(200);
+      expect(reviewed.body.data).toMatchObject({
+        state: 'research_review_ready', currentRevision: 0,
+        humanResearchReviewAvailable: true,
+        promotionAvailable: false, forecastServingEnabled: false,
+        reviewToken: null });
+      expect(JSON.stringify(reviewed.body.data)).not.toContain('1400.00');
+      const challengeRoute = `${root}/algorithm-research-challenges`;
+      const selectedKey = key();
+      const selectionRequest = {
+        expectedRevision: 0, action: 'select_candidate',
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        reversesEventId: null,
+        reason: 'Fictional owner review of complete M24 source comparison.' };
+      const challenged = await request(f.app).post(challengeRoute)
+        .set(owner.session.headers).send(selectionRequest);
+      expect(challenged.status).toBe(200);
+      expect(challenged.body.data).toMatchObject({
+        state: 'research_challenge_ready',
+        researchOnly: true, forecastServingEnabled: false });
+      expect(challenged.body.data.reviewToken).toMatch(/^[a-f0-9]{64}$/);
+      const privateReview = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_research_review($1,$2,$3,$4) value',
+        args);
+      const forgedDirect = await f.runtimePool.query(
+        'SELECT public.canonical_forecast_price_flow_research_select($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) value',
+        [...args, owner.csrfToken, key(), 0, 'select_candidate',
+          'm26_price_flow_zero_baseline_v1', null,
+          selectionRequest.reason, '0'.repeat(64),
+          privateReview.rows[0].value.comparisonDigest, true]);
+      expect(forgedDirect.rows[0].value).toMatchObject({
+        state: 'research_selection_unavailable',
+        reason: 'review_challenge_invalid' });
+      const selectionBody = { ...selectionRequest,
+        reviewToken: challenged.body.data.reviewToken, confirmed: true };
+      const selected = await request(f.app).post(selectionRoute)
+        .set(owner.session.headers).set('Idempotency-Key', selectedKey)
+        .send(selectionBody);
+      expect(selected.status).toBe(201);
+      expect(selected.body.data).toMatchObject({
+        state: 'research_selection_recorded', revision: 1,
+        algorithmVersion: 'm26_price_flow_zero_baseline_v1',
+        researchOnly: true, forecastServingEnabled: false,
+        forecastValueAvailable: false, realForecastEligible: false,
+        replayed: false });
+      const replayed = await request(f.app).post(selectionRoute)
+        .set(owner.session.headers).set('Idempotency-Key', selectedKey)
+        .send(selectionBody);
+      expect(replayed.status).toBe(200);
+      expect(replayed.body.data).toMatchObject({
+        eventId: selected.body.data.eventId, revision: 1,
+        replayed: true });
+      const newerReview = await request(f.app).get(reviewRoute)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(newerReview.status).toBe(200);
+      expect(newerReview.body.data).toMatchObject({
+        state: 'research_review_ready', currentRevision: 1,
+        currentAlgorithmVersion: 'm26_price_flow_zero_baseline_v1' });
+      const rollbackRequest = { expectedRevision: 1, action: 'rollback',
+        algorithmVersion: 'm26_price_flow_carry_forward_v1',
+        reversesEventId: selected.body.data.eventId,
+        reason: 'Fictional owner rollback to prior deterministic version.' };
+      const staleSelection = await request(f.app).post(selectionRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ ...rollbackRequest, reviewToken: selectionBody.reviewToken,
+          confirmed: true });
+      expect(staleSelection.status).toBe(409);
+      const rollbackChallenge = await request(f.app).post(challengeRoute)
+        .set(owner.session.headers).send(rollbackRequest);
+      expect(rollbackChallenge.status).toBe(200);
+      expect(rollbackChallenge.body.data).toMatchObject({
+        state: 'research_challenge_ready' });
+      const rolledBack = await request(f.app).post(selectionRoute)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ ...rollbackRequest,
+          reviewToken: rollbackChallenge.body.data.reviewToken,
+          confirmed: true });
+      expect(rolledBack.status).toBe(201);
+      expect(rolledBack.body.data).toMatchObject({
+        state: 'research_selection_recorded', revision: 2,
+        algorithmVersion: 'm26_price_flow_carry_forward_v1',
+        researchOnly: true, forecastServingEnabled: false });
+      const denied = await request(f.app).post(selectionRoute)
+        .set(f.actors.member.session.headers).set('Idempotency-Key', key())
+        .send(selectionBody);
+      expect(denied.status).toBe(403);
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_price_flow_research_selections WHERE organization_id=$1',
+        [f.org])).rejects.toMatchObject({ code: '42501' });
+      const estimateRoute =
+        `/api/v1/canonical/estimates/${estimates[0].ids.estimate}`;
+      const currentDecision = await request(f.app)
+        .get(`${estimateRoute}/review`).set(owner.session.headers);
+      expect(currentDecision.status).toBe(200);
+      const withdrawn = await request(f.app)
+        .post(`${estimateRoute}/decisions`)
+        .set(owner.session.headers).set('Idempotency-Key', key())
+        .send({ action: 'withdraw',
+          expectedRevision:
+            currentDecision.body.data.decisions.current.revision,
+          expectedDigest:
+            currentDecision.body.data.decisions.current.digest,
+          sourcePins: currentDecision.body.data.pins,
+          scopeSummary: null, priceBeforeTax: null,
+          currency: currentDecision.body.data.currency,
+          reason: 'Fictional owner source withdrawal.', confirmed: true,
+          confirmationVersion: 'estimate-quote-preparation-v1' });
+      expect(withdrawn.status).toBe(201);
+      const changedReview = await request(f.app).get(reviewRoute)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(changedReview.status).toBe(200);
+      expect(changedReview.body.data).toMatchObject({
+        state: 'research_review_unavailable',
+        humanResearchReviewAvailable: false, reviewToken: null });
+      const staleAfterSourceChange = await request(f.app)
+        .post(selectionRoute).set(owner.session.headers)
+        .set('Idempotency-Key', key())
+        .send({ ...selectionBody, expectedRevision: 2 });
+      expect(staleAfterSourceChange.status).toBe(409);
+      const preservedReplay = await request(f.app).post(selectionRoute)
+        .set(owner.session.headers).set('Idempotency-Key', selectedKey)
+        .send(selectionBody);
+      expect(preservedReplay.status).toBe(200);
+      expect(preservedReplay.body.data).toMatchObject({
+        eventId: selected.body.data.eventId, revision: 1, replayed: true,
+        forecastServingEnabled: false });
     }, 600000);
 });

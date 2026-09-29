@@ -70,7 +70,7 @@ CREATE FUNCTION public.canonical_forecast_price_flow_research_review(
  org UUID,actor UUID,role_value TEXT,session_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE population JSONB; item JSONB; lag_ok BOOLEAN:=TRUE;
+DECLARE population JSONB; reviewed_population JSONB; item JSONB; lag_ok BOOLEAN:=TRUE;
  horizon_end TIMESTAMPTZ; observed_through TIMESTAMPTZ;
  latest public.canonical_forecast_price_flow_research_selections%ROWTYPE;
  complete BOOLEAN;
@@ -82,7 +82,42 @@ BEGIN
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,NULL,FALSE);
  population:=public.canonical_forecast_price_flow_matched_population(
-  org,actor,role_value,session_value);
+  org,actor,role_value,session_value,FALSE);
+ IF population->>'state'='matched_population_observed' THEN
+  IF jsonb_typeof(population->'selectedRunIds') IS DISTINCT FROM 'array' OR
+     jsonb_array_length(population->'selectedRunIds')>200 OR
+     (SELECT count(*) FROM jsonb_array_elements_text(
+       population->'selectedRunIds')) IS DISTINCT FROM
+      (SELECT count(DISTINCT value) FROM jsonb_array_elements_text(
+       population->'selectedRunIds')) OR
+     EXISTS(SELECT 1 FROM jsonb_array_elements_text(
+       population->'selectedRunIds') selected(value)
+       WHERE value!~'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') THEN
+   RAISE EXCEPTION 'Research population origin inventory invalid'
+    USING ERRCODE='23514';
+  END IF;
+  -- The inventory holds the tenant price fence. Never wait for an actual
+  -- writer lock while holding it: a writer takes the locks in the opposite
+  -- order. A failed try aborts this review and releases the fence.
+  IF EXISTS(
+   SELECT 1 FROM jsonb_array_elements_text(
+     population->'selectedRunIds') selected(value)
+   WHERE NOT pg_try_advisory_xact_lock(hashtextextended(
+    'm26:price-flow-actual:'||org::text||':'||selected.value,0))) THEN
+   RAISE EXCEPTION 'Forecast price-flow actual source is busy'
+    USING ERRCODE='55P03';
+  END IF;
+  reviewed_population:=public.canonical_forecast_price_flow_matched_population(
+   org,actor,role_value,session_value,TRUE);
+  IF reviewed_population->>'state' IS DISTINCT FROM
+       'matched_population_observed' OR
+     reviewed_population->'selectedRunIds' IS DISTINCT FROM
+       population->'selectedRunIds' THEN
+   RAISE EXCEPTION 'Research population changed during guarded review'
+    USING ERRCODE='40001';
+  END IF;
+  population:=reviewed_population;
+ END IF;
  SELECT * INTO latest
  FROM public.canonical_forecast_price_flow_research_selections
  WHERE organization_id=org ORDER BY revision DESC LIMIT 1;

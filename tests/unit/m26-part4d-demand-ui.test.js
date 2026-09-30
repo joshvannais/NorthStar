@@ -363,6 +363,22 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
         approvedScheduledCount: 0, workInProgressCount: 0, completedCount: 1,
         knownBacklogCount: 0, plannedPersonMinutes: null,
         backlogHoursState: 'unavailable', backlogHoursReason: 'no_active_backlog' }), true],
+      ['aggregate overflow', snapshot({ state: 'partial',
+        reason: 'unresolved_linkage_present', approvedUnscheduledCount: 125,
+        approvedScheduledCount: 125, workInProgressCount: 125, completedCount: 125,
+        unresolvedLinkageCount: 1, knownBacklogCount: 375,
+        plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'unresolved_linkage_present' }), false],
+      ['active work marked no active backlog', snapshot({ plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable', backlogHoursReason: 'no_active_backlog' }), false],
+      ['completed-only marked plan missing', snapshot({ approvedUnscheduledCount: 0,
+        approvedScheduledCount: 0, workInProgressCount: 0, completedCount: 1,
+        knownBacklogCount: 0, plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable',
+        backlogHoursReason: 'reviewed_person_hour_plan_missing' }), false],
+      ['completed-only with planned minutes', snapshot({ approvedUnscheduledCount: 0,
+        approvedScheduledCount: 0, workInProgressCount: 0, completedCount: 1,
+        knownBacklogCount: 0 }), false],
       ['descriptive source-changed reason', snapshot({ plannedPersonMinutes: null,
         backlogHoursState: 'unavailable',
         backlogHoursReason: 'source_changed_after_capture' }), false],
@@ -436,6 +452,21 @@ describe('Mission 26 Part 4D route refusal projection', () => {
     return { app, pool };
   }
 
+  function appForValue(value) {
+    const client = { query: jest.fn(async sql =>
+      String(sql).startsWith('SELECT public.canonical_forecast_current_backlog') ?
+        { rows: [{ value }] } : { rows: [] }), release: jest.fn() };
+    const pool = { connect: jest.fn(async () => client) };
+    const app = express(); app.use(express.json());
+    app.use((req, _res, next) => { req.user = { id: ACTOR }; req.orgId = ID;
+      req.userRole = 'owner'; req.authSession = { id: SESSION };
+      req.tenantContext = { organizationId: ID, userId: ACTOR }; next(); });
+    app.use('/backlog', createForecastCurrentBacklogRouter({ poolProvider: () => pool,
+      auth: (_req, _res, next) => next(), throttle: (_req, _res, next) => next(),
+      captureThrottle: (_req, _res, next) => next() }));
+    return { app, client };
+  }
+
   test('maps bounded overflow without leaking database detail and denies member capture', async () => {
     const overflow = appFor('54000');
     const result = await request(overflow.app).post('/backlog/snapshots')
@@ -450,5 +481,27 @@ describe('Mission 26 Part 4D route refusal projection', () => {
       .set('Idempotency-Key', 'part4d-route-key-0002').set('X-CSRF-Token', 'token').send({});
     expect(denied.status).toBe(403);
     expect(member.pool.connect).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['aggregate overflow', { state: 'partial', reason: 'unresolved_linkage_present',
+      approvedUnscheduledCount: 125, approvedScheduledCount: 125,
+      workInProgressCount: 125, completedCount: 125, unresolvedLinkageCount: 1,
+      knownBacklogCount: 375, plannedPersonMinutes: null,
+      backlogHoursState: 'unavailable', backlogHoursReason: 'unresolved_linkage_present' }],
+    ['active work marked no active backlog', { plannedPersonMinutes: null,
+      backlogHoursState: 'unavailable', backlogHoursReason: 'no_active_backlog' }],
+    ['completed-only planned time', { approvedUnscheduledCount: 0,
+      approvedScheduledCount: 0, workInProgressCount: 0, completedCount: 1,
+      knownBacklogCount: 0 }],
+  ])('rolls back poisoned %s capture before returning any numeric result', async (_label, change) => {
+    const guarded = appForValue({ snapshot: snapshot(change), replayed: false });
+    const result = await request(guarded.app).post('/backlog/snapshots')
+      .set('Idempotency-Key', 'part4d-invalid-shape-key').set('X-CSRF-Token', 'token').send({});
+    expect(result.status).toBe(503);
+    expect(result.body.error.category).toBe('FORECAST_CURRENT_BACKLOG_UNAVAILABLE');
+    expect(JSON.stringify(result.body)).not.toMatch(/125|375|780|personMinutes|Count/);
+    expect(guarded.client.query.mock.calls.map(call => call[0])).toContain('ROLLBACK');
+    expect(guarded.client.query.mock.calls.map(call => call[0])).not.toContain('COMMIT');
   });
 });

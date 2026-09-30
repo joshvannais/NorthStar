@@ -84,8 +84,6 @@ function safeSnapshot(value, expectedId = null) {
       !['approvedUnscheduledCount', 'approvedScheduledCount', 'workInProgressCount',
         'completedCount', 'unresolvedLinkageCount', 'knownBacklogCount']
         .every(key => Number.isSafeInteger(value[key]) && value[key] >= 0 && value[key] <= 500) ||
-      value.knownBacklogCount !== value.approvedUnscheduledCount +
-        value.approvedScheduledCount + value.workInProgressCount ||
       !(value.plannedPersonMinutes === null ||
         /^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/.test(value.plannedPersonMinutes)) ||
       !['available', 'unavailable'].includes(value.backlogHoursState) ||
@@ -108,15 +106,20 @@ function safeSnapshot(value, expectedId = null) {
        value.backlogHoursReason !== null)) return null;
   if (value.backlogHoursState === 'unavailable' &&
       (value.plannedPersonMinutes !== null || value.backlogHoursReason === null)) return null;
-  const total = value.approvedUnscheduledCount + value.approvedScheduledCount +
-    value.workInProgressCount + value.completedCount + value.unresolvedLinkageCount;
-  const descriptiveHoursValid = value.backlogHoursState === 'available' ?
-    value.plannedPersonMinutes !== null && Number(value.plannedPersonMinutes) > 0 &&
-      value.backlogHoursReason === null :
-    value.plannedPersonMinutes === null && [
-      'approved_person_hour_plan_missing', 'no_active_backlog',
-      'reviewed_person_hour_plan_missing', 'reviewed_person_hour_plan_not_current',
-    ].includes(value.backlogHoursReason);
+  const active = value.approvedUnscheduledCount + value.approvedScheduledCount +
+    value.workInProgressCount;
+  const total = active + value.completedCount + value.unresolvedLinkageCount;
+  if (value.knownBacklogCount !== active || total > 500) return null;
+  const descriptiveHoursValid = active === 0 ?
+    value.backlogHoursState === 'unavailable' && value.plannedPersonMinutes === null &&
+      value.backlogHoursReason === 'no_active_backlog' :
+    value.backlogHoursState === 'available' ?
+      value.plannedPersonMinutes !== null && Number(value.plannedPersonMinutes) > 0 &&
+        value.backlogHoursReason === null :
+      value.plannedPersonMinutes === null && [
+        'approved_person_hour_plan_missing', 'reviewed_person_hour_plan_missing',
+        'reviewed_person_hour_plan_not_current',
+      ].includes(value.backlogHoursReason);
   if (value.state === 'descriptive_subset' && (value.reason !== null || total < 1 ||
       value.unresolvedLinkageCount !== 0 || !value.sourceAuthenticated ||
       !value.sourceDigest || !value.snapshotDigest || !descriptiveHoursValid)) return null;

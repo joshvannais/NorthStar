@@ -45,10 +45,10 @@
         }) || !['available', 'unavailable'].includes(value.backlogHoursState) ||
         !validInstant(value.capturedAt) || !(value.plannedPersonMinutes === null ||
           /^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/.test(value.plannedPersonMinutes))) return false;
-    if (value.knownBacklogCount !== value.approvedUnscheduledCount +
-        value.approvedScheduledCount + value.workInProgressCount) return false;
-    var total = value.approvedUnscheduledCount + value.approvedScheduledCount +
-      value.workInProgressCount + value.completedCount + value.unresolvedLinkageCount;
+    var active = value.approvedUnscheduledCount + value.approvedScheduledCount +
+      value.workInProgressCount;
+    var total = active + value.completedCount + value.unresolvedLinkageCount;
+    if (value.knownBacklogCount !== active || total > 500) return false;
     if (value.state === 'source_stale') {
       return value.reason === 'source_changed_after_capture' && value.sourceAuthenticated === false &&
         value.sourceDigest === null && value.snapshotDigest === null &&
@@ -61,12 +61,17 @@
         !DIGEST.test(value.snapshotDigest || '')) return false;
     if (value.state === 'descriptive_subset') {
       if (value.reason !== null || total < 1 || value.unresolvedLinkageCount !== 0) return false;
+      if (active === 0) {
+        return value.backlogHoursState === 'unavailable' &&
+          value.plannedPersonMinutes === null && value.backlogHoursReason === 'no_active_backlog';
+      }
       if (value.backlogHoursState === 'available') {
         return value.plannedPersonMinutes !== null && Number(value.plannedPersonMinutes) > 0 &&
           value.backlogHoursReason === null;
       }
       return value.plannedPersonMinutes === null &&
-        DESCRIPTIVE_HOURS_REASONS.includes(value.backlogHoursReason);
+        DESCRIPTIVE_HOURS_REASONS.includes(value.backlogHoursReason) &&
+        value.backlogHoursReason !== 'no_active_backlog';
     }
     if (value.state === 'partial') {
       return value.reason === 'unresolved_linkage_present' &&

@@ -151,11 +151,18 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
   }, 120000);
 
   test('refuses source contention, non-owner access, cross-tenant reads and missing authority', async () => {
-    const lock = await fixture.ownerPool.connect();
+    const inFlight = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true });
+    await fixture.ownerPool.query(`
+      CREATE FUNCTION public.m26_part4b_schedule_writer_delay()
+      RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN PERFORM pg_sleep(0.5); RETURN NEW; END $$;
+      CREATE TRIGGER z_m26_part4b_schedule_writer_delay
+      BEFORE INSERT ON canonical_schedule_assignment_revisions
+      FOR EACH ROW EXECUTE FUNCTION public.m26_part4b_schedule_writer_delay()`);
     try {
-      await lock.query('BEGIN');
-      await lock.query(`SELECT pg_advisory_xact_lock(hashtextextended(
-        'm26:schedule-booking-events:'||$1::text,0))`, [fixture.org]);
+      const writer = recordOperationalCancellation(inFlight);
+      await new Promise(resolve => setTimeout(resolve, 150));
       const busy = await request(fixture.app)
         .post('/api/v1/forecast/transition-cohorts/schedule-booking-cancellations')
         .set(fixture.actors.owner.session.headers)
@@ -164,9 +171,12 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
           horizonEndsAt: '2026-09-02T00:00:00.000000Z' });
       expect(busy.status).toBe(409);
       expect(busy.body.error.category).toBe('FORECAST_TRANSITION_COHORT_BUSY');
+      await expect(writer).resolves.toMatchObject({ status: 200, replayed: false });
     } finally {
-      await lock.query('ROLLBACK').catch(() => {});
-      lock.release();
+      await fixture.ownerPool.query(`
+        DROP TRIGGER IF EXISTS z_m26_part4b_schedule_writer_delay
+          ON canonical_schedule_assignment_revisions;
+        DROP FUNCTION IF EXISTS public.m26_part4b_schedule_writer_delay()`);
     }
 
     const member = await request(fixture.app)
@@ -194,6 +204,44 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
     } finally {
       await missing.query('ROLLBACK').catch(() => {});
       missing.release();
+    }
+
+    const publicTable = await fixture.ownerPool.connect();
+    try {
+      await publicTable.query('BEGIN');
+      await publicTable.query(
+        'GRANT SELECT ON canonical_forecast_schedule_booking_events TO PUBLIC');
+      await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(publicTable,
+        { runtimeRole: fixture.roles.runtime }))
+        .rejects.toThrow('Runtime database role privilege verification failed');
+    } finally {
+      await publicTable.query('ROLLBACK').catch(() => {});
+      publicTable.release();
+    }
+
+    const publicFunction = await fixture.ownerPool.connect();
+    try {
+      await publicFunction.query('BEGIN');
+      await publicFunction.query(`GRANT EXECUTE ON FUNCTION
+        canonical_forecast_schedule_booking_cancellation_cohort_capture(
+          uuid,uuid,text,uuid,text,text,timestamptz,timestamptz) TO PUBLIC`);
+      await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(publicFunction,
+        { runtimeRole: fixture.roles.runtime }))
+        .rejects.toThrow('Runtime database role privilege verification failed');
+    } finally {
+      await publicFunction.query('ROLLBACK').catch(() => {});
+      publicFunction.release();
+    }
+
+    const recovered = await fixture.ownerPool.connect();
+    try {
+      await recovered.query('BEGIN');
+      await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(recovered,
+        { runtimeRole: fixture.roles.runtime })).resolves.toBeUndefined();
+      await recovered.query('COMMIT');
+    } finally {
+      await recovered.query('ROLLBACK').catch(() => {});
+      recovered.release();
     }
   }, 120000);
 });

@@ -51,6 +51,24 @@ CREATE TRIGGER canonical_forecast_schedule_booking_event_immutable
  FOR EACH STATEMENT
  EXECUTE FUNCTION public.canonical_forecast_schedule_booking_event_immutable();
 
+-- Fence every genuine human schedule writer before its immutable revision can
+-- become an uncommitted source fact. Cohort capture takes the same tenant lock
+-- with try semantics, so it cannot win between revision insertion and event
+-- derivation and return an authenticated pre-writer view.
+CREATE FUNCTION public.canonical_forecast_schedule_booking_event_lock()
+RETURNS TRIGGER LANGUAGE plpgsql
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ IF NEW.source_kind IN ('human_approved','human_preview_approved') THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+   'm26:schedule-booking-events:'||NEW.organization_id::text,0));
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER a_canonical_forecast_schedule_booking_event_lock
+ BEFORE INSERT ON public.canonical_schedule_assignment_revisions
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_forecast_schedule_booking_event_lock();
+
 CREATE FUNCTION public.canonical_forecast_schedule_booking_event_capture()
 RETURNS TRIGGER LANGUAGE plpgsql
 SET search_path=pg_catalog,public,pg_temp AS $$
@@ -60,8 +78,6 @@ BEGIN
  IF NEW.source_kind NOT IN ('human_approved','human_preview_approved') THEN
   RETURN NEW;
  END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(
-  'm26:schedule-booking-events:'||NEW.organization_id::text,0));
  SELECT * INTO prior_revision
  FROM public.canonical_schedule_assignment_revisions
  WHERE organization_id=NEW.organization_id AND assignment_id=NEW.assignment_id
@@ -424,6 +440,7 @@ REVOKE ALL ON SEQUENCE public.canonical_forecast_schedule_booking_event_order_se
 REVOKE ALL ON TABLE public.canonical_forecast_schedule_booking_events FROM PUBLIC;
 REVOKE ALL ON TABLE public.canonical_forecast_schedule_booking_cancellation_cohorts FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_immutable() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_lock() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_capture() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_cancellation_cohort_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_cancellation_cohort_projection(

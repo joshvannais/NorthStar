@@ -1522,6 +1522,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          pg_catalog.to_regclass('public.canonical_forecast_schedule_booking_events') IS NULL OR
          pg_catalog.to_regclass('public.canonical_forecast_schedule_booking_cancellation_cohorts') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_event_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_event_lock()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_event_capture()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_cancellation_cohort_immutable()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_cancellation_cohort_projection(public.canonical_forecast_schedule_booking_cancellation_cohorts,boolean)') IS NULL OR
@@ -1533,6 +1534,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_schedule_booking_cancellation_cohorts FROM %I', runtime_role);
       EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_schedule_booking_event_order_sequence FROM %I', runtime_role);
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_immutable() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_lock() FROM %I', runtime_role);
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_capture() FROM %I', runtime_role);
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_cancellation_cohort_immutable() FROM %I', runtime_role);
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_cancellation_cohort_projection(public.canonical_forecast_schedule_booking_cancellation_cohorts,boolean) FROM %I', runtime_role);
@@ -2727,6 +2729,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND to_regclass('public.canonical_forecast_schedule_booking_events') IS NOT NULL
          AND to_regclass('public.canonical_forecast_schedule_booking_cancellation_cohorts') IS NOT NULL
          AND to_regprocedure('public.canonical_forecast_schedule_booking_event_immutable()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_schedule_booking_event_lock()') IS NOT NULL
          AND to_regprocedure('public.canonical_forecast_schedule_booking_event_capture()') IS NOT NULL
          AND to_regprocedure('public.canonical_forecast_schedule_booking_cancellation_cohort_immutable()') IS NOT NULL
          AND to_regprocedure('public.canonical_forecast_schedule_booking_cancellation_cohort_projection(public.canonical_forecast_schedule_booking_cancellation_cohorts,boolean)') IS NOT NULL
@@ -2736,11 +2739,22 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_table_privilege($1,'public.canonical_forecast_schedule_booking_cancellation_cohorts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_sequence_privilege($1,'public.canonical_forecast_schedule_booking_event_order_sequence','USAGE,SELECT,UPDATE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_schedule_booking_event_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_schedule_booking_event_lock()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_schedule_booking_event_capture()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_schedule_booking_cancellation_cohort_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_schedule_booking_cancellation_cohort_projection(public.canonical_forecast_schedule_booking_cancellation_cohorts,boolean)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_schedule_booking_cancellation_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_schedule_booking_cancellation_cohort_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_proc function_value
+           CROSS JOIN LATERAL aclexplode(COALESCE(function_value.proacl,
+             acldefault('f',function_value.proowner))) privilege_value
+           WHERE function_value.oid IN (
+             to_regprocedure('public.canonical_forecast_schedule_booking_cancellation_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz)'),
+             to_regprocedure('public.canonical_forecast_schedule_booking_cancellation_cohort_read(uuid,uuid,text,uuid,uuid)')
+           ) AND privilege_value.grantee=0
+             AND privilege_value.privilege_type='EXECUTE'
+         )
        ) AS schedule_booking_cancellation_cohort_private,
        (to_regclass('public.canonical_forecast_booked_work_confirmations') IS NULL OR (
          NOT has_table_privilege($1,'public.canonical_forecast_booked_work_confirmations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -3386,6 +3400,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.commercial_booking_correction_guarded ||
       !runtimePrivileges.owner_reviewed_booking_position_guarded ||
       !runtimePrivileges.booking_cancellation_cohort_private ||
+      !runtimePrivileges.schedule_booking_cancellation_cohort_private ||
       !runtimePrivileges.booked_work_confirmations_private ||
       !runtimePrivileges.booked_work_month_observed_guarded ||
       !runtimePrivileges.booked_work_source_anchor_private ||

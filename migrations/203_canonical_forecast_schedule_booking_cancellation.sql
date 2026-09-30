@@ -2,6 +2,14 @@
 -- This bridge is populated only by the immutable human-approved scheduling
 -- revision writers. Scheduled-to-scheduled reschedules remain state changes;
 -- only an explicit transition to appointment_status=cancelled is cancellation.
+-- Legacy scheduling binaries omitted approved_at. Change its default before
+-- installing the bridge so a rolling old writer records the wall clock rather
+-- than PostgreSQL's transaction-start NOW(). Historical legacy rows whose
+-- approval and revision share that old transaction-start instant are excluded
+-- below because their actual decision side of a cutoff is unknowable.
+ALTER TABLE public.canonical_schedule_approvals
+ ALTER COLUMN approved_at SET DEFAULT clock_timestamp();
+
 CREATE SEQUENCE public.canonical_forecast_schedule_booking_event_order_sequence;
 
 CREATE TABLE public.canonical_forecast_schedule_booking_events (
@@ -98,6 +106,9 @@ BEGIN
   FROM public.canonical_schedule_human_approvals approval
   WHERE approval.organization_id=NEW.organization_id AND approval.id=NEW.human_approval_id;
  END IF;
+ IF NEW.source_kind='human_approved' AND event_occurred_at<=NEW.created_at THEN
+  RETURN NEW;
+ END IF;
  transition_value:=CASE
   WHEN prior_found AND NEW.appointment_status='cancelled'
    AND prior_revision.appointment_status<>'cancelled' THEN 'booking_cancelled'
@@ -149,6 +160,8 @@ WITH human_ordered AS MATERIALIZED (
   ON preview_approval.organization_id=revision_value.organization_id
   AND preview_approval.id=revision_value.human_approval_id
  WHERE revision_value.source_kind IN ('human_approved','human_preview_approved')
+  AND (revision_value.source_kind<>'human_approved'
+   OR legacy_approval.approved_at>revision_value.created_at)
 ), human_rows AS (
  SELECT human_ordered.*,
   CASE

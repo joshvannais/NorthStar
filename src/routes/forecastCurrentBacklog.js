@@ -110,9 +110,16 @@ function safeSnapshot(value, expectedId = null) {
       (value.plannedPersonMinutes !== null || value.backlogHoursReason === null)) return null;
   const total = value.approvedUnscheduledCount + value.approvedScheduledCount +
     value.workInProgressCount + value.completedCount + value.unresolvedLinkageCount;
+  const descriptiveHoursValid = value.backlogHoursState === 'available' ?
+    value.plannedPersonMinutes !== null && Number(value.plannedPersonMinutes) > 0 &&
+      value.backlogHoursReason === null :
+    value.plannedPersonMinutes === null && [
+      'approved_person_hour_plan_missing', 'no_active_backlog',
+      'reviewed_person_hour_plan_missing', 'reviewed_person_hour_plan_not_current',
+    ].includes(value.backlogHoursReason);
   if (value.state === 'descriptive_subset' && (value.reason !== null || total < 1 ||
       value.unresolvedLinkageCount !== 0 || !value.sourceAuthenticated ||
-      !value.sourceDigest || !value.snapshotDigest)) return null;
+      !value.sourceDigest || !value.snapshotDigest || !descriptiveHoursValid)) return null;
   if (value.state === 'partial' && (value.reason !== 'unresolved_linkage_present' ||
       value.unresolvedLinkageCount < 1 || !value.sourceAuthenticated ||
       !value.sourceDigest || !value.snapshotDigest || value.plannedPersonMinutes !== null ||
@@ -120,12 +127,16 @@ function safeSnapshot(value, expectedId = null) {
       value.backlogHoursReason !== 'unresolved_linkage_present')) return null;
   if (value.state === 'unavailable' &&
       (value.reason !== 'no_authenticated_approved_booking_history' || total !== 0 ||
-       !value.sourceAuthenticated || !value.sourceDigest || !value.snapshotDigest)) return null;
+       !value.sourceAuthenticated || !value.sourceDigest || !value.snapshotDigest ||
+       value.plannedPersonMinutes !== null || value.backlogHoursState !== 'unavailable' ||
+       !['approved_person_hour_plan_missing', 'no_active_backlog']
+         .includes(value.backlogHoursReason))) return null;
   if (value.state === 'source_stale' &&
       (value.reason !== 'source_changed_after_capture' || total !== 0 ||
        value.sourceAuthenticated || value.sourceDigest !== null ||
        value.snapshotDigest !== null || value.backlogHoursState !== 'unavailable' ||
-       value.backlogHoursReason !== 'source_changed_after_capture')) return null;
+       value.backlogHoursReason !== 'source_changed_after_capture' ||
+       value.plannedPersonMinutes !== null)) return null;
   return value;
 }
 

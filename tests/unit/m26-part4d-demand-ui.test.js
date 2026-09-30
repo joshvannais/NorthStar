@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const express = require('express');
 const request = require('supertest');
 const demand = require('../../public/js/command-center-demand-position');
-const { createForecastCurrentBacklogRouter } = require('../../src/routes/forecastCurrentBacklog');
+const { createForecastCurrentBacklogRouter, safeSnapshot } =
+  require('../../src/routes/forecastCurrentBacklog');
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const ACTOR = '22222222-2222-4222-8222-222222222222';
@@ -283,6 +284,8 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
         workInProgressCount: 0, completedCount: 0, knownBacklogCount: 0,
         plannedPersonMinutes: null, backlogHoursState: 'unavailable',
         backlogHoursReason: 'no_active_backlog' },
+      { plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'source_changed_after_capture' },
     ]) expect(demand.project(snapshot(poison), false)).toBeNull();
     const html = fs.readFileSync('public/demo-dashboard.html', 'utf8');
     expect(html).toContain('Capture current backlog');
@@ -303,6 +306,8 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
         workInProgressCount: 0, completedCount: 0, knownBacklogCount: 0,
         plannedPersonMinutes: null, backlogHoursState: 'unavailable',
         backlogHoursReason: 'no_active_backlog' },
+      { plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'source_changed_after_capture' },
     ];
     for (const poison of poisons) {
       const fixture = documentFixture();
@@ -313,6 +318,55 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
       expect(controller.state()).toMatchObject({ kind: 'failure', metrics: [] });
       expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
       expect(JSON.stringify(controller.state())).not.toMatch(/780|13 person-hours/);
+    }
+  });
+
+  test('enforces the same bounded snapshot-state and planned-time reason matrix in route and UI', () => {
+    const zero = { approvedUnscheduledCount: 0, approvedScheduledCount: 0,
+      workInProgressCount: 0, completedCount: 0, unresolvedLinkageCount: 0,
+      knownBacklogCount: 0, plannedPersonMinutes: null,
+      backlogHoursState: 'unavailable' };
+    const cases = [
+      ['descriptive available', snapshot(), true],
+      ['descriptive reviewed plan missing', snapshot({ plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable',
+        backlogHoursReason: 'reviewed_person_hour_plan_missing' }), true],
+      ['descriptive completed-only', snapshot({ approvedUnscheduledCount: 0,
+        approvedScheduledCount: 0, workInProgressCount: 0, completedCount: 1,
+        knownBacklogCount: 0, plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable', backlogHoursReason: 'no_active_backlog' }), true],
+      ['descriptive source-changed reason', snapshot({ plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable',
+        backlogHoursReason: 'source_changed_after_capture' }), false],
+      ['descriptive unresolved reason', snapshot({ plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable',
+        backlogHoursReason: 'unresolved_linkage_present' }), false],
+      ['partial unresolved', snapshot({ state: 'partial',
+        reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1,
+        plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'unresolved_linkage_present' }), true],
+      ['unavailable current', snapshot({ ...zero, state: 'unavailable',
+        reason: 'no_authenticated_approved_booking_history',
+        backlogHoursReason: 'no_active_backlog' }), true],
+      ['unavailable legacy', snapshot({ ...zero, state: 'unavailable',
+        reason: 'no_authenticated_approved_booking_history',
+        backlogHoursReason: 'approved_person_hour_plan_missing' }), true],
+      ['unavailable wrong reason', snapshot({ ...zero, state: 'unavailable',
+        reason: 'no_authenticated_approved_booking_history',
+        backlogHoursReason: 'reviewed_person_hour_plan_missing' }), false],
+      ['source stale', snapshot({ ...zero, state: 'source_stale',
+        reason: 'source_changed_after_capture',
+        backlogHoursReason: 'source_changed_after_capture', sourceAuthenticated: false,
+        sourceDigest: null, snapshotDigest: null }), true],
+      ['source stale with numeric plan', snapshot({ ...zero, state: 'source_stale',
+        reason: 'source_changed_after_capture', plannedPersonMinutes: '780.000000',
+        backlogHoursState: 'available', backlogHoursReason: null,
+        sourceAuthenticated: false, sourceDigest: null, snapshotDigest: null }), false],
+    ];
+    for (const [_label, value, accepted] of cases) {
+      expect(Boolean(safeSnapshot(value, ID))).toBe(accepted);
+      expect(demand.validSnapshot(value)).toBe(accepted);
+      if (!accepted) expect(demand.project(value, false)).toBeNull();
     }
   });
 

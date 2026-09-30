@@ -15,9 +15,9 @@
     'knownBacklogCount'];
   var DIGEST = /^[0-9a-f]{64}$/;
   var DATABASE_INSTANT = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/;
-  var HOURS_REASONS = ['approved_person_hour_plan_missing', 'no_active_backlog',
-    'unresolved_linkage_present', 'reviewed_person_hour_plan_missing',
-    'reviewed_person_hour_plan_not_current', 'source_changed_after_capture'];
+  var DESCRIPTIVE_HOURS_REASONS = ['approved_person_hour_plan_missing',
+    'no_active_backlog', 'reviewed_person_hour_plan_missing',
+    'reviewed_person_hour_plan_not_current'];
 
   function validInstant(value) {
     var match = typeof value === 'string' ? DATABASE_INSTANT.exec(value) : null;
@@ -53,25 +53,32 @@
       return value.reason === 'source_changed_after_capture' && value.sourceAuthenticated === false &&
         value.sourceDigest === null && value.snapshotDigest === null &&
         COUNT_KEYS.every(function (key) { return value[key] === 0; }) &&
+        value.plannedPersonMinutes === null &&
         value.backlogHoursState === 'unavailable' &&
         value.backlogHoursReason === 'source_changed_after_capture';
     }
     if (value.sourceAuthenticated !== true || !DIGEST.test(value.sourceDigest || '') ||
         !DIGEST.test(value.snapshotDigest || '')) return false;
-    if (value.state === 'descriptive_subset' && (value.reason !== null || total < 1 ||
-        value.unresolvedLinkageCount !== 0)) return false;
-    if (value.state === 'partial' && (value.reason !== 'unresolved_linkage_present' ||
-        value.unresolvedLinkageCount < 1 || value.plannedPersonMinutes !== null ||
-        value.backlogHoursState !== 'unavailable' ||
-        value.backlogHoursReason !== 'unresolved_linkage_present')) return false;
-    if (value.state === 'unavailable' &&
-        (value.reason !== 'no_authenticated_approved_booking_history' ||
-         COUNT_KEYS.some(function (key) { return value[key] !== 0; }))) return false;
-    if (value.backlogHoursState === 'available') {
-      return value.plannedPersonMinutes !== null && Number(value.plannedPersonMinutes) > 0 &&
-        value.backlogHoursReason === null && value.state !== 'source_stale';
+    if (value.state === 'descriptive_subset') {
+      if (value.reason !== null || total < 1 || value.unresolvedLinkageCount !== 0) return false;
+      if (value.backlogHoursState === 'available') {
+        return value.plannedPersonMinutes !== null && Number(value.plannedPersonMinutes) > 0 &&
+          value.backlogHoursReason === null;
+      }
+      return value.plannedPersonMinutes === null &&
+        DESCRIPTIVE_HOURS_REASONS.includes(value.backlogHoursReason);
     }
-    return value.plannedPersonMinutes === null && HOURS_REASONS.includes(value.backlogHoursReason);
+    if (value.state === 'partial') {
+      return value.reason === 'unresolved_linkage_present' &&
+        value.unresolvedLinkageCount > 0 && value.plannedPersonMinutes === null &&
+        value.backlogHoursState === 'unavailable' &&
+        value.backlogHoursReason === 'unresolved_linkage_present';
+    }
+    return value.state === 'unavailable' &&
+      value.reason === 'no_authenticated_approved_booking_history' &&
+      COUNT_KEYS.every(function (key) { return value[key] === 0; }) &&
+      value.plannedPersonMinutes === null && value.backlogHoursState === 'unavailable' &&
+      ['approved_person_hour_plan_missing', 'no_active_backlog'].includes(value.backlogHoursReason);
   }
 
   function hours(minutes) {

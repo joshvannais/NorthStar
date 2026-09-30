@@ -245,7 +245,7 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
     }
   }, 120000);
 
-  test('orders live and backfilled events by approval decision time, not transaction start', async () => {
+  test('uses approval decision time and rejects transaction-start-shaped legacy evidence', async () => {
     const legacyDefault = (await fixture.ownerPool.query(
       `SELECT column_default FROM information_schema.columns
        WHERE table_schema='public' AND table_name='canonical_schedule_approvals'

@@ -1593,6 +1593,21 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_transition_cohort_projection(public.canonical_forecast_schedule_booking_transition_cohorts,boolean) FROM %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_schedule_booking_transition_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz) TO %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_schedule_booking_transition_cohort_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      IF pg_catalog.to_regclass('public.canonical_forecast_current_backlog_snapshots_tenant_capture') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_current_backlog_snapshots') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_stale(public.canonical_forecast_current_backlog_snapshots)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+        RAISE EXCEPTION 'Required current backlog snapshot authority is missing';
+      END IF;
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_current_backlog_snapshots FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_immutable() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_stale(public.canonical_forecast_current_backlog_snapshots) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       IF pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_order') IS NULL OR
          pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_opportunity_time') IS NULL OR
          pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_event_revision') IS NULL OR
@@ -2930,6 +2945,29 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           ) AND privilege_value.grantee=0
            AND privilege_value.privilege_type='EXECUTE'
          )) AS schedule_booking_transition_cohort_private,
+       (to_regclass('public.canonical_forecast_current_backlog_snapshots_tenant_capture') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_current_backlog_snapshots') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_immutable()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_stale(public.canonical_forecast_current_backlog_snapshots)') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean)') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL
+         AND NOT has_table_privilege($1,'public.canonical_forecast_current_backlog_snapshots','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_stale(public.canonical_forecast_current_backlog_snapshots)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT EXISTS (
+          SELECT 1 FROM pg_proc function_value
+          CROSS JOIN LATERAL aclexplode(COALESCE(function_value.proacl,
+            acldefault('f',function_value.proowner))) privilege_value
+          WHERE function_value.oid IN (
+           to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)'),
+           to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)')
+          ) AND privilege_value.grantee=0
+           AND privilege_value.privilege_type='EXECUTE'
+         )) AS current_backlog_snapshot_private,
        (to_regclass('public.canonical_lead_state_reviews_tenant_order') IS NOT NULL
          AND to_regclass('public.canonical_lead_state_reviews_tenant_opportunity_time') IS NOT NULL
          AND to_regclass('public.canonical_lead_state_reviews_tenant_event_revision') IS NOT NULL
@@ -3662,6 +3700,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.booking_cancellation_cohort_private ||
       !runtimePrivileges.schedule_booking_cancellation_cohort_private ||
       !runtimePrivileges.schedule_booking_transition_cohort_private ||
+      !runtimePrivileges.current_backlog_snapshot_private ||
       !runtimePrivileges.lead_qualification_authority_private ||
       !runtimePrivileges.estimate_request_authority_private ||
       !runtimePrivileges.booked_work_confirmations_private ||
@@ -3820,6 +3859,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('203_canonical_forecast_schedule_booking_ca
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('204_canonical_lead_qualification_authority.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('205_canonical_estimate_request_authority.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('206_canonical_forecast_schedule_booking_transition.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('207_canonical_forecast_current_backlog_position.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

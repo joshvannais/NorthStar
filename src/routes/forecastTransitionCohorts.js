@@ -21,6 +21,11 @@ const SCHEDULE = Object.freeze({
   target: 'demand.booking_cancellation.v1',
   source: 'northstar_human_approved_schedule_history',
 });
+const QUALIFICATION = Object.freeze({
+  version: 'm26-lead-qualification-cohort-v1',
+  target: 'demand.qualification_transition.v1',
+  source: 'northstar_human_reviewed_lead_state',
+});
 
 function exact(value, keys) {
   const prototype = value && typeof value === 'object' ?
@@ -126,6 +131,97 @@ function safeCohort(value, expectedId = null, contract = COMMERCIAL) {
     confidence: 'unavailable', forecastIssued: false, paidNumericServing: false };
 }
 
+function safeQualificationReview(value, expectedOpportunityId = null) {
+  if (!exact(value, ['id', 'opportunityId', 'revision', 'previousId', 'eventKey',
+    'supersedesId', 'action', 'state', 'effectiveAt', 'reason', 'digest',
+    'createdAt', 'sourceAuthority']) || !UUID.test(value.id || '') ||
+      !UUID.test(value.opportunityId || '') || !Number.isSafeInteger(value.revision) ||
+      value.revision < 1 || value.revision > 1000 ||
+      !(value.previousId === null || UUID.test(value.previousId)) ||
+      !UUID.test(value.eventKey || '') ||
+      !(value.supersedesId === null || UUID.test(value.supersedesId)) ||
+      !['observe', 'correct'].includes(value.action) ||
+      !['open', 'qualified', 'unqualified', 'closed'].includes(value.state) ||
+      !calendarInstant(value.effectiveAt, DATABASE_INSTANT) ||
+      typeof value.reason !== 'string' || value.reason.length < 1 ||
+      value.reason.length > 1000 || !DIGEST.test(value.digest || '') ||
+      !calendarInstant(value.createdAt, DATABASE_INSTANT) ||
+      value.sourceAuthority !== QUALIFICATION.source ||
+      (expectedOpportunityId !== null && value.opportunityId !== expectedOpportunityId) ||
+      (value.action === 'observe' &&
+        (value.supersedesId !== null || value.eventKey !== value.id)) ||
+      (value.action === 'correct' &&
+        (value.supersedesId === null || value.eventKey === value.id))) return null;
+  return value;
+}
+
+function safeQualificationFinalization(value) {
+  if (!exact(value, ['id', 'revision', 'previousId', 'recordedThrough',
+    'sourceHighWaterOrder', 'reason', 'digest', 'createdAt', 'boundary']) ||
+      !UUID.test(value.id || '') || !Number.isSafeInteger(value.revision) ||
+      value.revision < 1 || value.revision > 10000 ||
+      !(value.previousId === null || UUID.test(value.previousId)) ||
+      !calendarInstant(value.recordedThrough, DATABASE_INSTANT) ||
+      !Number.isSafeInteger(value.sourceHighWaterOrder) ||
+      value.sourceHighWaterOrder < 0 || typeof value.reason !== 'string' ||
+      value.reason.length < 1 || value.reason.length > 1000 ||
+      !DIGEST.test(value.digest || '') ||
+      !calendarInstant(value.createdAt, DATABASE_INSTANT) ||
+      typeof value.boundary !== 'string' || value.boundary.length < 1) return null;
+  return value;
+}
+
+function safeQualificationCohort(value, expectedId = null) {
+  if (!exact(value, ['id', 'version', 'targetKey', 'state', 'reason', 'cutoffAt',
+    'horizonEndsAt', 'capturedAt', 'eligibleCount', 'qualifiedCount', 'observedRate',
+    'sourceDigest', 'cohortDigest', 'sourceAuthority', 'sourceAuthenticated',
+    'sourceCoverageComplete', 'offPlatformCoverageVerified',
+    'providerCoverageVerified', 'probabilityCalibrated', 'confidence',
+    'forecastIssued', 'paidNumericServing']) || !UUID.test(value.id || '') ||
+      value.version !== QUALIFICATION.version || value.targetKey !== QUALIFICATION.target ||
+      !['descriptive_only', 'unavailable', 'source_stale'].includes(value.state) ||
+      !(value.reason === null || ['insufficient_history',
+        'source_changed_inside_horizon'].includes(value.reason)) ||
+      !calendarInstant(value.cutoffAt, DATABASE_INSTANT) ||
+      !calendarInstant(value.horizonEndsAt, DATABASE_INSTANT) ||
+      !calendarInstant(value.capturedAt, DATABASE_INSTANT) ||
+      Date.parse(value.cutoffAt) >= Date.parse(value.horizonEndsAt) ||
+      !Number.isSafeInteger(value.eligibleCount) || value.eligibleCount < 0 ||
+      value.eligibleCount > 500 || !Number.isSafeInteger(value.qualifiedCount) ||
+      value.qualifiedCount < 0 || value.qualifiedCount > value.eligibleCount ||
+      !(value.observedRate === null || /^(?:0(?:\.\d{1,6})?|1)$/.test(value.observedRate)) ||
+      !(value.sourceDigest === null || DIGEST.test(value.sourceDigest)) ||
+      !(value.cohortDigest === null || DIGEST.test(value.cohortDigest)) ||
+      value.sourceAuthority !== QUALIFICATION.source ||
+      typeof value.sourceAuthenticated !== 'boolean' ||
+      value.sourceCoverageComplete !== false || value.offPlatformCoverageVerified !== false ||
+      value.providerCoverageVerified !== false || value.probabilityCalibrated !== false ||
+      value.confidence !== 'unavailable' || value.forecastIssued !== false ||
+      value.paidNumericServing !== false ||
+      (expectedId !== null && value.id !== expectedId)) return null;
+  if (value.state === 'descriptive_only' && (value.reason !== null ||
+      value.eligibleCount < 1 || value.observedRate === null ||
+      !value.sourceAuthenticated || !value.sourceDigest || !value.cohortDigest)) return null;
+  if (value.state === 'unavailable' && (value.reason !== 'insufficient_history' ||
+      value.eligibleCount !== 0 || value.qualifiedCount !== 0 ||
+      value.observedRate !== null || !value.sourceAuthenticated ||
+      !value.sourceDigest || !value.cohortDigest)) return null;
+  if (value.state === 'source_stale' && (value.reason !== 'source_changed_inside_horizon' ||
+      value.eligibleCount !== 0 || value.qualifiedCount !== 0 ||
+      value.observedRate !== null || value.sourceAuthenticated ||
+      value.sourceDigest !== null || value.cohortDigest !== null)) return null;
+  return { state: value.state, reason: value.reason, cohortId: value.id,
+    version: value.version, targetKey: value.targetKey, cutoffAt: value.cutoffAt,
+    horizonEndsAt: value.horizonEndsAt, capturedAt: value.capturedAt,
+    eligibleCount: value.eligibleCount, qualifiedCount: value.qualifiedCount,
+    observedRate: value.observedRate, sourceDigest: value.sourceDigest,
+    cohortDigest: value.cohortDigest, sourceAuthority: value.sourceAuthority,
+    sourceAuthenticated: value.sourceAuthenticated,
+    sourceCoverageComplete: false, offPlatformCoverageVerified: false,
+    providerCoverageVerified: false, probabilityCalibrated: false,
+    confidence: 'unavailable', forecastIssued: false, paidNumericServing: false };
+}
+
 function createForecastTransitionCohortsRouter(options = {}) {
   const router = express.Router();
   const poolProvider = options.poolProvider || (() => db.getPool());
@@ -134,6 +230,8 @@ function createForecastTransitionCohortsRouter(options = {}) {
     `forecast-transition-cohort:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
   const captureThrottle = options.captureThrottle || rateLimit('forecast-source-capture', req =>
     `forecast-transition-cohort-capture:${req.tenantContext.organizationId}`);
+  const reviewThrottle = options.reviewThrottle || rateLimit('forecast-source-review', req =>
+    `forecast-lead-state-review:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
 
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
@@ -159,7 +257,8 @@ function createForecastTransitionCohortsRouter(options = {}) {
         if (!data) throw new Error('Invalid guarded transition cohort result');
         await client.query('COMMIT');
         if (write && value.replayed === true) res.set('Idempotency-Replayed', 'true');
-        return res.status(write && value.replayed === false && value.cohort ? 201 : 200)
+        return res.status(write && value.replayed === false &&
+          (value.cohort || value.review || value.finalization) ? 201 : 200)
           .json({ success: true, data });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
@@ -242,6 +341,103 @@ function createForecastTransitionCohortsRouter(options = {}) {
         sql: 'SELECT public.canonical_forecast_schedule_booking_cancellation_cohort_read($1,$2,$3,$4,$5) value',
         params: [cohortId],
         validate: value => safeCohort(value, cohortId, SCHEDULE),
+      });
+    });
+
+  router.post('/lead-qualification-sources/:opportunityId/reviews', auth,
+    requirePermission('forecast', 'update'), reviewThrottle, async (req, res) => {
+      const opportunityId = String(req.params.opportunityId || '').toLowerCase();
+      const body = req.body, key = req.get('Idempotency-Key');
+      if (!UUID.test(opportunityId) || !exact(req.query, []) ||
+          !exact(body, ['action', 'state', 'effectiveAt', 'reason']) ||
+          !['observe', 'correct'].includes(body.action) ||
+          !['open', 'qualified', 'unqualified', 'closed'].includes(body.state) ||
+          !calendarInstant(body.effectiveAt, UTC_MICROS) ||
+          typeof body.reason !== 'string' || body.reason.length < 1 ||
+          body.reason.length > 1000 || !KEY.test(key || '')) return invalid(res);
+      return run(req, res, { isolation: 'SERIALIZABLE', write: true,
+        sql: 'SELECT public.canonical_lead_state_review_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
+        params: [req.get('X-CSRF-Token'), key, opportunityId, body.action,
+          body.state, body.effectiveAt, body.reason],
+        validate(value) {
+          if (!value || typeof value.replayed !== 'boolean') return null;
+          const review = safeQualificationReview(value.review, opportunityId);
+          return review && { review, replayed: value.replayed };
+        } });
+    });
+
+  router.get('/lead-qualification-sources/:opportunityId/reviews', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      const opportunityId = String(req.params.opportunityId || '').toLowerCase();
+      if (!UUID.test(opportunityId) || !exact(req.query, [])) return invalid(res);
+      return run(req, res, {
+        sql: 'SELECT public.canonical_lead_state_review_read($1,$2,$3,$4,$5) value',
+        params: [opportunityId], validate(value) {
+          if (!exact(value, ['current', 'history', 'total', 'truncated', 'boundary']) ||
+              !(value.current === null ||
+                safeQualificationReview(value.current, opportunityId)) ||
+              !Array.isArray(value.history) || value.history.length > 20 ||
+              !value.history.every(item => safeQualificationReview(item, opportunityId)) ||
+              !Number.isSafeInteger(value.total) || value.total < value.history.length ||
+              typeof value.truncated !== 'boolean' || value.truncated !== (value.total > 20) ||
+              typeof value.boundary !== 'string') return null;
+          return value;
+        } });
+    });
+
+  router.post('/lead-qualification-sources/finalizations', auth,
+    requirePermission('forecast', 'update'), reviewThrottle, async (req, res) => {
+      const body = req.body, key = req.get('Idempotency-Key');
+      if (!exact(req.query, []) || !exact(body, ['recordedThrough', 'reason']) ||
+          !calendarInstant(body.recordedThrough, UTC_MICROS) ||
+          typeof body.reason !== 'string' || body.reason.length < 1 ||
+          body.reason.length > 1000 || !KEY.test(key || '')) return invalid(res);
+      return run(req, res, { isolation: 'SERIALIZABLE', write: true,
+        sql: 'SELECT public.canonical_lead_state_finalization_mutate($1,$2,$3,$4,$5,$6,$7,$8) value',
+        params: [req.get('X-CSRF-Token'), key, body.recordedThrough, body.reason],
+        validate(value) {
+          if (!value || typeof value.replayed !== 'boolean') return null;
+          const finalization = safeQualificationFinalization(value.finalization);
+          return finalization && { finalization, replayed: value.replayed };
+        } });
+    });
+
+  router.get('/lead-qualification-sources/finalizations/current', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exact(req.query, [])) return invalid(res);
+      return run(req, res, {
+        sql: 'SELECT public.canonical_lead_state_finalization_read($1,$2,$3,$4) value',
+        params: [], validate: value => value === null ? { finalization: null } :
+          (safeQualificationFinalization(value) && { finalization: value }),
+      });
+    });
+
+  router.post('/lead-qualifications', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      const body = req.body, key = req.get('Idempotency-Key');
+      if (!exact(req.query, []) || !exact(body, ['cutoffAt', 'horizonEndsAt']) ||
+          !calendarInstant(body.cutoffAt, UTC_MICROS) ||
+          !calendarInstant(body.horizonEndsAt, UTC_MICROS) ||
+          Date.parse(body.cutoffAt) >= Date.parse(body.horizonEndsAt) ||
+          !KEY.test(key || '')) return invalid(res);
+      return run(req, res, { isolation: 'READ COMMITTED', write: true,
+        sql: 'SELECT public.canonical_forecast_lead_qualification_cohort_capture($1,$2,$3,$4,$5,$6,$7,$8) value',
+        params: [req.get('X-CSRF-Token'), key, body.cutoffAt, body.horizonEndsAt],
+        validate(value) {
+          if (!value || typeof value.replayed !== 'boolean') return null;
+          const cohort = safeQualificationCohort(value.cohort);
+          return cohort && { ...cohort, replayed: value.replayed };
+        } });
+    });
+
+  router.get('/lead-qualifications/:cohortId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.cohortId || '') || !exact(req.query, [])) return invalid(res);
+      const cohortId = req.params.cohortId.toLowerCase();
+      return run(req, res, {
+        sql: 'SELECT public.canonical_forecast_lead_qualification_cohort_read($1,$2,$3,$4,$5) value',
+        params: [cohortId],
+        validate: value => safeQualificationCohort(value, cohortId),
       });
     });
   return router;

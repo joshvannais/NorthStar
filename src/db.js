@@ -1625,6 +1625,49 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean) FROM %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      IF pg_catalog.to_regclass('public.canonical_forecast_current_backlog_person_plan_reviews') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_estimate_source_fences') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_backlog_person_plan_tenant_current') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_estimate_source_fence_create()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_estimate_source_fence_advance()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_backlog_person_plan_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_backlog_person_plan_stale(public.canonical_forecast_current_backlog_person_plan_reviews)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_backlog_person_plan_projection(public.canonical_forecast_current_backlog_person_plan_reviews,boolean)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_backlog_person_plan_mutate(uuid,uuid,text,uuid,text,text,uuid,jsonb)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_backlog_person_plan_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+        RAISE EXCEPTION 'Required current backlog person-plan authority is missing';
+      END IF;
+      IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_forecast_current_backlog_person_plan_reviews'::regclass
+         AND tgname='canonical_forecast_backlog_person_plan_immutable'
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_estimates'::regclass
+         AND tgname='canonical_forecast_estimate_source_fence_create'
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_estimate_decisions'::regclass
+         AND tgname='canonical_forecast_estimate_decision_source_fence'
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_labor_plans'::regclass
+         AND tgname='canonical_forecast_labor_plan_source_fence'
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_estimate_revisions'::regclass
+         AND tgname='canonical_forecast_estimate_revision_source_fence'
+         AND NOT tgisinternal) THEN
+        RAISE EXCEPTION 'Required current backlog person-plan source fencing is missing';
+      END IF;
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_current_backlog_person_plan_reviews FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_estimate_source_fences FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_estimate_source_fence_create() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_estimate_source_fence_advance() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_backlog_person_plan_immutable() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_backlog_person_plan_stale(public.canonical_forecast_current_backlog_person_plan_reviews) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_backlog_person_plan_projection(public.canonical_forecast_current_backlog_person_plan_reviews,boolean) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_backlog_person_plan_mutate(uuid,uuid,text,uuid,text,text,uuid,jsonb) TO %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_backlog_person_plan_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       IF pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_order') IS NULL OR
          pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_opportunity_time') IS NULL OR
          pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_event_revision') IS NULL OR
@@ -3002,6 +3045,55 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           ) AND privilege_value.grantee=0
            AND privilege_value.privilege_type='EXECUTE'
          )) AS current_backlog_snapshot_private,
+       (to_regclass('public.canonical_forecast_current_backlog_person_plan_reviews') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_estimate_source_fences') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_backlog_person_plan_tenant_current') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_estimate_source_fence_create()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_estimate_source_fence_advance()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_backlog_person_plan_immutable()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_backlog_person_plan_stale(public.canonical_forecast_current_backlog_person_plan_reviews)') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_backlog_person_plan_projection(public.canonical_forecast_current_backlog_person_plan_reviews,boolean)') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_backlog_person_plan_mutate(uuid,uuid,text,uuid,text,text,uuid,jsonb)') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_backlog_person_plan_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL
+         AND EXISTS(SELECT 1 FROM pg_trigger WHERE
+          tgrelid='public.canonical_forecast_current_backlog_person_plan_reviews'::regclass
+          AND tgname='canonical_forecast_backlog_person_plan_immutable'
+          AND NOT tgisinternal)
+         AND EXISTS(SELECT 1 FROM pg_trigger WHERE
+          tgrelid='public.canonical_estimates'::regclass
+          AND tgname='canonical_forecast_estimate_source_fence_create'
+          AND NOT tgisinternal)
+         AND EXISTS(SELECT 1 FROM pg_trigger WHERE
+          tgrelid='public.canonical_estimate_decisions'::regclass
+          AND tgname='canonical_forecast_estimate_decision_source_fence'
+          AND NOT tgisinternal)
+         AND EXISTS(SELECT 1 FROM pg_trigger WHERE
+          tgrelid='public.canonical_labor_plans'::regclass
+          AND tgname='canonical_forecast_labor_plan_source_fence'
+          AND NOT tgisinternal)
+         AND EXISTS(SELECT 1 FROM pg_trigger WHERE
+          tgrelid='public.canonical_estimate_revisions'::regclass
+          AND tgname='canonical_forecast_estimate_revision_source_fence'
+          AND NOT tgisinternal)
+         AND NOT has_table_privilege($1,'public.canonical_forecast_current_backlog_person_plan_reviews','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_estimate_source_fences','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_estimate_source_fence_create()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_estimate_source_fence_advance()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_backlog_person_plan_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_backlog_person_plan_stale(public.canonical_forecast_current_backlog_person_plan_reviews)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_backlog_person_plan_projection(public.canonical_forecast_current_backlog_person_plan_reviews,boolean)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_backlog_person_plan_mutate(uuid,uuid,text,uuid,text,text,uuid,jsonb)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_backlog_person_plan_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT EXISTS (
+          SELECT 1 FROM pg_proc function_value
+          CROSS JOIN LATERAL aclexplode(COALESCE(function_value.proacl,
+            acldefault('f',function_value.proowner))) privilege_value
+          WHERE function_value.oid IN (
+           to_regprocedure('public.canonical_forecast_backlog_person_plan_mutate(uuid,uuid,text,uuid,text,text,uuid,jsonb)'),
+           to_regprocedure('public.canonical_forecast_backlog_person_plan_read(uuid,uuid,text,uuid,uuid)')
+          ) AND privilege_value.grantee=0
+           AND privilege_value.privilege_type='EXECUTE'
+         )) AS current_backlog_person_plan_private,
        (to_regclass('public.canonical_lead_state_reviews_tenant_order') IS NOT NULL
          AND to_regclass('public.canonical_lead_state_reviews_tenant_opportunity_time') IS NOT NULL
          AND to_regclass('public.canonical_lead_state_reviews_tenant_event_revision') IS NOT NULL
@@ -3735,6 +3827,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.schedule_booking_cancellation_cohort_private ||
       !runtimePrivileges.schedule_booking_transition_cohort_private ||
       !runtimePrivileges.current_backlog_snapshot_private ||
+      !runtimePrivileges.current_backlog_person_plan_private ||
       !runtimePrivileges.lead_qualification_authority_private ||
       !runtimePrivileges.estimate_request_authority_private ||
       !runtimePrivileges.booked_work_confirmations_private ||
@@ -3894,6 +3987,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('204_canonical_lead_qualification_authority
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('205_canonical_estimate_request_authority.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('206_canonical_forecast_schedule_booking_transition.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('207_canonical_forecast_current_backlog_position.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('208_canonical_forecast_current_backlog_person_plan.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

@@ -138,6 +138,46 @@ realPostgres('Mission 26 Part 4B booking-cancellation cohort', () => {
       expect(overflow.status).toBe(503);
       expect(JSON.stringify(overflow.body))
         .not.toMatch(/observedRate|eligibleCount|sourceDigest|cohortDigest/);
+
+      // Prove the pre-eligibility guard remains bounded when almost every
+      // historical first booking was withdrawn before the cutoff. There are
+      // still 501 first-booking candidates, but only the original appointment
+      // remains eligible after these 500 immutable cancellation rows.
+      await fixture.ownerPool.query(`
+        WITH bounded_firsts AS (
+          SELECT id,appointment_id,
+            row_number() OVER (ORDER BY review_order)::integer AS row_number
+          FROM canonical_forecast_commercial_booking_reviews
+          WHERE organization_id=$1
+            AND action='first_booking_reviewed'
+            AND reason='Fictional bounded overflow evidence'
+        )
+        INSERT INTO canonical_forecast_commercial_booking_reviews(
+          id,organization_id,appointment_id,opportunity_id,approval_id,acceptance_id,
+          estimate_id,issued_version_id,approved_decision_id,approved_decision_digest,
+          reviewed_price_before_tax,currency,action,previous_review_id,reason,
+          actor_user_id,auth_session_id,request_key_hash,request_digest,review_order,
+          reviewed_at)
+        SELECT gen_random_uuid(),$1,firsts.appointment_id,gen_random_uuid(),
+          gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),
+          gen_random_uuid(),
+          encode(sha256(convert_to('withdrawn-decision-'||row_number::text,'UTF8')),'hex'),
+          '100.00','USD','booking_cancelled',firsts.id,
+          'Fictional pre-cutoff withdrawal bound evidence',$2,$3,
+          encode(sha256(convert_to('withdrawn-key-'||row_number::text,'UTF8')),'hex'),
+          encode(sha256(convert_to('withdrawn-request-'||row_number::text,'UTF8')),'hex'),
+          1000+row_number,'2026-08-28T12:00:00Z'
+        FROM bounded_firsts firsts`, [fixture.otherOrg,
+        fixture.actors.otherOwner.actorUserId,
+        fixture.actors.otherOwner.authSessionId]);
+      const withdrawalHeavyOverflow = await request(app)
+        .post('/api/v1/forecast/transition-cohorts/commercial-booking-withdrawals')
+        .set('X-CSRF-Token', fixture.actors.otherOwner.csrfToken)
+        .set('Idempotency-Key', `m26-p4b-withdrawal-heavy-overflow-${key()}`)
+        .send({ cutoffAt: CUTOFF, horizonEndsAt: HORIZON });
+      expect(withdrawalHeavyOverflow.status).toBe(503);
+      expect(JSON.stringify(withdrawalHeavyOverflow.body))
+        .not.toMatch(/observedRate|eligibleCount|sourceDigest|cohortDigest/);
     } finally {
       await fixture.ownerPool.query(`
         DROP TRIGGER IF EXISTS m26_part4b_test_insert_delay
@@ -283,6 +323,19 @@ realPostgres('Mission 26 Part 4B booking-cancellation cohort', () => {
     } finally {
       await missingIndex.query('ROLLBACK').catch(() => {});
       missingIndex.release();
+    }
+
+    const missingCandidateIndex = await fixture.ownerPool.connect();
+    try {
+      await missingCandidateIndex.query('BEGIN');
+      await missingCandidateIndex.query(`DROP INDEX
+        canonical_forecast_commercial_booking_reviews_cohort_candidates`);
+      await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(missingCandidateIndex,
+        { runtimeRole: fixture.roles.runtime }))
+        .rejects.toThrow('Required booking withdrawal cohort authority is missing');
+    } finally {
+      await missingCandidateIndex.query('ROLLBACK').catch(() => {});
+      missingCandidateIndex.release();
     }
 
     const missing = await fixture.ownerPool.connect();

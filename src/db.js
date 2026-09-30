@@ -1503,6 +1503,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_owner_reviewed_booking_position(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_commercial_booking_reviews_tenant_order') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_commercial_booking_reviews_cohort_candidates') IS NULL OR
          pg_catalog.to_regclass('public.canonical_forecast_booking_cancellation_cohorts') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_booking_cancellation_cohort_immutable()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_booking_cancellation_cohort_projection(public.canonical_forecast_booking_cancellation_cohorts,boolean)') IS NULL OR
@@ -2675,6 +2676,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          has_function_privilege($1,'public.canonical_forecast_owner_reviewed_booking_position(uuid,uuid,text,uuid,uuid)','EXECUTE')
        ) AS owner_reviewed_booking_position_guarded,
        (to_regclass('public.canonical_forecast_commercial_booking_reviews_tenant_order') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_commercial_booking_reviews_cohort_candidates') IS NOT NULL
          AND to_regclass('public.canonical_forecast_booking_cancellation_cohorts') IS NOT NULL
          AND to_regprocedure('public.canonical_forecast_booking_cancellation_cohort_immutable()') IS NOT NULL
          AND to_regprocedure('public.canonical_forecast_booking_cancellation_cohort_projection(public.canonical_forecast_booking_cancellation_cohorts,boolean)') IS NOT NULL

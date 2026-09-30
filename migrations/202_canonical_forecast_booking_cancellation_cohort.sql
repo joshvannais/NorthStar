@@ -10,6 +10,9 @@
 CREATE INDEX canonical_forecast_commercial_booking_reviews_tenant_order
  ON public.canonical_forecast_commercial_booking_reviews(
   organization_id,review_order DESC);
+CREATE INDEX canonical_forecast_commercial_booking_reviews_cohort_candidates
+ ON public.canonical_forecast_commercial_booking_reviews(
+  organization_id,action,reviewed_at,appointment_id);
 
 CREATE TABLE public.canonical_forecast_booking_cancellation_cohorts (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -96,7 +99,7 @@ DECLARE authority JSONB;
  inserted public.canonical_forecast_booking_cancellation_cohorts%ROWTYPE;
  key_hash TEXT;request_hash TEXT;members JSONB;source_hash TEXT;cohort_hash TEXT;
  nonce UUID;eligible INTEGER;cancelled INTEGER;high_water BIGINT;stale_value BOOLEAN;
- corrected_found BOOLEAN;bounded_count INTEGER;
+ corrected_found BOOLEAN;candidate_count INTEGER;bounded_count INTEGER;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
   cutoff_value IS NULL OR horizon_value IS NULL OR horizon_value<=cutoff_value OR
@@ -145,6 +148,20 @@ BEGIN
  WHERE organization_id=org;
  IF high_water>9007199254740991 THEN
   RAISE EXCEPTION 'Commercial booking source exceeds safe order size' USING ERRCODE='54000';
+ END IF;
+ -- Refuse before the as-of anti-join when the cutoff contains more first-booking
+ -- candidates than this bounded cohort can inspect. The candidate index limits
+ -- this preflight to the target action/time range and LIMIT 501 stops early.
+ SELECT count(*)::integer INTO candidate_count FROM (
+  SELECT 1
+  FROM public.canonical_forecast_commercial_booking_reviews candidate
+  WHERE candidate.organization_id=org
+   AND candidate.action='first_booking_reviewed'
+   AND candidate.reviewed_at<=cutoff_value
+  LIMIT 501) bounded_candidates;
+ IF candidate_count>500 THEN
+  RAISE EXCEPTION 'Booking cancellation cohort exceeds bounded candidate size'
+   USING ERRCODE='54000';
  END IF;
  -- Bound the lightweight eligible identity set before performing per-member
  -- latest/cancellation enrichment. This keeps at most 501 enriched rows while

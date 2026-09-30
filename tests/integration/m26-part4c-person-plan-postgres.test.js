@@ -260,4 +260,57 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
       [fixture.org, context.appointment]);
     expect(count.rows[0].count).toBe(1);
   }, 120000);
+
+  test('holds paid authority and rechecks a trial clock immediately before insertion', async () => {
+    const context = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true, start: '2027-12-15T13:00:00.000Z' });
+    const plan = await seedApprovedPlan(context);
+    await fixture.ownerPool.query(
+      `WITH witness AS MATERIALIZED (
+         SELECT clock_timestamp()+interval '3 seconds' trial_end
+       )
+       UPDATE subscriptions
+       SET status='trialing',
+           trial_started_at=witness.trial_end-interval '14 days',
+           trial_ends_at=witness.trial_end
+       FROM witness
+       WHERE organization_id=$1`, [fixture.org]);
+    const blocker = await fixture.ownerPool.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
+        [`m26:backlog-person-plan:${fixture.org}:${context.appointment}`]);
+      const mutation = directMutate(context, approvalBody(context, plan),
+        `m26-p4c-person-plan-expiry-${uuid()}`)
+        .then(value => ({ value }), error => ({ error }));
+      let waiting = false;
+      for (let attempt = 0; attempt < 100 && !waiting; attempt += 1) {
+        const observed = await fixture.ownerPool.query(
+          `SELECT EXISTS(
+             SELECT 1 FROM pg_locks
+             WHERE locktype='advisory' AND granted=FALSE) waiting`);
+        waiting = observed.rows[0].waiting;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(waiting).toBe(true);
+      await new Promise(resolve => setTimeout(resolve, 3200));
+      await blocker.query('COMMIT');
+      const outcome = await mutation;
+      expect(outcome.error).toMatchObject({ code: '42501' });
+      expect(outcome.value).toBeUndefined();
+      const count = await fixture.ownerPool.query(
+        `SELECT count(*)::integer count
+         FROM canonical_forecast_current_backlog_person_plan_reviews
+         WHERE organization_id=$1 AND appointment_id=$2`,
+        [fixture.org, context.appointment]);
+      expect(count.rows[0].count).toBe(0);
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      blocker.release();
+      await fixture.ownerPool.query(
+        `UPDATE subscriptions SET status='active',trial_started_at=NULL,trial_ends_at=NULL
+         WHERE organization_id=$1`, [fixture.org]);
+    }
+  }, 120000);
 });

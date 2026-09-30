@@ -131,6 +131,8 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     expect(sql).toContain("plan_value.expected_decision_revision=decision_value.revision");
     expect(sql).toContain("rtrim(plan_value.expected_decision_digest)=rtrim(decision_value.digest)");
     expect(sql).toContain('newer.revision>value.revision');
+    expect(sql).toContain('FOR SHARE OF subscription');
+    expect(sql.match(/authority:=public\.canonical_forecast_booking_ordered_access\(/g)).toHaveLength(2);
     expect(sql).toContain("'knownSubsetOnly',TRUE,'sourceCoverageComplete',FALSE");
     expect(sql).toContain("'forecastIssued',FALSE,'paidNumericServing',FALSE");
     expect(sql).toContain('REVOKE ALL ON TABLE public.canonical_forecast_current_backlog_person_plan_reviews FROM PUBLIC');

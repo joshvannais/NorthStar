@@ -184,6 +184,11 @@ BEGIN
     (body->>'expectedCurrentReviewDigest')~'^[0-9a-f]{64}$')) THEN
   RAISE EXCEPTION 'Backlog person-plan review input invalid' USING ERRCODE='22023';
  END IF;
+ PERFORM 1 FROM public.subscriptions subscription
+ WHERE subscription.organization_id=org FOR SHARE OF subscription;
+ IF NOT FOUND THEN
+  RAISE EXCEPTION 'Current forecast access unavailable' USING ERRCODE='42501';
+ END IF;
  authority:=public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
@@ -315,6 +320,8 @@ BEGIN
  IF next_revision>10000 THEN
   RAISE EXCEPTION 'Backlog person-plan review limit reached' USING ERRCODE='54000';
  END IF;
+ authority:=public.canonical_forecast_booking_ordered_access(
+  org,actor,role_value,session_value,csrf,TRUE);
  INSERT INTO public.canonical_forecast_current_backlog_person_plan_reviews(
   organization_id,appointment_id,opportunity_id,revision,previous_id,action,
   assignment_id,assignment_revision,assignment_digest,estimate_id,

@@ -16,6 +16,24 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
     request(fixture.app).post('/api/v1/forecast/current-backlog/snapshots')
       .set(fixture.actors[actor].session.headers).set('Idempotency-Key', requestKey).send({});
 
+  const directCapture = async (requestKey = `m26-p4c-direct-${key()}`) => {
+    const actor = fixture.actors.owner;
+    const client = await fixture.runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      const value = (await client.query(
+        `SELECT canonical_forecast_current_backlog_snapshot_capture(
+          $1,$2,$3,$4,$5,$6) value`,
+        [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+          actor.csrfToken, requestKey])).rows[0].value;
+      await client.query('COMMIT');
+      return value;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally { client.release(); }
+  };
+
   const completeThroughCanonicalWriter = async (context, action = 'propose_completion', extra = {}) => {
     const input = require('../../src/completion/contract').normalizeCompletionAction({
       ...context.actor,
@@ -114,6 +132,28 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
       .toEqual([false, true]);
   }, 120000);
 
+  test('an unrelated tenant writer-level lock cannot block capture', async () => {
+    const other = await fixture.createExecution({
+      actor: 'otherOwner',
+      useMigrationRoleForUpstreamSeed: true,
+    });
+    const blocker = await fixture.ownerPool.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query(
+        `SELECT id FROM canonical_field_executions
+         WHERE organization_id=$1 AND id=$2 FOR UPDATE`,
+      [fixture.otherOrg, other.execution.id]);
+      await blocker.query('LOCK TABLE canonical_field_executions IN ROW EXCLUSIVE MODE');
+      const value = await directCapture();
+      expect(value.replayed).toBe(false);
+      expect(value.snapshot.sourceAuthenticated).toBe(true);
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      blocker.release();
+    }
+  }, 120000);
+
   test('refuses 501 authenticated booking identities before enrichment or persistence', async () => {
     const client = await fixture.ownerPool.connect();
     try {
@@ -168,6 +208,21 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
     const before = Number((await fixture.ownerPool.query(
       'SELECT count(*) value FROM canonical_forecast_current_backlog_snapshots WHERE organization_id=$1',
       [fixture.org])).rows[0].value);
+    const planner = await fixture.ownerPool.connect();
+    try {
+      await planner.query('BEGIN');
+      await planner.query('SET LOCAL enable_seqscan=off');
+      const plan = await planner.query(`EXPLAIN (FORMAT JSON)
+        SELECT position_value.appointment_id
+        FROM canonical_forecast_current_backlog_booking_positions position_value
+        WHERE position_value.organization_id=$1 AND position_value.active
+        ORDER BY position_value.appointment_id LIMIT 501`, [fixture.org]);
+      expect(JSON.stringify(plan.rows[0])).toContain(
+        'canonical_forecast_current_backlog_booking_positions_active');
+    } finally {
+      await planner.query('ROLLBACK').catch(() => {});
+      planner.release();
+    }
     const runtime = await fixture.runtimePool.connect();
     try {
       await runtime.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
@@ -197,6 +252,9 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
     await expect(fixture.runtimePool.query(
       'SELECT * FROM canonical_forecast_current_backlog_snapshots'))
       .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(
+      'SELECT * FROM canonical_forecast_current_backlog_booking_positions'))
+      .rejects.toMatchObject({ code: '42501' });
     await expect(fixture.ownerPool.query(
       'DELETE FROM canonical_forecast_current_backlog_snapshots'))
       .rejects.toMatchObject({ code: '23514' });
@@ -206,7 +264,7 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
     const missing = await fixture.ownerPool.connect();
     try {
       await missing.query('BEGIN');
-      await missing.query('DROP INDEX canonical_forecast_current_backlog_snapshots_tenant_capture');
+      await missing.query('DROP INDEX canonical_forecast_current_backlog_booking_positions_active');
       await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(missing,
         { runtimeRole: fixture.roles.runtime }))
         .rejects.toThrow('Required current backlog snapshot authority is missing');

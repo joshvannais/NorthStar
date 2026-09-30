@@ -21,7 +21,7 @@ CREATE TABLE public.canonical_forecast_current_backlog_snapshots (
  auth_session_id UUID NOT NULL,
  request_key_hash TEXT NOT NULL CHECK(request_key_hash~'^[a-f0-9]{64}$'),
  request_digest TEXT NOT NULL CHECK(request_digest~'^[a-f0-9]{64}$'),
- captured_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+ captured_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
  UNIQUE(organization_id,id),
  UNIQUE(organization_id,actor_user_id,request_key_hash),
  CHECK(approved_unscheduled_count+approved_scheduled_count+work_in_progress_count+
@@ -35,6 +35,99 @@ CREATE TABLE public.canonical_forecast_current_backlog_snapshots (
 CREATE INDEX canonical_forecast_current_backlog_snapshots_tenant_capture
  ON public.canonical_forecast_current_backlog_snapshots(
   organization_id,captured_at DESC,id);
+
+-- This private current projection converts append-only booking history into a
+-- unique, index-bounded identity source. It is maintained in the same
+-- transactions as the genuine schedule event and assignment writers. Capture
+-- never groups or enriches the unbounded event history.
+CREATE TABLE public.canonical_forecast_current_backlog_booking_positions (
+ organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
+ appointment_id UUID NOT NULL,
+ assignment_id UUID NOT NULL,
+ first_booking_order BIGINT NOT NULL CHECK(first_booking_order>0),
+ latest_booking_order BIGINT NOT NULL CHECK(latest_booking_order>=first_booking_order),
+ active BOOLEAN NOT NULL,
+ schedule_revision BIGINT NOT NULL CHECK(schedule_revision>0),
+ schedule_digest TEXT NOT NULL CHECK(schedule_digest~'^[a-f0-9]{64}$'),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(organization_id,appointment_id),
+ FOREIGN KEY(organization_id,appointment_id)
+  REFERENCES public.canonical_appointments(organization_id,id) ON DELETE RESTRICT,
+ FOREIGN KEY(organization_id,assignment_id)
+  REFERENCES public.canonical_schedule_assignments(organization_id,id) ON DELETE RESTRICT
+);
+CREATE INDEX canonical_forecast_current_backlog_booking_positions_active
+ ON public.canonical_forecast_current_backlog_booking_positions(
+  organization_id,appointment_id)
+ INCLUDE(first_booking_order,assignment_id,schedule_revision,schedule_digest)
+ WHERE active;
+
+INSERT INTO public.canonical_forecast_current_backlog_booking_positions(
+ organization_id,appointment_id,assignment_id,first_booking_order,
+ latest_booking_order,active,schedule_revision,schedule_digest)
+SELECT event_value.organization_id,event_value.appointment_id,assignment.id,
+ min(event_value.source_order),max(event_value.source_order),
+ assignment.appointment_status<>'cancelled',assignment.revision,
+ rtrim(assignment.canonical_digest)
+FROM public.canonical_forecast_schedule_booking_events event_value
+JOIN public.canonical_schedule_assignments assignment
+ ON assignment.organization_id=event_value.organization_id
+ AND assignment.appointment_id=event_value.appointment_id
+WHERE event_value.transition_kind='accepted_booking'
+GROUP BY event_value.organization_id,event_value.appointment_id,assignment.id,
+ assignment.appointment_status,assignment.revision,assignment.canonical_digest;
+
+CREATE FUNCTION public.canonical_forecast_current_backlog_booking_event_sync()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE assignment_value public.canonical_schedule_assignments%ROWTYPE;
+BEGIN
+ IF NEW.transition_kind<>'accepted_booking' THEN RETURN NEW; END IF;
+ SELECT * INTO STRICT assignment_value
+ FROM public.canonical_schedule_assignments
+ WHERE organization_id=NEW.organization_id AND id=NEW.assignment_id
+  AND appointment_id=NEW.appointment_id;
+ INSERT INTO public.canonical_forecast_current_backlog_booking_positions(
+  organization_id,appointment_id,assignment_id,first_booking_order,
+  latest_booking_order,active,schedule_revision,schedule_digest)
+ VALUES(NEW.organization_id,NEW.appointment_id,NEW.assignment_id,
+  NEW.source_order,NEW.source_order,
+  assignment_value.appointment_status<>'cancelled',assignment_value.revision,
+  rtrim(assignment_value.canonical_digest))
+ ON CONFLICT(organization_id,appointment_id) DO UPDATE SET
+  assignment_id=EXCLUDED.assignment_id,
+  first_booking_order=least(
+   canonical_forecast_current_backlog_booking_positions.first_booking_order,
+   EXCLUDED.first_booking_order),
+  latest_booking_order=greatest(
+   canonical_forecast_current_backlog_booking_positions.latest_booking_order,
+   EXCLUDED.latest_booking_order),
+  active=EXCLUDED.active,schedule_revision=EXCLUDED.schedule_revision,
+  schedule_digest=EXCLUDED.schedule_digest,updated_at=clock_timestamp();
+ RETURN NEW;
+END $$;
+CREATE TRIGGER canonical_forecast_current_backlog_booking_event_sync
+ AFTER INSERT ON public.canonical_forecast_schedule_booking_events
+ FOR EACH ROW EXECUTE FUNCTION
+  public.canonical_forecast_current_backlog_booking_event_sync();
+
+CREATE FUNCTION public.canonical_forecast_current_backlog_assignment_sync()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ UPDATE public.canonical_forecast_current_backlog_booking_positions SET
+  assignment_id=NEW.id,active=NEW.appointment_status<>'cancelled',
+  schedule_revision=NEW.revision,schedule_digest=rtrim(NEW.canonical_digest),
+  updated_at=clock_timestamp()
+ WHERE organization_id=NEW.organization_id
+  AND appointment_id=NEW.appointment_id;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER canonical_forecast_current_backlog_assignment_sync
+ AFTER UPDATE OF appointment_status,schedule_state,revision,canonical_digest
+ ON public.canonical_schedule_assignments
+ FOR EACH ROW EXECUTE FUNCTION
+  public.canonical_forecast_current_backlog_assignment_sync();
 
 CREATE FUNCTION public.canonical_forecast_current_backlog_snapshot_immutable()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
@@ -151,35 +244,30 @@ BEGIN
    public.canonical_forecast_current_backlog_snapshot_projection(existing,stale_value),
    'replayed',TRUE);
  END IF;
- LOCK TABLE public.canonical_schedule_assignments IN SHARE MODE NOWAIT;
- LOCK TABLE public.canonical_field_executions IN SHARE MODE NOWAIT;
- SELECT COALESCE(MAX(source_order),0) INTO high_water
- FROM public.canonical_forecast_schedule_booking_events WHERE organization_id=org;
+ -- SERIALIZABLE supplies one logical tenant snapshot without cross-tenant
+ -- table locks. The private unique-position projection bounds identity work;
+ -- persisted revision/digest pins and the source high-water invalidate later
+ -- source changes on every read.
+ SELECT COALESCE((SELECT source_order
+  FROM public.canonical_forecast_schedule_booking_events
+  WHERE organization_id=org ORDER BY source_order DESC LIMIT 1),0)
+ INTO high_water;
  SELECT count(*)::integer INTO candidate_count FROM (
-  SELECT event_value.appointment_id
-  FROM public.canonical_forecast_schedule_booking_events event_value
-  JOIN public.canonical_schedule_assignments assignment
-   ON assignment.organization_id=event_value.organization_id
-   AND assignment.appointment_id=event_value.appointment_id
-  WHERE event_value.organization_id=org
-   AND event_value.transition_kind='accepted_booking'
-   AND assignment.appointment_status<>'cancelled'
-  GROUP BY event_value.appointment_id
+  SELECT position_value.appointment_id
+  FROM public.canonical_forecast_current_backlog_booking_positions position_value
+  WHERE position_value.organization_id=org AND position_value.active
+  ORDER BY position_value.appointment_id
   LIMIT 501) bounded_candidates;
  IF candidate_count>500 THEN
   RAISE EXCEPTION 'Current backlog source exceeds bounded size' USING ERRCODE='54000';
  END IF;
  WITH candidates AS (
-  SELECT event_value.appointment_id,min(event_value.source_order) first_booking_order
-  FROM public.canonical_forecast_schedule_booking_events event_value
-  JOIN public.canonical_schedule_assignments assignment
-   ON assignment.organization_id=event_value.organization_id
-   AND assignment.appointment_id=event_value.appointment_id
-  WHERE event_value.organization_id=org
-   AND event_value.transition_kind='accepted_booking'
-   AND assignment.appointment_status<>'cancelled'
-  GROUP BY event_value.appointment_id
-  ORDER BY event_value.appointment_id LIMIT 500
+  SELECT position_value.appointment_id,position_value.first_booking_order,
+   position_value.assignment_id,position_value.schedule_revision,
+   rtrim(position_value.schedule_digest) schedule_digest
+  FROM public.canonical_forecast_current_backlog_booking_positions position_value
+  WHERE position_value.organization_id=org AND position_value.active
+  ORDER BY position_value.appointment_id LIMIT 500
  ), enriched AS (
   SELECT candidate.appointment_id,candidate.first_booking_order,
    assignment.id assignment_id,assignment.revision schedule_revision,
@@ -190,7 +278,9 @@ BEGIN
    rtrim(execution_value.canonical_digest) execution_digest,
    execution_value.lifecycle_state,execution_revision.id execution_revision_id,
    CASE
-    WHEN schedule_revision.id IS NULL OR
+    WHEN assignment.revision<>candidate.schedule_revision OR
+      rtrim(assignment.canonical_digest)<>candidate.schedule_digest OR
+      schedule_revision.id IS NULL OR
       (execution_value.id IS NOT NULL AND execution_revision.id IS NULL) OR
       execution_value.lifecycle_state='cancelled' THEN 'unresolved_linkage'
     WHEN execution_value.lifecycle_state='completed' THEN 'completed'
@@ -203,6 +293,7 @@ BEGIN
   JOIN public.canonical_schedule_assignments assignment
    ON assignment.organization_id=org
    AND assignment.appointment_id=candidate.appointment_id
+   AND assignment.id=candidate.assignment_id
   LEFT JOIN public.canonical_schedule_assignment_revisions schedule_revision
    ON schedule_revision.organization_id=assignment.organization_id
    AND schedule_revision.assignment_id=assignment.id
@@ -285,6 +376,11 @@ BEGIN
 END $$;
 
 REVOKE ALL ON TABLE public.canonical_forecast_current_backlog_snapshots FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_forecast_current_backlog_booking_positions FROM PUBLIC;
+REVOKE ALL ON FUNCTION
+ public.canonical_forecast_current_backlog_booking_event_sync() FROM PUBLIC;
+REVOKE ALL ON FUNCTION
+ public.canonical_forecast_current_backlog_assignment_sync() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_stale(
  public.canonical_forecast_current_backlog_snapshots) FROM PUBLIC;

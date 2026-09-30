@@ -51,16 +51,23 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
   test('migration bounds identities before enrichment and keeps private authority false', () => {
     const sql = fs.readFileSync(
       'migrations/207_canonical_forecast_current_backlog_position.sql', 'utf8');
+    const candidateStart = sql.indexOf('SELECT count(*)::integer INTO candidate_count');
     const preflight = sql.indexOf('LIMIT 501) bounded_candidates');
     const refusal = sql.indexOf('IF candidate_count>500');
     const enrichment = sql.indexOf('WITH candidates AS');
-    expect(preflight).toBeGreaterThan(0);
+    expect(candidateStart).toBeGreaterThan(0);
+    expect(preflight).toBeGreaterThan(candidateStart);
     expect(refusal).toBeGreaterThan(preflight);
     expect(enrichment).toBeGreaterThan(refusal);
     expect(sql).toContain("'knownSubsetOnly',TRUE,'sourceCoverageComplete',FALSE");
     expect(sql).toContain("'plannedPersonMinutes',NULL");
-    expect(sql).toContain('LOCK TABLE public.canonical_schedule_assignments IN SHARE MODE NOWAIT');
-    expect(sql).toContain('LOCK TABLE public.canonical_field_executions IN SHARE MODE NOWAIT');
+    expect(sql).toContain('canonical_forecast_current_backlog_booking_positions_active');
+    expect(sql).not.toContain('LOCK TABLE public.canonical_schedule_assignments');
+    expect(sql).not.toContain('LOCK TABLE public.canonical_field_executions');
+    expect(sql.slice(candidateStart, enrichment)).toContain(
+      'canonical_forecast_current_backlog_booking_positions');
+    expect(sql.slice(candidateStart, enrichment)).not.toContain(
+      'canonical_forecast_schedule_booking_events');
     expect(sql).toContain('REVOKE ALL ON TABLE public.canonical_forecast_current_backlog_snapshots FROM PUBLIC');
   });
 });

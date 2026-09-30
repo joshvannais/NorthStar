@@ -10,6 +10,9 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
 const SESSION = '33333333-3333-4333-8333-333333333333';
 const COHORT = '44444444-4444-4444-8444-444444444444';
+const OPPORTUNITY = '55555555-5555-4555-8555-555555555555';
+const REVIEW = '66666666-6666-4666-8666-666666666666';
+const FINALIZATION = '77777777-7777-4777-8777-777777777777';
 const DIGEST = 'a'.repeat(64);
 const KEY = 'm26-transition-cohort-request-1';
 const CUTOFF = '2026-09-01T00:00:00.000000Z';
@@ -36,7 +39,33 @@ function scheduleCohort(extra = {}) {
     sourceAuthority: 'northstar_human_approved_schedule_history', ...extra });
 }
 
-function application({ role = 'owner', captured, read, databaseError } = {}) {
+function qualificationCohort(extra = {}) {
+  const value = cohort({ version: 'm26-lead-qualification-cohort-v1',
+    targetKey: 'demand.qualification_transition.v1',
+    sourceAuthority: 'northstar_human_reviewed_lead_state', ...extra });
+  value.qualifiedCount = value.cancelledCount;
+  delete value.cancelledCount;
+  return value;
+}
+
+function qualificationReview(extra = {}) {
+  return { id: REVIEW, opportunityId: OPPORTUNITY, revision: 1,
+    previousId: null, eventKey: REVIEW, supersedesId: null, action: 'observe',
+    state: 'open', effectiveAt: CUTOFF, reason: 'Owner reviewed the lead state.',
+    digest: DIGEST, createdAt: CUTOFF,
+    sourceAuthority: 'northstar_human_reviewed_lead_state', ...extra };
+}
+
+function qualificationFinalization(extra = {}) {
+  return { id: FINALIZATION, revision: 1, previousId: null,
+    recordedThrough: HORIZON, sourceHighWaterOrder: 2,
+    reason: 'Owner reviewed the bounded source through the ended horizon.',
+    digest: DIGEST, createdAt: '2026-09-09T00:00:00.000000Z',
+    boundary: 'Finalization covers only this NorthStar human-review source.', ...extra };
+}
+
+function application({ role = 'owner', captured, read, reviewMutated, reviewRead,
+  finalizationMutated, finalizationRead, databaseError } = {}) {
   const app = express();
   app.set('query parser', querystring.parse);
   app.use(express.json());
@@ -50,6 +79,15 @@ function application({ role = 'owner', captured, read, databaseError } = {}) {
   };
   const client = { query: jest.fn(async sql => {
     if (databaseError && sql.startsWith('SELECT public.')) throw databaseError;
+    if (sql.includes('canonical_lead_state_review_mutate')) return { rows: [{ value:
+      reviewMutated || { review: qualificationReview(), replayed: false } }] };
+    if (sql.includes('canonical_lead_state_review_read')) return { rows: [{ value:
+      reviewRead || { current: qualificationReview(), history: [qualificationReview()],
+        total: 1, truncated: false, boundary: 'Tenant-private reviewed history.' } }] };
+    if (sql.includes('canonical_lead_state_finalization_mutate')) return { rows: [{ value:
+      finalizationMutated || { finalization: qualificationFinalization(), replayed: false } }] };
+    if (sql.includes('canonical_lead_state_finalization_read')) return { rows: [{ value:
+      finalizationRead === undefined ? qualificationFinalization() : finalizationRead }] };
     if (sql.includes('_capture')) return { rows: [{ value: captured || {
       cohort: cohort(), replayed: false } }] };
     if (sql.includes('_read')) return { rows: [{ value: read || cohort() }] };
@@ -58,7 +96,8 @@ function application({ role = 'owner', captured, read, databaseError } = {}) {
   const pool = { connect: jest.fn(async () => client) };
   const bypass = (_req, _res, next) => next();
   app.use('/cohorts', createForecastTransitionCohortsRouter({ auth,
-    throttle: bypass, captureThrottle: bypass, poolProvider: () => pool }));
+    throttle: bypass, captureThrottle: bypass, reviewThrottle: bypass,
+    poolProvider: () => pool }));
   return { app, pool, client };
 }
 
@@ -199,4 +238,77 @@ test('reads schedule receipts without accepting commercial or private result poi
     memberReceipts: [{ appointmentId: COHORT }] }) });
   expect((await request(privatePoison.app)
     .get(`/cohorts/schedule-booking-cancellations/${COHORT}`)).status).toBe(503);
+});
+
+test('records and reads tenant-private human-reviewed lead state', async () => {
+  const { app, client } = application();
+  const created = await request(app)
+    .post(`/cohorts/lead-qualification-sources/${OPPORTUNITY}/reviews`)
+    .set('X-CSRF-Token', 'validated-csrf').set('Idempotency-Key', KEY)
+    .send({ action: 'observe', state: 'open', effectiveAt: CUTOFF,
+      reason: 'Owner reviewed the lead state.' });
+  expect(created.status).toBe(201);
+  expect(created.body.data).toMatchObject({ replayed: false,
+    review: { opportunityId: OPPORTUNITY, state: 'open',
+      sourceAuthority: 'northstar_human_reviewed_lead_state' } });
+  expect(client.query.mock.calls[3][0]).toContain('canonical_lead_state_review_mutate');
+  expect(client.query.mock.calls[3][1]).toEqual([ORG, USER, 'owner', SESSION,
+    'validated-csrf', KEY, OPPORTUNITY, 'observe', 'open', CUTOFF,
+    'Owner reviewed the lead state.']);
+  const readResponse = await request(application().app)
+    .get(`/cohorts/lead-qualification-sources/${OPPORTUNITY}/reviews`);
+  expect(readResponse.status).toBe(200);
+  expect(readResponse.body.data).toMatchObject({ total: 1, truncated: false,
+    current: { opportunityId: OPPORTUNITY, state: 'open' } });
+});
+
+test('finalizes only the narrow reviewed source and rejects result poison', async () => {
+  const { app } = application();
+  const created = await request(app).post('/cohorts/lead-qualification-sources/finalizations')
+    .set('X-CSRF-Token', 'validated-csrf').set('Idempotency-Key', KEY)
+    .send({ recordedThrough: HORIZON,
+      reason: 'Owner reviewed the bounded source through the ended horizon.' });
+  expect(created.status).toBe(201);
+  expect(created.body.data).toMatchObject({ replayed: false,
+    finalization: { id: FINALIZATION, recordedThrough: HORIZON,
+      sourceHighWaterOrder: 2 } });
+  const poisoned = application({ finalizationRead: qualificationFinalization({
+    privateLeadIds: [OPPORTUNITY] }) });
+  expect((await request(poisoned.app)
+    .get('/cohorts/lead-qualification-sources/finalizations/current')).status).toBe(503);
+});
+
+test('captures qualification transitions without presenting a calibrated probability', async () => {
+  const value = qualificationCohort();
+  const { app, client } = application({ captured: { cohort: value, replayed: false } });
+  const response = await request(app).post('/cohorts/lead-qualifications')
+    .set('X-CSRF-Token', 'validated-csrf').set('Idempotency-Key', KEY)
+    .send({ cutoffAt: CUTOFF, horizonEndsAt: HORIZON });
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({
+    targetKey: 'demand.qualification_transition.v1', eligibleCount: 3,
+    qualifiedCount: 1, observedRate: '0.333333',
+    sourceAuthority: 'northstar_human_reviewed_lead_state',
+    sourceAuthenticated: true, sourceCoverageComplete: false,
+    offPlatformCoverageVerified: false, providerCoverageVerified: false,
+    probabilityCalibrated: false, forecastIssued: false,
+    paidNumericServing: false, replayed: false });
+  expect(client.query.mock.calls[3][0]).toContain(
+    'canonical_forecast_lead_qualification_cohort_capture');
+  const poisoned = application({ read: qualificationCohort({
+    sourceCoverageComplete: true }) });
+  expect((await request(poisoned.app)
+    .get(`/cohorts/lead-qualifications/${COHORT}`)).status).toBe(503);
+});
+
+test('rejects lead-source poison before touching PostgreSQL', async () => {
+  const { app, pool } = application();
+  expect((await request(app)
+    .post(`/cohorts/lead-qualification-sources/${OPPORTUNITY}/reviews`)
+    .set('Idempotency-Key', KEY).send({ action: 'observe', state: 'qualified',
+      effectiveAt: '2026-02-30T00:00:00.000000Z', reason: 'bad' })).status).toBe(400);
+  expect((await request(app).post('/cohorts/lead-qualification-sources/finalizations')
+    .set('Idempotency-Key', KEY).send({ recordedThrough: HORIZON,
+      reason: 'ok', organizationId: ORG })).status).toBe(400);
+  expect(pool.connect).not.toHaveBeenCalled();
 });

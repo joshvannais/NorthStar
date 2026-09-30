@@ -8,6 +8,8 @@ const { createForecastCurrentBacklogRouter, safeSnapshot } =
   require('../../src/routes/forecastCurrentBacklog');
 
 const ID = '11111111-1111-4111-8111-111111111111';
+const READ_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const OTHER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ACTOR = '22222222-2222-4222-8222-222222222222';
 const SESSION = '33333333-3333-4333-8333-333333333333';
 const DIGEST = 'a'.repeat(64);
@@ -97,6 +99,32 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     expect(controller.state().kind).toBe('stale');
     expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
     expect(JSON.stringify(controller.state())).not.toMatch(/780|sourceDigest|snapshotDigest/);
+  });
+
+  test('rejects a mismatched read receipt before mutation and retries the normalized requested identity', async () => {
+    const fixture = documentFixture(), calls = [];
+    const controller = demand.create({ mode: 'paid', document: fixture.document,
+      idempotency: () => 'unused-part4d-key', fetcher: async url => {
+        calls.push(url);
+        return response(200, snapshot({ id: calls.length === 1 ? OTHER_ID : READ_ID }));
+      } });
+    fixture.values.commandCenterBacklogReceipt.value = READ_ID.toUpperCase();
+    await controller.read();
+    expect(calls).toEqual([
+      `/api/v1/forecast/current-backlog/snapshots/${READ_ID}`,
+    ]);
+    expect(controller.state()).toMatchObject({ kind: 'failure', metrics: [] });
+    expect(fixture.values.commandCenterBacklogReceipt.value).toBe(READ_ID.toUpperCase());
+    expect(JSON.stringify(controller.state())).not.toMatch(/780|13 person-hours/);
+
+    fixture.values.commandCenterBacklogReceipt.value = OTHER_ID;
+    await controller.retry();
+    expect(calls).toEqual([
+      `/api/v1/forecast/current-backlog/snapshots/${READ_ID}`,
+      `/api/v1/forecast/current-backlog/snapshots/${READ_ID}`,
+    ]);
+    expect(controller.state()).toMatchObject({ kind: 'available', receiptId: READ_ID });
+    expect(fixture.values.commandCenterBacklogReceipt.value).toBe(READ_ID);
   });
 
   test('keeps bounded counts separate when reviewed planned time is missing or noncurrent', () => {

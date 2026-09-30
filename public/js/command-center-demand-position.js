@@ -216,6 +216,10 @@
             failure(response.status, body && body.error && body.error.category);
             return null;
           }
+          if (operation.kind === 'read' && body.data.id !== operation.id) {
+            failure(503, 'FORECAST_CURRENT_BACKLOG_UNAVAILABLE');
+            return null;
+          }
           var model = project(body.data, false);
           if (!model) {
             failure(503, 'FORECAST_CURRENT_BACKLOG_UNAVAILABLE');

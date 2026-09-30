@@ -141,6 +141,7 @@
   function create(options) {
     var doc = options.document, mode = options.mode === 'demo' ? 'demo' : 'paid';
     var fetcher = options.fetcher, lastOperation = null, pendingCaptureKey = null;
+    var operationGeneration = 0, workspaceAvailable = true;
     var current = { kind: 'initial', badge: 'Receipt required',
       title: 'Choose a saved backlog receipt',
       explanation: 'Capture a bounded current fact, or enter an exact saved receipt ID to read it. Nothing is captured on page load.',
@@ -184,6 +185,8 @@
       paint(model);
     }
     function request(operation) {
+      if (!workspaceAvailable) return Promise.resolve(null);
+      var generation = ++operationGeneration;
       lastOperation = operation;
       paint({ kind: 'loading', badge: 'Loading receipt', title: 'Checking the bounded source',
         explanation: 'Counts remain hidden until the exact guarded response is verified.', metrics: [] });
@@ -196,6 +199,7 @@
         (operation.kind === 'read' ? '/' + encodeURIComponent(operation.id) : '');
       return fetcher(url, settings).then(function (response) {
         return response.json().catch(function () { return null; }).then(function (body) {
+          if (generation !== operationGeneration || !workspaceAvailable) return null;
           if (!response.ok || !body || body.success !== true || !body.data) {
             failure(response.status, body && body.error && body.error.category);
             return null;
@@ -211,17 +215,18 @@
           return model;
         });
       }).catch(function () {
+        if (generation !== operationGeneration || !workspaceAvailable) return null;
         failure(0, 'WORKSPACE_FAILURE');
         return null;
       });
     }
     function capture() {
-      if (mode === 'demo') return Promise.resolve(null);
+      if (mode === 'demo' || !workspaceAvailable) return Promise.resolve(null);
       if (!pendingCaptureKey) pendingCaptureKey = options.idempotency();
       return request({ kind: 'capture', key: pendingCaptureKey });
     }
     function read() {
-      if (mode === 'demo') return Promise.resolve(null);
+      if (mode === 'demo' || !workspaceAvailable) return Promise.resolve(null);
       var id = String(node('commandCenterBacklogReceipt').value || '').trim().toLowerCase();
       if (!UUID.test(id)) {
         paint({ kind: 'invalid', badge: 'Receipt ID required', title: 'Enter an exact saved receipt ID',
@@ -235,14 +240,25 @@
       return lastOperation ? request(lastOperation) : Promise.resolve(null);
     }
     function workspaceUnavailable() {
+      workspaceAvailable = false;
+      operationGeneration += 1;
       paint({ kind: 'workspace', badge: 'Workspace unavailable', title: 'Backlog view could not load',
         explanation: 'Refresh the workspace before capturing or reading a receipt. No value is shown.', metrics: [] });
     }
     function workspaceReady() {
-      if (current.kind === 'workspace') paint({ kind: 'initial', badge: 'Receipt required',
-        title: 'Choose a saved backlog receipt',
-        explanation: 'Capture a bounded current fact, or enter an exact saved receipt ID to read it. Nothing is captured on page load.',
-        metrics: [] });
+      workspaceAvailable = true;
+      if (current.kind !== 'workspace') return;
+      if (lastOperation) {
+        paint({ kind: 'failure', badge: 'Receipt result unconfirmed',
+          title: 'Retry the same explicit receipt action',
+          explanation: 'Workspace recovery cannot confirm the earlier result. Retry preserves its exact request identity.',
+          metrics: [] });
+      } else {
+        paint({ kind: 'initial', badge: 'Receipt required',
+          title: 'Choose a saved backlog receipt',
+          explanation: 'Capture a bounded current fact, or enter an exact saved receipt ID to read it. Nothing is captured on page load.',
+          metrics: [] });
+      }
     }
     node('commandCenterBacklogCapture').addEventListener('click', capture);
     node('commandCenterBacklogRead').addEventListener('click', read);

@@ -143,7 +143,8 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     await controller.retry();
     expect(retryWorkspace).toHaveBeenCalledTimes(1);
     controller.workspaceReady();
-    expect(controller.state().kind).toBe('initial');
+    expect(controller.state()).toMatchObject({ kind: 'failure',
+      badge: 'Receipt result unconfirmed' });
     expect(fixture.values.commandCenterBacklogCapture.disabled).toBe(false);
   });
 
@@ -163,6 +164,45 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     expect(JSON.stringify(controller.state())).not.toContain('tenant');
     expect(controller.state().metrics).toEqual([]);
   });
+
+  test.each(['capture', 'read'])(
+    'withholds an in-flight %s completion after workspace failure and retries only after recovery',
+    async kind => {
+      const fixture = documentFixture(), calls = [];
+      let resolveFirst;
+      const first = new Promise(resolve => { resolveFirst = resolve; });
+      const controller = demand.create({ mode: 'paid', document: fixture.document,
+        idempotency: () => 'part4d-inflight-stable-key',
+        fetcher: async (url, options) => {
+          calls.push({ url, key: options.headers['Idempotency-Key'] || null });
+          if (calls.length === 1) return first;
+          return response(kind === 'capture' ? 201 : 200,
+            kind === 'capture' ? { ...snapshot(), replayed: true } : snapshot());
+        } });
+      fixture.values.commandCenterBacklogReceipt.value = ID;
+      const pending = kind === 'capture' ? controller.capture() : controller.read();
+      controller.workspaceUnavailable();
+      expect(controller.state().kind).toBe('workspace');
+      expect(controller.state().metrics).toEqual([]);
+      resolveFirst(response(kind === 'capture' ? 201 : 200,
+        kind === 'capture' ? { ...snapshot(), replayed: false } : snapshot()));
+      await pending;
+      expect(controller.state().kind).toBe('workspace');
+      expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
+      controller.workspaceReady();
+      expect(controller.state()).toMatchObject({ kind: 'failure',
+        badge: 'Receipt result unconfirmed' });
+      await controller.retry();
+      expect(controller.state().kind).toBe('available');
+      expect(calls).toHaveLength(2);
+      if (kind === 'capture') expect(calls.map(call => call.key))
+        .toEqual(['part4d-inflight-stable-key', 'part4d-inflight-stable-key']);
+      else expect(calls.map(call => call.url)).toEqual([
+        `/api/v1/forecast/current-backlog/snapshots/${ID}`,
+        `/api/v1/forecast/current-backlog/snapshots/${ID}`,
+      ]);
+    }
+  );
 
   test('fails closed on poisoned forecast or coverage authority', () => {
     for (const poison of [

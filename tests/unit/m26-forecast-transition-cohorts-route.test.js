@@ -64,6 +64,22 @@ function qualificationFinalization(extra = {}) {
     boundary: 'Finalization covers only this NorthStar human-review source.', ...extra };
 }
 
+function estimateRequestCohort(extra = {}) {
+  const value = cohort({ version: 'm26-estimate-request-cohort-v1',
+    targetKey: 'demand.estimate_request_transition.v1',
+    sourceAuthority: 'northstar_human_reviewed_estimate_request_state', ...extra });
+  value.requestedCount = value.cancelledCount;
+  delete value.cancelledCount;
+  return value;
+}
+
+function estimateRequestReview(extra = {}) {
+  return { ...qualificationReview({
+    reason: 'Owner reviewed the accepted estimate request state.',
+    sourceAuthority: 'northstar_human_reviewed_estimate_request_state',
+  }), ...extra };
+}
+
 function application({ role = 'owner', captured, read, reviewMutated, reviewRead,
   finalizationMutated, finalizationRead, databaseError } = {}) {
   const app = express();
@@ -79,6 +95,19 @@ function application({ role = 'owner', captured, read, reviewMutated, reviewRead
   };
   const client = { query: jest.fn(async sql => {
     if (databaseError && sql.startsWith('SELECT public.')) throw databaseError;
+    if (sql.includes('canonical_estimate_request_state_review_mutate')) return { rows: [{ value:
+      reviewMutated || { review: estimateRequestReview(), replayed: false } }] };
+    if (sql.includes('canonical_estimate_request_state_review_read')) return { rows: [{ value:
+      reviewRead || { current: estimateRequestReview(), history: [estimateRequestReview()],
+        total: 1, truncated: false, boundary: 'Tenant-private reviewed request history.' } }] };
+    if (sql.includes('canonical_estimate_request_state_finalization_mutate')) return { rows: [{ value:
+      finalizationMutated || { finalization: qualificationFinalization(), replayed: false } }] };
+    if (sql.includes('canonical_estimate_request_state_finalization_read')) return { rows: [{ value:
+      finalizationRead === undefined ? qualificationFinalization() : finalizationRead }] };
+    if (sql.includes('canonical_forecast_estimate_request_cohort_capture')) return { rows: [{ value:
+      captured || { cohort: estimateRequestCohort(), replayed: false } }] };
+    if (sql.includes('canonical_forecast_estimate_request_cohort_read')) return { rows: [{ value:
+      read || estimateRequestCohort() }] };
     if (sql.includes('canonical_lead_state_review_mutate')) return { rows: [{ value:
       reviewMutated || { review: qualificationReview(), replayed: false } }] };
     if (sql.includes('canonical_lead_state_review_read')) return { rows: [{ value:
@@ -308,6 +337,71 @@ test('rejects lead-source poison before touching PostgreSQL', async () => {
     .set('Idempotency-Key', KEY).send({ action: 'observe', state: 'qualified',
       effectiveAt: '2026-02-30T00:00:00.000000Z', reason: 'bad' })).status).toBe(400);
   expect((await request(app).post('/cohorts/lead-qualification-sources/finalizations')
+    .set('Idempotency-Key', KEY).send({ recordedThrough: HORIZON,
+      reason: 'ok', organizationId: ORG })).status).toBe(400);
+  expect(pool.connect).not.toHaveBeenCalled();
+});
+
+test('records, finalizes and reads tenant-private accepted estimate-request history', async () => {
+  const { app, client } = application();
+  const created = await request(app)
+    .post(`/cohorts/estimate-request-sources/${OPPORTUNITY}/reviews`)
+    .set('X-CSRF-Token', 'validated-csrf').set('Idempotency-Key', KEY)
+    .send({ action: 'observe', state: 'open', effectiveAt: CUTOFF,
+      reason: 'Owner reviewed the accepted estimate request state.' });
+  expect(created.status).toBe(201);
+  expect(created.body.data).toMatchObject({ replayed: false,
+    review: { opportunityId: OPPORTUNITY, state: 'open',
+      sourceAuthority: 'northstar_human_reviewed_estimate_request_state' } });
+  expect(client.query.mock.calls[3][0]).toContain(
+    'canonical_estimate_request_state_review_mutate');
+
+  const history = await request(application().app)
+    .get(`/cohorts/estimate-request-sources/${OPPORTUNITY}/reviews`);
+  expect(history.status).toBe(200);
+  expect(history.body.data).toMatchObject({ total: 1, truncated: false,
+    current: { opportunityId: OPPORTUNITY, state: 'open' } });
+
+  const finalized = await request(application().app)
+    .post('/cohorts/estimate-request-sources/finalizations')
+    .set('X-CSRF-Token', 'validated-csrf').set('Idempotency-Key', KEY)
+    .send({ recordedThrough: HORIZON,
+      reason: 'Owner finalized the bounded estimate-request source.' });
+  expect(finalized.status).toBe(201);
+  expect(finalized.body.data.finalization).toMatchObject({ id: FINALIZATION,
+    sourceHighWaterOrder: 2 });
+});
+
+test('captures accepted estimate-request transitions as descriptive-only evidence', async () => {
+  const value = estimateRequestCohort();
+  const { app, client } = application({ captured: { cohort: value, replayed: false } });
+  const response = await request(app).post('/cohorts/estimate-requests')
+    .set('X-CSRF-Token', 'validated-csrf').set('Idempotency-Key', KEY)
+    .send({ cutoffAt: CUTOFF, horizonEndsAt: HORIZON });
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({
+    targetKey: 'demand.estimate_request_transition.v1', eligibleCount: 3,
+    requestedCount: 1, observedRate: '0.333333',
+    sourceAuthority: 'northstar_human_reviewed_estimate_request_state',
+    sourceAuthenticated: true, sourceCoverageComplete: false,
+    offPlatformCoverageVerified: false, providerCoverageVerified: false,
+    probabilityCalibrated: false, forecastIssued: false,
+    paidNumericServing: false, replayed: false });
+  expect(client.query.mock.calls[3][0]).toContain(
+    'canonical_forecast_estimate_request_cohort_capture');
+  const poisoned = application({ read: estimateRequestCohort({
+    sourceCoverageComplete: true }) });
+  expect((await request(poisoned.app)
+    .get(`/cohorts/estimate-requests/${COHORT}`)).status).toBe(503);
+});
+
+test('rejects estimate-request source poison before touching PostgreSQL', async () => {
+  const { app, pool } = application();
+  expect((await request(app)
+    .post(`/cohorts/estimate-request-sources/${OPPORTUNITY}/reviews`)
+    .set('Idempotency-Key', KEY).send({ action: 'observe', state: 'requested',
+      effectiveAt: '2026-02-30T00:00:00.000000Z', reason: 'bad' })).status).toBe(400);
+  expect((await request(app).post('/cohorts/estimate-request-sources/finalizations')
     .set('Idempotency-Key', KEY).send({ recordedThrough: HORIZON,
       reason: 'ok', organizationId: ORG })).status).toBe(400);
   expect(pool.connect).not.toHaveBeenCalled();

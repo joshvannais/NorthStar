@@ -237,5 +237,3 @@ realPostgres('Mission 26 Part 4B human-reviewed estimate request cohort', () => 
     }
   }, 120000);
 });
-
-

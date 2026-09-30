@@ -600,4 +600,3 @@ DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtim
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_estimate_request_cohort_read(
   UUID,UUID,TEXT,UUID,UUID) TO northstar_app_runtime;
 END IF;END $$;
-

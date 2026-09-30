@@ -172,6 +172,9 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     expect(sql).toContain('FOR UPDATE OF assignment NOWAIT');
     expect(sql).toContain('FOR UPDATE OF estimate NOWAIT');
     expect(sql).toContain('FOR UPDATE OF source_fence NOWAIT');
+    expect(sql).toContain('FOR SHARE OF subscription');
+    expect((sql.match(/authority:=public\.canonical_forecast_booking_ordered_access/g) || [])
+      .length).toBe(2);
     expect(sql).toContain("('approved_unscheduled','approved_scheduled','work_in_progress')");
     expect(sql).toContain("hours_reason:='reviewed_person_hour_plan_missing'");
     expect(sql).toContain("hours_reason:='reviewed_person_hour_plan_not_current'");

@@ -315,6 +315,8 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
         backlogHoursReason: 'no_active_backlog' },
       { plannedPersonMinutes: null, backlogHoursState: 'unavailable',
         backlogHoursReason: 'source_changed_after_capture' },
+      { plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'approved_person_hour_plan_missing' },
     ]) expect(demand.project(snapshot(poison), false)).toBeNull();
     const html = fs.readFileSync('public/demo-dashboard.html', 'utf8');
     expect(html).toContain('Capture current backlog');
@@ -337,6 +339,8 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
         backlogHoursReason: 'no_active_backlog' },
       { plannedPersonMinutes: null, backlogHoursState: 'unavailable',
         backlogHoursReason: 'source_changed_after_capture' },
+      { plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'approved_person_hour_plan_missing' },
     ];
     for (const poison of poisons) {
       const fixture = documentFixture();
@@ -360,6 +364,12 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
       ['descriptive reviewed plan missing', snapshot({ plannedPersonMinutes: null,
         backlogHoursState: 'unavailable',
         backlogHoursReason: 'reviewed_person_hour_plan_missing' }), true],
+      ['descriptive reviewed plan not current', snapshot({ plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable',
+        backlogHoursReason: 'reviewed_person_hour_plan_not_current' }), true],
+      ['composed descriptive with legacy reason', snapshot({ plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable',
+        backlogHoursReason: 'approved_person_hour_plan_missing' }), false],
       ['descriptive completed-only', snapshot({ approvedUnscheduledCount: 0,
         approvedScheduledCount: 0, workInProgressCount: 0, completedCount: 1,
         knownBacklogCount: 0, plannedPersonMinutes: null,

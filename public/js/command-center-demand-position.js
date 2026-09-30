@@ -15,8 +15,7 @@
     'knownBacklogCount'];
   var DIGEST = /^[0-9a-f]{64}$/;
   var DATABASE_INSTANT = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/;
-  var DESCRIPTIVE_HOURS_REASONS = ['approved_person_hour_plan_missing',
-    'no_active_backlog', 'reviewed_person_hour_plan_missing',
+  var COMPOSED_ACTIVE_HOURS_REASONS = ['reviewed_person_hour_plan_missing',
     'reviewed_person_hour_plan_not_current'];
 
   function validInstant(value) {
@@ -78,8 +77,7 @@
           value.backlogHoursReason === null;
       }
       return value.plannedPersonMinutes === null &&
-        DESCRIPTIVE_HOURS_REASONS.includes(value.backlogHoursReason) &&
-        value.backlogHoursReason !== 'no_active_backlog';
+        COMPOSED_ACTIVE_HOURS_REASONS.includes(value.backlogHoursReason);
     }
     if (value.state === 'partial') {
       return value.reason === 'unresolved_linkage_present' &&

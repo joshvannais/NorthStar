@@ -112,6 +112,44 @@ function safeSnapshot(value, expectedId = null) {
   return value;
 }
 
+function safePersonPlanReview(value, expectedAppointmentId = null) {
+  const keys = ['id', 'appointmentId', 'revision', 'previousId', 'action', 'state',
+    'plannedPersonMinutes', 'reason', 'createdAt', 'digest', 'sourceAuthority',
+    'sourceAuthenticated', 'sourceCurrent', 'knownSubsetOnly',
+    'sourceCoverageComplete', 'offPlatformCoverageVerified',
+    'providerCoverageVerified', 'forecastIssued', 'paidNumericServing'];
+  if (!exact(value, keys) || !UUID.test(value.id || '') ||
+      !UUID.test(value.appointmentId || '') ||
+      !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+      value.revision > 10000 ||
+      !(value.previousId === null || UUID.test(value.previousId)) ||
+      !['approve', 'withdraw'].includes(value.action) ||
+      !['approved', 'withdrawn', 'source_stale'].includes(value.state) ||
+      !(value.plannedPersonMinutes === null ||
+        /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,6})?$/.test(value.plannedPersonMinutes)) ||
+      typeof value.reason !== 'string' || value.reason.length < 1 ||
+      value.reason.length > 2000 || !instant(value.createdAt) ||
+      !DIGEST.test(value.digest || '') || value.sourceAuthority !==
+        'owner_reviewed_m24_labor_plan_for_authenticated_booking' ||
+      typeof value.sourceAuthenticated !== 'boolean' ||
+      typeof value.sourceCurrent !== 'boolean' || value.knownSubsetOnly !== true ||
+      value.sourceCoverageComplete !== false ||
+      value.offPlatformCoverageVerified !== false ||
+      value.providerCoverageVerified !== false || value.forecastIssued !== false ||
+      value.paidNumericServing !== false || (expectedAppointmentId !== null &&
+        value.appointmentId !== expectedAppointmentId)) return null;
+  if (value.state === 'approved' && (value.action !== 'approve' ||
+      value.plannedPersonMinutes === null || Number(value.plannedPersonMinutes) <= 0 ||
+      !value.sourceAuthenticated || !value.sourceCurrent)) return null;
+  if (value.state === 'withdrawn' && (value.action !== 'withdraw' ||
+      value.plannedPersonMinutes !== null || !value.sourceAuthenticated ||
+      !value.sourceCurrent)) return null;
+  if (value.state === 'source_stale' && (value.action !== 'approve' ||
+      value.plannedPersonMinutes !== null || value.sourceAuthenticated ||
+      value.sourceCurrent)) return null;
+  return value;
+}
+
 function createForecastCurrentBacklogRouter(options = {}) {
   const router = express.Router();
   const poolProvider = options.poolProvider || (() => db.getPool());
@@ -176,7 +214,73 @@ function createForecastCurrentBacklogRouter(options = {}) {
         params: [snapshotId], validate: value => safeSnapshot(value, snapshotId),
       });
     });
+
+  router.post('/person-plan-sources/:appointmentId/reviews', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      const appointmentId = String(req.params.appointmentId || '').toLowerCase();
+      const body = req.body, key = req.get('Idempotency-Key');
+      const keys = ['action', 'expectedCurrentReviewId',
+        'expectedCurrentReviewDigest', 'assignmentId',
+        'expectedAssignmentRevision', 'expectedAssignmentDigest', 'estimateId',
+        'laborPlanId', 'expectedLaborPlanRevision', 'expectedLaborPlanDigest',
+        'reason', 'confirmed', 'confirmationVersion'];
+      const approve = body?.action === 'approve';
+      const uuidOrNull = value => value === null || UUID.test(value || '');
+      const digestOrNull = value => value === null || DIGEST.test(value || '');
+      if (!UUID.test(appointmentId) || !exact(req.query, []) || !exact(body, keys) ||
+          !['approve', 'withdraw'].includes(body.action) ||
+          !uuidOrNull(body.expectedCurrentReviewId) ||
+          !((body.expectedCurrentReviewId === null &&
+            body.expectedCurrentReviewDigest === 'none') ||
+            (body.expectedCurrentReviewId !== null &&
+              DIGEST.test(body.expectedCurrentReviewDigest || ''))) ||
+          !uuidOrNull(body.assignmentId) || !digestOrNull(body.expectedAssignmentDigest) ||
+          !uuidOrNull(body.estimateId) || !uuidOrNull(body.laborPlanId) ||
+          !digestOrNull(body.expectedLaborPlanDigest) ||
+          !(body.expectedAssignmentRevision === null ||
+            Number.isSafeInteger(body.expectedAssignmentRevision)) ||
+          !(body.expectedLaborPlanRevision === null ||
+            Number.isSafeInteger(body.expectedLaborPlanRevision)) ||
+          (approve && (body.assignmentId === null || body.estimateId === null ||
+            body.laborPlanId === null || body.expectedAssignmentRevision < 1 ||
+            body.expectedLaborPlanRevision < 1 ||
+            body.expectedAssignmentDigest === null ||
+            body.expectedLaborPlanDigest === null)) ||
+          (!approve && [body.assignmentId, body.expectedAssignmentRevision,
+            body.expectedAssignmentDigest, body.estimateId, body.laborPlanId,
+            body.expectedLaborPlanRevision, body.expectedLaborPlanDigest]
+            .some(value => value !== null)) || body.confirmed !== true ||
+          body.confirmationVersion !== 'm26-current-backlog-person-plan-v1' ||
+          typeof body.reason !== 'string' || body.reason.length < 1 ||
+          body.reason.length > 2000 || !KEY.test(key || '')) return invalid(res);
+      return run(req, res, { write: true,
+        sql: 'SELECT public.canonical_forecast_backlog_person_plan_mutate($1,$2,$3,$4,$5,$6,$7,$8) value',
+        params: [req.get('X-CSRF-Token'), key, appointmentId, body],
+        validate(value) {
+          if (!value || typeof value.replayed !== 'boolean') return null;
+          const review = safePersonPlanReview(value.review, appointmentId);
+          return review && { review, replayed: value.replayed };
+        } });
+    });
+
+  router.get('/person-plan-sources/:appointmentId/reviews', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      const appointmentId = String(req.params.appointmentId || '').toLowerCase();
+      if (!UUID.test(appointmentId) || !exact(req.query, [])) return invalid(res);
+      return run(req, res, {
+        sql: 'SELECT public.canonical_forecast_backlog_person_plan_read($1,$2,$3,$4,$5) value',
+        params: [appointmentId], validate(value) {
+          if (!exact(value, ['current', 'history', 'total', 'truncated', 'boundary']) ||
+              !(value.current === null || safePersonPlanReview(value.current, appointmentId)) ||
+              !Array.isArray(value.history) || value.history.length > 20 ||
+              !value.history.every(item => safePersonPlanReview(item, appointmentId)) ||
+              !Number.isSafeInteger(value.total) || value.total < value.history.length ||
+              value.truncated !== (value.total > 20) ||
+              typeof value.boundary !== 'string' || value.boundary.length < 1) return null;
+          return value;
+        } });
+    });
   return router;
 }
 
-module.exports = { createForecastCurrentBacklogRouter, safeSnapshot };
+module.exports = { createForecastCurrentBacklogRouter, safeSnapshot, safePersonPlanReview };

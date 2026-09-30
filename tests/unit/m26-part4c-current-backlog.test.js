@@ -45,6 +45,8 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
   });
 
   test('requires exact unavailable, partial and stale shapes', () => {
+    expect(safeSnapshot({ ...base, plannedPersonMinutes: '1440.000000',
+      backlogHoursState: 'available', backlogHoursReason: null })).not.toBeNull();
     expect(safeSnapshot({ ...base, state: 'partial',
       reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1 })).not.toBeNull();
     expect(safeSnapshot({ ...base, state: 'unavailable',
@@ -57,7 +59,9 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
       approvedUnscheduledCount: 0, approvedScheduledCount: 0,
       workInProgressCount: 0, completedCount: 0,
       unresolvedLinkageCount: 0, knownBacklogCount: 0,
-      sourceAuthenticated: false, sourceDigest: null, snapshotDigest: null })).not.toBeNull();
+      plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+      backlogHoursReason: 'source_changed_after_capture', sourceAuthenticated: false,
+      sourceDigest: null, snapshotDigest: null })).not.toBeNull();
   });
 
   test('migration bounds identities before enrichment and keeps private authority false', () => {
@@ -155,5 +159,34 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     expect(sql).toContain('REVOKE ALL ON TABLE public.canonical_forecast_current_backlog_person_plan_reviews FROM PUBLIC');
     expect(sql).toContain('REVOKE ALL ON TABLE public.canonical_forecast_estimate_source_fences FROM PUBLIC');
     expect(sql).not.toContain('GRANT SELECT ON TABLE public.canonical_forecast_current_backlog_person_plan_reviews');
+  });
+
+  test('composition migration requires every active member review at one private pinned cutoff', () => {
+    const sql = fs.readFileSync(
+      'migrations/209_canonical_forecast_current_backlog_person_plan_composition.sql',
+      'utf8');
+    expect(sql).toContain('person_plan_composition_version');
+    expect(sql).toContain('person_plan_receipts');
+    expect(sql).toContain('canonical_forecast_current_backlog_snapshot_source_lock');
+    expect(sql).toContain("'m26:backlog-person-plan:'||org::text||':'||lock_value.appointment_id::text");
+    expect(sql).toContain('FOR UPDATE OF assignment NOWAIT');
+    expect(sql).toContain('FOR UPDATE OF estimate NOWAIT');
+    expect(sql).toContain('FOR UPDATE OF source_fence NOWAIT');
+    expect(sql).toContain('FOR SHARE OF subscription');
+    expect((sql.match(/authority:=public\.canonical_forecast_booking_ordered_access/g) || [])
+      .length).toBe(2);
+    expect(sql).toContain("existing.person_plan_composition_version='none'");
+    expect(sql).toContain('existing.request_digest=legacy_request_hash');
+    expect(sql).toContain('current_source_fence.generation source_generation');
+    expect(sql).toContain("'sourceGeneration',source_generation");
+    expect(sql).toContain('current_source_fence.generation IS DISTINCT FROM');
+    expect(sql).toContain("('approved_unscheduled','approved_scheduled','work_in_progress')");
+    expect(sql).toContain("hours_reason:='reviewed_person_hour_plan_missing'");
+    expect(sql).toContain("hours_reason:='reviewed_person_hour_plan_not_current'");
+    expect(sql).toContain("hours_state:='available';hours_reason:=NULL");
+    expect(sql).toContain("'sourceCoverageComplete',FALSE");
+    expect(sql).toContain("'probabilityCalibrated',FALSE,'forecastIssued',FALSE");
+    expect(sql).toContain("'paidNumericServing',FALSE");
+    expect(sql).toContain('REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_source_lock');
   });
 });

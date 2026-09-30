@@ -83,8 +83,14 @@ function safeSnapshot(value, expectedId = null) {
         .every(key => Number.isSafeInteger(value[key]) && value[key] >= 0 && value[key] <= 500) ||
       value.knownBacklogCount !== value.approvedUnscheduledCount +
         value.approvedScheduledCount + value.workInProgressCount ||
-      value.plannedPersonMinutes !== null || value.backlogHoursState !== 'unavailable' ||
-      value.backlogHoursReason !== 'approved_person_hour_plan_missing' ||
+      !(value.plannedPersonMinutes === null ||
+        /^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/.test(value.plannedPersonMinutes)) ||
+      !['available', 'unavailable'].includes(value.backlogHoursState) ||
+      !(value.backlogHoursReason === null || [
+        'approved_person_hour_plan_missing', 'no_active_backlog',
+        'unresolved_linkage_present', 'reviewed_person_hour_plan_missing',
+        'reviewed_person_hour_plan_not_current', 'source_changed_after_capture',
+      ].includes(value.backlogHoursReason)) ||
       !(value.sourceDigest === null || DIGEST.test(value.sourceDigest)) ||
       !(value.snapshotDigest === null || DIGEST.test(value.snapshotDigest)) ||
       value.sourceAuthority !==
@@ -94,6 +100,11 @@ function safeSnapshot(value, expectedId = null) {
       value.providerCoverageVerified !== false || value.probabilityCalibrated !== false ||
       value.forecastIssued !== false || value.paidNumericServing !== false ||
       (expectedId !== null && value.id !== expectedId)) return null;
+  if (value.backlogHoursState === 'available' &&
+      (value.plannedPersonMinutes === null || Number(value.plannedPersonMinutes) <= 0 ||
+       value.backlogHoursReason !== null)) return null;
+  if (value.backlogHoursState === 'unavailable' &&
+      (value.plannedPersonMinutes !== null || value.backlogHoursReason === null)) return null;
   const total = value.approvedUnscheduledCount + value.approvedScheduledCount +
     value.workInProgressCount + value.completedCount + value.unresolvedLinkageCount;
   if (value.state === 'descriptive_subset' && (value.reason !== null || total < 1 ||
@@ -108,7 +119,8 @@ function safeSnapshot(value, expectedId = null) {
   if (value.state === 'source_stale' &&
       (value.reason !== 'source_changed_after_capture' || total !== 0 ||
        value.sourceAuthenticated || value.sourceDigest !== null ||
-       value.snapshotDigest !== null)) return null;
+       value.snapshotDigest !== null || value.backlogHoursState !== 'unavailable' ||
+       value.backlogHoursReason !== 'source_changed_after_capture')) return null;
   return value;
 }
 
@@ -158,6 +170,8 @@ function createForecastCurrentBacklogRouter(options = {}) {
     `forecast-current-backlog:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
   const captureThrottle = options.captureThrottle || rateLimit('forecast-source-capture', req =>
     `forecast-current-backlog-capture:${req.tenantContext.organizationId}`);
+  const reviewThrottle = options.reviewThrottle || rateLimit('forecast-source-review', req =>
+    `forecast-current-backlog-review:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
 
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
@@ -216,7 +230,7 @@ function createForecastCurrentBacklogRouter(options = {}) {
     });
 
   router.post('/person-plan-sources/:appointmentId/reviews', auth,
-    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+    requirePermission('forecast', 'update'), reviewThrottle, async (req, res) => {
       const appointmentId = String(req.params.appointmentId || '').toLowerCase();
       const body = req.body, key = req.get('Idempotency-Key');
       const keys = ['action', 'expectedCurrentReviewId',

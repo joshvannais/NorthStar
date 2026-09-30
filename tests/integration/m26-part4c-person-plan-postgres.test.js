@@ -17,11 +17,15 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
   }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
-  async function seedApprovedPlan(context, { oversized = false } = {}) {
+  async function seedApprovedPlan(context, { oversized = false, stalePins = false } = {}) {
     const actor = fixture.actors.owner;
     const source = (await fixture.ownerPool.query(
-      `SELECT a.operation_id,a.graph_id,a.opportunity_id
+      `SELECT a.operation_id,a.graph_id,a.opportunity_id,o.customer_id,t.id transcript_id
        FROM canonical_appointments a
+       JOIN canonical_opportunities o
+        ON o.organization_id=a.organization_id AND o.id=a.opportunity_id
+       JOIN canonical_transcripts t
+        ON t.organization_id=a.organization_id AND t.operation_id=a.operation_id
        WHERE a.organization_id=$1 AND a.id=$2`,
       [fixture.org, context.appointment])).rows[0];
     const estimateId = uuid(), decisionId = uuid(), planId = uuid();
@@ -53,33 +57,49 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
          opportunity_id,calculation_version,normalized_input_fingerprint,
          business_profile_version,business_profile_hash,currency,customer_price,
          line_items,calculation_output,snapshot_digest)
-       VALUES($1,$2,$3,$4,$5,'fixture-v1',$6,'org-profile-v1',$6,
+       VALUES($1,$2,$3,$4,$5,'m19-part3-canonical-v2',$6,'org-profile-v1',$6,
          'USD',500,'[]','{}',$6)`,
       [estimateId, fixture.org, source.operation_id, source.graph_id,
         source.opportunity_id, fingerprint]);
+    await fixture.ownerPool.query(
+      `INSERT INTO canonical_polaris_snapshots(
+         id,organization_id,operation_id,graph_id,customer_id,transcript_id,
+         opportunity_id,estimate_id,calculation_version,
+         normalized_input_fingerprint,business_profile_version,
+         business_profile_hash,supporting_fact_ids,snapshot,snapshot_digest)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,'m19-part3-canonical-v2',$9,
+         'org-profile-v1',$9,'{}',$10,$9)`,
+      [uuid(), fixture.org, source.operation_id, source.graph_id,
+        source.customer_id, source.transcript_id, source.opportunity_id,
+        estimateId, fingerprint, { service: { key: 'Plumbing' } }]);
+    const sourcePins = (await fixture.ownerPool.query(
+      `SELECT canonical_estimate_decision_source($1,$2) pins`,
+      [fixture.org, estimateId])).rows[0].pins;
+    expect(sourcePins).not.toBeNull();
+    const storedPins = stalePins ? {} : sourcePins;
     await fixture.ownerPool.query(
       `INSERT INTO canonical_estimate_decisions(
          id,organization_id,estimate_id,revision,previous_id,action,actor_user_id,
          membership_id,auth_session_id,actor_name,source_pins,scope_summary,
          price_before_tax,currency,reason,confirmation_version,request_key_hash,
          request_digest,digest)
-       VALUES($1,$2,$3,1,NULL,'approve',$4,$4,$5,'Synthetic owner','{}',
+       VALUES($1,$2,$3,1,NULL,'approve',$4,$4,$5,'Synthetic owner',$6,
          'Fictional mounted scope','500.00','USD','Fictional mounted approval',
-         'estimate-quote-preparation-v1',$6,$7,$8)`,
+         'estimate-quote-preparation-v1',$7,$8,$9)`,
       [decisionId, fixture.org, estimateId, actor.actorUserId, actor.authSessionId,
-        hash(uuid()), hash(uuid()), decisionDigest]);
+        storedPins, hash(uuid()), hash(uuid()), decisionDigest]);
     await fixture.ownerPool.query(
       `INSERT INTO canonical_labor_plans(
          id,organization_id,estimate_id,revision,previous_id,action,actor_user_id,
          membership_id,auth_session_id,actor_name,source_pins,inputs,
          expected_decision_revision,expected_decision_digest,currency,reason,
          confirmation_version,request_key_hash,request_digest,digest)
-       VALUES($1,$2,$3,1,NULL,'save',$4,$4,$5,'Synthetic owner','{}',$6,
-         1,$7,'USD','Fictional mounted labor review','estimate-labor-plan-v1',
-         $8,$9,$10)`,
+       VALUES($1,$2,$3,1,NULL,'save',$4,$4,$5,'Synthetic owner',$6,$7,
+         1,$8,'USD','Fictional mounted labor review','estimate-labor-plan-v1',
+         $9,$10,$11)`,
       [planId, fixture.org, estimateId, actor.actorUserId, actor.authSessionId,
-        inputs, decisionDigest, hash(uuid()), hash(uuid()), planDigest]);
-    return { estimateId, planId, planDigest };
+        storedPins, inputs, decisionDigest, hash(uuid()), hash(uuid()), planDigest]);
+    return { estimateId, decisionId, decisionDigest, planId, planDigest, sourcePins };
   }
 
   function approvalBody(context, plan) {
@@ -93,6 +113,29 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
       reason: 'Owner reviewed this exact fictional booking and labor plan.',
       confirmed: true, confirmationVersion: 'm26-current-backlog-person-plan-v1',
     };
+  }
+
+  function revisedDecisionBody(plan) {
+    return {
+      action: 'approve', expectedRevision: 1, expectedDigest: plan.decisionDigest,
+      sourcePins: plan.sourcePins, scopeSummary: 'Fictional revised mounted scope',
+      priceBeforeTax: '500.00', currency: 'USD',
+      reason: 'Fictional concurrent mounted approval.', confirmed: true,
+      confirmationVersion: 'estimate-quote-preparation-v1',
+    };
+  }
+
+  async function waitForNonAdvisoryLock() {
+    let waiting = false;
+    for (let attempt = 0; attempt < 100 && !waiting; attempt += 1) {
+      const observed = await fixture.ownerPool.query(
+        `SELECT EXISTS(
+           SELECT 1 FROM pg_locks
+           WHERE granted=FALSE AND locktype<>'advisory') waiting`);
+      waiting = observed.rows[0].waiting;
+      if (!waiting) await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(waiting).toBe(true);
   }
 
   function post(context, body, requestKey, actor = 'owner') {
@@ -279,6 +322,150 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
        WHERE organization_id=$1 AND appointment_id=$2`,
       [fixture.org, context.appointment]);
     expect(count.rows[0].count).toBe(0);
+  }, 120000);
+
+  test('refuses an approval whose Mission 24 decision and plan source pins are stale', async () => {
+    const context = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true, start: '2027-12-08T13:00:00.000Z' });
+    const plan = await seedApprovedPlan(context, { stalePins: true });
+    await expect(directMutate(context, approvalBody(context, plan),
+      `m26-p4c-person-plan-stale-pins-${uuid()}`))
+      .rejects.toMatchObject({ code: '40001' });
+    const count = await fixture.ownerPool.query(
+      `SELECT count(*)::integer count
+       FROM canonical_forecast_current_backlog_person_plan_reviews
+       WHERE organization_id=$1 AND appointment_id=$2`,
+      [fixture.org, context.appointment]);
+    expect(count.rows[0].count).toBe(0);
+  }, 120000);
+
+  test('a genuine Mission 24 estimate revision stales read and replay output', async () => {
+    const context = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true, start: '2027-12-09T13:00:00.000Z' });
+    const plan = await seedApprovedPlan(context);
+    const requestKey = `m26-p4c-person-plan-estimate-revision-${uuid()}`;
+    const created = await directMutate(context, approvalBody(context, plan), requestKey);
+    expect(created.review).toMatchObject({ state: 'approved',
+      plannedPersonMinutes: '240.000000' });
+    const actor = fixture.actors.owner;
+    const client = await fixture.runtimePool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      const material = (await client.query(
+        `SELECT canonical_material_plan_mutate($1,$2,$3,$4,$5,$6,$7,$8) value`,
+        [fixture.org, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, plan.estimateId, actor.csrfToken,
+          `m26-p4c-material-${uuid()}`, {
+            action: 'save', expectedRevision: 0, expectedDigest: 'none',
+            sourcePins: plan.sourcePins, expectedDecisionRevision: 1,
+            expectedDecisionDigest: plan.decisionDigest,
+            inputs: { material: 'Fictional mounted pipe', quantity: '1', unit: 'ea',
+              wastePercent: '0', unitPrice: '10.00', sourceType: 'my_estimate',
+              sourceNote: 'Fictional mounted source.', priceDate: null },
+            currency: 'USD', reason: 'Fictional mounted material plan.',
+            confirmed: true, confirmationVersion: 'estimate-material-plan-v1',
+          }])).rows[0].value;
+      const revision = (await client.query(
+        `SELECT canonical_estimate_revision_mutate($1,$2,$3,$4,$5,$6,$7,$8) value`,
+        [fixture.org, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, plan.estimateId, actor.csrfToken,
+          `m26-p4c-estimate-revision-${uuid()}`, {
+            sourcePins: plan.sourcePins, expectedPlanId: material.receipt.id,
+            expectedPlanRevision: 1, expectedPlanDigest: material.receipt.digest,
+            expectedDecisionRevision: 1, expectedDecisionDigest: plan.decisionDigest,
+            reason: 'Fictional mounted estimate source revision.', confirmed: true,
+            confirmationVersion: 'estimate-material-adoption-v1',
+          }])).rows[0].value;
+      expect(revision.replayed).toBe(false);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally { client.release(); }
+
+    const read = await request(fixture.app)
+      .get(`/api/v1/forecast/current-backlog/person-plan-sources/${context.appointment}/reviews`)
+      .set(actor.session.headers);
+    expect(read.status).toBe(200);
+    expect(read.body.data.current).toMatchObject({ state: 'source_stale',
+      plannedPersonMinutes: null, sourceAuthenticated: false, sourceCurrent: false });
+    const replay = await directMutate(context, approvalBody(context, plan), requestKey);
+    expect(replay).toMatchObject({ replayed: true, review: { state: 'source_stale',
+      plannedPersonMinutes: null, sourceAuthenticated: false, sourceCurrent: false } });
+  }, 120000);
+
+  test('serializes approval against a genuine Mission 24 decision writer fence', async () => {
+    const context = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true, start: '2027-12-10T13:00:00.000Z' });
+    const plan = await seedApprovedPlan(context);
+    const actor = fixture.actors.owner;
+    const blocker = await fixture.ownerPool.connect();
+    try {
+      await blocker.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await blocker.query(
+        `SELECT 1 FROM canonical_estimates
+         WHERE organization_id=$1 AND id=$2 FOR UPDATE`,
+        [fixture.org, plan.estimateId]);
+      const mutation = directMutate(context, approvalBody(context, plan),
+        `m26-p4c-person-plan-decision-race-${uuid()}`)
+        .then(value => ({ value }), error => ({ error }));
+      await waitForNonAdvisoryLock();
+      await blocker.query(
+        `SELECT canonical_estimate_decision_mutate($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [fixture.org, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, plan.estimateId, actor.csrfToken,
+          `m26-p4c-decision-race-${uuid()}`, revisedDecisionBody(plan)]);
+      await blocker.query('COMMIT');
+      const outcome = await mutation;
+      expect(outcome.error).toMatchObject({ code: '40001' });
+      expect(outcome.value).toBeUndefined();
+      const count = await fixture.ownerPool.query(
+        `SELECT count(*)::integer count
+         FROM canonical_forecast_current_backlog_person_plan_reviews
+         WHERE organization_id=$1 AND appointment_id=$2`,
+        [fixture.org, context.appointment]);
+      expect(count.rows[0].count).toBe(0);
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      blocker.release();
+    }
+  }, 120000);
+
+  test('fences idempotent replay against a genuine Mission 24 decision writer', async () => {
+    const context = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true, start: '2027-12-12T13:00:00.000Z' });
+    const plan = await seedApprovedPlan(context);
+    const actor = fixture.actors.owner;
+    const requestKey = `m26-p4c-person-plan-replay-race-${uuid()}`;
+    const body = approvalBody(context, plan);
+    const created = await directMutate(context, body, requestKey);
+    expect(created.replayed).toBe(false);
+    const blocker = await fixture.ownerPool.connect();
+    try {
+      await blocker.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await blocker.query(
+        `SELECT 1 FROM canonical_estimates
+         WHERE organization_id=$1 AND id=$2 FOR UPDATE`,
+        [fixture.org, plan.estimateId]);
+      const replay = directMutate(context, body, requestKey)
+        .then(value => ({ value }), error => ({ error }));
+      await waitForNonAdvisoryLock();
+      await blocker.query(
+        `SELECT canonical_estimate_decision_mutate($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [fixture.org, actor.actorUserId, actor.actorAccessRole,
+          actor.authSessionId, plan.estimateId, actor.csrfToken,
+          `m26-p4c-decision-replay-race-${uuid()}`, revisedDecisionBody(plan)]);
+      await blocker.query('COMMIT');
+      const outcome = await replay;
+      expect(outcome.error).toBeUndefined();
+      expect(outcome.value).toMatchObject({ replayed: true, review: {
+        state: 'source_stale', plannedPersonMinutes: null,
+        sourceAuthenticated: false, sourceCurrent: false,
+      } });
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      blocker.release();
+    }
   }, 120000);
 
   test('holds paid authority and rechecks a trial clock immediately before insertion', async () => {

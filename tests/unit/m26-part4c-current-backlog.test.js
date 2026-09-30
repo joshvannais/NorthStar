@@ -133,11 +133,27 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     expect(sql).toContain("rtrim(plan_value.expected_decision_digest)=rtrim(decision_value.digest)");
     expect(sql).toContain('newer.revision>value.revision');
     expect(sql).toContain('FOR SHARE OF subscription');
+    expect(sql).toContain('AND opportunity_id=assignment_value.opportunity_id FOR UPDATE');
+    expect(sql).toContain('canonical_forecast_estimate_source_fences');
+    expect(sql).toContain('canonical_forecast_estimate_decision_source_fence');
+    expect(sql).toContain('canonical_forecast_labor_plan_source_fence');
+    expect(sql).toContain('canonical_forecast_estimate_revision_source_fence');
+    expect(sql).toContain('WHERE organization_id=org AND estimate_id=estimate_value.id FOR UPDATE');
+    expect(sql.indexOf('CREATE TRIGGER canonical_forecast_estimate_revision_source_fence'))
+      .toBeLessThan(sql.indexOf('SELECT organization_id,id,0 FROM public.canonical_estimates'));
+    expect(sql).toContain('source_fence.generation=value.source_generation');
+    expect(sql).toContain("IF replay_value.action='approve' THEN");
+    expect(sql).toContain('WHERE organization_id=org AND id=replay_value.estimate_id FOR UPDATE');
+    expect(sql).toContain('decision_value.source_pins=public.canonical_estimate_decision_source(');
+    expect(sql).toContain('plan_value.source_pins=public.canonical_estimate_decision_source(');
+    expect(sql).toContain('decision_value.source_pins IS DISTINCT FROM source_value');
+    expect(sql).toContain('plan_value.source_pins IS DISTINCT FROM source_value');
     expect(sql.match(/authority:=public\.canonical_forecast_booking_ordered_access\(/g)).toHaveLength(2);
     expect(sql).toContain('raw_planned_minutes>99999999999999.999999');
     expect(sql).toContain("'knownSubsetOnly',TRUE,'sourceCoverageComplete',FALSE");
     expect(sql).toContain("'forecastIssued',FALSE,'paidNumericServing',FALSE");
     expect(sql).toContain('REVOKE ALL ON TABLE public.canonical_forecast_current_backlog_person_plan_reviews FROM PUBLIC');
+    expect(sql).toContain('REVOKE ALL ON TABLE public.canonical_forecast_estimate_source_fences FROM PUBLIC');
     expect(sql).not.toContain('GRANT SELECT ON TABLE public.canonical_forecast_current_backlog_person_plan_reviews');
   });
 });

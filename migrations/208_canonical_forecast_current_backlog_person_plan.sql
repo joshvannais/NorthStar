@@ -2,6 +2,64 @@
 -- This does not change schedules, reserve workers, prove complete backlog
 -- coverage or issue a forecast. Existing migration bytes remain unchanged.
 
+-- A mutable generation fence makes the immutable Mission 24 decision, labor-plan,
+-- and estimate-revision writers visible to serializable consumers after they wait
+-- for the shared estimate row lock. Without this row, a transaction whose snapshot
+-- predates an in-flight writer can acquire the estimate lock and still read the old
+-- immutable children.
+CREATE TABLE public.canonical_forecast_estimate_source_fences (
+ organization_id UUID NOT NULL,
+ estimate_id UUID NOT NULL,
+ generation BIGINT NOT NULL DEFAULT 0 CHECK(generation>=0),
+ changed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(organization_id,estimate_id),
+ FOREIGN KEY(organization_id,estimate_id)
+  REFERENCES public.canonical_estimates(organization_id,id) ON DELETE RESTRICT
+);
+
+CREATE FUNCTION public.canonical_forecast_estimate_source_fence_create()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ INSERT INTO public.canonical_forecast_estimate_source_fences(
+  organization_id,estimate_id,generation)
+ VALUES(NEW.organization_id,NEW.id,0) ON CONFLICT DO NOTHING;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.canonical_forecast_estimate_source_fence_advance()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ INSERT INTO public.canonical_forecast_estimate_source_fences(
+  organization_id,estimate_id,generation,changed_at)
+ VALUES(NEW.organization_id,NEW.estimate_id,1,clock_timestamp())
+ ON CONFLICT(organization_id,estimate_id) DO UPDATE
+ SET generation=public.canonical_forecast_estimate_source_fences.generation+1,
+     changed_at=clock_timestamp();
+ RETURN NEW;
+END $$;
+
+CREATE TRIGGER canonical_forecast_estimate_source_fence_create
+ AFTER INSERT ON public.canonical_estimates FOR EACH ROW EXECUTE FUNCTION
+ public.canonical_forecast_estimate_source_fence_create();
+CREATE TRIGGER canonical_forecast_estimate_decision_source_fence
+ AFTER INSERT ON public.canonical_estimate_decisions FOR EACH ROW EXECUTE FUNCTION
+ public.canonical_forecast_estimate_source_fence_advance();
+CREATE TRIGGER canonical_forecast_labor_plan_source_fence
+ AFTER INSERT ON public.canonical_labor_plans FOR EACH ROW EXECUTE FUNCTION
+ public.canonical_forecast_estimate_source_fence_advance();
+CREATE TRIGGER canonical_forecast_estimate_revision_source_fence
+ AFTER INSERT ON public.canonical_estimate_revisions FOR EACH ROW EXECUTE FUNCTION
+ public.canonical_forecast_estimate_source_fence_advance();
+
+-- Trigger DDL table locks are retained through the migration transaction. Install
+-- all writer hooks first, then reconcile pre-existing and pre-install estimates.
+INSERT INTO public.canonical_forecast_estimate_source_fences(
+ organization_id,estimate_id,generation)
+SELECT organization_id,id,0 FROM public.canonical_estimates
+ON CONFLICT(organization_id,estimate_id) DO NOTHING;
+
 CREATE TABLE public.canonical_forecast_current_backlog_person_plan_reviews (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
@@ -20,6 +78,7 @@ CREATE TABLE public.canonical_forecast_current_backlog_person_plan_reviews (
  labor_plan_id UUID NOT NULL,
  labor_plan_revision BIGINT NOT NULL CHECK(labor_plan_revision>0),
  labor_plan_digest TEXT NOT NULL CHECK(labor_plan_digest~'^[0-9a-f]{64}$'),
+ source_generation BIGINT NOT NULL CHECK(source_generation>=0),
  planned_person_minutes NUMERIC(20,6) NOT NULL CHECK(planned_person_minutes>0),
  source_digest TEXT NOT NULL CHECK(source_digest~'^[0-9a-f]{64}$'),
  actor_user_id UUID NOT NULL,
@@ -100,6 +159,10 @@ SET search_path=pg_catalog,public,pg_temp AS $$
    ON plan_value.organization_id=estimate.organization_id
    AND plan_value.estimate_id=estimate.id
    AND plan_value.id=value.labor_plan_id
+  JOIN public.canonical_forecast_estimate_source_fences source_fence
+   ON source_fence.organization_id=estimate.organization_id
+   AND source_fence.estimate_id=estimate.id
+   AND source_fence.generation=value.source_generation
   WHERE position_value.organization_id=value.organization_id
    AND position_value.appointment_id=value.appointment_id
    AND position_value.active
@@ -108,6 +171,8 @@ SET search_path=pg_catalog,public,pg_temp AS $$
    AND rtrim(assignment.canonical_digest)=value.assignment_digest
    AND decision_value.revision=value.estimate_decision_revision
    AND rtrim(decision_value.digest)=value.estimate_decision_digest
+   AND decision_value.source_pins=public.canonical_estimate_decision_source(
+    value.organization_id,value.estimate_id)
    AND decision_value.action='approve'
    AND decision_value.id=(SELECT current_decision.id
     FROM public.canonical_estimate_decisions current_decision
@@ -116,6 +181,8 @@ SET search_path=pg_catalog,public,pg_temp AS $$
     ORDER BY current_decision.revision DESC LIMIT 1)
    AND plan_value.revision=value.labor_plan_revision
    AND rtrim(plan_value.digest)=value.labor_plan_digest
+   AND plan_value.source_pins=public.canonical_estimate_decision_source(
+    value.organization_id,value.estimate_id)
    AND plan_value.action='save'
    AND plan_value.expected_decision_revision=decision_value.revision
    AND rtrim(plan_value.expected_decision_digest)=rtrim(decision_value.digest)
@@ -153,7 +220,8 @@ CREATE FUNCTION public.canonical_forecast_backlog_person_plan_mutate(
  appointment_value UUID,body JSONB)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE authority JSONB;key_hash TEXT;request_hash TEXT;next_revision BIGINT;
+DECLARE authority JSONB;source_value JSONB;key_hash TEXT;request_hash TEXT;next_revision BIGINT;
+ source_generation BIGINT;
  current_value public.canonical_forecast_current_backlog_person_plan_reviews%ROWTYPE;
  replay_value public.canonical_forecast_current_backlog_person_plan_reviews%ROWTYPE;
  inserted public.canonical_forecast_current_backlog_person_plan_reviews%ROWTYPE;
@@ -206,6 +274,13 @@ BEGIN
   END IF;
   PERFORM public.canonical_forecast_booking_ordered_access(
    org,actor,role_value,session_value,csrf,TRUE);
+  IF replay_value.action='approve' THEN
+   PERFORM 1 FROM public.canonical_estimates
+   WHERE organization_id=org AND id=replay_value.estimate_id FOR UPDATE;
+   SELECT generation INTO STRICT source_generation
+   FROM public.canonical_forecast_estimate_source_fences
+   WHERE organization_id=org AND estimate_id=replay_value.estimate_id FOR UPDATE;
+  END IF;
   RETURN jsonb_build_object('review',
    public.canonical_forecast_backlog_person_plan_projection(replay_value,
     public.canonical_forecast_backlog_person_plan_stale(replay_value)),
@@ -242,6 +317,7 @@ BEGIN
   plan_value.id:=current_value.labor_plan_id;
   plan_value.revision:=current_value.labor_plan_revision;
   plan_value.digest:=current_value.labor_plan_digest;
+  source_generation:=current_value.source_generation;
   planned_minutes:=current_value.planned_person_minutes;
   source_hash:=current_value.source_digest;
  ELSE
@@ -276,13 +352,23 @@ BEGIN
   END IF;
   SELECT * INTO STRICT estimate_value FROM public.canonical_estimates
   WHERE organization_id=org AND id=(body->>'estimateId')::uuid
-   AND opportunity_id=assignment_value.opportunity_id;
+   AND opportunity_id=assignment_value.opportunity_id FOR UPDATE;
+  SELECT generation INTO STRICT source_generation
+  FROM public.canonical_forecast_estimate_source_fences
+  WHERE organization_id=org AND estimate_id=estimate_value.id FOR UPDATE;
+  source_value:=public.canonical_estimate_decision_source(org,estimate_value.id);
+  IF source_value IS NULL THEN
+   RAISE EXCEPTION 'Current estimate source unavailable' USING ERRCODE='40001';
+  END IF;
   SELECT * INTO STRICT decision_value
   FROM public.canonical_estimate_decisions
   WHERE organization_id=org AND estimate_id=estimate_value.id
   ORDER BY revision DESC LIMIT 1;
   IF decision_value.action<>'approve' THEN
    RAISE EXCEPTION 'Current estimate approval unavailable' USING ERRCODE='22023';
+  END IF;
+  IF decision_value.source_pins IS DISTINCT FROM source_value THEN
+   RAISE EXCEPTION 'Current estimate source changed' USING ERRCODE='40001';
   END IF;
   SELECT * INTO STRICT plan_value FROM public.canonical_labor_plans
   WHERE organization_id=org AND estimate_id=estimate_value.id
@@ -296,6 +382,7 @@ BEGIN
    plan_value.action<>'save' OR
    plan_value.revision<>(body->>'expectedLaborPlanRevision')::bigint OR
    rtrim(plan_value.digest)<>body->>'expectedLaborPlanDigest' OR
+   plan_value.source_pins IS DISTINCT FROM source_value OR
    plan_value.expected_decision_revision<>decision_value.revision OR
    rtrim(plan_value.expected_decision_digest)<>rtrim(decision_value.digest) THEN
    RAISE EXCEPTION 'Current labor plan source changed' USING ERRCODE='40001';
@@ -316,6 +403,7 @@ BEGIN
    'estimateDecisionDigest',rtrim(decision_value.digest),
    'laborPlanId',plan_value.id,'laborPlanRevision',plan_value.revision,
    'laborPlanDigest',rtrim(plan_value.digest),
+   'sourceGeneration',source_generation,
    'plannedPersonMinutes',planned_minutes));
  END IF;
  next_revision:=COALESCE(current_value.revision,0)+1;
@@ -328,14 +416,16 @@ BEGIN
   organization_id,appointment_id,opportunity_id,revision,previous_id,action,
   assignment_id,assignment_revision,assignment_digest,estimate_id,
   estimate_decision_id,estimate_decision_revision,estimate_decision_digest,
-  labor_plan_id,labor_plan_revision,labor_plan_digest,planned_person_minutes,
+  labor_plan_id,labor_plan_revision,labor_plan_digest,source_generation,
+  planned_person_minutes,
   source_digest,actor_user_id,membership_id,auth_session_id,reason,
   confirmation_version,request_key_hash,request_digest,digest)
  VALUES(org,appointment_value,assignment_value.opportunity_id,next_revision,
   current_value.id,body->>'action',assignment_value.id,assignment_value.revision,
   rtrim(assignment_value.canonical_digest),estimate_value.id,decision_value.id,
   decision_value.revision,rtrim(decision_value.digest),plan_value.id,
-  plan_value.revision,rtrim(plan_value.digest),planned_minutes,source_hash,actor,
+  plan_value.revision,rtrim(plan_value.digest),source_generation,planned_minutes,
+  source_hash,actor,
   (authority->>'membershipId')::uuid,session_value,btrim(body->>'reason'),
   'm26-current-backlog-person-plan-v1',key_hash,request_hash,
   public.canonical_completion_digest(jsonb_build_object(
@@ -381,6 +471,9 @@ BEGIN
 END $$;
 
 REVOKE ALL ON TABLE public.canonical_forecast_current_backlog_person_plan_reviews FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_forecast_estimate_source_fences FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_estimate_source_fence_create() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_estimate_source_fence_advance() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_backlog_person_plan_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_backlog_person_plan_stale(
  public.canonical_forecast_current_backlog_person_plan_reviews) FROM PUBLIC;

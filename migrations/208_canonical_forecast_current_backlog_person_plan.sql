@@ -161,7 +161,7 @@ DECLARE authority JSONB;key_hash TEXT;request_hash TEXT;next_revision BIGINT;
  estimate_value public.canonical_estimates%ROWTYPE;
  decision_value public.canonical_estimate_decisions%ROWTYPE;
  plan_value public.canonical_labor_plans%ROWTYPE;
- planned_minutes NUMERIC(20,6);source_hash TEXT;
+ planned_minutes NUMERIC(20,6);raw_planned_minutes NUMERIC;source_hash TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' OR
   key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' OR
@@ -300,11 +300,13 @@ BEGIN
    rtrim(plan_value.expected_decision_digest)<>rtrim(decision_value.digest) THEN
    RAISE EXCEPTION 'Current labor plan source changed' USING ERRCODE='40001';
   END IF;
-  planned_minutes:=round(public.canonical_labor_plan_worker_hours(
+  raw_planned_minutes:=round(public.canonical_labor_plan_worker_hours(
    plan_value.inputs)*60,6);
-  IF planned_minutes<=0 THEN
-   RAISE EXCEPTION 'Positive approved person-hours required' USING ERRCODE='22023';
+  IF raw_planned_minutes IS NULL OR raw_planned_minutes<=0 OR
+   raw_planned_minutes>99999999999999.999999 THEN
+   RAISE EXCEPTION 'Approved person-hours out of range' USING ERRCODE='22023';
   END IF;
+  planned_minutes:=raw_planned_minutes;
   source_hash:=public.canonical_completion_digest(jsonb_build_object(
    'appointmentId',appointment_value,'opportunityId',assignment_value.opportunity_id,
    'assignmentId',assignment_value.id,'assignmentRevision',assignment_value.revision,

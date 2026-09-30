@@ -126,7 +126,7 @@ function safePersonPlanReview(value, expectedAppointmentId = null) {
       !['approve', 'withdraw'].includes(value.action) ||
       !['approved', 'withdrawn', 'source_stale'].includes(value.state) ||
       !(value.plannedPersonMinutes === null ||
-        /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,6})?$/.test(value.plannedPersonMinutes)) ||
+        /^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/.test(value.plannedPersonMinutes)) ||
       typeof value.reason !== 'string' || value.reason.length < 1 ||
       value.reason.length > 2000 || !instant(value.createdAt) ||
       !DIGEST.test(value.digest || '') || value.sourceAuthority !==

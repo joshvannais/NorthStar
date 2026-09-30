@@ -17,7 +17,7 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
   }, 120000);
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
-  async function seedApprovedPlan(context) {
+  async function seedApprovedPlan(context, { oversized = false } = {}) {
     const actor = fixture.actors.owner;
     const source = (await fixture.ownerPool.query(
       `SELECT a.operation_id,a.graph_id,a.opportunity_id
@@ -28,17 +28,22 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
     const fingerprint = hash(`person-plan-estimate:${estimateId}`);
     const decisionDigest = hash(`person-plan-decision:${decisionId}`);
     const planDigest = hash(`person-plan:${planId}`);
+    const sourceEvidence = { kind: 'my_estimate', reference: '', note: 'Fictional source',
+      effectiveOn: null, endsOn: null, geography: '' };
     const inputs = {
       serviceKey: 'Plumbing',
-      lines: [{
+      lines: [oversized ? {
+        lineId: uuid(), task: 'Fictional oversized mounted repair',
+        basis: 'quantity_productivity', workerHours: null, people: null,
+        elapsedHours: null, quantity: '10000000', unit: 'ea',
+        hoursPerUnit: '10000000', rateMode: 'all_in', hourlyCost: null,
+        burdenPercent: null, quantitySource: sourceEvidence, rateSource: sourceEvidence,
+      } : {
         lineId: uuid(), task: 'Fictional mounted repair', basis: 'worker_hours',
         workerHours: '4', people: null, elapsedHours: null, quantity: null,
         unit: null, hoursPerUnit: null, rateMode: 'all_in', hourlyCost: '50.00',
         burdenPercent: null,
-        quantitySource: { kind: 'my_estimate', reference: '', note: 'Fictional source',
-          effectiveOn: null, endsOn: null, geography: '' },
-        rateSource: { kind: 'my_estimate', reference: '', note: 'Fictional source',
-          effectiveOn: null, endsOn: null, geography: '' },
+        quantitySource: sourceEvidence, rateSource: sourceEvidence,
       }],
       assessment: { date: '2026-09-30', cautions: [], acknowledged: true,
         explanation: 'Fictional mounted review.' },
@@ -259,6 +264,21 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
        WHERE organization_id=$1 AND appointment_id=$2`,
       [fixture.org, context.appointment]);
     expect(count.rows[0].count).toBe(1);
+  }, 120000);
+
+  test('rejects otherwise-valid person-minute totals outside receipt capacity', async () => {
+    const context = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true, start: '2027-12-01T13:00:00.000Z' });
+    const plan = await seedApprovedPlan(context, { oversized: true });
+    await expect(directMutate(context, approvalBody(context, plan),
+      `m26-p4c-person-plan-overflow-${uuid()}`))
+      .rejects.toMatchObject({ code: '22023' });
+    const count = await fixture.ownerPool.query(
+      `SELECT count(*)::integer count
+       FROM canonical_forecast_current_backlog_person_plan_reviews
+       WHERE organization_id=$1 AND appointment_id=$2`,
+      [fixture.org, context.appointment]);
+    expect(count.rows[0].count).toBe(0);
   }, 120000);
 
   test('holds paid authority and rechecks a trial clock immediately before insertion', async () => {

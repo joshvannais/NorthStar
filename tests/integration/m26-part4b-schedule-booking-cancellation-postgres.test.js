@@ -397,6 +397,6 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
     expect(migrationContract).toContain(
       "event_occurred_at<=NEW.created_at THEN\n  RETURN NEW");
     expect(migrationContract).toContain(
-      "legacy_approval.approved_at>revision_value.created_at");
+      "FROM human_ordered\n WHERE source_kind<>'human_approved' OR event_occurred_at>created_at");
   }, 120000);
 });

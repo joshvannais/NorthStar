@@ -160,8 +160,6 @@ WITH human_ordered AS MATERIALIZED (
   ON preview_approval.organization_id=revision_value.organization_id
   AND preview_approval.id=revision_value.human_approval_id
  WHERE revision_value.source_kind IN ('human_approved','human_preview_approved')
-  AND (revision_value.source_kind<>'human_approved'
-   OR legacy_approval.approved_at>revision_value.created_at)
 ), human_rows AS (
  SELECT human_ordered.*,
   CASE
@@ -172,6 +170,7 @@ WITH human_ordered AS MATERIALIZED (
      OR prior_appointment_status IS DISTINCT FROM 'scheduled') THEN 'accepted_booking'
    ELSE 'state_changed' END transition_kind
  FROM human_ordered
+ WHERE source_kind<>'human_approved' OR event_occurred_at>created_at
 ), prepared AS (
  SELECT human_rows.*,
   public.canonical_completion_digest(jsonb_build_object(

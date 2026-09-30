@@ -115,7 +115,9 @@ function safeSnapshot(value, expectedId = null) {
       !value.sourceDigest || !value.snapshotDigest)) return null;
   if (value.state === 'partial' && (value.reason !== 'unresolved_linkage_present' ||
       value.unresolvedLinkageCount < 1 || !value.sourceAuthenticated ||
-      !value.sourceDigest || !value.snapshotDigest)) return null;
+      !value.sourceDigest || !value.snapshotDigest || value.plannedPersonMinutes !== null ||
+      value.backlogHoursState !== 'unavailable' ||
+      value.backlogHoursReason !== 'unresolved_linkage_present')) return null;
   if (value.state === 'unavailable' &&
       (value.reason !== 'no_authenticated_approved_booking_history' || total !== 0 ||
        !value.sourceAuthenticated || !value.sourceDigest || !value.snapshotDigest)) return null;

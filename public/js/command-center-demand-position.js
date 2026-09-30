@@ -58,7 +58,9 @@
         !DIGEST.test(value.snapshotDigest || '')) return false;
     if (value.state === 'descriptive_subset' && value.reason !== null) return false;
     if (value.state === 'partial' && (value.reason !== 'unresolved_linkage_present' ||
-        value.unresolvedLinkageCount < 1)) return false;
+        value.unresolvedLinkageCount < 1 || value.plannedPersonMinutes !== null ||
+        value.backlogHoursState !== 'unavailable' ||
+        value.backlogHoursReason !== 'unresolved_linkage_present')) return false;
     if (value.state === 'unavailable' &&
         (value.reason !== 'no_authenticated_approved_booking_history' ||
          COUNT_KEYS.some(function (key) { return value[key] !== 0; }))) return false;

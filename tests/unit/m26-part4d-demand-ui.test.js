@@ -227,11 +227,38 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
       { probabilityCalibrated: true }, { forecastIssued: true },
       { paidNumericServing: true }, { knownBacklogCount: 5 },
       { sourceAuthority: 'lead_pipeline' },
+      { state: 'partial', reason: 'unresolved_linkage_present',
+        unresolvedLinkageCount: 1 },
+      { state: 'partial', reason: 'unresolved_linkage_present',
+        unresolvedLinkageCount: 1, plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable',
+        backlogHoursReason: 'reviewed_person_hour_plan_missing' },
     ]) expect(demand.project(snapshot(poison), false)).toBeNull();
     const html = fs.readFileSync('public/demo-dashboard.html', 'utf8');
     expect(html).toContain('Capture current backlog');
     expect(html).toContain('Demand forecast');
     expect(html).toContain('command-center-demand-position.js');
+  });
+
+  test('withholds all numeric UI output for conflicting partial receipt shapes', async () => {
+    const poisons = [
+      { state: 'partial', reason: 'unresolved_linkage_present',
+        unresolvedLinkageCount: 1 },
+      { state: 'partial', reason: 'unresolved_linkage_present',
+        unresolvedLinkageCount: 1, plannedPersonMinutes: null,
+        backlogHoursState: 'unavailable',
+        backlogHoursReason: 'reviewed_person_hour_plan_missing' },
+    ];
+    for (const poison of poisons) {
+      const fixture = documentFixture();
+      const controller = demand.create({ mode: 'paid', document: fixture.document,
+        idempotency: () => 'part4d-partial-poison-key',
+        fetcher: async () => response(201, snapshot(poison)) });
+      await controller.capture();
+      expect(controller.state()).toMatchObject({ kind: 'failure', metrics: [] });
+      expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
+      expect(JSON.stringify(controller.state())).not.toMatch(/780|13 person-hours/);
+    }
   });
 });
 

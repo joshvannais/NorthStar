@@ -48,7 +48,15 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     expect(safeSnapshot({ ...base, plannedPersonMinutes: '1440.000000',
       backlogHoursState: 'available', backlogHoursReason: null })).not.toBeNull();
     expect(safeSnapshot({ ...base, state: 'partial',
-      reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1 })).not.toBeNull();
+      reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1,
+      backlogHoursReason: 'unresolved_linkage_present' })).not.toBeNull();
+    expect(safeSnapshot({ ...base, state: 'partial',
+      reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1,
+      plannedPersonMinutes: '1440.000000', backlogHoursState: 'available',
+      backlogHoursReason: null })).toBeNull();
+    expect(safeSnapshot({ ...base, state: 'partial',
+      reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1,
+      backlogHoursReason: 'reviewed_person_hour_plan_missing' })).toBeNull();
     expect(safeSnapshot({ ...base, state: 'unavailable',
       reason: 'no_authenticated_approved_booking_history',
       approvedUnscheduledCount: 0, approvedScheduledCount: 0,

@@ -244,4 +244,72 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
       recovered.release();
     }
   }, 120000);
+
+  test('orders live and backfilled events by approval decision time, not transaction start', async () => {
+    const live = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true });
+    const liveApproval = (await fixture.ownerPool.query(
+      `SELECT approval.approved_at,event_value.occurred_at,revision.created_at
+       FROM canonical_schedule_assignment_revisions revision
+       JOIN canonical_schedule_human_approvals approval
+        ON approval.organization_id=revision.organization_id
+        AND approval.id=revision.human_approval_id
+       JOIN canonical_forecast_schedule_booking_events event_value
+        ON event_value.organization_id=revision.organization_id
+        AND event_value.source_revision_id=revision.id
+       WHERE revision.organization_id=$1 AND revision.assignment_id=(
+        SELECT id FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2)
+        AND revision.source_kind='human_preview_approved'
+       ORDER BY revision.revision DESC LIMIT 1`, [fixture.org, live.appointment])).rows[0];
+    expect(liveApproval.occurred_at.getTime()).toBe(liveApproval.approved_at.getTime());
+    expect(liveApproval.occurred_at.getTime()).toBeGreaterThan(
+      liveApproval.created_at.getTime());
+
+    const legacy = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true });
+    await recordOperationalCancellation(legacy);
+    const legacyApproval = (await fixture.ownerPool.query(
+      `SELECT approval.approved_at,event_value.occurred_at,revision.created_at
+       FROM canonical_schedule_assignment_revisions revision
+       JOIN canonical_schedule_approvals approval
+        ON approval.organization_id=revision.organization_id
+        AND approval.id=revision.approval_id
+       JOIN canonical_forecast_schedule_booking_events event_value
+        ON event_value.organization_id=revision.organization_id
+        AND event_value.source_revision_id=revision.id
+       WHERE revision.organization_id=$1 AND revision.assignment_id=(
+        SELECT id FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2)
+        AND revision.source_kind='human_approved'
+       ORDER BY revision.revision DESC LIMIT 1`, [fixture.org, legacy.appointment])).rows[0];
+    expect(legacyApproval.occurred_at.getTime()).toBe(legacyApproval.approved_at.getTime());
+    expect(legacyApproval.occurred_at.getTime()).toBeGreaterThan(
+      legacyApproval.created_at.getTime());
+
+    const revision = (await fixture.ownerPool.query(
+      `SELECT revision.id,revision.organization_id,revision.approval_id,
+        revision.human_approval_id,revision.source_kind
+       FROM canonical_schedule_assignment_revisions revision
+       WHERE revision.organization_id=$1 AND revision.source_kind IN (
+        'human_approved','human_preview_approved') ORDER BY revision.created_at LIMIT 1`,
+      [fixture.org])).rows[0];
+    const evidenceTable = revision.source_kind === 'human_approved' ?
+      'canonical_schedule_approvals' : 'canonical_schedule_human_approvals';
+    const evidenceId = revision.approval_id || revision.human_approval_id;
+    const decisionTime = (await fixture.ownerPool.query(
+      `SELECT approved_at FROM ${evidenceTable} WHERE organization_id=$1 AND id=$2`,
+      [revision.organization_id, evidenceId])).rows[0].approved_at;
+    const rebuilt = await fixture.ownerPool.query(
+      `SELECT CASE WHEN revision.source_kind='human_approved'
+        THEN legacy.approved_at ELSE preview.approved_at END occurred_at
+       FROM canonical_schedule_assignment_revisions revision
+       LEFT JOIN canonical_schedule_approvals legacy
+        ON legacy.organization_id=revision.organization_id AND legacy.id=revision.approval_id
+       LEFT JOIN canonical_schedule_human_approvals preview
+        ON preview.organization_id=revision.organization_id AND preview.id=revision.human_approval_id
+       WHERE revision.organization_id=$1 AND revision.id=$2`,
+      [revision.organization_id, revision.id]);
+    expect(rebuilt.rows[0].occurred_at.getTime()).toBe(decisionTime.getTime());
+  }, 120000);
 });

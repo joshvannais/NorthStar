@@ -74,6 +74,7 @@ RETURNS TRIGGER LANGUAGE plpgsql
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE prior_revision public.canonical_schedule_assignment_revisions%ROWTYPE;
  appointment_value UUID;transition_value TEXT;event_hash TEXT;prior_found BOOLEAN;
+ event_occurred_at TIMESTAMPTZ;
 BEGIN
  IF NEW.source_kind NOT IN ('human_approved','human_preview_approved') THEN
   RETURN NEW;
@@ -88,6 +89,15 @@ BEGIN
  SELECT appointment_id INTO STRICT appointment_value
  FROM public.canonical_schedule_assignments
  WHERE organization_id=NEW.organization_id AND id=NEW.assignment_id;
+ IF NEW.source_kind='human_approved' THEN
+  SELECT approval.approved_at INTO STRICT event_occurred_at
+  FROM public.canonical_schedule_approvals approval
+  WHERE approval.organization_id=NEW.organization_id AND approval.id=NEW.approval_id;
+ ELSE
+  SELECT approval.approved_at INTO STRICT event_occurred_at
+  FROM public.canonical_schedule_human_approvals approval
+  WHERE approval.organization_id=NEW.organization_id AND approval.id=NEW.human_approval_id;
+ END IF;
  transition_value:=CASE
   WHEN prior_found AND NEW.appointment_status='cancelled'
    AND prior_revision.appointment_status<>'cancelled' THEN 'booking_cancelled'
@@ -101,7 +111,7 @@ BEGIN
   'sourceRevision',NEW.revision,'sourceKind',NEW.source_kind,
   'scheduleState',NEW.schedule_state,'appointmentStatus',NEW.appointment_status,
   'transitionKind',transition_value,
-  'occurredAt',public.canonical_forecast_utc_instant(NEW.created_at),
+  'occurredAt',public.canonical_forecast_utc_instant(event_occurred_at),
   'sourceDigest',rtrim(NEW.canonical_digest)));
  INSERT INTO public.canonical_forecast_schedule_booking_events(
   organization_id,assignment_id,appointment_id,source_revision_id,source_revision,
@@ -109,7 +119,7 @@ BEGIN
   source_digest,event_digest)
  VALUES(NEW.organization_id,NEW.assignment_id,appointment_value,NEW.id,NEW.revision,
   NEW.source_kind,NEW.schedule_state,NEW.appointment_status,transition_value,
-  NEW.created_at,rtrim(NEW.canonical_digest),event_hash)
+  event_occurred_at,rtrim(NEW.canonical_digest),event_hash)
  ON CONFLICT(organization_id,source_revision_id) DO NOTHING;
  RETURN NEW;
 END $$;
@@ -120,6 +130,8 @@ CREATE TRIGGER canonical_forecast_schedule_booking_event_capture
 -- Mount all pre-existing genuine human scheduling history in revision order.
 WITH human_ordered AS MATERIALIZED (
  SELECT revision_value.*,assignment.appointment_id,
+  CASE WHEN revision_value.source_kind='human_approved'
+   THEN legacy_approval.approved_at ELSE preview_approval.approved_at END event_occurred_at,
   lag(revision_value.schedule_state) OVER (
    PARTITION BY revision_value.organization_id,revision_value.assignment_id
    ORDER BY revision_value.revision) prior_schedule_state,
@@ -130,6 +142,12 @@ WITH human_ordered AS MATERIALIZED (
  JOIN public.canonical_schedule_assignments assignment
   ON assignment.organization_id=revision_value.organization_id
   AND assignment.id=revision_value.assignment_id
+ LEFT JOIN public.canonical_schedule_approvals legacy_approval
+  ON legacy_approval.organization_id=revision_value.organization_id
+  AND legacy_approval.id=revision_value.approval_id
+ LEFT JOIN public.canonical_schedule_human_approvals preview_approval
+  ON preview_approval.organization_id=revision_value.organization_id
+  AND preview_approval.id=revision_value.human_approval_id
  WHERE revision_value.source_kind IN ('human_approved','human_preview_approved')
 ), human_rows AS (
  SELECT human_ordered.*,
@@ -149,7 +167,7 @@ WITH human_ordered AS MATERIALIZED (
    'sourceRevision',revision,'sourceKind',source_kind,
    'scheduleState',schedule_state,'appointmentStatus',appointment_status,
    'transitionKind',transition_kind,
-   'occurredAt',public.canonical_forecast_utc_instant(created_at),
+   'occurredAt',public.canonical_forecast_utc_instant(event_occurred_at),
    'sourceDigest',rtrim(canonical_digest))) event_digest_value
  FROM human_rows
 )
@@ -158,7 +176,7 @@ INSERT INTO public.canonical_forecast_schedule_booking_events(
  source_kind,schedule_state,appointment_status,transition_kind,occurred_at,
  source_digest,event_digest)
 SELECT organization_id,assignment_id,appointment_id,id,revision,source_kind,
- schedule_state,appointment_status,transition_kind,created_at,
+ schedule_state,appointment_status,transition_kind,event_occurred_at,
  rtrim(canonical_digest),event_digest_value
 FROM prepared ORDER BY organization_id,assignment_id,revision;
 

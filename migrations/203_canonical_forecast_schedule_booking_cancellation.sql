@@ -5,8 +5,8 @@
 -- Legacy scheduling binaries omitted approved_at. Change its default before
 -- installing the bridge so a rolling old writer records the wall clock rather
 -- than PostgreSQL's transaction-start NOW(). Historical legacy rows whose
--- approval and revision share that old transaction-start instant are excluded
--- below because their actual decision side of a cutoff is unknowable.
+-- approval and revision share that old transaction-start instant become private
+-- immutable lineage-gap markers because their actual cutoff side is unknowable.
 ALTER TABLE public.canonical_schedule_approvals
  ALTER COLUMN approved_at SET DEFAULT clock_timestamp();
 
@@ -48,6 +48,44 @@ CREATE INDEX canonical_forecast_schedule_booking_events_candidates
  ON public.canonical_forecast_schedule_booking_events(
   organization_id,transition_kind,occurred_at,assignment_id);
 
+-- Preserve every legacy revision whose exact decision instant is unknowable.
+-- These markers are private source authority: a cohort may only authenticate a
+-- horizon that ends before the marker's earliest possible decision instant.
+CREATE TABLE public.canonical_forecast_schedule_booking_lineage_gaps (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
+ assignment_id UUID NOT NULL,
+ appointment_id UUID NOT NULL,
+ source_revision_id UUID NOT NULL,
+ source_revision BIGINT NOT NULL CHECK(source_revision>1),
+ uncertain_from_at TIMESTAMPTZ NOT NULL,
+ reason TEXT NOT NULL CHECK(reason='legacy_transaction_start_timestamp'),
+ source_digest TEXT NOT NULL CHECK(source_digest~'^[a-f0-9]{64}$'),
+ gap_digest TEXT NOT NULL CHECK(gap_digest~'^[a-f0-9]{64}$'),
+ UNIQUE(organization_id,id),
+ UNIQUE(organization_id,source_revision_id),
+ FOREIGN KEY(organization_id,assignment_id)
+  REFERENCES public.canonical_schedule_assignments(organization_id,id) ON DELETE RESTRICT,
+ FOREIGN KEY(organization_id,appointment_id)
+  REFERENCES public.canonical_appointments(organization_id,id) ON DELETE RESTRICT,
+ FOREIGN KEY(organization_id,source_revision_id)
+  REFERENCES public.canonical_schedule_assignment_revisions(organization_id,id) ON DELETE RESTRICT
+);
+CREATE INDEX canonical_forecast_schedule_booking_lineage_gaps_tenant_time
+ ON public.canonical_forecast_schedule_booking_lineage_gaps(
+  organization_id,uncertain_from_at,assignment_id);
+
+CREATE FUNCTION public.canonical_forecast_schedule_booking_lineage_gap_immutable()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ RAISE EXCEPTION 'Schedule booking lineage gaps are immutable' USING ERRCODE='23514';
+END $$;
+CREATE TRIGGER canonical_forecast_schedule_booking_lineage_gap_immutable
+ BEFORE UPDATE OR DELETE OR TRUNCATE
+ ON public.canonical_forecast_schedule_booking_lineage_gaps
+ FOR EACH STATEMENT
+ EXECUTE FUNCTION public.canonical_forecast_schedule_booking_lineage_gap_immutable();
+
 CREATE FUNCTION public.canonical_forecast_schedule_booking_event_immutable()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
@@ -82,7 +120,7 @@ RETURNS TRIGGER LANGUAGE plpgsql
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE prior_revision public.canonical_schedule_assignment_revisions%ROWTYPE;
  appointment_value UUID;transition_value TEXT;event_hash TEXT;prior_found BOOLEAN;
- event_occurred_at TIMESTAMPTZ;
+ event_occurred_at TIMESTAMPTZ;gap_hash TEXT;
 BEGIN
  IF NEW.source_kind NOT IN ('human_approved','human_preview_approved') THEN
   RETURN NEW;
@@ -107,6 +145,20 @@ BEGIN
   WHERE approval.organization_id=NEW.organization_id AND approval.id=NEW.human_approval_id;
  END IF;
  IF NEW.source_kind='human_approved' AND event_occurred_at<=NEW.created_at THEN
+  gap_hash:=public.canonical_completion_digest(jsonb_build_object(
+   'organizationId',NEW.organization_id,'assignmentId',NEW.assignment_id,
+   'appointmentId',appointment_value,'sourceRevisionId',NEW.id,
+   'sourceRevision',NEW.revision,
+   'uncertainFromAt',public.canonical_forecast_utc_instant(event_occurred_at),
+   'reason','legacy_transaction_start_timestamp',
+   'sourceDigest',rtrim(NEW.canonical_digest)));
+  INSERT INTO public.canonical_forecast_schedule_booking_lineage_gaps(
+   organization_id,assignment_id,appointment_id,source_revision_id,source_revision,
+   uncertain_from_at,reason,source_digest,gap_digest)
+  VALUES(NEW.organization_id,NEW.assignment_id,appointment_value,NEW.id,NEW.revision,
+   event_occurred_at,'legacy_transaction_start_timestamp',
+   rtrim(NEW.canonical_digest),gap_hash)
+  ON CONFLICT(organization_id,source_revision_id) DO NOTHING;
   RETURN NEW;
  END IF;
  transition_value:=CASE
@@ -137,6 +189,34 @@ END $$;
 CREATE TRIGGER canonical_forecast_schedule_booking_event_capture
  AFTER INSERT ON public.canonical_schedule_assignment_revisions
  FOR EACH ROW EXECUTE FUNCTION public.canonical_forecast_schedule_booking_event_capture();
+
+-- Persist unsafe pre-203 lineage before mounting the durable event subset.
+INSERT INTO public.canonical_forecast_schedule_booking_lineage_gaps(
+ organization_id,assignment_id,appointment_id,source_revision_id,source_revision,
+ uncertain_from_at,reason,source_digest,gap_digest)
+SELECT revision_value.organization_id,revision_value.assignment_id,
+ assignment.appointment_id,revision_value.id,revision_value.revision,
+ approval.approved_at,'legacy_transaction_start_timestamp',
+ rtrim(revision_value.canonical_digest),
+ public.canonical_completion_digest(jsonb_build_object(
+  'organizationId',revision_value.organization_id,
+  'assignmentId',revision_value.assignment_id,
+  'appointmentId',assignment.appointment_id,
+  'sourceRevisionId',revision_value.id,
+  'sourceRevision',revision_value.revision,
+  'uncertainFromAt',public.canonical_forecast_utc_instant(approval.approved_at),
+  'reason','legacy_transaction_start_timestamp',
+  'sourceDigest',rtrim(revision_value.canonical_digest)))
+FROM public.canonical_schedule_assignment_revisions revision_value
+JOIN public.canonical_schedule_assignments assignment
+ ON assignment.organization_id=revision_value.organization_id
+ AND assignment.id=revision_value.assignment_id
+JOIN public.canonical_schedule_approvals approval
+ ON approval.organization_id=revision_value.organization_id
+ AND approval.id=revision_value.approval_id
+WHERE revision_value.source_kind='human_approved'
+ AND approval.approved_at<=revision_value.created_at
+ORDER BY revision_value.organization_id,revision_value.assignment_id,revision_value.revision;
 
 -- Mount all pre-existing genuine human scheduling history in revision order.
 WITH human_ordered AS MATERIALIZED (
@@ -312,10 +392,21 @@ BEGIN
    SELECT 1 FROM public.canonical_forecast_schedule_booking_events event_value
    WHERE event_value.organization_id=org
     AND event_value.source_order>existing.source_high_water_order
-    AND event_value.occurred_at<=existing.horizon_ends_at) INTO stale_value;
+    AND event_value.occurred_at<=existing.horizon_ends_at
+   UNION ALL
+   SELECT 1 FROM public.canonical_forecast_schedule_booking_lineage_gaps gap_value
+   WHERE gap_value.organization_id=org
+    AND gap_value.uncertain_from_at<=existing.horizon_ends_at) INTO stale_value;
   RETURN jsonb_build_object('cohort',
    public.canonical_forecast_schedule_booking_cancellation_cohort_projection(
     existing,stale_value),'replayed',TRUE);
+ END IF;
+ IF EXISTS(
+  SELECT 1 FROM public.canonical_forecast_schedule_booking_lineage_gaps gap_value
+  WHERE gap_value.organization_id=org
+   AND gap_value.uncertain_from_at<=horizon_value) THEN
+  RAISE EXCEPTION 'Schedule booking source contains unknowable legacy lineage'
+   USING ERRCODE='55000';
  END IF;
  SELECT COALESCE(MAX(source_order),0) INTO high_water
  FROM public.canonical_forecast_schedule_booking_events
@@ -461,15 +552,21 @@ BEGIN
   SELECT 1 FROM public.canonical_forecast_schedule_booking_events event_value
   WHERE event_value.organization_id=org
    AND event_value.source_order>value.source_high_water_order
-   AND event_value.occurred_at<=value.horizon_ends_at) INTO stale_value;
+   AND event_value.occurred_at<=value.horizon_ends_at
+  UNION ALL
+  SELECT 1 FROM public.canonical_forecast_schedule_booking_lineage_gaps gap_value
+  WHERE gap_value.organization_id=org
+   AND gap_value.uncertain_from_at<=value.horizon_ends_at) INTO stale_value;
  RETURN public.canonical_forecast_schedule_booking_cancellation_cohort_projection(
   value,stale_value);
 END $$;
 
 REVOKE ALL ON SEQUENCE public.canonical_forecast_schedule_booking_event_order_sequence FROM PUBLIC;
 REVOKE ALL ON TABLE public.canonical_forecast_schedule_booking_events FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_forecast_schedule_booking_lineage_gaps FROM PUBLIC;
 REVOKE ALL ON TABLE public.canonical_forecast_schedule_booking_cancellation_cohorts FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_immutable() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_lineage_gap_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_lock() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_event_capture() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_cancellation_cohort_immutable() FROM PUBLIC;

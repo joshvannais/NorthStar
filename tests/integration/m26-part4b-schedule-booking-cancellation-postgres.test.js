@@ -59,7 +59,7 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
       `SELECT canonical_forecast_utc_instant(${expression}) value`)).rows[0].value;
   }
 
-  async function recordOperationalCancellation(context) {
+  async function recordLegacyStatus(context, status, reason) {
     const current = (await fixture.ownerPool.query(
       `SELECT revision,rtrim(canonical_digest) digest
        FROM canonical_schedule_assignments
@@ -72,12 +72,17 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
       authSessionId: fixture.actors.owner.authSessionId,
       appointmentId: context.appointment,
       explicitSession: null,
-      idempotencyKey: `m26-p4b-operational-cancel-${key()}`,
-      body: { status: 'cancelled', expectedRevision: Number(current.revision),
+      idempotencyKey: `m26-p4b-legacy-status-${key()}`,
+      body: { status, expectedRevision: Number(current.revision),
         expectedDigest: current.digest, expectedTimeZone: 'UTC',
         action: 'calendar_edit',
-        reason: 'Fictional mounted explicit operational cancellation.' },
+        reason },
     }));
+  }
+
+  async function recordOperationalCancellation(context) {
+    return recordLegacyStatus(context, 'cancelled',
+      'Fictional mounted explicit operational cancellation.');
   }
 
   test('composes genuine schedule writers, excludes reschedule and later entrant, and replays once', async () => {
@@ -144,6 +149,9 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
 
     await expect(fixture.runtimePool.query(
       'SELECT * FROM canonical_forecast_schedule_booking_events'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(
+      'SELECT * FROM canonical_forecast_schedule_booking_lineage_gaps'))
       .rejects.toMatchObject({ code: '42501' });
     await expect(fixture.ownerPool.query(
       "UPDATE canonical_forecast_schedule_booking_events SET transition_kind='state_changed'"))
@@ -274,6 +282,8 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
     const legacy = await fixture.createExecution({ approvedScheduling: true,
       stopAfterScheduling: true });
     await recordOperationalCancellation(legacy);
+    await recordLegacyStatus(legacy, 'scheduled',
+      'Fictional mounted durable scheduled successor.');
     const legacyApproval = (await fixture.ownerPool.query(
       `SELECT approval.approved_at,event_value.occurred_at,revision.created_at
        FROM canonical_schedule_assignment_revisions revision
@@ -296,10 +306,27 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
     try {
       await unsafe.query('BEGIN');
       await unsafe.query('SELECT pg_sleep(0.05)');
+      const window = (await unsafe.query(`SELECT
+        canonical_forecast_utc_instant(clock_timestamp()-interval '1 millisecond') cutoff,
+        canonical_forecast_utc_instant(clock_timestamp()) horizon`)).rows[0];
+      const beforeGap = (await unsafe.query(
+        `SELECT canonical_forecast_schedule_booking_cancellation_cohort_capture(
+          $1,$2,$3,$4,$5,$6,$7,$8) value`,
+        [fixture.org, fixture.actors.owner.actorUserId,
+          fixture.actors.owner.actorAccessRole, fixture.actors.owner.authSessionId,
+          fixture.actors.owner.csrfToken, `m26-p4b-before-gap-${key()}`,
+          window.cutoff, window.horizon])).rows[0].value.cohort;
       const assignment = (await unsafe.query(
         `SELECT * FROM canonical_schedule_assignments
          WHERE organization_id=$1 AND appointment_id=$2 FOR UPDATE`,
         [fixture.org, legacy.appointment])).rows[0];
+      const unsafeDigest = (await unsafe.query(
+        `SELECT canonical_schedule_assignment_digest(
+          $1,$2,$3,$4,$5,$6,$7,'cancelled',$8,$9::jsonb) digest`,
+        [assignment.target_state, assignment.workforce_profile_id,
+          assignment.workforce_crew_id, assignment.schedule_state,
+          assignment.dispatch_state, assignment.scheduled_start, assignment.scheduled_end,
+          assignment.needs_review, JSON.stringify(assignment.review_reasons)])).rows[0].digest;
       const oldRequest = crypto.createHash('sha256').update(`old-request:${key()}`).digest('hex');
       const oldKey = crypto.createHash('sha256').update(`old-key:${key()}`).digest('hex');
       const oldApproval = (await unsafe.query(
@@ -313,10 +340,10 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
           approved_at)
          SELECT approval.organization_id,approval.assignment_id,approval.appointment_id,
           approval.actor_user_id,approval.actor_access_role,approval.auth_session_id,
-          $2::bigint,$3::char(64),$2::bigint+1,$3::char(64),
-          $4::char(64),$5::char(64),'calendar_edit',
-          'Synthetic pre-203 transaction-start approval evidence.',
-          assignment.scheduled_start,assignment.scheduled_end,assignment.appointment_status,
+           $2::bigint,$3::char(64),$2::bigint+1,$7::char(64),
+           $4::char(64),$5::char(64),'calendar_edit',
+           'Synthetic pre-203 transaction-start approval evidence.',
+           assignment.scheduled_start,assignment.scheduled_end,'cancelled',
           assignment.schedule_state,assignment.dispatch_state,assignment.needs_review,
           assignment.review_reasons,
           approval.time_evidence_version,approval.submitted_schedule,
@@ -328,16 +355,17 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
           AND assignment.id=$6 AND approval.assignment_id=assignment.id
          ORDER BY approval.approved_at DESC LIMIT 1 RETURNING id,approved_at`,
         [fixture.org, Number(assignment.revision), assignment.canonical_digest.trim(),
-          oldRequest, oldKey, assignment.id])).rows[0];
+          oldRequest, oldKey, assignment.id, unsafeDigest])).rows[0];
       await unsafe.query(`ALTER TABLE canonical_schedule_assignments
         DISABLE TRIGGER canonical_schedule_assignments_guard`);
       await unsafe.query(
         `UPDATE canonical_schedule_assignments SET revision=revision+1,
           last_approval_id=$3,last_human_approval_id=NULL,last_actor_user_id=$4,
-          last_action_code='calendar_edit',last_reason=$5,updated_at=transaction_timestamp()
+          last_action_code='calendar_edit',last_reason=$5,appointment_status='cancelled',
+          canonical_digest=$6,updated_at=transaction_timestamp()
          WHERE organization_id=$1 AND id=$2`,
         [fixture.org, assignment.id, oldApproval.id, fixture.actors.owner.actorUserId,
-          'Synthetic pre-203 transaction-start approval evidence.']);
+          'Synthetic pre-203 transaction-start approval evidence.', unsafeDigest]);
       const oldRevision = (await unsafe.query(
         `INSERT INTO canonical_schedule_assignment_revisions(
           organization_id,assignment_id,revision,workforce_profile_id,workforce_crew_id,
@@ -352,15 +380,96 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
         [fixture.org, assignment.id, Number(assignment.revision) + 1,
           assignment.workforce_profile_id, assignment.workforce_crew_id,
           assignment.target_state, assignment.schedule_state, assignment.dispatch_state,
-          assignment.scheduled_start, assignment.scheduled_end, assignment.appointment_status,
+          assignment.scheduled_start, assignment.scheduled_end, 'cancelled',
           assignment.needs_review, JSON.stringify(assignment.review_reasons),
-          assignment.canonical_digest.trim(),
+          unsafeDigest,
           oldApproval.id, fixture.actors.owner.actorUserId, oldRequest])).rows[0];
       expect(oldRevision.created_at.getTime()).toBe(oldApproval.approved_at.getTime());
       expect((await unsafe.query(
         `SELECT count(*)::int count FROM canonical_forecast_schedule_booking_events
          WHERE organization_id=$1 AND source_revision_id=$2`,
         [fixture.org, oldRevision.id])).rows[0].count).toBe(0);
+      const gap = (await unsafe.query(
+        `SELECT reason,uncertain_from_at,gap_digest
+         FROM canonical_forecast_schedule_booking_lineage_gaps
+         WHERE organization_id=$1 AND source_revision_id=$2`,
+        [fixture.org, oldRevision.id])).rows[0];
+      expect(gap).toMatchObject({ reason: 'legacy_transaction_start_timestamp' });
+      expect(gap.uncertain_from_at.getTime()).toBe(oldRevision.created_at.getTime());
+      expect(gap.gap_digest).toMatch(/^[a-f0-9]{64}$/);
+
+      const successorRequest = crypto.createHash('sha256')
+        .update(`successor-request:${key()}`).digest('hex');
+      const successorKey = crypto.createHash('sha256')
+        .update(`successor-key:${key()}`).digest('hex');
+      const successorApproval = (await unsafe.query(
+        `INSERT INTO canonical_schedule_approvals(
+          organization_id,assignment_id,appointment_id,actor_user_id,actor_access_role,
+          auth_session_id,expected_revision,expected_digest,applied_revision,applied_digest,
+          request_digest,idempotency_key_hash,action_code,reason,approved_scheduled_start,
+          approved_scheduled_end,approved_appointment_status,resulting_schedule_state,
+          resulting_dispatch_state,resulting_needs_review,resulting_review_reasons,
+          time_evidence_version,submitted_schedule,time_zone_authority,time_evidence_digest,
+          approved_at)
+         SELECT organization_id,assignment_id,appointment_id,actor_user_id,actor_access_role,
+          auth_session_id,$2::bigint,$3::char(64),$2::bigint+1,$3::char(64),
+          $4::char(64),$5::char(64),'calendar_edit',
+          'Durable successor after uncertain legacy cancellation.',approved_scheduled_start,
+          approved_scheduled_end,'cancelled',resulting_schedule_state,
+          resulting_dispatch_state,resulting_needs_review,resulting_review_reasons,
+          time_evidence_version,submitted_schedule,time_zone_authority,time_evidence_digest,
+          clock_timestamp()
+         FROM canonical_schedule_approvals WHERE organization_id=$1 AND id=$6
+         RETURNING id,approved_at`,
+        [fixture.org, Number(assignment.revision) + 1, unsafeDigest,
+          successorRequest, successorKey, oldApproval.id])).rows[0];
+      await unsafe.query(
+        `UPDATE canonical_schedule_assignments SET revision=revision+1,
+          last_approval_id=$3,last_actor_user_id=$4,last_action_code='calendar_edit',
+          last_reason='Durable successor after uncertain legacy cancellation.',
+          updated_at=$5 WHERE organization_id=$1 AND id=$2`,
+        [fixture.org, assignment.id, successorApproval.id,
+          fixture.actors.owner.actorUserId, successorApproval.approved_at]);
+      const successorRevision = (await unsafe.query(
+        `INSERT INTO canonical_schedule_assignment_revisions(
+          organization_id,assignment_id,revision,workforce_profile_id,workforce_crew_id,
+          target_state,schedule_state,dispatch_state,scheduled_start,scheduled_end,
+          appointment_status,needs_review,review_reasons,canonical_digest,source_kind,
+          approval_id,human_approval_id,actor_user_id,action_code,reason,request_digest,
+          source_snapshot,created_at)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'cancelled',$11,$12,$13,'human_approved',
+          $14,NULL,$15,'calendar_edit',
+          'Durable successor after uncertain legacy cancellation.',
+          $16,'{}'::jsonb,transaction_timestamp()) RETURNING id`,
+        [fixture.org, assignment.id, Number(assignment.revision) + 2,
+          assignment.workforce_profile_id, assignment.workforce_crew_id,
+          assignment.target_state, assignment.schedule_state, assignment.dispatch_state,
+          assignment.scheduled_start, assignment.scheduled_end, assignment.needs_review,
+          JSON.stringify(assignment.review_reasons), unsafeDigest, successorApproval.id,
+          fixture.actors.owner.actorUserId, successorRequest])).rows[0];
+      expect((await unsafe.query(
+        `SELECT transition_kind FROM canonical_forecast_schedule_booking_events
+         WHERE organization_id=$1 AND source_revision_id=$2`,
+        [fixture.org, successorRevision.id])).rows[0].transition_kind).toBe('state_changed');
+
+      const withheld = (await unsafe.query(
+        `SELECT canonical_forecast_schedule_booking_cancellation_cohort_read(
+          $1,$2,$3,$4,$5) value`,
+        [fixture.org, fixture.actors.owner.actorUserId,
+          fixture.actors.owner.actorAccessRole, fixture.actors.owner.authSessionId,
+          beforeGap.id])).rows[0].value;
+      expect(withheld).toMatchObject({ state: 'source_stale',
+        reason: 'source_changed_inside_horizon', eligibleCount: 0,
+        cancelledCount: 0, observedRate: null, sourceAuthenticated: false,
+        sourceDigest: null, cohortDigest: null, paidNumericServing: false });
+
+      await expect(unsafe.query(
+        `SELECT canonical_forecast_schedule_booking_cancellation_cohort_capture(
+          $1,$2,$3,$4,$5,$6,$7,$8) value`,
+        [fixture.org, fixture.actors.owner.actorUserId,
+          fixture.actors.owner.actorAccessRole, fixture.actors.owner.authSessionId,
+          fixture.actors.owner.csrfToken, `m26-p4b-after-gap-${key()}`,
+          window.cutoff, window.horizon])).rejects.toMatchObject({ code: '55000' });
     } finally {
       await unsafe.query('ROLLBACK').catch(() => {});
       unsafe.release();
@@ -395,8 +504,10 @@ realPostgres('Mission 26 Part 4B scheduling-owned booking cancellation cohort', 
       __dirname, '../../migrations/203_canonical_forecast_schedule_booking_cancellation.sql'),
     'utf8');
     expect(migrationContract).toContain(
-      "event_occurred_at<=NEW.created_at THEN\n  RETURN NEW");
+      "event_occurred_at<=NEW.created_at THEN\n  gap_hash:=");
     expect(migrationContract).toContain(
       "FROM human_ordered\n WHERE source_kind<>'human_approved' OR event_occurred_at>created_at");
+    expect(migrationContract).toContain(
+      'canonical_forecast_schedule_booking_lineage_gaps gap_value');
   }, 120000);
 });

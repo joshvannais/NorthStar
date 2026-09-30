@@ -39,6 +39,16 @@ function scheduleCohort(extra = {}) {
     sourceAuthority: 'northstar_human_approved_schedule_history', ...extra });
 }
 
+function bookingTransitionCohort(extra = {}) {
+  const value = cohort({ version: 'm26-schedule-booking-transition-cohort-v1',
+    targetKey: 'demand.booking_transition.v1',
+    sourceAuthority: 'northstar_canonical_opportunity_and_human_approved_schedule_history',
+    ...extra });
+  value.bookedCount = value.cancelledCount;
+  delete value.cancelledCount;
+  return value;
+}
+
 function qualificationCohort(extra = {}) {
   const value = cohort({ version: 'm26-lead-qualification-cohort-v1',
     targetKey: 'demand.qualification_transition.v1',
@@ -108,6 +118,10 @@ function application({ role = 'owner', captured, read, reviewMutated, reviewRead
       captured || { cohort: estimateRequestCohort(), replayed: false } }] };
     if (sql.includes('canonical_forecast_estimate_request_cohort_read')) return { rows: [{ value:
       read || estimateRequestCohort() }] };
+    if (sql.includes('canonical_forecast_schedule_booking_transition_cohort_capture')) return {
+      rows: [{ value: captured || { cohort: bookingTransitionCohort(), replayed: false } }] };
+    if (sql.includes('canonical_forecast_schedule_booking_transition_cohort_read')) return {
+      rows: [{ value: read || bookingTransitionCohort() }] };
     if (sql.includes('canonical_lead_state_review_mutate')) return { rows: [{ value:
       reviewMutated || { review: qualificationReview(), replayed: false } }] };
     if (sql.includes('canonical_lead_state_review_read')) return { rows: [{ value:
@@ -267,6 +281,37 @@ test('reads schedule receipts without accepting commercial or private result poi
     memberReceipts: [{ appointmentId: COHORT }] }) });
   expect((await request(privatePoison.app)
     .get(`/cohorts/schedule-booking-cancellations/${COHORT}`)).status).toBe(503);
+});
+
+test('captures first accepted bookings through the scheduling-owned authority', async () => {
+  const { app, client } = application({ captured: {
+    cohort: bookingTransitionCohort(), replayed: false } });
+  const response = await request(app).post('/cohorts/schedule-bookings')
+    .set('X-CSRF-Token', 'validated-csrf').set('Idempotency-Key', KEY)
+    .send({ cutoffAt: CUTOFF, horizonEndsAt: HORIZON });
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({
+    targetKey: 'demand.booking_transition.v1', eligibleCount: 3,
+    bookedCount: 1, observedRate: '0.333333',
+    sourceAuthority: 'northstar_canonical_opportunity_and_human_approved_schedule_history',
+    sourceAuthenticated: true, sourceCoverageComplete: false,
+    offPlatformCoverageVerified: false, providerCoverageVerified: false,
+    probabilityCalibrated: false, forecastIssued: false,
+    paidNumericServing: false, replayed: false });
+  expect(client.query.mock.calls[3][0]).toContain(
+    'canonical_forecast_schedule_booking_transition_cohort_capture');
+});
+
+test('rejects booking-transition request and private result poison', async () => {
+  const { app, pool } = application();
+  expect((await request(app).post('/cohorts/schedule-bookings')
+    .set('Idempotency-Key', KEY).send({ cutoffAt: CUTOFF,
+      horizonEndsAt: HORIZON, organizationId: ORG })).status).toBe(400);
+  expect(pool.connect).not.toHaveBeenCalled();
+  const poisoned = application({ read: bookingTransitionCohort({
+    memberReceipts: [{ opportunityId: OPPORTUNITY }] }) });
+  expect((await request(poisoned.app)
+    .get(`/cohorts/schedule-bookings/${COHORT}`)).status).toBe(503);
 });
 
 test('records and reads tenant-private human-reviewed lead state', async () => {

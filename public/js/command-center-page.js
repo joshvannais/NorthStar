@@ -2,7 +2,14 @@
   'use strict';
 
   var contract = global.NorthStarCommandCenterContract;
-  var mode = contract && contract.modeForPath(global.location.pathname);
+  var mode = contract && typeof contract.modeForPath === 'function'
+    ? contract.modeForPath(global.location.pathname) : null;
+  var workspaceDependenciesReady = Boolean(contract &&
+    typeof contract.modeForPath === 'function' &&
+    typeof contract.routeForPath === 'function' &&
+    typeof contract.destinationPath === 'function' &&
+    typeof contract.validateWorkspace === 'function' && global.NorthStarAccountSession &&
+    typeof global.NorthStarAccountSession.fetch === 'function');
   var workspace = null;
   var loading = false;
   var chartPeriod = 'daily';
@@ -130,7 +137,8 @@
   }
 
   function destination(id) {
-    return contract.destinationPath(id, mode);
+    return contract && typeof contract.destinationPath === 'function'
+      ? contract.destinationPath(id, mode) : null;
   }
 
   function detailHref(graph, kind) {
@@ -759,7 +767,8 @@
 
   function load(expected) {
     if (loading) return Promise.resolve(null);
-    if (!contract || !contract.routeForPath(global.location.pathname) || !global.NorthStarAccountSession) {
+    if (!workspaceDependenciesReady || !contract.routeForPath(global.location.pathname)) {
+      if (demandPosition) demandPosition.workspaceUnavailable();
       setStatus('Command Center could not load. Refresh and try again.', 'error');
       return Promise.resolve(null);
     }
@@ -823,6 +832,7 @@
       fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
       idempotency: function () { return global.crypto.randomUUID(); },
       onWorkspaceRetry: function () { return load(); },
+      workspaceAvailable: workspaceDependenciesReady,
     });
   }
   byId('commandCenterRefresh').addEventListener('click', function () { load(); });

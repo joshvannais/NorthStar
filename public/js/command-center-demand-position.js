@@ -47,6 +47,8 @@
           /^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/.test(value.plannedPersonMinutes))) return false;
     if (value.knownBacklogCount !== value.approvedUnscheduledCount +
         value.approvedScheduledCount + value.workInProgressCount) return false;
+    var total = value.approvedUnscheduledCount + value.approvedScheduledCount +
+      value.workInProgressCount + value.completedCount + value.unresolvedLinkageCount;
     if (value.state === 'source_stale') {
       return value.reason === 'source_changed_after_capture' && value.sourceAuthenticated === false &&
         value.sourceDigest === null && value.snapshotDigest === null &&
@@ -56,7 +58,8 @@
     }
     if (value.sourceAuthenticated !== true || !DIGEST.test(value.sourceDigest || '') ||
         !DIGEST.test(value.snapshotDigest || '')) return false;
-    if (value.state === 'descriptive_subset' && value.reason !== null) return false;
+    if (value.state === 'descriptive_subset' && (value.reason !== null || total < 1 ||
+        value.unresolvedLinkageCount !== 0)) return false;
     if (value.state === 'partial' && (value.reason !== 'unresolved_linkage_present' ||
         value.unresolvedLinkageCount < 1 || value.plannedPersonMinutes !== null ||
         value.backlogHoursState !== 'unavailable' ||
@@ -143,7 +146,7 @@
   function create(options) {
     var doc = options.document, mode = options.mode === 'demo' ? 'demo' : 'paid';
     var fetcher = options.fetcher, lastOperation = null, pendingCaptureKey = null;
-    var operationGeneration = 0, workspaceAvailable = true;
+    var operationGeneration = 0, workspaceAvailable = options.workspaceAvailable !== false;
     var current = { kind: 'initial', badge: 'Receipt required',
       title: 'Choose a saved backlog receipt',
       explanation: 'Capture a bounded current fact, or enter an exact saved receipt ID to read it. Nothing is captured on page load.',
@@ -179,7 +182,7 @@
         explanation: 'Your current workspace role cannot capture or read this private backlog receipt.', metrics: [] } :
         category === 'FORECAST_CURRENT_BACKLOG_OVERSIZED' ? { kind: 'oversized', badge: 'Review limit exceeded',
           title: 'Backlog is too large for this bounded view',
-          explanation: 'More than 500 supported records are present. No counts or planned time are shown.', metrics: [] } :
+          explanation: 'A supported review or response-size limit was exceeded. No counts or planned time are shown.', metrics: [] } :
           category === 'FORECAST_CURRENT_BACKLOG_BUSY' ? { kind: 'busy', badge: 'Source busy',
             title: 'Current source is changing', explanation: 'Retry the same explicit action shortly. No result is assumed.', metrics: [] } :
             { kind: 'failure', badge: 'Workspace request failed', title: 'Backlog receipt unavailable',
@@ -269,7 +272,9 @@
     node('commandCenterBacklogCapture').addEventListener('click', capture);
     node('commandCenterBacklogRead').addEventListener('click', read);
     node('commandCenterBacklogRetry').addEventListener('click', retry);
-    if (mode === 'demo') paint(project(demoSnapshot(), true)); else paint(current);
+    if (mode === 'demo') paint(project(demoSnapshot(), true));
+    else if (!workspaceAvailable) workspaceUnavailable();
+    else paint(current);
     return { capture: capture, read: read, retry: retry,
       workspaceUnavailable: workspaceUnavailable, workspaceReady: workspaceReady,
       state: function () { return current; } };

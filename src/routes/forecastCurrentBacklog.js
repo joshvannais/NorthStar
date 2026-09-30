@@ -57,7 +57,7 @@ function failure(res, error, overflow = false) {
       error?.code === '23505' ?
         'This request was already used with different details. Start a new request.' :
         overflow && error?.code === '54000' ?
-          'Current backlog exceeds the supported 500-record review limit.' :
+          'Current backlog exceeds a supported review or response-size limit.' :
         busy ? 'The current backlog source is busy. Try again shortly.' :
           status === 409 ? 'The current backlog source changed. Refresh and try again.' :
             'The current backlog position is temporarily unavailable.';

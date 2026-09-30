@@ -41,6 +41,11 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
       { sourceCoverageComplete: true }, { forecastIssued: true },
       { paidNumericServing: true }, { probabilityCalibrated: true },
       { id: 'not-a-uuid' }, { capturedAt: '2026-09-31T00:00:00Z' },
+      { unresolvedLinkageCount: 1 },
+      { approvedUnscheduledCount: 0, approvedScheduledCount: 0,
+        workInProgressCount: 0, completedCount: 0, knownBacklogCount: 0,
+        plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'no_active_backlog' },
     ]) expect(safeSnapshot({ ...base, ...change }, id)).toBeNull();
   });
 

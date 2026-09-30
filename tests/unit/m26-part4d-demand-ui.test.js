@@ -154,6 +154,8 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     expect(controller.state().kind).toBe('restricted');
     await controller.capture();
     expect(controller.state().kind).toBe('oversized');
+    expect(controller.state().explanation).toMatch(/review or response-size limit/);
+    expect(controller.state().explanation).not.toMatch(/500/);
     controller.workspaceUnavailable();
     expect(controller.state().kind).toBe('workspace');
     expect(fixture.values.commandCenterBacklogCapture.disabled).toBe(true);
@@ -233,6 +235,11 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
         unresolvedLinkageCount: 1, plannedPersonMinutes: null,
         backlogHoursState: 'unavailable',
         backlogHoursReason: 'reviewed_person_hour_plan_missing' },
+      { unresolvedLinkageCount: 1 },
+      { approvedUnscheduledCount: 0, approvedScheduledCount: 0,
+        workInProgressCount: 0, completedCount: 0, knownBacklogCount: 0,
+        plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'no_active_backlog' },
     ]) expect(demand.project(snapshot(poison), false)).toBeNull();
     const html = fs.readFileSync('public/demo-dashboard.html', 'utf8');
     expect(html).toContain('Capture current backlog');
@@ -240,7 +247,7 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     expect(html).toContain('command-center-demand-position.js');
   });
 
-  test('withholds all numeric UI output for conflicting partial receipt shapes', async () => {
+  test('withholds all numeric UI output for conflicting partial or descriptive receipt shapes', async () => {
     const poisons = [
       { state: 'partial', reason: 'unresolved_linkage_present',
         unresolvedLinkageCount: 1 },
@@ -248,6 +255,11 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
         unresolvedLinkageCount: 1, plannedPersonMinutes: null,
         backlogHoursState: 'unavailable',
         backlogHoursReason: 'reviewed_person_hour_plan_missing' },
+      { unresolvedLinkageCount: 1 },
+      { approvedUnscheduledCount: 0, approvedScheduledCount: 0,
+        workInProgressCount: 0, completedCount: 0, knownBacklogCount: 0,
+        plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'no_active_backlog' },
     ];
     for (const poison of poisons) {
       const fixture = documentFixture();
@@ -259,6 +271,24 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
       expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
       expect(JSON.stringify(controller.state())).not.toMatch(/780|13 person-hours/);
     }
+  });
+
+  test('starts paid receipt controls unavailable and issues no request without workspace dependencies', async () => {
+    const fixture = documentFixture(), fetcher = jest.fn();
+    const controller = demand.create({ mode: 'paid', document: fixture.document,
+      workspaceAvailable: false, idempotency: () => 'unused', fetcher });
+    expect(controller.state()).toMatchObject({ kind: 'workspace', metrics: [] });
+    expect(fixture.values.commandCenterBacklogCapture.disabled).toBe(true);
+    expect(fixture.values.commandCenterBacklogRead.disabled).toBe(true);
+    fixture.values.commandCenterBacklogReceipt.value = ID;
+    await controller.capture();
+    await controller.read();
+    expect(fetcher).not.toHaveBeenCalled();
+    const page = fs.readFileSync('public/js/command-center-page.js', 'utf8');
+    expect(page).toContain('workspaceAvailable: workspaceDependenciesReady');
+    expect(page).toContain('if (!workspaceDependenciesReady ||');
+    expect(page).toContain("typeof contract.destinationPath === 'function'");
+    expect(page).toContain("typeof global.NorthStarAccountSession.fetch === 'function'");
   });
 });
 
@@ -287,7 +317,7 @@ describe('Mission 26 Part 4D route refusal projection', () => {
       .set('Idempotency-Key', 'part4d-route-key-0001').set('X-CSRF-Token', 'token').send({});
     expect(result.status).toBe(503);
     expect(result.body.error).toEqual({ category: 'FORECAST_CURRENT_BACKLOG_OVERSIZED',
-      message: 'Current backlog exceeds the supported 500-record review limit.' });
+      message: 'Current backlog exceeds a supported review or response-size limit.' });
     expect(JSON.stringify(result.body)).not.toContain('private database detail');
 
     const member = appFor('unused', 'member');

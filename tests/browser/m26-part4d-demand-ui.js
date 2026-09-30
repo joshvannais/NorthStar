@@ -39,6 +39,7 @@ const snapshot = {
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
     for (const item of [
       { mode: 'paid', width: 1440, theme: 'light' },
+      { mode: 'paid', width: 1024, theme: 'light', dependenciesReady: false },
       { mode: 'demo', width: 390, theme: 'dark' },
     ]) {
       const context = await browser.newContext({ viewport: { width: item.width, height: 900 } });
@@ -52,18 +53,24 @@ const snapshot = {
         document.querySelector('main').innerHTML = fragment;
       }, { fragment, theme: item.theme });
       await page.addScriptTag({ path: path.resolve('public/js/command-center-demand-position.js') });
-      await page.evaluate(({ mode, snapshot }) => {
+      await page.evaluate(({ mode, snapshot, dependenciesReady }) => {
         window.__calls = [];
         window.__controller = NorthStarDemandPosition.create({ mode, document,
+          workspaceAvailable: dependenciesReady !== false,
           idempotency: () => 'browser-part4d-capture-key',
           fetcher: async (url, options) => {
             window.__calls.push({ url, method: options.method });
             return { ok: true, status: 201,
               json: async () => ({ success: true, data: snapshot }) };
           } });
-      }, { mode: item.mode, snapshot });
+      }, { mode: item.mode, snapshot, dependenciesReady: item.dependenciesReady });
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
-      if (item.mode === 'paid') {
+      if (item.dependenciesReady === false) {
+        assert.equal(await page.getByRole('button', { name: 'Capture current backlog', exact: true }).isDisabled(), true);
+        await page.evaluate(() => window.__controller.capture());
+        assert.equal(await page.evaluate(() => window.__calls.length), 0);
+        assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Workspace unavailable/);
+      } else if (item.mode === 'paid') {
         assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Nothing is captured on page load/);
         await page.getByRole('button', { name: 'Capture current backlog', exact: true }).click();
         await page.waitForFunction(() => window.__controller.state().kind === 'available');
@@ -76,7 +83,8 @@ const snapshot = {
         assert.match(await page.locator('.command-center-demand-outlook').innerText(), /13 person-hours/);
       }
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-      const tag = `${item.mode}-${item.width}-${item.theme}`;
+      const tag = `${item.mode}-${item.width}-${item.theme}` +
+        (item.dependenciesReady === false ? '-dependencies-unavailable' : '');
       await page.locator('.command-center-demand-outlook').screenshot({ path: path.join(output, `${tag}.png`) });
       result.cases.push({ ...item, requests: await page.evaluate(() => window.__calls), pass: true });
       await context.close();

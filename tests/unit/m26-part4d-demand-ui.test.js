@@ -124,6 +124,23 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
       'paidNumericServing']) expect(value[flag]).toBe(false);
   });
 
+  test('isolated demo restores its frozen fiction after workspace refresh without a paid request', async () => {
+    const fixture = documentFixture(), fetcher = jest.fn();
+    const retryWorkspace = jest.fn(async () => null);
+    const controller = demand.create({ mode: 'demo', document: fixture.document,
+      idempotency: () => 'unused', fetcher, onWorkspaceRetry: retryWorkspace });
+    controller.workspaceUnavailable();
+    expect(controller.state()).toMatchObject({ kind: 'workspace', metrics: [] });
+    await controller.retry();
+    expect(retryWorkspace).toHaveBeenCalledTimes(1);
+    controller.workspaceReady();
+    expect(controller.state()).toMatchObject({ kind: 'available', fictional: true });
+    expect(fixture.values.commandCenterBacklogActions.hidden).toBe(true);
+    expect(fixture.values.commandCenterBacklogNotice.textContent)
+      .toMatch(/Fictional isolated demo/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   test('shows unauthorized, oversized, workspace failure and explicit recovery states', async () => {
     const fixture = documentFixture(), outcomes = [
       response(403, null, { category: 'FORECAST_CURRENT_BACKLOG_RESTRICTED' }),

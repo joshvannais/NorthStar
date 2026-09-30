@@ -248,6 +248,10 @@
     function workspaceReady() {
       workspaceAvailable = true;
       if (current.kind !== 'workspace') return;
+      if (mode === 'demo') {
+        paint(project(demoSnapshot(), true));
+        return;
+      }
       if (lastOperation) {
         paint({ kind: 'failure', badge: 'Receipt result unconfirmed',
           title: 'Retry the same explicit receipt action',

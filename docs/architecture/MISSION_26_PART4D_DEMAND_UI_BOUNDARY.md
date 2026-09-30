@@ -15,7 +15,7 @@ The UI separates approved-unscheduled, approved-scheduled and in-progress counts
 
 ## Isolated demo
 
-`/demo` uses one frozen fictional presentation object inside the browser. It never calls the paid current-backlog endpoint and never reads or writes production tenant tables. The card labels the example fictional and hides paid receipt controls. Its example numerics prove only responsive presentation behavior.
+`/demo` uses one frozen fictional presentation object inside the browser. It never calls the paid current-backlog endpoint and never reads or writes production tenant tables. After a workspace failure, successful refresh restores that same frozen fictional projection rather than entering the paid receipt flow. The card labels the example fictional and hides paid receipt controls. Its example numerics prove only responsive presentation behavior.
 
 ## Forecast boundary
 

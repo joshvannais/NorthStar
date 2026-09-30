@@ -21,6 +21,11 @@ const SCHEDULE = Object.freeze({
   target: 'demand.booking_cancellation.v1',
   source: 'northstar_human_approved_schedule_history',
 });
+const BOOKING_TRANSITION = Object.freeze({
+  version: 'm26-schedule-booking-transition-cohort-v1',
+  target: 'demand.booking_transition.v1',
+  source: 'northstar_canonical_opportunity_and_human_approved_schedule_history',
+});
 const QUALIFICATION = Object.freeze({
   version: 'm26-lead-qualification-cohort-v1',
   target: 'demand.qualification_transition.v1',
@@ -158,6 +163,58 @@ function safeQualificationReview(value, expectedOpportunityId = null) {
       (value.action === 'correct' &&
         (value.supersedesId === null || value.eventKey === value.id))) return null;
   return value;
+}
+
+function safeBookingTransitionCohort(value, expectedId = null) {
+  if (!exact(value, ['id', 'version', 'targetKey', 'state', 'reason', 'cutoffAt',
+    'horizonEndsAt', 'capturedAt', 'eligibleCount', 'bookedCount', 'observedRate',
+    'sourceDigest', 'cohortDigest', 'sourceAuthority', 'sourceAuthenticated',
+    'sourceCoverageComplete', 'offPlatformCoverageVerified',
+    'providerCoverageVerified', 'probabilityCalibrated', 'confidence',
+    'forecastIssued', 'paidNumericServing']) || !UUID.test(value.id || '') ||
+      value.version !== BOOKING_TRANSITION.version ||
+      value.targetKey !== BOOKING_TRANSITION.target ||
+      !['descriptive_only', 'unavailable', 'source_stale'].includes(value.state) ||
+      !(value.reason === null || ['insufficient_history',
+        'source_changed_inside_horizon'].includes(value.reason)) ||
+      !calendarInstant(value.cutoffAt, DATABASE_INSTANT) ||
+      !calendarInstant(value.horizonEndsAt, DATABASE_INSTANT) ||
+      !calendarInstant(value.capturedAt, DATABASE_INSTANT) ||
+      Date.parse(value.cutoffAt) >= Date.parse(value.horizonEndsAt) ||
+      !Number.isSafeInteger(value.eligibleCount) || value.eligibleCount < 0 ||
+      value.eligibleCount > 500 || !Number.isSafeInteger(value.bookedCount) ||
+      value.bookedCount < 0 || value.bookedCount > value.eligibleCount ||
+      !(value.observedRate === null || /^(?:0(?:\.\d{1,6})?|1)$/.test(value.observedRate)) ||
+      !(value.sourceDigest === null || DIGEST.test(value.sourceDigest)) ||
+      !(value.cohortDigest === null || DIGEST.test(value.cohortDigest)) ||
+      value.sourceAuthority !== BOOKING_TRANSITION.source ||
+      typeof value.sourceAuthenticated !== 'boolean' ||
+      value.sourceCoverageComplete !== false || value.offPlatformCoverageVerified !== false ||
+      value.providerCoverageVerified !== false || value.probabilityCalibrated !== false ||
+      value.confidence !== 'unavailable' || value.forecastIssued !== false ||
+      value.paidNumericServing !== false ||
+      (expectedId !== null && value.id !== expectedId)) return null;
+  if (value.state === 'descriptive_only' && (value.reason !== null ||
+      value.eligibleCount < 1 || value.observedRate === null ||
+      !value.sourceAuthenticated || !value.sourceDigest || !value.cohortDigest)) return null;
+  if (value.state === 'unavailable' && (value.reason !== 'insufficient_history' ||
+      value.eligibleCount !== 0 || value.bookedCount !== 0 ||
+      value.observedRate !== null || !value.sourceAuthenticated ||
+      !value.sourceDigest || !value.cohortDigest)) return null;
+  if (value.state === 'source_stale' && (value.reason !== 'source_changed_inside_horizon' ||
+      value.eligibleCount !== 0 || value.bookedCount !== 0 ||
+      value.observedRate !== null || value.sourceAuthenticated ||
+      value.sourceDigest !== null || value.cohortDigest !== null)) return null;
+  return { state: value.state, reason: value.reason, cohortId: value.id,
+    version: value.version, targetKey: value.targetKey, cutoffAt: value.cutoffAt,
+    horizonEndsAt: value.horizonEndsAt, capturedAt: value.capturedAt,
+    eligibleCount: value.eligibleCount, bookedCount: value.bookedCount,
+    observedRate: value.observedRate, sourceDigest: value.sourceDigest,
+    cohortDigest: value.cohortDigest, sourceAuthority: value.sourceAuthority,
+    sourceAuthenticated: value.sourceAuthenticated,
+    sourceCoverageComplete: false, offPlatformCoverageVerified: false,
+    providerCoverageVerified: false, probabilityCalibrated: false,
+    confidence: 'unavailable', forecastIssued: false, paidNumericServing: false };
 }
 
 function safeQualificationFinalization(value) {
@@ -422,6 +479,35 @@ function createForecastTransitionCohortsRouter(options = {}) {
         sql: 'SELECT public.canonical_forecast_schedule_booking_cancellation_cohort_read($1,$2,$3,$4,$5) value',
         params: [cohortId],
         validate: value => safeCohort(value, cohortId, SCHEDULE),
+      });
+    });
+
+  router.post('/schedule-bookings', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      const body = req.body, key = req.get('Idempotency-Key');
+      if (!exact(req.query, []) || !exact(body, ['cutoffAt', 'horizonEndsAt']) ||
+          !calendarInstant(body.cutoffAt, UTC_MICROS) ||
+          !calendarInstant(body.horizonEndsAt, UTC_MICROS) ||
+          Date.parse(body.cutoffAt) >= Date.parse(body.horizonEndsAt) ||
+          !KEY.test(key || '')) return invalid(res);
+      return run(req, res, { isolation: 'READ COMMITTED', write: true,
+        sql: 'SELECT public.canonical_forecast_schedule_booking_transition_cohort_capture($1,$2,$3,$4,$5,$6,$7,$8) value',
+        params: [req.get('X-CSRF-Token'), key, body.cutoffAt, body.horizonEndsAt],
+        validate(value) {
+          if (!value || typeof value.replayed !== 'boolean') return null;
+          const cohort = safeBookingTransitionCohort(value.cohort);
+          return cohort && { ...cohort, replayed: value.replayed };
+        } });
+    });
+
+  router.get('/schedule-bookings/:cohortId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.cohortId || '') || !exact(req.query, [])) return invalid(res);
+      const cohortId = req.params.cohortId.toLowerCase();
+      return run(req, res, {
+        sql: 'SELECT public.canonical_forecast_schedule_booking_transition_cohort_read($1,$2,$3,$4,$5) value',
+        params: [cohortId],
+        validate: value => safeBookingTransitionCohort(value, cohortId),
       });
     });
 

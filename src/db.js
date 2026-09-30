@@ -1545,6 +1545,54 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_cancellation_cohort_projection(public.canonical_forecast_schedule_booking_cancellation_cohorts,boolean) FROM %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_schedule_booking_cancellation_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz) TO %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_schedule_booking_cancellation_cohort_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      IF pg_catalog.to_regclass('public.canonical_forecast_opportunity_eligibility_order_sequence') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_opportunity_eligibility_events_tenant_visible') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_opportunity_eligibility_events_tenant_order') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_opportunity_eligibility_events') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_opportunity_eligibility_activations_tenant_visible') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_opportunity_eligibility_activations') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_schedule_booking_transition_cohorts_tenant') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_schedule_booking_transition_cohorts') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_opportunity_eligibility_event_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_opportunity_eligibility_lock()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_opportunity_eligibility_capture()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_opportunity_eligibility_activation_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_opportunity_eligibility_activate(uuid)') IS NULL OR
+         NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_opportunity_eligibility_events'::regclass
+           AND tgname='canonical_forecast_opportunity_eligibility_event_immutable'
+           AND NOT tgisinternal) OR
+         NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_operations'::regclass
+           AND tgname='a_canonical_forecast_opportunity_eligibility_lock'
+           AND NOT tgisinternal) OR
+         NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_operations'::regclass
+           AND tgname='canonical_forecast_opportunity_eligibility_capture'
+           AND NOT tgisinternal) OR
+         NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_opportunity_eligibility_activations'::regclass
+           AND tgname='canonical_forecast_opportunity_eligibility_activation_immutable'
+           AND NOT tgisinternal) OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_projection(public.canonical_forecast_schedule_booking_transition_cohorts,boolean)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+        RAISE EXCEPTION 'Required schedule booking transition cohort authority is missing';
+      END IF;
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_opportunity_eligibility_order_sequence FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_opportunity_eligibility_events FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_opportunity_eligibility_activations FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_schedule_booking_transition_cohorts FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_opportunity_eligibility_event_immutable() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_opportunity_eligibility_lock() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_opportunity_eligibility_capture() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_opportunity_eligibility_activation_immutable() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_opportunity_eligibility_activate(uuid) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_transition_cohort_immutable() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_schedule_booking_transition_cohort_projection(public.canonical_forecast_schedule_booking_transition_cohorts,boolean) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_schedule_booking_transition_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz) TO %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_schedule_booking_transition_cohort_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       IF pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_order') IS NULL OR
          pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_opportunity_time') IS NULL OR
          pg_catalog.to_regclass('public.canonical_lead_state_reviews_tenant_event_revision') IS NULL OR
@@ -2826,6 +2874,62 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              AND privilege_value.privilege_type='EXECUTE'
          )
        ) AS schedule_booking_cancellation_cohort_private,
+       (to_regclass('public.canonical_forecast_opportunity_eligibility_order_sequence') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_opportunity_eligibility_events_tenant_visible') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_opportunity_eligibility_events_tenant_order') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_opportunity_eligibility_events') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_opportunity_eligibility_activations_tenant_visible') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_opportunity_eligibility_activations') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_schedule_booking_transition_cohorts_tenant') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_schedule_booking_transition_cohorts') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_opportunity_eligibility_event_immutable()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_opportunity_eligibility_lock()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_opportunity_eligibility_capture()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_opportunity_eligibility_activation_immutable()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_opportunity_eligibility_activate(uuid)') IS NOT NULL
+         AND EXISTS (SELECT 1 FROM pg_trigger
+          WHERE tgrelid='public.canonical_forecast_opportunity_eligibility_events'::regclass
+           AND tgname='canonical_forecast_opportunity_eligibility_event_immutable'
+           AND NOT tgisinternal)
+         AND EXISTS (SELECT 1 FROM pg_trigger
+          WHERE tgrelid='public.canonical_operations'::regclass
+           AND tgname='a_canonical_forecast_opportunity_eligibility_lock'
+           AND NOT tgisinternal)
+         AND EXISTS (SELECT 1 FROM pg_trigger
+          WHERE tgrelid='public.canonical_operations'::regclass
+           AND tgname='canonical_forecast_opportunity_eligibility_capture'
+           AND NOT tgisinternal)
+         AND EXISTS (SELECT 1 FROM pg_trigger
+          WHERE tgrelid='public.canonical_forecast_opportunity_eligibility_activations'::regclass
+           AND tgname='canonical_forecast_opportunity_eligibility_activation_immutable'
+           AND NOT tgisinternal)
+         AND to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_immutable()') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_projection(public.canonical_forecast_schedule_booking_transition_cohorts,boolean)') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz)') IS NOT NULL
+         AND to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL
+         AND NOT has_sequence_privilege($1,'public.canonical_forecast_opportunity_eligibility_order_sequence','USAGE,SELECT,UPDATE')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_opportunity_eligibility_events','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_opportunity_eligibility_activations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_schedule_booking_transition_cohorts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_opportunity_eligibility_event_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_opportunity_eligibility_lock()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_opportunity_eligibility_capture()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_opportunity_eligibility_activation_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_opportunity_eligibility_activate(uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_schedule_booking_transition_cohort_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_schedule_booking_transition_cohort_projection(public.canonical_forecast_schedule_booking_transition_cohorts,boolean)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_schedule_booking_transition_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_schedule_booking_transition_cohort_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT EXISTS (
+          SELECT 1 FROM pg_proc function_value
+          CROSS JOIN LATERAL aclexplode(COALESCE(function_value.proacl,
+            acldefault('f',function_value.proowner))) privilege_value
+          WHERE function_value.oid IN (
+           to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_capture(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz)'),
+           to_regprocedure('public.canonical_forecast_schedule_booking_transition_cohort_read(uuid,uuid,text,uuid,uuid)')
+          ) AND privilege_value.grantee=0
+           AND privilege_value.privilege_type='EXECUTE'
+         )) AS schedule_booking_transition_cohort_private,
        (to_regclass('public.canonical_lead_state_reviews_tenant_order') IS NOT NULL
          AND to_regclass('public.canonical_lead_state_reviews_tenant_opportunity_time') IS NOT NULL
          AND to_regclass('public.canonical_lead_state_reviews_tenant_event_revision') IS NOT NULL
@@ -3557,6 +3661,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.owner_reviewed_booking_position_guarded ||
       !runtimePrivileges.booking_cancellation_cohort_private ||
       !runtimePrivileges.schedule_booking_cancellation_cohort_private ||
+      !runtimePrivileges.schedule_booking_transition_cohort_private ||
       !runtimePrivileges.lead_qualification_authority_private ||
       !runtimePrivileges.estimate_request_authority_private ||
       !runtimePrivileges.booked_work_confirmations_private ||
@@ -3714,6 +3819,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('202_canonical_forecast_booking_cancellatio
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('203_canonical_forecast_schedule_booking_cancellation.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('204_canonical_lead_qualification_authority.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('205_canonical_estimate_request_authority.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('206_canonical_forecast_schedule_booking_transition.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

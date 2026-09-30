@@ -30,6 +30,12 @@ function cohort(extra = {}) {
     paidNumericServing: false, ...extra };
 }
 
+function scheduleCohort(extra = {}) {
+  return cohort({ version: 'm26-schedule-booking-cancellation-cohort-v1',
+    targetKey: 'demand.booking_cancellation.v1',
+    sourceAuthority: 'northstar_human_approved_schedule_history', ...extra });
+}
+
 function application({ role = 'owner', captured, read, databaseError } = {}) {
   const app = express();
   app.set('query parser', querystring.parse);
@@ -162,4 +168,35 @@ test('maps guarded access, contention, replay and database failure without leaki
     .send({ cutoffAt: CUTOFF, horizonEndsAt: HORIZON });
   expect(replayResponse.status).toBe(200);
   expect(replayResponse.headers['idempotency-replayed']).toBe('true');
+});
+
+test('captures the scheduling-owned cancellation cohort through its distinct authority', async () => {
+  const { app, client } = application({ captured: {
+    cohort: scheduleCohort(), replayed: false } });
+  const response = await request(app).post('/cohorts/schedule-booking-cancellations')
+    .set('X-CSRF-Token', 'validated-csrf').set('Idempotency-Key', KEY)
+    .send({ cutoffAt: CUTOFF, horizonEndsAt: HORIZON });
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({
+    targetKey: 'demand.booking_cancellation.v1',
+    sourceAuthority: 'northstar_human_approved_schedule_history',
+    state: 'descriptive_only', sourceAuthenticated: true,
+    sourceCoverageComplete: false, offPlatformCoverageVerified: false,
+    providerCoverageVerified: false, probabilityCalibrated: false,
+    forecastIssued: false, paidNumericServing: false });
+  expect(client.query.mock.calls[3][0]).toContain(
+    'canonical_forecast_schedule_booking_cancellation_cohort_capture');
+});
+
+test('reads schedule receipts without accepting commercial or private result poison', async () => {
+  const { app } = application({ read: scheduleCohort() });
+  expect((await request(app)
+    .get(`/cohorts/schedule-booking-cancellations/${COHORT}`)).status).toBe(200);
+  const wrongAuthority = application({ read: cohort() });
+  expect((await request(wrongAuthority.app)
+    .get(`/cohorts/schedule-booking-cancellations/${COHORT}`)).status).toBe(503);
+  const privatePoison = application({ read: scheduleCohort({
+    memberReceipts: [{ appointmentId: COHORT }] }) });
+  expect((await request(privatePoison.app)
+    .get(`/cohorts/schedule-booking-cancellations/${COHORT}`)).status).toBe(503);
 });

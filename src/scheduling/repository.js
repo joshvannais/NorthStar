@@ -288,10 +288,11 @@ async function mutateInTransaction(client, input) {
         action_code, reason, approved_scheduled_start, approved_scheduled_end,
         approved_appointment_status, resulting_schedule_state, resulting_dispatch_state,
         resulting_needs_review, resulting_review_reasons, time_evidence_version,
-        submitted_schedule, time_zone_authority, time_evidence_digest)
+        submitted_schedule, time_zone_authority, time_evidence_digest, approved_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,
              2::smallint,$22::jsonb,$23::jsonb,
-             public.canonical_schedule_time_evidence_digest(2::smallint,$22::jsonb,$23::jsonb))
+             public.canonical_schedule_time_evidence_digest(2::smallint,$22::jsonb,$23::jsonb),
+             clock_timestamp())
      RETURNING *`,
     [input.organizationId, current.assignment_id, input.appointmentId, input.actorUserId,
       input.actorAccessRole, input.authSessionId, input.expectedRevision, input.expectedDigest,
@@ -312,14 +313,14 @@ async function mutateInTransaction(client, input) {
         SET schedule_state = $3, dispatch_state = $4, scheduled_start = $5,
             scheduled_end = $6, appointment_status = $7, needs_review = $8,
             review_reasons = $9::jsonb, revision = $10, canonical_digest = $11,
-            last_approval_id = $12, last_actor_user_id = $13,
-            last_action_code = $14, last_reason = $15, updated_at = NOW()
+            last_approval_id = $12, last_human_approval_id = NULL, last_actor_user_id = $13,
+            last_action_code = $14, last_reason = $15, updated_at = $16
       WHERE organization_id = $1 AND id = $2
       RETURNING *, id AS assignment_id, updated_at AS assignment_updated_at`,
     [input.organizationId, current.assignment_id, scheduleState, dispatchState,
       scheduledStart, scheduledEnd, appointmentStatus, needsReview,
       JSON.stringify(reviewReasons), afterRevision, afterDigest, approvalRow.id,
-      input.actorUserId, input.action, input.reason]
+      input.actorUserId, input.action, input.reason, approvalRow.approved_at]
   );
   const assignment = assignmentResult.rows[0];
   await client.query(

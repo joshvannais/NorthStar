@@ -11,9 +11,16 @@ const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const UTC_MICROS = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)\.(\d{6})Z$/;
 const DATABASE_INSTANT = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/;
-const VERSION = 'm26-commercial-booking-withdrawal-cohort-v1';
-const TARGET = 'commercial.owner_reviewed_booking_withdrawal';
-const SOURCE = 'northstar_owner_reviewed_commercial_booking_history';
+const COMMERCIAL = Object.freeze({
+  version: 'm26-commercial-booking-withdrawal-cohort-v1',
+  target: 'commercial.owner_reviewed_booking_withdrawal',
+  source: 'northstar_owner_reviewed_commercial_booking_history',
+});
+const SCHEDULE = Object.freeze({
+  version: 'm26-schedule-booking-cancellation-cohort-v1',
+  target: 'demand.booking_cancellation.v1',
+  source: 'northstar_human_approved_schedule_history',
+});
 
 function exact(value, keys) {
   const prototype = value && typeof value === 'object' ?
@@ -68,15 +75,15 @@ function failure(res, error) {
   return res.status(status).json({ success: false, error: { category, message } });
 }
 
-function safeCohort(value, expectedId = null) {
+function safeCohort(value, expectedId = null, contract = COMMERCIAL) {
   if (!exact(value, ['id', 'version', 'targetKey', 'state', 'reason', 'cutoffAt',
     'horizonEndsAt', 'capturedAt', 'eligibleCount', 'cancelledCount', 'observedRate',
     'sourceDigest', 'cohortDigest', 'sourceAuthority', 'sourceAuthenticated',
     'sourceCoverageComplete', 'offPlatformCoverageVerified',
     'providerCoverageVerified', 'probabilityCalibrated', 'confidence',
     'forecastIssued', 'paidNumericServing']) || !UUID.test(value.id || '') ||
-      value.version !== VERSION ||
-      value.targetKey !== TARGET || !['descriptive_only', 'unavailable',
+      value.version !== contract.version ||
+      value.targetKey !== contract.target || !['descriptive_only', 'unavailable',
         'source_stale'].includes(value.state) ||
       !(value.reason === null || ['insufficient_history',
         'source_changed_inside_horizon'].includes(value.reason)) ||
@@ -90,7 +97,7 @@ function safeCohort(value, expectedId = null) {
       !(value.observedRate === null || /^(?:0(?:\.\d{1,6})?|1)$/.test(value.observedRate)) ||
       !(value.sourceDigest === null || DIGEST.test(value.sourceDigest)) ||
       !(value.cohortDigest === null || DIGEST.test(value.cohortDigest)) ||
-      value.sourceAuthority !== SOURCE || typeof value.sourceAuthenticated !== 'boolean' ||
+      value.sourceAuthority !== contract.source || typeof value.sourceAuthenticated !== 'boolean' ||
       value.sourceCoverageComplete !== false || value.offPlatformCoverageVerified !== false ||
       value.providerCoverageVerified !== false || value.probabilityCalibrated !== false ||
       value.confidence !== 'unavailable' || value.forecastIssued !== false ||
@@ -206,6 +213,35 @@ function createForecastTransitionCohortsRouter(options = {}) {
       return run(req, res, {
         sql: 'SELECT public.canonical_forecast_booking_cancellation_cohort_read($1,$2,$3,$4,$5) value',
         params: [cohortId], validate: value => safeCohort(value, cohortId),
+      });
+    });
+
+  router.post('/schedule-booking-cancellations', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      const body = req.body, key = req.get('Idempotency-Key');
+      if (!exact(req.query, []) || !exact(body, ['cutoffAt', 'horizonEndsAt']) ||
+          !calendarInstant(body.cutoffAt, UTC_MICROS) ||
+          !calendarInstant(body.horizonEndsAt, UTC_MICROS) ||
+          Date.parse(body.cutoffAt) >= Date.parse(body.horizonEndsAt) ||
+          !KEY.test(key || '')) return invalid(res);
+      return run(req, res, { isolation: 'READ COMMITTED', write: true,
+        sql: 'SELECT public.canonical_forecast_schedule_booking_cancellation_cohort_capture($1,$2,$3,$4,$5,$6,$7,$8) value',
+        params: [req.get('X-CSRF-Token'), key, body.cutoffAt, body.horizonEndsAt],
+        validate(value) {
+          if (!value || typeof value.replayed !== 'boolean') return null;
+          const cohort = safeCohort(value.cohort, null, SCHEDULE);
+          return cohort && { ...cohort, replayed: value.replayed };
+        } });
+    });
+
+  router.get('/schedule-booking-cancellations/:cohortId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.cohortId || '') || !exact(req.query, [])) return invalid(res);
+      const cohortId = req.params.cohortId.toLowerCase();
+      return run(req, res, {
+        sql: 'SELECT public.canonical_forecast_schedule_booking_cancellation_cohort_read($1,$2,$3,$4,$5) value',
+        params: [cohortId],
+        validate: value => safeCohort(value, cohortId, SCHEDULE),
       });
     });
   return router;

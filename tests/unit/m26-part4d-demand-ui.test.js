@@ -447,6 +447,10 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     expect(page).toContain('if (!workspaceDependenciesReady ||');
     expect(page).toContain("typeof contract.destinationPath === 'function'");
     expect(page).toContain("typeof global.NorthStarAccountSession.fetch === 'function'");
+    expect(page).toContain("typeof global.NorthStarDemandPosition.create === 'function'");
+    expect(page).toContain('function demandWorkspaceUnavailable()');
+    expect(page).toContain("byId('commandCenterBacklogCapture').disabled = true");
+    expect(page).toContain("byId('commandCenterBacklogRead').disabled = true");
   });
 });
 

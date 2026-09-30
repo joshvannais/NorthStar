@@ -38,6 +38,40 @@ const snapshot = {
   try {
     const runtime = resolveBrowserRuntime(engine);
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
+    for (const missingDependency of ['demand', 'contract', 'session']) {
+      const context = await browser.newContext({ viewport: { width: 1024, height: 900 } });
+      const page = await context.newPage();
+      const dashboard = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+      await page.setContent(dashboard);
+      await page.evaluate(missing => {
+        window.__calls = [];
+        if (missing !== 'contract') {
+          window.NorthStarCommandCenterContract = {
+            modeForPath: () => 'paid', routeForPath: () => '/api/v1/command-center/workspace',
+            destinationPath: value => '/' + value, validateWorkspace: value => value,
+          };
+        }
+        if (missing !== 'session') {
+          window.NorthStarAccountSession = {
+            fetch: async (url, options) => {
+              window.__calls.push({ url, method: options && options.method });
+              throw new Error('No request is permitted with a missing workspace dependency.');
+            },
+          };
+        }
+      }, missingDependency);
+      if (missingDependency !== 'demand') {
+        await page.addScriptTag({ path: path.resolve('public/js/command-center-demand-position.js') });
+      }
+      await page.addScriptTag({ path: path.resolve('public/js/command-center-page.js') });
+      assert.equal(await page.getByRole('button', { name: 'Capture current backlog', exact: true }).isDisabled(), true);
+      assert.equal(await page.getByRole('button', { name: 'Load receipt', exact: true }).isDisabled(), true);
+      assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Workspace unavailable/);
+      assert.equal(await page.evaluate(() => window.__calls.length), 0);
+      result.cases.push({ mode: 'paid', width: 1024, theme: 'light',
+        missingDependency, requests: [], pass: true });
+      await context.close();
+    }
     for (const item of [
       { mode: 'paid', width: 1440, theme: 'light' },
       { mode: 'paid', width: 1024, theme: 'light', dependenciesReady: false },

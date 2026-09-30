@@ -312,7 +312,7 @@ async function mutateInTransaction(client, input) {
         SET schedule_state = $3, dispatch_state = $4, scheduled_start = $5,
             scheduled_end = $6, appointment_status = $7, needs_review = $8,
             review_reasons = $9::jsonb, revision = $10, canonical_digest = $11,
-            last_approval_id = $12, last_actor_user_id = $13,
+            last_approval_id = $12, last_human_approval_id = NULL, last_actor_user_id = $13,
             last_action_code = $14, last_reason = $15, updated_at = NOW()
       WHERE organization_id = $1 AND id = $2
       RETURNING *, id AS assignment_id, updated_at AS assignment_updated_at`,

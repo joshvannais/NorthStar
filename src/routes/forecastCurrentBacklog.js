@@ -65,7 +65,8 @@ function failure(res, error, overflow = false) {
 }
 
 function safeSnapshot(value, expectedId = null) {
-  const keys = ['id', 'version', 'targetKey', 'state', 'reason', 'capturedAt',
+  const keys = ['id', 'version', 'personPlanCompositionVersion', 'targetKey',
+    'state', 'reason', 'capturedAt',
     'approvedUnscheduledCount', 'approvedScheduledCount', 'workInProgressCount',
     'completedCount', 'unresolvedLinkageCount', 'knownBacklogCount',
     'plannedPersonMinutes', 'backlogHoursState', 'backlogHoursReason',
@@ -75,6 +76,8 @@ function safeSnapshot(value, expectedId = null) {
     'paidNumericServing'];
   if (!exact(value, keys) || !UUID.test(value.id || '') ||
       value.version !== 'm26-current-backlog-position-v1' ||
+      !['none', 'm26-current-backlog-person-plan-composition-v1']
+        .includes(value.personPlanCompositionVersion) ||
       value.targetKey !== 'demand.current_backlog_position.v1' ||
       !['descriptive_subset', 'partial', 'unavailable', 'source_stale'].includes(value.state) ||
       !(value.reason === null || ['unresolved_linkage_present',
@@ -110,16 +113,17 @@ function safeSnapshot(value, expectedId = null) {
     value.workInProgressCount;
   const total = active + value.completedCount + value.unresolvedLinkageCount;
   if (value.knownBacklogCount !== active || total > 500) return null;
-  const descriptiveHoursValid = active === 0 ?
+  const legacy = value.personPlanCompositionVersion === 'none';
+  const descriptiveHoursValid = legacy ?
     value.backlogHoursState === 'unavailable' && value.plannedPersonMinutes === null &&
-      value.backlogHoursReason === 'no_active_backlog' :
-    value.backlogHoursState === 'available' ?
-      value.plannedPersonMinutes !== null && Number(value.plannedPersonMinutes) > 0 &&
-        value.backlogHoursReason === null :
-      value.plannedPersonMinutes === null && [
-        'approved_person_hour_plan_missing', 'reviewed_person_hour_plan_missing',
-        'reviewed_person_hour_plan_not_current',
-      ].includes(value.backlogHoursReason);
+      value.backlogHoursReason === 'approved_person_hour_plan_missing' :
+    active === 0 ? value.backlogHoursState === 'unavailable' &&
+      value.plannedPersonMinutes === null && value.backlogHoursReason === 'no_active_backlog' :
+      value.backlogHoursState === 'available' ? value.plannedPersonMinutes !== null &&
+        Number(value.plannedPersonMinutes) > 0 && value.backlogHoursReason === null :
+        value.plannedPersonMinutes === null && [
+          'reviewed_person_hour_plan_missing', 'reviewed_person_hour_plan_not_current',
+        ].includes(value.backlogHoursReason);
   if (value.state === 'descriptive_subset' && (value.reason !== null || total < 1 ||
       value.unresolvedLinkageCount !== 0 || !value.sourceAuthenticated ||
       !value.sourceDigest || !value.snapshotDigest || !descriptiveHoursValid)) return null;
@@ -127,13 +131,14 @@ function safeSnapshot(value, expectedId = null) {
       value.unresolvedLinkageCount < 1 || !value.sourceAuthenticated ||
       !value.sourceDigest || !value.snapshotDigest || value.plannedPersonMinutes !== null ||
       value.backlogHoursState !== 'unavailable' ||
-      value.backlogHoursReason !== 'unresolved_linkage_present')) return null;
+      value.backlogHoursReason !== (legacy ? 'approved_person_hour_plan_missing' :
+        'unresolved_linkage_present'))) return null;
   if (value.state === 'unavailable' &&
       (value.reason !== 'no_authenticated_approved_booking_history' || total !== 0 ||
        !value.sourceAuthenticated || !value.sourceDigest || !value.snapshotDigest ||
        value.plannedPersonMinutes !== null || value.backlogHoursState !== 'unavailable' ||
-       !['approved_person_hour_plan_missing', 'no_active_backlog']
-         .includes(value.backlogHoursReason))) return null;
+       value.backlogHoursReason !== (legacy ? 'approved_person_hour_plan_missing' :
+         'no_active_backlog'))) return null;
   if (value.state === 'source_stale' &&
       (value.reason !== 'source_changed_after_capture' || total !== 0 ||
        value.sourceAuthenticated || value.sourceDigest !== null ||
@@ -230,7 +235,7 @@ function createForecastCurrentBacklogRouter(options = {}) {
       const key = req.get('Idempotency-Key');
       if (!exact(req.query, []) || !exact(req.body, []) || !KEY.test(key || '')) return invalid(res);
       return run(req, res, { write: true, overflow: true,
-        sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_capture($1,$2,$3,$4,$5,$6) value',
+        sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_capture_v2($1,$2,$3,$4,$5,$6) value',
         params: [req.get('X-CSRF-Token'), key], validate(value) {
           if (!value || typeof value.replayed !== 'boolean') return null;
           const snapshot = safeSnapshot(value.snapshot);
@@ -243,7 +248,7 @@ function createForecastCurrentBacklogRouter(options = {}) {
       const snapshotId = String(req.params.snapshotId || '').toLowerCase();
       if (!UUID.test(snapshotId) || !exact(req.query, [])) return invalid(res);
       return run(req, res, {
-        sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_read($1,$2,$3,$4,$5) value',
+        sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_read_v2($1,$2,$3,$4,$5) value',
         params: [snapshotId], validate: value => safeSnapshot(value, snapshotId),
       });
     });

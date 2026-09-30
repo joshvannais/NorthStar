@@ -1602,9 +1602,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_immutable()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_source_lock(public.canonical_forecast_current_backlog_snapshots)') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_stale(public.canonical_forecast_current_backlog_snapshots)') IS NULL OR
-         pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean)') IS NULL OR
-         pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
-         pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+          pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean)') IS NULL OR
+          pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
+          pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+          pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture_v2(uuid,uuid,text,uuid,text,text)') IS NULL OR
+          pg_catalog.to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read_v2(uuid,uuid,text,uuid,uuid)') IS NULL THEN
         RAISE EXCEPTION 'Required current backlog snapshot authority is missing';
       END IF;
       IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
@@ -1627,6 +1629,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean) FROM %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_capture_v2(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_read_v2(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       IF pg_catalog.to_regclass('public.canonical_forecast_current_backlog_person_plan_reviews') IS NULL OR
          pg_catalog.to_regclass('public.canonical_forecast_estimate_source_fences') IS NULL OR
          pg_catalog.to_regclass('public.canonical_forecast_backlog_person_plan_tenant_current') IS NULL OR
@@ -3016,9 +3020,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_immutable()') IS NOT NULL
          AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_source_lock(public.canonical_forecast_current_backlog_snapshots)') IS NOT NULL
          AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_stale(public.canonical_forecast_current_backlog_snapshots)') IS NOT NULL
-         AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean)') IS NOT NULL
-         AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)') IS NOT NULL
-         AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL
+          AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean)') IS NOT NULL
+          AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)') IS NOT NULL
+          AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)') IS NOT NULL
+          AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture_v2(uuid,uuid,text,uuid,text,text)') IS NOT NULL
+          AND to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read_v2(uuid,uuid,text,uuid,uuid)') IS NOT NULL
          AND EXISTS(SELECT 1 FROM pg_trigger WHERE
           tgrelid='public.canonical_forecast_schedule_booking_events'::regclass
           AND tgname='canonical_forecast_current_backlog_booking_event_sync'
@@ -3035,15 +3041,19 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_source_lock(public.canonical_forecast_current_backlog_snapshots)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_stale(public.canonical_forecast_current_backlog_snapshots)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_projection(public.canonical_forecast_current_backlog_snapshots,boolean)','EXECUTE')
-         AND has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
-         AND has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_capture_v2(uuid,uuid,text,uuid,text,text)','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_forecast_current_backlog_snapshot_read_v2(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT EXISTS (
           SELECT 1 FROM pg_proc function_value
           CROSS JOIN LATERAL aclexplode(COALESCE(function_value.proacl,
             acldefault('f',function_value.proowner))) privilege_value
           WHERE function_value.oid IN (
-           to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)'),
-           to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)'),
+            to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture(uuid,uuid,text,uuid,text,text)'),
+            to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read(uuid,uuid,text,uuid,uuid)'),
+            to_regprocedure('public.canonical_forecast_current_backlog_snapshot_capture_v2(uuid,uuid,text,uuid,text,text)'),
+            to_regprocedure('public.canonical_forecast_current_backlog_snapshot_read_v2(uuid,uuid,text,uuid,uuid)'),
            to_regprocedure('public.canonical_forecast_current_backlog_snapshot_source_lock(public.canonical_forecast_current_backlog_snapshots)'),
            to_regprocedure('public.canonical_forecast_current_backlog_booking_event_sync()'),
            to_regprocedure('public.canonical_forecast_current_backlog_assignment_sync()')
@@ -3994,6 +4004,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('206_canonical_forecast_schedule_booking_tr
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('207_canonical_forecast_current_backlog_position.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('208_canonical_forecast_current_backlog_person_plan.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('209_canonical_forecast_current_backlog_person_plan_composition.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('210_canonical_forecast_current_backlog_composition_marker.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

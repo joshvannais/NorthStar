@@ -17,6 +17,7 @@ const fragment = html.slice(start, end);
 const snapshot = {
   id: '11111111-1111-4111-8111-111111111111',
   version: 'm26-current-backlog-position-v1',
+  personPlanCompositionVersion: 'm26-current-backlog-person-plan-composition-v1',
   targetKey: 'demand.current_backlog_position.v1', state: 'descriptive_subset',
   reason: null, capturedAt: '2026-09-30T12:00:00.000000Z',
   approvedUnscheduledCount: 1, approvedScheduledCount: 2, workInProgressCount: 1,

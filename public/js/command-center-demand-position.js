@@ -36,6 +36,8 @@
   function validSnapshot(value) {
     if (!value || typeof value !== 'object' || !UUID.test(value.id || '') ||
         value.version !== 'm26-current-backlog-position-v1' ||
+        !['none', 'm26-current-backlog-person-plan-composition-v1']
+          .includes(value.personPlanCompositionVersion) ||
         value.targetKey !== 'demand.current_backlog_position.v1' ||
         !['descriptive_subset', 'partial', 'unavailable', 'source_stale'].includes(value.state) ||
         value.sourceAuthority !== 'northstar_authenticated_booking_schedule_and_execution_current_position' ||
@@ -59,8 +61,14 @@
     }
     if (value.sourceAuthenticated !== true || !DIGEST.test(value.sourceDigest || '') ||
         !DIGEST.test(value.snapshotDigest || '')) return false;
+    var legacy = value.personPlanCompositionVersion === 'none';
     if (value.state === 'descriptive_subset') {
       if (value.reason !== null || total < 1 || value.unresolvedLinkageCount !== 0) return false;
+      if (legacy) {
+        return value.backlogHoursState === 'unavailable' &&
+          value.plannedPersonMinutes === null &&
+          value.backlogHoursReason === 'approved_person_hour_plan_missing';
+      }
       if (active === 0) {
         return value.backlogHoursState === 'unavailable' &&
           value.plannedPersonMinutes === null && value.backlogHoursReason === 'no_active_backlog';
@@ -77,13 +85,15 @@
       return value.reason === 'unresolved_linkage_present' &&
         value.unresolvedLinkageCount > 0 && value.plannedPersonMinutes === null &&
         value.backlogHoursState === 'unavailable' &&
-        value.backlogHoursReason === 'unresolved_linkage_present';
+        value.backlogHoursReason === (legacy ? 'approved_person_hour_plan_missing' :
+          'unresolved_linkage_present');
     }
     return value.state === 'unavailable' &&
       value.reason === 'no_authenticated_approved_booking_history' &&
       COUNT_KEYS.every(function (key) { return value[key] === 0; }) &&
       value.plannedPersonMinutes === null && value.backlogHoursState === 'unavailable' &&
-      ['approved_person_hour_plan_missing', 'no_active_backlog'].includes(value.backlogHoursReason);
+      value.backlogHoursReason === (legacy ? 'approved_person_hour_plan_missing' :
+        'no_active_backlog');
   }
 
   function hours(minutes) {
@@ -140,7 +150,9 @@
   function demoSnapshot() {
     return Object.freeze({
       id: 'de000000-0000-4000-8000-000000000026',
-      version: 'm26-current-backlog-position-v1', targetKey: 'demand.current_backlog_position.v1',
+      version: 'm26-current-backlog-position-v1',
+      personPlanCompositionVersion: 'm26-current-backlog-person-plan-composition-v1',
+      targetKey: 'demand.current_backlog_position.v1',
       state: 'descriptive_subset', reason: null, capturedAt: '2026-09-30T12:00:00.000000Z',
       approvedUnscheduledCount: 1,
       approvedScheduledCount: 2, workInProgressCount: 1, completedCount: 0,

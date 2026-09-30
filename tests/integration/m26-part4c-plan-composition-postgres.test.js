@@ -250,6 +250,84 @@ realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () 
       plannedPersonMinutes: null, backlogHoursReason: 'source_changed_after_capture' });
   }, 120000);
 
+  test('pins the current estimate generation for an already-stale review', async () => {
+    const context = await fixture.createExecution({ approvedScheduling: true,
+      stopAfterScheduling: true, start: '2027-12-24T13:00:00.000Z' });
+    const plan = await seedPlan(context), actor = fixture.actors.owner;
+    expect((await postReview(context, plan)).status).toBe(201);
+    const mutateDecision = async (expectedRevision, expectedDigest, label) => {
+      const client = await fixture.runtimePool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await client.query(
+          `SELECT canonical_estimate_decision_mutate($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+            plan.estimateId, actor.csrfToken, `m26-p4c-stale-review-${label}-${uuid()}`,
+            { action: 'approve', expectedRevision, expectedDigest,
+              sourcePins: plan.sourcePins,
+              scopeSummary: `Fictional ${label} stale-review source change`,
+              priceBeforeTax: '500.00', currency: 'USD',
+              reason: `Fictional ${label} stale-review source mutation.`, confirmed: true,
+              confirmationVersion: 'estimate-quote-preparation-v1' }]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally { client.release(); }
+    };
+    await mutateDecision(1, plan.decisionDigest, 'pre-capture');
+    const captureKey = `m26-p4c-already-stale-${uuid()}`;
+    const identity = { organizationId: fixture.org, userId: actor.actorUserId,
+      sessionId: actor.authSessionId, csrfToken: actor.csrfToken };
+    const captured = await captureSnapshot(fixture.runtimePool, identity, captureKey);
+    expect(captured.replayed).toBe(false);
+    expect(captured.snapshot).toMatchObject({
+      backlogHoursState: 'unavailable',
+      backlogHoursReason: 'reviewed_person_hour_plan_not_current',
+      plannedPersonMinutes: null,
+    });
+    const privateReceipt = (await fixture.ownerPool.query(
+      `SELECT receipt
+       FROM canonical_forecast_current_backlog_snapshots snapshot,
+       LATERAL jsonb_array_elements(snapshot.person_plan_receipts) receipt
+       WHERE snapshot.organization_id=$1 AND snapshot.id=$2
+        AND receipt->>'appointmentId'=$3`,
+      [fixture.org, captured.snapshot.id, context.appointment])).rows[0].receipt;
+    const currentFence = (await fixture.ownerPool.query(
+      `SELECT generation FROM canonical_forecast_estimate_source_fences
+       WHERE organization_id=$1 AND estimate_id=$2`,
+      [fixture.org, plan.estimateId])).rows[0];
+    expect(privateReceipt.state).toBe('not_current');
+    expect(privateReceipt.reviewId).toBeTruthy();
+    expect(Number(privateReceipt.sourceGeneration)).toBe(Number(currentFence.generation));
+
+    const latest = (await fixture.ownerPool.query(
+      `SELECT revision,rtrim(digest) digest FROM canonical_estimate_decisions
+       WHERE organization_id=$1 AND estimate_id=$2
+       ORDER BY revision DESC LIMIT 1`, [fixture.org, plan.estimateId])).rows[0];
+    await mutateDecision(Number(latest.revision), latest.digest, 'post-capture');
+    const stale = await request(fixture.app)
+      .get(`/api/v1/forecast/current-backlog/snapshots/${captured.snapshot.id}`)
+      .set(actor.session.headers);
+    expect(stale.status).toBe(200);
+    expect(stale.body.data).toMatchObject({ state: 'source_stale',
+      approvedUnscheduledCount: 0, approvedScheduledCount: 0,
+      workInProgressCount: 0, completedCount: 0, unresolvedLinkageCount: 0,
+      knownBacklogCount: 0, plannedPersonMinutes: null,
+      backlogHoursState: 'unavailable',
+      backlogHoursReason: 'source_changed_after_capture', sourceDigest: null,
+      snapshotDigest: null, sourceAuthenticated: false });
+    const replay = await captureSnapshot(fixture.runtimePool, identity, captureKey);
+    expect(replay).toMatchObject({ replayed: true,
+      snapshot: { state: 'source_stale',
+      approvedUnscheduledCount: 0, approvedScheduledCount: 0,
+      workInProgressCount: 0, completedCount: 0, unresolvedLinkageCount: 0,
+      knownBacklogCount: 0, plannedPersonMinutes: null,
+      backlogHoursState: 'unavailable',
+      backlogHoursReason: 'source_changed_after_capture',
+      sourceDigest: null, snapshotDigest: null } });
+  }, 120000);
+
   test('keeps private composition authority entry-only and startup-mandatory', async () => {
     expect((await capture(undefined, 'member')).status).toBe(403);
     await expect(fixture.runtimePool.query(

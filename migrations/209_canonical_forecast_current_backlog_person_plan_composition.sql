@@ -118,7 +118,8 @@ SET search_path=pg_catalog,public,pg_temp AS $$
     FROM jsonb_to_recordset(value.person_plan_receipts) receipt(
      "appointmentId" UUID,"assignmentId" UUID,"classification" TEXT,
      "state" TEXT,"reviewId" UUID,"reviewRevision" BIGINT,
-     "reviewDigest" TEXT,"estimateId" UUID,"plannedPersonMinutes" NUMERIC)
+     "reviewDigest" TEXT,"estimateId" UUID,"sourceGeneration" BIGINT,
+     "plannedPersonMinutes" NUMERIC)
     LEFT JOIN jsonb_to_recordset(value.member_receipts) member(
      "appointmentId" UUID,"assignmentId" UUID,"classification" TEXT)
      ON member."appointmentId"=receipt."appointmentId"
@@ -130,12 +131,22 @@ SET search_path=pg_catalog,public,pg_temp AS $$
      WHERE review.organization_id=value.organization_id
       AND review.appointment_id=receipt."appointmentId"
      ORDER BY review.revision DESC LIMIT 1) current_review ON TRUE
+    LEFT JOIN public.canonical_forecast_estimate_source_fences current_source_fence
+     ON current_source_fence.organization_id=value.organization_id
+      AND current_source_fence.estimate_id=receipt."estimateId"
     WHERE member."appointmentId" IS NULL OR receipt."classification" NOT IN
        ('approved_unscheduled','approved_scheduled','work_in_progress') OR
      current_review.id IS DISTINCT FROM receipt."reviewId" OR
      current_review.revision IS DISTINCT FROM receipt."reviewRevision" OR
      rtrim(current_review.digest) IS DISTINCT FROM receipt."reviewDigest" OR
      current_review.estimate_id IS DISTINCT FROM receipt."estimateId" OR
+     (receipt."reviewId" IS NOT NULL AND (
+       receipt."sourceGeneration" IS NULL OR
+       current_source_fence.generation IS DISTINCT FROM
+        receipt."sourceGeneration")) OR
+     (receipt."reviewId" IS NULL AND (
+       receipt."estimateId" IS NOT NULL OR
+       receipt."sourceGeneration" IS NOT NULL)) OR
      CASE
       WHEN current_review.id IS NULL OR current_review.action='withdraw' THEN 'missing'
       WHEN current_review.assignment_id=receipt."assignmentId" AND
@@ -289,6 +300,10 @@ BEGIN
   WHERE source_fence.organization_id=org
    AND source_fence.estimate_id=lock_value.estimate_id
   FOR UPDATE OF source_fence NOWAIT;
+  IF NOT FOUND THEN
+   RAISE EXCEPTION 'Current backlog person-plan source unavailable'
+    USING ERRCODE='55000';
+  END IF;
  END LOOP;
  SELECT COALESCE((SELECT source_order
   FROM public.canonical_forecast_schedule_booking_events
@@ -380,6 +395,7 @@ BEGIN
  ), reviewed AS MATERIALIZED (
   SELECT member.*,current_review.id review_id,current_review.revision review_revision,
    rtrim(current_review.digest) review_digest,current_review.estimate_id,
+   current_source_fence.generation source_generation,
    CASE WHEN current_review.id IS NULL OR current_review.action='withdraw' THEN 'missing'
     WHEN current_review.assignment_id=member."assignmentId" AND
      current_review.assignment_revision=member."scheduleRevision" AND
@@ -394,12 +410,16 @@ BEGIN
    WHERE review.organization_id=org
     AND review.appointment_id=member."appointmentId"
    ORDER BY review.revision DESC LIMIT 1) current_review ON TRUE
+  LEFT JOIN public.canonical_forecast_estimate_source_fences current_source_fence
+   ON current_source_fence.organization_id=org
+    AND current_source_fence.estimate_id=current_review.estimate_id
  ), plan_aggregate AS (
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
     'appointmentId',"appointmentId",'assignmentId',"assignmentId",
     'classification',"classification",'state',plan_state,
     'reviewId',review_id,'reviewRevision',review_revision,
     'reviewDigest',review_digest,'estimateId',estimate_id,
+    'sourceGeneration',source_generation,
     'plannedPersonMinutes',CASE WHEN plan_state='available'
       THEN planned_person_minutes ELSE NULL END)
     ORDER BY "appointmentId"),'[]'::jsonb) receipts,

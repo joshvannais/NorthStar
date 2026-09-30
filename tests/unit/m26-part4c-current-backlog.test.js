@@ -177,6 +177,9 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
       .length).toBe(2);
     expect(sql).toContain("existing.person_plan_composition_version='none'");
     expect(sql).toContain('existing.request_digest=legacy_request_hash');
+    expect(sql).toContain('current_source_fence.generation source_generation');
+    expect(sql).toContain("'sourceGeneration',source_generation");
+    expect(sql).toContain('current_source_fence.generation IS DISTINCT FROM');
     expect(sql).toContain("('approved_unscheduled','approved_scheduled','work_in_progress')");
     expect(sql).toContain("hours_reason:='reviewed_person_hour_plan_missing'");
     expect(sql).toContain("hours_reason:='reviewed_person_hour_plan_not_current'");

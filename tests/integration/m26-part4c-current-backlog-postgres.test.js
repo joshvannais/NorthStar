@@ -127,7 +127,7 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
       workInProgressCount: 1, completedCount: 1, unresolvedLinkageCount: 0,
       knownBacklogCount: 2, plannedPersonMinutes: null,
       backlogHoursState: 'unavailable',
-      backlogHoursReason: 'approved_person_hour_plan_missing',
+      backlogHoursReason: 'reviewed_person_hour_plan_missing',
       sourceAuthenticated: true, knownSubsetOnly: true, sourceCoverageComplete: false,
       offPlatformCoverageVerified: false, providerCoverageVerified: false,
       probabilityCalibrated: false, forecastIssued: false, paidNumericServing: false,

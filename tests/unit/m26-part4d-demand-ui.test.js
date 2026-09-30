@@ -184,6 +184,49 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     expect(controller.state().metrics).toEqual([]);
   });
 
+  test('an exact receipt read abandons an uncertain capture key before the next capture', async () => {
+    const fixture = documentFixture(), calls = [], keys = ['part4d-abandoned-key', 'part4d-new-key'];
+    const controller = demand.create({ mode: 'paid', document: fixture.document,
+      idempotency: () => keys.shift(), fetcher: async (url, options) => {
+        calls.push({ url, key: options.headers['Idempotency-Key'] || null });
+        if (calls.length === 1) throw new Error('capture response lost');
+        return response(options.method === 'POST' ? 201 : 200,
+          options.method === 'POST' ? { ...snapshot(), replayed: false } : snapshot());
+      } });
+    await controller.capture();
+    fixture.values.commandCenterBacklogReceipt.value = ID;
+    await controller.read();
+    await controller.capture();
+    expect(calls).toEqual([
+      { url: '/api/v1/forecast/current-backlog/snapshots', key: 'part4d-abandoned-key' },
+      { url: `/api/v1/forecast/current-backlog/snapshots/${ID}`, key: null },
+      { url: '/api/v1/forecast/current-backlog/snapshots', key: 'part4d-new-key' },
+    ]);
+  });
+
+  test('a late superseded capture completion cannot restore an abandoned capture key', async () => {
+    const fixture = documentFixture(), calls = [], keys = ['part4d-late-key', 'part4d-after-read-key'];
+    let resolveCapture;
+    const lateCapture = new Promise(resolve => { resolveCapture = resolve; });
+    const controller = demand.create({ mode: 'paid', document: fixture.document,
+      idempotency: () => keys.shift(), fetcher: async (url, options) => {
+        calls.push({ url, key: options.headers['Idempotency-Key'] || null });
+        if (calls.length === 1) return lateCapture;
+        return response(options.method === 'POST' ? 201 : 200,
+          options.method === 'POST' ? { ...snapshot(), replayed: false } : snapshot());
+      } });
+    const pending = controller.capture();
+    fixture.values.commandCenterBacklogReceipt.value = ID;
+    await controller.read();
+    resolveCapture(response(201, { ...snapshot(), replayed: false }));
+    await pending;
+    await controller.capture();
+    expect(calls.map(call => call.key)).toEqual([
+      'part4d-late-key', null, 'part4d-after-read-key',
+    ]);
+    expect(controller.state().kind).toBe('available');
+  });
+
   test.each(['capture', 'read'])(
     'withholds an in-flight %s completion after workspace failure and retries only after recovery',
     async kind => {

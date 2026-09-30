@@ -214,7 +214,9 @@
             failure(503, 'FORECAST_CURRENT_BACKLOG_UNAVAILABLE');
             return null;
           }
-          if (operation.kind === 'capture') pendingCaptureKey = null;
+          if (operation.kind === 'capture' && pendingCaptureKey === operation.key) {
+            pendingCaptureKey = null;
+          }
           node('commandCenterBacklogReceipt').value = body.data.id;
           paint(model);
           return model;
@@ -238,6 +240,7 @@
           explanation: 'Use the UUID returned by an explicit backlog capture.', metrics: [] });
         return Promise.resolve(null);
       }
+      pendingCaptureKey = null;
       return request({ kind: 'read', id: id });
     }
     function retry() {

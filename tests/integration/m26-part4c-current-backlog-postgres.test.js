@@ -3,6 +3,8 @@
 const crypto = require('node:crypto');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { normalizeScheduleMutation } = require('../../src/scheduling/contract');
+const { updateAppointmentSchedule } = require('../../src/scheduling/repository');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const key = () => crypto.randomUUID();
@@ -32,6 +34,30 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
       await client.query('ROLLBACK').catch(() => {});
       throw error;
     } finally { client.release(); }
+  };
+
+  const approveReschedule = async context => {
+    const before = (await fixture.ownerPool.query(
+      `SELECT revision,rtrim(canonical_digest) digest,scheduled_start,scheduled_end,
+        appointment_status
+       FROM canonical_schedule_assignments
+       WHERE organization_id=$1 AND appointment_id=$2`,
+    [fixture.org, context.appointment])).rows[0];
+    const scheduledStart = new Date(before.scheduled_start.getTime() + 86400000).toISOString();
+    const scheduledEnd = new Date(before.scheduled_end.getTime() + 86400000).toISOString();
+    const reason = 'Fictional mounted reschedule after execution start.';
+    return updateAppointmentSchedule(fixture.ownerPool, normalizeScheduleMutation({
+      organizationId: fixture.org,
+      actorUserId: fixture.actors.owner.actorUserId,
+      actorAccessRole: fixture.actors.owner.actorAccessRole,
+      authSessionId: fixture.actors.owner.authSessionId,
+      appointmentId: context.appointment,
+      explicitSession: null,
+      idempotencyKey: `m26-p4c-post-execution-reschedule-${key()}`,
+      body: { expectedRevision: Number(before.revision), expectedDigest: before.digest,
+        expectedTimeZone: 'UTC', action: 'calendar_edit', scheduledStart, scheduledEnd,
+        status: before.appointment_status, reason },
+    }));
   };
 
   const waitForLock = async backendPid => {
@@ -129,6 +155,13 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
     expect(stale.body.data).toMatchObject({ state: 'source_stale',
       reason: 'source_changed_after_capture', knownBacklogCount: 0,
       sourceAuthenticated: false, sourceDigest: null, snapshotDigest: null });
+
+    await approveReschedule(active);
+    const afterReschedule = await directCapture();
+    expect(afterReschedule.snapshot).toMatchObject({ state: 'partial',
+      reason: 'unresolved_linkage_present', approvedScheduledCount: 1,
+      workInProgressCount: 0, completedCount: 1, unresolvedLinkageCount: 1,
+      knownBacklogCount: 1, sourceAuthenticated: true });
   }, 120000);
 
   test('serializes simultaneous idempotent capture without duplicate receipts', async () => {

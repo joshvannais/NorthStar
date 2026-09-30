@@ -84,6 +84,9 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
       'canonical_forecast_current_backlog_booking_positions');
     expect(sql.slice(candidateStart, enrichment)).not.toContain(
       'canonical_forecast_schedule_booking_events');
+    expect(sql).toContain('execution_value.assignment_id<>assignment.id');
+    expect(sql).toContain('execution_value.source_assignment_revision<>assignment.revision');
+    expect(sql).toContain("rtrim(execution_value.source_assignment_digest)<>");
     expect(assignmentFence).toBeGreaterThan(0);
     expect(eventFence).toBeGreaterThan(assignmentFence);
     expect(backfill).toBeGreaterThan(eventFence);

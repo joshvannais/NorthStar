@@ -285,12 +285,20 @@ BEGIN
    schedule_revision.id schedule_revision_id,
    execution_value.id execution_id,execution_value.revision execution_revision,
    rtrim(execution_value.canonical_digest) execution_digest,
+   execution_value.assignment_id execution_assignment_id,
+   execution_value.source_assignment_revision execution_source_schedule_revision,
+   rtrim(execution_value.source_assignment_digest) execution_source_schedule_digest,
    execution_value.lifecycle_state,execution_revision.id execution_revision_id,
    CASE
     WHEN assignment.revision<>candidate.schedule_revision OR
       rtrim(assignment.canonical_digest)<>candidate.schedule_digest OR
       schedule_revision.id IS NULL OR
       (execution_value.id IS NOT NULL AND execution_revision.id IS NULL) OR
+      (execution_value.id IS NOT NULL AND (
+       execution_value.assignment_id<>assignment.id OR
+       execution_value.source_assignment_revision<>assignment.revision OR
+       rtrim(execution_value.source_assignment_digest)<>
+        rtrim(assignment.canonical_digest))) OR
       execution_value.lifecycle_state='cancelled' THEN 'unresolved_linkage'
     WHEN execution_value.lifecycle_state='completed' THEN 'completed'
     WHEN execution_value.lifecycle_state IN
@@ -323,6 +331,9 @@ BEGIN
     'scheduleDigest',schedule_digest,'scheduleRevisionId',schedule_revision_id,
     'scheduleState',schedule_state,'executionId',execution_id,
     'executionRevision',execution_revision,'executionDigest',execution_digest,
+    'executionAssignmentId',execution_assignment_id,
+    'executionSourceScheduleRevision',execution_source_schedule_revision,
+    'executionSourceScheduleDigest',execution_source_schedule_digest,
     'executionRevisionId',execution_revision_id,'lifecycleState',lifecycle_state,
     'classification',classification) ORDER BY appointment_id),'[]'::jsonb) receipts,
    count(*) FILTER(WHERE classification='approved_unscheduled')::integer unscheduled,

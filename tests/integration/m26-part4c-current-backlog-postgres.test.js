@@ -34,6 +34,17 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
     } finally { client.release(); }
   };
 
+  const waitForLock = async backendPid => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const state = (await fixture.ownerPool.query(
+        `SELECT wait_event_type FROM pg_stat_activity WHERE pid=$1`,
+        [backendPid])).rows[0];
+      if (state?.wait_event_type === 'Lock') return;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error('Expected PostgreSQL lock wait was not observed');
+  };
+
   const completeThroughCanonicalWriter = async (context, action = 'propose_completion', extra = {}) => {
     const input = require('../../src/completion/contract').normalizeCompletionAction({
       ...context.actor,
@@ -151,6 +162,55 @@ realPostgres('Mission 26 Part 4C guarded current backlog position', () => {
     } finally {
       await blocker.query('ROLLBACK').catch(() => {});
       blocker.release();
+    }
+  }, 120000);
+
+  test('the migration fence drains an active writer and excludes a queued writer', async () => {
+    const active = await fixture.ownerPool.connect();
+    const installer = await fixture.ownerPool.connect();
+    const queued = await fixture.ownerPool.connect();
+    try {
+      await active.query('BEGIN');
+      await installer.query('BEGIN');
+      await queued.query('BEGIN');
+      const installerPid = Number((await installer.query(
+        'SELECT pg_backend_pid() pid')).rows[0].pid);
+      const queuedPid = Number((await queued.query(
+        'SELECT pg_backend_pid() pid')).rows[0].pid);
+      await active.query(
+        'LOCK TABLE canonical_schedule_assignments IN ROW EXCLUSIVE MODE');
+      await active.query(
+        'LOCK TABLE canonical_forecast_schedule_booking_events IN ROW EXCLUSIVE MODE');
+
+      const installerAssignmentFence = installer.query(
+        'LOCK TABLE canonical_schedule_assignments IN SHARE ROW EXCLUSIVE MODE');
+      await waitForLock(installerPid);
+      const queuedWriter = queued.query(
+        'LOCK TABLE canonical_schedule_assignments IN ROW EXCLUSIVE MODE');
+      await waitForLock(queuedPid);
+
+      await active.query('COMMIT');
+      await installerAssignmentFence;
+      expect((await fixture.ownerPool.query(
+        'SELECT wait_event_type FROM pg_stat_activity WHERE pid=$1',
+        [queuedPid])).rows[0].wait_event_type).toBe('Lock');
+      await installer.query(
+        `LOCK TABLE canonical_forecast_schedule_booking_events
+         IN SHARE ROW EXCLUSIVE MODE`);
+      const sourceCount = Number((await installer.query(
+        'SELECT count(*) value FROM canonical_forecast_schedule_booking_events'))
+        .rows[0].value);
+      expect(sourceCount).toBeGreaterThan(0);
+      await installer.query('COMMIT');
+      await queuedWriter;
+      await queued.query('ROLLBACK');
+    } finally {
+      await active.query('ROLLBACK').catch(() => {});
+      await installer.query('ROLLBACK').catch(() => {});
+      await queued.query('ROLLBACK').catch(() => {});
+      active.release();
+      installer.release();
+      queued.release();
     }
   }, 120000);
 

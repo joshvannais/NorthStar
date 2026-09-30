@@ -62,6 +62,15 @@ CREATE INDEX canonical_forecast_current_backlog_booking_positions_active
  INCLUDE(first_booking_order,assignment_id,schedule_revision,schedule_digest)
  WHERE active;
 
+-- Rolling-upgrade fence: genuine writers update the assignment first and then
+-- append the schedule event. Acquire those source locks in the same order and
+-- hold them through backfill plus both trigger installations. An already-active
+-- writer drains before the backfill snapshot; a queued writer cannot slip into
+-- the triggerless interval.
+LOCK TABLE public.canonical_schedule_assignments IN SHARE ROW EXCLUSIVE MODE;
+LOCK TABLE public.canonical_forecast_schedule_booking_events
+ IN SHARE ROW EXCLUSIVE MODE;
+
 INSERT INTO public.canonical_forecast_current_backlog_booking_positions(
  organization_id,appointment_id,assignment_id,first_booking_order,
  latest_booking_order,active,schedule_revision,schedule_digest)

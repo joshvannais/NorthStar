@@ -55,6 +55,20 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     const preflight = sql.indexOf('LIMIT 501) bounded_candidates');
     const refusal = sql.indexOf('IF candidate_count>500');
     const enrichment = sql.indexOf('WITH candidates AS');
+    const assignmentFence = sql.indexOf(
+      'LOCK TABLE public.canonical_schedule_assignments IN SHARE ROW EXCLUSIVE MODE');
+    const eventFence = sql.indexOf(
+      'LOCK TABLE public.canonical_forecast_schedule_booking_events\n IN SHARE ROW EXCLUSIVE MODE');
+    const backfill = sql.indexOf(
+      'INSERT INTO public.canonical_forecast_current_backlog_booking_positions');
+    const eventTrigger = sql.indexOf(
+      'CREATE TRIGGER canonical_forecast_current_backlog_booking_event_sync');
+    const assignmentTrigger = sql.indexOf(
+      'CREATE TRIGGER canonical_forecast_current_backlog_assignment_sync');
+    const captureStart = sql.indexOf(
+      'CREATE FUNCTION public.canonical_forecast_current_backlog_snapshot_capture');
+    const captureEnd = sql.indexOf(
+      'CREATE FUNCTION public.canonical_forecast_current_backlog_snapshot_read');
     expect(candidateStart).toBeGreaterThan(0);
     expect(preflight).toBeGreaterThan(candidateStart);
     expect(refusal).toBeGreaterThan(preflight);
@@ -62,12 +76,19 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     expect(sql).toContain("'knownSubsetOnly',TRUE,'sourceCoverageComplete',FALSE");
     expect(sql).toContain("'plannedPersonMinutes',NULL");
     expect(sql).toContain('canonical_forecast_current_backlog_booking_positions_active');
-    expect(sql).not.toContain('LOCK TABLE public.canonical_schedule_assignments');
-    expect(sql).not.toContain('LOCK TABLE public.canonical_field_executions');
+    expect(sql.slice(captureStart, captureEnd)).not.toContain(
+      'LOCK TABLE public.canonical_schedule_assignments');
+    expect(sql.slice(captureStart, captureEnd)).not.toContain(
+      'LOCK TABLE public.canonical_field_executions');
     expect(sql.slice(candidateStart, enrichment)).toContain(
       'canonical_forecast_current_backlog_booking_positions');
     expect(sql.slice(candidateStart, enrichment)).not.toContain(
       'canonical_forecast_schedule_booking_events');
+    expect(assignmentFence).toBeGreaterThan(0);
+    expect(eventFence).toBeGreaterThan(assignmentFence);
+    expect(backfill).toBeGreaterThan(eventFence);
+    expect(eventTrigger).toBeGreaterThan(backfill);
+    expect(assignmentTrigger).toBeGreaterThan(eventTrigger);
     expect(sql).toContain('REVOKE ALL ON TABLE public.canonical_forecast_current_backlog_snapshots FROM PUBLIC');
   });
 });

@@ -74,9 +74,16 @@ CREATE FUNCTION public.canonical_forecast_backlog_person_plan_stale(
  value public.canonical_forecast_current_backlog_person_plan_reviews)
 RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
- SELECT value.action='approve' AND NOT EXISTS(
-  SELECT 1
-  FROM public.canonical_forecast_current_backlog_booking_positions position_value
+ SELECT value.action='approve' AND (
+  EXISTS(
+   SELECT 1
+   FROM public.canonical_forecast_current_backlog_person_plan_reviews newer
+   WHERE newer.organization_id=value.organization_id
+    AND newer.appointment_id=value.appointment_id
+    AND newer.revision>value.revision
+  ) OR NOT EXISTS(
+   SELECT 1
+   FROM public.canonical_forecast_current_backlog_booking_positions position_value
   JOIN public.canonical_schedule_assignments assignment
    ON assignment.organization_id=position_value.organization_id
    AND assignment.id=position_value.assignment_id
@@ -117,7 +124,7 @@ SET search_path=pg_catalog,public,pg_temp AS $$
     WHERE current_plan.organization_id=value.organization_id
      AND current_plan.estimate_id=value.estimate_id
     ORDER BY current_plan.revision DESC LIMIT 1)
- )
+  ))
 $$;
 
 CREATE FUNCTION public.canonical_forecast_backlog_person_plan_projection(

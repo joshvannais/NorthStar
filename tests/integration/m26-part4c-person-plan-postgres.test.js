@@ -161,6 +161,37 @@ realPostgres('Mission 26 Part 4C reviewed person-hour plan source', () => {
           'public.canonical_forecast_backlog_person_plan_mutate(uuid,uuid,text,uuid,text,text,uuid,jsonb)',
           'EXECUTE') guarded_write`, [fixture.roles.runtime])).rows[0];
     expect(privileges).toEqual({ direct_read: false, guarded_write: true });
+
+    const withdrawal = await directMutate(context, {
+      action: 'withdraw', expectedCurrentReviewId: created.body.data.review.id,
+      expectedCurrentReviewDigest: created.body.data.review.digest,
+      assignmentId: null, expectedAssignmentRevision: null,
+      expectedAssignmentDigest: null, estimateId: null, laborPlanId: null,
+      expectedLaborPlanRevision: null, expectedLaborPlanDigest: null,
+      reason: 'Owner withdrew the still-current fictional person-hour source.',
+      confirmed: true, confirmationVersion: 'm26-current-backlog-person-plan-v1',
+    }, `m26-p4c-person-plan-supersede-${uuid()}`);
+    expect(withdrawal.replayed).toBe(false);
+    expect(withdrawal.review).toMatchObject({ revision: 2,
+      previousId: created.body.data.review.id, action: 'withdraw', state: 'withdrawn' });
+
+    const supersededReplay = await directMutate(context, approvalBody(context, plan), requestKey);
+    expect(supersededReplay.replayed).toBe(true);
+    expect(supersededReplay.review).toMatchObject({
+      id: created.body.data.review.id, revision: 1, state: 'source_stale',
+      plannedPersonMinutes: null, sourceAuthenticated: false, sourceCurrent: false,
+    });
+    const afterWithdrawal = await request(fixture.app)
+      .get(`/api/v1/forecast/current-backlog/person-plan-sources/${context.appointment}/reviews`)
+      .set(fixture.actors.owner.session.headers);
+    expect(afterWithdrawal.status).toBe(200);
+    expect(afterWithdrawal.body.data.current).toMatchObject({ revision: 2,
+      action: 'withdraw', state: 'withdrawn', plannedPersonMinutes: null });
+    expect(afterWithdrawal.body.data.history).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: created.body.data.review.id, revision: 1,
+        state: 'source_stale', plannedPersonMinutes: null,
+        sourceAuthenticated: false, sourceCurrent: false }),
+    ]));
   }, 120000);
 
   test('a genuine schedule revision stales the source and an explicit withdrawal preserves history', async () => {

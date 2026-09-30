@@ -4,6 +4,13 @@
 -- does not prove Mission 22 operational cancellation or current at-risk state.
 -- It is descriptive internal evidence, not complete business history, a
 -- calibrated probability or a forecast, and never mutates scheduling.
+-- The cohort capture and replay paths also need a tenant-wide source order.
+-- Keep that lookup bounded by review order rather than scanning every
+-- appointment partition while the source-writer exclusion lock is held.
+CREATE INDEX canonical_forecast_commercial_booking_reviews_tenant_order
+ ON public.canonical_forecast_commercial_booking_reviews(
+  organization_id,review_order DESC);
+
 CREATE TABLE public.canonical_forecast_booking_cancellation_cohorts (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,

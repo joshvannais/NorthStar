@@ -272,6 +272,19 @@ realPostgres('Mission 26 Part 4B booking-cancellation cohort', () => {
   }, 120000);
 
   test('startup refuses missing authority and inherited PUBLIC entry access', async () => {
+    const missingIndex = await fixture.ownerPool.connect();
+    try {
+      await missingIndex.query('BEGIN');
+      await missingIndex.query(`DROP INDEX
+        canonical_forecast_commercial_booking_reviews_tenant_order`);
+      await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(missingIndex,
+        { runtimeRole: fixture.roles.runtime }))
+        .rejects.toThrow('Required booking withdrawal cohort authority is missing');
+    } finally {
+      await missingIndex.query('ROLLBACK').catch(() => {});
+      missingIndex.release();
+    }
+
     const missing = await fixture.ownerPool.connect();
     try {
       await missing.query('BEGIN');

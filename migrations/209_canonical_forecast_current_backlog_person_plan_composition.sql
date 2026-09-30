@@ -202,7 +202,8 @@ DECLARE authority JSONB;
  existing public.canonical_forecast_current_backlog_snapshots%ROWTYPE;
  inserted public.canonical_forecast_current_backlog_snapshots%ROWTYPE;
  lock_value RECORD;
- key_hash TEXT;request_hash TEXT;members JSONB;plan_receipts JSONB;
+ key_hash TEXT;request_hash TEXT;legacy_request_hash TEXT;
+ members JSONB;plan_receipts JSONB;
  source_hash TEXT;snapshot_hash TEXT;hours_state TEXT;hours_reason TEXT;
  nonce UUID;candidate_count INTEGER;high_water BIGINT;
  unscheduled_count INTEGER;scheduled_count INTEGER;in_progress_count INTEGER;
@@ -225,12 +226,17 @@ BEGIN
   'version','m26-current-backlog-position-v1',
   'personPlanCompositionVersion',
    'm26-current-backlog-person-plan-composition-v1')::text,'UTF8')),'hex');
+ legacy_request_hash:=encode(sha256(convert_to(
+  jsonb_build_object('version','m26-current-backlog-position-v1')::text,
+  'UTF8')),'hex');
  PERFORM pg_advisory_xact_lock(hashtextextended(
   'm26:current-backlog:'||org::text||':'||actor::text||':'||key_hash,0));
  SELECT * INTO existing FROM public.canonical_forecast_current_backlog_snapshots
  WHERE organization_id=org AND actor_user_id=actor AND request_key_hash=key_hash;
  IF FOUND THEN
-  IF existing.request_digest<>request_hash THEN
+  IF existing.request_digest<>request_hash AND NOT(
+    existing.person_plan_composition_version='none' AND
+    existing.request_digest=legacy_request_hash) THEN
    RAISE EXCEPTION 'Current backlog replay changed' USING ERRCODE='23505';
   END IF;
   PERFORM public.canonical_forecast_current_backlog_snapshot_source_lock(existing);

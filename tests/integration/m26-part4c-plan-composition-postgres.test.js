@@ -1,14 +1,51 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { Pool } = require('pg');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database');
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
+const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
 const { normalizeScheduleMutation } = require('../../src/scheduling/contract');
 const { updateAppointmentSchedule } = require('../../src/scheduling/repository');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const uuid = () => crypto.randomUUID();
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
+
+function migrationDirectoryThrough(maximum, root, name) {
+  const source = path.resolve(__dirname, '../../migrations');
+  const target = path.join(root, name);
+  fs.mkdirSync(target, { recursive: true });
+  for (const file of fs.readdirSync(source)) {
+    const match = /^(\d{3})_.+\.sql$/.exec(file);
+    if (match && Number(match[1]) <= maximum) {
+      fs.copyFileSync(path.join(source, file), path.join(target, file));
+    }
+  }
+  return target;
+}
+
+async function captureSnapshot(pool, identity, key) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+    const result = await client.query(
+      `SELECT canonical_forecast_current_backlog_snapshot_capture(
+        $1,$2,'owner',$3,$4,$5) value`,
+      [identity.organizationId, identity.userId, identity.sessionId,
+        identity.csrfToken, key]);
+    await client.query('COMMIT');
+    return result.rows[0].value;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally { client.release(); }
+}
 
 realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () => {
   let fixture;
@@ -347,4 +384,82 @@ realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () 
          WHERE organization_id=$1`, [fixture.org]);
     }
   }, 120000);
+
+  test('replays an exact migration 207 receipt after migration 209 without widening request identity', async () => {
+    const database = await createSuiteDatabase('m26p4c-legacy-replay');
+    const pool = new Pool({ connectionString: database.connectionString, max: 4 });
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m26p4c-replay-'));
+    try {
+      const through207 = migrationDirectoryThrough(207, temporary, 'through207');
+      const through209 = migrationDirectoryThrough(209, temporary, 'through209');
+      await fixture.db.runMigrations({ pool, migrationsDirectory: through207 });
+      const organizationId = uuid(), userId = uuid();
+      await pool.query(
+        `INSERT INTO organizations(id,name,email)
+         VALUES($1,'Migration 207 replay tenant',$2)`,
+        [organizationId, `${organizationId}@example.test`]);
+      await pool.query(
+        `INSERT INTO users(id,organization_id,name,email,password_hash,role,status)
+         VALUES($1,$2,'Migration 207 owner',$3,'unused','owner','active')`,
+        [userId, organizationId, `${userId}@example.test`]);
+      const rawProfile = { company: { name: 'Migration 207 replay tenant',
+        timeZone: 'UTC', currency: 'USD' }, headquarters: {}, services: [] };
+      const normalized = adaptBusinessProfile(rawProfile, 'm26-p4c-legacy-replay-v1');
+      await pool.query(
+        `INSERT INTO canonical_business_profiles(
+           organization_id,version_number,version_label,raw_profile,
+           normalized_profile,normalized_profile_hash,is_active,created_by)
+         VALUES($1,1,'m26-p4c-legacy-replay-v1',$2,$3,$4,TRUE,$5)`,
+        [organizationId, rawProfile, normalized, normalized.hash, userId]);
+      const session = await provisionDurableSession(pool, {
+        organizationId, userId, role: 'owner', onboardingStatus: 'complete',
+      });
+      const identity = { organizationId, userId, sessionId: session.sessionId,
+        csrfToken: session.csrfToken };
+      const requestKey = `m26-p4c-legacy-replay-${uuid()}`;
+      const created = await captureSnapshot(pool, identity, requestKey);
+      expect(created.replayed).toBe(false);
+      const legacy = (await pool.query(
+        `SELECT id,request_digest FROM canonical_forecast_current_backlog_snapshots
+         WHERE organization_id=$1 AND actor_user_id=$2 AND request_key_hash=$3`,
+        [organizationId, userId, hash(requestKey)])).rows[0];
+      const legacyDigest = (await pool.query(
+        `SELECT encode(sha256(convert_to(jsonb_build_object(
+          'version','m26-current-backlog-position-v1')::text,'UTF8')),'hex') digest`
+      )).rows[0].digest;
+      expect(legacy.request_digest).toBe(legacyDigest);
+
+      await fixture.db.runMigrations({ pool, migrationsDirectory: through209 });
+      const upgraded = (await pool.query(
+        `SELECT person_plan_composition_version
+         FROM canonical_forecast_current_backlog_snapshots WHERE id=$1`,
+        [legacy.id])).rows[0];
+      expect(upgraded.person_plan_composition_version).toBe('none');
+      const replayed = await captureSnapshot(pool, identity, requestKey);
+      expect(replayed.replayed).toBe(true);
+      expect(replayed.snapshot.id).toBe(legacy.id);
+
+      // Disposable owner-only corruption proves the compatibility branch accepts
+      // only the exact migration 207 digest rather than any changed request.
+      await pool.query('ALTER TABLE canonical_forecast_current_backlog_snapshots DISABLE TRIGGER USER');
+      try {
+        await pool.query(
+          `UPDATE canonical_forecast_current_backlog_snapshots
+           SET request_digest=$2 WHERE id=$1`, [legacy.id, 'f'.repeat(64)]);
+      } finally {
+        await pool.query('ALTER TABLE canonical_forecast_current_backlog_snapshots ENABLE TRIGGER USER');
+      }
+      await expect(captureSnapshot(pool, identity, requestKey))
+        .rejects.toMatchObject({ code: '23505' });
+      expect((await pool.query(
+        `SELECT count(*)::integer count
+         FROM canonical_forecast_current_backlog_snapshots
+         WHERE organization_id=$1 AND actor_user_id=$2 AND request_key_hash=$3`,
+        [organizationId, userId, hash(requestKey)])).rows[0].count).toBe(1);
+    } finally {
+      await pool.end().catch(() => {});
+      await database.cleanup().catch(() => {});
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  }, 180000);
 });

@@ -8,6 +8,7 @@
   var chartPeriod = 'daily';
   var schedulingCategory = 'atRisk';
   var schedulingCursor = null;
+  var demandPosition = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -702,8 +703,9 @@
   }
 
   function renderDemandOutlook() {
-    // No demand-forecast source or issued run is mounted. Never turn the
-    // current workspace graph or fictional demo leads into a prediction.
+    if (demandPosition) demandPosition.workspaceReady();
+    // The backlog controller is a present-state receipt reader. Never turn it,
+    // the workspace graph or fictional demo leads into a prediction.
     byId('commandCenterDemandState').textContent = 'Forecast unavailable';
     byId('commandCenterDemandExplanation').textContent = mode === 'demo'
       ? 'This demo shows fictional leads. No demand forecast has been issued for this demo workspace.'
@@ -794,8 +796,9 @@
     }).catch(function (error) {
       workspace = null;
       byId('commandCenterContent').setAttribute('aria-busy', 'false');
-      byId('commandCenterDemandState').textContent = 'Workspace unavailable';
-      byId('commandCenterDemandExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
+      if (demandPosition) demandPosition.workspaceUnavailable();
+      byId('commandCenterDemandState').textContent = 'Forecast unavailable';
+      byId('commandCenterDemandExplanation').textContent = 'No demand forecast has been issued.';
       byId('commandCenterDemandBoundary').textContent = 'No forecast value is shown while workspace data is unavailable.';
       byId('commandCenterResourceState').textContent = 'Workspace unavailable';
       byId('commandCenterResourceExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
@@ -814,6 +817,14 @@
   }
 
   configureMode();
+  if (global.NorthStarDemandPosition) {
+    demandPosition = global.NorthStarDemandPosition.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+      idempotency: function () { return global.crypto.randomUUID(); },
+      onWorkspaceRetry: function () { return load(); },
+    });
+  }
   byId('commandCenterRefresh').addEventListener('click', function () { load(); });
   document.querySelectorAll('[data-chart-period]').forEach(function (button) {
     button.addEventListener('click', function () {

@@ -41,13 +41,14 @@ function invalid(res) {
   } });
 }
 
-function failure(res, error) {
+function failure(res, error, overflow = false) {
   const status = error?.code === '42501' ? 403 : error?.code === '22023' ? 400 :
     ['23505', '40001', '40P01', '55P03'].includes(error?.code) ? 409 : 503;
   const busy = ['40001', '40P01', '55P03', '57014'].includes(error?.code);
   const category = status === 403 ? 'FORECAST_CURRENT_BACKLOG_RESTRICTED' :
     status === 400 ? 'FORECAST_CURRENT_BACKLOG_REQUEST_INVALID' :
       error?.code === '23505' ? 'FORECAST_CURRENT_BACKLOG_REQUEST_REUSED' :
+        overflow && error?.code === '54000' ? 'FORECAST_CURRENT_BACKLOG_OVERSIZED' :
         busy ? 'FORECAST_CURRENT_BACKLOG_BUSY' :
           status === 409 ? 'FORECAST_CURRENT_BACKLOG_CHANGED' :
             'FORECAST_CURRENT_BACKLOG_UNAVAILABLE';
@@ -55,6 +56,8 @@ function failure(res, error) {
     status === 400 ? 'Check the current backlog request and try again.' :
       error?.code === '23505' ?
         'This request was already used with different details. Start a new request.' :
+        overflow && error?.code === '54000' ?
+          'Current backlog exceeds the supported 500-record review limit.' :
         busy ? 'The current backlog source is busy. Try again shortly.' :
           status === 409 ? 'The current backlog source changed. Refresh and try again.' :
             'The current backlog position is temporarily unavailable.';
@@ -180,7 +183,7 @@ function createForecastCurrentBacklogRouter(options = {}) {
     next();
   });
 
-  async function run(req, res, { write = false, sql, params, validate }) {
+  async function run(req, res, { write = false, overflow = false, sql, params, validate }) {
     const attempts = write ? 2 : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       let client;
@@ -200,17 +203,17 @@ function createForecastCurrentBacklogRouter(options = {}) {
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         if (write && ['40001', '23505'].includes(error?.code) && attempt + 1 < attempts) continue;
-        return failure(res, error);
+        return failure(res, error, overflow);
       } finally { if (client) client.release(); }
     }
-    return failure(res, { code: '40001' });
+    return failure(res, { code: '40001' }, overflow);
   }
 
   router.post('/snapshots', auth, requirePermission('forecast', 'update'),
     captureThrottle, async (req, res) => {
       const key = req.get('Idempotency-Key');
       if (!exact(req.query, []) || !exact(req.body, []) || !KEY.test(key || '')) return invalid(res);
-      return run(req, res, { write: true,
+      return run(req, res, { write: true, overflow: true,
         sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_capture($1,$2,$3,$4,$5,$6) value',
         params: [req.get('X-CSRF-Token'), key], validate(value) {
           if (!value || typeof value.replayed !== 'boolean') return null;

@@ -89,7 +89,7 @@ DECLARE authority JSONB;
  inserted public.canonical_forecast_booking_cancellation_cohorts%ROWTYPE;
  key_hash TEXT;request_hash TEXT;members JSONB;source_hash TEXT;cohort_hash TEXT;
  nonce UUID;eligible INTEGER;cancelled INTEGER;high_water BIGINT;stale_value BOOLEAN;
- corrected_count INTEGER;bounded_count INTEGER;
+ corrected_found BOOLEAN;bounded_count INTEGER;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
   cutoff_value IS NULL OR horizon_value IS NULL OR horizon_value<=cutoff_value OR
@@ -208,13 +208,20 @@ BEGIN
  IF bounded_count>500 OR octet_length(members::text)>262144 THEN
   RAISE EXCEPTION 'Booking cancellation cohort exceeds bounded size' USING ERRCODE='54000';
  END IF;
- SELECT count(*)::integer INTO corrected_count
- FROM public.canonical_forecast_commercial_booking_reviews correction
- WHERE correction.organization_id=org AND correction.action='booking_corrected'
-  AND correction.reviewed_at>cutoff_value AND correction.reviewed_at<=horizon_value
-  AND EXISTS(SELECT 1 FROM jsonb_array_elements(members) member
-   WHERE (member->>'appointmentId')::uuid=correction.appointment_id);
- IF corrected_count>0 THEN
+ -- Drive correction detection from the bounded member identities so each
+ -- lookup can use the tenant/appointment review-order index and stop at the
+ -- first matching correction. Never scan unrelated tenant review history
+ -- while holding the source-writer exclusion lock.
+ SELECT EXISTS(
+  SELECT 1 FROM jsonb_array_elements(members) member
+  WHERE EXISTS(
+   SELECT 1 FROM public.canonical_forecast_commercial_booking_reviews correction
+   WHERE correction.organization_id=org
+    AND correction.appointment_id=(member->>'appointmentId')::uuid
+    AND correction.action='booking_corrected'
+    AND correction.reviewed_at>cutoff_value
+    AND correction.reviewed_at<=horizon_value)) INTO corrected_found;
+ IF corrected_found THEN
   RETURN jsonb_build_object('state','source_changed_inside_horizon',
    'replayed',FALSE,'sourceAuthenticated',FALSE,
    'sourceCoverageComplete',FALSE,'offPlatformCoverageVerified',FALSE,

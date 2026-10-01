@@ -153,16 +153,33 @@
           </section>
 
           <div class="command-center-outlook-grid">
-          <section class="demo-panel command-center-demand-outlook" aria-labelledby="commandCenterDemandTitle">
+          <section class="demo-panel command-center-demand-outlook" aria-labelledby="commandCenterDemandTitle" aria-live="polite" aria-atomic="false">
             <div class="demo-panel-heading">
               <div>
-                <p class="demo-panel-kicker">Demand outlook</p>
-                <h2 id="commandCenterDemandTitle">Future leads</h2>
+                <p class="demo-panel-kicker">Current approved work</p>
+                <h2 id="commandCenterDemandTitle">Bounded backlog</h2>
               </div>
-              <span class="command-center-demand-state" id="commandCenterDemandState">Waiting for workspace</span>
+              <span class="command-center-demand-state" id="commandCenterBacklogState">Waiting for workspace</span>
             </div>
-            <p id="commandCenterDemandExplanation">Forecast status will appear after the workspace loads.</p>
-            <p class="command-center-demand-boundary" id="commandCenterDemandBoundary">Current leads and scheduled work are shown separately above.</p>
+            <h3 class="command-center-backlog-title" id="commandCenterBacklogTitle">Waiting for workspace</h3>
+            <p id="commandCenterBacklogExplanation">No receipt is read or captured until you choose an action.</p>
+            <dl class="command-center-backlog-metrics" id="commandCenterBacklogMetrics" hidden></dl>
+            <div class="command-center-backlog-actions" id="commandCenterBacklogActions">
+              <label for="commandCenterBacklogReceipt">Saved receipt ID</label>
+              <div class="command-center-backlog-receipt-row">
+                <input id="commandCenterBacklogReceipt" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000">
+                <button class="btn btn-secondary" id="commandCenterBacklogRead" type="button">Load receipt</button>
+              </div>
+              <button class="btn btn-primary" id="commandCenterBacklogCapture" type="button">Capture current backlog</button>
+            </div>
+            <button class="btn btn-secondary command-center-backlog-retry" id="commandCenterBacklogRetry" type="button" hidden>Retry</button>
+            <p class="command-center-demand-boundary" id="commandCenterBacklogNotice">Known NorthStar subset only.</p>
+            <div class="command-center-forecast-boundary" aria-labelledby="commandCenterForecastTitle">
+              <div><strong id="commandCenterForecastTitle">Demand forecast</strong>
+                <span class="command-center-demand-state" id="commandCenterDemandState">Unavailable</span></div>
+              <p id="commandCenterDemandExplanation">No demand forecast has been issued.</p>
+              <p class="command-center-demand-boundary" id="commandCenterDemandBoundary">Current backlog is a present fact, not predicted work.</p>
+            </div>
           </section>
 
           <section class="demo-panel command-center-resource-outlook" aria-labelledby="commandCenterResourceTitle">
@@ -248,7 +265,8 @@
   <script src="/js/scheduling-time-contract.js"></script>
   <script src="/js/display-projection.js"></script>
   <script src="/js/scheduling-approval-ui.js"></script>
-  <script src="/js/command-center-page.js?v=m26-range-state-20260922"></script>
+  <script src="/js/command-center-demand-position.js?v=m26-part4d-demand-ui-20260930"></script>
+  <script src="/js/command-center-page.js?v=m26-part4d-demand-ui-20260930"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

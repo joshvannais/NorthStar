@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const express = require('express');
 const { Pool } = require('pg');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
@@ -12,6 +13,8 @@ const { provisionDurableSession } = require('../helpers/account-session-fixture'
 const { adaptBusinessProfile } = require('../../src/services/businessProfileAdapter');
 const { normalizeScheduleMutation } = require('../../src/scheduling/contract');
 const { updateAppointmentSchedule } = require('../../src/scheduling/repository');
+const { createForecastCurrentBacklogRouter } =
+  require('../../src/routes/forecastCurrentBacklog');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const uuid = () => crypto.randomUUID();
@@ -330,6 +333,14 @@ realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () 
 
   test('keeps private composition authority entry-only and startup-mandatory', async () => {
     expect((await capture(undefined, 'member')).status).toBe(403);
+    const composedAuthority = (await fixture.ownerPool.query(
+      `SELECT has_function_privilege($1,
+         'canonical_forecast_current_backlog_snapshot_capture_v2(uuid,uuid,text,uuid,text,text)',
+         'EXECUTE') runtime_capture,
+        has_function_privilege('public',
+         'canonical_forecast_current_backlog_snapshot_read_v2(uuid,uuid,text,uuid,uuid)',
+         'EXECUTE') public_read`, [fixture.roles.runtime])).rows[0];
+    expect(composedAuthority).toEqual({ runtime_capture: true, public_read: false });
     await expect(fixture.runtimePool.query(
       `SELECT canonical_forecast_current_backlog_snapshot_source_lock(value)
        FROM canonical_forecast_current_backlog_snapshots value LIMIT 1`))
@@ -338,9 +349,9 @@ realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () 
     try {
       await missing.query('BEGIN');
       await missing.query(`ALTER FUNCTION
-        canonical_forecast_current_backlog_snapshot_source_lock(
-          canonical_forecast_current_backlog_snapshots)
-        RENAME TO canonical_forecast_current_backlog_snapshot_source_lock_missing`);
+        canonical_forecast_current_backlog_snapshot_capture_v2(
+          uuid,uuid,text,uuid,text,text)
+        RENAME TO canonical_forecast_current_backlog_snapshot_capture_v2_missing`);
       await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(missing,
         { runtimeRole: fixture.roles.runtime }))
         .rejects.toThrow('Required current backlog snapshot authority is missing');
@@ -349,8 +360,8 @@ realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () 
     try {
       await leaked.query('BEGIN');
       await leaked.query(`GRANT EXECUTE ON FUNCTION
-        canonical_forecast_current_backlog_snapshot_source_lock(
-          canonical_forecast_current_backlog_snapshots) TO PUBLIC`);
+        canonical_forecast_current_backlog_snapshot_read_v2(
+          uuid,uuid,text,uuid,uuid) TO PUBLIC`);
       await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(leaked,
         { runtimeRole: fixture.roles.runtime }))
         .rejects.toThrow('Runtime database role privilege verification failed');
@@ -463,13 +474,13 @@ realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () 
     }
   }, 120000);
 
-  test('replays an exact migration 207 receipt after migration 209 without widening request identity', async () => {
+  test('reads and replays an exact migration 207 partial after the composition-marker upgrade', async () => {
     const database = await createSuiteDatabase('m26p4c-legacy-replay');
     const pool = new Pool({ connectionString: database.connectionString, max: 4 });
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m26p4c-replay-'));
     try {
       const through207 = migrationDirectoryThrough(207, temporary, 'through207');
-      const through209 = migrationDirectoryThrough(209, temporary, 'through209');
+      const through210 = migrationDirectoryThrough(210, temporary, 'through210');
       await fixture.db.runMigrations({ pool, migrationsDirectory: through207 });
       const organizationId = uuid(), userId = uuid();
       await pool.query(
@@ -494,9 +505,59 @@ realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () 
       });
       const identity = { organizationId, userId, sessionId: session.sessionId,
         csrfToken: session.csrfToken };
+      const operationId = uuid(), graphId = uuid(), customerId = uuid();
+      const transcriptId = uuid(), opportunityId = uuid(), appointmentId = uuid();
+      await pool.query(
+        `INSERT INTO canonical_operations(
+           id,organization_id,graph_id,idempotency_key_hash,payload_fingerprint,state,
+           lease_owner,lease_expires_at,result_status,result_body,completed_at)
+         VALUES($1,$2,$3,$4,$4,'completed',$1,NOW()+INTERVAL '1 hour',200,'{}',NOW())`,
+        [operationId, organizationId, graphId, hash(`legacy-operation:${operationId}`)]);
+      await pool.query(
+        `INSERT INTO canonical_customers(id,organization_id,operation_id,graph_id,name)
+         VALUES($1,$2,$3,$4,'Migration 207 partial customer')`,
+        [customerId, organizationId, operationId, graphId]);
+      await pool.query(
+        `INSERT INTO canonical_transcripts(
+           id,organization_id,operation_id,graph_id,customer_id,source,source_version,
+           transcript_text,normalized_fingerprint)
+         VALUES($1,$2,$3,$4,$5,'lead','fixture','Migration 207 partial source',$6)`,
+        [transcriptId, organizationId, operationId, graphId, customerId,
+          hash(`legacy-transcript:${transcriptId}`)]);
+      await pool.query(
+        `INSERT INTO canonical_opportunities(
+           id,organization_id,operation_id,graph_id,customer_id,status,service_type,job_scope)
+         VALUES($1,$2,$3,$4,$5,'qualified','Plumbing',$6)`,
+        [opportunityId, organizationId, operationId, graphId, customerId,
+          { jobTitle: 'Migration 207 partial work' }]);
+      await pool.query(
+        `INSERT INTO canonical_appointments(
+           id,organization_id,operation_id,graph_id,opportunity_id,
+           scheduled_start,scheduled_end,status)
+         VALUES($1,$2,$3,$4,$5,NOW()+INTERVAL '1 day',
+           NOW()+INTERVAL '2 days','scheduled')`,
+        [appointmentId, organizationId, operationId, graphId, opportunityId]);
+      const assignment = (await pool.query(
+        `SELECT id,revision,rtrim(canonical_digest) digest
+         FROM canonical_schedule_assignments
+         WHERE organization_id=$1 AND appointment_id=$2`,
+        [organizationId, appointmentId])).rows[0];
+      expect(assignment).toBeDefined();
+      await pool.query(
+        `INSERT INTO canonical_forecast_current_backlog_booking_positions(
+           organization_id,appointment_id,assignment_id,first_booking_order,
+           latest_booking_order,active,schedule_revision,schedule_digest)
+         VALUES($1,$2,$3,1,1,TRUE,$4,$5)`,
+        [organizationId, appointmentId, assignment.id, Number(assignment.revision),
+          'f'.repeat(64)]);
       const requestKey = `m26-p4c-legacy-replay-${uuid()}`;
       const created = await captureSnapshot(pool, identity, requestKey);
       expect(created.replayed).toBe(false);
+      expect(created.snapshot).toMatchObject({ state: 'partial',
+        reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1,
+        plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'approved_person_hour_plan_missing' });
+      expect(created.snapshot.personPlanCompositionVersion).toBeUndefined();
       const legacy = (await pool.query(
         `SELECT id,request_digest FROM canonical_forecast_current_backlog_snapshots
          WHERE organization_id=$1 AND actor_user_id=$2 AND request_key_hash=$3`,
@@ -507,15 +568,57 @@ realPostgres('Mission 26 Part 4C bounded reviewed-plan backlog composition', () 
       )).rows[0].digest;
       expect(legacy.request_digest).toBe(legacyDigest);
 
-      await fixture.db.runMigrations({ pool, migrationsDirectory: through209 });
+      await fixture.db.runMigrations({ pool, migrationsDirectory: through210 });
       const upgraded = (await pool.query(
         `SELECT person_plan_composition_version
          FROM canonical_forecast_current_backlog_snapshots WHERE id=$1`,
         [legacy.id])).rows[0];
       expect(upgraded.person_plan_composition_version).toBe('none');
-      const replayed = await captureSnapshot(pool, identity, requestKey);
-      expect(replayed.replayed).toBe(true);
-      expect(replayed.snapshot.id).toBe(legacy.id);
+      const app = express(); app.use(express.json());
+      app.use((req, _res, next) => { req.user = { id: userId };
+        req.orgId = organizationId; req.userRole = 'owner';
+        req.authSession = { id: session.sessionId };
+        req.tenantContext = { organizationId, userId }; next(); });
+      app.use('/backlog', createForecastCurrentBacklogRouter({ poolProvider: () => pool,
+        auth: (_req, _res, next) => next(), throttle: (_req, _res, next) => next(),
+        captureThrottle: (_req, _res, next) => next() }));
+      const read = await request(app).get(`/backlog/snapshots/${legacy.id}`);
+      expect(read.status).toBe(200);
+      expect(read.body.data).toMatchObject({ id: legacy.id, state: 'partial',
+        personPlanCompositionVersion: 'none', unresolvedLinkageCount: 1,
+        plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'approved_person_hour_plan_missing' });
+      const replayed = await request(app).post('/backlog/snapshots')
+        .set('Idempotency-Key', requestKey).set('X-CSRF-Token', session.csrfToken)
+        .send({});
+      expect(replayed.status).toBe(200);
+      expect(replayed.headers['idempotency-replayed']).toBe('true');
+      expect(replayed.body.data).toMatchObject({ id: legacy.id, state: 'partial',
+        personPlanCompositionVersion: 'none', plannedPersonMinutes: null,
+        replayed: true });
+
+      const malformed = (await pool.query(
+        `INSERT INTO canonical_forecast_current_backlog_snapshots(
+           organization_id,schedule_source_high_water_order,member_receipts,
+           approved_unscheduled_count,approved_scheduled_count,work_in_progress_count,
+           completed_count,unresolved_linkage_count,source_digest,digest_nonce,
+           snapshot_digest,actor_user_id,membership_id,auth_session_id,
+           request_key_hash,request_digest,captured_at,person_plan_composition_version,
+           person_plan_receipts,planned_person_minutes,backlog_hours_state,
+           backlog_hours_reason)
+         SELECT organization_id,schedule_source_high_water_order,member_receipts,
+           approved_unscheduled_count,approved_scheduled_count,work_in_progress_count,
+           completed_count,unresolved_linkage_count,source_digest,gen_random_uuid(),
+           snapshot_digest,actor_user_id,membership_id,auth_session_id,$2,
+           request_digest,clock_timestamp(),
+           'm26-current-backlog-person-plan-composition-v1','[]',NULL,
+           'unavailable','approved_person_hour_plan_missing'
+         FROM canonical_forecast_current_backlog_snapshots WHERE id=$1
+         RETURNING id`, [legacy.id, hash(`malformed-composed:${legacy.id}`)])).rows[0];
+      const rejected = await request(app).get(`/backlog/snapshots/${malformed.id}`);
+      expect(rejected.status).toBe(503);
+      expect(rejected.body.error.category).toBe('FORECAST_CURRENT_BACKLOG_UNAVAILABLE');
+      expect(JSON.stringify(rejected.body)).not.toMatch(/plannedPersonMinutes|unresolvedLinkageCount/);
 
       // Disposable owner-only corruption proves the compatibility branch accepts
       // only the exact migration 207 digest rather than any changed request.

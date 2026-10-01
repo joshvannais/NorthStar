@@ -41,13 +41,14 @@ function invalid(res) {
   } });
 }
 
-function failure(res, error) {
+function failure(res, error, overflow = false) {
   const status = error?.code === '42501' ? 403 : error?.code === '22023' ? 400 :
     ['23505', '40001', '40P01', '55P03'].includes(error?.code) ? 409 : 503;
   const busy = ['40001', '40P01', '55P03', '57014'].includes(error?.code);
   const category = status === 403 ? 'FORECAST_CURRENT_BACKLOG_RESTRICTED' :
     status === 400 ? 'FORECAST_CURRENT_BACKLOG_REQUEST_INVALID' :
       error?.code === '23505' ? 'FORECAST_CURRENT_BACKLOG_REQUEST_REUSED' :
+        overflow && error?.code === '54000' ? 'FORECAST_CURRENT_BACKLOG_OVERSIZED' :
         busy ? 'FORECAST_CURRENT_BACKLOG_BUSY' :
           status === 409 ? 'FORECAST_CURRENT_BACKLOG_CHANGED' :
             'FORECAST_CURRENT_BACKLOG_UNAVAILABLE';
@@ -55,6 +56,8 @@ function failure(res, error) {
     status === 400 ? 'Check the current backlog request and try again.' :
       error?.code === '23505' ?
         'This request was already used with different details. Start a new request.' :
+        overflow && error?.code === '54000' ?
+          'Current backlog exceeds a supported review or response-size limit.' :
         busy ? 'The current backlog source is busy. Try again shortly.' :
           status === 409 ? 'The current backlog source changed. Refresh and try again.' :
             'The current backlog position is temporarily unavailable.';
@@ -62,7 +65,8 @@ function failure(res, error) {
 }
 
 function safeSnapshot(value, expectedId = null) {
-  const keys = ['id', 'version', 'targetKey', 'state', 'reason', 'capturedAt',
+  const keys = ['id', 'version', 'personPlanCompositionVersion', 'targetKey',
+    'state', 'reason', 'capturedAt',
     'approvedUnscheduledCount', 'approvedScheduledCount', 'workInProgressCount',
     'completedCount', 'unresolvedLinkageCount', 'knownBacklogCount',
     'plannedPersonMinutes', 'backlogHoursState', 'backlogHoursReason',
@@ -72,6 +76,8 @@ function safeSnapshot(value, expectedId = null) {
     'paidNumericServing'];
   if (!exact(value, keys) || !UUID.test(value.id || '') ||
       value.version !== 'm26-current-backlog-position-v1' ||
+      !['none', 'm26-current-backlog-person-plan-composition-v1']
+        .includes(value.personPlanCompositionVersion) ||
       value.targetKey !== 'demand.current_backlog_position.v1' ||
       !['descriptive_subset', 'partial', 'unavailable', 'source_stale'].includes(value.state) ||
       !(value.reason === null || ['unresolved_linkage_present',
@@ -81,8 +87,6 @@ function safeSnapshot(value, expectedId = null) {
       !['approvedUnscheduledCount', 'approvedScheduledCount', 'workInProgressCount',
         'completedCount', 'unresolvedLinkageCount', 'knownBacklogCount']
         .every(key => Number.isSafeInteger(value[key]) && value[key] >= 0 && value[key] <= 500) ||
-      value.knownBacklogCount !== value.approvedUnscheduledCount +
-        value.approvedScheduledCount + value.workInProgressCount ||
       !(value.plannedPersonMinutes === null ||
         /^(?:0|[1-9][0-9]{0,13})(?:\.[0-9]{1,6})?$/.test(value.plannedPersonMinutes)) ||
       !['available', 'unavailable'].includes(value.backlogHoursState) ||
@@ -105,22 +109,42 @@ function safeSnapshot(value, expectedId = null) {
        value.backlogHoursReason !== null)) return null;
   if (value.backlogHoursState === 'unavailable' &&
       (value.plannedPersonMinutes !== null || value.backlogHoursReason === null)) return null;
-  const total = value.approvedUnscheduledCount + value.approvedScheduledCount +
-    value.workInProgressCount + value.completedCount + value.unresolvedLinkageCount;
+  const active = value.approvedUnscheduledCount + value.approvedScheduledCount +
+    value.workInProgressCount;
+  const total = active + value.completedCount + value.unresolvedLinkageCount;
+  if (value.knownBacklogCount !== active || total > 500) return null;
+  const legacy = value.personPlanCompositionVersion === 'none';
+  const descriptiveHoursValid = legacy ?
+    value.backlogHoursState === 'unavailable' && value.plannedPersonMinutes === null &&
+      value.backlogHoursReason === 'approved_person_hour_plan_missing' :
+    active === 0 ? value.backlogHoursState === 'unavailable' &&
+      value.plannedPersonMinutes === null && value.backlogHoursReason === 'no_active_backlog' :
+      value.backlogHoursState === 'available' ? value.plannedPersonMinutes !== null &&
+        Number(value.plannedPersonMinutes) > 0 && value.backlogHoursReason === null :
+        value.plannedPersonMinutes === null && [
+          'reviewed_person_hour_plan_missing', 'reviewed_person_hour_plan_not_current',
+        ].includes(value.backlogHoursReason);
   if (value.state === 'descriptive_subset' && (value.reason !== null || total < 1 ||
       value.unresolvedLinkageCount !== 0 || !value.sourceAuthenticated ||
-      !value.sourceDigest || !value.snapshotDigest)) return null;
+      !value.sourceDigest || !value.snapshotDigest || !descriptiveHoursValid)) return null;
   if (value.state === 'partial' && (value.reason !== 'unresolved_linkage_present' ||
       value.unresolvedLinkageCount < 1 || !value.sourceAuthenticated ||
-      !value.sourceDigest || !value.snapshotDigest)) return null;
+      !value.sourceDigest || !value.snapshotDigest || value.plannedPersonMinutes !== null ||
+      value.backlogHoursState !== 'unavailable' ||
+      value.backlogHoursReason !== (legacy ? 'approved_person_hour_plan_missing' :
+        'unresolved_linkage_present'))) return null;
   if (value.state === 'unavailable' &&
       (value.reason !== 'no_authenticated_approved_booking_history' || total !== 0 ||
-       !value.sourceAuthenticated || !value.sourceDigest || !value.snapshotDigest)) return null;
+       !value.sourceAuthenticated || !value.sourceDigest || !value.snapshotDigest ||
+       value.plannedPersonMinutes !== null || value.backlogHoursState !== 'unavailable' ||
+       value.backlogHoursReason !== (legacy ? 'approved_person_hour_plan_missing' :
+         'no_active_backlog'))) return null;
   if (value.state === 'source_stale' &&
       (value.reason !== 'source_changed_after_capture' || total !== 0 ||
        value.sourceAuthenticated || value.sourceDigest !== null ||
        value.snapshotDigest !== null || value.backlogHoursState !== 'unavailable' ||
-       value.backlogHoursReason !== 'source_changed_after_capture')) return null;
+       value.backlogHoursReason !== 'source_changed_after_capture' ||
+       value.plannedPersonMinutes !== null)) return null;
   return value;
 }
 
@@ -180,7 +204,7 @@ function createForecastCurrentBacklogRouter(options = {}) {
     next();
   });
 
-  async function run(req, res, { write = false, sql, params, validate }) {
+  async function run(req, res, { write = false, overflow = false, sql, params, validate }) {
     const attempts = write ? 2 : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       let client;
@@ -200,18 +224,18 @@ function createForecastCurrentBacklogRouter(options = {}) {
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         if (write && ['40001', '23505'].includes(error?.code) && attempt + 1 < attempts) continue;
-        return failure(res, error);
+        return failure(res, error, overflow);
       } finally { if (client) client.release(); }
     }
-    return failure(res, { code: '40001' });
+    return failure(res, { code: '40001' }, overflow);
   }
 
   router.post('/snapshots', auth, requirePermission('forecast', 'update'),
     captureThrottle, async (req, res) => {
       const key = req.get('Idempotency-Key');
       if (!exact(req.query, []) || !exact(req.body, []) || !KEY.test(key || '')) return invalid(res);
-      return run(req, res, { write: true,
-        sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_capture($1,$2,$3,$4,$5,$6) value',
+      return run(req, res, { write: true, overflow: true,
+        sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_capture_v2($1,$2,$3,$4,$5,$6) value',
         params: [req.get('X-CSRF-Token'), key], validate(value) {
           if (!value || typeof value.replayed !== 'boolean') return null;
           const snapshot = safeSnapshot(value.snapshot);
@@ -224,7 +248,7 @@ function createForecastCurrentBacklogRouter(options = {}) {
       const snapshotId = String(req.params.snapshotId || '').toLowerCase();
       if (!UUID.test(snapshotId) || !exact(req.query, [])) return invalid(res);
       return run(req, res, {
-        sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_read($1,$2,$3,$4,$5) value',
+        sql: 'SELECT public.canonical_forecast_current_backlog_snapshot_read_v2($1,$2,$3,$4,$5) value',
         params: [snapshotId], validate: value => safeSnapshot(value, snapshotId),
       });
     });

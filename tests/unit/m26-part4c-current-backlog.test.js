@@ -8,13 +8,14 @@ const id = '11111111-1111-4111-8111-111111111111';
 const digest = 'a'.repeat(64);
 const base = {
   id, version: 'm26-current-backlog-position-v1',
+  personPlanCompositionVersion: 'm26-current-backlog-person-plan-composition-v1',
   targetKey: 'demand.current_backlog_position.v1', state: 'descriptive_subset',
   reason: null, capturedAt: '2026-09-30T06:00:00.000000Z',
   approvedUnscheduledCount: 1, approvedScheduledCount: 2,
   workInProgressCount: 3, completedCount: 4, unresolvedLinkageCount: 0,
   knownBacklogCount: 6, plannedPersonMinutes: null,
   backlogHoursState: 'unavailable',
-  backlogHoursReason: 'approved_person_hour_plan_missing',
+  backlogHoursReason: 'reviewed_person_hour_plan_missing',
   sourceDigest: digest, snapshotDigest: digest,
   sourceAuthority: 'northstar_authenticated_booking_schedule_and_execution_current_position',
   sourceAuthenticated: true, knownSubsetOnly: true, sourceCoverageComplete: false,
@@ -41,6 +42,11 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
       { sourceCoverageComplete: true }, { forecastIssued: true },
       { paidNumericServing: true }, { probabilityCalibrated: true },
       { id: 'not-a-uuid' }, { capturedAt: '2026-09-31T00:00:00Z' },
+      { unresolvedLinkageCount: 1 },
+      { approvedUnscheduledCount: 0, approvedScheduledCount: 0,
+        workInProgressCount: 0, completedCount: 0, knownBacklogCount: 0,
+        plannedPersonMinutes: null, backlogHoursState: 'unavailable',
+        backlogHoursReason: 'no_active_backlog' },
     ]) expect(safeSnapshot({ ...base, ...change }, id)).toBeNull();
   });
 
@@ -48,12 +54,21 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     expect(safeSnapshot({ ...base, plannedPersonMinutes: '1440.000000',
       backlogHoursState: 'available', backlogHoursReason: null })).not.toBeNull();
     expect(safeSnapshot({ ...base, state: 'partial',
-      reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1 })).not.toBeNull();
+      reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1,
+      backlogHoursReason: 'unresolved_linkage_present' })).not.toBeNull();
+    expect(safeSnapshot({ ...base, state: 'partial',
+      reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1,
+      plannedPersonMinutes: '1440.000000', backlogHoursState: 'available',
+      backlogHoursReason: null })).toBeNull();
+    expect(safeSnapshot({ ...base, state: 'partial',
+      reason: 'unresolved_linkage_present', unresolvedLinkageCount: 1,
+      backlogHoursReason: 'reviewed_person_hour_plan_missing' })).toBeNull();
     expect(safeSnapshot({ ...base, state: 'unavailable',
       reason: 'no_authenticated_approved_booking_history',
       approvedUnscheduledCount: 0, approvedScheduledCount: 0,
       workInProgressCount: 0, completedCount: 0,
-      unresolvedLinkageCount: 0, knownBacklogCount: 0 })).not.toBeNull();
+      unresolvedLinkageCount: 0, knownBacklogCount: 0,
+      backlogHoursReason: 'no_active_backlog' })).not.toBeNull();
     expect(safeSnapshot({ ...base, state: 'source_stale',
       reason: 'source_changed_after_capture',
       approvedUnscheduledCount: 0, approvedScheduledCount: 0,
@@ -188,5 +203,22 @@ describe('Mission 26 Part 4C current backlog boundary', () => {
     expect(sql).toContain("'probabilityCalibrated',FALSE,'forecastIssued',FALSE");
     expect(sql).toContain("'paidNumericServing',FALSE");
     expect(sql).toContain('REVOKE ALL ON FUNCTION public.canonical_forecast_current_backlog_snapshot_source_lock');
+  });
+
+  test('forward marker migration adds rolling-compatible guarded composition entries', () => {
+    const sql = fs.readFileSync(
+      'migrations/210_canonical_forecast_current_backlog_composition_marker.sql',
+      'utf8');
+    const db = fs.readFileSync('src/db.js', 'utf8');
+    expect(sql).toContain('canonical_forecast_current_backlog_snapshot_capture_v2');
+    expect(sql).toContain('canonical_forecast_current_backlog_snapshot_read_v2');
+    expect(sql).toContain("jsonb_set(result,'{snapshot,personPlanCompositionVersion}'");
+    expect(sql).toContain("jsonb_set(result,'{personPlanCompositionVersion}'");
+    expect(sql).not.toContain('CREATE OR REPLACE FUNCTION');
+    expect(sql).not.toMatch(/\bUPDATE\s+public\.canonical_forecast_current_backlog_snapshots\b/i);
+    expect(db).toContain('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_capture_v2');
+    expect(db).toContain('GRANT EXECUTE ON FUNCTION public.canonical_forecast_current_backlog_snapshot_read_v2');
+    expect(db).toContain(
+      "REVIEWED_MIGRATION_TIMEOUT_FILES.add('210_canonical_forecast_current_backlog_composition_marker.sql')");
   });
 });

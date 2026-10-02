@@ -6,7 +6,8 @@ const request = require('supertest');
 const { createForecastPriceHistoryRouter } =
   require('../../src/routes/forecastPriceHistory');
 
-function application({ role = 'owner', captureValue, readValue } = {}) {
+function application({ role = 'owner', captureValue, readValue,
+  measurementValue } = {}) {
   const organizationId = crypto.randomUUID();
   const actorUserId = crypto.randomUUID();
   const authSessionId = crypto.randomUUID();
@@ -17,6 +18,21 @@ function application({ role = 'owner', captureValue, readValue } = {}) {
       captureValue || { state: 'complete_window_evaluation_saved',
         evaluationId: crypto.randomUUID(), revision: 1, previousId: null,
         replayed: false } }] };
+    if (sql.includes('measurement_v2')) return { rows: [{ value:
+      measurementValue || { state: 'complete_window_measurement_available',
+        measurement: { version: 'm26-complete-window-measurement-v2',
+          evaluationId: values[4], denominator: { storedOriginCount: 60,
+            pairedCount: 60, unsavedOriginCoverageVerified: false },
+          descriptiveError: { state: 'descriptive_only', totalAbsolute: '12.00',
+            meanAbsolute: '0.200000', meanSigned: '0.000000' },
+          intervalCoverage: { state: 'not_applicable',
+            reason: 'point_only_target' },
+          sampleSufficiency: { state: 'supported_source_descriptive_only' },
+          calibration: { state: 'unavailable' },
+          drift: { state: 'descriptive_only',
+            empiricalDriftVerdictAvailable: false },
+          realAccuracyAvailable: false, calibrationAvailable: false,
+          realForecastEligible: false } } }] };
     if (sql.includes('evaluation_v2_read')) return { rows: [{ value:
       readValue || { state: 'complete_window_evaluation_available',
         evaluationId: values[4], revision: 1, storedOriginCount: 60,
@@ -113,6 +129,54 @@ describe('Mission 26 Part 3B complete-window v2 HTTP authority', () => {
     expect((await request(context.app)
       .get(`/history/complete-price-flow-evaluations-v2/${crypto.randomUUID()}`)).status)
       .toBe(403);
+    expect((await request(context.app)
+      .get(`/history/complete-price-flow-evaluations-v2/${crypto.randomUUID()}/measurement`)).status)
+      .toBe(403);
     expect(context.queries).toHaveLength(0);
+  });
+
+  test('reads only server-measured aggregate evidence for the exact receipt', async () => {
+    const context = application();
+    const evaluationId = crypto.randomUUID();
+    const response = await request(context.app)
+      .get(`/history/complete-price-flow-evaluations-v2/${evaluationId}/measurement`);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      state: 'complete_window_measurement_available',
+      measurement: {
+        evaluationId, denominator: { storedOriginCount: 60, pairedCount: 60,
+          unsavedOriginCoverageVerified: false },
+        descriptiveError: { state: 'descriptive_only', meanAbsolute: '0.200000' },
+        intervalCoverage: { state: 'not_applicable' },
+        sampleSufficiency: { state: 'supported_source_descriptive_only' },
+        calibration: { state: 'unavailable' },
+        realAccuracyAvailable: false, realForecastEligible: false,
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/forecastValue|outcomeAmount/);
+    const query = context.queries.find(item => item.sql.includes('measurement_v2'));
+    expect(query.values).toEqual([context.organizationId, context.actorUserId,
+      'owner', context.authSessionId, evaluationId]);
+  });
+
+  test('rejects measurement query inputs and keeps cross-tenant absence generic', async () => {
+    const evaluationId = crypto.randomUUID();
+    const invalid = application();
+    expect((await request(invalid.app)
+      .get(`/history/complete-price-flow-evaluations-v2/${evaluationId}/measurement?limit=1`))
+      .status).toBe(400);
+    expect(invalid.queries).toHaveLength(0);
+    const missing = application({ measurementValue: {
+      state: 'complete_window_measurement_unavailable',
+      reason: 'evaluation_not_found', realAccuracyAvailable: false,
+      calibrationAvailable: false, realForecastEligible: false,
+    } });
+    const response = await request(missing.app)
+      .get(`/history/complete-price-flow-evaluations-v2/${evaluationId}/measurement`);
+    expect(response.body.data).toEqual({
+      state: 'complete_window_measurement_unavailable',
+      reason: 'evaluation_not_found', realAccuracyAvailable: false,
+      calibrationAvailable: false, realForecastEligible: false,
+    });
   });
 });

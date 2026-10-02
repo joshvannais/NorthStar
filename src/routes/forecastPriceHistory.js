@@ -2721,6 +2721,44 @@ function createForecastPriceHistoryRouter(options = {}) {
       } finally { if (client) client.release(); }
     });
 
+  // Target-complete Part 3C measurement over one exact current Part 3B v2
+  // receipt. The database selects and measures the private values; this route
+  // accepts no origins, values, thresholds, policy or evidence manifest.
+  router.get('/complete-price-flow-evaluations-v2/:evaluationId/measurement', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.evaluationId || '') ||
+          !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The complete-window measurement request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          `SELECT public.canonical_forecast_complete_window_measurement_v2(
+            $1,$2,$3,$4,$5) value`,
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (!value || !['complete_window_measurement_available',
+          'complete_window_measurement_stale',
+          'complete_window_measurement_unavailable'].includes(value.state)) {
+          throw new Error('Invalid complete-window measurement authority');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   return router;
 }
 

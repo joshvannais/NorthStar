@@ -123,7 +123,7 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
     expect(zeroReplay.status).toBe(200);
     expect(zeroReplay.headers['idempotency-replayed']).toBe('true');
     expect(zeroReplay.body.data).toMatchObject({ snapshotId: zero.body.data.snapshotId,
-      replayed: true });
+      state: 'current', replayed: true, sourceCurrent: true });
 
     const source = await seedEstimateSource();
     const approval = await mutate(source);
@@ -138,20 +138,34 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
       .toMatchObject({ state: 'stale', sourceCurrent: false,
         reason: 'source_changed', forecastIssued: false });
 
-    const first = await capture();
+    const firstKey = `m26-p2a-v2-first-${uuid()}`;
+    const first = await capture('owner', firstKey);
     expect(first.status).toBe(201);
     expect(first.body.data).toMatchObject({ state: 'current', sourceCount: 1,
       targetComplete: true });
     const correction = await mutate(source, { expectedRevision: 1,
       expectedDigest: approval.digest });
+    const correctionReplay = await capture('owner', firstKey);
+    expect(correctionReplay.status).toBe(200);
+    expect(correctionReplay.body.data).toMatchObject({
+      snapshotId: first.body.data.snapshotId, state: 'stale', reason: 'source_changed',
+      replayed: true, sourceCurrent: false, sourceCount: 1,
+    });
     expect((await read('admin', first.body.data.snapshotId)).body.data)
       .toMatchObject({ state: 'stale', sourceCurrent: false });
 
-    const corrected = await capture('admin');
+    const correctedKey = `m26-p2a-v2-corrected-${uuid()}`;
+    const corrected = await capture('admin', correctedKey);
     expect(corrected.status).toBe(201);
     expect(corrected.body.data.sourceCount).toBe(1);
     await mutate(source, { action: 'withdraw', expectedRevision: 2,
       expectedDigest: correction.digest });
+    const withdrawalReplay = await capture('admin', correctedKey);
+    expect(withdrawalReplay.status).toBe(200);
+    expect(withdrawalReplay.body.data).toMatchObject({
+      snapshotId: corrected.body.data.snapshotId, state: 'stale', reason: 'source_changed',
+      replayed: true, sourceCurrent: false, sourceCount: 1,
+    });
     expect((await read('owner', corrected.body.data.snapshotId)).body.data)
       .toMatchObject({ state: 'stale', sourceCurrent: false });
     const withdrawn = await capture();

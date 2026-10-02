@@ -9,6 +9,7 @@ const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 describe('Mission 26 Part 3C complete-window measurement v2 authority', () => {
   const migration = read('migrations/215_canonical_forecast_complete_window_measurement_v2.sql');
   const correction = read('migrations/216_canonical_forecast_complete_window_measurement_drift_gate.sql');
+  const tenantCorrection = read('migrations/217_canonical_forecast_complete_window_measurement_tenant_identity.sql');
   const routes = read('src/routes/forecastPriceHistory.js');
   const database = read('src/db.js');
 
@@ -46,6 +47,7 @@ describe('Mission 26 Part 3C complete-window measurement v2 authority', () => {
     expect(database).toContain("GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)");
     expect(database).toContain("REVIEWED_MIGRATION_TIMEOUT_FILES.add('215_canonical_forecast_complete_window_measurement_v2.sql')");
     expect(database).toContain("REVIEWED_MIGRATION_TIMEOUT_FILES.add('216_canonical_forecast_complete_window_measurement_drift_gate.sql')");
+    expect(database).toContain("REVIEWED_MIGRATION_TIMEOUT_FILES.add('217_canonical_forecast_complete_window_measurement_tenant_identity.sql')");
   });
 
   test('withholds drift actions whenever the cohort is sample-ineligible', () => {
@@ -54,5 +56,13 @@ describe('Mission 26 Part 3C complete-window measurement v2 authority', () => {
     expect(correction).toContain("WHEN sample_reason IS NOT NULL THEN jsonb_build_object(");
     expect(correction).toContain("'state','unavailable','reason',sample_reason");
     expect(correction).toContain("'reviewAction',CASE WHEN later_abs/later_count>reference_abs/reference_count");
+  });
+
+  test('digests the authenticated tenant identity into every measurement', () => {
+    expect(tenantCorrection).toContain(
+      'CREATE OR REPLACE FUNCTION public.canonical_forecast_complete_window_measurement_v2');
+    expect(tenantCorrection).toContain("'organizationId',org");
+    expect(tenantCorrection).toContain(
+      "result:=unsigned||jsonb_build_object('digest',public.canonical_completion_digest(unsigned))");
   });
 });

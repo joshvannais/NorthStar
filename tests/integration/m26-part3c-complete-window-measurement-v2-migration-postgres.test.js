@@ -8,7 +8,7 @@ const { createSuiteDatabase } = require('../helpers/m19-part3-postgres-database'
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
-realPostgres('Mission 26 Part 3C migrations 214 through 216 rolling upgrade', () => {
+realPostgres('Mission 26 Part 3C migrations 214 through 217 rolling upgrade', () => {
   let database;
   let pool;
   let migrationDirectory;
@@ -114,4 +114,47 @@ realPostgres('Mission 26 Part 3C migrations 214 through 216 rolling upgrade', ()
       'canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)',
       'EXECUTE') public_execute`)).rows[0]).toEqual({ public_execute: false });
   }, 120000);
+
+  test('replaces only the measurement authority to bind tenant identity',
+    async () => {
+      const before = (await pool.query(`SELECT
+       pg_get_functiondef('canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)'::regprocedure) measurement,
+       pg_get_functiondef('canonical_forecast_price_flow_complete_window(uuid,uuid,text,uuid)'::regprocedure) complete_window,
+       pg_get_functiondef('canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text)'::regprocedure) capture,
+       pg_get_functiondef('canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)'::regprocedure) read`)).rows[0];
+      const source = path.resolve(__dirname, '../../migrations');
+      const filename =
+        '217_canonical_forecast_complete_window_measurement_tenant_identity.sql';
+      fs.copyFileSync(path.join(source, filename),
+        path.join(migrationDirectory, filename));
+      expect(await db.runMigrations({ pool, migrationsDirectory: migrationDirectory }))
+        .toBe(true);
+      const after = (await pool.query(`SELECT
+       pg_get_functiondef('canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)'::regprocedure) measurement,
+       pg_get_functiondef('canonical_forecast_price_flow_complete_window(uuid,uuid,text,uuid)'::regprocedure) complete_window,
+       pg_get_functiondef('canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text)'::regprocedure) capture,
+       pg_get_functiondef('canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)'::regprocedure) read`)).rows[0];
+      expect(after.measurement).not.toEqual(before.measurement);
+      expect(after.measurement).toContain("'organizationId',org");
+      expect(after.measurement).toContain(
+        'sample_reason IS NULL AND reference_count=30 AND later_count=30');
+      expect(after.complete_window).toEqual(before.complete_window);
+      expect(after.capture).toEqual(before.capture);
+      expect(after.read).toEqual(before.read);
+      expect((await pool.query(`SELECT filename FROM _migrations
+        WHERE filename LIKE '21%_canonical%' ORDER BY filename`)).rows
+        .map(row => row.filename)).toEqual([
+        '210_canonical_forecast_current_backlog_composition_marker.sql',
+        '211_canonical_forecast_approved_estimate_asof_v2.sql',
+        '212_canonical_forecast_comparable_months_v2.sql',
+        '213_canonical_forecast_approved_estimate_lineage_replay_v2.sql',
+        '214_canonical_forecast_complete_window_evaluation_v2.sql',
+        '215_canonical_forecast_complete_window_measurement_v2.sql',
+        '216_canonical_forecast_complete_window_measurement_drift_gate.sql',
+        filename,
+      ]);
+      expect((await pool.query(`SELECT has_function_privilege('public',
+        'canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)',
+        'EXECUTE') public_execute`)).rows[0]).toEqual({ public_execute: false });
+    }, 120000);
 });

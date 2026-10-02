@@ -240,6 +240,53 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
       });
       expect(JSON.stringify(response.body.data)).not.toContain('amount');
       expect(response.body.data).not.toHaveProperty('digest');
+      const missingEvaluation = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({});
+      expect(missingEvaluation.status).toBe(201);
+      const missingMeasurement = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${missingEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(missingMeasurement.status).toBe(200);
+      expect(missingMeasurement.body.data).toMatchObject({
+        state: 'complete_window_measurement_available',
+        measurement: {
+          version: 'm26-complete-window-measurement-v2',
+          evaluationId: missingEvaluation.body.data.evaluationId,
+          denominator: { storedOriginCount: 60, matchingContextCount: 60,
+            pairedCount: 0, missingCount: 60, excludedCount: 0,
+            unsavedOriginCoverageVerified: false },
+          applicability: { state: 'supported_source_only',
+            target: { key: 'revenue.approved_price_flow',
+              definitionVersion: 'v1' },
+            unit: { key: 'money', currency: 'USD' },
+            sourceApplicability: { serviceKey: null, areaKey: null,
+              limits: ['northstar_m24_only', 'uncalibrated_carry_forward'] },
+            algorithmVersion: 'm26-rolling-backtest-v1',
+            calculationVersion: 'm26_price_flow_carry_forward_v1',
+            horizon: { grain: 'day', expectedUtcDays: 60 },
+            dataRecency: { state: 'descriptive_only' },
+            excludedConditions: { contextChangedCount: 0,
+              missingOutcomeCount: 60, revokedOutcomeCount: 0,
+              excludedOutcomeCount: 0, unsavedOriginCoverageVerified: false,
+              providerCoverageVerified: false,
+              wholeBusinessCoverageVerified: false } },
+          descriptiveError: { state: 'unavailable',
+            reason: 'no_paired_actuals', pairedCount: 0 },
+          intervalCoverage: { state: 'not_applicable',
+            reason: 'point_only_target' },
+          sampleSufficiency: { state: 'unavailable',
+            reason: 'finalized_outcomes_incomplete' },
+          calibration: { state: 'unavailable',
+            reason: 'point_only_no_nominal_interval' },
+          observationLag: { state: 'unavailable',
+            reason: 'no_paired_actuals', actualCommitLagVerified: false },
+          realAccuracyAvailable: false, calibrationAvailable: false,
+          realForecastEligible: false,
+        },
+      });
+      expect(JSON.stringify(missingMeasurement.body.data))
+        .not.toMatch(/forecastValue|outcomeAmount|1400\.00/);
       const sourceWindow = await f.runtimePool.query(
         'SELECT public.canonical_forecast_price_flow_complete_window($1,$2,$3,$4) value',
         args);
@@ -308,6 +355,132 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
         numericalErrorAvailable: false,
       });
       expect(JSON.stringify(paired.body.data)).not.toContain('amount');
+      const pairedEvaluation = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({});
+      expect(pairedEvaluation.status).toBe(201);
+      const pairedMeasurement = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${pairedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(pairedMeasurement.status).toBe(200);
+      expect(pairedMeasurement.body.data).toMatchObject({
+        state: 'complete_window_measurement_available',
+        measurement: {
+          version: 'm26-complete-window-measurement-v2',
+          evaluationId: pairedEvaluation.body.data.evaluationId,
+          denominator: { storedOriginCount: 60, matchingContextCount: 60,
+            pairedCount: 60, missingCount: 0, excludedCount: 0,
+            unsavedOriginCoverageVerified: false },
+          applicability: { state: 'supported_source_only',
+            target: { key: 'revenue.approved_price_flow',
+              definitionVersion: 'v1' },
+            sourceApplicability: { serviceKey: null, areaKey: null,
+              limits: ['northstar_m24_only', 'uncalibrated_carry_forward'] },
+            algorithmVersion: 'm26-rolling-backtest-v1',
+            calculationVersion: 'm26_price_flow_carry_forward_v1',
+            horizon: { grain: 'day', expectedUtcDays: 60 },
+            dataRecency: { state: 'descriptive_only' },
+            excludedConditions: { contextChangedCount: 0,
+              missingOutcomeCount: 0, revokedOutcomeCount: 0,
+              excludedOutcomeCount: 0 } },
+          descriptiveError: { state: 'descriptive_only', pairedCount: 60,
+            unit: 'money' },
+          intervalCoverage: { state: 'not_applicable',
+            reason: 'point_only_target' },
+          sampleSufficiency: { state: 'unavailable',
+            reason: 'source_event_diversity_unverified' },
+          calibration: { state: 'unavailable',
+            reason: 'point_only_no_nominal_interval' },
+          observationLag: { state: 'descriptive_only',
+            policyMaxUtcDays: 60, actualCommitLagVerified: false },
+          drift: { state: 'descriptive_only',
+            empiricalDriftVerdictAvailable: false },
+          realAccuracyAvailable: false, calibrationAvailable: false,
+          realForecastEligible: false,
+        },
+      });
+      expect(pairedMeasurement.body.data.measurement.digest)
+        .toMatch(/^[0-9a-f]{64}$/);
+      expect(JSON.stringify(pairedMeasurement.body.data))
+        .not.toMatch(/forecastValue|outcomeAmount|1400\.00/);
+      const malformed = await f.ownerPool.connect();
+      try {
+        await malformed.query('BEGIN');
+        await malformed.query(`ALTER TABLE
+          canonical_forecast_price_flow_saved_origins
+          DISABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+        await malformed.query(`ALTER TABLE
+          canonical_forecast_price_flow_origin_activations
+          DISABLE TRIGGER canonical_forecast_price_flow_activation_immutable`);
+        await malformed.query(`ALTER TABLE
+          canonical_forecast_complete_window_evaluations_v2
+          DISABLE TRIGGER canonical_forecast_complete_window_evaluations_v2_immutable`);
+        await malformed.query(`WITH rewritten AS (
+          SELECT id,jsonb_set(output,'{target}',
+            (output->'target')-'definitionVersion') next_output
+          FROM canonical_forecast_price_flow_saved_origins
+          WHERE organization_id=$1)
+          UPDATE canonical_forecast_price_flow_saved_origins saved
+          SET output=rewritten.next_output,
+            receipt_digest=public.canonical_completion_digest(
+              rewritten.next_output)
+          FROM rewritten WHERE saved.id=rewritten.id`, [f.org]);
+        await malformed.query(`WITH rewritten AS (
+          SELECT activation.run_id,jsonb_set(activation.proof,
+            '{savedReceiptDigest}',to_jsonb(saved.receipt_digest)) next_proof
+          FROM canonical_forecast_price_flow_origin_activations activation
+          JOIN canonical_forecast_price_flow_saved_origins saved
+            ON saved.organization_id=activation.organization_id
+           AND saved.id=activation.run_id
+          WHERE activation.organization_id=$1)
+          UPDATE canonical_forecast_price_flow_origin_activations activation
+          SET proof=rewritten.next_proof,
+            proof_digest=public.canonical_completion_digest(
+              rewritten.next_proof)
+          FROM rewritten WHERE activation.run_id=rewritten.run_id`, [f.org]);
+        await malformed.query(`WITH rebuilt AS (
+          SELECT public.canonical_forecast_complete_window_evidence_v2(
+            $1,$2,$3,$4) value), rewritten AS (
+          SELECT $5::uuid id,value->'evidence' next_evidence
+          FROM rebuilt WHERE value->>'state'='complete_window_evidence_current')
+          UPDATE canonical_forecast_complete_window_evaluations_v2 saved
+          SET evidence=rewritten.next_evidence,
+            evidence_digest=public.canonical_completion_digest(
+              rewritten.next_evidence)
+          FROM rewritten WHERE saved.id=rewritten.id`,
+        [...args, pairedEvaluation.body.data.evaluationId]);
+        const rejected = await malformed.query(
+          `SELECT public.canonical_forecast_complete_window_measurement_v2(
+            $1,$2,$3,$4,$5) value`,
+          [...args, pairedEvaluation.body.data.evaluationId]);
+        expect(rejected.rows[0].value).toMatchObject({
+          state: 'complete_window_measurement_unavailable',
+          reason: 'forecast_context_invalid', realAccuracyAvailable: false,
+          calibrationAvailable: false, realForecastEligible: false,
+        });
+        await malformed.query('ROLLBACK');
+      } catch (error) {
+        await malformed.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        malformed.release();
+      }
+      const pairedMeasurementReplay = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${pairedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(pairedMeasurementReplay.body.data).toEqual(pairedMeasurement.body.data);
+      const foreignMeasurement = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${pairedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
+      expect(foreignMeasurement.body.data).toEqual({
+        state: 'complete_window_measurement_unavailable',
+        reason: 'evaluation_not_found', realAccuracyAvailable: false,
+        calibrationAvailable: false, realForecastEligible: false,
+      });
+      const deniedMeasurement = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${pairedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', f.actors.member.session.headers.Cookie);
+      expect(deniedMeasurement.status).toBe(403);
       const estimateId = f.estimateGraphs[0].ids.estimate;
       const review = await request(f.app)
         .get(`/api/v1/canonical/estimates/${estimateId}/review`)
@@ -389,6 +562,34 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
           realAccuracyAvailable: false, realForecastEligible: false },
         numericalErrorAvailable: false });
       expect(JSON.stringify(changed.body.data)).not.toContain('1400.00');
+      const staleMeasurement = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${pairedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(staleMeasurement.status).toBe(200);
+      expect(staleMeasurement.body.data).toMatchObject({
+        state: 'complete_window_measurement_stale',
+        evaluationId: pairedEvaluation.body.data.evaluationId,
+        restartRequired: true, realAccuracyAvailable: false,
+        calibrationAvailable: false, realForecastEligible: false,
+      });
+      const revisedEvaluation = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({});
+      expect(revisedEvaluation.status).toBe(201);
+      const positiveMeasurement = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${revisedEvaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(positiveMeasurement.body.data).toMatchObject({
+        state: 'complete_window_measurement_available',
+        measurement: { denominator: { pairedCount: 60 },
+          descriptiveError: { state: 'descriptive_only', pairedCount: 60 },
+          realAccuracyAvailable: false, calibrationAvailable: false,
+          realForecastEligible: false },
+      });
+      expect(Number(positiveMeasurement.body.data.measurement
+        .descriptiveError.totalAbsolute)).toBeGreaterThan(0);
+      expect(JSON.stringify(positiveMeasurement.body.data))
+        .not.toMatch(/forecastValue|outcomeAmount/);
       // Disposable owner-only chronology fixture: bind one of the saved
       // origins to the genuine M24 source receipt containing the day-45
       // approval, including its nonzero microsecond source order. The prior

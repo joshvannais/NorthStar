@@ -1459,6 +1459,10 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         has_function_privilege($1,
           'canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE') read,
         has_function_privilege($1,
+          'canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)','EXECUTE') measurement,
+        has_function_privilege('public',
+          'canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)','EXECUTE') public_measurement,
+        has_function_privilege($1,
           'canonical_forecast_complete_window_evidence_v2(uuid,uuid,text,uuid)','EXECUTE') helper,
         has_function_privilege($1,
           'canonical_forecast_price_flow_origin_inventory_fence_v2()','EXECUTE') inventory_fence,
@@ -1466,7 +1470,8 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') table_access`,
       [f.roles.runtime]);
       expect(v2Privileges.rows[0]).toEqual({ capture: true, read: true,
-        helper: false, inventory_fence: false, table_access: false });
+        measurement: true, public_measurement: false, helper: false,
+        inventory_fence: false, table_access: false });
       const verifyRuntime = async () => {
         const client = await f.ownerPool.connect();
         try {
@@ -1500,6 +1505,17 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         await f.ownerPool.query(`ALTER FUNCTION
           canonical_forecast_complete_window_evaluation_v2_capture_missing_test(uuid,uuid,text,uuid,text,text)
           RENAME TO canonical_forecast_complete_window_evaluation_v2_capture`);
+      }
+      await f.ownerPool.query(`ALTER FUNCTION
+        canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)
+        RENAME TO canonical_forecast_complete_window_measurement_v2_missing_test`);
+      try {
+        await expect(verifyRuntime()).rejects.toThrow(
+          'Required complete-window evaluation v2 authority is missing');
+      } finally {
+        await f.ownerPool.query(`ALTER FUNCTION
+          canonical_forecast_complete_window_measurement_v2_missing_test(uuid,uuid,text,uuid,uuid)
+          RENAME TO canonical_forecast_complete_window_measurement_v2`);
       }
       await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
         DISABLE TRIGGER canonical_forecast_price_flow_origin_inventory_fence_v2`);

@@ -352,5 +352,35 @@ realPostgres('Mission 26 Part 3C source-event diversity', () => {
         numericalErrorAvailable: false,
       });
       expect(JSON.stringify(paired.body.data)).not.toContain('1400.00');
+      const evaluation = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner.session.headers).set('Idempotency-Key', key()).send({});
+      expect(evaluation.status).toBe(201);
+      const measurement = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${evaluation.body.data.evaluationId}/measurement`)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(measurement.status).toBe(200);
+      expect(measurement.body.data).toMatchObject({
+        state: 'complete_window_measurement_available',
+        measurement: { denominator: { storedOriginCount: 60,
+          matchingContextCount: 60, pairedCount: 60, missingCount: 0,
+          excludedCount: 0, unsavedOriginCoverageVerified: false },
+        descriptiveError: { state: 'descriptive_only', pairedCount: 60 },
+        intervalCoverage: { state: 'not_applicable',
+          reason: 'point_only_target' },
+        sampleSufficiency: { state: 'supported_source_descriptive_only',
+          distinctSourceEventDays: 60, realAccuracyAvailable: false },
+        calibration: { state: 'unavailable',
+          reason: 'point_only_no_nominal_interval' },
+        drift: { state: 'descriptive_only', direction: 'higher_error',
+          reviewAction: 'human_review_required',
+          empiricalDriftVerdictAvailable: false },
+        realAccuracyAvailable: false, calibrationAvailable: false,
+        realForecastEligible: false },
+      });
+      expect(measurement.body.data.measurement.digest)
+        .toMatch(/^[0-9a-f]{64}$/);
+      expect(JSON.stringify(measurement.body.data))
+        .not.toMatch(/forecastValue|outcomeAmount/);
     }, 600000);
 });

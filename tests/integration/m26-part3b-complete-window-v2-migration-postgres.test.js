@@ -64,10 +64,17 @@ realPostgres('Mission 26 Part 3B migration 213 to 214 rolling upgrade', () => {
       ]);
       expect((await pool.query(`SELECT
        to_regclass('canonical_forecast_complete_window_evaluations_v2')::text relation,
+       to_regprocedure('canonical_forecast_price_flow_origin_inventory_fence_v2()')::text inventory_fence,
        to_regprocedure('canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text)')::text capture,
-       to_regprocedure('canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)')::text read`)).rows[0])
+       to_regprocedure('canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)')::text read,
+       EXISTS(SELECT 1 FROM pg_trigger
+        WHERE tgrelid='canonical_forecast_price_flow_saved_origins'::regclass
+         AND tgname='canonical_forecast_price_flow_origin_inventory_fence_v2'
+         AND tgenabled='O' AND tgtype=7 AND NOT tgisinternal) inventory_trigger`)).rows[0])
         .toEqual({ relation: 'canonical_forecast_complete_window_evaluations_v2',
+          inventory_fence: 'canonical_forecast_price_flow_origin_inventory_fence_v2()',
           capture: 'canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text)',
-          read: 'canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)' });
+          read: 'canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)',
+          inventory_trigger: true });
     }, 120000);
 });

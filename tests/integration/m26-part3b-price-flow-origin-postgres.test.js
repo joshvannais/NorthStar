@@ -1118,6 +1118,87 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         state: 'complete_window_evaluation_available', revision: 2,
         storedOriginCount: 3, pairedCount: 2, missingCount: 0,
         revokedCount: 0, excludedCount: 1 });
+      // Hold an uncommitted zero-baseline-style origin after its INSERT trigger
+      // has taken the new inventory fence. Capture's first inventory read cannot
+      // see it, then capture must wait at the final shared fence. Once the
+      // writer commits, the fenced re-read must observe the added origin and
+      // refuse the whole capture without persisting a partial denominator.
+      const concurrentOriginWriter = await f.ownerPool.connect();
+      const originRaceCapture = await f.runtimePool.connect();
+      let concurrentOriginId;
+      try {
+        await concurrentOriginWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const concurrentOrigin = await concurrentOriginWriter.query(`
+          INSERT INTO canonical_forecast_price_flow_saved_origins (
+            organization_id,id,saved_at,horizon_start,horizon_end,
+            source_receipt_id,output,receipt_digest,actor_user_id,
+            auth_session_id,request_key_hash,request_digest)
+          SELECT organization_id,gen_random_uuid(),saved_at,horizon_start,horizon_end,
+            source_receipt_id,output,receipt_digest,actor_user_id,auth_session_id,
+            encode(sha256(convert_to(gen_random_uuid()::text,'UTF8')),'hex'),
+            request_digest
+          FROM canonical_forecast_price_flow_saved_origins
+          WHERE organization_id=$1 AND id=$2
+          RETURNING id`, [f.org, zeroRunId]);
+        concurrentOriginId = concurrentOrigin.rows[0].id;
+        await originRaceCapture.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const capturePid = (await originRaceCapture.query(
+          'SELECT pg_backend_pid() pid')).rows[0].pid;
+        const rowsBeforeRace = (await f.ownerPool.query(
+          `SELECT count(*)::integer count
+           FROM canonical_forecast_complete_window_evaluations_v2
+           WHERE organization_id=$1`, [f.org])).rows[0].count;
+        const captureDuringOriginRace = originRaceCapture.query(
+          `SELECT public.canonical_forecast_complete_window_evaluation_v2_capture(
+            $1,$2,$3,$4,$5,$6) value`,
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, key()]);
+        let captureSettled;
+        captureDuringOriginRace.then(result => { captureSettled = result; },
+          error => { captureSettled = error; });
+        let captureWaiting = false;
+        for (let attempt = 0; attempt < 100 && !captureWaiting; attempt += 1) {
+          captureWaiting = (await f.ownerPool.query(
+            `SELECT EXISTS(SELECT 1 FROM pg_locks
+              WHERE pid=$1 AND locktype='advisory' AND NOT granted) waiting`,
+          [capturePid])).rows[0].waiting;
+          if (captureSettled) break;
+          if (!captureWaiting) await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        if (!captureWaiting && captureSettled) {
+          throw new Error(`Capture settled before inventory fence: ${JSON.stringify(
+            captureSettled.rows?.[0]?.value || { message: captureSettled.message })}`);
+        }
+        expect(captureWaiting).toBe(true);
+        await concurrentOriginWriter.query('COMMIT');
+        const refusedOriginRace = (await captureDuringOriginRace).rows[0].value;
+        expect(refusedOriginRace).toMatchObject({
+          state: 'complete_window_evaluation_unavailable',
+          reason: 'origin_inventory_changed' });
+        await originRaceCapture.query('COMMIT');
+        expect((await f.ownerPool.query(
+          `SELECT count(*)::integer count
+           FROM canonical_forecast_complete_window_evaluations_v2
+           WHERE organization_id=$1`, [f.org])).rows[0].count)
+          .toBe(rowsBeforeRace);
+      } finally {
+        await concurrentOriginWriter.query('ROLLBACK').catch(() => {});
+        await originRaceCapture.query('ROLLBACK').catch(() => {});
+        concurrentOriginWriter.release();
+        originRaceCapture.release();
+        if (concurrentOriginId) {
+          try {
+            await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+              DISABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+            await f.ownerPool.query(
+              'DELETE FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+              [concurrentOriginId]);
+          } finally {
+            await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+              ENABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+          }
+        }
+      }
       const profileActivationBefore = (await f.ownerPool.query(
         `SELECT observed_at FROM canonical_forecast_profile_effective_activations
          WHERE anchor_id=$1`, [profileAnchorId])).rows[0].observed_at;
@@ -1379,11 +1460,13 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
           'canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE') read,
         has_function_privilege($1,
           'canonical_forecast_complete_window_evidence_v2(uuid,uuid,text,uuid)','EXECUTE') helper,
+        has_function_privilege($1,
+          'canonical_forecast_price_flow_origin_inventory_fence_v2()','EXECUTE') inventory_fence,
         has_table_privilege($1,'canonical_forecast_complete_window_evaluations_v2',
           'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') table_access`,
       [f.roles.runtime]);
       expect(v2Privileges.rows[0]).toEqual({ capture: true, read: true,
-        helper: false, table_access: false });
+        helper: false, inventory_fence: false, table_access: false });
       const verifyRuntime = async () => {
         const client = await f.ownerPool.connect();
         try {
@@ -1417,6 +1500,15 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         await f.ownerPool.query(`ALTER FUNCTION
           canonical_forecast_complete_window_evaluation_v2_capture_missing_test(uuid,uuid,text,uuid,text,text)
           RENAME TO canonical_forecast_complete_window_evaluation_v2_capture`);
+      }
+      await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+        DISABLE TRIGGER canonical_forecast_price_flow_origin_inventory_fence_v2`);
+      try {
+        await expect(verifyRuntime()).rejects.toThrow(
+          'Required complete-window evaluation v2 fencing is missing');
+      } finally {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+          ENABLE TRIGGER canonical_forecast_price_flow_origin_inventory_fence_v2`);
       }
       await expect(verifyRuntime()).resolves.toBeUndefined();
       const estimate = f.estimateGraphs[0].ids.estimate;

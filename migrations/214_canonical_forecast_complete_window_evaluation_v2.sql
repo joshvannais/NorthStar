@@ -47,6 +47,25 @@ CREATE TRIGGER canonical_forecast_complete_window_evaluations_v2_immutable
  ON public.canonical_forecast_complete_window_evaluations_v2
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_price_flow_origin_immutable();
 
+-- Every origin writer, including the unchanged legacy and zero-baseline
+-- functions, crosses this tenant fence at the table boundary. Complete-window
+-- readers take the same fence only after assembling their candidate evidence,
+-- then re-read the inventory. A writer that committed during assembly is
+-- therefore observed and causes whole-request refusal; a writer that has not
+-- crossed the fence cannot commit its origin until the reader transaction ends.
+CREATE FUNCTION public.canonical_forecast_price_flow_origin_inventory_fence_v2()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  'm26:price-flow-origin-inventory:'||NEW.organization_id::text,0));
+ RETURN NEW;
+END $$;
+CREATE TRIGGER canonical_forecast_price_flow_origin_inventory_fence_v2
+ BEFORE INSERT ON public.canonical_forecast_price_flow_saved_origins
+ FOR EACH ROW EXECUTE FUNCTION
+  public.canonical_forecast_price_flow_origin_inventory_fence_v2();
+
 -- Build the authoritative non-numeric evidence receipt under the same per-run
 -- locks used by genuine actual writers. Actual receipt digests commit the
 -- private amount without returning or duplicating it in this receipt.
@@ -56,6 +75,7 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE window_value JSONB; origin JSONB; source_value JSONB;
  actual_value JSONB; profile_value JSONB; evidence_rows JSONB:='[]'::jsonb;
+ window_recheck JSONB; inventory_digest TEXT;
  actual_row public.canonical_forecast_price_flow_actual_receipts%ROWTYPE;
  run_value UUID; evidence_state TEXT; reason_value TEXT;
  paired_count INTEGER:=0; missing_count INTEGER:=0;
@@ -81,6 +101,7 @@ BEGIN
   RETURN jsonb_build_object('state','complete_window_evaluation_unavailable',
    'reason','complete_window_invalid');
  END IF;
+ inventory_digest:=public.canonical_completion_digest(window_value);
  -- Locks are acquired in UUID order before any guarded source is read.
  FOR run_value IN
   SELECT (entry->>'runId')::uuid
@@ -182,6 +203,20 @@ BEGIN
    'outcomeCutoff',actual_value->>'observedThrough',
    'outcomeSourceDigest',actual_value->>'sourceDigest'));
  END LOOP;
+ -- Do not take the inventory fence before the guarded source reads: legacy
+ -- origin writers acquire their source locks before INSERT. Taking it here
+ -- avoids a reversed lock order, drains any writer already at INSERT, and
+ -- makes the final inventory comparison authoritative for this transaction.
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  'm26:price-flow-origin-inventory:'||org::text,0));
+ window_recheck:=public.canonical_forecast_price_flow_complete_window(
+  org,actor,role_value,session_value);
+ IF window_recheck->>'state'<>'complete_saved_origin_window_observed' OR
+  public.canonical_completion_digest(window_recheck) IS DISTINCT FROM
+   inventory_digest THEN
+  RETURN jsonb_build_object('state','complete_window_evaluation_unavailable',
+   'reason','origin_inventory_changed');
+ END IF;
  RETURN jsonb_build_object('state','complete_window_evidence_current',
   'evidence',jsonb_build_object(
    'version','m26-complete-window-evaluation-v2',
@@ -195,6 +230,7 @@ BEGIN
    'revokedCount',revoked_count,'excludedCount',excluded_count,
    'algorithmVersion','m26-rolling-backtest-v1',
    'calculationVersion','m26_price_flow_carry_forward_v1',
+   'originInventoryDigest',inventory_digest,
    'unsavedOriginCoverageVerified',FALSE,
    'wholeBusinessCoverageVerified',FALSE,
    'empiricalAccuracyAvailable',FALSE,'calibrationAvailable',FALSE,
@@ -304,6 +340,8 @@ END $$;
 REVOKE ALL ON TABLE public.canonical_forecast_complete_window_evaluations_v2 FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_complete_window_evidence_v2(
  UUID,UUID,TEXT,UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_origin_inventory_fence_v2()
+ FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_complete_window_evaluation_v2_capture(
  UUID,UUID,TEXT,UUID,TEXT,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_complete_window_evaluation_v2_read(
@@ -317,4 +355,6 @@ DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtim
   UUID,UUID,TEXT,UUID,UUID) TO northstar_app_runtime;
  REVOKE ALL ON FUNCTION public.canonical_forecast_complete_window_evidence_v2(
   UUID,UUID,TEXT,UUID) FROM northstar_app_runtime;
+ REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_origin_inventory_fence_v2()
+  FROM northstar_app_runtime;
 END IF; END $$;

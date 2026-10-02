@@ -273,6 +273,11 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
       expect(last.status).toBe(200);
       expect(last.body.data.results).toHaveLength(1);
       expect(last.body.data.nextCursor).toBeNull();
+      const missingAfterPage = await replayLineage('owner',
+        [ids[0], ids[1], uuid()], null, 2);
+      expect(missingAfterPage.status).toBe(404);
+      expect(JSON.stringify(missingAfterPage.body))
+        .not.toMatch(/amount|digest|sourceCurrent/i);
 
       const owner = fixture.actors.owner;
       for (const malformedCursor of [

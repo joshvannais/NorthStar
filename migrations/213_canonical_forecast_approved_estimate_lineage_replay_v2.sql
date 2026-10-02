@@ -54,6 +54,14 @@ BEGIN
   WHERE organization_id=org;
  IF epoch.organization_id IS NULL OR state_row.organization_id IS NULL THEN
   RAISE EXCEPTION 'Approved-estimate replay authority unavailable' USING ERRCODE='55000';END IF;
+ -- Validate the complete ordered request before emitting any page. A missing
+ -- or cross-tenant receipt makes the whole recovery request unavailable.
+ IF (SELECT count(*) FROM jsonb_array_elements_text(snapshot_ids) requested(id)
+      JOIN public.canonical_forecast_approved_estimate_v2_snapshots receipt
+        ON receipt.organization_id=org AND receipt.id=requested.id::UUID)
+      <>item_count THEN
+  RETURN NULL;
+ END IF;
 
  request_digest:=public.canonical_completion_digest(jsonb_build_object(
   'version','m26-approved-estimate-lineage-replay-request-v2',

@@ -367,6 +367,7 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
         state: 'complete_window_measurement_available',
         measurement: {
           version: 'm26-complete-window-measurement-v2',
+          organizationId: f.org,
           evaluationId: pairedEvaluation.body.data.evaluationId,
           denominator: { storedOriginCount: 60, matchingContextCount: 60,
             pairedCount: 60, missingCount: 0, excludedCount: 0,
@@ -402,6 +403,13 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
       });
       expect(pairedMeasurement.body.data.measurement.digest)
         .toMatch(/^[0-9a-f]{64}$/);
+      const { digest: measurementDigest, ...unsignedMeasurement } =
+        pairedMeasurement.body.data.measurement;
+      const recomputedMeasurementDigest = await f.ownerPool.query(
+        'SELECT public.canonical_completion_digest($1::jsonb) digest',
+        [unsignedMeasurement]);
+      expect(recomputedMeasurementDigest.rows[0].digest)
+        .toBe(measurementDigest);
       expect(pairedMeasurement.body.data.measurement.drift)
         .not.toHaveProperty('reviewedRule');
       expect(pairedMeasurement.body.data.measurement.drift)

@@ -4279,6 +4279,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('213_canonical_forecast_approved_estimate_l
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('214_canonical_forecast_complete_window_evaluation_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('215_canonical_forecast_complete_window_measurement_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('216_canonical_forecast_complete_window_measurement_drift_gate.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('217_canonical_forecast_complete_window_measurement_tenant_identity.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

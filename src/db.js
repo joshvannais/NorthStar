@@ -1494,6 +1494,50 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT tgisinternal) THEN
         RAISE EXCEPTION 'Required approved-estimate v2 fencing is missing';
       END IF;
+      IF NOT EXISTS(
+        SELECT 1
+          FROM pg_catalog.pg_index index_record
+          JOIN pg_catalog.pg_class index_class
+            ON index_class.oid=index_record.indexrelid
+          JOIN pg_catalog.pg_am access_method
+            ON access_method.oid=index_class.relam
+         WHERE index_record.indexrelid=
+                pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_active_idx')
+           AND index_record.indrelid=
+                'public.canonical_forecast_approved_estimate_v2_current_sources'::regclass
+           AND index_record.indisvalid AND index_record.indisready
+           AND NOT index_record.indisunique AND NOT index_record.indisprimary
+           AND access_method.amname='btree'
+           AND index_record.indnkeyatts=2 AND index_record.indnatts=2
+           AND index_record.indkey::text='1 2'
+           AND index_record.indoption::text='0 0'
+           AND pg_catalog.pg_get_indexdef(index_record.indexrelid,1,TRUE)='organization_id'
+           AND pg_catalog.pg_get_indexdef(index_record.indexrelid,2,TRUE)='estimate_id'
+           AND pg_catalog.pg_get_expr(index_record.indpred,index_record.indrelid) IN
+                ('(action = ''approve''::text)','action = ''approve''::text')
+      ) OR NOT EXISTS(
+        SELECT 1
+          FROM pg_catalog.pg_index index_record
+          JOIN pg_catalog.pg_class index_class
+            ON index_class.oid=index_record.indexrelid
+          JOIN pg_catalog.pg_am access_method
+            ON access_method.oid=index_class.relam
+         WHERE index_record.indexrelid=
+                pg_catalog.to_regclass('public.canonical_forecast_price_decision_orders_tenant_order_idx')
+           AND index_record.indrelid=
+                'public.canonical_forecast_price_decision_orders'::regclass
+           AND index_record.indisvalid AND index_record.indisready
+           AND NOT index_record.indisunique AND NOT index_record.indisprimary
+           AND access_method.amname='btree'
+           AND index_record.indnkeyatts=2 AND index_record.indnatts=2
+           AND index_record.indkey::text='1 4'
+           AND index_record.indoption::text='0 3'
+           AND pg_catalog.pg_get_indexdef(index_record.indexrelid,1,TRUE)='organization_id'
+           AND pg_catalog.pg_get_indexdef(index_record.indexrelid,2,TRUE)='source_order'
+           AND index_record.indpred IS NULL
+      ) THEN
+        RAISE EXCEPTION 'Required approved-estimate v2 bounded indexes are missing';
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_approved_estimate_v2_epochs FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_approved_estimate_v2_current_sources FROM %I', runtime_role);

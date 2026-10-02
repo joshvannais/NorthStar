@@ -430,6 +430,19 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
           .rejects.toThrow('Required approved-estimate v2 fencing is missing');
       } finally { await disabled.query('ROLLBACK').catch(() => {}); disabled.release(); }
     }
+    for (const index of [
+      'canonical_forecast_approved_estimate_v2_active_idx',
+      'canonical_forecast_price_decision_orders_tenant_order_idx',
+    ]) {
+      const missing = await fixture.ownerPool.connect();
+      try {
+        await missing.query('BEGIN');
+        await missing.query(`DROP INDEX ${index}`);
+        await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(missing,
+          { runtimeRole: fixture.roles.runtime }))
+          .rejects.toThrow('Required approved-estimate v2 bounded indexes are missing');
+      } finally { await missing.query('ROLLBACK').catch(() => {}); missing.release(); }
+    }
   }, 120000);
 
   test('refuses a post-epoch legacy ordering gap without partial persistence', async () => {

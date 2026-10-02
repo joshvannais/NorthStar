@@ -7,6 +7,7 @@ const { sha256 } = require('../services/businessProfileAdapter');
 
 const DEFINITION_VERSION = 'm26-feature-definition-v1';
 const VALUE_VERSION = 'm26-feature-value-v1';
+const VALUE_VERSION_V2 = 'm26-feature-value-v2';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
 const TOKEN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
@@ -100,14 +101,14 @@ function normalizeFeatureDefinition(input) {
   });
 }
 
-function normalizeFeatureValue(input, definition) {
+function normalizeFeatureValueVersion(input, definition, contractVersion) {
   // The definition is only structurally checked here; an owning, versioned
   // registry must authorize it before a future reader calculates a value.
   const declared = normalizeFeatureDefinition(definition);
   if (!exact(input, ['contractVersion', 'organizationId', 'definitionKey',
     'definitionVersion', 'definitionDigest', 'asOf', 'reportingWindow', 'sourceSnapshotDigest',
     'latestSourceRecordedAt', 'state', 'amount', 'reason', 'unit']) ||
-    input.contractVersion !== VALUE_VERSION ||
+    input.contractVersion !== contractVersion ||
     typeof input.organizationId !== 'string' || !UUID.test(input.organizationId) ||
     input.definitionKey !== declared.key ||
     input.definitionVersion !== declared.definitionVersion ||
@@ -140,14 +141,15 @@ function normalizeFeatureValue(input, definition) {
     if (input.amount !== null || !token(input.reason)) invalid();
     if (input.state === 'stale' || input.state === 'conflicting') {
       if (!digest(input.sourceSnapshotDigest) ||
-          input.latestSourceRecordedAt === null) invalid();
+          (input.state === 'conflicting' && input.latestSourceRecordedAt === null) ||
+          (contractVersion === VALUE_VERSION && input.latestSourceRecordedAt === null)) invalid();
     } else if (input.state === 'inapplicable' &&
         (input.sourceSnapshotDigest !== null || input.latestSourceRecordedAt !== null)) invalid();
     else if (input.state === 'missing' && input.latestSourceRecordedAt !== null) invalid();
   }
 
   return freeze({
-    contractVersion: VALUE_VERSION,
+    contractVersion,
     organizationId: input.organizationId.toLowerCase(),
     definitionKey: declared.key, definitionVersion: declared.definitionVersion,
     definitionDigest: input.definitionDigest,
@@ -160,6 +162,18 @@ function normalizeFeatureValue(input, definition) {
   });
 }
 
+function normalizeFeatureValue(input, definition) {
+  return normalizeFeatureValueVersion(input, definition, VALUE_VERSION);
+}
+
+// V2 keeps every V1 invariant while allowing a stale, authenticated receipt
+// for a complete empty source set. Such a receipt has no source row timestamp;
+// inventing one would make the stale zero look more precise than its evidence.
+function normalizeFeatureValueV2(input, definition) {
+  return normalizeFeatureValueVersion(input, definition, VALUE_VERSION_V2);
+}
+
 module.exports = {
-  DEFINITION_VERSION, VALUE_VERSION, normalizeFeatureDefinition, normalizeFeatureValue,
+  DEFINITION_VERSION, VALUE_VERSION, VALUE_VERSION_V2,
+  normalizeFeatureDefinition, normalizeFeatureValue, normalizeFeatureValueV2,
 };

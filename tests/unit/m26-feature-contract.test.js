@@ -1,7 +1,8 @@
 'use strict';
 
-const { DEFINITION_VERSION, VALUE_VERSION, normalizeFeatureDefinition,
-  normalizeFeatureValue } = require('../../src/forecasting/featureContract');
+const { DEFINITION_VERSION, VALUE_VERSION, VALUE_VERSION_V2,
+  normalizeFeatureDefinition, normalizeFeatureValue,
+  normalizeFeatureValueV2 } = require('../../src/forecasting/featureContract');
 const { deriveReportingWindow } = require('../../src/forecasting/timeSeriesWindows');
 const { registeredFeatureDefinition, normalizeRegisteredFeatureValue } =
   require('../../src/forecasting/featureDefinitions');
@@ -132,6 +133,21 @@ describe('Mission 26 Part 2C feature boundary', () => {
     expect(normalizeFeatureValue(value({ state: 'inapplicable', amount: null,
       reason: 'service_not_supported', sourceSnapshotDigest: null,
       latestSourceRecordedAt: null }), declared).state).toBe('inapplicable');
+  });
+
+  test('v2 truthfully represents a stale complete-zero receipt without a source timestamp', () => {
+    const declared = definition();
+    const staleZero = value({ contractVersion: VALUE_VERSION_V2,
+      state: 'stale', amount: null, reason: 'source_changed',
+      latestSourceRecordedAt: null });
+    expect(normalizeFeatureValueV2(staleZero, declared)).toMatchObject({
+      contractVersion: VALUE_VERSION_V2, state: 'stale', amount: null,
+      latestSourceRecordedAt: null });
+    expect(() => normalizeFeatureValue(staleZero, declared))
+      .toThrow('Forecast feature details are invalid.');
+    expect(() => normalizeFeatureValueV2({ ...staleZero,
+      state: 'conflicting' }, declared))
+      .toThrow('Forecast feature details are invalid.');
   });
 
   test('refuses currency, definition, source time and unexplained field changes', () => {

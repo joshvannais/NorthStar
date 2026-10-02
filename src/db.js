@@ -1555,6 +1555,62 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_comparable_month_v2_receipts') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_unique_instant(text,timestamp without time zone)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_window(uuid,uuid,date)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_windows_digest(uuid,uuid,jsonb,jsonb)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_events(uuid,timestamptz,timestamptz,timestamptz,timestamptz)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_projection(public.canonical_forecast_comparable_month_v2_receipts)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_guard()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_capture(uuid,uuid,text,uuid,text,text,uuid,date,date)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+        RAISE EXCEPTION 'Required comparable-month v2 authority is missing';
+      END IF;
+      IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_forecast_comparable_month_v2_receipts'::regclass
+         AND tgname='canonical_forecast_comparable_month_v2_immutable'
+         AND tgenabled='O' AND tgtype=58
+         AND tgfoid='public.canonical_forecast_comparable_month_v2_immutable()'::regprocedure
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_forecast_comparable_month_v2_receipts'::regclass
+         AND tgname='canonical_forecast_comparable_month_v2_guard'
+         AND tgenabled='O' AND tgtype=7
+         AND tgfoid='public.canonical_forecast_comparable_month_v2_guard()'::regprocedure
+         AND NOT tgisinternal) THEN
+        RAISE EXCEPTION 'Required comparable-month v2 fencing is missing';
+      END IF;
+      IF NOT EXISTS(SELECT 1
+        FROM pg_catalog.pg_class index_class
+        JOIN pg_catalog.pg_index index_record ON index_record.indexrelid=index_class.oid
+        JOIN pg_catalog.pg_class source_class ON source_class.oid=index_record.indrelid
+        JOIN pg_catalog.pg_namespace source_namespace ON source_namespace.oid=source_class.relnamespace
+        JOIN pg_catalog.pg_am access_method ON access_method.oid=index_class.relam
+        WHERE source_namespace.nspname='public'
+         AND source_class.relname='canonical_forecast_price_decision_orders'
+         AND index_class.relname='canonical_forecast_price_decision_orders_tenant_time_idx'
+         AND index_record.indisvalid AND index_record.indisready
+         AND access_method.amname='btree'
+         AND index_record.indnkeyatts=3 AND index_record.indnatts=5
+         AND pg_catalog.pg_get_indexdef(index_record.indexrelid,1,TRUE)='organization_id'
+         AND pg_catalog.pg_get_indexdef(index_record.indexrelid,2,TRUE)='ordered_at'
+         AND pg_catalog.pg_get_indexdef(index_record.indexrelid,3,TRUE)='source_order'
+         AND pg_catalog.pg_get_indexdef(index_record.indexrelid,4,TRUE)='estimate_id'
+         AND pg_catalog.pg_get_indexdef(index_record.indexrelid,5,TRUE)='decision_id'
+         AND index_record.indpred IS NULL) THEN
+        RAISE EXCEPTION 'Required comparable-month v2 bounded index is missing';
+      END IF;
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_comparable_month_v2_receipts FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_comparable_month_v2_unique_instant(text,timestamp without time zone) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_comparable_month_v2_window(uuid,uuid,date) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_comparable_month_v2_windows_digest(uuid,uuid,jsonb,jsonb) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_comparable_month_v2_events(uuid,timestamptz,timestamptz,timestamptz,timestamptz) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_comparable_month_v2_immutable() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_comparable_month_v2_projection(public.canonical_forecast_comparable_month_v2_receipts) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_comparable_month_v2_guard() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_comparable_month_v2_capture(uuid,uuid,text,uuid,text,text,uuid,date,date) TO %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_comparable_month_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -2969,6 +3025,22 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots)','EXECUTE')
        ) AS approved_estimate_v2_private,
+       (to_regclass('public.canonical_forecast_comparable_month_v2_receipts') IS NOT NULL
+         AND NOT has_table_privilege('public','public.canonical_forecast_comparable_month_v2_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_comparable_month_v2_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_capture(uuid,uuid,text,uuid,text,text,uuid,date,date)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_comparable_month_v2_capture(uuid,uuid,text,uuid,text,text,uuid,date,date)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_comparable_month_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_events(uuid,timestamptz,timestamptz,timestamptz,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_unique_instant(text,timestamp without time zone)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_comparable_month_v2_unique_instant(text,timestamp without time zone)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_window(uuid,uuid,date)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_windows_digest(uuid,uuid,jsonb,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_projection(public.canonical_forecast_comparable_month_v2_receipts)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_comparable_month_v2_guard()','EXECUTE')
+       ) AS comparable_month_v2_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -3964,6 +4036,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.forecast_snapshot_entries_allowed ||
       !runtimePrivileges.forecast_snapshot_helpers_withheld ||
       !runtimePrivileges.approved_estimate_v2_private ||
+      !runtimePrivileges.comparable_month_v2_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||
@@ -4151,6 +4224,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('210_canonical_forecast_current_backlog_com
 // The target-complete M24 baseline must drain active decision writers before
 // installing its immutable coverage epoch and entry-only v2 authority.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('211_canonical_forecast_approved_estimate_asof_v2.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('212_canonical_forecast_comparable_months_v2.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

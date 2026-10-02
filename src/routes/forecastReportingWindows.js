@@ -10,6 +10,9 @@ const { getActiveBusinessProfile, getBusinessProfileById } =
 const { adaptBusinessProfile, sha256 } = require('../services/businessProfileAdapter');
 const { deriveReportingWindow, compareReportingWindows } =
   require('../forecasting/timeSeriesWindows');
+const { captureView: comparableMonthV2CaptureView,
+  readView: comparableMonthV2ReadView } =
+  require('../forecasting/comparableApprovedEstimateMonthsV2');
 
 const GRAINS = new Set(['day', 'week', 'month', 'quarter', 'year']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -26,13 +29,15 @@ function exact(value, keys) {
 function attestationError(res, error) {
   const status = error?.code === '42501' ? 403 :
     error?.code === '22023' ? 400 :
-      ['40001', '55P03', '23505'].includes(error?.code) ? 409 : 503;
+      ['40001', '55P03', '23505', '54000'].includes(error?.code) ? 409 : 503;
   return res.status(status).json({ success: false, error: {
     category: status === 403 ? 'FORECAST_ACCESS_RESTRICTED' :
       status === 400 ? 'FORECAST_REQUEST_INVALID' :
+        error?.code === '54000' ? 'FORECAST_SOURCE_CAPACITY' :
         status === 409 ? 'FORECAST_CALENDAR_CHANGED' : 'FORECAST_CALENDAR_UNAVAILABLE',
     message: status === 403 ? 'Forecast calendar access is restricted.' :
       status === 400 ? 'The forecast calendar request is invalid.' :
+        error?.code === '54000' ? 'There is too much history to capture safely.' :
         status === 409 ? 'Forecast calendar evidence changed. Refresh and try again.' :
           'Forecast calendar evidence is temporarily unavailable.',
   } });
@@ -66,6 +71,31 @@ function validRequestDate(value, grain) {
   else if (grain === 'quarter') date.setUTCMonth(date.getUTCMonth() + 3);
   else date.setUTCFullYear(date.getUTCFullYear() + 1);
   return date.getUTCFullYear() <= 2100;
+}
+
+function validateComparableMonthV2Capture(req, res, next) {
+  const key = req.get('Idempotency-Key');
+  if (!UUID.test(req.params.anchorId) ||
+      !exact(req.body, ['firstLocalStartDate', 'secondLocalStartDate', 'areaScope']) ||
+      !validRequestDate(req.body.firstLocalStartDate, 'month') ||
+      !validRequestDate(req.body.secondLocalStartDate, 'month') ||
+      req.body.firstLocalStartDate >= req.body.secondLocalStartDate ||
+      !['tenant_all', 'profile_area'].includes(req.body.areaScope) ||
+      !KEY.test(key || '')) {
+    return res.status(400).json({ success: false, error: {
+      category: 'FORECAST_REQUEST_INVALID',
+      message: 'The comparable reporting-window request is invalid.',
+    } });
+  }
+  if (req.body.areaScope === 'profile_area') {
+    return res.status(409).json({ success: false, error: {
+      category: 'FORECAST_SOURCE_UNAVAILABLE',
+      message: 'Approved-estimate decisions have no verified service-area attribution.',
+    }, data: { state: 'unavailable', reason: 'area_observation_coverage_unavailable',
+      observationCoverageVerified: false, areaObservationCoverageVerified: false,
+      targetComplete: false, eligibleForForecast: false, forecastIssued: false } });
+  }
+  return next();
 }
 
 function createForecastReportingWindowsRouter(options = {}) {
@@ -473,6 +503,133 @@ function createForecastReportingWindowsRouter(options = {}) {
           areaObservationCoverageVerified: false,
           forecastIssued: false,
         } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return attestationError(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/effective-anchors/:anchorId/comparable-month-receipts/v2', auth,
+    requirePermission('forecast', 'update'), validateComparableMonthV2Capture,
+    captureThrottle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      let client;
+      try {
+        client = await pool().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const pin = (await client.query(
+          'SELECT public.canonical_forecast_profile_effective_anchor_pin($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.params.anchorId])).rows[0]?.value;
+        if (!pin || pin.state !== 'profile_effective_anchor_pinned') {
+          await client.query('COMMIT');
+          return res.status(409).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'The comparable reporting-window source is unavailable.',
+          }, data: { state: 'unavailable', reason: 'anchor_not_found',
+            observationCoverageVerified: false, targetComplete: false,
+            eligibleForForecast: false, forecastIssued: false } });
+        }
+        const profile = await getBusinessProfileById(client,
+          req.tenantContext.organizationId, pin.businessProfileId);
+        if (profile.versionNumber !== pin.businessProfileVersion ||
+            profile.profileHash !== pin.businessProfileHash ||
+            adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+              pin.businessProfileHash) throw new Error('Business Profile pin is unavailable');
+        const windows = [req.body.firstLocalStartDate,
+          req.body.secondLocalStartDate].map(localStartDate => deriveReportingWindow({
+          organizationId: profile.organizationId,
+          businessProfileId: profile.id,
+          businessProfileVersion: profile.versionNumber,
+          businessProfileHash: profile.profileHash,
+          rawProfile: profile.rawProfile, grain: 'month', localStartDate,
+          serviceKey: null, areaScope: 'tenant_all',
+        }));
+        const result = await client.query(
+          'SELECT public.canonical_forecast_comparable_month_v2_capture($1,$2,$3,$4,$5,$6,$7,$8::date,$9::date) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.get('X-CSRF-Token'), key,
+            req.params.anchorId, req.body.firstLocalStartDate,
+            req.body.secondLocalStartDate]);
+        const view = comparableMonthV2CaptureView(result.rows[0]?.value,
+          req.tenantContext.organizationId, req.params.anchorId, windows);
+        await client.query('COMMIT');
+        if (view.state === 'unavailable') {
+          return res.status(409).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Complete comparable reporting-window coverage is unavailable.',
+          }, data: view });
+        }
+        if (view.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(view.replayed ? 200 : 201).json({ success: true, data: view });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return attestationError(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/effective-anchors/:anchorId/comparable-month-receipts/v2/:receiptId',
+    auth, requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.anchorId) || !UUID.test(req.params.receiptId) ||
+          !exact(req.query, ['firstLocalStartDate', 'secondLocalStartDate', 'areaScope']) ||
+          !validRequestDate(req.query.firstLocalStartDate, 'month') ||
+          !validRequestDate(req.query.secondLocalStartDate, 'month') ||
+          req.query.firstLocalStartDate >= req.query.secondLocalStartDate ||
+          req.query.areaScope !== 'tenant_all') {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The comparable reporting-window request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await pool().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const pin = (await client.query(
+          'SELECT public.canonical_forecast_profile_effective_anchor_pin($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.params.anchorId])).rows[0]?.value;
+        if (!pin || pin.state !== 'profile_effective_anchor_pinned') {
+          await client.query('COMMIT');
+          return res.status(404).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Comparable reporting-window history is unavailable.',
+          } });
+        }
+        const profile = await getBusinessProfileById(client,
+          req.tenantContext.organizationId, pin.businessProfileId);
+        if (profile.versionNumber !== pin.businessProfileVersion ||
+            profile.profileHash !== pin.businessProfileHash ||
+            adaptBusinessProfile(profile.rawProfile, profile.versionLabel).hash !==
+              pin.businessProfileHash) throw new Error('Business Profile pin is unavailable');
+        const windows = [req.query.firstLocalStartDate,
+          req.query.secondLocalStartDate].map(localStartDate => deriveReportingWindow({
+          organizationId: profile.organizationId,
+          businessProfileId: profile.id,
+          businessProfileVersion: profile.versionNumber,
+          businessProfileHash: profile.profileHash,
+          rawProfile: profile.rawProfile, grain: 'month', localStartDate,
+          serviceKey: null, areaScope: 'tenant_all',
+        }));
+        const result = await client.query(
+          'SELECT public.canonical_forecast_comparable_month_v2_read($1,$2,$3,$4,$5) value',
+          [req.tenantContext.organizationId, req.tenantContext.userId,
+            req.userRole, req.authSession.id, req.params.receiptId]);
+        if (result.rows[0]?.value === null) {
+          await client.query('COMMIT');
+          return res.status(404).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Comparable reporting-window history is unavailable.',
+          } });
+        }
+        const view = comparableMonthV2ReadView(result.rows[0]?.value,
+          req.tenantContext.organizationId, req.params.anchorId, windows);
+        await client.query('COMMIT');
+        return res.json({ success: true, data: view });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return attestationError(res, error);

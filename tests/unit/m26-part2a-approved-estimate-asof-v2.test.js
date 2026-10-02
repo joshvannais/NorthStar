@@ -23,7 +23,8 @@ function snapshot(sources = []) {
 
 describe('Mission 26 Part 2A approved-estimate as-of v2 contract', () => {
   test('accepts a complete observed zero without inventing provider coverage', () => {
-    expect(captureView({ state: 'complete', snapshot: snapshot(), replayed: false }, ORG))
+    expect(captureView({ state: 'complete', snapshot: snapshot(), replayed: false,
+      sourceCurrent: true }, ORG))
       .toEqual(expect.objectContaining({ state: 'current', sourceCount: 0,
         targetComplete: true, providerCoverageVerified: false,
         wholeBusinessCoverageVerified: false, forecastIssued: false }));
@@ -58,8 +59,16 @@ describe('Mission 26 Part 2A approved-estimate as-of v2 contract', () => {
     const pin = { sourceKind: 'estimate_decision', estimateId: ESTIMATE,
       sourceId: DECISION, revision: 1, digest: 'b'.repeat(64),
       recordedAt: NOW, state: 'active' };
-    const value = { state: 'complete', snapshot: snapshot([pin]), replayed: false };
+    const value = { state: 'complete', snapshot: snapshot([pin]), replayed: false,
+      sourceCurrent: true };
     mutate(value);
     expect(() => captureView(value, ORG)).toThrow();
+  });
+
+  test('reports a replayed receipt stale when its source has changed', () => {
+    expect(captureView({ state: 'complete', snapshot: snapshot(), replayed: true,
+      sourceCurrent: false }, ORG)).toEqual(expect.objectContaining({
+      state: 'stale', reason: 'source_changed', replayed: true, sourceCurrent: false,
+    }));
   });
 });

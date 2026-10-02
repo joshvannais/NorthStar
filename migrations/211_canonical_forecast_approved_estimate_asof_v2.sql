@@ -351,7 +351,7 @@ DECLARE authority JSONB;old public.canonical_forecast_approved_estimate_v2_snaps
  inserted public.canonical_forecast_approved_estimate_v2_snapshots%ROWTYPE;
  epoch public.canonical_forecast_approved_estimate_v2_epochs%ROWTYPE;
  key_hash TEXT;request_hash TEXT;cutoff TIMESTAMPTZ;pins JSONB;
- last_order BIGINT;digest_value TEXT;nonce UUID;
+ last_order BIGINT;digest_value TEXT;nonce UUID;source_current BOOLEAN;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
   RAISE EXCEPTION 'Read committed required' USING ERRCODE='25001';END IF;
@@ -379,10 +379,21 @@ BEGIN
  IF old.id IS NOT NULL THEN
   IF rtrim(old.request_digest)<>request_hash THEN
    RAISE EXCEPTION 'Approved-estimate request key conflict' USING ERRCODE='23505';END IF;
+  SELECT * INTO epoch FROM public.canonical_forecast_approved_estimate_v2_epochs
+   WHERE organization_id=org;
+  SELECT high_water_order INTO last_order
+   FROM public.canonical_forecast_approved_estimate_v2_states
+   WHERE organization_id=org;
+  source_current:=epoch.coverage_state='complete' AND
+   epoch.coverage_starts_at=old.coverage_starts_at AND
+   epoch.coverage_start_order=old.coverage_start_order AND
+   NOT public.canonical_forecast_approved_estimate_v2_gap(org,epoch.coverage_starts_at) AND
+   last_order=old.high_water_order;
   authority:=public.canonical_forecast_approved_estimate_v2_access(
    org,actor,role_value,session_value,csrf,TRUE);
   RETURN jsonb_build_object('state','complete','snapshot',
-   public.canonical_forecast_approved_estimate_v2_projection(old),'replayed',TRUE);
+   public.canonical_forecast_approved_estimate_v2_projection(old),'replayed',TRUE,
+   'sourceCurrent',source_current);
  END IF;
  SELECT * INTO epoch FROM public.canonical_forecast_approved_estimate_v2_epochs
   WHERE organization_id=org;
@@ -429,7 +440,8 @@ BEGIN
   nonce,digest_value,actor,(authority->>'membershipId')::uuid,session_value,
   key_hash,request_hash,cutoff) RETURNING * INTO inserted;
  RETURN jsonb_build_object('state','complete','snapshot',
-  public.canonical_forecast_approved_estimate_v2_projection(inserted),'replayed',FALSE);
+  public.canonical_forecast_approved_estimate_v2_projection(inserted),'replayed',FALSE,
+  'sourceCurrent',TRUE);
 END $$;
 
 CREATE FUNCTION public.canonical_forecast_approved_estimate_v2_read(

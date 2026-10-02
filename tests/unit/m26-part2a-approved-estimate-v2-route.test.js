@@ -53,7 +53,7 @@ function snapshot(organizationId) {
 describe('Mission 26 Part 2A approved-estimate v2 HTTP boundary', () => {
   test('captures a distinct complete-zero v2 receipt and commits it', async () => {
     const context = application(({ organizationId }) => ({ state: 'complete',
-      snapshot: snapshot(organizationId), replayed: false }));
+      snapshot: snapshot(organizationId), replayed: false, sourceCurrent: true }));
     const response = await request(context.app)
       .post('/api/v1/forecast/features/approved-estimate-stock/v2/snapshots')
       .set('Idempotency-Key', crypto.randomUUID()).send({});
@@ -95,7 +95,7 @@ describe('Mission 26 Part 2A approved-estimate v2 HTTP boundary', () => {
 
   test('rejects a forged cross-tenant projection and rolls back', async () => {
     const context = application(() => ({ state: 'complete',
-      snapshot: snapshot(crypto.randomUUID()), replayed: false }));
+      snapshot: snapshot(crypto.randomUUID()), replayed: false, sourceCurrent: true }));
     const response = await request(context.app)
       .post('/api/v1/forecast/features/approved-estimate-stock/v2/snapshots')
       .set('Idempotency-Key', crypto.randomUUID()).send({});

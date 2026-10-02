@@ -58,15 +58,18 @@ function captureView(value, organizationId) {
       providerCoverageVerified: false, wholeBusinessCoverageVerified: false,
       forecastIssued: false };
   }
-  if (!exact(value, ['state', 'snapshot', 'replayed']) || value.state !== 'complete' ||
-    (value.replayed !== true && value.replayed !== false)) {
+  if (!exact(value, ['state', 'snapshot', 'replayed', 'sourceCurrent']) ||
+    value.state !== 'complete' || (value.replayed !== true && value.replayed !== false) ||
+    (value.sourceCurrent !== true && value.sourceCurrent !== false) ||
+    (!value.replayed && !value.sourceCurrent)) {
     throw new Error('Invalid complete v2 capture');
   }
   const snapshot = normalizeSnapshot(value.snapshot, organizationId);
-  return { state: 'current', reason: null, snapshotId: snapshot.id,
+  return { state: value.sourceCurrent ? 'current' : 'stale',
+    reason: value.sourceCurrent ? null : 'source_changed', snapshotId: snapshot.id,
     asOf: snapshot.asOf, sourceSnapshotDigest: snapshot.sourceSnapshotDigest,
     sourceCount: snapshot.sourceCount, replayed: value.replayed,
-    sourceAuthenticated: true, targetComplete: true,
+    sourceAuthenticated: true, targetComplete: true, sourceCurrent: value.sourceCurrent,
     providerCoverageVerified: false, wholeBusinessCoverageVerified: false,
     forecastIssued: false };
 }

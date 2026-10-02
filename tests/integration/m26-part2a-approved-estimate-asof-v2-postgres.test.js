@@ -127,6 +127,13 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
 
     const source = await seedEstimateSource();
     const approval = await mutate(source);
+    const staleReplay = await capture('owner', zeroKey);
+    expect(staleReplay.status).toBe(200);
+    expect(staleReplay.headers['idempotency-replayed']).toBe('true');
+    expect(staleReplay.body.data).toMatchObject({
+      snapshotId: zero.body.data.snapshotId, state: 'stale', reason: 'source_changed',
+      replayed: true, sourceCurrent: false, sourceCount: 0,
+    });
     expect((await read('owner', zero.body.data.snapshotId)).body.data)
       .toMatchObject({ state: 'stale', sourceCurrent: false,
         reason: 'source_changed', forecastIssued: false });

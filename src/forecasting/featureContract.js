@@ -7,6 +7,7 @@ const { sha256 } = require('../services/businessProfileAdapter');
 
 const DEFINITION_VERSION = 'm26-feature-definition-v1';
 const VALUE_VERSION = 'm26-feature-value-v1';
+const VALUE_VERSION_V2 = 'm26-feature-value-v2';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
 const TOKEN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
@@ -100,14 +101,16 @@ function normalizeFeatureDefinition(input) {
   });
 }
 
-function normalizeFeatureValue(input, definition) {
+function normalizeFeatureValueVersion(input, definition, contractVersion) {
   // The definition is only structurally checked here; an owning, versioned
   // registry must authorize it before a future reader calculates a value.
   const declared = normalizeFeatureDefinition(definition);
-  if (!exact(input, ['contractVersion', 'organizationId', 'definitionKey',
+  const valueKeys = ['contractVersion', 'organizationId', 'definitionKey',
     'definitionVersion', 'definitionDigest', 'asOf', 'reportingWindow', 'sourceSnapshotDigest',
-    'latestSourceRecordedAt', 'state', 'amount', 'reason', 'unit']) ||
-    input.contractVersion !== VALUE_VERSION ||
+    'latestSourceRecordedAt', 'state', 'amount', 'reason', 'unit'];
+  if (contractVersion === VALUE_VERSION_V2) valueKeys.push('sourceRecordCount');
+  if (!exact(input, valueKeys) ||
+    input.contractVersion !== contractVersion ||
     typeof input.organizationId !== 'string' || !UUID.test(input.organizationId) ||
     input.definitionKey !== declared.key ||
     input.definitionVersion !== declared.definitionVersion ||
@@ -121,6 +124,11 @@ function normalizeFeatureValue(input, definition) {
     input.unit.key !== declared.unit.key ||
     input.unit.currency !== declared.unit.currency ||
     input.unit.scale !== declared.unit.scale) invalid();
+
+  if (contractVersion === VALUE_VERSION_V2 &&
+      !(input.sourceRecordCount === null ||
+        (Number.isSafeInteger(input.sourceRecordCount) &&
+          input.sourceRecordCount >= 0 && input.sourceRecordCount <= 1000))) invalid();
 
   if (declared.temporalBasis === 'as_of_stock') {
     if (input.reportingWindow !== null) invalid();
@@ -140,14 +148,21 @@ function normalizeFeatureValue(input, definition) {
     if (input.amount !== null || !token(input.reason)) invalid();
     if (input.state === 'stale' || input.state === 'conflicting') {
       if (!digest(input.sourceSnapshotDigest) ||
-          input.latestSourceRecordedAt === null) invalid();
+          (input.state === 'conflicting' && input.latestSourceRecordedAt === null) ||
+          (input.latestSourceRecordedAt === null &&
+            (contractVersion === VALUE_VERSION || input.sourceRecordCount !== 0))) invalid();
     } else if (input.state === 'inapplicable' &&
         (input.sourceSnapshotDigest !== null || input.latestSourceRecordedAt !== null)) invalid();
     else if (input.state === 'missing' && input.latestSourceRecordedAt !== null) invalid();
   }
 
+  if (contractVersion === VALUE_VERSION_V2) {
+    if (input.sourceSnapshotDigest === null && input.sourceRecordCount !== null) invalid();
+    if (input.sourceSnapshotDigest !== null && input.sourceRecordCount === null) invalid();
+  }
+
   return freeze({
-    contractVersion: VALUE_VERSION,
+    contractVersion,
     organizationId: input.organizationId.toLowerCase(),
     definitionKey: declared.key, definitionVersion: declared.definitionVersion,
     definitionDigest: input.definitionDigest,
@@ -155,11 +170,25 @@ function normalizeFeatureValue(input, definition) {
     reportingWindow: input.reportingWindow === null ? null : { ...input.reportingWindow },
     sourceSnapshotDigest: input.sourceSnapshotDigest,
     latestSourceRecordedAt: input.latestSourceRecordedAt,
+    ...(contractVersion === VALUE_VERSION_V2 ?
+      { sourceRecordCount: input.sourceRecordCount } : {}),
     state: input.state, amount: input.amount, reason: input.reason,
     unit: { ...declared.unit },
   });
 }
 
+function normalizeFeatureValue(input, definition) {
+  return normalizeFeatureValueVersion(input, definition, VALUE_VERSION);
+}
+
+// V2 keeps every V1 invariant while allowing a stale, authenticated receipt
+// for a complete empty source set. Such a receipt has no source row timestamp;
+// inventing one would make the stale zero look more precise than its evidence.
+function normalizeFeatureValueV2(input, definition) {
+  return normalizeFeatureValueVersion(input, definition, VALUE_VERSION_V2);
+}
+
 module.exports = {
-  DEFINITION_VERSION, VALUE_VERSION, normalizeFeatureDefinition, normalizeFeatureValue,
+  DEFINITION_VERSION, VALUE_VERSION, VALUE_VERSION_V2,
+  normalizeFeatureDefinition, normalizeFeatureValue, normalizeFeatureValueV2,
 };

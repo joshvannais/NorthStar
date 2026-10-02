@@ -10,6 +10,9 @@ const { deriveApprovedEstimateStockFeature } =
 const { captureView: approvedEstimateV2CaptureView,
   readView: approvedEstimateV2ReadView } =
   require('../forecasting/approvedEstimateAsOfV2');
+const { captureFeatureView: approvedEstimateFeatureV2CaptureView,
+  readFeatureView: approvedEstimateFeatureV2ReadView } =
+  require('../forecasting/approvedEstimateStockFeatureV2');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
@@ -123,6 +126,81 @@ function createForecastFeaturesRouter(options = {}) {
           } });
         }
         const view = approvedEstimateV2ReadView(result.rows[0]?.value,
+          identity.organizationId);
+        await client.query('COMMIT');
+        return res.json({ success: true, data: view });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/approved-estimate-stock/v2/features', auth,
+    requirePermission('forecast', 'update'), captureThrottle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exactKeys(req.body, []) || !KEY.test(key || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The feature snapshot request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const response = await client.query(
+          `SELECT public.canonical_forecast_approved_estimate_v2_capture(
+            $1,$2,$3,$4,$5,$6) value,
+           to_char(clock_timestamp() AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') evaluated_at`,
+          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+            identity.authSessionId, req.get('X-CSRF-Token'), key]);
+        const view = approvedEstimateFeatureV2CaptureView(response.rows[0]?.value,
+          identity.organizationId, response.rows[0]?.evaluated_at);
+        await client.query('COMMIT');
+        if (view.feature.state === 'missing') {
+          return res.status(409).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Complete approved-estimate coverage is unavailable.',
+          }, data: view });
+        }
+        if (view.replayed) res.set('Idempotency-Replayed', 'true');
+        return res.status(view.replayed ? 200 : 201).json({ success: true, data: view });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/approved-estimate-stock/v2/features/:snapshotId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.snapshotId) || Object.keys(req.query).length !== 0) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID', message: 'The feature request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const result = await client.query(
+          'SELECT public.canonical_forecast_approved_estimate_v2_read($1,$2,$3,$4,$5) value',
+          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+            identity.authSessionId, req.params.snapshotId]);
+        if (result.rows[0]?.value === null) {
+          await client.query('COMMIT');
+          return res.status(404).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Forecast feature history is unavailable.',
+          } });
+        }
+        const view = approvedEstimateFeatureV2ReadView(result.rows[0]?.value,
           identity.organizationId);
         await client.query('COMMIT');
         return res.json({ success: true, data: view });

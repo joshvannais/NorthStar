@@ -1,9 +1,11 @@
 'use strict';
 
-const { DEFINITION_VERSION, VALUE_VERSION, normalizeFeatureDefinition,
-  normalizeFeatureValue } = require('../../src/forecasting/featureContract');
+const { DEFINITION_VERSION, VALUE_VERSION, VALUE_VERSION_V2,
+  normalizeFeatureDefinition, normalizeFeatureValue,
+  normalizeFeatureValueV2 } = require('../../src/forecasting/featureContract');
 const { deriveReportingWindow } = require('../../src/forecasting/timeSeriesWindows');
-const { registeredFeatureDefinition, normalizeRegisteredFeatureValue } =
+const { registeredFeatureDefinition, normalizeRegisteredFeatureValue,
+  normalizeRegisteredFeatureValueV2 } =
   require('../../src/forecasting/featureDefinitions');
 const { sha256 } = require('../../src/services/businessProfileAdapter');
 
@@ -132,6 +134,36 @@ describe('Mission 26 Part 2C feature boundary', () => {
     expect(normalizeFeatureValue(value({ state: 'inapplicable', amount: null,
       reason: 'service_not_supported', sourceSnapshotDigest: null,
       latestSourceRecordedAt: null }), declared).state).toBe('inapplicable');
+  });
+
+  test('v2 truthfully represents a stale complete-zero receipt without a source timestamp', () => {
+    const declared = definition();
+    const staleZero = value({ contractVersion: VALUE_VERSION_V2,
+      state: 'stale', amount: null, reason: 'source_changed',
+      latestSourceRecordedAt: null, sourceRecordCount: 0 });
+    expect(normalizeFeatureValueV2(staleZero, declared)).toMatchObject({
+      contractVersion: VALUE_VERSION_V2, state: 'stale', amount: null,
+      latestSourceRecordedAt: null, sourceRecordCount: 0 });
+    expect(() => normalizeFeatureValue(staleZero, declared))
+      .toThrow('Forecast feature details are invalid.');
+    expect(() => normalizeFeatureValueV2({ ...staleZero,
+      state: 'conflicting' }, declared))
+      .toThrow('Forecast feature details are invalid.');
+    expect(() => normalizeFeatureValueV2({ ...staleZero,
+      sourceRecordCount: 1 }, declared))
+      .toThrow('Forecast feature details are invalid.');
+  });
+
+  test('registered v2 active-decision values must equal their authenticated source count', () => {
+    const known = value({ contractVersion: VALUE_VERSION_V2,
+      sourceRecordCount: 4 });
+    expect(normalizeRegisteredFeatureValueV2(known)).toMatchObject({
+      state: 'known', amount: '4', sourceRecordCount: 4 });
+    for (const mismatch of [
+      { amount: '999', sourceRecordCount: 4 },
+      { amount: '0', sourceRecordCount: 1 },
+    ]) expect(() => normalizeRegisteredFeatureValueV2({ ...known, ...mismatch }))
+      .toThrow('Forecast feature value does not match its source record count.');
   });
 
   test('refuses currency, definition, source time and unexplained field changes', () => {

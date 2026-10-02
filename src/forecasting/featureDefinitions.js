@@ -2,8 +2,8 @@
 
 // Source-controlled feature identities. Registering a definition does not
 // authorize a source read or implement its named derivation.
-const { DEFINITION_VERSION, normalizeFeatureDefinition,
-  normalizeFeatureValue } = require('./featureContract');
+const { DEFINITION_VERSION, VALUE_VERSION_V2, normalizeFeatureDefinition,
+  normalizeFeatureValue, normalizeFeatureValueV2 } = require('./featureContract');
 
 const DEFINITIONS = Object.freeze([
   normalizeFeatureDefinition({
@@ -21,7 +21,7 @@ function registeredFeatureDefinition(key, version) {
     definition.definitionVersion === version) || null;
 }
 
-function normalizeRegisteredFeatureValue(input) {
+function normalizeRegisteredFeatureValueWith(input, normalize) {
   const definition = input && registeredFeatureDefinition(input.definitionKey,
     input.definitionVersion);
   if (!definition) {
@@ -30,7 +30,7 @@ function normalizeRegisteredFeatureValue(input) {
     error.status = 400;
     throw error;
   }
-  const value = normalizeFeatureValue(input, definition);
+  const value = normalize(input, definition);
   // This stock counts active decision rows. A positive count cannot come from
   // an empty source set, while an authorized empty snapshot can prove zero.
   if (definition.derivationKey === 'active_decision_count' &&
@@ -41,8 +41,24 @@ function normalizeRegisteredFeatureValue(input) {
     error.status = 400;
     throw error;
   }
+  if (definition.derivationKey === 'active_decision_count' &&
+      value.contractVersion === VALUE_VERSION_V2 && value.state === 'known' &&
+      value.amount !== String(value.sourceRecordCount)) {
+    const error = new Error('Forecast feature value does not match its source record count.');
+    error.code = 'M26_FEATURE_SOURCE_COUNT_MISMATCH';
+    error.status = 400;
+    throw error;
+  }
   return value;
 }
 
+function normalizeRegisteredFeatureValue(input) {
+  return normalizeRegisteredFeatureValueWith(input, normalizeFeatureValue);
+}
+
+function normalizeRegisteredFeatureValueV2(input) {
+  return normalizeRegisteredFeatureValueWith(input, normalizeFeatureValueV2);
+}
+
 module.exports = { DEFINITIONS, registeredFeatureDefinition,
-  normalizeRegisteredFeatureValue };
+  normalizeRegisteredFeatureValue, normalizeRegisteredFeatureValueV2 };

@@ -111,6 +111,21 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
       .set(fixture.actors[actorName].session.headers);
   }
 
+  function captureFeature(actorName = 'owner', key = `m26-p2c-v2-feature-${uuid()}`,
+    csrf = null) {
+    const actor = fixture.actors[actorName];
+    const call = request(app)
+      .post('/api/v1/forecast/features/approved-estimate-stock/v2/features')
+      .set(actor.session.headers).set('Idempotency-Key', key).send({});
+    return csrf === null ? call : call.set('X-CSRF-Token', csrf);
+  }
+
+  function readFeature(actorName, snapshotId) {
+    return request(app)
+      .get(`/api/v1/forecast/features/approved-estimate-stock/v2/features/${snapshotId}`)
+      .set(fixture.actors[actorName].session.headers);
+  }
+
   test('captures complete zero, replays, and marks genuine approval/correction/withdrawal stale', async () => {
     const zeroKey = `m26-p2a-v2-zero-${uuid()}`;
     const zero = await capture('owner', zeroKey);
@@ -179,6 +194,51 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
     expect((await capture('member')).status).toBe(403);
     expect((await capture('owner', undefined, 'invalid-csrf')).status).toBe(403);
   }, 120000);
+
+  test('projects exact known and stale registered values from the target-complete authority',
+    async () => {
+      const key = `m26-p2c-v2-zero-${uuid()}`;
+      const zero = await captureFeature('owner', key);
+      expect(zero.status).toBe(201);
+      expect(zero.body.data).toMatchObject({
+        version: 'm26-approved-estimate-stock-feature-v2',
+        sourceAuthenticated: true, targetComplete: true, sourceCurrent: true,
+        eligibleForForecast: false, forecastIssued: false,
+        feature: { contractVersion: 'm26-feature-value-v2',
+          definitionKey: 'pipeline.approved_estimate_stock',
+          definitionVersion: 'v1', state: 'known', amount: '0',
+          latestSourceRecordedAt: null,
+          unit: { key: 'count', currency: null, scale: 0 } } });
+      const replay = await captureFeature('owner', key);
+      expect(replay.status).toBe(200);
+      expect(replay.headers['idempotency-replayed']).toBe('true');
+      expect(replay.body.data.snapshotId).toBe(zero.body.data.snapshotId);
+
+      const source = await seedEstimateSource();
+      const approval = await mutate(source);
+      const staleZero = await readFeature('owner', zero.body.data.snapshotId);
+      expect(staleZero.status).toBe(200);
+      expect(staleZero.body.data).toMatchObject({ sourceCurrent: false,
+        feature: { state: 'stale', amount: null, reason: 'source_changed',
+          latestSourceRecordedAt: null } });
+      const positive = await captureFeature('admin');
+      expect(positive.status).toBe(201);
+      expect(positive.body.data.feature).toMatchObject({ state: 'known', amount: '1' });
+      expect(positive.body.data.feature.latestSourceRecordedAt).not.toBeNull();
+      expect(JSON.stringify(positive.body)).not.toMatch(new RegExp(
+        `${source.estimate}|${approval.id}|Fictional approved-estimate customer`, 'i'));
+
+      const crossTenant = await readFeature('otherOwner', positive.body.data.snapshotId);
+      expect(crossTenant.status).toBe(404);
+      expect(JSON.stringify(crossTenant.body)).not.toMatch(/amount|digest|sourceCurrent/i);
+      expect((await captureFeature('member')).status).toBe(403);
+      expect((await captureFeature('owner', undefined, 'invalid-csrf')).status).toBe(403);
+
+      await mutate(source, { action: 'withdraw', expectedRevision: 1,
+        expectedDigest: approval.digest });
+      expect((await readFeature('admin', positive.body.data.snapshotId)).body.data.feature)
+        .toMatchObject({ state: 'stale', amount: null, reason: 'source_changed' });
+    }, 120000);
 
   test('refuses an in-flight genuine M24 writer, then includes it after commit', async () => {
     const source = await seedEstimateSource();
@@ -479,10 +539,12 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
         `ALTER TABLE canonical_estimate_decisions
          ENABLE TRIGGER canonical_forecast_price_decision_order_insert`);
     }
-    const unavailable = await capture();
+    const unavailable = await captureFeature();
     expect(unavailable.status).toBe(409);
     expect(unavailable.body).toMatchObject({ success: false,
-      data: { state: 'unavailable', reason: 'legacy_order_gap', snapshotId: null } });
+      data: { sourceAuthenticated: false, targetComplete: false,
+        feature: { state: 'missing', amount: null, reason: 'legacy_order_gap',
+          sourceSnapshotDigest: null } } });
     const after = (await fixture.ownerPool.query(
       `SELECT count(*)::integer count FROM canonical_forecast_approved_estimate_v2_snapshots
        WHERE organization_id=$1`, [fixture.org])).rows[0].count;

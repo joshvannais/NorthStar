@@ -92,4 +92,4 @@ function readView(value, organizationId) {
     eligibleForForecast: false, forecastIssued: false };
 }
 
-module.exports = { captureView, readView };
+module.exports = { normalizeSnapshot, captureView, readView };

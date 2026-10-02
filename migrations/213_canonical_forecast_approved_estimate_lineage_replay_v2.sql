@@ -22,7 +22,8 @@ BEGIN
    (SELECT count(*) FROM jsonb_object_keys(request))<>3 OR
    NOT (request ? 'snapshotIds' AND request ? 'cursor' AND request ? 'limit') OR
    jsonb_typeof(request->'snapshotIds')<>'array' OR
-   jsonb_typeof(request->'limit')<>'number' THEN
+   jsonb_typeof(request->'limit')<>'number' OR
+   (request->>'limit')!~'^[0-9]+$' THEN
   RAISE EXCEPTION 'Approved-estimate replay request invalid' USING ERRCODE='22023';END IF;
  snapshot_ids:=request->'snapshotIds';cursor_value:=request->'cursor';
  BEGIN limit_value:=(request->>'limit')::INTEGER;
@@ -73,6 +74,7 @@ BEGIN
     cursor_value ? 'requestDigest' AND cursor_value ? 'currentGenerationDigest') OR
    jsonb_typeof(cursor_value->'version')<>'string' OR
    jsonb_typeof(cursor_value->'offset')<>'number' OR
+   (cursor_value->>'offset')!~'^[0-9]+$' OR
    jsonb_typeof(cursor_value->'requestDigest')<>'string' OR
    jsonb_typeof(cursor_value->'currentGenerationDigest')<>'string' OR
    (cursor_value->>'version') IS DISTINCT FROM

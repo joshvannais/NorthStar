@@ -304,6 +304,9 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
           offset: first.body.data.nextCursor.offset,
           requestDigest: first.body.data.nextCursor.requestDigest,
           currentGenerationDigest: 1 },
+        { version: first.body.data.nextCursor.version, offset: 1.5,
+          requestDigest: first.body.data.nextCursor.requestDigest,
+          currentGenerationDigest: first.body.data.nextCursor.currentGenerationDigest },
       ]) {
         await expect(fixture.runtimePool.query(
           `SELECT canonical_forecast_approved_estimate_v2_lineage_replay(
@@ -312,6 +315,12 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
             owner.authSessionId, { snapshotIds: ids, cursor: malformedCursor, limit: 2 }]))
           .rejects.toMatchObject({ code: '40001' });
       }
+      await expect(fixture.runtimePool.query(
+        `SELECT canonical_forecast_approved_estimate_v2_lineage_replay(
+          $1,$2,$3,$4,$5::jsonb)`,
+        [owner.organizationId, owner.actorUserId, owner.actorAccessRole,
+          owner.authSessionId, { snapshotIds: ids, cursor: null, limit: 0.5 }]))
+        .rejects.toMatchObject({ code: '22023' });
 
       const source = await seedEstimateSource();
       const writer = await fixture.runtimePool.connect();

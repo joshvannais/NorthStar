@@ -1439,6 +1439,50 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_estimate_decision_snapshot_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_source_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_epochs') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_snapshots') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_pins(uuid)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_gap(uuid,timestamptz)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_epoch_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_epoch_for_new_org()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_guard()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+        RAISE EXCEPTION 'Required approved-estimate v2 authority is missing';
+      END IF;
+      IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_forecast_approved_estimate_v2_epochs'::regclass
+         AND tgname='canonical_forecast_approved_estimate_v2_epoch_immutable'
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.organizations'::regclass
+         AND tgname='canonical_forecast_approved_estimate_v2_epoch_for_new_org'
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_forecast_approved_estimate_v2_snapshots'::regclass
+         AND tgname='canonical_forecast_approved_estimate_v2_immutable'
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_forecast_approved_estimate_v2_snapshots'::regclass
+         AND tgname='canonical_forecast_approved_estimate_v2_guard'
+         AND NOT tgisinternal) THEN
+        RAISE EXCEPTION 'Required approved-estimate v2 fencing is missing';
+      END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_snapshots') IS NOT NULL THEN
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_approved_estimate_v2_epochs FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_approved_estimate_v2_snapshots FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_pins(uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_gap(uuid,timestamptz) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_epoch_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_epoch_for_new_org() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_guard() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -2827,6 +2871,24 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_source_snapshot_projection(public.canonical_forecast_source_snapshots)','EXECUTE')
        )) AS forecast_snapshot_helpers_withheld,
+       (to_regclass('public.canonical_forecast_approved_estimate_v2_snapshots') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_approved_estimate_v2_epochs') IS NOT NULL
+         AND NOT has_table_privilege('public','public.canonical_forecast_approved_estimate_v2_snapshots','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege('public','public.canonical_forecast_approved_estimate_v2_epochs','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_approved_estimate_v2_snapshots','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_approved_estimate_v2_epochs','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_pins(uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_gap(uuid,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_epoch_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_epoch_for_new_org()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_guard()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots)','EXECUTE')
+       ) AS approved_estimate_v2_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -3821,6 +3883,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.forecast_snapshot_table_withheld ||
       !runtimePrivileges.forecast_snapshot_entries_allowed ||
       !runtimePrivileges.forecast_snapshot_helpers_withheld ||
+      !runtimePrivileges.approved_estimate_v2_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||
@@ -4005,6 +4068,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('207_canonical_forecast_current_backlog_pos
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('208_canonical_forecast_current_backlog_person_plan.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('209_canonical_forecast_current_backlog_person_plan_composition.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('210_canonical_forecast_current_backlog_composition_marker.sql');
+// The target-complete M24 baseline must drain active decision writers before
+// installing its immutable coverage epoch and entry-only v2 authority.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('211_canonical_forecast_approved_estimate_asof_v2.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

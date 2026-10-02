@@ -13,6 +13,8 @@ const { captureView: approvedEstimateV2CaptureView,
 const { captureFeatureView: approvedEstimateFeatureV2CaptureView,
   readFeatureView: approvedEstimateFeatureV2ReadView } =
   require('../forecasting/approvedEstimateStockFeatureV2');
+const { lineageReplayView: approvedEstimateLineageReplayV2View } =
+  require('../forecasting/approvedEstimateLineageReplayV2');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
@@ -23,6 +25,22 @@ function exactKeys(value, keys) {
   return value && typeof value === 'object' && !Array.isArray(value) &&
     Object.keys(value).length === keys.length &&
     Object.keys(value).every(key => keys.includes(key));
+}
+
+function validReplayRequest(value) {
+  if (!exactKeys(value, ['snapshotIds', 'cursor', 'limit']) ||
+      !Array.isArray(value.snapshotIds) || value.snapshotIds.length < 1 ||
+      value.snapshotIds.length > 100 ||
+      Reflect.ownKeys(value.snapshotIds).length !== value.snapshotIds.length + 1 ||
+      !value.snapshotIds.every(id => typeof id === 'string' && UUID.test(id)) ||
+      new Set(value.snapshotIds).size !== value.snapshotIds.length ||
+      !Number.isSafeInteger(value.limit) || value.limit < 1 || value.limit > 25) return false;
+  return value.cursor === null || (exactKeys(value.cursor,
+    ['version', 'offset', 'requestDigest', 'currentGenerationDigest']) &&
+    value.cursor.version === 'm26-approved-estimate-lineage-replay-v2' &&
+    Number.isSafeInteger(value.cursor.offset) && value.cursor.offset > 0 &&
+    DIGEST.test(value.cursor.requestDigest || '') &&
+    DIGEST.test(value.cursor.currentGenerationDigest || ''));
 }
 
 function actor(req) {
@@ -126,6 +144,43 @@ function createForecastFeaturesRouter(options = {}) {
           } });
         }
         const view = approvedEstimateV2ReadView(result.rows[0]?.value,
+          identity.organizationId);
+        await client.query('COMMIT');
+        return res.json({ success: true, data: view });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/approved-estimate-stock/v2/lineage/replay', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!validReplayRequest(req.body)) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The lineage replay request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const result = await client.query(
+          `SELECT public.canonical_forecast_approved_estimate_v2_lineage_replay(
+            $1,$2,$3,$4,$5::jsonb) value`,
+          [identity.organizationId, identity.actorUserId, identity.actorAccessRole,
+            identity.authSessionId, req.body]);
+        if (result.rows[0]?.value === null) {
+          await client.query('COMMIT');
+          return res.status(404).json({ success: false, error: {
+            category: 'FORECAST_SOURCE_UNAVAILABLE',
+            message: 'Forecast feature history is unavailable.',
+          } });
+        }
+        const view = approvedEstimateLineageReplayV2View(result.rows[0]?.value,
           identity.organizationId);
         await client.query('COMMIT');
         return res.json({ success: true, data: view });

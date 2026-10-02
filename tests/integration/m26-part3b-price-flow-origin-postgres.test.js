@@ -17,7 +17,7 @@ const utc = day => `${day.toISOString().slice(0, 10)}T00:00:00.000000Z`;
 realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => {
   let f;
   beforeAll(async () => { f = await createEstimateReviewFixture({
-    operationalSchedule: true }); }, 120000);
+    operationalSchedule: true, additionalCompleteEstimates: 1 }); }, 120000);
   afterAll(async () => { if (f) await f.cleanup(); }, 120000);
   const owner = () => f.actors.owner;
 
@@ -1541,6 +1541,19 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .toEqual(['stale', 'stale']);
       expect(unverifiedManifest.body.data.origins.map(item => item.reason))
         .toEqual(['actual_source_changed', 'actual_source_changed']);
+      const sourceChangedComplete = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner().session.headers).set('Idempotency-Key', key()).send({});
+      expect(sourceChangedComplete.status).toBe(201);
+      expect(sourceChangedComplete.body.data).toMatchObject({
+        state: 'complete_window_evaluation_saved', revision: 3,
+        previousId: completePaired.body.data.evaluationId, replayed: false });
+      const sourceChangedCompleteRead = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${sourceChangedComplete.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(sourceChangedCompleteRead.body.data).toMatchObject({
+        state: 'complete_window_evaluation_available', revision: 3,
+        pairedCount: 0, excludedCount: 3, restartRequired: false });
       const correctedSource = await capturePriceThroughGuardedSource();
       const unverifiedClient = await f.runtimePool.connect();
       try {
@@ -1601,13 +1614,13 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .set(owner().session.headers).set('Idempotency-Key', key()).send({});
       expect(revisedComplete.status).toBe(201);
       expect(revisedComplete.body.data).toMatchObject({
-        state: 'complete_window_evaluation_saved', revision: 3,
-        previousId: completePaired.body.data.evaluationId, replayed: false });
+        state: 'complete_window_evaluation_saved', revision: 4,
+        previousId: sourceChangedComplete.body.data.evaluationId, replayed: false });
       const revisedCompleteRead = await request(f.app)
         .get(`${root}/complete-price-flow-evaluations-v2/${revisedComplete.body.data.evaluationId}`)
         .set('Cookie', owner().session.headers.Cookie);
       expect(revisedCompleteRead.body.data).toMatchObject({
-        state: 'complete_window_evaluation_available', revision: 3,
+        state: 'complete_window_evaluation_available', revision: 4,
         storedOriginCount: 3, pairedCount: 0, revokedCount: 1,
         excludedCount: 2, restartRequired: false });
       const revokedManifest = await request(f.app)
@@ -1745,5 +1758,17 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         await heldActualWriter.query('ROLLBACK').catch(() => {});
         heldActualWriter.release();
       }
+      // Change the M24 generation again after revision 2 was current. Both
+      // revision 1 and revision 2 now project as source_changed. The receipt
+      // captured during revision 1's unavailable state must remain stale; its
+      // pinned immutable actual identity prevents two null projections from
+      // collapsing into the same evidence.
+      await approve(f.estimateGraphs[2].ids.estimate);
+      const priorUnavailableGenerationStaysStale = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${sourceChangedComplete.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(priorUnavailableGenerationStaysStale.body.data).toMatchObject({
+        state: 'complete_window_evaluation_stale', revision: 3,
+        reason: 'source_generation_changed', restartRequired: true });
     }, 120000);
 });

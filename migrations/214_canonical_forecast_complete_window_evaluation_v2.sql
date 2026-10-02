@@ -195,13 +195,16 @@ BEGIN
    'sourceReceiptDigest',source_value->>'sourceReceiptDigest',
    'profileAnchorId',source_value->>'profileAnchorId',
    'profileProofDigest',source_value->>'profileProofDigest',
-   'outcomeReceiptId',actual_value->>'receiptId',
-   'outcomeRevision',CASE WHEN actual_value->>'revision' IS NULL THEN NULL
-    ELSE (actual_value->>'revision')::integer END,
-   'outcomeReceiptDigest',CASE WHEN actual_value->>'receiptId' IS NULL THEN NULL
-    ELSE actual_row.receipt_digest END,
-   'outcomeCutoff',actual_value->>'observedThrough',
-   'outcomeSourceDigest',actual_value->>'sourceDigest'));
+   -- Pin the latest immutable generation even when the guarded projection is
+   -- unavailable (for example source_changed). Otherwise two different stale
+   -- revisions could both collapse to null identities and make an old receipt
+   -- appear current again after a later source change.
+   'outcomeReceiptId',actual_row.id,
+   'outcomeRevision',actual_row.revision,
+   'outcomeReceiptDigest',actual_row.receipt_digest,
+   'outcomeCutoff',CASE WHEN actual_row.id IS NULL THEN NULL ELSE
+    public.canonical_forecast_utc_instant(actual_row.observed_through) END,
+   'outcomeSourceDigest',actual_row.source_snapshot_digest));
  END LOOP;
  -- Do not take the inventory fence before the guarded source reads: legacy
  -- origin writers acquire their source locks before INSERT. Taking it here

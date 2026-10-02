@@ -69,7 +69,8 @@ BEGIN
  IF jsonb_typeof(cursor_value)='null' THEN offset_value:=0;
  ELSIF jsonb_typeof(cursor_value)<>'object' OR
    (SELECT count(*) FROM jsonb_object_keys(cursor_value))<>4 OR
-   cursor_value->>'version'<>'m26-approved-estimate-lineage-replay-v2' OR
+   (cursor_value->>'version') IS DISTINCT FROM
+    'm26-approved-estimate-lineage-replay-v2' OR
    (cursor_value->>'requestDigest') IS DISTINCT FROM request_digest OR
    (cursor_value->>'currentGenerationDigest') IS DISTINCT FROM generation_digest OR
    (cursor_value->>'requestDigest')!~'^[0-9a-f]{64}$' OR

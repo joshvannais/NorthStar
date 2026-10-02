@@ -274,6 +274,24 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
       expect(last.body.data.results).toHaveLength(1);
       expect(last.body.data.nextCursor).toBeNull();
 
+      const owner = fixture.actors.owner;
+      for (const malformedCursor of [
+        { offset: first.body.data.nextCursor.offset,
+          requestDigest: first.body.data.nextCursor.requestDigest,
+          currentGenerationDigest: first.body.data.nextCursor.currentGenerationDigest,
+          extra: 'version-missing' },
+        { version: null, offset: first.body.data.nextCursor.offset,
+          requestDigest: first.body.data.nextCursor.requestDigest,
+          currentGenerationDigest: first.body.data.nextCursor.currentGenerationDigest },
+      ]) {
+        await expect(fixture.runtimePool.query(
+          `SELECT canonical_forecast_approved_estimate_v2_lineage_replay(
+            $1,$2,$3,$4,$5::jsonb)`,
+          [owner.organizationId, owner.actorUserId, owner.actorAccessRole,
+            owner.authSessionId, { snapshotIds: ids, cursor: malformedCursor, limit: 2 }]))
+          .rejects.toMatchObject({ code: '40001' });
+      }
+
       const source = await seedEstimateSource();
       const writer = await fixture.runtimePool.connect();
       let approval;

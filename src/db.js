@@ -1729,6 +1729,77 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_future_origin_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='221_canonical_forecast_transition_future_origins_v2.sql') OR
+         pg_catalog.to_regclass('public.canonical_forecast_transition_future_origins_v2') IS NOT NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_transition_evaluations_v2') IS NOT NULL THEN
+        IF pg_catalog.to_regclass('public.canonical_forecast_transition_coverage_epochs_v2') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_transition_methods_v2') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_transition_method_reviews_v2') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_transition_future_origins_v2') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_transition_evaluations_v2') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_transition_origin_v2_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_transition_origin_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_transition_evaluation_v2_capture(uuid,uuid,text,uuid,text,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_transition_evaluation_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_transition_method_review_v2_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,boolean,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_transition_method_review_v2_read(uuid,uuid,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_transition_clock_v2()') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_transition_generation_v2(uuid)') IS NULL THEN
+          RAISE EXCEPTION 'Required transition future-origin v2 authority is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_transition_coverage_epochs_v2'::regclass
+           AND tgname='canonical_forecast_transition_epochs_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_transition_methods_v2'::regclass
+           AND tgname='canonical_forecast_transition_methods_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_transition_method_reviews_v2'::regclass
+           AND tgname='canonical_forecast_transition_method_reviews_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_transition_future_origins_v2'::regclass
+           AND tgname='canonical_forecast_transition_origins_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_transition_evaluations_v2'::regclass
+           AND tgname='canonical_forecast_transition_evaluations_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) THEN
+          RAISE EXCEPTION 'Required transition future-origin v2 immutability is missing';
+        END IF;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_transition_coverage_epochs_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_transition_methods_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_transition_method_reviews_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_transition_future_origins_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_transition_evaluations_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_transition_profile_v2(uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_transition_epoch_ensure_v2(uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_transition_cohort_capture_v2(uuid,uuid,text,uuid,text,text,text,timestamptz,timestamptz) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_transition_cohort_read_v2(uuid,uuid,text,uuid,text,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_transition_generation_v2(uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_transition_clock_v2() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_transition_origin_current_v2(uuid,uuid,text,uuid,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_transition_child_key_v2(text,text) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_transition_method_review_v2_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,boolean,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_transition_method_review_v2_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_transition_origin_v2_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_transition_origin_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_transition_evaluation_v2_capture(uuid,uuid,text,uuid,text,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_transition_evaluation_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);

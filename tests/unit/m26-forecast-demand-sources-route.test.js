@@ -5,6 +5,8 @@ const querystring = require('node:querystring');
 const request = require('supertest');
 const { createForecastDemandSourcesRouter } =
   require('../../src/routes/forecastDemandSources');
+const { inspectRetellCallWindow } =
+  require('../../src/forecasting/retellCallScanReader');
 const { getLimitConfig } = require('../../src/middleware/rateLimit');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -13,11 +15,15 @@ const SESSION = '33333333-3333-4333-8333-333333333333';
 const SNAPSHOT = '44444444-4444-4444-8444-444444444444';
 const CALL = '55555555-5555-4555-8555-555555555555';
 const REVIEW = '66666666-6666-4666-8666-666666666666';
+const ORIGIN = '77777777-7777-4777-8777-777777777777';
+const OWNERSHIP = '88888888-8888-4888-8888-888888888888';
+const AGENT = 'synthetic-agent';
 const DIGEST = 'a'.repeat(64);
 const KEY = 'm26-demand-source-request-1';
 const START = '2026-09-01T00:00:00.000000Z';
 const END = '2026-10-01T00:00:00.000000Z';
 const CAPTURED = '2026-09-10T12:01:00.000000Z';
+const SCANNED = '2026-10-02T12:01:00.000000Z';
 const CONSENT_BOUNDARY =
   'Company permission does not establish caller consent, provider coverage or retention.';
 const SNAPSHOT_BOUNDARY =
@@ -51,7 +57,9 @@ function snapshot(extra = {}) {
 }
 
 function application({ role = 'owner', consentRead, consentWrite, capture,
-  snapshotRead, reviews, reviewWrite, readReviewed, databaseError } = {}) {
+  snapshotRead, reviews, reviewWrite, readReviewed, databaseError,
+  periodEvidence, periodMutation, futureCapture, futureRead, inspectWindow,
+  periodSnapshot, periodRead, scanInputs, fetchRetellPage } = {}) {
   const app = express();
   // Express's production "simple" parser returns null-prototype objects.
   app.set('query parser', querystring.parse);
@@ -86,14 +94,66 @@ function application({ role = 'owner', consentRead, consentWrite, capture,
     if (sql.includes('review_mutate')) return { rows: [{ value:
       reviewWrite || { id: REVIEW, revision: 1, digest: DIGEST,
         replayed: false, status: 'recorded' } }] };
+    if (sql.includes('period_snapshot_v2_capture')) return { rows: [{ value:
+      periodSnapshot || { state: 'retell_period_snapshot_saved', replayed: false,
+        snapshot: snapshot({ windowVersion: 'm26-retell-period-source-window-v2',
+          localMonthStart: '2026-09-01', sourceWindowStartsAt: START,
+          sourceWindowEndsAt: END }) } }] };
+    if (sql.includes('retell_period_evidence_v2')) return { rows: [{ value:
+      periodEvidence || { state: 'retell_period_ready_for_certification',
+        organizationId: ORG, snapshotId: SNAPSHOT, localMonthStart: '2026-09-01',
+        startsAt: START, endsAt: END, sourceManifestDigest: DIGEST,
+        snapshotDigest: DIGEST, integrationOwnershipId: OWNERSHIP,
+        agentId: AGENT, providerCallDigestSetDigest: DIGEST,
+        sourceCount: 1, reviewedDistinctLeadCount: 1,
+        scope: 'retell_only_tenant_all', targetKey: 'demand.inbound_leads',
+        targetVersion: 'v1' } }] };
+    if (sql.includes('retell_scan_inputs_read')) return { rows: [{ value:
+      scanInputs || { state: 'ready_for_diagnostic', agentId: AGENT,
+        startsAt: START, endsAt: END, canonicalCallDigests: [DIGEST],
+        sourceSnapshotDigest: DIGEST, historicalCoverageCertified: false } }] };
+    if (sql.includes('period_certification_v2_mutate')) return { rows: [{ value:
+      periodMutation || { state: 'retell_period_certified', id: REVIEW,
+        revision: 1, digest: DIGEST, replayed: false } }] };
+    if (sql.includes('period_certification_v2_read')) return { rows: [{ value:
+      periodRead || { state: 'retell_period_certified', id: REVIEW,
+        localMonthStart: '2026-09-01', snapshotId: SNAPSHOT,
+        revision: 1, digest: DIGEST, action: 'certify', recordedAt: CAPTURED,
+        expectedRevision: 1, expectedDigest: DIGEST,
+        callerConsentAttested: true, providerCoverageAttested: true,
+        retentionAttested: true, providerIndependentVerified: false,
+        wholeBusinessCoverageVerified: false, forecastIssued: false,
+        paidNumericServing: false } }] };
+    if (sql.includes('future_origin_v2_capture')) return { rows: [{ value:
+      futureCapture || { state: 'retell_future_origin_saved', id: ORIGIN,
+        asOf: CAPTURED, localHorizonStart: '2026-11-01', evidenceDigest: DIGEST,
+        replayed: false, researchOnly: true,
+        amountWithheld: true, serviceMixAvailable: false,
+        areaForecastAvailable: false, realForecastEligible: false,
+        paidNumericServing: false, forecastServingEnabled: false } }] };
+    if (sql.includes('future_origin_v2_read')) return { rows: [{ value:
+      futureRead || { state: 'retell_future_origin_current', id: ORIGIN,
+        asOf: CAPTURED, localHorizonStart: '2026-11-01', startsAt: START,
+        horizonStartsAt: START, horizonEndsAt: END,
+        targetKey: 'demand.inbound_leads', targetVersion: 'v1',
+        scope: 'retell_only_tenant_all', evidenceDigest: DIGEST,
+        researchOnly: true, amountWithheld: true,
+        serviceMixAvailable: false, areaForecastAvailable: false,
+        providerIndependentVerified: false, wholeBusinessCoverageVerified: false,
+        paidNumericServing: false, forecastServingEnabled: false } }] };
     return { rows: [] };
   }), release: jest.fn() };
-  const pool = { connect: jest.fn(async () => client), query: jest.fn() };
+  const pool = { connect: jest.fn(async () => client),
+    query: jest.fn((...args) => client.query(...args)) };
   app.use('/sources', createForecastDemandSourcesRouter({ auth,
     throttle: (_req, _res, next) => next(),
     captureThrottle: (_req, _res, next) => next(),
+    periodCertificationThrottle: (_req, _res, next) => next(),
     reviewThrottle: (_req, _res, next) => next(),
     poolProvider: () => pool,
+    inspectWindow: inspectWindow || jest.fn(async () => ({
+      state: 'snapshot_matched', callCount: 1, historicalCoverageCertified: false })),
+    fetchRetellPage,
     readReviewed: readReviewed || jest.fn(async () => ({
       state: 'reviewed_source_only', sourceSnapshotDigest: DIGEST,
       callCount: 1, reviewedDistinctLeadCount: 1,
@@ -295,6 +355,68 @@ test('post endpoints reject query authority and review uses a separate bounded a
   expect(getLimitConfig('forecast-source-review')).toEqual({
     limit: 120, window: 60 * 60 * 1000,
   });
+  expect(getLimitConfig('forecast-period-certification')).toEqual({
+    limit: 12, window: 60 * 60 * 1000,
+  });
+});
+
+test('captures an exact month-scoped source receipt without lifetime snapshot dependence', async () => {
+  const { app, client } = application();
+  const response = await request(app).post('/sources/retell/period-snapshots')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf')
+    .send({ localMonthStart: '2026-09-01' });
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({ state: 'retell_period_snapshot_saved',
+    snapshotId: SNAPSHOT, localMonthStart: '2026-09-01',
+    sourceWindowStartsAt: START, sourceWindowEndsAt: END, sourceCount: 1,
+    providerCoverageVerified: false, wholeBusinessCoverageVerified: false });
+  expect(response.body.data.sources).toEqual([{ callSourceId: CALL,
+    sourceDigest: DIGEST, occurredAt: '2026-09-10T12:00:00.000000Z',
+    recordedAt: CAPTURED }]);
+  expect(client.query.mock.calls.some(call =>
+    call[0].includes('period_snapshot_v2_capture'))).toBe(true);
+  expect(JSON.stringify(response.body)).not.toContain('privateTranscript');
+});
+
+test.each(['source_changed_refresh_required',
+  'source_permission_changed_refresh_required'])(
+'returns an explicit refresh-required state for a stale month snapshot replay: %s', async reason => {
+  const { app } = application({ periodSnapshot: {
+    state: 'retell_period_snapshot_unavailable',
+    reason, replayed: true,
+  } });
+  const response = await request(app).post('/sources/retell/period-snapshots')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf')
+    .send({ localMonthStart: '2026-09-01' });
+  expect(response.status).toBe(200);
+  expect(response.headers['idempotency-replayed']).toBe('true');
+  expect(response.body.data).toEqual({
+    state: 'retell_period_snapshot_unavailable',
+    reason, localMonthStart: '2026-09-01',
+    refreshRequired: true, providerCoverageVerified: false,
+    wholeBusinessCoverageVerified: false, forecastIssued: false,
+  });
+});
+
+test('reads the current certification token needed for a later revoke', async () => {
+  const { app } = application();
+  const response = await request(app)
+    .get('/sources/retell/period-certifications/2026-09-01');
+  expect(response.status).toBe(200);
+  expect(response.body.data).toMatchObject({ state: 'retell_period_certified',
+    revision: 1, digest: DIGEST, expectedRevision: 1, expectedDigest: DIGEST,
+    snapshotId: SNAPSHOT, action: 'certify' });
+  expect(JSON.stringify(response.body)).not.toMatch(/providerScan|reviewManifest|sourceManifest/);
+
+  const missing = application({ periodRead: {
+    state: 'retell_period_certification_missing', localMonthStart: '2026-09-01',
+    expectedRevision: 0, expectedDigest: 'none' } });
+  const missingResponse = await request(missing.app)
+    .get('/sources/retell/period-certifications/2026-09-01');
+  expect(missingResponse.status).toBe(200);
+  expect(missingResponse.body.data).toMatchObject({
+    state: 'retell_period_certification_missing', expectedRevision: 0,
+    expectedDigest: 'none' });
 });
 
 test('wrong-tenant and malformed authority projections fail closed', async () => {
@@ -364,4 +486,116 @@ test('database timeout is typed busy, rolled back and never leaks details', asyn
     message: 'The demand source is busy. Try again shortly.' });
   expect(JSON.stringify(response.body)).not.toContain('private lock details');
   expect(client.query.mock.calls.at(-1)[0]).toBe('ROLLBACK');
+});
+
+test('owner certifies one exact server-derived Retell period after the bounded scan', async () => {
+  const inspectWindow = jest.fn(async () => ({ state: 'snapshot_matched',
+    callCount: 1, historicalCoverageCertified: false, agentId: AGENT,
+    canonicalCallDigests: [DIGEST], sourceSnapshotDigest: DIGEST,
+    scannedAt: SCANNED }));
+  const { app, client } = application({ inspectWindow });
+  const response = await request(app).post('/sources/retell/period-certifications')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf')
+    .send({ action: 'certify', snapshotId: SNAPSHOT,
+      localMonthStart: '2026-09-01', expectedRevision: 0,
+      expectedDigest: 'none', callerConsentAttested: true,
+      providerCoverageAttested: true, retentionAttested: true,
+      reason: 'Confirm complete fictional Retell period evidence', confirmed: true,
+      confirmationVersion: 'm26-retell-period-certification-v2' });
+  expect(response.status).toBe(201);
+  expect(response.body.data).toMatchObject({ state: 'retell_period_certified',
+    localMonthStart: '2026-09-01', scope: 'retell_only_tenant_all',
+    providerIndependentVerified: false, wholeBusinessCoverageVerified: false,
+    forecastIssued: false, paidNumericServing: false });
+  expect(inspectWindow).toHaveBeenCalledWith(expect.objectContaining({
+    snapshotId: SNAPSHOT, startsAt: START, endsAt: END }));
+  const mutation = client.query.mock.calls.find(call =>
+    call[0].includes('period_certification_v2_mutate'));
+  expect(mutation).toBeDefined();
+  expect(mutation[1].slice(11, 15)).toEqual(['0'.repeat(64), 1, '0'.repeat(64),
+    expect.stringContaining('m26-retell-provider-scan-v2')]);
+  expect(JSON.stringify(response.body)).not.toMatch(/amount|agentId|canonicalCallDigests/);
+});
+
+test('real scan reader output passes the route with canonical microsecond scan time', async () => {
+  const { app, client } = application({ inspectWindow: inspectRetellCallWindow,
+    fetchRetellPage: jest.fn(async () => ({ has_more: false, items: [] })),
+    scanInputs: { state: 'ready_for_diagnostic', agentId: AGENT,
+      startsAt: START, endsAt: END, canonicalCallDigests: [],
+      sourceSnapshotDigest: DIGEST, historicalCoverageCertified: false },
+    periodEvidence: { state: 'retell_period_ready_for_certification',
+      organizationId: ORG, snapshotId: SNAPSHOT, localMonthStart: '2026-09-01',
+      startsAt: START, endsAt: END, sourceManifestDigest: DIGEST,
+      snapshotDigest: DIGEST, integrationOwnershipId: OWNERSHIP,
+      agentId: AGENT, providerCallDigestSetDigest: DIGEST,
+      sourceCount: 0, reviewedDistinctLeadCount: 0,
+      scope: 'retell_only_tenant_all', targetKey: 'demand.inbound_leads',
+      targetVersion: 'v1' } });
+  const response = await request(app).post('/sources/retell/period-certifications')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf')
+    .send({ action: 'certify', snapshotId: SNAPSHOT,
+      localMonthStart: '2026-09-01', expectedRevision: 0,
+      expectedDigest: 'none', callerConsentAttested: true,
+      providerCoverageAttested: true, retentionAttested: true,
+      reason: 'Confirm complete fictional Retell period evidence', confirmed: true,
+      confirmationVersion: 'm26-retell-period-certification-v2' });
+  expect(response.status).toBe(201);
+  const mutation = client.query.mock.calls.find(call =>
+    call[0].includes('period_certification_v2_mutate'));
+  const scanReceipt = JSON.parse(mutation[1][14]);
+  expect(scanReceipt.scannedAt).toMatch(
+    /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/);
+  expect(scanReceipt).toMatchObject({ agentId: AGENT,
+    integrationOwnershipId: OWNERSHIP, canonicalCallDigests: [], callCount: 0 });
+});
+
+test('period certification refuses provider disagreement without persistence', async () => {
+  const { app, client } = application({ inspectWindow: jest.fn(async () => ({
+    state: 'unavailable', reason: 'source_records_disagree' })) });
+  const response = await request(app).post('/sources/retell/period-certifications')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf')
+    .send({ action: 'certify', snapshotId: SNAPSHOT,
+      localMonthStart: '2026-09-01', expectedRevision: 0,
+      expectedDigest: 'none', callerConsentAttested: true,
+      providerCoverageAttested: true, retentionAttested: true,
+      reason: 'Confirm complete fictional Retell period evidence', confirmed: true,
+      confirmationVersion: 'm26-retell-period-certification-v2' });
+  expect(response.status).toBe(409);
+  expect(response.body.error.category)
+    .toBe('FORECAST_DEMAND_SOURCE_COVERAGE_UNAVAILABLE');
+  expect(client.query.mock.calls.some(call =>
+    call[0].includes('period_certification_v2_mutate'))).toBe(false);
+});
+
+test('future origin capture and read expose exact lineage while withholding the number', async () => {
+  const { app } = application();
+  const created = await request(app).post('/sources/retell/future-origins')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf')
+    .send({ localHorizonStart: '2026-11-01' });
+  expect(created.status).toBe(201);
+  expect(created.body.data).toMatchObject({ state: 'retell_future_origin_saved',
+    id: ORIGIN, scope: 'retell_only_tenant_all', amountWithheld: true,
+    serviceMixAvailable: false, areaForecastAvailable: false,
+    realForecastEligible: false, paidNumericServing: false,
+    forecastServingEnabled: false, forecastIssued: false });
+  expect(JSON.stringify(created.body)).not.toMatch(/"amount"|outputDigest/);
+  const read = await request(app).get(`/sources/retell/future-origins/${ORIGIN}`);
+  expect(read.status).toBe(200);
+  expect(read.body.data).toMatchObject({ state: 'retell_future_origin_current',
+    amountWithheld: true, providerIndependentVerified: false,
+    wholeBusinessCoverageVerified: false, forecastIssued: false });
+  expect(JSON.stringify(read.body)).not.toMatch(/"amount"|outputDigest/);
+});
+
+test('member and caller-supplied extra future authority fail before database use', async () => {
+  const member = application({ role: 'member' });
+  expect((await request(member.app).post('/sources/retell/future-origins')
+    .set('Idempotency-Key', KEY).send({ localHorizonStart: '2026-11-01' })).status)
+    .toBe(403);
+  expect(member.pool.connect).not.toHaveBeenCalled();
+  const owner = application();
+  expect((await request(owner.app).post('/sources/retell/future-origins')
+    .set('Idempotency-Key', KEY).send({ localHorizonStart: '2026-11-01',
+      amount: '99' })).status).toBe(400);
+  expect(owner.pool.connect).not.toHaveBeenCalled();
 });

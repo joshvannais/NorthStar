@@ -16,11 +16,16 @@ test('only a current guarded scan input can run the provider diagnostic', async 
   const query = jest.fn(async () => ({ rows: [{ value: first }] }));
   const fetchPage = jest.fn(async () => ({ has_more: false, items: [] }));
   await expect(inspectRetellCallWindow({ ...args, pool: { query }, fetchPage }))
-    .resolves.toMatchObject({ state: 'snapshot_matched', historicalCoverageCertified: false });
+    .resolves.toMatchObject({ state: 'snapshot_matched', historicalCoverageCertified: false,
+      agentId: first.agentId, canonicalCallDigests: [],
+      sourceSnapshotDigest: first.sourceSnapshotDigest,
+      scannedAt: expect.any(String) });
   expect(query).toHaveBeenCalledTimes(2);
   expect(fetchPage).toHaveBeenCalledWith({ agentId: first.agentId,
     startsAtMs: Date.parse(args.startsAt), endsAtMs: Date.parse(args.endsAt),
     paginationKey: undefined });
+  const result = await inspectRetellCallWindow({ ...args, pool: { query }, fetchPage });
+  expect(result.scannedAt).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/);
 });
 
 test('a changed source or permission during the provider scan is unavailable', async () => {

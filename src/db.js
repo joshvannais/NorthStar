@@ -1651,6 +1651,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_governance_selection_v2_read(uuid,uuid,text,uuid)') IS NULL THEN
           RAISE EXCEPTION 'Required complete-window governance v2 authority is missing';
         END IF;
+        IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='219_canonical_forecast_complete_window_governance_metrics.sql') AND
+           pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_governance_evidence_v3(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+          RAISE EXCEPTION 'Required complete-window governance metrics authority is missing';
+        END IF;
         IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
           WHERE tgrelid='public.canonical_forecast_complete_window_governance_methods_v2'::regclass
            AND tgname='m26_complete_window_governance_methods_v2_immutable'
@@ -1675,6 +1680,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_complete_window_governance_reviews_v2 FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_complete_window_governance_selections_v2 FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_complete_window_governance_evidence_v2(uuid,uuid,text,uuid,uuid) FROM %I', runtime_role);
+        IF pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_governance_evidence_v3(uuid,uuid,text,uuid,uuid)') IS NOT NULL THEN
+          EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_complete_window_governance_evidence_v3(uuid,uuid,text,uuid,uuid) FROM %I', runtime_role);
+        END IF;
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_review_v2_capture(uuid,uuid,text,uuid,text,text,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_review_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_select_v2(uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean) TO %I', runtime_role);
@@ -3679,6 +3687,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             AND NOT COALESCE(has_function_privilege($1,
               to_regprocedure('public.canonical_forecast_complete_window_governance_evidence_v2(uuid,uuid,text,uuid,uuid)'),
               'EXECUTE'),FALSE)
+            AND (NOT EXISTS(SELECT 1 FROM public._migrations
+              WHERE filename='219_canonical_forecast_complete_window_governance_metrics.sql') OR (
+              to_regprocedure('public.canonical_forecast_complete_window_governance_evidence_v3(uuid,uuid,text,uuid,uuid)') IS NOT NULL
+              AND NOT COALESCE(has_function_privilege($1,
+                to_regprocedure('public.canonical_forecast_complete_window_governance_evidence_v3(uuid,uuid,text,uuid,uuid)'),
+                'EXECUTE'),FALSE)))
             AND COALESCE(has_function_privilege($1,
               to_regprocedure('public.canonical_forecast_complete_window_governance_review_v2_capture(uuid,uuid,text,uuid,text,text,uuid)'),
               'EXECUTE'),FALSE)
@@ -4342,6 +4356,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('215_canonical_forecast_complete_window_mea
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('216_canonical_forecast_complete_window_measurement_drift_gate.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('217_canonical_forecast_complete_window_measurement_tenant_identity.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('218_canonical_forecast_complete_window_governance_v2.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('219_canonical_forecast_complete_window_governance_metrics.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

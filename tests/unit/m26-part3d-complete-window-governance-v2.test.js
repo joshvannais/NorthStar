@@ -6,6 +6,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 describe('Mission 26 Part 3D target-complete governance v2 contract', () => {
   const migration = read('migrations/218_canonical_forecast_complete_window_governance_v2.sql');
+  const metrics = read('migrations/219_canonical_forecast_complete_window_governance_metrics.sql');
   const routes = read('src/routes/forecastPriceHistory.js');
   const database = read('src/db.js');
 
@@ -81,5 +82,17 @@ describe('Mission 26 Part 3D target-complete governance v2 contract', () => {
     expect(database).toContain("REVIEWED_MIGRATION_TIMEOUT_FILES.add('218_canonical_forecast_complete_window_governance_v2.sql')");
     expect(database).toContain('Required complete-window governance v2 authority is missing');
     expect(database).toContain('Required complete-window governance v2 immutability is missing');
+  });
+
+  test('binds candidate-versus-current metrics and a human-review verdict', () => {
+    expect(metrics).toContain('canonical_forecast_complete_window_governance_evidence_v3');
+    expect(metrics).toContain("'baseMeanAbsoluteError'");
+    expect(metrics).toContain("'candidateMeanAbsoluteError'");
+    expect(metrics).toContain("'candidateWorseOriginCount'");
+    expect(metrics).toContain("'policyVerdict','human_review_required_no_automatic_winner'");
+    expect(metrics).toContain("'comparisonDigest',public.canonical_completion_digest(comparison_value)");
+    expect(metrics).toContain("reviewed->'comparison'->>'state' IS DISTINCT FROM");
+    expect(database).toContain("REVIEWED_MIGRATION_TIMEOUT_FILES.add('219_canonical_forecast_complete_window_governance_metrics.sql')");
+    expect(database).toContain('canonical_forecast_complete_window_governance_evidence_v3(uuid,uuid,text,uuid,uuid)');
   });
 });

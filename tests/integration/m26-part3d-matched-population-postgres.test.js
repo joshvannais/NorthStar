@@ -1006,9 +1006,13 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
       const deterministicMethod = await request(f.app)
         .get(`${methodRoute}&methodKind=deterministic`)
         .set('Cookie', owner.session.headers.Cookie);
+      // Migration 214 extended the registered-origin writer closure after the
+      // immutable migration-201 registration. The legacy route therefore
+      // remains fail-closed; Part3D v2 registers the current closure separately.
       expect(deterministicMethod.body.data).toMatchObject({
-        state: 'method_registered', methodKind: 'deterministic',
-        eligible: true, internalExperimentOnly: true,
+        state: 'method_unavailable', methodKind: 'deterministic',
+        reason: 'reviewed_implementation_changed',
+        eligible: false, internalExperimentOnly: true,
         productionPromotionEligible: false, paidNumericServing: false,
         realForecastEligible: false });
       const statisticalMethod = await request(f.app)
@@ -1077,12 +1081,23 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
           await heldSelectionKey.query('ROLLBACK').catch(() => {});
           heldSelectionKey.release();
         }
-        expect(concurrentSelections.map(value => ({
+        const concurrentSelectionSummary = concurrentSelections.map(value => ({
           status: value.status, replayed: value.body.data?.replayed,
           eventId: value.body.data?.eventId, state: value.body.data?.state,
           reason: value.body.data?.reason,
-        })).sort((left, right) => Number(left.replayed) - Number(right.replayed)))
-          .toEqual([
+        })).sort((left, right) => Number(left.replayed) - Number(right.replayed));
+        if (deterministicMethod.body.data.state === 'method_unavailable') {
+          expect(concurrentSelectionSummary).toEqual([
+            { status: 200, replayed: false, eventId: null,
+              state: 'supported_selection_unavailable',
+              reason: 'reviewed_implementation_changed' },
+            { status: 200, replayed: false, eventId: null,
+              state: 'supported_selection_unavailable',
+              reason: 'reviewed_implementation_changed' },
+          ]);
+          return;
+        }
+        expect(concurrentSelectionSummary).toEqual([
             { status: 201, replayed: false, eventId: expect.any(String),
               state: 'supported_selection_recorded', reason: null },
             { status: 200, replayed: true, eventId: expect.any(String),
@@ -1431,7 +1446,9 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
         const restoredMethod = await request(f.app)
           .get(`${methodRoute}&methodKind=deterministic`)
           .set('Cookie', owner.session.headers.Cookie);
-        expect(restoredMethod.body.data.state).toBe('method_registered');
+        expect(restoredMethod.body.data).toMatchObject({
+          state: 'method_unavailable',
+          reason: 'reviewed_implementation_changed', eligible: false });
         await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_supported_origins
           DISABLE TRIGGER canonical_forecast_price_flow_supported_origins_immutable`);
         try {
@@ -1448,7 +1465,9 @@ realPostgres(`Mission 26 Part 3D matched algorithm population ${scenario}`, () =
         const triggerRestored = await request(f.app)
           .get(`${methodRoute}&methodKind=deterministic`)
           .set('Cookie', owner.session.headers.Cookie);
-        expect(triggerRestored.body.data.state).toBe('method_registered');
+        expect(triggerRestored.body.data).toMatchObject({
+          state: 'method_unavailable',
+          reason: 'reviewed_implementation_changed', eligible: false });
         expect(JSON.stringify(current.body.data))
           .not.toMatch(/comparisonDigest|policyDigest|reviewDigest|"amount"|1400\.00/);
         return;

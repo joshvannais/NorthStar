@@ -1641,6 +1641,45 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      IF pg_catalog.to_regclass('public.canonical_forecast_complete_window_governance_reviews_v2') IS NOT NULL THEN
+        IF pg_catalog.to_regclass('public.canonical_forecast_complete_window_governance_methods_v2') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_complete_window_governance_selections_v2') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_governance_evidence_v2(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_governance_review_v2_capture(uuid,uuid,text,uuid,text,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_governance_review_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_governance_select_v2(uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_governance_selection_v2_read(uuid,uuid,text,uuid)') IS NULL THEN
+          RAISE EXCEPTION 'Required complete-window governance v2 authority is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_complete_window_governance_methods_v2'::regclass
+           AND tgname='m26_complete_window_governance_methods_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_price_flow_origin_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+         NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_complete_window_governance_reviews_v2'::regclass
+           AND tgname='m26_complete_window_governance_reviews_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_price_flow_origin_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+         NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_complete_window_governance_selections_v2'::regclass
+           AND tgname='m26_complete_window_governance_selections_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_price_flow_origin_immutable()'::regprocedure
+           AND NOT tgisinternal) THEN
+          RAISE EXCEPTION 'Required complete-window governance v2 immutability is missing';
+        END IF;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_complete_window_governance_methods_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_complete_window_governance_reviews_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_complete_window_governance_selections_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_complete_window_governance_evidence_v2(uuid,uuid,text,uuid,uuid) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_review_v2_capture(uuid,uuid,text,uuid,text,text,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_review_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_select_v2(uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_selection_v2_read(uuid,uuid,text,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -3631,6 +3670,28 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
               to_regprocedure('public.canonical_forecast_price_flow_method_eligibility(uuid,uuid,text,uuid,uuid,text)'),
               'EXECUTE'),FALSE)
           )
+          AND (to_regclass('public.canonical_forecast_complete_window_governance_reviews_v2') IS NULL OR (
+            to_regclass('public.canonical_forecast_complete_window_governance_methods_v2') IS NOT NULL
+            AND to_regclass('public.canonical_forecast_complete_window_governance_selections_v2') IS NOT NULL
+            AND NOT has_table_privilege($1,'public.canonical_forecast_complete_window_governance_methods_v2','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+            AND NOT has_table_privilege($1,'public.canonical_forecast_complete_window_governance_reviews_v2','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+            AND NOT has_table_privilege($1,'public.canonical_forecast_complete_window_governance_selections_v2','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+            AND NOT COALESCE(has_function_privilege($1,
+              to_regprocedure('public.canonical_forecast_complete_window_governance_evidence_v2(uuid,uuid,text,uuid,uuid)'),
+              'EXECUTE'),FALSE)
+            AND COALESCE(has_function_privilege($1,
+              to_regprocedure('public.canonical_forecast_complete_window_governance_review_v2_capture(uuid,uuid,text,uuid,text,text,uuid)'),
+              'EXECUTE'),FALSE)
+            AND COALESCE(has_function_privilege($1,
+              to_regprocedure('public.canonical_forecast_complete_window_governance_review_v2_read(uuid,uuid,text,uuid,uuid)'),
+              'EXECUTE'),FALSE)
+            AND COALESCE(has_function_privilege($1,
+              to_regprocedure('public.canonical_forecast_complete_window_governance_select_v2(uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean)'),
+              'EXECUTE'),FALSE)
+            AND COALESCE(has_function_privilege($1,
+              to_regprocedure('public.canonical_forecast_complete_window_governance_selection_v2_read(uuid,uuid,text,uuid)'),
+              'EXECUTE'),FALSE)
+          ))
           AND (
             NOT has_table_privilege($1,'public.canonical_forecast_price_flow_active_algorithms','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             AND COALESCE(has_function_privilege($1,
@@ -4280,6 +4341,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('214_canonical_forecast_complete_window_eva
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('215_canonical_forecast_complete_window_measurement_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('216_canonical_forecast_complete_window_measurement_drift_gate.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('217_canonical_forecast_complete_window_measurement_tenant_identity.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('218_canonical_forecast_complete_window_governance_v2.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

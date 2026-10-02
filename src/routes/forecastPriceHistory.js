@@ -2759,6 +2759,167 @@ function createForecastPriceHistoryRouter(options = {}) {
       } finally { if (client) client.release(); }
     });
 
+  // Target-complete Part 3D governance over one exact current Part 3B/3C
+  // authority. Requests cannot supply origins, outputs, actuals, measurements,
+  // method manifests, thresholds or comparison results.
+  router.post('/complete-price-flow-governance-reviews-v2', auth,
+    requirePermission('forecast', 'update'), completeWindowEvaluationThrottle,
+    async (req, res) => {
+      if (!exactKeys(req.query, []) ||
+          !exactKeys(req.body, ['evaluationId']) ||
+          !UUID.test(req.body.evaluationId || '') ||
+          !KEY.test(req.get('Idempotency-Key') || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The complete-window governance review request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          `SELECT public.canonical_forecast_complete_window_governance_review_v2_capture(
+            $1,$2,$3,$4,$5,$6,$7) value`,
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), req.get('Idempotency-Key'),
+            req.body.evaluationId])).rows[0]?.value;
+        if (!value || !['complete_window_governance_review_saved',
+          'complete_window_governance_review_unavailable'].includes(value.state)) {
+          throw new Error('Invalid complete-window governance review authority');
+        }
+        await client.query('COMMIT');
+        return res.status(value.state === 'complete_window_governance_review_saved' &&
+          value.replayed !== true ? 201 : 200).json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/complete-price-flow-governance-reviews-v2/:reviewId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, []) || !UUID.test(req.params.reviewId || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The complete-window governance review read is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          `SELECT public.canonical_forecast_complete_window_governance_review_v2_read(
+            $1,$2,$3,$4,$5) value`,
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.reviewId])).rows[0]?.value;
+        if (!value || !['complete_window_governance_review_available',
+          'complete_window_governance_review_stale',
+          'complete_window_governance_review_unavailable'].includes(value.state)) {
+          throw new Error('Invalid complete-window governance review read authority');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.post('/complete-price-flow-governance-selections-v2', auth,
+    requirePermission('forecast', 'update'), completeWindowEvaluationThrottle,
+    async (req, res) => {
+      const body = req.body || {};
+      if (!exactKeys(req.query, []) || !exactKeys(body, ['reviewId',
+        'expectedRevision', 'action', 'algorithmVersion', 'reversesEventId',
+        'reason', 'reviewDigest', 'confirmed']) ||
+        !UUID.test(body.reviewId || '') ||
+        !Number.isInteger(body.expectedRevision) || body.expectedRevision < 0 ||
+        !['promote', 'rollback'].includes(body.action) ||
+        !['m26_price_flow_zero_baseline_v1',
+          'm26_price_flow_carry_forward_v1'].includes(body.algorithmVersion) ||
+        (body.reversesEventId !== null &&
+          !UUID.test(body.reversesEventId || '')) ||
+        typeof body.reason !== 'string' || body.reason.length < 16 ||
+        body.reason.length > 500 || !DIGEST.test(body.reviewDigest || '') ||
+        body.confirmed !== true ||
+        !KEY.test(req.get('Idempotency-Key') || '')) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The complete-window governance selection is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          `SELECT public.canonical_forecast_complete_window_governance_select_v2(
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) value`,
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), req.get('Idempotency-Key'),
+            body.reviewId, body.expectedRevision, body.action,
+            body.algorithmVersion, body.reversesEventId, body.reason,
+            body.reviewDigest, body.confirmed])).rows[0]?.value;
+        if (!value || !['complete_window_governance_selection_recorded',
+          'complete_window_governance_selection_unavailable'].includes(value.state)) {
+          throw new Error('Invalid complete-window governance selection authority');
+        }
+        await client.query('COMMIT');
+        return res.status(
+          value.state === 'complete_window_governance_selection_recorded' &&
+          value.replayed !== true ? 201 : 200).json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/complete-price-flow-governance-selections-v2', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The complete-window governance selection read is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '30000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          `SELECT public.canonical_forecast_complete_window_governance_selection_v2_read(
+            $1,$2,$3,$4) value`,
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId])).rows[0]?.value;
+        if (!value || !['complete_window_governance_selection_current',
+          'complete_window_governance_selection_unavailable'].includes(value.state)) {
+          throw new Error('Invalid complete-window governance selection read authority');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: value });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
   return router;
 }
 

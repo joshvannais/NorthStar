@@ -126,6 +126,13 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
       .set(fixture.actors[actorName].session.headers);
   }
 
+  function replayLineage(actorName, snapshotIds, cursor = null, limit = 2) {
+    return request(app)
+      .post('/api/v1/forecast/features/approved-estimate-stock/v2/lineage/replay')
+      .set(fixture.actors[actorName].session.headers)
+      .send({ snapshotIds, cursor, limit });
+  }
+
   test('captures complete zero, replays, and marks genuine approval/correction/withdrawal stale', async () => {
     const zeroKey = `m26-p2a-v2-zero-${uuid()}`;
     const zero = await capture('owner', zeroKey);
@@ -238,6 +245,63 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
         expectedDigest: approval.digest });
       expect((await readFeature('admin', positive.body.data.snapshotId)).body.data.feature)
         .toMatchObject({ state: 'stale', amount: null, reason: 'source_changed' });
+    }, 120000);
+
+  test('replays bounded feature lineage, resumes exactly, and restarts after source change',
+    async () => {
+      const ids = [];
+      for (let index = 0; index < 3; index += 1) {
+        const captured = await captureFeature('owner', `m26-p2d-v2-${index}-${uuid()}`);
+        expect(captured.status).toBe(201);
+        ids.push(captured.body.data.snapshotId);
+      }
+      const first = await replayLineage('owner', ids);
+      expect(first.status).toBe(200);
+      expect(first.body.data).toMatchObject({ sourceAuthenticated: true,
+        targetComplete: true, eligibleForForecast: false, forecastIssued: false,
+        recovery: { mode: 'bounded_pull', restartOnSourceChange: true,
+          durableForecastCheckpoint: false },
+        lifecycleCoverage: { correction: true, withdrawalTombstone: true,
+          currentAccessRevocation: true, retentionPolicyImplemented: false,
+          deletionEventImplemented: false } });
+      expect(first.body.data.results).toHaveLength(2);
+      expect(first.body.data.results.every(result =>
+        result.feature.state === 'known' && result.feature.amount === '0')).toBe(true);
+      const repeated = await replayLineage('owner', ids);
+      expect(repeated.body.data).toEqual(first.body.data);
+      const last = await replayLineage('admin', ids, first.body.data.nextCursor);
+      expect(last.status).toBe(200);
+      expect(last.body.data.results).toHaveLength(1);
+      expect(last.body.data.nextCursor).toBeNull();
+
+      const source = await seedEstimateSource();
+      const writer = await fixture.runtimePool.connect();
+      let approval;
+      try {
+        await writer.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        approval = await mutate(source, { client: writer });
+        const busy = await replayLineage('owner', ids);
+        expect(busy.status).toBe(409);
+        expect(busy.body.error.category).toBe('FORECAST_SOURCE_BUSY');
+        await writer.query('COMMIT');
+      } finally {
+        await writer.query('ROLLBACK').catch(() => {});
+        writer.release();
+      }
+      const changedCursor = await replayLineage('owner', ids, first.body.data.nextCursor);
+      expect(changedCursor.status).toBe(409);
+      expect(changedCursor.body.error.category).toBe('FORECAST_SOURCE_CHANGED');
+      const restarted = await replayLineage('owner', ids);
+      expect(restarted.status).toBe(200);
+      expect(restarted.body.data.results.every(result =>
+        result.feature.state === 'stale' && result.feature.amount === null)).toBe(true);
+
+      expect((await replayLineage('member', ids)).status).toBe(403);
+      const crossTenant = await replayLineage('otherOwner', ids);
+      expect(crossTenant.status).toBe(404);
+      expect(JSON.stringify(crossTenant.body)).not.toMatch(/amount|digest|sourceCurrent/i);
+      await mutate(source, { action: 'withdraw', expectedRevision: 1,
+        expectedDigest: approval.digest });
     }, 120000);
 
   test('refuses an in-flight genuine M24 writer, then includes it after commit', async () => {
@@ -470,13 +534,20 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
         'canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)',
         'EXECUTE') runtime_capture,
        has_function_privilege($1,
+        'canonical_forecast_approved_estimate_v2_lineage_replay(uuid,uuid,text,uuid,jsonb)',
+        'EXECUTE') runtime_replay,
+       has_function_privilege($1,
         'canonical_forecast_approved_estimate_v2_pins(uuid)','EXECUTE') runtime_helper,
        has_table_privilege($1,'canonical_forecast_approved_estimate_v2_snapshots','SELECT') runtime_table,
        has_function_privilege('public',
         'canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)',
-        'EXECUTE') public_read`, [fixture.roles.runtime])).rows[0];
-    expect(privileges).toEqual({ runtime_capture: true, runtime_helper: false,
-      runtime_table: false, public_read: false });
+        'EXECUTE') public_read,
+       has_function_privilege('public',
+        'canonical_forecast_approved_estimate_v2_lineage_replay(uuid,uuid,text,uuid,jsonb)',
+        'EXECUTE') public_replay`, [fixture.roles.runtime])).rows[0];
+    expect(privileges).toEqual({ runtime_capture: true, runtime_replay: true,
+      runtime_helper: false, runtime_table: false, public_read: false,
+      public_replay: false });
     const missing = await fixture.ownerPool.connect();
     try {
       await missing.query('BEGIN');
@@ -487,6 +558,18 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
         { runtimeRole: fixture.roles.runtime }))
         .rejects.toThrow('Required approved-estimate v2 authority is missing');
     } finally { await missing.query('ROLLBACK').catch(() => {}); missing.release(); }
+    const missingReplay = await fixture.ownerPool.connect();
+    try {
+      await missingReplay.query('BEGIN');
+      await missingReplay.query(`ALTER FUNCTION
+       canonical_forecast_approved_estimate_v2_lineage_replay(uuid,uuid,text,uuid,jsonb)
+       RENAME TO canonical_forecast_approved_estimate_v2_lineage_replay_missing`);
+      await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(missingReplay,
+        { runtimeRole: fixture.roles.runtime }))
+        .rejects.toThrow('Required approved-estimate v2 authority is missing');
+    } finally {
+      await missingReplay.query('ROLLBACK').catch(() => {}); missingReplay.release();
+    }
     const leaked = await fixture.ownerPool.connect();
     try {
       await leaked.query('BEGIN');

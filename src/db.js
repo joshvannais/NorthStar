@@ -1453,7 +1453,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_guard()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots)') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
-         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_lineage_replay(uuid,uuid,text,uuid,jsonb)') IS NULL THEN
         RAISE EXCEPTION 'Required approved-estimate v2 authority is missing';
       END IF;
       IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
@@ -1554,6 +1555,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_approved_estimate_v2_lineage_replay(uuid,uuid,text,uuid,jsonb) TO %I', runtime_role);
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_comparable_month_v2_receipts') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_comparable_month_v2_unique_instant(text,timestamp without time zone)') IS NULL OR
@@ -3013,8 +3015,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_table_privilege($1,'public.canonical_forecast_approved_estimate_v2_states','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_lineage_replay(uuid,uuid,text,uuid,jsonb)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_approved_estimate_v2_lineage_replay(uuid,uuid,text,uuid,jsonb)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_pins(uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_gap(uuid,timestamptz)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_epoch_immutable()','EXECUTE')
@@ -4225,6 +4229,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('210_canonical_forecast_current_backlog_com
 // installing its immutable coverage epoch and entry-only v2 authority.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('211_canonical_forecast_approved_estimate_asof_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('212_canonical_forecast_comparable_months_v2.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('213_canonical_forecast_approved_estimate_lineage_replay_v2.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

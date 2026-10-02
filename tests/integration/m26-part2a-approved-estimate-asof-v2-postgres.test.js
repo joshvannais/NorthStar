@@ -276,6 +276,112 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
        WHERE organization_id=$1`, [org])).rows[0].count).toBe(0);
   }, 120000);
 
+  test('keeps correction-heavy history bounded by one writer-owned current row', async () => {
+    const source = await seedEstimateSource();
+    const first = await mutate(source);
+    const client = await fixture.ownerPool.connect();
+    try {
+      await client.query(`CREATE FUNCTION pg_temp.m26_part2a_history(
+       org uuid,estimate uuid,actor uuid,session_value uuid,first_id uuid)
+       RETURNS void LANGUAGE plpgsql AS $body$
+       DECLARE prior uuid:=first_id;next_id uuid;revision_value bigint;
+       BEGIN
+        FOR revision_value IN 2..1501 LOOP
+         next_id:=gen_random_uuid();
+         INSERT INTO canonical_estimate_decisions(id,organization_id,estimate_id,
+          revision,previous_id,action,actor_user_id,membership_id,auth_session_id,
+          actor_name,source_pins,scope_summary,price_before_tax,currency,reason,
+          confirmation_version,request_key_hash,request_digest,digest)
+         VALUES(next_id,org,estimate,revision_value,prior,'approve',actor,actor,
+          session_value,'Fictional owner','{}','Correction-heavy approved estimate',
+          '500.00','USD','Fictional bounded correction','estimate-quote-preparation-v1',
+          encode(sha256(convert_to(next_id::text||':key','UTF8')),'hex'),
+          encode(sha256(convert_to(next_id::text||':request','UTF8')),'hex'),
+          encode(sha256(convert_to(next_id::text||':digest','UTF8')),'hex'));
+         prior:=next_id;
+        END LOOP;
+        next_id:=gen_random_uuid();
+        INSERT INTO canonical_estimate_decisions(id,organization_id,estimate_id,
+         revision,previous_id,action,actor_user_id,membership_id,auth_session_id,
+         actor_name,source_pins,scope_summary,price_before_tax,currency,reason,
+         confirmation_version,request_key_hash,request_digest,digest)
+        VALUES(next_id,org,estimate,1502,prior,'withdraw',actor,actor,session_value,
+         'Fictional owner','{}',NULL,NULL,'USD','Fictional bounded withdrawal',
+         'estimate-quote-preparation-v1',
+         encode(sha256(convert_to(next_id::text||':key','UTF8')),'hex'),
+         encode(sha256(convert_to(next_id::text||':request','UTF8')),'hex'),
+         encode(sha256(convert_to(next_id::text||':digest','UTF8')),'hex'));
+       END $body$`);
+      await client.query('SELECT pg_temp.m26_part2a_history($1,$2,$3,$4,$5)',
+        [source.actor.organizationId, source.estimate, source.actor.actorUserId,
+          source.actor.authSessionId, first.id]);
+    } finally { client.release(); }
+    expect((await fixture.ownerPool.query(
+      `SELECT count(*)::integer count FROM canonical_estimate_decisions
+       WHERE organization_id=$1 AND estimate_id=$2`,
+      [source.actor.organizationId, source.estimate])).rows[0].count).toBe(1502);
+    expect((await fixture.ownerPool.query(
+      `SELECT count(*)::integer count FROM canonical_forecast_approved_estimate_v2_current_sources
+       WHERE organization_id=$1 AND estimate_id=$2 AND action='withdraw'`,
+      [source.actor.organizationId, source.estimate])).rows[0].count).toBe(1);
+    const result = await capture();
+    expect(result.status).toBe(201);
+    expect(result.body.data).toMatchObject({ state: 'current', targetComplete: true });
+  }, 120000);
+
+  test('rechecks paid authority at persistence and private-return boundaries', async () => {
+    const actor = fixture.actors.owner;
+    const before = (await fixture.ownerPool.query(
+      `SELECT count(*)::integer count FROM canonical_forecast_approved_estimate_v2_snapshots
+       WHERE organization_id=$1`, [actor.organizationId])).rows[0].count;
+    await fixture.ownerPool.query(`CREATE FUNCTION public.m26_part2a_test_pause()
+      RETURNS trigger LANGUAGE plpgsql AS $$BEGIN PERFORM pg_sleep(1.2);RETURN NEW;END$$`);
+    await fixture.ownerPool.query(`CREATE TRIGGER aaa_m26_part2a_test_pause
+      BEFORE INSERT ON canonical_forecast_approved_estimate_v2_snapshots
+      FOR EACH ROW EXECUTE FUNCTION public.m26_part2a_test_pause()`);
+    await fixture.ownerPool.query(
+      `WITH clock_value AS (SELECT clock_timestamp() value)
+       UPDATE subscriptions SET status='trialing',
+        trial_started_at=clock_value.value-INTERVAL '14 days'+INTERVAL '600 ms',
+        trial_ends_at=clock_value.value+INTERVAL '600 ms'
+       FROM clock_value WHERE organization_id=$1`, [actor.organizationId]);
+    try {
+      expect((await capture()).status).toBe(403);
+      expect((await fixture.ownerPool.query(
+        `SELECT count(*)::integer count FROM canonical_forecast_approved_estimate_v2_snapshots
+         WHERE organization_id=$1`, [actor.organizationId])).rows[0].count).toBe(before);
+    } finally {
+      await fixture.ownerPool.query(
+        'DROP TRIGGER IF EXISTS aaa_m26_part2a_test_pause ON canonical_forecast_approved_estimate_v2_snapshots');
+      await fixture.ownerPool.query('DROP FUNCTION IF EXISTS public.m26_part2a_test_pause()');
+      await fixture.ownerPool.query(
+        `UPDATE subscriptions SET status='active',trial_started_at=NULL,trial_ends_at=NULL
+         WHERE organization_id=$1`, [actor.organizationId]);
+    }
+
+    const current = await capture();
+    expect(current.status).toBe(201);
+    const revoker = await fixture.ownerPool.connect();
+    try {
+      await revoker.query('BEGIN');
+      await revoker.query(
+        `UPDATE subscriptions SET status='canceled' WHERE organization_id=$1`,
+        [actor.organizationId]);
+      const pending = read('owner', current.body.data.snapshotId);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await revoker.query('COMMIT');
+      const denied = await pending;
+      expect(denied.status).toBe(403);
+      expect(JSON.stringify(denied.body)).not.toContain(current.body.data.sourceSnapshotDigest);
+    } finally {
+      await revoker.query('ROLLBACK').catch(() => {});
+      revoker.release();
+      await fixture.ownerPool.query(
+        `UPDATE subscriptions SET status='active',trial_started_at=NULL,trial_ends_at=NULL
+         WHERE organization_id=$1`, [actor.organizationId]);
+    }
+  }, 120000);
+
   test('keeps runtime entry-only, PUBLIC denied, and startup authority mandatory', async () => {
     const privileges = (await fixture.ownerPool.query(
       `SELECT
@@ -309,6 +415,21 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
         { runtimeRole: fixture.roles.runtime }))
         .rejects.toThrow('Runtime database role privilege verification failed');
     } finally { await leaked.query('ROLLBACK').catch(() => {}); leaked.release(); }
+    for (const [table, trigger] of [
+      ['canonical_estimate_decisions', 'canonical_forecast_price_decision_order_insert'],
+      ['canonical_estimate_decisions', 'canonical_forecast_z_approved_estimate_v2_current_track'],
+      ['canonical_forecast_approved_estimate_v2_snapshots',
+        'canonical_forecast_approved_estimate_v2_guard'],
+    ]) {
+      const disabled = await fixture.ownerPool.connect();
+      try {
+        await disabled.query('BEGIN');
+        await disabled.query(`ALTER TABLE ${table} DISABLE TRIGGER ${trigger}`);
+        await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(disabled,
+          { runtimeRole: fixture.roles.runtime }))
+          .rejects.toThrow('Required approved-estimate v2 fencing is missing');
+      } finally { await disabled.query('ROLLBACK').catch(() => {}); disabled.release(); }
+    }
   }, 120000);
 
   test('refuses a post-epoch legacy ordering gap without partial persistence', async () => {

@@ -20,6 +20,39 @@ CREATE TABLE public.canonical_forecast_approved_estimate_v2_epochs (
         ('baseline_pin_limit','baseline_size_limit') AND baseline_manifest_digest IS NULL))
 );
 
+-- Runtime capture never walks the unbounded decision ledger. Migration 211
+-- builds one current row per estimate while the writer table is fenced; the
+-- post-install writer trigger then replaces only that estimate's row.
+CREATE TABLE public.canonical_forecast_approved_estimate_v2_current_sources (
+ organization_id UUID NOT NULL,
+ estimate_id UUID NOT NULL,
+ decision_id UUID NOT NULL,
+ revision BIGINT NOT NULL CHECK(revision>0),
+ action TEXT NOT NULL CHECK(action IN ('approve','withdraw')),
+ digest CHAR(64) NOT NULL CHECK(digest~'^[0-9a-f]{64}$'),
+ recorded_at TIMESTAMPTZ NOT NULL,
+ source_order BIGINT NOT NULL CHECK(source_order>=0),
+ PRIMARY KEY(organization_id,estimate_id),
+ UNIQUE(organization_id,decision_id),
+ FOREIGN KEY(organization_id,estimate_id,decision_id)
+  REFERENCES public.canonical_estimate_decisions(organization_id,estimate_id,id)
+  ON DELETE RESTRICT
+);
+CREATE UNIQUE INDEX canonical_forecast_approved_estimate_v2_order_idx
+ ON public.canonical_forecast_approved_estimate_v2_current_sources(
+  organization_id,source_order) WHERE source_order>0;
+CREATE INDEX canonical_forecast_approved_estimate_v2_active_idx
+ ON public.canonical_forecast_approved_estimate_v2_current_sources(
+  organization_id,estimate_id)
+ WHERE action='approve';
+
+CREATE TABLE public.canonical_forecast_approved_estimate_v2_states (
+ organization_id UUID PRIMARY KEY REFERENCES public.organizations(id) ON DELETE RESTRICT,
+ coverage_starts_at TIMESTAMPTZ NOT NULL,
+ high_water_order BIGINT NOT NULL CHECK(high_water_order>=0),
+ ordering_complete BOOLEAN NOT NULL
+);
+
 CREATE FUNCTION public.canonical_forecast_approved_estimate_v2_pins(org UUID)
 RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
@@ -30,13 +63,9 @@ SET search_path=pg_catalog,public,pg_temp AS $$
    'state','active'
  ) ORDER BY decision.estimate_id),'[]'::jsonb)
  FROM (
-   SELECT * FROM (
-     SELECT DISTINCT ON (estimate_id) estimate_id,id,revision,digest,created_at,action
-     FROM public.canonical_estimate_decisions
-     WHERE organization_id=org
-     ORDER BY estimate_id,revision DESC,id DESC
-   ) current_decision
-   WHERE action='approve'
+   SELECT estimate_id,decision_id id,revision,digest,recorded_at created_at,action
+   FROM public.canonical_forecast_approved_estimate_v2_current_sources
+   WHERE organization_id=org AND action='approve'
    ORDER BY estimate_id
    LIMIT 1001
  ) decision
@@ -46,15 +75,14 @@ CREATE FUNCTION public.canonical_forecast_approved_estimate_v2_gap(
  org UUID,epoch_at TIMESTAMPTZ)
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
- SELECT EXISTS(
-   SELECT 1 FROM public.canonical_estimate_decisions decision
-   LEFT JOIN public.canonical_forecast_price_decision_orders source_order
-    ON source_order.organization_id=decision.organization_id
-     AND source_order.estimate_id=decision.estimate_id
-     AND source_order.decision_id=decision.id
-   WHERE decision.organization_id=org AND decision.created_at>=epoch_at
-     AND source_order.decision_id IS NULL
- )
+ SELECT NOT COALESCE((SELECT state.ordering_complete AND
+   state.coverage_starts_at=epoch_at AND state.high_water_order=COALESCE((
+    SELECT source_order.source_order
+    FROM public.canonical_forecast_price_decision_orders source_order
+    WHERE source_order.organization_id=org
+    ORDER BY source_order.source_order DESC LIMIT 1),0)
+  FROM public.canonical_forecast_approved_estimate_v2_states state
+  WHERE state.organization_id=org),FALSE)
 $$;
 
 CREATE FUNCTION public.canonical_forecast_approved_estimate_v2_epoch_immutable()
@@ -76,6 +104,9 @@ BEGIN
   organization_id,coverage_starts_at,coverage_start_order,baseline_source_count,
   baseline_manifest_digest,coverage_state,unavailable_reason)
  VALUES(NEW.id,captured,0,0,public.canonical_completion_digest(pins),'complete',NULL);
+ INSERT INTO public.canonical_forecast_approved_estimate_v2_states(
+  organization_id,coverage_starts_at,high_water_order,ordering_complete)
+ VALUES(NEW.id,captured,0,TRUE);
  RETURN NEW;
 END $$;
 CREATE TRIGGER canonical_forecast_approved_estimate_v2_epoch_for_new_org
@@ -85,6 +116,21 @@ CREATE TRIGGER canonical_forecast_approved_estimate_v2_epoch_for_new_org
 DO $$
 DECLARE tenant RECORD;pins JSONB;pin_count INTEGER;start_order BIGINT;captured TIMESTAMPTZ;
 BEGIN
+ INSERT INTO public.canonical_forecast_approved_estimate_v2_current_sources(
+  organization_id,estimate_id,decision_id,revision,action,digest,recorded_at,source_order)
+ SELECT current_decision.organization_id,current_decision.estimate_id,
+  current_decision.id,current_decision.revision,current_decision.action,
+  current_decision.digest,current_decision.created_at,COALESCE(source_order.source_order,0)
+ FROM (
+  SELECT DISTINCT ON (organization_id,estimate_id) organization_id,estimate_id,
+   id,revision,action,digest,created_at
+  FROM public.canonical_estimate_decisions
+  ORDER BY organization_id,estimate_id,revision DESC,id DESC
+ ) current_decision
+ LEFT JOIN public.canonical_forecast_price_decision_orders source_order
+  ON source_order.organization_id=current_decision.organization_id
+   AND source_order.estimate_id=current_decision.estimate_id
+   AND source_order.decision_id=current_decision.id;
  FOR tenant IN SELECT id FROM public.organizations ORDER BY id LOOP
   pins:=public.canonical_forecast_approved_estimate_v2_pins(tenant.id);
   pin_count:=jsonb_array_length(pins);
@@ -102,8 +148,49 @@ BEGIN
     THEN 'complete' ELSE 'unavailable' END,
    CASE WHEN pin_count>1000 THEN 'baseline_pin_limit'
     WHEN octet_length(pins::text)>262144 THEN 'baseline_size_limit' ELSE NULL END);
+  INSERT INTO public.canonical_forecast_approved_estimate_v2_states(
+   organization_id,coverage_starts_at,high_water_order,ordering_complete)
+  VALUES(tenant.id,captured,start_order,TRUE);
  END LOOP;
 END $$;
+
+CREATE FUNCTION public.canonical_forecast_approved_estimate_v2_current_track()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE ordered BIGINT;
+BEGIN
+ SELECT source_order INTO ordered
+ FROM public.canonical_forecast_price_decision_orders
+ WHERE organization_id=NEW.organization_id AND decision_id=NEW.id;
+ IF ordered IS NULL THEN
+  UPDATE public.canonical_forecast_approved_estimate_v2_states
+   SET ordering_complete=FALSE WHERE organization_id=NEW.organization_id;
+  IF NOT FOUND THEN
+   RAISE EXCEPTION 'Approved-estimate coverage state is missing' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+ END IF;
+ INSERT INTO public.canonical_forecast_approved_estimate_v2_current_sources(
+  organization_id,estimate_id,decision_id,revision,action,digest,recorded_at,source_order)
+ VALUES(NEW.organization_id,NEW.estimate_id,NEW.id,NEW.revision,NEW.action,
+  NEW.digest,NEW.created_at,ordered)
+ ON CONFLICT(organization_id,estimate_id) DO UPDATE SET
+  decision_id=EXCLUDED.decision_id,revision=EXCLUDED.revision,
+  action=EXCLUDED.action,digest=EXCLUDED.digest,
+  recorded_at=EXCLUDED.recorded_at,source_order=EXCLUDED.source_order;
+ UPDATE public.canonical_forecast_approved_estimate_v2_states
+  SET high_water_order=GREATEST(high_water_order,ordered)
+  WHERE organization_id=NEW.organization_id;
+ IF NOT FOUND THEN
+  RAISE EXCEPTION 'Approved-estimate coverage state is missing' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+-- The name sorts after the migration-146 order trigger, so the order sidecar
+-- exists before this tracker reads it for the same inserted decision.
+CREATE TRIGGER canonical_forecast_z_approved_estimate_v2_current_track
+ AFTER INSERT ON public.canonical_estimate_decisions
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_forecast_approved_estimate_v2_current_track();
 
 CREATE TABLE public.canonical_forecast_approved_estimate_v2_snapshots (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -154,6 +241,50 @@ CREATE TRIGGER canonical_forecast_approved_estimate_v2_immutable
  ON public.canonical_forecast_approved_estimate_v2_snapshots
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_approved_estimate_v2_immutable();
 
+CREATE FUNCTION public.canonical_forecast_approved_estimate_v2_access(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,
+ mutation_required BOOLEAN)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE authority RECORD;evaluated TIMESTAMPTZ:=clock_timestamp();
+BEGIN
+ SELECT membership.id membership_id,membership.role membership_role,
+  membership.status membership_status,account.status account_status,
+  session.status session_status,session.access_expires_at,session.csrf_token_hash,
+  subscription.status subscription_status,subscription.trial_started_at,
+  subscription.trial_ends_at,onboarding.status onboarding_status
+ INTO authority
+ FROM public.organization_memberships membership
+ JOIN public.users account ON account.organization_id=membership.organization_id
+  AND account.id=membership.user_id
+ JOIN public.auth_sessions session ON session.organization_id=membership.organization_id
+  AND session.membership_id=membership.id AND session.user_id=membership.user_id
+  AND session.id=session_value
+ JOIN public.subscriptions subscription
+  ON subscription.organization_id=membership.organization_id
+ JOIN public.organization_onboarding onboarding
+  ON onboarding.organization_id=membership.organization_id
+ WHERE membership.organization_id=org AND membership.user_id=actor
+ FOR SHARE OF membership,account,session,subscription,onboarding;
+ IF NOT FOUND OR authority.membership_role IS DISTINCT FROM role_value OR
+  authority.membership_role NOT IN ('owner','admin') OR
+  authority.membership_status<>'active' OR authority.account_status<>'active' OR
+  authority.session_status<>'active' OR authority.access_expires_at<=evaluated OR
+  authority.onboarding_status<>'complete' OR NOT(
+   authority.subscription_status='active' OR
+   (authority.subscription_status='trialing' AND
+    authority.trial_started_at IS NOT NULL AND
+    authority.trial_ends_at=authority.trial_started_at+INTERVAL '14 days' AND
+    authority.trial_ends_at>evaluated)) OR
+  (mutation_required AND (csrf IS NULL OR octet_length(csrf) NOT BETWEEN 32 AND 512 OR
+   encode(sha256(convert_to(csrf,'UTF8')),'hex')<>rtrim(authority.csrf_token_hash))) THEN
+  RAISE EXCEPTION 'Current approved-estimate authority is unavailable'
+   USING ERRCODE='42501';
+ END IF;
+ RETURN jsonb_build_object('membershipId',authority.membership_id,
+  'evaluatedAt',public.canonical_forecast_utc_instant(evaluated));
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_approved_estimate_v2_guard()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
@@ -165,9 +296,9 @@ BEGIN
   RAISE EXCEPTION 'Approved-estimate receipt cutoff changed' USING ERRCODE='23514';END IF;
  SELECT * INTO epoch FROM public.canonical_forecast_approved_estimate_v2_epochs
   WHERE organization_id=NEW.organization_id;
- SELECT COALESCE(MAX(source_order),0) INTO current_order
-  FROM public.canonical_forecast_price_decision_orders
-  WHERE organization_id=NEW.organization_id;
+ SELECT high_water_order INTO current_order
+  FROM public.canonical_forecast_approved_estimate_v2_states
+  WHERE organization_id=NEW.organization_id AND ordering_complete;
  current_pins:=public.canonical_forecast_approved_estimate_v2_pins(NEW.organization_id);
  IF epoch.coverage_state IS DISTINCT FROM 'complete' OR
    NEW.coverage_starts_at IS DISTINCT FROM epoch.coverage_starts_at OR
@@ -180,9 +311,7 @@ BEGIN
  SELECT role INTO actual_role FROM public.organization_memberships
   WHERE organization_id=NEW.organization_id AND id=NEW.membership_id
    AND user_id=NEW.actor_user_id AND status='active';
- IF actual_role NOT IN ('owner','admin') THEN
-  RAISE EXCEPTION 'Approved-estimate access restricted' USING ERRCODE='42501';END IF;
- PERFORM public.canonical_field_execution_actor_authority(
+ PERFORM public.canonical_forecast_approved_estimate_v2_access(
   NEW.organization_id,NEW.actor_user_id,actual_role,NEW.auth_session_id,NULL,FALSE);
  expected_request:=public.canonical_completion_digest(jsonb_build_object(
   'version','m26-approved-estimate-asof-request-v2',
@@ -228,9 +357,7 @@ BEGIN
   RAISE EXCEPTION 'Read committed required' USING ERRCODE='25001';END IF;
  IF role_value IS NULL OR role_value NOT IN ('owner','admin') THEN
   RAISE EXCEPTION 'Approved-estimate access restricted' USING ERRCODE='42501';END IF;
- PERFORM 1 FROM public.subscriptions WHERE organization_id=org FOR SHARE;
- IF NOT FOUND THEN RAISE EXCEPTION 'Subscription unavailable' USING ERRCODE='42501';END IF;
- authority:=public.canonical_field_execution_actor_authority(
+ authority:=public.canonical_forecast_approved_estimate_v2_access(
   org,actor,role_value,session_value,csrf,TRUE);
  IF key_value IS NULL OR key_value!~'^[A-Za-z0-9._:-]{16,128}$' THEN
   RAISE EXCEPTION 'Approved-estimate request invalid' USING ERRCODE='22023';END IF;
@@ -252,6 +379,8 @@ BEGIN
  IF old.id IS NOT NULL THEN
   IF rtrim(old.request_digest)<>request_hash THEN
    RAISE EXCEPTION 'Approved-estimate request key conflict' USING ERRCODE='23505';END IF;
+  authority:=public.canonical_forecast_approved_estimate_v2_access(
+   org,actor,role_value,session_value,csrf,TRUE);
   RETURN jsonb_build_object('state','complete','snapshot',
    public.canonical_forecast_approved_estimate_v2_projection(old),'replayed',TRUE);
  END IF;
@@ -269,8 +398,13 @@ BEGIN
   RETURN jsonb_build_object('state','unavailable','reason','legacy_order_gap',
    'snapshot',NULL,'replayed',FALSE);
  END IF;
- SELECT COALESCE(MAX(source_order),0) INTO last_order
-  FROM public.canonical_forecast_price_decision_orders WHERE organization_id=org;
+ SELECT high_water_order INTO last_order
+  FROM public.canonical_forecast_approved_estimate_v2_states
+  WHERE organization_id=org AND ordering_complete;
+ IF last_order IS NULL THEN
+  RETURN jsonb_build_object('state','unavailable','reason','legacy_order_gap',
+   'snapshot',NULL,'replayed',FALSE);
+ END IF;
  IF last_order>9007199254740991 THEN
   RAISE EXCEPTION 'Approved-estimate source order exceeds safe size' USING ERRCODE='54000';END IF;
  pins:=public.canonical_forecast_approved_estimate_v2_pins(org);
@@ -284,6 +418,8 @@ BEGIN
   'coverageStartOrder',epoch.coverage_start_order,'highWaterOrder',last_order,
   'purposeKey','forecast_pipeline','targetKey','pipeline.approved_estimates',
   'coverageState','complete_northstar_m24','digestNonce',nonce,'sources',pins));
+ authority:=public.canonical_forecast_approved_estimate_v2_access(
+  org,actor,role_value,session_value,csrf,TRUE);
  INSERT INTO public.canonical_forecast_approved_estimate_v2_snapshots(
   organization_id,as_of,coverage_starts_at,coverage_start_order,high_water_order,
   purpose_key,target_key,source_manifest,coverage_state,digest_nonce,snapshot_digest,
@@ -307,18 +443,8 @@ BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
    role_value IS NULL OR role_value NOT IN ('owner','admin') THEN
   RAISE EXCEPTION 'Approved-estimate access restricted' USING ERRCODE='42501';END IF;
- PERFORM public.canonical_field_execution_actor_authority(
+ PERFORM public.canonical_forecast_approved_estimate_v2_access(
   org,actor,role_value,session_value,NULL,FALSE);
- PERFORM 1 FROM public.subscriptions subscription
-  JOIN public.organization_onboarding onboarding
-   ON onboarding.organization_id=subscription.organization_id
-  WHERE subscription.organization_id=org AND onboarding.status='complete'
-   AND (subscription.status='active' OR
-    (subscription.status='trialing' AND subscription.trial_started_at IS NOT NULL
-     AND subscription.trial_ends_at=subscription.trial_started_at+INTERVAL '14 days'
-     AND subscription.trial_ends_at>clock_timestamp()));
- IF NOT FOUND THEN
-  RAISE EXCEPTION 'Current forecast access unavailable' USING ERRCODE='42501';END IF;
  IF NOT pg_try_advisory_xact_lock(hashtextextended(
   'm26:price-decision-order:'||org::text,0)) THEN
   RAISE EXCEPTION 'Approved-estimate source is busy' USING ERRCODE='55P03';END IF;
@@ -327,13 +453,16 @@ BEGIN
  IF selected.id IS NULL THEN RETURN NULL;END IF;
  SELECT * INTO epoch FROM public.canonical_forecast_approved_estimate_v2_epochs
   WHERE organization_id=org;
- SELECT COALESCE(MAX(source_order),0) INTO last_order
-  FROM public.canonical_forecast_price_decision_orders WHERE organization_id=org;
+ SELECT high_water_order INTO last_order
+  FROM public.canonical_forecast_approved_estimate_v2_states
+  WHERE organization_id=org;
  source_current:=epoch.coverage_state='complete' AND
   epoch.coverage_starts_at=selected.coverage_starts_at AND
   epoch.coverage_start_order=selected.coverage_start_order AND
   NOT public.canonical_forecast_approved_estimate_v2_gap(org,epoch.coverage_starts_at) AND
   last_order=selected.high_water_order;
+ PERFORM public.canonical_forecast_approved_estimate_v2_access(
+  org,actor,role_value,session_value,NULL,FALSE);
  RETURN jsonb_build_object(
   'snapshot',public.canonical_forecast_approved_estimate_v2_projection(selected),
   'state',CASE WHEN source_current THEN 'current' ELSE 'stale' END,
@@ -341,12 +470,16 @@ BEGIN
 END $$;
 
 REVOKE ALL ON TABLE public.canonical_forecast_approved_estimate_v2_epochs FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_forecast_approved_estimate_v2_current_sources FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_forecast_approved_estimate_v2_states FROM PUBLIC;
 REVOKE ALL ON TABLE public.canonical_forecast_approved_estimate_v2_snapshots FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_pins(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_gap(UUID,TIMESTAMPTZ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_epoch_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_epoch_for_new_org() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_current_track() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_immutable() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_access(UUID,UUID,TEXT,UUID,TEXT,BOOLEAN) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_capture(UUID,UUID,TEXT,UUID,TEXT,TEXT) FROM PUBLIC;

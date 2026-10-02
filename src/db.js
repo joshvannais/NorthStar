@@ -1440,12 +1440,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_source_snapshot_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_epochs') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_current_sources') IS NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_states') IS NULL OR
          pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_snapshots') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_pins(uuid)') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_gap(uuid,timestamptz)') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_epoch_immutable()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_epoch_for_new_org()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_current_track()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_immutable()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_access(uuid,uuid,text,uuid,text,boolean)') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_guard()') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots)') IS NULL OR
          pg_catalog.to_regprocedure('public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
@@ -1455,29 +1459,53 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
         WHERE tgrelid='public.canonical_forecast_approved_estimate_v2_epochs'::regclass
          AND tgname='canonical_forecast_approved_estimate_v2_epoch_immutable'
+         AND tgenabled='O' AND tgtype=58
+         AND tgfoid='public.canonical_forecast_approved_estimate_v2_epoch_immutable()'::regprocedure
          AND NOT tgisinternal) OR
        NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
         WHERE tgrelid='public.organizations'::regclass
          AND tgname='canonical_forecast_approved_estimate_v2_epoch_for_new_org'
+         AND tgenabled='O' AND tgtype=5
+         AND tgfoid='public.canonical_forecast_approved_estimate_v2_epoch_for_new_org()'::regprocedure
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_estimate_decisions'::regclass
+         AND tgname='canonical_forecast_price_decision_order_insert'
+         AND tgenabled='O' AND tgtype=5
+         AND tgfoid='public.canonical_forecast_price_decision_order_insert()'::regprocedure
+         AND NOT tgisinternal) OR
+       NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_estimate_decisions'::regclass
+         AND tgname='canonical_forecast_z_approved_estimate_v2_current_track'
+         AND tgenabled='O' AND tgtype=5
+         AND tgfoid='public.canonical_forecast_approved_estimate_v2_current_track()'::regprocedure
          AND NOT tgisinternal) OR
        NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
         WHERE tgrelid='public.canonical_forecast_approved_estimate_v2_snapshots'::regclass
          AND tgname='canonical_forecast_approved_estimate_v2_immutable'
+         AND tgenabled='O' AND tgtype=58
+         AND tgfoid='public.canonical_forecast_approved_estimate_v2_immutable()'::regprocedure
          AND NOT tgisinternal) OR
        NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
         WHERE tgrelid='public.canonical_forecast_approved_estimate_v2_snapshots'::regclass
          AND tgname='canonical_forecast_approved_estimate_v2_guard'
+         AND tgenabled='O' AND tgtype=7
+         AND tgfoid='public.canonical_forecast_approved_estimate_v2_guard()'::regprocedure
          AND NOT tgisinternal) THEN
         RAISE EXCEPTION 'Required approved-estimate v2 fencing is missing';
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_approved_estimate_v2_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_approved_estimate_v2_epochs FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_approved_estimate_v2_current_sources FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_approved_estimate_v2_states FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_approved_estimate_v2_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_pins(uuid) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_gap(uuid,timestamptz) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_epoch_immutable() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_epoch_for_new_org() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_current_track() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_immutable() FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_access(uuid,uuid,text,uuid,text,boolean) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_guard() FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
@@ -2873,10 +2901,16 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        )) AS forecast_snapshot_helpers_withheld,
        (to_regclass('public.canonical_forecast_approved_estimate_v2_snapshots') IS NOT NULL
          AND to_regclass('public.canonical_forecast_approved_estimate_v2_epochs') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_approved_estimate_v2_current_sources') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_approved_estimate_v2_states') IS NOT NULL
          AND NOT has_table_privilege('public','public.canonical_forecast_approved_estimate_v2_snapshots','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege('public','public.canonical_forecast_approved_estimate_v2_epochs','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege('public','public.canonical_forecast_approved_estimate_v2_current_sources','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege('public','public.canonical_forecast_approved_estimate_v2_states','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_approved_estimate_v2_snapshots','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_approved_estimate_v2_epochs','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_approved_estimate_v2_current_sources','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_approved_estimate_v2_states','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_approved_estimate_v2_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
@@ -2885,7 +2919,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_gap(uuid,timestamptz)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_epoch_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_epoch_for_new_org()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_current_track()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_access(uuid,uuid,text,uuid,text,boolean)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_guard()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_approved_estimate_v2_projection(public.canonical_forecast_approved_estimate_v2_snapshots)','EXECUTE')
        ) AS approved_estimate_v2_private,

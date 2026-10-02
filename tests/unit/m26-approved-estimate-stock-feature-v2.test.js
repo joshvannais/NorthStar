@@ -48,21 +48,25 @@ test('emits an exact authenticated known feature for positive and complete-zero 
       definitionKey: 'pipeline.approved_estimate_stock', definitionVersion: 'v1',
       state: 'known', amount: '1',
       latestSourceRecordedAt: '2026-10-02T09:59:00.000000Z',
+      sourceRecordCount: 1,
       unit: { key: 'count', currency: null, scale: 0 } },
   });
   expect(captureFeatureView(captured([]), ORG, AT).feature).toMatchObject({
-    state: 'known', amount: '0', latestSourceRecordedAt: null });
+    state: 'known', amount: '0', latestSourceRecordedAt: null,
+    sourceRecordCount: 0 });
 });
 
 test('withholds stale positive and stale complete-zero values without inventing a timestamp', () => {
   const stalePositive = readFeatureView(read([source()], {
     state: 'stale', sourceCurrent: false }), ORG);
   expect(stalePositive.feature).toMatchObject({ state: 'stale', amount: null,
-    reason: 'source_changed', latestSourceRecordedAt: source().recordedAt });
+    reason: 'source_changed', latestSourceRecordedAt: source().recordedAt,
+    sourceRecordCount: 1 });
   const staleZero = readFeatureView(read([], {
     state: 'stale', sourceCurrent: false }), ORG);
   expect(staleZero.feature).toMatchObject({ state: 'stale', amount: null,
-    reason: 'source_changed', latestSourceRecordedAt: null });
+    reason: 'source_changed', latestSourceRecordedAt: null,
+    sourceRecordCount: 0 });
 });
 
 test('maps exact coverage refusal to a missing value without claiming source authority', () => {
@@ -73,7 +77,7 @@ test('maps exact coverage refusal to a missing value without claiming source aut
     coverage: { state: 'unavailable', startsAt: null },
     feature: { contractVersion: 'm26-feature-value-v2', state: 'missing',
       amount: null, reason: 'legacy_order_gap', sourceSnapshotDigest: null,
-      latestSourceRecordedAt: null } });
+      latestSourceRecordedAt: null, sourceRecordCount: null } });
 });
 
 test('rejects unregistered refusal reasons and malformed authenticated receipts', () => {

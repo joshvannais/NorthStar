@@ -139,14 +139,17 @@ describe('Mission 26 Part 2C feature boundary', () => {
     const declared = definition();
     const staleZero = value({ contractVersion: VALUE_VERSION_V2,
       state: 'stale', amount: null, reason: 'source_changed',
-      latestSourceRecordedAt: null });
+      latestSourceRecordedAt: null, sourceRecordCount: 0 });
     expect(normalizeFeatureValueV2(staleZero, declared)).toMatchObject({
       contractVersion: VALUE_VERSION_V2, state: 'stale', amount: null,
-      latestSourceRecordedAt: null });
+      latestSourceRecordedAt: null, sourceRecordCount: 0 });
     expect(() => normalizeFeatureValue(staleZero, declared))
       .toThrow('Forecast feature details are invalid.');
     expect(() => normalizeFeatureValueV2({ ...staleZero,
       state: 'conflicting' }, declared))
+      .toThrow('Forecast feature details are invalid.');
+    expect(() => normalizeFeatureValueV2({ ...staleZero,
+      sourceRecordCount: 1 }, declared))
       .toThrow('Forecast feature details are invalid.');
   });
 

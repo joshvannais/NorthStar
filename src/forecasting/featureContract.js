@@ -105,9 +105,11 @@ function normalizeFeatureValueVersion(input, definition, contractVersion) {
   // The definition is only structurally checked here; an owning, versioned
   // registry must authorize it before a future reader calculates a value.
   const declared = normalizeFeatureDefinition(definition);
-  if (!exact(input, ['contractVersion', 'organizationId', 'definitionKey',
+  const valueKeys = ['contractVersion', 'organizationId', 'definitionKey',
     'definitionVersion', 'definitionDigest', 'asOf', 'reportingWindow', 'sourceSnapshotDigest',
-    'latestSourceRecordedAt', 'state', 'amount', 'reason', 'unit']) ||
+    'latestSourceRecordedAt', 'state', 'amount', 'reason', 'unit'];
+  if (contractVersion === VALUE_VERSION_V2) valueKeys.push('sourceRecordCount');
+  if (!exact(input, valueKeys) ||
     input.contractVersion !== contractVersion ||
     typeof input.organizationId !== 'string' || !UUID.test(input.organizationId) ||
     input.definitionKey !== declared.key ||
@@ -122,6 +124,11 @@ function normalizeFeatureValueVersion(input, definition, contractVersion) {
     input.unit.key !== declared.unit.key ||
     input.unit.currency !== declared.unit.currency ||
     input.unit.scale !== declared.unit.scale) invalid();
+
+  if (contractVersion === VALUE_VERSION_V2 &&
+      !(input.sourceRecordCount === null ||
+        (Number.isSafeInteger(input.sourceRecordCount) &&
+          input.sourceRecordCount >= 0 && input.sourceRecordCount <= 1000))) invalid();
 
   if (declared.temporalBasis === 'as_of_stock') {
     if (input.reportingWindow !== null) invalid();
@@ -142,10 +149,16 @@ function normalizeFeatureValueVersion(input, definition, contractVersion) {
     if (input.state === 'stale' || input.state === 'conflicting') {
       if (!digest(input.sourceSnapshotDigest) ||
           (input.state === 'conflicting' && input.latestSourceRecordedAt === null) ||
-          (contractVersion === VALUE_VERSION && input.latestSourceRecordedAt === null)) invalid();
+          (input.latestSourceRecordedAt === null &&
+            (contractVersion === VALUE_VERSION || input.sourceRecordCount !== 0))) invalid();
     } else if (input.state === 'inapplicable' &&
         (input.sourceSnapshotDigest !== null || input.latestSourceRecordedAt !== null)) invalid();
     else if (input.state === 'missing' && input.latestSourceRecordedAt !== null) invalid();
+  }
+
+  if (contractVersion === VALUE_VERSION_V2) {
+    if (input.sourceSnapshotDigest === null && input.sourceRecordCount !== null) invalid();
+    if (input.sourceSnapshotDigest !== null && input.sourceRecordCount === null) invalid();
   }
 
   return freeze({
@@ -157,6 +170,8 @@ function normalizeFeatureValueVersion(input, definition, contractVersion) {
     reportingWindow: input.reportingWindow === null ? null : { ...input.reportingWindow },
     sourceSnapshotDigest: input.sourceSnapshotDigest,
     latestSourceRecordedAt: input.latestSourceRecordedAt,
+    ...(contractVersion === VALUE_VERSION_V2 ?
+      { sourceRecordCount: input.sourceRecordCount } : {}),
     state: input.state, amount: input.amount, reason: input.reason,
     unit: { ...declared.unit },
   });

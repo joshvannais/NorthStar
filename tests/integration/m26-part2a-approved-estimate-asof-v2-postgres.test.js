@@ -290,6 +290,20 @@ realPostgres('Mission 26 Part 2A target-complete approved-estimate v2', () => {
         { version: first.body.data.nextCursor.version, offset: null,
           requestDigest: first.body.data.nextCursor.requestDigest,
           currentGenerationDigest: first.body.data.nextCursor.currentGenerationDigest },
+        { version: first.body.data.nextCursor.version,
+          offset: String(first.body.data.nextCursor.offset),
+          requestDigest: first.body.data.nextCursor.requestDigest,
+          currentGenerationDigest: first.body.data.nextCursor.currentGenerationDigest },
+        { version: 1, offset: first.body.data.nextCursor.offset,
+          requestDigest: first.body.data.nextCursor.requestDigest,
+          currentGenerationDigest: first.body.data.nextCursor.currentGenerationDigest },
+        { version: first.body.data.nextCursor.version,
+          offset: first.body.data.nextCursor.offset, requestDigest: 1,
+          currentGenerationDigest: first.body.data.nextCursor.currentGenerationDigest },
+        { version: first.body.data.nextCursor.version,
+          offset: first.body.data.nextCursor.offset,
+          requestDigest: first.body.data.nextCursor.requestDigest,
+          currentGenerationDigest: 1 },
       ]) {
         await expect(fixture.runtimePool.query(
           `SELECT canonical_forecast_approved_estimate_v2_lineage_replay(

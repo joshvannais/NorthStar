@@ -71,6 +71,10 @@ BEGIN
    (SELECT count(*) FROM jsonb_object_keys(cursor_value))<>4 OR
    NOT (cursor_value ? 'version' AND cursor_value ? 'offset' AND
     cursor_value ? 'requestDigest' AND cursor_value ? 'currentGenerationDigest') OR
+   jsonb_typeof(cursor_value->'version')<>'string' OR
+   jsonb_typeof(cursor_value->'offset')<>'number' OR
+   jsonb_typeof(cursor_value->'requestDigest')<>'string' OR
+   jsonb_typeof(cursor_value->'currentGenerationDigest')<>'string' OR
    (cursor_value->>'version') IS DISTINCT FROM
     'm26-approved-estimate-lineage-replay-v2' OR
    (cursor_value->>'requestDigest') IS DISTINCT FROM request_digest OR

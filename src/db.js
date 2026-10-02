@@ -1688,6 +1688,47 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_select_v2(uuid,uuid,text,uuid,text,text,uuid,integer,text,text,uuid,text,text,boolean) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_governance_selection_v2_read(uuid,uuid,text,uuid) TO %I', runtime_role);
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='220_canonical_forecast_retell_future_origin_v2.sql') OR
+         pg_catalog.to_regclass('public.canonical_forecast_retell_period_certifications_v2') IS NOT NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_retell_future_origins_v2') IS NOT NULL THEN
+        IF pg_catalog.to_regclass('public.canonical_forecast_retell_period_certifications_v2') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_retell_future_origins_v2') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_retell_call_window_pins(uuid,timestamptz,timestamptz,timestamptz)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_retell_period_snapshot_v2_capture(uuid,uuid,text,uuid,text,text,date)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_retell_period_evidence_v2(uuid,uuid,text,uuid,uuid,date)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_retell_period_certification_v2_mutate(uuid,uuid,text,uuid,text,text,text,uuid,date,integer,text,text,integer,text,jsonb,boolean,boolean,boolean,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_retell_period_certification_v2_read(uuid,uuid,text,uuid,date)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_retell_future_evidence_v2(uuid,uuid,text,uuid,date)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_retell_future_origin_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+          RAISE EXCEPTION 'Required Retell future-origin v2 authority is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_retell_period_certifications_v2'::regclass
+           AND tgname='canonical_forecast_retell_period_certifications_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_price_flow_origin_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_retell_future_origins_v2'::regclass
+           AND tgname='canonical_forecast_retell_future_origins_v2_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_price_flow_origin_immutable()'::regprocedure
+           AND NOT tgisinternal) THEN
+          RAISE EXCEPTION 'Required Retell future-origin v2 immutability is missing';
+        END IF;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_period_certifications_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_retell_future_origins_v2 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_call_window_pins(uuid,timestamptz,timestamptz,timestamptz) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_retell_future_evidence_v2(uuid,uuid,text,uuid,date) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_period_evidence_v2(uuid,uuid,text,uuid,uuid,date) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_period_snapshot_v2_capture(uuid,uuid,text,uuid,text,text,date) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_period_certification_v2_mutate(uuid,uuid,text,uuid,text,text,text,uuid,date,integer,text,text,integer,text,jsonb,boolean,boolean,boolean,text,text) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_period_certification_v2_read(uuid,uuid,text,uuid,date) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date) TO %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_retell_future_origin_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -4357,6 +4398,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('216_canonical_forecast_complete_window_mea
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('217_canonical_forecast_complete_window_measurement_tenant_identity.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('218_canonical_forecast_complete_window_governance_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('219_canonical_forecast_complete_window_governance_metrics.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('220_canonical_forecast_retell_future_origin_v2.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

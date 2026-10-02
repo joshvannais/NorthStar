@@ -26,7 +26,10 @@ async function inspectRetellCallWindow({ pool, actor, snapshotId, startsAt, ends
   if (!second || JSON.stringify(first) !== JSON.stringify(second)) {
     return Object.freeze({ state: 'unavailable', reason: 'source_changed_during_scan' });
   }
-  return result;
+  return Object.freeze({ ...result, agentId: first.agentId,
+    canonicalCallDigests: Object.freeze([...first.canonicalCallDigests]),
+    sourceSnapshotDigest: first.sourceSnapshotDigest,
+    scannedAt: new Date().toISOString().replace(/Z$/, '000Z') });
 }
 
 module.exports = { inspectRetellCallWindow };

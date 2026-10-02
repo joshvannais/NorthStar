@@ -322,6 +322,17 @@ realPostgres('Mission 26 Part 3D complete-window governance v2', () => {
       expect(review.status).toBe(201);
       expect(review.body.data).toMatchObject({
         state: 'complete_window_governance_review_saved', revision: 1,
+        comparison: {
+          version: 'm26-complete-window-candidate-comparison-v3',
+          state: 'descriptive_comparison_available', pairedOriginCount: 50,
+          baseMeanAbsoluteError: '56.00',
+          candidateMeanAbsoluteError: '1344.00',
+          direction: 'candidate_higher_error',
+          candidateBetterOriginCount: 2, candidateWorseOriginCount: 48,
+          candidateEqualOriginCount: 0,
+          policyVerdict: 'human_review_required_no_automatic_winner',
+          empiricalFitnessEstablished: false,
+        },
         replayed: false, internalExperimentOnly: true,
         productionPromotionEligible: false, realForecastEligible: false,
         paidNumericServing: false, forecastServingEnabled: false });
@@ -340,7 +351,13 @@ realPostgres('Mission 26 Part 3D complete-window governance v2', () => {
         storedOriginCount: 100, pairedCount: 50,
         baseAlgorithmVersion: 'm26_price_flow_carry_forward_v1',
         candidateAlgorithmVersion: 'm26_price_flow_zero_baseline_v1',
-        humanDecisionRequired: true });
+        humanDecisionRequired: true,
+        comparison: {
+          direction: 'candidate_higher_error',
+          baseMeanAbsoluteError: '56.00',
+          candidateMeanAbsoluteError: '1344.00',
+          policyVerdict: 'human_review_required_no_automatic_winner',
+        } });
       const foreign = await request(f.app)
         .get(`${root}/complete-price-flow-governance-reviews-v2/${review.body.data.reviewId}`)
         .set('Cookie', f.actors.otherOwner.session.headers.Cookie);

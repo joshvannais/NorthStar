@@ -69,6 +69,8 @@ BEGIN
  IF jsonb_typeof(cursor_value)='null' THEN offset_value:=0;
  ELSIF jsonb_typeof(cursor_value)<>'object' OR
    (SELECT count(*) FROM jsonb_object_keys(cursor_value))<>4 OR
+   NOT (cursor_value ? 'version' AND cursor_value ? 'offset' AND
+    cursor_value ? 'requestDigest' AND cursor_value ? 'currentGenerationDigest') OR
    (cursor_value->>'version') IS DISTINCT FROM
     'm26-approved-estimate-lineage-replay-v2' OR
    (cursor_value->>'requestDigest') IS DISTINCT FROM request_digest OR
@@ -81,7 +83,7 @@ BEGIN
   EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range THEN
    RAISE EXCEPTION 'Approved-estimate replay cursor changed' USING ERRCODE='40001';
   END;
-  IF offset_value<=0 OR offset_value>=item_count THEN
+  IF offset_value IS NULL OR offset_value<=0 OR offset_value>=item_count THEN
    RAISE EXCEPTION 'Approved-estimate replay cursor changed' USING ERRCODE='40001';END IF;
  END IF;
 

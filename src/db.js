@@ -1613,6 +1613,32 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_comparable_month_v2_guard() FROM %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_comparable_month_v2_capture(uuid,uuid,text,uuid,text,text,uuid,date,date) TO %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_comparable_month_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      IF pg_catalog.to_regclass('public.canonical_forecast_complete_window_evaluations_v2') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_price_flow_origin_inventory_fence_v2()') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_evidence_v2(uuid,uuid,text,uuid)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+        RAISE EXCEPTION 'Required complete-window evaluation v2 authority is missing';
+      END IF;
+      IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_forecast_complete_window_evaluations_v2'::regclass
+         AND tgname='canonical_forecast_complete_window_evaluations_v2_immutable'
+         AND tgenabled='O' AND tgtype=58
+         AND tgfoid='public.canonical_forecast_price_flow_origin_immutable()'::regprocedure
+         AND NOT tgisinternal) OR
+         NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+        WHERE tgrelid='public.canonical_forecast_price_flow_saved_origins'::regclass
+         AND tgname='canonical_forecast_price_flow_origin_inventory_fence_v2'
+         AND tgenabled='O' AND tgtype=7
+         AND tgfoid='public.canonical_forecast_price_flow_origin_inventory_fence_v2()'::regprocedure
+         AND NOT tgisinternal) THEN
+        RAISE EXCEPTION 'Required complete-window evaluation v2 fencing is missing';
+      END IF;
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_complete_window_evaluations_v2 FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_complete_window_evidence_v2(uuid,uuid,text,uuid) FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_flow_origin_inventory_fence_v2() FROM %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text) TO %I', runtime_role);
+      EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -3487,6 +3513,21 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_actual_commit_observations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_profile_witnesses','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_forecast_price_flow_evaluations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND (to_regclass('public.canonical_forecast_complete_window_evaluations_v2') IS NULL OR (
+           NOT has_table_privilege($1,'public.canonical_forecast_complete_window_evaluations_v2','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+           AND COALESCE(has_function_privilege($1,
+             to_regprocedure('public.canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text)'),
+             'EXECUTE'),FALSE)
+           AND COALESCE(has_function_privilege($1,
+             to_regprocedure('public.canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)'),
+             'EXECUTE'),FALSE)
+           AND NOT COALESCE(has_function_privilege($1,
+             to_regprocedure('public.canonical_forecast_complete_window_evidence_v2(uuid,uuid,text,uuid)'),
+             'EXECUTE'),FALSE)
+           AND NOT COALESCE(has_function_privilege($1,
+             to_regprocedure('public.canonical_forecast_price_flow_origin_inventory_fence_v2()'),
+             'EXECUTE'),FALSE)
+         ))
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_flow_origin_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_price_flow_actual_commit_marker()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_profile_activation_order_lock()','EXECUTE')
@@ -4230,6 +4271,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('210_canonical_forecast_current_backlog_com
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('211_canonical_forecast_approved_estimate_asof_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('212_canonical_forecast_comparable_months_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('213_canonical_forecast_approved_estimate_lineage_replay_v2.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('214_canonical_forecast_complete_window_evaluation_v2.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

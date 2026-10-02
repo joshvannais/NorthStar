@@ -92,6 +92,10 @@ function createForecastPriceHistoryRouter(options = {}) {
   const evaluationThrottle = options.evaluationThrottle ||
     rateLimit('forecast-evaluation-capture', req =>
       `forecast-price-history:${req.tenantContext.organizationId}`);
+  const completeWindowEvaluationThrottle =
+    options.completeWindowEvaluationThrottle ||
+    rateLimit('forecast-evaluation-capture', req =>
+      `forecast-price-history:${req.tenantContext.organizationId}:complete-window-v2`);
   const algorithmOriginThrottle = options.algorithmOriginThrottle ||
     rateLimit('forecast-algorithm-origin', req =>
       `forecast-price-history:${req.tenantContext.organizationId}`);
@@ -2634,6 +2638,83 @@ function createForecastPriceHistoryRouter(options = {}) {
           numericalErrorAvailable: false,
           realAccuracyAvailable: false, realForecastEligible: false,
         } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  // Target-complete Part 3B receipt. The server and database select the full
+  // bounded registered-origin window; the request cannot provide run IDs,
+  // forecasts, actuals, a cutoff, or an evidence manifest.
+  router.post('/complete-price-flow-evaluations-v2', auth,
+    requirePermission('forecast', 'update'), completeWindowEvaluationThrottle,
+    async (req, res) => {
+      if (!exactKeys(req.body, []) || !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The complete-window evaluation request is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          `SELECT public.canonical_forecast_complete_window_evaluation_v2_capture(
+            $1,$2,$3,$4,$5,$6) value`,
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.get('X-CSRF-Token'), req.get('Idempotency-Key')])).rows[0]?.value;
+        if (!value || !['complete_window_evaluation_saved',
+          'complete_window_evaluation_unavailable'].includes(value.state)) {
+          throw new Error('Invalid complete-window evaluation authority');
+        }
+        await client.query('COMMIT');
+        return res.status(value.state === 'complete_window_evaluation_saved' &&
+          value.replayed !== true ? 201 : 200).json({ success: true, data: {
+          ...value, numericalResultsAvailable: false,
+          empiricalAccuracyAvailable: false, calibrationAvailable: false,
+          realForecastEligible: false,
+        } });
+      } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        return errorReply(res, error);
+      } finally { if (client) client.release(); }
+    });
+
+  router.get('/complete-price-flow-evaluations-v2/:evaluationId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.evaluationId || '') ||
+          !exactKeys(req.query, [])) {
+        return res.status(400).json({ success: false, error: {
+          category: 'FORECAST_REQUEST_INVALID',
+          message: 'The complete-window evaluation read is invalid.',
+        } });
+      }
+      let client;
+      try {
+        client = await poolProvider().connect();
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await client.query("SET LOCAL statement_timeout = '10000ms'");
+        await client.query("SET LOCAL lock_timeout = '2000ms'");
+        const identity = actor(req);
+        const value = (await client.query(
+          `SELECT public.canonical_forecast_complete_window_evaluation_v2_read(
+            $1,$2,$3,$4,$5) value`,
+          [identity.organizationId, identity.actorUserId,
+            identity.actorAccessRole, identity.authSessionId,
+            req.params.evaluationId])).rows[0]?.value;
+        if (!value || !['complete_window_evaluation_available',
+          'complete_window_evaluation_stale',
+          'complete_window_evaluation_unavailable'].includes(value.state)) {
+          throw new Error('Invalid complete-window evaluation read authority');
+        }
+        await client.query('COMMIT');
+        return res.json({ success: true, data: value });
       } catch (error) {
         if (client) await client.query('ROLLBACK').catch(() => {});
         return errorReply(res, error);

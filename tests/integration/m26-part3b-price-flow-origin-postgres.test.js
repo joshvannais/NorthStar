@@ -17,7 +17,7 @@ const utc = day => `${day.toISOString().slice(0, 10)}T00:00:00.000000Z`;
 realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => {
   let f;
   beforeAll(async () => { f = await createEstimateReviewFixture({
-    operationalSchedule: true }); }, 120000);
+    operationalSchedule: true, additionalCompleteEstimates: 1 }); }, 120000);
   afterAll(async () => { if (f) await f.cleanup(); }, 120000);
   const owner = () => f.actors.owner;
 
@@ -836,6 +836,12 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         expect(busyWindow.body.error).toMatchObject({
           category: 'FORECAST_SOURCE_BUSY',
         });
+        await expect(f.runtimePool.query(
+          `SELECT public.canonical_forecast_complete_window_evaluation_v2_capture(
+            $1,$2,$3,$4,$5,$6) value`,
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, key()]))
+          .rejects.toMatchObject({ code: '55P03' });
         await actualLock.query('ROLLBACK');
       } catch (error) {
         await actualLock.query('ROLLBACK').catch(() => {});
@@ -940,6 +946,30 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         originCount: 2, pairedCount: 0, accuracyAvailable: false });
       expect(missingManifest.body.data.origins.map(item => item.currentStatus))
         .toEqual(['missing', 'missing']);
+      const completeMissingKey = key();
+      const completeMissing = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner().session.headers).set('Idempotency-Key', completeMissingKey)
+        .send({});
+      expect(completeMissing.body.data).toMatchObject({
+        state: 'complete_window_evaluation_saved', revision: 1,
+        previousId: null, replayed: false,
+        empiricalAccuracyAvailable: false, calibrationAvailable: false,
+        realForecastEligible: false });
+      expect(completeMissing.status).toBe(201);
+      const missingCompleteRead = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${completeMissing.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(missingCompleteRead.status).toBe(200);
+      expect(missingCompleteRead.body.data).toMatchObject({
+        state: 'complete_window_evaluation_available', revision: 1,
+        storedOriginCount: 3, matchingContextCount: 2,
+        excludedContextCount: 1, pairedCount: 0, missingCount: 2,
+        revokedCount: 0, excludedCount: 1, restartRequired: false,
+        empiricalAccuracyAvailable: false, calibrationAvailable: false,
+        realForecastEligible: false });
+      expect(JSON.stringify(missingCompleteRead.body.data))
+        .not.toMatch(/1400\.00|outcomeAmount|forecastValue/);
       const savedActual = await request(f.app)
         .post(`${root}/saved-price-flow-origins/${runId}/actual-receipts`)
         .set(owner().session.headers).set('Idempotency-Key', actualKey)
@@ -1064,6 +1094,145 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(secondPairedActual.rows[0].value).toMatchObject({
         state: 'pair_actual_known', amount: '0.00',
         receiptId: secondActual.body.data.receiptId });
+      const completePairedKey = key();
+      const completePaired = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner().session.headers).set('Idempotency-Key', completePairedKey)
+        .send({});
+      expect(completePaired.status).toBe(201);
+      expect(completePaired.body.data).toMatchObject({
+        state: 'complete_window_evaluation_saved', revision: 2,
+        previousId: completeMissing.body.data.evaluationId, replayed: false });
+      const completePairedReplay = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner().session.headers).set('Idempotency-Key', completePairedKey)
+        .send({});
+      expect(completePairedReplay.status).toBe(200);
+      expect(completePairedReplay.body.data).toMatchObject({
+        evaluationId: completePaired.body.data.evaluationId,
+        revision: 2, replayed: true });
+      const completePairedRead = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${completePaired.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(completePairedRead.body.data).toMatchObject({
+        state: 'complete_window_evaluation_available', revision: 2,
+        storedOriginCount: 3, pairedCount: 2, missingCount: 0,
+        revokedCount: 0, excludedCount: 1 });
+      // Hold an uncommitted zero-baseline-style origin after its INSERT trigger
+      // has taken the new inventory fence. Capture's first inventory read cannot
+      // see it, then capture must wait at the final shared fence. Once the
+      // writer commits, the fenced re-read must observe the added origin and
+      // refuse the whole capture without persisting a partial denominator.
+      const concurrentOriginWriter = await f.ownerPool.connect();
+      const originRaceCapture = await f.runtimePool.connect();
+      let concurrentOriginId;
+      try {
+        await concurrentOriginWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const concurrentOrigin = await concurrentOriginWriter.query(`
+          INSERT INTO canonical_forecast_price_flow_saved_origins (
+            organization_id,id,saved_at,horizon_start,horizon_end,
+            source_receipt_id,output,receipt_digest,actor_user_id,
+            auth_session_id,request_key_hash,request_digest)
+          SELECT organization_id,gen_random_uuid(),saved_at,horizon_start,horizon_end,
+            source_receipt_id,output,receipt_digest,actor_user_id,auth_session_id,
+            encode(sha256(convert_to(gen_random_uuid()::text,'UTF8')),'hex'),
+            request_digest
+          FROM canonical_forecast_price_flow_saved_origins
+          WHERE organization_id=$1 AND id=$2
+          RETURNING id`, [f.org, zeroRunId]);
+        concurrentOriginId = concurrentOrigin.rows[0].id;
+        await originRaceCapture.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const capturePid = (await originRaceCapture.query(
+          'SELECT pg_backend_pid() pid')).rows[0].pid;
+        const rowsBeforeRace = (await f.ownerPool.query(
+          `SELECT count(*)::integer count
+           FROM canonical_forecast_complete_window_evaluations_v2
+           WHERE organization_id=$1`, [f.org])).rows[0].count;
+        const captureDuringOriginRace = originRaceCapture.query(
+          `SELECT public.canonical_forecast_complete_window_evaluation_v2_capture(
+            $1,$2,$3,$4,$5,$6) value`,
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, key()]);
+        let captureSettled;
+        captureDuringOriginRace.then(result => { captureSettled = result; },
+          error => { captureSettled = error; });
+        let captureWaiting = false;
+        for (let attempt = 0; attempt < 100 && !captureWaiting; attempt += 1) {
+          captureWaiting = (await f.ownerPool.query(
+            `SELECT EXISTS(SELECT 1 FROM pg_locks
+              WHERE pid=$1 AND locktype='advisory' AND NOT granted) waiting`,
+          [capturePid])).rows[0].waiting;
+          if (captureSettled) break;
+          if (!captureWaiting) await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        if (!captureWaiting && captureSettled) {
+          throw new Error(`Capture settled before inventory fence: ${JSON.stringify(
+            captureSettled.rows?.[0]?.value || { message: captureSettled.message })}`);
+        }
+        expect(captureWaiting).toBe(true);
+        await concurrentOriginWriter.query('COMMIT');
+        const refusedOriginRace = (await captureDuringOriginRace).rows[0].value;
+        expect(refusedOriginRace).toMatchObject({
+          state: 'complete_window_evaluation_unavailable',
+          reason: 'origin_inventory_changed' });
+        await originRaceCapture.query('COMMIT');
+        expect((await f.ownerPool.query(
+          `SELECT count(*)::integer count
+           FROM canonical_forecast_complete_window_evaluations_v2
+           WHERE organization_id=$1`, [f.org])).rows[0].count)
+          .toBe(rowsBeforeRace);
+      } finally {
+        await concurrentOriginWriter.query('ROLLBACK').catch(() => {});
+        await originRaceCapture.query('ROLLBACK').catch(() => {});
+        concurrentOriginWriter.release();
+        originRaceCapture.release();
+        if (concurrentOriginId) {
+          try {
+            await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+              DISABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+            await f.ownerPool.query(
+              'DELETE FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+              [concurrentOriginId]);
+          } finally {
+            await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+              ENABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+          }
+        }
+      }
+      const profileActivationBefore = (await f.ownerPool.query(
+        `SELECT observed_at FROM canonical_forecast_profile_effective_activations
+         WHERE anchor_id=$1`, [profileAnchorId])).rows[0].observed_at;
+      try {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_profile_effective_activations
+          DISABLE TRIGGER canonical_forecast_profile_effective_activations_immutable`);
+        await f.ownerPool.query(`UPDATE canonical_forecast_profile_effective_activations
+          SET observed_at=$2 WHERE anchor_id=$1`,
+        [profileAnchorId, fictionalEnd]);
+        const profileChanged = await request(f.app)
+          .get(`${root}/complete-price-flow-evaluations-v2/${completePaired.body.data.evaluationId}`)
+          .set('Cookie', owner().session.headers.Cookie);
+        expect(profileChanged.body.data).toMatchObject({
+          state: 'complete_window_evaluation_stale', revision: 2,
+          reason: 'source_evidence_unavailable', restartRequired: true });
+      } finally {
+        await f.ownerPool.query(`UPDATE canonical_forecast_profile_effective_activations
+          SET observed_at=$2 WHERE anchor_id=$1`,
+        [profileAnchorId, profileActivationBefore]);
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_profile_effective_activations
+          ENABLE TRIGGER canonical_forecast_profile_effective_activations_immutable`);
+      }
+      const foreignComplete = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${completePaired.body.data.evaluationId}`)
+        .set('Cookie', f.actors.otherOwner.session.headers.Cookie);
+      expect(foreignComplete.status).toBe(200);
+      expect(foreignComplete.body.data).toEqual({
+        state: 'complete_window_evaluation_unavailable',
+        reason: 'evaluation_not_found' });
+      const deniedComplete = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(f.actors.member.session.headers).set('Idempotency-Key', key())
+        .send({});
+      expect(deniedComplete.status).toBe(403);
       const paired = await request(f.app)
         .get(`${root}/saved-price-flow-rolling-pairs`)
         .set('Cookie', owner().session.headers.Cookie)
@@ -1183,7 +1352,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(foreignMeasurement.body.data).not.toHaveProperty('statusCounts');
       // Owner-SQL fictional fixture: a third stored same-context candidate in
       // the selected capture span must make the two-origin selection incomplete.
-      await f.ownerPool.query(`
+      const extraOrigin = await f.ownerPool.query(`
         INSERT INTO canonical_forecast_price_flow_saved_origins (
           organization_id,id,saved_at,horizon_start,horizon_end,
           source_receipt_id,output,receipt_digest,actor_user_id,
@@ -1198,6 +1367,7 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         JOIN canonical_forecast_price_flow_saved_origins b
           ON b.organization_id=a.organization_id
         WHERE a.organization_id=$1 AND a.id=$2 AND b.id=$3
+        RETURNING id
       `, [f.org, runId, secondRunId]);
       const incompletePopulation = await request(f.app)
         .get(`${root}/saved-price-flow-evaluations/${savedEvaluation.body.data.evaluationId}/measurement`)
@@ -1220,6 +1390,39 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         state: 'evaluation_window_unavailable',
         reason: 'source_evidence_unavailable',
         realAccuracyAvailable: false, realForecastEligible: false });
+      const completeAfterPopulationChange = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${completePaired.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(completeAfterPopulationChange.body.data).toMatchObject({
+        state: 'complete_window_evaluation_stale', revision: 2,
+        reason: 'source_evidence_unavailable', restartRequired: true });
+      const rowCountBeforeRefusal = (await f.ownerPool.query(
+        `SELECT count(*)::integer count
+         FROM canonical_forecast_complete_window_evaluations_v2
+         WHERE organization_id=$1`, [f.org])).rows[0].count;
+      const refusedCapture = (await f.runtimePool.query(
+        `SELECT public.canonical_forecast_complete_window_evaluation_v2_capture(
+          $1,$2,$3,$4,$5,$6) value`,
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, key()])).rows[0].value;
+      expect(refusedCapture).toMatchObject({
+        state: 'complete_window_evaluation_unavailable',
+        reason: 'source_evidence_unavailable' });
+      expect((await f.ownerPool.query(
+        `SELECT count(*)::integer count
+         FROM canonical_forecast_complete_window_evaluations_v2
+         WHERE organization_id=$1`, [f.org])).rows[0].count)
+        .toBe(rowCountBeforeRefusal);
+      try {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+          DISABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+        await f.ownerPool.query(
+          'DELETE FROM canonical_forecast_price_flow_saved_origins WHERE id=$1',
+          [extraOrigin.rows[0].id]);
+      } finally {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+          ENABLE TRIGGER canonical_forecast_price_flow_origins_immutable`);
+      }
       const deniedEvaluation = await request(f.app)
         .post(`${root}/saved-price-flow-rolling-pairs`)
         .set(f.actors.member.session.headers)
@@ -1243,6 +1446,71 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       await expect(f.runtimePool.query(
         'SELECT * FROM canonical_forecast_price_flow_actual_commit_observations'))
         .rejects.toMatchObject({ code: '42501' });
+      await expect(f.runtimePool.query(
+        'SELECT * FROM canonical_forecast_complete_window_evaluations_v2'))
+        .rejects.toMatchObject({ code: '42501' });
+      await expect(f.runtimePool.query(
+        'SELECT public.canonical_forecast_complete_window_evidence_v2($1,$2,$3,$4)',
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId])).rejects.toMatchObject({ code: '42501' });
+      const v2Privileges = await f.ownerPool.query(`SELECT
+        has_function_privilege($1,
+          'canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text)','EXECUTE') capture,
+        has_function_privilege($1,
+          'canonical_forecast_complete_window_evaluation_v2_read(uuid,uuid,text,uuid,uuid)','EXECUTE') read,
+        has_function_privilege($1,
+          'canonical_forecast_complete_window_evidence_v2(uuid,uuid,text,uuid)','EXECUTE') helper,
+        has_function_privilege($1,
+          'canonical_forecast_price_flow_origin_inventory_fence_v2()','EXECUTE') inventory_fence,
+        has_table_privilege($1,'canonical_forecast_complete_window_evaluations_v2',
+          'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') table_access`,
+      [f.roles.runtime]);
+      expect(v2Privileges.rows[0]).toEqual({ capture: true, read: true,
+        helper: false, inventory_fence: false, table_access: false });
+      const verifyRuntime = async () => {
+        const client = await f.ownerPool.connect();
+        try {
+          await client.query('BEGIN');
+          try {
+            await f.db.grantAndVerifyRuntimeAuthorityForTests(client,
+              { runtimeRole: f.roles.runtime });
+            await client.query('COMMIT');
+          } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+          }
+        } finally { client.release(); }
+      };
+      await f.ownerPool.query(`GRANT EXECUTE ON FUNCTION
+        canonical_forecast_complete_window_evidence_v2(uuid,uuid,text,uuid) TO PUBLIC`);
+      try {
+        await expect(verifyRuntime()).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+      } finally {
+        await f.ownerPool.query(`REVOKE ALL ON FUNCTION
+          canonical_forecast_complete_window_evidence_v2(uuid,uuid,text,uuid) FROM PUBLIC`);
+      }
+      await f.ownerPool.query(`ALTER FUNCTION
+        canonical_forecast_complete_window_evaluation_v2_capture(uuid,uuid,text,uuid,text,text)
+        RENAME TO canonical_forecast_complete_window_evaluation_v2_capture_missing_test`);
+      try {
+        await expect(verifyRuntime()).rejects.toThrow(
+          'Required complete-window evaluation v2 authority is missing');
+      } finally {
+        await f.ownerPool.query(`ALTER FUNCTION
+          canonical_forecast_complete_window_evaluation_v2_capture_missing_test(uuid,uuid,text,uuid,text,text)
+          RENAME TO canonical_forecast_complete_window_evaluation_v2_capture`);
+      }
+      await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+        DISABLE TRIGGER canonical_forecast_price_flow_origin_inventory_fence_v2`);
+      try {
+        await expect(verifyRuntime()).rejects.toThrow(
+          'Required complete-window evaluation v2 fencing is missing');
+      } finally {
+        await f.ownerPool.query(`ALTER TABLE canonical_forecast_price_flow_saved_origins
+          ENABLE TRIGGER canonical_forecast_price_flow_origin_inventory_fence_v2`);
+      }
+      await expect(verifyRuntime()).resolves.toBeUndefined();
       const estimate = f.estimateGraphs[0].ids.estimate;
       const route = `/api/v1/canonical/estimates/${estimate}`;
       const current = await request(f.app).get(`${route}/review`)
@@ -1273,6 +1541,19 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         .toEqual(['stale', 'stale']);
       expect(unverifiedManifest.body.data.origins.map(item => item.reason))
         .toEqual(['actual_source_changed', 'actual_source_changed']);
+      const sourceChangedComplete = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner().session.headers).set('Idempotency-Key', key()).send({});
+      expect(sourceChangedComplete.status).toBe(201);
+      expect(sourceChangedComplete.body.data).toMatchObject({
+        state: 'complete_window_evaluation_saved', revision: 3,
+        previousId: completePaired.body.data.evaluationId, replayed: false });
+      const sourceChangedCompleteRead = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${sourceChangedComplete.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(sourceChangedCompleteRead.body.data).toMatchObject({
+        state: 'complete_window_evaluation_available', revision: 3,
+        pairedCount: 0, excludedCount: 3, restartRequired: false });
       const correctedSource = await capturePriceThroughGuardedSource();
       const unverifiedClient = await f.runtimePool.connect();
       try {
@@ -1322,6 +1603,26 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       expect(revokedPair.rows[0].value).toMatchObject({
         state: 'pair_actual_revoked', amount: null,
         reason: 'source_revoked', receiptId: correction.body.data.receiptId });
+      const pairedReceiptNowStale = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${completePaired.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(pairedReceiptNowStale.body.data).toMatchObject({
+        state: 'complete_window_evaluation_stale', revision: 2,
+        reason: 'source_generation_changed', restartRequired: true });
+      const revisedComplete = await request(f.app)
+        .post(`${root}/complete-price-flow-evaluations-v2`)
+        .set(owner().session.headers).set('Idempotency-Key', key()).send({});
+      expect(revisedComplete.status).toBe(201);
+      expect(revisedComplete.body.data).toMatchObject({
+        state: 'complete_window_evaluation_saved', revision: 4,
+        previousId: sourceChangedComplete.body.data.evaluationId, replayed: false });
+      const revisedCompleteRead = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${revisedComplete.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(revisedCompleteRead.body.data).toMatchObject({
+        state: 'complete_window_evaluation_available', revision: 4,
+        storedOriginCount: 3, pairedCount: 0, revokedCount: 1,
+        excludedCount: 2, restartRequired: false });
       const revokedManifest = await request(f.app)
         .get(`${root}/saved-price-flow-evaluations/${missingEvaluation.body.data.evaluationId}/manifest`)
         .set('Cookie', owner().session.headers.Cookie);
@@ -1457,5 +1758,17 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         await heldActualWriter.query('ROLLBACK').catch(() => {});
         heldActualWriter.release();
       }
+      // Change the M24 generation again after revision 2 was current. Both
+      // revision 1 and revision 2 now project as source_changed. The receipt
+      // captured during revision 1's unavailable state must remain stale; its
+      // pinned immutable actual identity prevents two null projections from
+      // collapsing into the same evidence.
+      await approve(f.estimateGraphs[2].ids.estimate);
+      const priorUnavailableGenerationStaysStale = await request(f.app)
+        .get(`${root}/complete-price-flow-evaluations-v2/${sourceChangedComplete.body.data.evaluationId}`)
+        .set('Cookie', owner().session.headers.Cookie);
+      expect(priorUnavailableGenerationStaysStale.body.data).toMatchObject({
+        state: 'complete_window_evaluation_stale', revision: 3,
+        reason: 'source_generation_changed', restartRequired: true });
     }, 120000);
 });

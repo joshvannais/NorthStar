@@ -8,6 +8,7 @@ const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 
 describe('Mission 26 Part 3C complete-window measurement v2 authority', () => {
   const migration = read('migrations/215_canonical_forecast_complete_window_measurement_v2.sql');
+  const correction = read('migrations/216_canonical_forecast_complete_window_measurement_drift_gate.sql');
   const routes = read('src/routes/forecastPriceHistory.js');
   const database = read('src/db.js');
 
@@ -44,5 +45,14 @@ describe('Mission 26 Part 3C complete-window measurement v2 authority', () => {
     expect(database).toContain("to_regprocedure('public.canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)') IS NULL");
     expect(database).toContain("GRANT EXECUTE ON FUNCTION public.canonical_forecast_complete_window_measurement_v2(uuid,uuid,text,uuid,uuid)");
     expect(database).toContain("REVIEWED_MIGRATION_TIMEOUT_FILES.add('215_canonical_forecast_complete_window_measurement_v2.sql')");
+    expect(database).toContain("REVIEWED_MIGRATION_TIMEOUT_FILES.add('216_canonical_forecast_complete_window_measurement_drift_gate.sql')");
+  });
+
+  test('withholds drift actions whenever the cohort is sample-ineligible', () => {
+    expect(correction).toContain('CREATE OR REPLACE FUNCTION public.canonical_forecast_complete_window_measurement_v2');
+    expect(correction).toContain('WHEN sample_reason IS NULL AND reference_count=30 AND later_count=30');
+    expect(correction).toContain("WHEN sample_reason IS NOT NULL THEN jsonb_build_object(");
+    expect(correction).toContain("'state','unavailable','reason',sample_reason");
+    expect(correction).toContain("'reviewAction',CASE WHEN later_abs/later_count>reference_abs/reference_count");
   });
 });

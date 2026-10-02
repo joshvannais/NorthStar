@@ -393,7 +393,8 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
             reason: 'point_only_no_nominal_interval' },
           observationLag: { state: 'descriptive_only',
             policyMaxUtcDays: 60, actualCommitLagVerified: false },
-          drift: { state: 'descriptive_only',
+          drift: { state: 'unavailable',
+            reason: 'source_event_diversity_unverified',
             empiricalDriftVerdictAvailable: false },
           realAccuracyAvailable: false, calibrationAvailable: false,
           realForecastEligible: false,
@@ -401,6 +402,10 @@ realPostgres('Mission 26 Part 3C registered M24 population', () => {
       });
       expect(pairedMeasurement.body.data.measurement.digest)
         .toMatch(/^[0-9a-f]{64}$/);
+      expect(pairedMeasurement.body.data.measurement.drift)
+        .not.toHaveProperty('reviewedRule');
+      expect(pairedMeasurement.body.data.measurement.drift)
+        .not.toHaveProperty('reviewAction');
       expect(JSON.stringify(pairedMeasurement.body.data))
         .not.toMatch(/forecastValue|outcomeAmount|1400\.00/);
       const malformed = await f.ownerPool.connect();

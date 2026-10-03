@@ -137,6 +137,54 @@ function safeEvaluation(value, kind, expectedOrigin = null) {
   return result;
 }
 
+function safePrerequisites(value) {
+  if (!value || !exact(value, ['state', 'profile', 'seasonal', 'pipeline',
+    'researchOnly', 'automaticActionTaken', 'forecastIssued', 'paidNumericServing',
+    'forecastServingEnabled']) || value.state !== 'demand_ui_prerequisites_current' ||
+      value.researchOnly !== true || value.automaticActionTaken !== false ||
+      value.forecastIssued !== false || value.paidNumericServing !== false ||
+      value.forecastServingEnabled !== false || !exact(value.profile, ['state', 'anchorId']) ||
+      !['current', 'unavailable'].includes(value.profile.state) ||
+      (value.profile.state === 'current' ? !UUID.test(value.profile.anchorId || '') :
+        value.profile.anchorId !== null)) return null;
+  const project = (item, purpose, target) => {
+    if (!exact(item, ['purpose', 'targetKey', 'targetVersion', 'calculationVersion',
+      'method', 'epoch']) || item.purpose !== purpose || item.targetKey !== target ||
+        item.targetVersion !== 'v1' || typeof item.calculationVersion !== 'string' ||
+        !item.calculationVersion || !exact(item.method,
+          ['expectedRevision', 'expectedDigest', 'action', 'approved']) ||
+        !Number.isSafeInteger(item.method.expectedRevision) || item.method.expectedRevision < 0 ||
+        item.method.expectedRevision > 10000 || !(item.method.expectedDigest === 'none' ||
+          DIGEST.test(item.method.expectedDigest || '')) ||
+        ((item.method.expectedRevision === 0) !== (item.method.expectedDigest === 'none')) ||
+        ![null, 'approve', 'reject'].includes(item.method.action) ||
+        item.method.approved !== (item.method.action === 'approve') ||
+        !exact(item.epoch, ['state', 'id', 'revision', 'installedAt']) ||
+        !['missing', 'current', 'stale'].includes(item.epoch.state)) return null;
+    if (item.epoch.state === 'missing') {
+      if (item.epoch.id !== null || item.epoch.revision !== null ||
+          item.epoch.installedAt !== null) return null;
+    } else if (!UUID.test(item.epoch.id || '') ||
+        !Number.isSafeInteger(item.epoch.revision) || item.epoch.revision < 1 ||
+        !instant(item.epoch.installedAt)) return null;
+    return { purpose: item.purpose, targetKey: item.targetKey,
+      targetVersion: item.targetVersion, calculationVersion: item.calculationVersion,
+      method: { expectedRevision: item.method.expectedRevision,
+        expectedDigest: item.method.expectedDigest, action: item.method.action,
+        approved: item.method.approved }, epoch: { state: item.epoch.state,
+        id: item.epoch.id, revision: item.epoch.revision,
+        installedAt: item.epoch.installedAt } };
+  };
+  const seasonal = project(value.seasonal, 'seasonal_inbound', 'demand.inbound_leads');
+  const pipeline = project(value.pipeline, 'pipeline_first_booking',
+    'demand.pipeline_first_accepted_bookings');
+  if (!seasonal || !pipeline) return null;
+  return { state: value.state, profile: { state: value.profile.state,
+    anchorId: value.profile.anchorId }, seasonal, pipeline, researchOnly: true,
+  automaticActionTaken: false, forecastIssued: false, paidNumericServing: false,
+  forecastServingEnabled: false };
+}
+
 function createForecastDemandToScheduleRouter(options = {}) {
   const router = express.Router();
   const poolProvider = options.poolProvider || (() => db.getPool());
@@ -164,6 +212,15 @@ function createForecastDemandToScheduleRouter(options = {}) {
     } catch (error) { if (client) await client.query('ROLLBACK').catch(() => {});
       return failure(res, error); } finally { if (client) client.release(); }
   }
+
+  router.get('/prerequisites/current', auth, requirePermission('forecast', 'read'), throttle,
+    async (req, res) => {
+      if (!exact(req.query, [])) return invalid(res);
+      return run(req, res, {
+        sql: `SELECT public.canonical_forecast_demand_ui_prerequisites_v1_read(
+          $1,$2,$3,$4) value`, params: [], validate: safePrerequisites,
+      });
+    });
 
   router.post('/epochs', auth, requirePermission('forecast', 'update'), writeThrottle,
     async (req, res) => {
@@ -310,4 +367,5 @@ function createForecastDemandToScheduleRouter(options = {}) {
   return router;
 }
 
-module.exports = { createForecastDemandToScheduleRouter, safeOrigin, safeEvaluation };
+module.exports = { createForecastDemandToScheduleRouter, safeOrigin, safeEvaluation,
+  safePrerequisites };

@@ -33,6 +33,13 @@ function snapshot(extra = {}) {
   };
 }
 
+function fact(extra = {}) {
+  return { state: 'backlog_fact_saved', id: ID, backlogSnapshotId: ID,
+    factDigest: DIGEST, replayed: false, knownSubsetOnly: true,
+    wholeBusinessCoverageVerified: false, researchOnly: true,
+    forecastIssued: false, ...extra };
+}
+
 class Element {
   constructor() {
     this.textContent = ''; this.value = ''; this.hidden = false; this.children = [];
@@ -66,12 +73,12 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     const controller = demand.create({ mode: 'paid', document: fixture.document,
       idempotency: () => 'part4d-capture-key-0001',
       fetcher: async (url, options) => { calls.push({ url, options });
-        return response(201, { ...snapshot(), replayed: false }); } });
+        return url.includes('/current-backlog/') ? response(200, snapshot()) : response(201, fact()); } });
     expect(calls).toEqual([]);
     expect(controller.state().kind).toBe('initial');
     await controller.capture();
-    expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe('/api/v1/forecast/current-backlog/snapshots');
+    expect(calls).toHaveLength(2);
+    expect(calls[0].url).toBe('/api/v1/forecast/demand-to-schedule/backlog-facts');
     expect(calls[0].options.headers['Idempotency-Key']).toBe('part4d-capture-key-0001');
     expect(controller.state()).toMatchObject({ kind: 'available', receiptId: ID });
     expect(fixture.values.commandCenterBacklogMetrics.children).toHaveLength(5);
@@ -89,14 +96,16 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
       snapshotDigest: null, sourceAuthenticated: false });
     const controller = demand.create({ mode: 'paid', document: fixture.document,
       idempotency: () => 'unused-part4d-key', fetcher: async (url, options) => {
-        calls.push({ url, options }); return response(200, stale); } });
+        calls.push({ url, options }); return response(200, { state: 'backlog_fact_stale', id: ID,
+          refreshRequired: true, knownSubsetOnly: true, wholeBusinessCoverageVerified: false,
+          researchOnly: true, forecastIssued: false }); } });
     fixture.values.commandCenterBacklogReceipt.value = 'bad';
     await controller.read();
     expect(calls).toEqual([]);
     expect(controller.state().kind).toBe('invalid');
     fixture.values.commandCenterBacklogReceipt.value = ID;
     await controller.read();
-    expect(calls[0].url).toBe(`/api/v1/forecast/current-backlog/snapshots/${ID}`);
+    expect(calls[0].url).toBe(`/api/v1/forecast/demand-to-schedule/backlog-facts/${ID}`);
     expect(controller.state().kind).toBe('stale');
     expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
     expect(JSON.stringify(controller.state())).not.toMatch(/780|sourceDigest|snapshotDigest/);
@@ -107,12 +116,13 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     const controller = demand.create({ mode: 'paid', document: fixture.document,
       idempotency: () => 'unused-part4d-key', fetcher: async url => {
         calls.push(url);
-        return response(200, snapshot({ id: calls.length === 1 ? OTHER_ID : READ_ID }));
+        if (url.includes('/current-backlog/')) return response(200, snapshot());
+        return response(200, fact({ id: calls.length === 1 ? OTHER_ID : READ_ID }));
       } });
     fixture.values.commandCenterBacklogReceipt.value = READ_ID.toUpperCase();
     await controller.read();
     expect(calls).toEqual([
-      `/api/v1/forecast/current-backlog/snapshots/${READ_ID}`,
+      `/api/v1/forecast/demand-to-schedule/backlog-facts/${READ_ID}`,
     ]);
     expect(controller.state()).toMatchObject({ kind: 'failure', metrics: [] });
     expect(fixture.values.commandCenterBacklogReceipt.value).toBe(READ_ID.toUpperCase());
@@ -121,8 +131,9 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     fixture.values.commandCenterBacklogReceipt.value = OTHER_ID;
     await controller.retry();
     expect(calls).toEqual([
-      `/api/v1/forecast/current-backlog/snapshots/${READ_ID}`,
-      `/api/v1/forecast/current-backlog/snapshots/${READ_ID}`,
+      `/api/v1/forecast/demand-to-schedule/backlog-facts/${READ_ID}`,
+      `/api/v1/forecast/demand-to-schedule/backlog-facts/${READ_ID}`,
+      `/api/v1/forecast/current-backlog/snapshots/${ID}`,
     ]);
     expect(controller.state()).toMatchObject({ kind: 'available', receiptId: READ_ID });
     expect(fixture.values.commandCenterBacklogReceipt.value).toBe(READ_ID);
@@ -214,87 +225,132 @@ describe('Mission 26 Part 4D bounded demand UI', () => {
     expect(controller.state().metrics).toEqual([]);
   });
 
-  test('an exact receipt read abandons an uncertain capture key before the next capture', async () => {
-    const fixture = documentFixture(), calls = [], keys = ['part4d-abandoned-key', 'part4d-new-key'];
+  test('chains an exact Part4C fact to its exact backlog snapshot', async () => {
+    const fixture = documentFixture(), calls = [];
     const controller = demand.create({ mode: 'paid', document: fixture.document,
-      idempotency: () => keys.shift(), fetcher: async (url, options) => {
+      idempotency: () => 'part4d-fact-chain-key', fetcher: async (url, options) => {
         calls.push({ url, key: options.headers['Idempotency-Key'] || null });
-        if (calls.length === 1) throw new Error('capture response lost');
-        return response(options.method === 'POST' ? 201 : 200,
-          options.method === 'POST' ? { ...snapshot(), replayed: false } : snapshot());
+        return url.includes('/current-backlog/') ? response(200, snapshot()) :
+          response(201, fact());
       } });
-    await controller.capture();
-    fixture.values.commandCenterBacklogReceipt.value = ID;
-    await controller.read();
     await controller.capture();
     expect(calls).toEqual([
-      { url: '/api/v1/forecast/current-backlog/snapshots', key: 'part4d-abandoned-key' },
+      { url: '/api/v1/forecast/demand-to-schedule/backlog-facts', key: 'part4d-fact-chain-key' },
       { url: `/api/v1/forecast/current-backlog/snapshots/${ID}`, key: null },
-      { url: '/api/v1/forecast/current-backlog/snapshots', key: 'part4d-new-key' },
     ]);
+    expect(controller.state()).toMatchObject({ kind: 'available', receiptId: ID });
   });
 
-  test('a late superseded capture completion cannot restore an abandoned capture key', async () => {
-    const fixture = documentFixture(), calls = [], keys = ['part4d-late-key', 'part4d-after-read-key'];
-    let resolveCapture;
-    const lateCapture = new Promise(resolve => { resolveCapture = resolve; });
-    const controller = demand.create({ mode: 'paid', document: fixture.document,
-      idempotency: () => keys.shift(), fetcher: async (url, options) => {
-        calls.push({ url, key: options.headers['Idempotency-Key'] || null });
-        if (calls.length === 1) return lateCapture;
-        return response(options.method === 'POST' ? 201 : 200,
-          options.method === 'POST' ? { ...snapshot(), replayed: false } : snapshot());
+  test('enforces state-specific replay identity on actual backlog capture and read actions', async () => {
+    for (const replayed of [false, true]) {
+      const fixture = documentFixture(), calls = [];
+      const controller = demand.create({ mode: 'paid', document: fixture.document,
+        idempotency: () => `part4d-valid-replay-${replayed}`, fetcher: async url => {
+          calls.push(url);
+          return url.includes('/current-backlog/') ? response(200, snapshot()) :
+            response(201, fact({ replayed }));
+        } });
+      await controller.capture();
+      expect(calls).toHaveLength(2);
+      expect(controller.state()).toMatchObject({ kind: 'available', receiptId: ID });
+    }
+
+    for (const malformedReplay of ['missing', 'false', null]) {
+      const fixture = documentFixture(), calls = [];
+      const malformed = fact();
+      if (malformedReplay === 'missing') delete malformed.replayed;
+      else malformed.replayed = malformedReplay;
+      const controller = demand.create({ mode: 'paid', document: fixture.document,
+        idempotency: () => 'part4d-malformed-saved-replay', fetcher: async url => {
+          calls.push(url); return response(201, malformed);
+        } });
+      await controller.capture();
+      expect(calls).toEqual(['/api/v1/forecast/demand-to-schedule/backlog-facts']);
+      expect(controller.state()).toMatchObject({ kind: 'failure', metrics: [] });
+    }
+
+    const current = fact({ state: 'backlog_fact_current' });
+    delete current.replayed;
+    const validFixture = documentFixture(), validCalls = [];
+    validFixture.values.commandCenterBacklogReceipt.value = ID;
+    const validRead = demand.create({ mode: 'paid', document: validFixture.document,
+      idempotency: () => 'unused-current-read', fetcher: async url => {
+        validCalls.push(url);
+        return url.includes('/current-backlog/') ? response(200, snapshot()) : response(200, current);
       } });
-    const pending = controller.capture();
-    fixture.values.commandCenterBacklogReceipt.value = ID;
-    await controller.read();
-    resolveCapture(response(201, { ...snapshot(), replayed: false }));
-    await pending;
-    await controller.capture();
-    expect(calls.map(call => call.key)).toEqual([
-      'part4d-late-key', null, 'part4d-after-read-key',
-    ]);
+    await validRead.read();
+    expect(validCalls).toHaveLength(2);
+    expect(validRead.state()).toMatchObject({ kind: 'available', receiptId: ID });
+
+    for (const replayed of [false, true, 'false', null]) {
+      const fixture = documentFixture(), calls = [];
+      fixture.values.commandCenterBacklogReceipt.value = ID;
+      const controller = demand.create({ mode: 'paid', document: fixture.document,
+        idempotency: () => 'unused-poisoned-current', fetcher: async url => {
+          calls.push(url); return response(200, { ...current, replayed });
+        } });
+      await controller.read();
+      expect(calls).toEqual([`/api/v1/forecast/demand-to-schedule/backlog-facts/${ID}`]);
+      expect(controller.state()).toMatchObject({ kind: 'failure', metrics: [] });
+    }
+  });
+
+  test('rejects unknown and private backlog snapshot fields before any value is painted', async () => {
+    const poisonedSnapshots = [
+      snapshot({ outputDigest: DIGEST }),
+      snapshot({ privateMetrics: { expectedCount: 4 } }),
+      snapshot({ members: [OTHER_ID] }),
+      snapshot({ arbitrary: 'unexpected' }),
+      snapshot({ metadata: { privateOutput: { probability: '0.75' } } }),
+    ];
+    for (const poisoned of poisonedSnapshots) {
+      expect(demand.validSnapshot(poisoned)).toBe(false);
+      const fixture = documentFixture(), calls = [];
+      const controller = demand.create({ mode: 'paid', document: fixture.document,
+        idempotency: () => 'part4d-snapshot-poison', fetcher: async url => {
+          calls.push(url);
+          return url.includes('/current-backlog/') ? response(200, poisoned) : response(201, fact());
+        } });
+      await controller.capture();
+      expect(calls).toHaveLength(2);
+      expect(controller.state()).toMatchObject({ kind: 'failure', metrics: [] });
+      expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
+      expect(JSON.stringify(controller.state())).not.toMatch(/0\.75|expectedCount|privateOutput/);
+    }
+  });
+
+  test('withholds a late fact completion after workspace failure and replays the exact key', async () => {
+    const fixture = documentFixture(), calls = []; let resolveFirst;
+    const first = new Promise(resolve => { resolveFirst = resolve; });
+    const controller = demand.create({ mode: 'paid', document: fixture.document,
+      idempotency: () => 'part4d-inflight-stable-key', fetcher: async (url, options) => {
+        calls.push({ url, key: options.headers['Idempotency-Key'] || null });
+        if (calls.length === 1) return first;
+        return url.includes('/current-backlog/') ? response(200, snapshot()) :
+          response(200, fact({ replayed: true }));
+      } });
+    const pending = controller.capture(); controller.workspaceUnavailable();
+    resolveFirst(response(201, fact())); await pending;
+    expect(controller.state().kind).toBe('workspace');
+    controller.workspaceReady(); await controller.retry();
+    expect(calls[0].key).toBe('part4d-inflight-stable-key');
+    expect(calls[1].key).toBe('part4d-inflight-stable-key');
     expect(controller.state().kind).toBe('available');
   });
 
-  test.each(['capture', 'read'])(
-    'withholds an in-flight %s completion after workspace failure and retries only after recovery',
-    async kind => {
-      const fixture = documentFixture(), calls = [];
-      let resolveFirst;
-      const first = new Promise(resolve => { resolveFirst = resolve; });
-      const controller = demand.create({ mode: 'paid', document: fixture.document,
-        idempotency: () => 'part4d-inflight-stable-key',
-        fetcher: async (url, options) => {
-          calls.push({ url, key: options.headers['Idempotency-Key'] || null });
-          if (calls.length === 1) return first;
-          return response(kind === 'capture' ? 201 : 200,
-            kind === 'capture' ? { ...snapshot(), replayed: true } : snapshot());
-        } });
-      fixture.values.commandCenterBacklogReceipt.value = ID;
-      const pending = kind === 'capture' ? controller.capture() : controller.read();
-      controller.workspaceUnavailable();
-      expect(controller.state().kind).toBe('workspace');
-      expect(controller.state().metrics).toEqual([]);
-      resolveFirst(response(kind === 'capture' ? 201 : 200,
-        kind === 'capture' ? { ...snapshot(), replayed: false } : snapshot()));
-      await pending;
-      expect(controller.state().kind).toBe('workspace');
-      expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
-      controller.workspaceReady();
-      expect(controller.state()).toMatchObject({ kind: 'failure',
-        badge: 'Receipt result unconfirmed' });
-      await controller.retry();
-      expect(controller.state().kind).toBe('available');
-      expect(calls).toHaveLength(2);
-      if (kind === 'capture') expect(calls.map(call => call.key))
-        .toEqual(['part4d-inflight-stable-key', 'part4d-inflight-stable-key']);
-      else expect(calls.map(call => call.url)).toEqual([
-        `/api/v1/forecast/current-backlog/snapshots/${ID}`,
-        `/api/v1/forecast/current-backlog/snapshots/${ID}`,
-      ]);
-    }
-  );
+  test('clears a private backlog receipt and suppresses completion when workspace identity changes', async () => {
+    const fixture = documentFixture(); let resolveFirst;
+    const first = new Promise(resolve => { resolveFirst = resolve; });
+    const controller = demand.create({ mode: 'paid', document: fixture.document,
+      idempotency: () => 'part4d-tenant-change-key', fetcher: async () => first });
+    controller.workspaceReady('paid:tenant-a:1:digest-a:session-a');
+    const pending = controller.capture();
+    controller.workspaceReady('paid:tenant-b:1:digest-b:session-b');
+    resolveFirst(response(201, fact())); await pending;
+    expect(controller.state().kind).toBe('initial');
+    expect(fixture.values.commandCenterBacklogReceipt.value).toBe('');
+    expect(fixture.values.commandCenterBacklogMetrics.children).toEqual([]);
+  });
 
   test('fails closed on poisoned forecast or coverage authority', () => {
     for (const poison of [

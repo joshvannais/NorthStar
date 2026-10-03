@@ -288,6 +288,33 @@
 .command-center-backlog-receipt-row { display: flex; gap: 8px; min-width: 0; }
 .command-center-backlog-receipt-row input { min-width: 0; flex: 1 1 auto; padding: 10px 12px; border: 1px solid var(--theme-border); border-radius: 10px; background: var(--theme-surface); color: var(--theme-text); }
 .command-center-backlog-retry { margin-top: 12px; }
+.command-center-research { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--theme-border); }
+.command-center-research-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.command-center-research-heading h3 { margin: 2px 0 0; color: var(--theme-text); font-size: 18px; }
+.command-center-research-intro { margin-top: 8px !important; color: var(--theme-muted); }
+.command-center-research-demo { margin-top: 14px; padding: 14px; border: 1px solid var(--theme-border); border-radius: 14px; background: var(--theme-surface); }
+.command-center-research-demo[hidden], #commandCenterResearchPaid[hidden] { display: none; }
+.command-center-research-setup { margin-top: 14px; padding: 12px; border: 1px solid var(--theme-border); border-radius: 12px; }
+.command-center-research-setup summary { cursor: pointer; color: var(--theme-text); font-weight: 800; }
+.command-center-research-setup > p { margin-top: 8px !important; color: var(--theme-muted); font-size: 12px; }
+.command-center-research-setup h4 { margin: 18px 0 0; color: var(--theme-text); font-size: 14px; }
+.command-center-research-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.command-center-research-card { min-width: 0; padding: 14px; border: 1px solid var(--theme-border); border-radius: 14px; background: var(--theme-surface); }
+.command-center-research-card h4 { margin: 0 0 6px; color: var(--theme-text); font-size: 15px; }
+.command-center-research-card > p { color: var(--theme-muted); font-size: 13px; }
+.command-center-research-status { display: grid; gap: 3px; margin: 12px 0; padding: 10px; border-radius: 10px; background: var(--theme-surface-raised, rgba(82, 101, 129, .08)); }
+.command-center-research-status strong { color: var(--theme-text); font-size: 13px; }
+.command-center-research-status span { color: var(--theme-muted); font-size: 12px; line-height: 1.45; }
+.command-center-research-status[data-tone="ready"] { box-shadow: inset 3px 0 0 #3f8f66; }
+.command-center-research-status[data-tone="loading"] { box-shadow: inset 3px 0 0 #5d78a5; }
+.command-center-research-status[data-tone="stale"], .command-center-research-status[data-tone="missing"] { box-shadow: inset 3px 0 0 #b57a30; }
+.command-center-research-status[data-tone="error"], .command-center-research-status[data-tone="restricted"] { box-shadow: inset 3px 0 0 #a84d4d; }
+.command-center-research-field { display: grid; gap: 5px; margin-top: 12px; color: var(--theme-text); font-size: 12px; font-weight: 700; }
+.command-center-research-field input,
+.command-center-research-field select { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--theme-border); border-radius: 9px; background: var(--theme-surface); color: var(--theme-text); }
+.command-center-research-field small { color: var(--theme-muted); font-size: 11px; font-weight: 500; line-height: 1.4; }
+.command-center-research-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.command-center-research-buttons .btn { flex: 1 1 132px; }
 .command-center-forecast-boundary { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--theme-border); }
 .command-center-forecast-boundary > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .command-center-forecast-boundary p { margin-top: 8px; }
@@ -686,6 +713,8 @@ button.command-center-record-link {
   .command-center-demand-state { align-self: flex-start; }
   .command-center-backlog-metrics { grid-template-columns: minmax(0, 1fr); }
   .command-center-backlog-receipt-row { align-items: stretch; flex-direction: column; }
+  .command-center-research-heading { flex-direction: column; }
+  .command-center-research-grid { grid-template-columns: minmax(0, 1fr); }
   .demo-daily-brief .demo-panel-heading > div,
   .demo-daily-brief .demo-updated { width: 100%; min-width: 0; max-width: 100%; }
   .demo-daily-brief .demo-updated { flex: 0 1 auto; white-space: normal; overflow-wrap: anywhere; }

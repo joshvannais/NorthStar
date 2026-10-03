@@ -6,6 +6,8 @@ const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixtur
 const { ingestLead } = require('../../src/services/canonicalGraphService');
 const { normalizeScheduleMutation } = require('../../src/scheduling/contract');
 const { updateAppointmentSchedule } = require('../../src/scheduling/repository');
+const research = require('../../public/js/command-center-demand-research');
+const { openPaidResearchBrowser } = require('../helpers/m26-part4d-paid-browser');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const key = prefix => `${prefix}-${crypto.randomUUID()}`;
@@ -19,6 +21,7 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
   let seasonalEpoch; let pipelineEpoch; let seasonalOrigin; let seasonalEvaluation;
   let seasonalOriginKey; let pipelineOrigin; let pipelineOriginKey;
   let pipelineSequence = 0;
+  let ui; let uiSeasonalOrigin; let uiPipelineOrigin;
   const snapshots = new Map();
 
   beforeAll(async () => {
@@ -48,7 +51,10 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
       .set(owner().session.headers).send({})).status).toBe(200);
   }, 120000);
 
-  afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
+  afterAll(async () => {
+    if (ui) await ui.close();
+    if (fixture) await fixture.cleanup();
+  }, 120000);
   const owner = () => fixture.actors.owner;
   const admin = () => fixture.actors.admin;
   async function transaction(operation, isolation = 'READ COMMITTED') {
@@ -76,13 +82,6 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
         [instant]);
     } finally { client.release(); }
   }
-  async function method(purpose, action, expectedRevision, expectedDigest, actor = owner()) {
-    return request(fixture.app).post(`${ROOT}/method-reviews`).set(actor.session.headers)
-      .set('Idempotency-Key', key(`method-${purpose}`)).send({ purpose, action,
-        expectedRevision, expectedDigest,
-        reason: `${action} the exact deterministic ${purpose} Part 4C research method.`,
-        confirmed: true, confirmationVersion: 'm26-demand-schedule-method-review-v1' });
-  }
   async function mutateMethod(purpose, action, expectedRevision, expectedDigest,
     actor = owner()) {
     return transaction(async client => (await client.query(
@@ -93,10 +92,6 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
         `${action} the exact deterministic ${purpose} Part 4C research method.`,
         'm26-demand-schedule-method-review-v1']))
       .rows[0].value);
-  }
-  async function epoch(purpose, actor = owner()) {
-    return request(fixture.app).post(`${ROOT}/epochs`).set(actor.session.headers)
-      .set('Idempotency-Key', key(`epoch-${purpose}`)).send({ purpose, profileAnchorId: anchorId });
   }
   async function createUnbookedPipeline(label) {
     pipelineSequence += 1;
@@ -492,15 +487,21 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
         'Reject malformed expected governance digests at the SQL boundary.']));
     await expect(invalidReview(null)).rejects.toMatchObject({ code: '22023' });
     await expect(invalidReview('not-a-digest')).rejects.toMatchObject({ code: '22023' });
-    expect((await method('seasonal_inbound', 'approve', 0, 'none')).status).toBe(201);
+    const seasonalApproved = await mutateMethod('seasonal_inbound', 'approve', 0, 'none');
+    expect(seasonalApproved).toMatchObject({ state: 'demand_schedule_method_review_recorded',
+      purpose: 'seasonal_inbound', action: 'approve', revision: 1 });
     const current = (await fixture.ownerPool.query(`SELECT revision,rtrim(review_digest) digest
       FROM canonical_forecast_demand_schedule_method_reviews_v1
       WHERE organization_id=$1 AND purpose='seasonal_inbound' ORDER BY revision DESC LIMIT 1`,
     [fixture.org])).rows[0];
-    expect((await method('seasonal_inbound', 'approve', 0, 'none', admin())).status).toBe(409);
-    expect((await method('seasonal_inbound', 'reject', Number(current.revision), current.digest,
-      fixture.actors.member)).status).toBe(403);
-    expect((await method('pipeline_first_booking', 'approve', 0, 'none', admin())).status).toBe(201);
+    await expect(mutateMethod('seasonal_inbound', 'approve', 0, 'none', admin()))
+      .rejects.toMatchObject({ code: '40001' });
+    await expect(mutateMethod('seasonal_inbound', 'reject', Number(current.revision), current.digest,
+      fixture.actors.member)).rejects.toMatchObject({ code: '22023' });
+    const pipelineApproved = await mutateMethod('pipeline_first_booking', 'approve', 0, 'none',
+      admin());
+    expect(pipelineApproved).toMatchObject({ state: 'demand_schedule_method_review_recorded',
+      purpose: 'pipeline_first_booking', action: 'approve', revision: 1 });
     const pipelineCurrent = (await fixture.ownerPool.query(`SELECT revision,
       rtrim(review_digest) digest FROM canonical_forecast_demand_schedule_method_reviews_v1
       WHERE organization_id=$1 AND purpose='pipeline_first_booking'
@@ -569,9 +570,12 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
     }, 120000);
 
   test('saves and evaluates a genuine prospective 24-month signal without rewriting origin', async () => {
-    seasonalEpoch = await epoch('seasonal_inbound');
-    expect(seasonalEpoch.status).toBe(201);
-    expect(seasonalEpoch.body.data).toMatchObject({ state: 'demand_schedule_epoch_recorded',
+    seasonalEpoch = await transaction(async client => (await client.query(
+      `SELECT canonical_forecast_demand_schedule_epoch_v1_capture(
+       $1,$2,$3,$4,$5,$6,'seasonal_inbound',$7) value`, [fixture.org,
+        owner().actorUserId, owner().actorAccessRole, owner().authSessionId,
+        owner().csrfToken, key('epoch-seasonal'), anchorId])).rows[0].value);
+    expect(seasonalEpoch).toMatchObject({ state: 'demand_schedule_epoch_recorded',
       purpose: 'seasonal_inbound', replayed: false });
 
     const trainingMonths = (await fixture.ownerPool.query(`SELECT array_agg(
@@ -596,12 +600,21 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
       const certified = await certify(month, period);
       expect(certified).toMatchObject({ state: 'retell_period_certified', revision: 1 });
     }
-    const seasonalKey = key('seasonal-origin'); seasonalOriginKey = seasonalKey;
-    const saved = await transaction(async client => (await client.query(
-      `SELECT canonical_forecast_seasonal_origin_v1_capture(
-       $1,$2,$3,$4,$5,$6,$7::date) value`, [fixture.org, owner().actorUserId,
-        owner().actorAccessRole, owner().authSessionId, owner().csrfToken,
-        seasonalKey, '2028-12-01'])).rows[0].value);
+    ui = await openPaidResearchBrowser(fixture);
+    await ui.action('prerequisites-load', 'Prerequisites loaded', 'Setup');
+    await ui.page.locator('#commandCenterResearchHorizon').fill('2028-12-01');
+    await ui.action('seasonal-save', 'Research origin saved', 'Seasonal');
+    uiSeasonalOrigin = await ui.page.locator('#commandCenterResearchSeasonalId').inputValue();
+    expect(uiSeasonalOrigin).toMatch(/^[0-9a-f-]{36}$/);
+    await ui.action('seasonal-load', 'Evidence is current', 'Seasonal');
+
+    const uiOriginResponse = [...ui.responses].reverse().find(item => item.method === 'POST' &&
+      item.url.endsWith(`${ROOT}/seasonal-origins`));
+    expect(uiOriginResponse).toBeDefined();
+    const seasonalKey = uiOriginResponse.headers['idempotency-key'];
+    seasonalOriginKey = seasonalKey;
+    const saved = uiOriginResponse.body.data;
+    expect(uiOriginResponse.status).toBe(201);
     expect(saved).toMatchObject({ state: 'seasonal_origin_saved',
       localHorizonStart: '2028-12-01', seasonalSignalState: 'repeated_high',
       amountWithheld: true, outputDigestWithheld: true, forecastIssued: false,
@@ -613,6 +626,12 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
         seasonalKey, '2028-12-01'])).rows[0].value)).toMatchObject({
       state: 'seasonal_origin_saved', id: saved.id, replayed: true });
     seasonalOrigin = saved.id;
+    expect(uiSeasonalOrigin).toBe(seasonalOrigin);
+    const mountedOrigin = await request(fixture.app)
+      .get(`${ROOT}/seasonal-origins/${seasonalOrigin}`).set(owner().session.headers);
+    expect(mountedOrigin.status).toBe(200);
+    expect(research.validateDemandOrigin(mountedOrigin.body.data,
+      'seasonal', seasonalOrigin)).not.toBeNull();
     const immutableBefore = (await fixture.ownerPool.query(`SELECT evidence_digest,
       output_digest,as_of FROM canonical_forecast_seasonal_origins_v1 WHERE id=$1`,
     [seasonalOrigin])).rows[0];
@@ -625,14 +644,26 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
     const outcomeEvidence = await evidence('2028-12-01');
     expect((await certify('2028-12-01', outcomeEvidence))).toMatchObject({
       state: 'retell_period_certified', revision: 1 });
-    const evaluated = await transaction(async client => (await client.query(
-      `SELECT canonical_forecast_seasonal_evaluation_v1_capture(
-       $1,$2,$3,$4,$5,$6,$7) value`, [fixture.org, owner().actorUserId,
-        owner().actorAccessRole, owner().authSessionId, owner().csrfToken,
-        key('seasonal-eval'), seasonalOrigin])).rows[0].value);
+    await ui.page.locator('#commandCenterResearchSeasonalId').fill(seasonalOrigin);
+    await ui.action('seasonal-evaluate', 'Evaluation saved', 'Seasonal');
+    const uiSeasonalEvaluation = await ui.page
+      .locator('#commandCenterResearchSeasonalEvaluationId').inputValue();
+    expect(uiSeasonalEvaluation).toMatch(/^[0-9a-f-]{36}$/);
+    await ui.action('seasonal-evaluation-load', 'Evidence is current', 'Seasonal');
+    const uiEvaluationResponse = [...ui.responses].reverse().find(item => item.method === 'POST' &&
+      item.url.endsWith(`${ROOT}/seasonal-origins/${seasonalOrigin}/evaluations`));
+    expect(uiEvaluationResponse).toBeDefined();
+    const evaluated = uiEvaluationResponse.body.data;
+    expect(uiEvaluationResponse.status).toBe(201);
     expect(evaluated).toMatchObject({ state: 'seasonal_evaluation_saved',
       originId: seasonalOrigin, revision: 1, metricsWithheld: true, forecastIssued: false });
     seasonalEvaluation = evaluated.id;
+    expect(uiSeasonalEvaluation).toBe(seasonalEvaluation);
+    const mountedEvaluation = await request(fixture.app)
+      .get(`${ROOT}/seasonal-evaluations/${seasonalEvaluation}`).set(owner().session.headers);
+    expect(mountedEvaluation.status).toBe(200);
+    expect(research.validateDemandEvaluation(mountedEvaluation.body.data,
+      'seasonal', seasonalOrigin, seasonalEvaluation)).not.toBeNull();
     expect((await fixture.ownerPool.query(`SELECT evidence_digest,output_digest,as_of
       FROM canonical_forecast_seasonal_origins_v1 WHERE id=$1`, [seasonalOrigin])).rows[0])
       .toEqual(immutableBefore);
@@ -937,17 +968,29 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
         firstBookedCount: 0 });
       expect(diagnostic.current_risk).toMatchObject({ state: 'complete', eligibleCount: 3 });
 
-      const originKey = key('pipeline-origin'); pipelineOriginKey = originKey;
-      const saved = await transaction(async client => (await client.query(
-        `SELECT canonical_forecast_pipeline_origin_v1_capture(
-         $1,$2,$3,$4,$5,$6) value`, [fixture.org, owner().actorUserId,
-          owner().actorAccessRole, owner().authSessionId, owner().csrfToken,
-          originKey])).rows[0].value);
+      await ui.action('prerequisites-load', 'Prerequisites loaded', 'Setup');
+      await ui.action('pipeline-save', 'Research origin saved', 'Pipeline');
+      uiPipelineOrigin = await ui.page.locator('#commandCenterResearchPipelineId').inputValue();
+      expect(uiPipelineOrigin).toMatch(/^[0-9a-f-]{36}$/);
+      await ui.action('pipeline-load', 'Evidence is current', 'Pipeline');
+
+      const uiOriginResponse = [...ui.responses].reverse().find(item => item.method === 'POST' &&
+        item.url.endsWith(`${ROOT}/pipeline-origins`));
+      expect(uiOriginResponse).toBeDefined();
+      const originKey = uiOriginResponse.headers['idempotency-key'];
+      pipelineOriginKey = originKey;
+      const saved = uiOriginResponse.body.data;
+      expect(uiOriginResponse.status).toBe(201);
       expect(saved).toMatchObject({ state: 'pipeline_origin_saved',
-        targetKey: 'demand.pipeline_first_accepted_bookings', unit: 'first_accepted_bookings',
-        sourceCoverageComplete: true, retellCouplingAvailable: false,
         countWithheld: true, outputDigestWithheld: true, forecastIssued: false });
+      expect(research.validateDemandOrigin(saved, 'pipeline')).not.toBeNull();
       pipelineOrigin = saved.id;
+      expect(uiPipelineOrigin).toBe(pipelineOrigin);
+      const mountedOrigin = await request(fixture.app)
+        .get(`${ROOT}/pipeline-origins/${pipelineOrigin}`).set(owner().session.headers);
+      expect(mountedOrigin.status).toBe(200);
+      expect(research.validateDemandOrigin(mountedOrigin.body.data,
+        'pipeline', pipelineOrigin)).not.toBeNull();
       const origin = (await fixture.ownerPool.query(`SELECT *,evidence#>>'{currentRisk,eligibleCount}'
         current_eligible,private_output->>'expectedCount' expected_count
         FROM canonical_forecast_pipeline_origins_v1 WHERE id=$1`, [saved.id])).rows[0];
@@ -983,14 +1026,21 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
       expect(sourceEvent.source_occurred_at.getTime()).toBeLessThan(origin.horizon_ends_at.getTime());
 
       await clock('2034-12-02T12:00:00Z');
-      const evaluated = await transaction(async client => (await client.query(
-        `SELECT canonical_forecast_pipeline_evaluation_v1_capture(
-         $1,$2,$3,$4,$5,$6,$7) value`, [fixture.org, owner().actorUserId,
-          owner().actorAccessRole, owner().authSessionId, owner().csrfToken,
-          key('pipeline-evaluation'), saved.id])).rows[0].value);
+      await ui.page.locator('#commandCenterResearchPipelineId').fill(pipelineOrigin);
+      await ui.action('pipeline-evaluate', 'Evaluation saved', 'Pipeline');
+      const uiPipelineEvaluation = await ui.page
+        .locator('#commandCenterResearchPipelineEvaluationId').inputValue();
+      expect(uiPipelineEvaluation).toMatch(/^[0-9a-f-]{36}$/);
+      await ui.action('pipeline-evaluation-load', 'Evidence is current', 'Pipeline');
+      const uiEvaluationResponse = [...ui.responses].reverse().find(item => item.method === 'POST' &&
+        item.url.endsWith(`${ROOT}/pipeline-origins/${saved.id}/evaluations`));
+      expect(uiEvaluationResponse).toBeDefined();
+      const evaluated = uiEvaluationResponse.body.data;
+      expect(uiEvaluationResponse.status).toBe(201);
       expect(evaluated).toMatchObject({ state: 'pipeline_evaluation_saved', revision: 1,
-        metricsWithheld: true, calibrationClaimed: false, driftVerdictIssued: false,
-        automaticActionTaken: false, forecastIssued: false });
+        metricsWithheld: true, forecastIssued: false });
+      expect(research.validateDemandEvaluation(evaluated, 'pipeline', saved.id)).not.toBeNull();
+      expect(uiPipelineEvaluation).toBe(evaluated.id);
       const immutableOrigin = (await fixture.ownerPool.query(`SELECT evidence_digest,output_digest,
         as_of FROM canonical_forecast_pipeline_origins_v1 WHERE id=$1`, [saved.id])).rows[0];
       const privateEvaluation = (await fixture.ownerPool.query(`SELECT outcome_evidence,
@@ -998,6 +1048,11 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
       [evaluated.id])).rows[0];
       expect(privateEvaluation.outcome_evidence).toMatchObject({ actualFirstBookedCount: 1,
         memberCount: 3 });
+      const mountedEvaluation = await request(fixture.app)
+        .get(`${ROOT}/pipeline-evaluations/${evaluated.id}`).set(owner().session.headers);
+      expect(mountedEvaluation.status).toBe(200);
+      expect(research.validateDemandEvaluation(mountedEvaluation.body.data,
+        'pipeline', pipelineOrigin, evaluated.id)).not.toBeNull();
 
       await clock('2034-12-03T12:00:00Z');
       await sourceClock('2034-11-20T12:00:00Z');
@@ -1219,8 +1274,18 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
   test('excludes prior bookings before the complete-population bound without truncation',
     async () => {
       await clock('2036-01-01T12:00:00Z');
+      const installedAt = (await fixture.ownerPool.query(`SELECT installed_at
+        FROM canonical_forecast_demand_schedule_epochs_v1 WHERE id=$1`, [pipelineEpoch]))
+        .rows[0].installed_at;
+      const prior = (await fixture.ownerPool.query(`SELECT
+        canonical_forecast_pipeline_risk_v1($1,$2,'2036-02-01T12:00:00Z') value`,
+      [fixture.org, installedAt])).rows[0].value;
+      expect(prior).toMatchObject({ state: 'complete' });
+      const newCandidateCount = 505 - Number(prior.eligibleCount);
+      expect(newCandidateCount).toBeGreaterThan(5);
+      expect(newCandidateCount).toBeLessThanOrEqual(600);
       const opportunities = await createBulkEligiblePipeline(
-        502, `complete-population-${crypto.randomUUID()}`);
+        newCandidateCount, `complete-population-${crypto.randomUUID()}`);
       const booked = opportunities.slice(0, 5);
       await fixture.ownerPool.query(`WITH source AS (
         SELECT opportunity_id,row_number() OVER(ORDER BY opportunity_id) ordinal
@@ -1238,20 +1303,17 @@ realPostgres('Mission 26 Part 4C target-complete demand-to-schedule authority', 
         encode(sha256(convert_to('booked:'||source.opportunity_id::text,'UTF8')),'hex'),
         encode(sha256(convert_to('observed:'||source.opportunity_id::text,'UTF8')),'hex')
       FROM source CROSS JOIN high_water`, [fixture.org, booked]);
-      const installedAt = (await fixture.ownerPool.query(`SELECT installed_at
-        FROM canonical_forecast_demand_schedule_epochs_v1 WHERE id=$1`, [pipelineEpoch]))
-        .rows[0].installed_at;
       const complete = (await fixture.ownerPool.query(`SELECT
         canonical_forecast_pipeline_risk_v1($1,$2,'2036-02-01T12:00:00Z') value`,
       [fixture.org, installedAt])).rows[0].value;
-      expect(complete).toMatchObject({ state: 'complete', eligibleCount: 499 });
+      expect(complete).toMatchObject({ state: 'complete', eligibleCount: 500 });
       const members = new Set(complete.members.map(member => member.opportunityId));
       expect(booked.every(id => !members.has(id))).toBe(true);
       expect(members.has(opportunities.at(-1))).toBe(true);
-      expect(opportunities.filter(id => members.has(id))).toHaveLength(497);
+      expect(opportunities.filter(id => members.has(id))).toHaveLength(newCandidateCount - 5);
 
       await clock('2036-01-03T12:00:00Z');
-      await createBulkEligiblePipeline(4, `complete-population-excess-${crypto.randomUUID()}`);
+      await createBulkEligiblePipeline(1, `complete-population-excess-${crypto.randomUUID()}`);
       await expect(fixture.ownerPool.query(`SELECT
         canonical_forecast_pipeline_risk_v1($1,$2,'2036-02-01T12:00:00Z') value`,
       [fixture.org, installedAt])).rejects.toMatchObject({ code: '54000' });

@@ -3,6 +3,8 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
+const { execFileSync } = require('node:child_process');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { navigationFixture } = require('../helpers/navigation-fixture');
 const builder = require('../../src/commandCenter/workspace');
@@ -38,6 +40,32 @@ const account = { account: {
     plan: 'Complete', safe: true, state: 'active', readOnly: false, showTrialBanner: false,
   },
 } };
+const originId = id(41), evaluationId = id(42);
+const flags = { researchOnly: true, forecastIssued: false,
+  paidNumericServing: false, forecastServingEnabled: false };
+const prerequisites = { state: 'demand_ui_prerequisites_current',
+  profile: { state: 'current', anchorId: id(40) },
+  seasonal: { purpose: 'seasonal_inbound', targetKey: 'demand.inbound_leads',
+    targetVersion: 'v1', calculationVersion: 'm26-seasonal-two-cycle-open-minute-v1',
+    method: { expectedRevision: 1, expectedDigest: 'd'.repeat(64), action: 'approve', approved: true },
+    epoch: { state: 'current', id: id(43), revision: 1, installedAt: '2026-10-03T12:00:00.000000Z' } },
+  pipeline: { purpose: 'pipeline_first_booking',
+    targetKey: 'demand.pipeline_first_accepted_bookings', targetVersion: 'v1',
+    calculationVersion: 'm26-pipeline-first-booking-pooled-v1',
+    method: { expectedRevision: 1, expectedDigest: 'e'.repeat(64), action: 'approve', approved: true },
+    epoch: { state: 'current', id: id(44), revision: 1, installedAt: '2026-10-03T12:00:00.000000Z' } },
+  automaticActionTaken: false, ...flags };
+const pipelineSaved = { state: 'pipeline_origin_saved', id: originId,
+  predictionCutoffAt: '2026-10-03T12:00:00.000000Z',
+  horizonEndsAt: '2026-11-02T12:00:00.000000Z', countWithheld: true,
+  outputDigestWithheld: true, replayed: false, ...flags };
+const pipelineCurrent = { ...pipelineSaved, state: 'pipeline_origin_current' };
+delete pipelineCurrent.replayed;
+const pipelineEvaluationSaved = { state: 'pipeline_evaluation_saved', id: evaluationId,
+  originId, revision: 1, replayed: false, metricsWithheld: true, ...flags };
+const pipelineEvaluationCurrent = { state: 'pipeline_evaluation_current', id: evaluationId,
+  originId, revision: 1, evaluatedAt: '2026-11-03T12:00:00.000000Z',
+  metricsWithheld: true, ...flags };
 
 async function main() {
   const app = require('../../src/server').app;
@@ -55,6 +83,7 @@ async function main() {
       await context.addInitScript(() => localStorage.setItem('northstar-quick-start-seen', 'true'));
       const page = await context.newPage();
       const errors = [];
+      const forecastRequests = [];
       page.on('pageerror', error => errors.push(error.message));
       let failedWorkspace = false;
       await page.route('**/*', route => {
@@ -71,11 +100,31 @@ async function main() {
           return failedWorkspace ? json({ success: false, error: { message: 'Workspace unavailable.' } }, 503)
             : json({ success: true, data: demo });
         }
+        if (url.pathname.startsWith('/api/v1/forecast/')) {
+          forecastRequests.push({ path: url.pathname, method: route.request().method() });
+          if (url.pathname === '/api/v1/forecast/demand-to-schedule/prerequisites/current') {
+            return json({ success: true, data: prerequisites });
+          }
+          if (url.pathname === '/api/v1/forecast/demand-to-schedule/pipeline-origins') {
+            return json({ success: true, data: pipelineSaved }, 201);
+          }
+          if (url.pathname === `/api/v1/forecast/demand-to-schedule/pipeline-origins/${originId}`) {
+            return json({ success: true, data: pipelineCurrent });
+          }
+          if (url.pathname === `/api/v1/forecast/demand-to-schedule/pipeline-origins/${originId}/evaluations`) {
+            return json({ success: true, data: pipelineEvaluationSaved }, 201);
+          }
+          if (url.pathname === `/api/v1/forecast/demand-to-schedule/pipeline-evaluations/${evaluationId}`) {
+            return json({ success: true, data: pipelineEvaluationCurrent });
+          }
+          return json({ success: false, error: { message: 'Unexpected research route.' } }, 500);
+        }
         if (url.pathname.startsWith('/api/')) return json({ success: true, data: {}, items: [], records: [] });
         return route.continue();
       });
       await page.goto(origin + (mode === 'demo' ? '/demo' : '/dashboard'));
-      await page.locator('#commandCenterDemandState').getByText('Forecast unavailable').waitFor();
+      await page.locator('#commandCenterDemandState').getByText(
+        mode === 'demo' ? 'Fictional research ready' : 'Research only').waitFor();
       await page.locator('#northstarQuickStartDialog[open]').waitFor({ timeout: 2000 }).catch(() => {});
       if (await page.locator('#northstarQuickStartDialog[open]').count()) {
         await page.locator('#northstarQuickStartDialog .northstar-quick-start-close').click();
@@ -84,8 +133,50 @@ async function main() {
       const resource = page.locator('.command-center-resource-outlook');
       const range = page.locator('.command-center-range-outlook');
       const text = await panel.innerText();
-      assert.match(text, mode === 'demo' ? /fictional leads/i : /verified lead history/i);
-      assert.match(text, /not a prediction of future work/i);
+      assert.match(text, mode === 'demo' ? /fictional isolated demo/i : /guarded research receipts/i);
+      assert.match(text, /do(?:es)? not issue a production forecast/i);
+      if (mode === 'paid') {
+        await page.locator('.command-center-research-setup > summary').click();
+        await page.getByRole('button', { name: 'Check current prerequisites', exact: true }).click();
+        await page.locator('#commandCenterResearchSetup').getByText('Prerequisites loaded').waitFor({ timeout: 5000 })
+          .catch(async error => { throw new Error(`${error.message}\nSetup: ${await page.locator('#commandCenterResearchSetup').innerText()}\nRequests: ${JSON.stringify(forecastRequests)}`); });
+        await page.getByRole('button', { name: 'Save pipeline origin', exact: true }).click();
+        await page.locator('#commandCenterResearchPipeline').getByText('Research origin saved').waitFor();
+        assert.equal(await page.locator('#commandCenterResearchPipelineId').inputValue(), originId);
+        await page.getByRole('button', { name: 'Load origin', exact: true }).last().click();
+        await page.locator('#commandCenterResearchPipeline').getByText('Evidence is current').waitFor();
+        await page.getByRole('button', { name: 'Evaluate after horizon', exact: true }).last().click();
+        await page.waitForFunction(expected =>
+          document.querySelector('#commandCenterResearchPipelineEvaluationId').value === expected,
+        evaluationId).catch(async error => { throw new Error(`${error.message}\nPipeline: ${await page.locator('#commandCenterResearchPipeline').innerText()}\nRequests: ${JSON.stringify(forecastRequests)}`); });
+        assert.equal(await page.locator('#commandCenterResearchPipelineEvaluationId').inputValue(), evaluationId);
+        await page.getByRole('button', { name: 'Load evaluation', exact: true }).last().click();
+        await page.locator('#commandCenterResearchPipeline').getByText('Evidence is current').waitFor();
+        assert.equal((await panel.innerText()).includes('0.25'), false);
+      } else {
+        assert.equal(forecastRequests.length, 0);
+        await page.getByRole('button', { name: 'Approve method', exact: true }).click();
+        await page.locator('#commandCenterResearchTransitions')
+          .getByText('Fictional method approved').waitFor();
+        const action = page.locator('#commandCenterResearchDemoAction');
+        await action.focus(); assert.equal(await action.evaluate(node => node === document.activeElement), true);
+        await page.keyboard.press('Enter');
+        await page.locator('#commandCenterDemandState').getByText('Fictional origins saved').waitFor();
+        await action.click();
+        await page.locator('#commandCenterDemandState').getByText('Fictional evaluations ready').waitFor();
+        await action.click();
+        await page.locator('#commandCenterDemandState').getByText('Fictional source changed').waitFor();
+        await action.click();
+        await page.locator('#commandCenterDemandState').getByText('Recovered with new origins').waitFor();
+        const recoveredId = await page.locator('#commandCenterResearchPipelineId').inputValue();
+        assert.match(recoveredId, /^[0-9a-f-]{36}$/);
+        await page.getByRole('button', { name: 'Load origin', exact: true }).last().click();
+        await page.locator('#commandCenterResearchPipeline').getByText('Fictional origin loaded').waitFor();
+        await page.locator('#commandCenterResearchDemoReset').click();
+        await page.locator('#commandCenterDemandState').getByText('Fictional research ready').waitFor();
+        assert.equal(await page.locator('#commandCenterResearchPipelineId').inputValue(), '');
+        assert.equal(forecastRequests.length, 0);
+      }
       await page.locator('#commandCenterResourceState').getByText('Forecast unavailable').waitFor();
       assert.match(await resource.innerText(), mode === 'demo' ? /fictional jobs/i : /verified material, equipment and travel records/i);
       assert.match(await resource.innerText(), /do not confirm stock, equipment availability or travel capacity/i);
@@ -93,6 +184,12 @@ async function main() {
       assert.match(await range.innerText(), mode === 'demo' ? /fictional results/i : /verified past results and tested forecasts/i);
       assert.match(await range.innerText(), /not the odds that a result will happen/i);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+      const keyboardTarget = mode === 'demo' ? page.locator('#commandCenterResearchDemoAction') :
+        page.getByRole('button', { name: 'Load evaluation', exact: true }).last();
+      await keyboardTarget.focus();
+      assert.equal(await keyboardTarget.evaluate(node => node === document.activeElement), true);
+      const fullReadyScreenshot = path.join(output, `${mode}-${viewport.name}-full-ready.png`);
+      await page.screenshot({ path: fullReadyScreenshot, fullPage: true });
       const readyScreenshot = path.join(output, `${mode}-${viewport.name}-unavailable.png`);
       await panel.screenshot({ path: readyScreenshot });
       const resourceReadyScreenshot = path.join(output, `${mode}-${viewport.name}-resource-unavailable.png`);
@@ -107,7 +204,7 @@ async function main() {
       await page.locator('#commandCenterResourceState').getByText('Workspace unavailable').waitFor();
       await page.locator('#commandCenterRangeState').getByText('Workspace unavailable').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
-      assert.match(await panel.innerText(), /Refresh to retry loading it/);
+      assert.match(await panel.innerText(), /Refresh the workspace before/i);
       assert.match(await resource.innerText(), /Refresh to retry loading it/);
       assert.match(await range.innerText(), /Refresh to retry loading it/);
       const failedScreenshot = path.join(output, `${mode}-${viewport.name}-workspace-failed.png`);
@@ -115,21 +212,37 @@ async function main() {
       failedWorkspace = false;
       if (mode === 'demo') await page.reload();
       else await page.locator('#commandCenterRefresh').evaluate(button => button.click());
-      await page.locator('#commandCenterDemandState').getByText('Forecast unavailable').waitFor();
+      await page.locator('#commandCenterDemandState').getByText(
+        mode === 'demo' ? 'Fictional research ready' : 'Research only').waitFor();
       await page.locator('#commandCenterResourceState').getByText('Forecast unavailable').waitFor();
       await page.locator('#commandCenterRangeState').getByText('Ranges unavailable').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
-      assert.match(await panel.innerText(), mode === 'demo' ? /fictional leads/i : /verified lead history/i);
+      assert.match(await panel.innerText(), mode === 'demo' ? /fictional isolated demo/i : /guarded research receipts/i);
       assert.match(await resource.innerText(), mode === 'demo' ? /fictional jobs/i : /verified material, equipment and travel records/i);
       assert.match(await range.innerText(), mode === 'demo' ? /fictional results/i : /verified past results and tested forecasts/i);
       assert.equal(errors.length, 0, errors.join('\n'));
       const recoveredScreenshot = path.join(output, `${mode}-${viewport.name}-recovered.png`);
       await panel.screenshot({ path: recoveredScreenshot });
       results.push({ mode, viewport: viewport.name, success: true, readyScreenshot,
-        resourceReadyScreenshot, rangeReadyScreenshot, failedScreenshot, recoveredScreenshot });
+        fullReadyScreenshot, resourceReadyScreenshot, rangeReadyScreenshot,
+        failedScreenshot, recoveredScreenshot,
+        forecastRequests: forecastRequests.slice() });
       await context.close();
     }
+    const sourceFiles = ['public/demo-dashboard.html',
+      'public/js/command-center-demand-research.js',
+      'public/js/command-center-demand-position.js',
+      'public/js/command-center-page.js', 'public/css/demo-dashboard.css'];
+    const sha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim();
+    const status = execFileSync('git', ['status', '--porcelain=v1'], { encoding: 'utf8' }).trim();
+    const captures = fs.readdirSync(output).filter(file => file.endsWith('.png'))
+      .sort().map(file => ({ file, sha256: sha256(path.join(output, file)) }));
     fs.writeFileSync(path.join(output, 'evidence.json'), JSON.stringify({
+      capturedAt: new Date().toISOString(), head, tree, worktreeStatus: status,
+      sourceHashes: Object.fromEntries(sourceFiles.map(file => [file, sha256(file)])),
+      captures,
       browser: process.argv.includes('--webkit') ? 'Playwright WebKit' : 'Chrome', results,
       limits: 'Synthetic intercepted sources; no live provider, private production, calibrated forecast or physical Safari evidence.',
     }, null, 2), { flag: 'wx' });

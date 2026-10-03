@@ -165,7 +165,7 @@
             <p id="commandCenterBacklogExplanation">No receipt is read or captured until you choose an action.</p>
             <dl class="command-center-backlog-metrics" id="commandCenterBacklogMetrics" hidden></dl>
             <div class="command-center-backlog-actions" id="commandCenterBacklogActions">
-              <label for="commandCenterBacklogReceipt">Saved receipt ID</label>
+              <label for="commandCenterBacklogReceipt">Saved backlog fact ID</label>
               <div class="command-center-backlog-receipt-row">
                 <input id="commandCenterBacklogReceipt" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000">
                 <button class="btn btn-secondary" id="commandCenterBacklogRead" type="button">Load receipt</button>
@@ -179,6 +179,146 @@
                 <span class="command-center-demand-state" id="commandCenterDemandState">Unavailable</span></div>
               <p id="commandCenterDemandExplanation">No demand forecast has been issued.</p>
               <p class="command-center-demand-boundary" id="commandCenterDemandBoundary">Current backlog is a present fact, not predicted work.</p>
+            </div>
+            <div class="command-center-research" id="commandCenterResearchRoot" aria-labelledby="commandCenterResearchTitle">
+              <div class="command-center-research-heading">
+                <div>
+                  <p class="demo-panel-kicker">Private research evidence</p>
+                  <h3 id="commandCenterResearchTitle">Demand research workspace</h3>
+                </div>
+                <button class="btn btn-secondary" id="commandCenterResearchRetry" type="button">Retry last action</button>
+              </div>
+              <p class="command-center-research-intro">Save and revisit guarded research receipts. Numbers stay private; no forecast, schedule, dispatch, estimate or commercial action is issued here.</p>
+
+              <div class="command-center-research-demo" id="commandCenterResearchDemo" hidden>
+                <p>Explore an isolated fictional lifecycle using the same visible states as the paid workspace. It never calls paid research endpoints.</p>
+                <div class="command-center-research-buttons">
+                  <button class="btn btn-primary" id="commandCenterResearchDemoAction" type="button">Start fictional research</button>
+                  <button class="btn btn-secondary" id="commandCenterResearchDemoReset" type="button">Reset fictional research</button>
+                </div>
+              </div>
+
+              <div id="commandCenterResearchPaid">
+                <label class="command-center-research-field" for="commandCenterResearchHorizon">
+                  <span>Future local month</span>
+                  <input id="commandCenterResearchHorizon" type="date" autocomplete="off">
+                  <small>Use the first day of a future month. The server verifies the exact tenant-local horizon.</small>
+                </label>
+                <details class="command-center-research-setup">
+                  <summary>Source and human-review setup</summary>
+                  <p>These controls record explicit owner or administrator decisions. They never approve a method, certify a period or grant source permission automatically.</p>
+                  <div class="command-center-research-status" id="commandCenterResearchSetup" role="status"><strong>Check prerequisites</strong><span>Load the current profile anchor, epoch and method-review tokens before changing setup.</span></div>
+                  <div class="command-center-research-buttons">
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="prerequisites-load">Check current prerequisites</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="consent-load">Check Retell permission</button>
+                  </div>
+                  <label class="command-center-research-field" for="commandCenterResearchDecisionReason"><span>Decision reason</span><input id="commandCenterResearchDecisionReason" type="text" maxlength="1000" autocomplete="off" placeholder="Why this explicit decision is appropriate"></label>
+                  <h4>Prospective profile source</h4>
+                  <p>Review the current profile for the selected month, then explicitly capture and activate its prospective anchor. Historical month applicability remains a separate owner or administrator attestation.</p>
+                  <label class="command-center-research-field" for="commandCenterResearchCertificationMonth"><span>Completed local month</span><input id="commandCenterResearchCertificationMonth" type="date" autocomplete="off"></label>
+                  <label class="command-center-research-field" for="commandCenterResearchProfileAnchorId"><span>Profile anchor receipt</span><input id="commandCenterResearchProfileAnchorId" type="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <div class="command-center-research-buttons">
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="profile-window-load">Check current month profile</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="profile-anchor-capture">Capture profile anchor</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="profile-anchor-activate">Activate profile anchor</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="month-attestation-load">Check month attestation</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="month-attestation-confirm">Confirm month profile</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="month-attestation-revoke">Revoke month profile</button>
+                  </div>
+                  <div class="command-center-research-buttons">
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="consent-grant">Grant Retell research permission</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="consent-revoke">Revoke Retell research permission</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="epoch-seasonal">Create seasonal epoch</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="epoch-pipeline">Create pipeline epoch</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="method-seasonal-approve">Approve seasonal method</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="method-seasonal-reject">Reject seasonal method</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="method-pipeline-approve">Approve pipeline method</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="method-pipeline-reject">Reject pipeline method</button>
+                  </div>
+                  <h4>Monthly Retell certification</h4>
+                  <p>Choose one completed month, then select <strong>Capture month source</strong>. NorthStar saves that bounded month receipt, selects it for review and loads its current call-review state. Record each unresolved call decision, check the certification token and certify only when the complete month is ready.</p>
+                  <label class="command-center-research-field" for="commandCenterResearchPeriodSnapshotId"><span>Selected month receipt</span><input id="commandCenterResearchPeriodSnapshotId" type="text" autocomplete="off" spellcheck="false" placeholder="Filled after month capture"></label>
+                  <label class="command-center-research-field" for="commandCenterResearchRetellSnapshotId"><span>Retell call snapshot</span><input id="commandCenterResearchRetellSnapshotId" type="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <label class="command-center-research-field" for="commandCenterResearchRetellCallSourceId"><span>Call source to review</span><input id="commandCenterResearchRetellCallSourceId" type="text" autocomplete="off" spellcheck="false" placeholder="Call source UUID"></label>
+                  <label class="command-center-research-field" for="commandCenterResearchRetellDisposition"><span>Reviewed disposition</span><select id="commandCenterResearchRetellDisposition"><option value="new_lead">New lead</option><option value="repeat_lead">Repeat lead</option><option value="not_lead">Not a lead</option><option value="unresolved">Unresolved</option></select></label>
+                  <label class="command-center-research-field" for="commandCenterResearchRetellAnchorCallId"><span>Earlier call for repeat lead</span><input id="commandCenterResearchRetellAnchorCallId" type="text" autocomplete="off" spellcheck="false" placeholder="Required only for repeat lead"></label>
+                  <div class="command-center-research-buttons">
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="period-snapshot">Capture month source</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="retell-reviews-load">Check call reviews</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="retell-review-save">Record call review</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="certification-load">Check certification</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="certification-certify">Certify reviewed month</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="certification-revoke">Revoke certification</button>
+                  </div>
+                  <details class="command-center-research-legacy-source">
+                    <summary>All-history call receipt troubleshooting</summary>
+                    <p>This optional receipt is bounded across lifetime history and can be unavailable for large accounts. Monthly certification uses the selected month receipt above.</p>
+                    <div class="command-center-research-buttons">
+                      <button class="btn btn-secondary" type="button" data-demand-research-action="retell-snapshot-capture">Capture bounded all-history calls</button>
+                      <button class="btn btn-secondary" type="button" data-demand-research-action="retell-snapshot-load">Load exact call snapshot</button>
+                    </div>
+                  </details>
+                </details>
+              </div>
+
+              <div class="command-center-research-grid" id="commandCenterResearchActions">
+                <article class="command-center-research-card">
+                  <h4>Inbound source research</h4>
+                  <p>Retell-only, tenant-wide saved research from reviewed and certified periods. This source-origin authority does not provide a 4A evaluation action.</p>
+                  <div class="command-center-research-status" id="commandCenterResearchInbound" role="status"><strong>Receipt required</strong><span>Prepare a future origin after consent, call review and period certification are current.</span></div>
+                  <label class="command-center-research-field" for="commandCenterResearchRetellId"><span>Inbound origin receipt</span><input id="commandCenterResearchRetellId" type="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <div class="command-center-research-buttons">
+                    <button class="btn btn-primary" type="button" data-demand-research-action="retell-save">Save inbound origin</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="retell-load">Load receipt</button>
+                  </div>
+                </article>
+
+                <article class="command-center-research-card">
+                  <h4>Transition evidence</h4>
+                  <p>Four approved NorthStar transition targets under one current owner-reviewed method.</p>
+                  <div class="command-center-research-status" id="commandCenterResearchTransitions" role="status"><strong>Review required</strong><span>Check the current method review before saving an origin.</span></div>
+                  <label class="command-center-research-field" for="commandCenterResearchTransitionId"><span>Transition origin receipt</span><input id="commandCenterResearchTransitionId" type="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <div class="command-center-research-buttons">
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="transition-review">Check method review</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="transition-review-approve">Approve method</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="transition-review-reject">Reject method</button>
+                    <button class="btn btn-primary" type="button" data-demand-research-action="transition-save">Save origin</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="transition-load">Load origin</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="transition-evaluate">Evaluate after horizon</button>
+                  </div>
+                  <label class="command-center-research-field" for="commandCenterResearchTransitionEvaluationId"><span>Evaluation receipt ID</span><input id="commandCenterResearchTransitionEvaluationId" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <button class="btn btn-secondary" type="button" data-demand-research-action="transition-evaluation-load">Load evaluation</button>
+                </article>
+
+                <article class="command-center-research-card">
+                  <h4>Seasonal inbound research</h4>
+                  <p>Two complete twelve-month cycles for the same calendar month and source lineage.</p>
+                  <div class="command-center-research-status" id="commandCenterResearchSeasonal" role="status"><strong>Prerequisites required</strong><span>A prospective epoch, approved method and 24 current monthly certifications are required.</span></div>
+                  <label class="command-center-research-field" for="commandCenterResearchSeasonalId"><span>Seasonal origin receipt</span><input id="commandCenterResearchSeasonalId" type="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <div class="command-center-research-buttons">
+                    <button class="btn btn-primary" type="button" data-demand-research-action="seasonal-save">Save seasonal origin</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="seasonal-load">Load origin</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="seasonal-evaluate">Evaluate after horizon</button>
+                  </div>
+                  <label class="command-center-research-field" for="commandCenterResearchSeasonalEvaluationId"><span>Evaluation receipt ID</span><input id="commandCenterResearchSeasonalEvaluationId" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <button class="btn btn-secondary" type="button" data-demand-research-action="seasonal-evaluation-load">Load evaluation</button>
+                </article>
+
+                <article class="command-center-research-card">
+                  <h4>First accepted booking research</h4>
+                  <p>One frozen eligible opportunity cohort, two comparable training windows and a fixed 30-day horizon.</p>
+                  <div class="command-center-research-status" id="commandCenterResearchPipeline" role="status"><strong>Prerequisites required</strong><span>A prospective epoch and approved first-booking method are required.</span></div>
+                  <label class="command-center-research-field" for="commandCenterResearchPipelineId"><span>Pipeline origin receipt</span><input id="commandCenterResearchPipelineId" type="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <div class="command-center-research-buttons">
+                    <button class="btn btn-primary" type="button" data-demand-research-action="pipeline-save">Save pipeline origin</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="pipeline-load">Load origin</button>
+                    <button class="btn btn-secondary" type="button" data-demand-research-action="pipeline-evaluate">Evaluate after horizon</button>
+                  </div>
+                  <label class="command-center-research-field" for="commandCenterResearchPipelineEvaluationId"><span>Evaluation receipt ID</span><input id="commandCenterResearchPipelineEvaluationId" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="Receipt UUID"></label>
+                  <button class="btn btn-secondary" type="button" data-demand-research-action="pipeline-evaluation-load">Load evaluation</button>
+                </article>
+              </div>
+              <p class="command-center-demand-boundary">Source coverage is limited to each receipt's named post-installation NorthStar authority. Provider, off-platform and whole-business coverage, natural seasonality, empirical accuracy, calibration and drift remain unavailable.</p>
             </div>
           </section>
 
@@ -266,7 +406,8 @@
   <script src="/js/display-projection.js"></script>
   <script src="/js/scheduling-approval-ui.js"></script>
   <script src="/js/command-center-demand-position.js?v=m26-part4d-demand-ui-20260930"></script>
-  <script src="/js/command-center-page.js?v=m26-part4d-demand-ui-20260930"></script>
+  <script src="/js/command-center-demand-research.js?v=m26-part4d-target-complete-20261003"></script>
+  <script src="/js/command-center-page.js?v=m26-part4d-target-complete-20261003"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

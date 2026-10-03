@@ -1963,6 +1963,26 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_demand_schedule_clock_v1(),public.canonical_forecast_demand_schedule_test_clock_v1_set(timestamptz),public.canonical_forecast_demand_schedule_source_test_clock_v1_set(timestamptz),public.canonical_forecast_demand_schedule_source_clock_v1_apply(),public.canonical_forecast_seasonal_call_visibility_v1_capture(),public.canonical_forecast_seasonal_call_generation_v1(uuid,timestamptz,timestamptz),public.canonical_forecast_pipeline_eligibility_visibility_v1_capture(),public.canonical_forecast_pipeline_booking_visibility_v1_capture(),public.canonical_forecast_seasonal_certification_visibility_v1_capture(),public.canonical_forecast_demand_schedule_child_key_v1(text,text),public.canonical_forecast_seasonal_signal_v1(numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric),public.canonical_forecast_seasonal_training_v1(uuid,uuid,text,uuid,date),public.canonical_forecast_seasonal_input_current_v1(uuid,uuid,text,uuid,public.canonical_forecast_seasonal_origins_v1),public.canonical_forecast_demand_schedule_epoch_current_v1(uuid,public.canonical_forecast_demand_schedule_epochs_v1),public.canonical_forecast_pipeline_cohort_v1(uuid,timestamptz,timestamptz,timestamptz),public.canonical_forecast_pipeline_risk_v1(uuid,timestamptz,timestamptz),public.canonical_forecast_pipeline_origin_input_current_v1(uuid,public.canonical_forecast_pipeline_origins_v1),public.canonical_forecast_pipeline_outcome_v1(uuid,public.canonical_forecast_pipeline_origins_v1) FROM %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_demand_schedule_method_review_v1_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text,text),public.canonical_forecast_demand_schedule_epoch_v1_capture(uuid,uuid,text,uuid,text,text,text,uuid),public.canonical_forecast_demand_schedule_backlog_v1_capture(uuid,uuid,text,uuid,text,text),public.canonical_forecast_demand_schedule_backlog_v1_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_seasonal_origin_v1_capture(uuid,uuid,text,uuid,text,text,date),public.canonical_forecast_seasonal_origin_v1_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_seasonal_evaluation_v1_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_seasonal_evaluation_v1_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_pipeline_origin_v1_capture(uuid,uuid,text,uuid,text,text),public.canonical_forecast_pipeline_origin_v1_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_pipeline_evaluation_v1_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_pipeline_evaluation_v1_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='223_canonical_forecast_demand_ui_prerequisites_v1.sql') OR
+         pg_catalog.to_regprocedure(
+          'public.canonical_forecast_demand_ui_prerequisites_v1_read(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_proc routine
+          WHERE routine.oid=pg_catalog.to_regprocedure(
+            'public.canonical_forecast_demand_ui_prerequisites_v1_read(uuid,uuid,text,uuid)')
+           AND routine.prosecdef
+           AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[]
+        ) THEN
+          RAISE EXCEPTION 'Required demand UI prerequisite authority is missing';
+        END IF;
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_demand_ui_prerequisites_v1_read(uuid,uuid,text,uuid) FROM %I',
+          runtime_role);
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_demand_ui_prerequisites_v1_read(uuid,uuid,text,uuid) TO %I',
+          runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -4378,8 +4398,20 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_forecast_demand_schedule_epoch_current_v1(uuid,public.canonical_forecast_demand_schedule_epochs_v1)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_cohort_v1(uuid,timestamptz,timestamptz,timestamptz)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_risk_v1(uuid,timestamptz,timestamptz)','EXECUTE')
-         AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_outcome_v1(uuid,public.canonical_forecast_pipeline_origins_v1)','EXECUTE')
-       )) AS demand_schedule_v1_private,
+          AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_outcome_v1(uuid,public.canonical_forecast_pipeline_origins_v1)','EXECUTE')
+          AND (to_regprocedure('public.canonical_forecast_demand_ui_prerequisites_v1_read(uuid,uuid,text,uuid)') IS NULL OR (
+            has_function_privilege($1,'public.canonical_forecast_demand_ui_prerequisites_v1_read(uuid,uuid,text,uuid)','EXECUTE')
+            AND NOT EXISTS (
+              SELECT 1 FROM pg_proc function_value
+              CROSS JOIN LATERAL aclexplode(COALESCE(function_value.proacl,
+                acldefault('f',function_value.proowner))) privilege_value
+              WHERE function_value.oid=to_regprocedure(
+                'public.canonical_forecast_demand_ui_prerequisites_v1_read(uuid,uuid,text,uuid)')
+               AND privilege_value.grantee=0
+               AND privilege_value.privilege_type='EXECUTE'
+            )
+          ))
+        )) AS demand_schedule_v1_private,
        (to_regclass('public.polaris_provider_requests') IS NULL OR (
          NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')
          AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'INSERT')
@@ -4681,6 +4713,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('219_canonical_forecast_complete_window_gov
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('220_canonical_forecast_retell_future_origin_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('221_canonical_forecast_transition_future_origins_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('222_canonical_forecast_demand_to_schedule_v1.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('223_canonical_forecast_demand_ui_prerequisites_v1.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

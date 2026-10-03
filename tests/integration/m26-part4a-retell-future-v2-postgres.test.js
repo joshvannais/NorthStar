@@ -3,6 +3,8 @@
 const crypto = require('node:crypto');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const research = require('../../public/js/command-center-demand-research');
+const { openPaidResearchBrowser } = require('../helpers/m26-part4d-paid-browser');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const key = () => crypto.randomUUID();
@@ -20,6 +22,7 @@ realPostgres('Mission 26 Part 4A complete Retell periods and future origin v2', 
   let profileRaw;
   let integrationOwnershipId;
   let agentId;
+  let ui;
 
   beforeAll(async () => {
     fixture = await createDatabaseFixture();
@@ -122,7 +125,10 @@ realPostgres('Mission 26 Part 4A complete Retell periods and future origin v2', 
           confirmationVersion: 'm26-retell-call-review-v1' })]), 'SERIALIZABLE');
   }, 120000);
 
-  afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
+  afterAll(async () => {
+    if (ui) await ui.close();
+    if (fixture) await fixture.cleanup();
+  }, 120000);
 
   async function transaction(operation, isolation = 'READ COMMITTED') {
     const client = await fixture.runtimePool.connect();
@@ -321,6 +327,23 @@ realPostgres('Mission 26 Part 4A complete Retell periods and future origin v2', 
       areaForecastAvailable: false, providerIndependentVerified: false,
       wholeBusinessCoverageVerified: false, paidNumericServing: false });
     expect(JSON.stringify(current)).not.toContain('outputDigest');
+    const mounted = await request(fixture.app)
+      .get(`/api/v1/forecast/demand-sources/retell/future-origins/${saved.id}`)
+      .set(fixture.actors.owner.session.headers);
+    expect(mounted.status).toBe(200);
+    expect(research.validateRetell(mounted.body.data, saved.id)).not.toBeNull();
+    expect(JSON.stringify(mounted.body.data)).not.toMatch(/probability|privateOutput/i);
+    ui = await openPaidResearchBrowser(fixture);
+    await ui.page.locator('#commandCenterResearchHorizon').fill(horizon);
+    await ui.action('retell-save', 'Research origin saved', 'Inbound');
+    const browserOriginId = await ui.page.locator('#commandCenterResearchRetellId').inputValue();
+    expect(browserOriginId).toMatch(/^[0-9a-f-]{36}$/);
+    await ui.action('retell-load', 'Evidence is current', 'Inbound');
+    const browserRead = await request(fixture.app)
+      .get(`/api/v1/forecast/demand-sources/retell/future-origins/${browserOriginId}`)
+      .set(fixture.actors.owner.session.headers);
+    expect(browserRead.status).toBe(200);
+    expect(JSON.stringify(browserRead.body)).not.toContain('0.333333');
     const privateOutput = (await fixture.ownerPool.query(
       'SELECT private_output FROM canonical_forecast_retell_future_origins_v2 WHERE id=$1',
     [saved.id])).rows[0].private_output;

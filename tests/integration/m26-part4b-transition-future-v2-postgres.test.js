@@ -3,6 +3,8 @@
 const crypto = require('node:crypto');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const research = require('../../public/js/command-center-demand-research');
+const { openPaidResearchBrowser } = require('../helpers/m26-part4d-paid-browser');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const key = prefix => `${prefix}-${crypto.randomUUID()}`;
@@ -11,10 +13,13 @@ const METHOD_PATH = '/api/v1/forecast/demand-sources/transitions/method-reviews'
 const PROFILE_PATH = '/api/v1/forecast/reporting-windows/effective-anchors';
 
 realPostgres('Mission 26 Part 4B complete four-target future-origin authority', () => {
-  let fixture;
+  let fixture; let ui;
   beforeAll(async () => { fixture = await createDatabaseFixture({ operationalSchedule: true }); },
     120000);
-  afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
+  afterAll(async () => {
+    if (ui) await ui.close();
+    if (fixture) await fixture.cleanup();
+  }, 120000);
 
   const actor = name => fixture.actors[name || 'owner'];
   const postOrigin = (name = 'owner', idempotencyKey = key('m26-p4b-origin')) =>
@@ -286,8 +291,14 @@ realPostgres('Mission 26 Part 4B complete four-target future-origin authority', 
         profileWriter.release();
       }
 
-      const captureKey = key('m26-p4b-complete-origin');
-      const created = await postOrigin('owner', captureKey);
+      ui = await openPaidResearchBrowser(fixture);
+      await ui.action('transition-review', 'Evidence is current', 'Transitions');
+      await ui.action('transition-save', 'Research origin saved', 'Transitions');
+      const uiOriginResponse = [...ui.responses].reverse().find(item => item.method === 'POST' &&
+        item.url.endsWith(ORIGIN_PATH));
+      expect(uiOriginResponse).toBeDefined();
+      const captureKey = uiOriginResponse.headers['idempotency-key'];
+      const created = { status: uiOriginResponse.status, body: uiOriginResponse.body };
       expect(created.status).toBe(201);
       expect(created.body.data).toMatchObject({ state: 'transition_origin_saved',
         sourceCoverageComplete: true,
@@ -303,6 +314,12 @@ realPostgres('Mission 26 Part 4B complete four-target future-origin authority', 
         'demand.booking_cancellation.v1',
       ]);
       expect(JSON.stringify(created.body.data)).not.toMatch(/"probability":|"outputDigest":/i);
+      expect(research.validateTransitionOrigin(created.body.data)).not.toBeNull();
+      const uiTransitionOrigin = await ui.page
+        .locator('#commandCenterResearchTransitionId').inputValue();
+      expect(uiTransitionOrigin).toMatch(/^[0-9a-f-]{36}$/);
+      expect(uiTransitionOrigin).toBe(created.body.data.id);
+      await ui.action('transition-load', 'Evidence is current', 'Transitions');
       const saved = (await fixture.ownerPool.query(`SELECT evidence,private_output
         FROM canonical_forecast_transition_future_origins_v2
         WHERE organization_id=$1 AND id=$2`, [fixture.org, created.body.data.id])).rows[0];
@@ -381,14 +398,21 @@ realPostgres('Mission 26 Part 4B complete four-target future-origin authority', 
           WHERE organization_id=$1) cohorts`, [fixture.org])).rows[0].count)).toBe(cohortsBeforeMissing);
 
       const prospective = await seedProspectiveOutcomes();
+      await ui.page.locator('#commandCenterResearchTransitionId').fill(created.body.data.id);
+      await ui.action('transition-evaluate', 'Evaluation saved', 'Transitions');
+      const uiTransitionEvaluation = await ui.page
+        .locator('#commandCenterResearchTransitionEvaluationId').inputValue();
+      expect(uiTransitionEvaluation).toMatch(/^[0-9a-f-]{36}$/);
+      await ui.action('transition-evaluation-load', 'Evidence is current', 'Transitions');
       const originAfterOutcomeProgress = await request(fixture.app)
         .get(`${ORIGIN_PATH}/${created.body.data.id}`).set(actor().session.headers);
       expect(originAfterOutcomeProgress.body.data).toMatchObject({
         state: 'transition_origin_current', id: created.body.data.id });
-      const evaluationKey = key('m26-p4b-evaluation');
-      const evaluated = await request(fixture.app)
-        .post(`${ORIGIN_PATH}/${created.body.data.id}/evaluations`)
-        .set(actor().session.headers).set('Idempotency-Key', evaluationKey).send({});
+      const uiEvaluationResponse = [...ui.responses].reverse().find(item => item.method === 'POST' &&
+        item.url.endsWith(`${ORIGIN_PATH}/${created.body.data.id}/evaluations`));
+      expect(uiEvaluationResponse).toBeDefined();
+      const evaluationKey = uiEvaluationResponse.headers['idempotency-key'];
+      const evaluated = { status: uiEvaluationResponse.status, body: uiEvaluationResponse.body };
       expect(evaluated.status).toBe(201);
       expect(evaluated.body.data).toMatchObject({ state: 'transition_evaluation_saved',
         originId: created.body.data.id, revision: 1, replayed: false,
@@ -419,6 +443,8 @@ realPostgres('Mission 26 Part 4B complete four-target future-origin authority', 
       expect(evaluationRead.body.data).toMatchObject({ state: 'transition_evaluation_current',
         revision: 1, metricsWithheld: true, calibrationClaimed: false,
         driftVerdictIssued: false, automaticActionTaken: false });
+      expect(research.validateTransitionEvaluation(evaluationRead.body.data,
+        created.body.data.id, evaluated.body.data.id)).not.toBeNull();
       expect((await review('qualification', prospective.futureQualification, 'unqualified',
         '2026-09-15T12:00:00.000000Z', 'correct')).status).toBe(201);
       expect((await finalize('qualification', '2026-10-02T00:00:00.000000Z')).status).toBe(201);

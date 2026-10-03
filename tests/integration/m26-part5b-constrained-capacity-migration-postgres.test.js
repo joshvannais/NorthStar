@@ -62,7 +62,7 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
       has_function_privilege($1,'canonical_forecast_constrained_capacity_v1_source_identity(uuid,text,text,uuid,jsonb)','EXECUTE') runtime_helper,
       has_function_privilege($1,'canonical_forecast_constrained_capacity_v1_definition_valid(text,jsonb)','EXECUTE') runtime_validator,
       has_function_privilege($1,'canonical_forecast_constrained_capacity_v1_origin_projection(canonical_forecast_constrained_capacity_origins_v1,text,boolean)','EXECUTE') runtime_projection,
-      has_function_privilege($1,'canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz)','EXECUTE') runtime_input,
+      has_function_privilege($1,'canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz,timestamptz)','EXECUTE') runtime_input,
       has_function_privilege($1,'canonical_forecast_constrained_capacity_v1_results(uuid,timestamptz,timestamptz,timestamptz,jsonb)','EXECUTE') runtime_results,
       has_function_privilege($1,'canonical_forecast_constrained_capacity_v1_source_capture()','EXECUTE') runtime_trigger`,
     [runtimeRole])).rows[0];
@@ -75,7 +75,7 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
       .rows[0].count).toBe(7);
     expect((await pool.query(`SELECT count(*)::integer count FROM pg_trigger WHERE NOT tgisinternal
       AND tgenabled='O' AND tgfoid='canonical_forecast_constrained_capacity_v1_source_capture()'::regprocedure`))
-      .rows[0].count).toBe(18);
+      .rows[0].count).toBe(19);
   });
 
   test('fails startup closed for missing entry, unsafe helper and disabled source or immutable trigger', async () => {
@@ -91,7 +91,7 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
       SECURITY INVOKER`, 'Required constrained-capacity v1 entry security is missing');
     await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_lock_sources(uuid)
       SET search_path TO public`, 'Required constrained-capacity v1 entry security is missing');
-    await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz)
+    await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz,timestamptz)
       SECURITY INVOKER`, 'Required constrained-capacity v1 entry security is missing');
     await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_results(uuid,timestamptz,timestamptz,timestamptz,jsonb)
       SET search_path TO public`, 'Required constrained-capacity v1 entry security is missing');
@@ -113,6 +113,8 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
     await fail(`ALTER TABLE workforce_crews DISABLE TRIGGER z_m26_p5b_source_crews`,
       'Required constrained-capacity v1 source capture is missing');
     await fail(`ALTER TABLE canonical_estimates DISABLE TRIGGER z_m26_p5b_source_estimates`,
+      'Required constrained-capacity v1 source capture is missing');
+    await fail(`ALTER TABLE canonical_completion_records DISABLE TRIGGER z_m26_p5b_source_completion_records`,
       'Required constrained-capacity v1 source capture is missing');
   }, 120000);
 

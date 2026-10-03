@@ -151,7 +151,7 @@ BEGIN
   'canonical_equipment_events','canonical_equipment_plans','canonical_equipment_readiness_plans',
   'canonical_travel_plans','canonical_schedule_assignments','canonical_schedule_assignment_revisions',
   'canonical_schedule_approvals','canonical_schedule_human_approvals','canonical_workforce_availability_revisions',
-  'canonical_estimates',
+  'canonical_estimates','canonical_completion_records',
   'canonical_opportunities'])
  LOOP
   statement_value:=format($sql$
@@ -198,7 +198,8 @@ BEGIN
   public.canonical_equipment_readiness_plans,public.canonical_travel_plans,
   public.canonical_schedule_assignments,public.canonical_schedule_assignment_revisions,
   public.canonical_schedule_approvals,public.canonical_schedule_human_approvals,
-  public.canonical_estimates,public.canonical_opportunities IN SHARE MODE;
+  public.canonical_estimates,public.canonical_opportunities,public.canonical_field_executions,
+  public.canonical_completion_records IN SHARE MODE;
 END $$;
 
 CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_uuid_array(array_value JSONB,max_count INTEGER)
@@ -330,7 +331,7 @@ BEGIN
    OR NOT(item->>'role'=ANY(roles)) THEN RETURN FALSE;END IF;
  END LOOP;
  IF EXISTS(SELECT 1 FROM jsonb_array_elements(definition_value->'crewAssignments') entry
-   GROUP BY lower(entry->>'profileId') HAVING count(*)>1)
+   GROUP BY lower(entry->>'profileId'),COALESCE(lower(entry->>'crewId'),''),entry->>'role' HAVING count(*)>1)
   OR EXISTS(SELECT 1 FROM jsonb_array_elements(definition_value->'crewAssignments') entry
    WHERE (entry->'crewId'<>'null'::jsonb AND entry->>'crewId' NOT IN
       (SELECT value#>>'{}' FROM jsonb_array_elements(definition_value->'crewIds') value))
@@ -347,7 +348,8 @@ BEGIN
    OR item->>'kind' NOT IN('vehicle','equipment') THEN RETURN FALSE;END IF;
  END LOOP;
  IF EXISTS(SELECT 1 FROM jsonb_array_elements(definition_value->'assetAssignments') entry
-   GROUP BY lower(entry->>'assetId') HAVING count(*)>1)
+   GROUP BY lower(entry->>'assetId'),COALESCE(lower(entry->>'crewId'),''),entry->>'kind',
+    lower(entry->>'operatorProfileId') HAVING count(*)>1)
   OR EXISTS(SELECT 1 FROM jsonb_array_elements(definition_value->'assetAssignments') entry
    WHERE (entry->'crewId'<>'null'::jsonb AND entry->>'crewId' NOT IN
       (SELECT value#>>'{}' FROM jsonb_array_elements(definition_value->'crewIds') value))
@@ -399,16 +401,14 @@ BEGIN
     FROM jsonb_array_elements(definition_value->'assetAssignments') value
     WHERE value->>'operatorProfileId' IN
       (SELECT member#>>'{}' FROM jsonb_array_elements(definition_value->'operatorProfileIds') member))
-  AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(definition_value->'assetAssignments') value
-    GROUP BY value->>'operatorProfileId' HAVING count(*)>1)
   AND ((definition_value#>>'{applicability,vehicle}')::boolean
     OR (definition_value#>>'{applicability,equipment}')::boolean
     OR jsonb_array_length(definition_value->'operatorProfileIds')=0)
-  AND (SELECT count(*)=jsonb_array_length(definition_value->'vehicleAssetIds')
+  AND (SELECT count(DISTINCT value->>'assetId')=jsonb_array_length(definition_value->'vehicleAssetIds')
     FROM jsonb_array_elements(definition_value->'assetAssignments') entries(value)
     WHERE value->>'kind'='vehicle' AND value->>'assetId' IN
       (SELECT member#>>'{}' FROM jsonb_array_elements(definition_value->'vehicleAssetIds') member))
-  AND (SELECT count(*)=jsonb_array_length(definition_value->'equipmentAssetIds')
+  AND (SELECT count(DISTINCT value->>'assetId')=jsonb_array_length(definition_value->'equipmentAssetIds')
     FROM jsonb_array_elements(definition_value->'assetAssignments') entries(value)
     WHERE value->>'kind'='equipment' AND value->>'assetId' IN
       (SELECT member#>>'{}' FROM jsonb_array_elements(definition_value->'equipmentAssetIds') member))
@@ -430,6 +430,10 @@ RETURNS TEXT LANGUAGE SQL IMMUTABLE SET search_path=pg_catalog,public,pg_temp AS
   WHEN 'canonical_schedule_human_approvals' THEN payload->>'assignment_id'
   WHEN 'canonical_workforce_availability_revisions' THEN payload->>'workforce_profile_id'
   WHEN 'canonical_estimates' THEN payload->>'opportunity_id'
+  WHEN 'canonical_equipment_plans' THEN (payload->>'estimate_id')||':equipment'
+  WHEN 'canonical_equipment_readiness_plans' THEN (payload->>'estimate_id')||':readiness'
+  WHEN 'canonical_travel_plans' THEN (payload->>'estimate_id')||':travel'
+  WHEN 'canonical_completion_records' THEN payload->>'execution_id'
   ELSE COALESCE(payload->>'id',payload->>'profile_id',payload->>'crew_id',payload->>'skill_id',
    payload->>'asset_id',payload->>'estimate_id',payload->>'assignment_id',payload->>'appointment_id') END
 $$;
@@ -481,6 +485,7 @@ BEGIN
   ('canonical_schedule_human_approvals','z_m26_p5b_source_human_approvals'),
   ('canonical_workforce_availability_revisions','z_m26_p5b_source_availability_revisions'),
   ('canonical_estimates','z_m26_p5b_source_estimates'),
+  ('canonical_completion_records','z_m26_p5b_source_completion_records'),
   ('canonical_opportunities','z_m26_p5b_source_opportunities')) AS value(table_name,trigger_name)
  LOOP
   EXECUTE format('CREATE TRIGGER %I BEFORE INSERT OR UPDATE OR DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.canonical_forecast_constrained_capacity_v1_source_capture()',item.trigger_name,item.table_name);
@@ -495,6 +500,7 @@ DECLARE result_value JSONB;profile_value public.canonical_business_profiles%ROWT
  assignment_value public.canonical_schedule_assignments%ROWTYPE;
  scope_review_value public.canonical_forecast_constrained_capacity_reviews_v1%ROWTYPE;
  opportunity_value JSONB;basis_value JSONB;estimate_value UUID;receipt_value JSONB;estimate_population JSONB;
+ m24_bases JSONB:='[]'::jsonb;
  expected_count INTEGER;actual_count INTEGER;assigned_role TEXT;route_home TEXT;route_key TEXT;
  job_source_order BIGINT:=0;job_role_source_order BIGINT:=0;job_crew_source_order BIGINT:=0;
 BEGIN
@@ -577,6 +583,9 @@ BEGIN
     OR receipt_value->>'id' IS DISTINCT FROM basis_value#>>'{basis,receiptId}'
     OR rtrim(receipt_value->>'digest') IS DISTINCT FROM basis_value#>>'{basis,digest}' THEN
     RAISE EXCEPTION 'Adopted M24 constrained-capacity basis unavailable' USING ERRCODE='22023';END IF;
+   m24_bases:=m24_bases||jsonb_build_array(jsonb_build_object('kind',basis_value->>'kind',
+    'estimateId',estimate_value,'receiptId',receipt_value->>'id','revision',(receipt_value->>'revision')::bigint,
+    'digest',rtrim(receipt_value->>'digest'),'action',receipt_value->>'action'));
   END LOOP;
   IF estimate_population IS NULL THEN
    SELECT COALESCE(jsonb_agg(jsonb_build_array(value.id,value.snapshot_digest,value.created_at) ORDER BY value.id),'[]'::jsonb)
@@ -592,8 +601,7 @@ BEGIN
    OR (event_value.source_kind IN('canonical_opportunities','canonical_estimates')
     AND event_value.subject_key=assignment_value.opportunity_id::text)
    OR (event_value.source_kind IN('canonical_equipment_plans','canonical_equipment_readiness_plans','canonical_travel_plans')
-    AND event_value.subject_key IN(COALESCE(definition_value#>>'{equipmentBasis,receiptId}',''),
-      COALESCE(definition_value#>>'{readinessBasis,receiptId}',''),COALESCE(definition_value#>>'{travelBasis,receiptId}','')))
+    AND event_value.subject_key IN(estimate_value::text||':equipment',estimate_value::text||':readiness',estimate_value::text||':travel'))
    OR (assignment_value.workforce_crew_id IS NOT NULL AND event_value.source_kind='workforce_crews'
     AND event_value.subject_key=assignment_value.workforce_crew_id::text));
   IF assignment_value.workforce_profile_id IS NOT NULL THEN
@@ -611,14 +619,16 @@ BEGIN
    'opportunityId',assignment_value.opportunity_id,
    'assignmentRevision',assignment_value.revision,
    'assignmentDigest',rtrim(assignment_value.canonical_digest),
-   'workforceProfileId',assignment_value.workforce_profile_id,
-   'workforceCrewId',assignment_value.workforce_crew_id,
-   'assignedRole',assigned_role,'routeKey',route_key,'routeHomeLocation',route_home,
-   'scheduleState',assignment_value.schedule_state,'targetState',assignment_value.target_state,
+	   'workforceProfileId',assignment_value.workforce_profile_id,
+	   'workforceCrewId',assignment_value.workforce_crew_id,
+	   'assignedRole',assigned_role,'routeKey',route_key,'routeHomeLocation',route_home,
+	   'scheduleState',assignment_value.schedule_state,'targetState',assignment_value.target_state,
+	   'appointmentStatus',assignment_value.appointment_status,'scheduledStart',assignment_value.scheduled_start,
+	   'scheduledEnd',assignment_value.scheduled_end,
    'opportunityDigest',public.canonical_completion_digest(opportunity_value),
    'serviceType',opportunity_value->>'service_type',
    'equipmentBasis',definition_value->'equipmentBasis','readinessBasis',definition_value->'readinessBasis',
-   'travelBasis',definition_value->'travelBasis','estimateId',estimate_value,
+   'travelBasis',definition_value->'travelBasis','m24Bases',m24_bases,'estimateId',estimate_value,
    'estimatePopulation',estimate_population,
     'estimatePopulationDigest',public.canonical_completion_digest(estimate_population),
     'jobConstrainedSourceOrder',job_source_order,'jobRoleSourceOrder',job_role_source_order,
@@ -1032,24 +1042,64 @@ BEGIN
  RETURN value;
 END $$;
 
+CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_m24_bases_current(
+ org UUID,review_value public.canonical_forecast_constrained_capacity_reviews_v1)
+RETURNS BOOLEAN LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE pinned JSONB;current_value JSONB;expected_count INTEGER:=0;
+BEGIN
+ expected_count:=(CASE WHEN review_value.definition#>>'{equipmentBasis,kind}'='m24_adopted' THEN 1 ELSE 0 END)+
+  (CASE WHEN review_value.definition#>>'{readinessBasis,kind}'='m24_adopted' THEN 1 ELSE 0 END)+
+  (CASE WHEN review_value.definition#>>'{travelBasis,kind}'='m24_adopted' THEN 1 ELSE 0 END);
+ IF jsonb_typeof(review_value.source_identity->'m24Bases')<>'array'
+  OR jsonb_array_length(review_value.source_identity->'m24Bases')<>expected_count THEN RETURN FALSE;END IF;
+ FOR pinned IN SELECT value FROM jsonb_array_elements(review_value.source_identity->'m24Bases') entries(value) LOOP
+  current_value:=NULL;
+  IF pinned->>'kind'='equipment' THEN
+   SELECT to_jsonb(value) INTO current_value FROM public.canonical_equipment_plans value
+    WHERE value.organization_id=org AND value.estimate_id=(pinned->>'estimateId')::uuid
+    ORDER BY value.revision DESC LIMIT 1;
+  ELSIF pinned->>'kind'='readiness' THEN
+   SELECT to_jsonb(value) INTO current_value FROM public.canonical_equipment_readiness_plans value
+    WHERE value.organization_id=org AND value.estimate_id=(pinned->>'estimateId')::uuid
+    ORDER BY value.revision DESC LIMIT 1;
+  ELSIF pinned->>'kind'='travel' THEN
+   SELECT to_jsonb(value) INTO current_value FROM public.canonical_travel_plans value
+    WHERE value.organization_id=org AND value.estimate_id=(pinned->>'estimateId')::uuid
+    ORDER BY value.revision DESC LIMIT 1;
+  ELSE RETURN FALSE;END IF;
+  IF current_value IS NULL OR current_value->>'action'<>'save'
+   OR current_value->>'id' IS DISTINCT FROM pinned->>'receiptId'
+   OR (current_value->>'revision')::bigint IS DISTINCT FROM (pinned->>'revision')::bigint
+   OR rtrim(current_value->>'digest') IS DISTINCT FROM pinned->>'digest' THEN RETURN FALSE;END IF;
+ END LOOP;
+ RETURN TRUE;
+EXCEPTION WHEN OTHERS THEN RETURN FALSE;
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_job_review_covers(
  org UUID,review_value public.canonical_forecast_constrained_capacity_reviews_v1,at_value TIMESTAMPTZ)
 RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT review_value.id IS NOT NULL AND review_value.review_kind='job' AND review_value.action='approve'
   AND review_value.decided_at<=at_value
+  AND public.canonical_forecast_constrained_capacity_v1_m24_bases_current(org,review_value)
   AND NOT EXISTS(SELECT 1 FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
    WHERE event_value.organization_id=org
     AND event_value.source_order>COALESCE((review_value.source_identity->>'jobConstrainedSourceOrder')::bigint,0)
     AND event_value.observed_at<at_value AND (
-     (event_value.source_kind IN('canonical_schedule_assignments','canonical_schedule_assignment_revisions',
-       'canonical_schedule_approvals','canonical_schedule_human_approvals')
-      AND event_value.subject_key=review_value.source_identity->>'assignmentId')
+	     (event_value.source_kind IN('canonical_schedule_assignments','canonical_schedule_assignment_revisions')
+	      AND event_value.subject_key=review_value.source_identity->>'assignmentId'
+	      AND NOT (COALESCE(event_value.after_payload->>'appointment_status','') IN('completed','cancelled')
+	       AND event_value.after_payload->>'target_state'=review_value.source_identity->>'targetState'
+	       AND event_value.after_payload->>'schedule_state'=review_value.source_identity->>'scheduleState'
+	       AND event_value.after_payload->>'workforce_profile_id' IS NOT DISTINCT FROM review_value.source_identity->>'workforceProfileId'
+	       AND event_value.after_payload->>'workforce_crew_id' IS NOT DISTINCT FROM review_value.source_identity->>'workforceCrewId'
+	       AND event_value.after_payload->>'scheduled_start' IS NOT DISTINCT FROM review_value.source_identity->>'scheduledStart'
+	       AND event_value.after_payload->>'scheduled_end' IS NOT DISTINCT FROM review_value.source_identity->>'scheduledEnd'))
      OR (event_value.source_kind IN('canonical_opportunities','canonical_estimates')
       AND event_value.subject_key=review_value.source_identity->>'opportunityId')
      OR (event_value.source_kind IN('canonical_equipment_plans','canonical_equipment_readiness_plans','canonical_travel_plans')
-      AND event_value.subject_key IN(COALESCE(review_value.source_identity#>>'{equipmentBasis,receiptId}',''),
-       COALESCE(review_value.source_identity#>>'{readinessBasis,receiptId}',''),
-       COALESCE(review_value.source_identity#>>'{travelBasis,receiptId}','')))
+      AND event_value.subject_key IN(SELECT (basis->>'estimateId')||':'||(basis->>'kind')
+       FROM jsonb_array_elements(COALESCE(review_value.source_identity->'m24Bases','[]'::jsonb)) entries(basis)))
      OR (review_value.source_identity->>'workforceCrewId' IS NOT NULL
       AND event_value.source_kind='workforce_crews'
       AND event_value.subject_key=review_value.source_identity->>'workforceCrewId')))
@@ -1065,19 +1115,141 @@ RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER SET search_path=pg_catalog,
     AND event_value.crew_id::text=review_value.source_identity->>'workforceCrewId')
 $$;
 
+CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_exact_pack(candidates JSONB)
+RETURNS INTEGER LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE candidate_count INTEGER:=jsonb_array_length(candidates);visited INTEGER[]:=ARRAY[]::integer[];
+ component INTEGER[];queue_pos INTEGER;left_index INTEGER;right_index INTEGER;left_value JSONB;right_value JSONB;
+ mask BIGINT;limit_mask BIGINT;bit_pos INTEGER;used_profiles TEXT[];used_assets TEXT[];candidate_value JSONB;
+ score INTEGER;best_score INTEGER;total_score INTEGER:=0;conflicts BOOLEAN;
+BEGIN
+ IF jsonb_typeof(candidates)<>'array' OR candidate_count>256 THEN
+  RAISE EXCEPTION 'Exact constrained-capacity matching exceeds candidate bound' USING ERRCODE='54000';END IF;
+ FOR left_index IN 1..candidate_count LOOP
+  IF left_index=ANY(visited) THEN CONTINUE;END IF;
+  component:=ARRAY[left_index];visited:=array_append(visited,left_index);queue_pos:=1;
+  WHILE queue_pos<=cardinality(component) LOOP
+   left_value:=candidates->(component[queue_pos]-1);
+   FOR right_index IN 1..candidate_count LOOP
+    IF right_index=ANY(visited) THEN CONTINUE;END IF;
+    right_value:=candidates->(right_index-1);
+    SELECT EXISTS(SELECT 1 FROM jsonb_array_elements_text(left_value->'profiles') a(value)
+      JOIN jsonb_array_elements_text(right_value->'profiles') b(value) ON b.value=a.value)
+      OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(left_value->'assets') a(value)
+      JOIN jsonb_array_elements_text(right_value->'assets') b(value) ON b.value=a.value) INTO conflicts;
+    IF conflicts THEN component:=array_append(component,right_index);visited:=array_append(visited,right_index);END IF;
+   END LOOP;
+   queue_pos:=queue_pos+1;
+  END LOOP;
+  IF cardinality(component)>20 THEN
+   RAISE EXCEPTION 'Exact constrained-capacity matching component exceeds bound' USING ERRCODE='54000';END IF;
+  best_score:=0;limit_mask:=(1::bigint<<cardinality(component));
+  FOR mask IN 0..limit_mask-1 LOOP
+   used_profiles:=ARRAY[]::text[];used_assets:=ARRAY[]::text[];score:=0;conflicts:=FALSE;
+   FOR bit_pos IN 0..cardinality(component)-1 LOOP
+    IF (mask&(1::bigint<<bit_pos))=0 THEN CONTINUE;END IF;
+    candidate_value:=candidates->(component[bit_pos+1]-1);
+    IF EXISTS(SELECT 1 FROM jsonb_array_elements_text(candidate_value->'profiles') value WHERE value=ANY(used_profiles))
+     OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(candidate_value->'assets') value WHERE value=ANY(used_assets)) THEN
+     conflicts:=TRUE;EXIT;END IF;
+    used_profiles:=used_profiles||ARRAY(SELECT value FROM jsonb_array_elements_text(candidate_value->'profiles') value);
+    used_assets:=used_assets||ARRAY(SELECT value FROM jsonb_array_elements_text(candidate_value->'assets') value);
+    score:=score+(candidate_value->>'targetSeats')::int;
+   END LOOP;
+   IF NOT conflicts THEN best_score:=GREATEST(best_score,score);END IF;
+  END LOOP;
+  total_score:=total_score+best_score;
+ END LOOP;
+ RETURN total_score;
+END $$;
+
+CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_exact_match(
+ definition_value JSONB,workers_value JSONB,assets_value JSONB,route_key TEXT DEFAULT NULL)
+RETURNS JSONB LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE candidates_value JSONB;score_value INTEGER;target_role TEXT:=definition_value->>'role';
+BEGIN
+ WITH RECURSIVE formations AS (
+  SELECT CASE WHEN (definition_value#>>'{applicability,crew}')::boolean THEN crew_id ELSE 'profile:'||profile_id END formation_key,
+   CASE WHEN (definition_value#>>'{applicability,crew}')::boolean THEN crew_id ELSE NULL END crew_id,
+   CASE WHEN (definition_value#>>'{applicability,crew}')::boolean THEN NULL ELSE profile_id END direct_profile
+  FROM (SELECT DISTINCT value crew_id,NULL::text profile_id FROM jsonb_array_elements_text(definition_value->'crewIds') value
+        WHERE (definition_value#>>'{applicability,crew}')::boolean
+        UNION ALL
+        SELECT DISTINCT NULL,value->>'profileId' FROM jsonb_array_elements(workers_value) value
+        WHERE NOT (definition_value#>>'{applicability,crew}')::boolean AND value->>'role'=target_role) source
+ ), seat_tokens AS (
+  SELECT formation_key,crew_id,direct_profile,row_number() OVER(PARTITION BY formation_key ORDER BY role,ordinal)::int position,
+   role,count(*) OVER(PARTITION BY formation_key)::int seat_count,
+   count(*) FILTER(WHERE role=target_role) OVER(PARTITION BY formation_key)::int target_seats
+  FROM (SELECT formation.formation_key,formation.crew_id,formation.direct_profile,required->>'role' role,ordinal
+    FROM formations formation CROSS JOIN LATERAL jsonb_array_elements(definition_value->'crewRoleRequirements') required
+    CROSS JOIN LATERAL generate_series(1,(required->>'count')::int) ordinal
+    WHERE (definition_value#>>'{applicability,crew}')::boolean
+    UNION ALL SELECT formation_key,crew_id,direct_profile,target_role,1 FROM formations
+     WHERE NOT (definition_value#>>'{applicability,crew}')::boolean) tokens
+ ), worker_paths AS (
+  SELECT formation_key,crew_id,direct_profile,0 position,'[]'::jsonb profiles,0 seat_count,0 target_seats FROM formations
+  UNION ALL
+  SELECT path.formation_key,path.crew_id,path.direct_profile,path.position+1,
+   path.profiles||jsonb_build_array(worker.value->>'profileId'),token.seat_count,token.target_seats
+  FROM worker_paths path JOIN seat_tokens token ON token.formation_key=path.formation_key AND token.position=path.position+1
+  JOIN LATERAL (SELECT value FROM jsonb_array_elements(workers_value) value
+    WHERE value->>'role'=token.role AND value->'crewId' IS NOT DISTINCT FROM COALESCE(to_jsonb(path.crew_id),'null'::jsonb)
+     AND (path.direct_profile IS NULL OR value->>'profileId'=path.direct_profile)
+     AND NOT path.profiles ? (value->>'profileId') ORDER BY value->>'profileId') worker ON TRUE
+ ), worker_candidates AS (
+  SELECT DISTINCT formation_key,crew_id,
+   (SELECT jsonb_agg(value ORDER BY value) FROM jsonb_array_elements_text(path.profiles) value) profiles,target_seats
+  FROM worker_paths path WHERE position=seat_count AND seat_count>0
+   AND (route_key IS NULL OR route_key='crew:'||COALESCE(crew_id,'')
+    OR (route_key LIKE 'profile:%' AND path.profiles ? substring(route_key FROM 9)))
+ ), asset_tokens AS (
+  SELECT candidate.formation_key,candidate.crew_id,candidate.profiles,candidate.target_seats,
+   row_number() OVER(PARTITION BY candidate.formation_key,candidate.profiles::text ORDER BY kind,ordinal)::int position,
+   kind,count(*) OVER(PARTITION BY candidate.formation_key,candidate.profiles::text)::int asset_count
+  FROM worker_candidates candidate CROSS JOIN LATERAL (
+   SELECT 'vehicle' kind,ordinal FROM generate_series(1,(definition_value#>>'{assetRequirements,vehiclePerSeat}')::int*candidate.target_seats) ordinal
+   UNION ALL SELECT 'equipment',ordinal FROM generate_series(1,(definition_value#>>'{assetRequirements,equipmentPerSeat}')::int*candidate.target_seats) ordinal) slots
+ ), asset_paths AS (
+  SELECT candidate.formation_key,candidate.crew_id,candidate.profiles,candidate.target_seats,0 position,
+   '[]'::jsonb assets,'[]'::jsonb operators,
+   (((definition_value#>>'{assetRequirements,vehiclePerSeat}')::int+
+     (definition_value#>>'{assetRequirements,equipmentPerSeat}')::int)*candidate.target_seats) asset_count
+   FROM worker_candidates candidate
+  UNION ALL
+  SELECT path.formation_key,path.crew_id,path.profiles,path.target_seats,path.position+1,
+   path.assets||jsonb_build_array(asset.value->>'assetId'),path.operators||jsonb_build_array(asset.value->>'operatorProfileId'),token.asset_count
+  FROM asset_paths path JOIN asset_tokens token ON token.formation_key=path.formation_key
+    AND token.profiles=path.profiles AND token.position=path.position+1
+  JOIN LATERAL (SELECT value FROM jsonb_array_elements(assets_value) value
+    WHERE value->>'kind'=token.kind AND value->'crewId' IS NOT DISTINCT FROM COALESCE(to_jsonb(path.crew_id),'null'::jsonb)
+     AND path.profiles ? (value->>'operatorProfileId') AND NOT path.assets ? (value->>'assetId')
+     AND NOT path.operators ? (value->>'operatorProfileId')
+    ORDER BY value->>'assetId',value->>'operatorProfileId') asset ON TRUE
+ ), completed AS (
+  SELECT DISTINCT profiles,assets,target_seats FROM asset_paths
+   WHERE (asset_count=0 AND position=0) OR (asset_count>0 AND position=asset_count)
+ ) SELECT COALESCE(jsonb_agg(jsonb_build_object('profiles',profiles,'assets',assets,'targetSeats',target_seats)
+    ORDER BY profiles::text,assets::text),'[]'::jsonb) INTO candidates_value FROM completed;
+ IF jsonb_array_length(candidates_value)>256 THEN
+  RAISE EXCEPTION 'Exact constrained-capacity matching exceeds candidate bound' USING ERRCODE='54000';END IF;
+ score_value:=public.canonical_forecast_constrained_capacity_v1_exact_pack(candidates_value);
+ RETURN jsonb_build_object('targetSlots',score_value,'candidateCount',jsonb_array_length(candidates_value),
+  'matchingDigest',public.canonical_completion_digest(candidates_value));
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_scope_segment(
  org UUID,scope_review public.canonical_forecast_constrained_capacity_reviews_v1,
  start_value TIMESTAMPTZ,end_value TIMESTAMPTZ,job_evidence JSONB,route_key TEXT DEFAULT NULL)
 RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE definition_value JSONB:=scope_review.definition;segment_minutes NUMERIC:=EXTRACT(EPOCH FROM(end_value-start_value))/60;
- profile JSONB;formation_id TEXT;crew_id TEXT;route_profile TEXT;requirement JSONB;role_result JSONB;role_profile JSONB;
- target_value JSONB;profile_id TEXT;role_value TEXT;count_value INTEGER;slots INTEGER:=0;formation_slots INTEGER;
- available_count INTEGER;target_seats INTEGER:=1;vehicle_count INTEGER;equipment_count INTEGER;
+ profile JSONB;requirement JSONB;role_result JSONB;role_profile JSONB;
+ target_value JSONB;profile_id TEXT;role_value TEXT;target_seats INTEGER:=1;
  vehicle_needed INTEGER:=(definition_value#>>'{assetRequirements,vehiclePerSeat}')::int;
  equipment_needed INTEGER:=(definition_value#>>'{assetRequirements,equipmentPerSeat}')::int;
  worker_minutes NUMERIC:=0;calendar_value JSONB;business_payload JSONB;business_id TEXT;
  asset_assignment JSONB;asset_payload JSONB;asset_free BOOLEAN;crew_payload JSONB;reviewed_asset JSONB;
  operator_assignment JSONB;operator_result JSONB;operator_row JSONB;operator_available BOOLEAN;
+ workers_value JSONB:='[]'::jsonb;assets_value JSONB:='[]'::jsonb;match_value JSONB;
 BEGIN
  IF EXISTS(SELECT 1 FROM public.canonical_forecast_constrained_capacity_source_events_v1 value
    WHERE value.organization_id=org AND value.source_order>
@@ -1138,68 +1310,40 @@ BEGIN
   SELECT (value->>'count')::int INTO target_seats FROM jsonb_array_elements(definition_value->'crewRoleRequirements') value
    WHERE value->>'role'=definition_value->>'role';
  ELSE target_seats:=1;END IF;
- FOR formation_id IN
-  SELECT CASE WHEN (definition_value#>>'{applicability,crew}')::boolean
-    THEN value->>'crewId' ELSE 'profile:'||(value->>'profileId') END
-   FROM jsonb_array_elements(definition_value->'crewAssignments') value
-   WHERE value->>'role'=definition_value->>'role'
-   GROUP BY 1 ORDER BY 1
- LOOP
-  crew_id:=CASE WHEN formation_id LIKE 'profile:%' THEN NULL ELSE formation_id END;
-  route_profile:=CASE WHEN route_key LIKE 'profile:%' THEN substring(route_key FROM 9) ELSE NULL END;
-  IF route_key IS NOT NULL AND NOT(
-    route_key='crew:'||COALESCE(crew_id,'')
-    OR (route_profile IS NOT NULL AND EXISTS(SELECT 1 FROM jsonb_array_elements(definition_value->'crewAssignments') assigned
-      WHERE assigned->>'profileId'=route_profile AND assigned->>'role'=definition_value->>'role'
-       AND assigned->'crewId' IS NOT DISTINCT FROM COALESCE(to_jsonb(crew_id),'null'::jsonb)))) THEN CONTINUE;END IF;
-  formation_slots:=2147483647;
-  IF (definition_value#>>'{applicability,crew}')::boolean THEN
-   FOR requirement IN SELECT value FROM jsonb_array_elements(definition_value->'crewRoleRequirements') entries(value) LOOP
-    role_value:=requirement->>'role';count_value:=(requirement->>'count')::int;available_count:=0;
-    role_result:=CASE WHEN role_value=definition_value->>'role' THEN target_value ELSE
-      public.canonical_forecast_workload_capacity_v1_capacity_calculation(org,start_value,end_value,end_value,role_value) END;
-    IF (role_result->>'classificationComplete')::boolean IS NOT TRUE
-     OR (role_result->>'availabilityComplete')::boolean IS NOT TRUE OR COALESCE((role_result->>'overlap')::boolean,FALSE) THEN
-     RAISE EXCEPTION 'Formation-role interval evidence incomplete' USING ERRCODE='22023';END IF;
-    FOR role_profile IN SELECT value FROM jsonb_array_elements(role_result->'rows') entries(value) LOOP
-     profile_id:=role_profile->>'profileId';
-     IF (role_profile->>'availableMinutes')::numeric=round(segment_minutes,6)
-      AND EXISTS(SELECT 1 FROM jsonb_array_elements(definition_value->'crewAssignments') assigned
-       WHERE assigned->>'crewId'=crew_id AND assigned->>'profileId'=profile_id AND assigned->>'role'=role_value)
-      AND public.canonical_forecast_constrained_capacity_v1_subject_present(org,'workforce_crew_members',crew_id||':'||profile_id,start_value)
-      AND (NOT (definition_value#>>'{applicability,skill}')::boolean OR NOT EXISTS(
-       SELECT 1 FROM jsonb_array_elements(definition_value->'skillIds') skill WHERE NOT
-        public.canonical_forecast_constrained_capacity_v1_subject_present(
-         org,'workforce_profile_skills',profile_id||':'||(skill#>>'{}'),start_value))) THEN
-      available_count:=available_count+1;END IF;
-    END LOOP;
-    formation_slots:=LEAST(formation_slots,available_count/count_value);
-   END LOOP;
-  ELSE
-   profile_id:=substring(formation_id FROM 9);formation_slots:=0;
-   SELECT value INTO profile FROM jsonb_array_elements(target_value->'rows') value
-    WHERE value->>'profileId'=profile_id;
-   IF profile IS NOT NULL AND (profile->>'availableMinutes')::numeric=round(segment_minutes,6)
-    AND (NOT (definition_value#>>'{applicability,skill}')::boolean OR NOT EXISTS(
-     SELECT 1 FROM jsonb_array_elements(definition_value->'skillIds') skill WHERE NOT
-      public.canonical_forecast_constrained_capacity_v1_subject_present(
-       org,'workforce_profile_skills',profile_id||':'||(skill#>>'{}'),start_value))) THEN formation_slots:=1;END IF;
+ FOR operator_assignment IN SELECT value FROM jsonb_array_elements(definition_value->'crewAssignments') entries(value)
+  ORDER BY value->>'profileId',value->>'crewId',value->>'role' LOOP
+  role_value:=operator_assignment->>'role';profile_id:=operator_assignment->>'profileId';
+  role_result:=CASE WHEN role_value=definition_value->>'role' THEN target_value ELSE
+    public.canonical_forecast_workload_capacity_v1_capacity_calculation(org,start_value,end_value,end_value,role_value) END;
+  IF (role_result->>'classificationComplete')::boolean IS NOT TRUE
+   OR (role_result->>'availabilityComplete')::boolean IS NOT TRUE OR COALESCE((role_result->>'overlap')::boolean,FALSE) THEN
+   RAISE EXCEPTION 'Formation-role interval evidence incomplete' USING ERRCODE='22023';END IF;
+  SELECT value INTO role_profile FROM jsonb_array_elements(role_result->'rows') value WHERE value->>'profileId'=profile_id;
+  IF role_profile IS NOT NULL AND (role_profile->>'availableMinutes')::numeric=round(segment_minutes,6)
+   AND (operator_assignment->'crewId'='null'::jsonb OR public.canonical_forecast_constrained_capacity_v1_subject_present(
+     org,'workforce_crew_members',(operator_assignment->>'crewId')||':'||profile_id,start_value))
+   AND (NOT (definition_value#>>'{applicability,skill}')::boolean OR NOT EXISTS(
+    SELECT 1 FROM jsonb_array_elements(definition_value->'skillIds') skill WHERE NOT
+     public.canonical_forecast_constrained_capacity_v1_subject_present(
+      org,'workforce_profile_skills',profile_id||':'||(skill#>>'{}'),start_value))) THEN
+   workers_value:=workers_value||jsonb_build_array(jsonb_build_object('profileId',profile_id,
+    'crewId',operator_assignment->'crewId','role',role_value));
   END IF;
-  vehicle_count:=0;equipment_count:=0;
-  IF crew_id IS NOT NULL THEN
-   crew_payload:=public.canonical_forecast_constrained_capacity_v1_source_payload_at(org,'workforce_crews',crew_id,start_value);
-   IF crew_payload IS NULL THEN RAISE EXCEPTION 'Crew interval authority unavailable' USING ERRCODE='22023';END IF;
-  ELSE crew_payload:=NULL;END IF;
-  FOR asset_assignment IN SELECT value FROM jsonb_array_elements(definition_value->'assetAssignments') entries(value)
-   WHERE value->'crewId' IS NOT DISTINCT FROM COALESCE(to_jsonb(crew_id),'null'::jsonb)
-    AND (crew_id IS NOT NULL OR value->>'operatorProfileId'=profile_id) LOOP
+ END LOOP;
+ FOR asset_assignment IN SELECT value FROM jsonb_array_elements(definition_value->'assetAssignments') entries(value)
+  ORDER BY value->>'assetId',value->>'crewId',value->>'operatorProfileId' LOOP
+   crew_payload:=CASE WHEN asset_assignment->'crewId'='null'::jsonb THEN NULL ELSE
+    public.canonical_forecast_constrained_capacity_v1_source_payload_at(org,'workforce_crews',asset_assignment->>'crewId',start_value) END;
+   IF asset_assignment->'crewId'<>'null'::jsonb AND crew_payload IS NULL THEN
+    RAISE EXCEPTION 'Crew interval authority unavailable' USING ERRCODE='22023';END IF;
    asset_payload:=public.canonical_forecast_constrained_capacity_v1_source_payload_at(
     org,'tenant_assets',asset_assignment->>'assetId',start_value);
    SELECT value INTO reviewed_asset FROM jsonb_array_elements(scope_review.source_identity->'assets') value
     WHERE value->>'id'=asset_assignment->>'assetId';
    SELECT value INTO operator_assignment FROM jsonb_array_elements(definition_value->'crewAssignments') value
-    WHERE value->>'profileId'=asset_assignment->>'operatorProfileId'
-     AND value->'crewId' IS NOT DISTINCT FROM asset_assignment->'crewId';
+     WHERE value->>'profileId'=asset_assignment->>'operatorProfileId'
+      AND value->'crewId' IS NOT DISTINCT FROM asset_assignment->'crewId'
+     ORDER BY value->>'role' LIMIT 1;
    operator_available:=FALSE;
    IF operator_assignment IS NOT NULL THEN
     operator_result:=CASE WHEN operator_assignment->>'role'=definition_value->>'role' THEN target_value ELSE
@@ -1216,8 +1360,8 @@ BEGIN
     AND asset_payload->>'home_location_id'=COALESCE(crew_payload->>'home_location_id',
       (public.canonical_forecast_constrained_capacity_v1_source_payload_at(org,'workforce_profiles',
        asset_assignment->>'operatorProfileId',start_value))->>'home_location_id')
-    AND (crew_id IS NULL OR public.canonical_forecast_constrained_capacity_v1_subject_present(
-      org,'workforce_crew_members',crew_id||':'||(asset_assignment->>'operatorProfileId'),start_value))
+    AND (asset_assignment->'crewId'='null'::jsonb OR public.canonical_forecast_constrained_capacity_v1_subject_present(
+      org,'workforce_crew_members',(asset_assignment->>'crewId')||':'||(asset_assignment->>'operatorProfileId'),start_value))
     AND public.canonical_completion_digest(asset_payload->'configuration')=
       public.canonical_completion_digest(reviewed_asset->'configuration')
     AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(job_evidence) job_item
@@ -1238,15 +1382,15 @@ BEGIN
         WHERE (interval_value->>'start')::timestamptz<=start_value AND (interval_value->>'end')::timestamptz>=end_value)
        AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(value->'committedIntervals') interval_value
         WHERE (interval_value->>'start')::timestamptz<end_value AND (interval_value->>'end')::timestamptz>start_value));
-   IF asset_free AND asset_assignment->>'kind'='vehicle' THEN vehicle_count:=vehicle_count+1;
-   ELSIF asset_free AND asset_assignment->>'kind'='equipment' THEN equipment_count:=equipment_count+1;END IF;
-  END LOOP;
-  IF vehicle_needed>0 THEN formation_slots:=LEAST(formation_slots,vehicle_count/(vehicle_needed*target_seats));END IF;
-  IF equipment_needed>0 THEN formation_slots:=LEAST(formation_slots,equipment_count/(equipment_needed*target_seats));END IF;
-  slots:=slots+GREATEST(formation_slots,0);
+   IF asset_free THEN assets_value:=assets_value||jsonb_build_array(jsonb_build_object(
+    'assetId',asset_assignment->>'assetId','crewId',asset_assignment->'crewId',
+    'kind',asset_assignment->>'kind','operatorProfileId',asset_assignment->>'operatorProfileId'));END IF;
  END LOOP;
- worker_minutes:=slots*target_seats*segment_minutes;
- RETURN jsonb_build_object('personMinutes',worker_minutes,'segmentMinutes',segment_minutes,'crewSlots',slots);
+ match_value:=public.canonical_forecast_constrained_capacity_v1_exact_match(definition_value,workers_value,assets_value,route_key);
+ worker_minutes:=(match_value->>'targetSlots')::int*segment_minutes;
+ RETURN jsonb_build_object('personMinutes',worker_minutes,'segmentMinutes',segment_minutes,
+  'crewSlots',CASE WHEN target_seats=0 THEN 0 ELSE (match_value->>'targetSlots')::int/target_seats END,
+  'targetSlots',(match_value->>'targetSlots')::int,'matchingDigest',match_value->>'matchingDigest');
 END $$;
 
 CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_scope_calculation(
@@ -1258,7 +1402,7 @@ DECLARE definition_value JSONB:=scope_review.definition;endpoints TIMESTAMPTZ[]:
  interval_value JSONB;calendar_value JSONB;business_payload JSONB;business_id TEXT;event_value RECORD;
  job_item JSONB;job_review public.canonical_forecast_constrained_capacity_reviews_v1%ROWTYPE;
  active_scope_review public.canonical_forecast_constrained_capacity_reviews_v1%ROWTYPE;
- assignment_value public.canonical_schedule_assignment_revisions%ROWTYPE;travel_minutes NUMERIC:=0;
+ assignment_value public.canonical_schedule_assignment_revisions%ROWTYPE;assignment_decided_at TIMESTAMPTZ;travel_minutes NUMERIC:=0;
  ordered_job JSONB;prior_job JSONB:=NULL;scheduled_rows JSONB:='[]'::jsonb;duration_value INTEGER;
   home_location TEXT;home_count INTEGER;route_value TEXT;route_jobs JSONB;active_target_seats INTEGER:=1;
  route_definition JSONB;
@@ -1273,7 +1417,7 @@ BEGIN
   RAISE EXCEPTION 'Capacity evidence exceeds bound' USING ERRCODE='54000';END IF;
  IF (base_value->>'classificationComplete')::boolean IS NOT TRUE OR
     (base_value->>'availabilityComplete')::boolean IS NOT TRUE OR COALESCE((base_value->>'overlap')::boolean,FALSE)
-    OR jsonb_array_length(base_value->'rows')<>(SELECT count(*) FROM jsonb_array_elements(definition_value->'crewAssignments') assigned
+	    OR jsonb_array_length(base_value->'rows')<>(SELECT count(DISTINCT assigned->>'profileId') FROM jsonb_array_elements(definition_value->'crewAssignments') assigned
       WHERE assigned->>'role'=definition_value->>'role')
     OR EXISTS(SELECT 1 FROM jsonb_array_elements(base_value->'rows') row_value
       WHERE row_value->>'profileId' NOT IN(SELECT value->>'profileId' FROM jsonb_array_elements(definition_value->'crewAssignments') value
@@ -1354,6 +1498,14 @@ BEGIN
     AND COALESCE(human_value.approved_at,approval_value.approved_at)<=as_of_value
    ORDER BY COALESCE(human_value.approved_at,approval_value.approved_at) DESC,revision_value.revision DESC LIMIT 1;
   IF assignment_value.assignment_id IS NULL THEN RAISE EXCEPTION 'Approved commitment unavailable' USING ERRCODE='22023';END IF;
+  SELECT COALESCE(human_value.approved_at,approval_value.approved_at) INTO assignment_decided_at
+   FROM public.canonical_schedule_assignment_revisions revision_value
+   LEFT JOIN public.canonical_schedule_human_approvals human_value ON human_value.organization_id=revision_value.organization_id
+    AND human_value.id=revision_value.human_approval_id
+   LEFT JOIN public.canonical_schedule_approvals approval_value ON approval_value.organization_id=revision_value.organization_id
+    AND approval_value.id=revision_value.approval_id
+   WHERE revision_value.organization_id=org AND revision_value.assignment_id=assignment_value.assignment_id
+    AND revision_value.revision=assignment_value.revision;
   IF assignment_value.schedule_state='scheduled' THEN
    job_review:=public.canonical_forecast_constrained_capacity_v1_review_at(
     org,'job',scope_review.scope_key,job_review.subject_id,GREATEST(assignment_value.scheduled_start,start_value));
@@ -1361,11 +1513,28 @@ BEGIN
     OR job_review.definition->>'scopeKey' IS DISTINCT FROM scope_review.scope_key THEN
     RAISE EXCEPTION 'Applicable approved work scope unavailable' USING ERRCODE='22023';END IF;
   END IF;
-  IF assignment_value.schedule_state='scheduled' AND assignment_value.scheduled_start<end_value AND assignment_value.scheduled_end>start_value THEN
+  -- The owning schedule authority remains the commitment clock even when a
+  -- later completion/cancellation shortens route evidence. Split every
+  -- intersecting approved commitment at its exact half-open boundaries so
+  -- the base role-hours calculation subtracts only that interval rather than
+  -- making the entire surrounding calendar segment unavailable.
+  IF assignment_value.schedule_state='scheduled' AND assignment_value.scheduled_start<end_value
+   AND assignment_value.scheduled_end>start_value THEN
    endpoints:=array_append(endpoints,GREATEST(assignment_value.scheduled_start,start_value));
    endpoints:=array_append(endpoints,LEAST(assignment_value.scheduled_end,end_value));
+  END IF;
+  IF assignment_value.schedule_state='scheduled' AND assignment_value.scheduled_start<end_value
+   AND LEAST(assignment_value.scheduled_end,CASE WHEN job_item->>'appointmentStatus' IN('completed','cancelled')
+      THEN (job_item->>'statusObservedAt')::timestamptz ELSE assignment_value.scheduled_end END)>
+       GREATEST(assignment_value.scheduled_start,start_value) THEN
+   endpoints:=array_append(endpoints,GREATEST(assignment_value.scheduled_start,start_value));
+   endpoints:=array_append(endpoints,LEAST(assignment_value.scheduled_end,end_value,
+    CASE WHEN job_item->>'appointmentStatus' IN('completed','cancelled')
+     THEN (job_item->>'statusObservedAt')::timestamptz ELSE assignment_value.scheduled_end END));
    scheduled_rows:=scheduled_rows||jsonb_build_array(jsonb_build_object('appointmentId',job_review.subject_id,
-    'start',assignment_value.scheduled_start,'end',assignment_value.scheduled_end,
+   'start',assignment_value.scheduled_start,'end',LEAST(assignment_value.scheduled_end,
+     CASE WHEN job_item->>'appointmentStatus' IN('completed','cancelled')
+      THEN (job_item->>'statusObservedAt')::timestamptz ELSE assignment_value.scheduled_end END),
     'routeKey',job_review.source_identity->>'routeKey',
     'routeHomeLocation',job_review.source_identity->>'routeHomeLocation',
     'locationKey',job_review.definition->>'locationKey','previousLocationKey',job_review.definition->>'previousLocationKey',
@@ -1515,22 +1684,48 @@ RETURNS JSONB LANGUAGE SQL STABLE SECURITY DEFINER SET search_path=pg_catalog,pu
    AND event_value.observed_at<=cutoff_value
  ), accepted AS (
   SELECT assignment_payload,revision_payload,
+   COALESCE(completion_lifecycle,assignment_payload->>'appointment_status') appointment_status,
+   COALESCE(completion_decided_at,assignment_event.observed_at) status_observed_at,
    COALESCE((human_payload->>'approved_at')::timestamptz,(approval_payload->>'approved_at')::timestamptz) decision_at
-  FROM subjects
+  FROM subjects subject_value
   CROSS JOIN LATERAL (SELECT public.canonical_forecast_constrained_capacity_v1_source_payload_at(
-    org,'canonical_schedule_assignments',assignment_id,cutoff_value) assignment_payload) assignment_source
+    org,'canonical_schedule_assignments',subject_value.assignment_id,cutoff_value) assignment_payload) assignment_source
+  CROSS JOIN LATERAL (SELECT event_value.observed_at
+    FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
+    WHERE event_value.organization_id=org AND event_value.source_kind='canonical_schedule_assignments'
+     AND event_value.subject_key=subject_value.assignment_id AND event_value.observed_at<=cutoff_value
+    ORDER BY event_value.observed_at DESC,event_value.source_order DESC LIMIT 1) assignment_event
   CROSS JOIN LATERAL (SELECT public.canonical_forecast_constrained_capacity_v1_source_payload_at(
-    org,'canonical_schedule_assignment_revisions',assignment_id,cutoff_value) revision_payload) revision_source
+    org,'canonical_schedule_assignment_revisions',subject_value.assignment_id,cutoff_value) revision_payload) revision_source
+  LEFT JOIN LATERAL (
+   SELECT latest.lifecycle_after completion_lifecycle,
+    CASE WHEN latest.lifecycle_after IN('completed','cancelled') THEN COALESCE((
+      SELECT min(root_value.decided_at) FROM public.canonical_completion_records root_value
+       WHERE root_value.organization_id=org AND root_value.execution_id=latest.execution_id
+        AND (root_value.id=COALESCE(latest.root_id,latest.id)
+         OR root_value.root_id=COALESCE(latest.root_id,latest.id))
+        AND root_value.decided_at<=cutoff_value),latest.decided_at) ELSE latest.decided_at END completion_decided_at
+   FROM (SELECT record_value.* FROM public.canonical_field_executions execution_value
+     JOIN public.canonical_completion_records record_value
+      ON record_value.organization_id=execution_value.organization_id AND record_value.execution_id=execution_value.id
+     JOIN public.canonical_forecast_constrained_capacity_source_events_v1 completion_event
+      ON completion_event.organization_id=record_value.organization_id
+       AND completion_event.source_kind='canonical_completion_records'
+       AND completion_event.subject_key=record_value.execution_id::text
+       AND completion_event.after_payload->>'id'=record_value.id::text
+    WHERE execution_value.organization_id=org AND execution_value.assignment_id=subject_value.assignment_id::uuid
+     AND record_value.decided_at<=cutoff_value
+    ORDER BY record_value.decided_at DESC,completion_event.source_order DESC LIMIT 1) latest) completion_source ON TRUE
   LEFT JOIN LATERAL (SELECT event_value.after_payload human_payload
     FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
     WHERE event_value.organization_id=org AND event_value.source_kind='canonical_schedule_human_approvals'
-     AND event_value.subject_key=assignment_id AND event_value.observed_at<=cutoff_value
+     AND event_value.subject_key=subject_value.assignment_id AND event_value.observed_at<=cutoff_value
      AND event_value.after_payload->>'id'=revision_payload->>'human_approval_id'
     ORDER BY event_value.observed_at DESC,event_value.source_order DESC LIMIT 1) human_source ON TRUE
   LEFT JOIN LATERAL (SELECT event_value.after_payload approval_payload
     FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
     WHERE event_value.organization_id=org AND event_value.source_kind='canonical_schedule_approvals'
-     AND event_value.subject_key=assignment_id AND event_value.observed_at<=cutoff_value
+     AND event_value.subject_key=subject_value.assignment_id AND event_value.observed_at<=cutoff_value
      AND event_value.after_payload->>'id'=revision_payload->>'approval_id'
     ORDER BY event_value.observed_at DESC,event_value.source_order DESC LIMIT 1) approval_source ON TRUE
   WHERE assignment_payload IS NOT NULL AND revision_payload IS NOT NULL
@@ -1538,7 +1733,7 @@ RETURNS JSONB LANGUAGE SQL STABLE SECURITY DEFINER SET search_path=pg_catalog,pu
   SELECT * FROM accepted WHERE decision_at IS NOT NULL AND decision_at<=cutoff_value
    AND revision_payload->>'target_state'='assigned'
    AND revision_payload->>'schedule_state' IN('scheduled','unscheduled')
-   AND (revision_payload->>'appointment_status' NOT IN('completed','cancelled') OR
+   AND (appointment_status NOT IN('completed','cancelled') OR
     (revision_payload->>'schedule_state'='scheduled'
      AND (revision_payload->>'scheduled_start')::timestamptz<cutoff_value+INTERVAL '2592000 seconds'
      AND (revision_payload->>'scheduled_end')::timestamptz>cutoff_value))
@@ -1547,12 +1742,85 @@ RETURNS JSONB LANGUAGE SQL STABLE SECURITY DEFINER SET search_path=pg_catalog,pu
    'appointmentId',assignment_payload->>'appointment_id','assignmentId',revision_payload->>'assignment_id',
    'assignmentRevision',(revision_payload->>'revision')::bigint,
    'assignmentDigest',rtrim(revision_payload->>'canonical_digest'),
-   'scheduleState',revision_payload->>'schedule_state','decisionAt',decision_at)
+   'scheduleState',revision_payload->>'schedule_state','decisionAt',decision_at,
+   'appointmentStatus',appointment_status,'statusObservedAt',status_observed_at)
+   ORDER BY assignment_payload->>'appointment_id'),'[]'::jsonb)) FROM eligible
+$$;
+
+CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_work_census_period(
+ org UUID,start_value TIMESTAMPTZ,end_value TIMESTAMPTZ)
+RETURNS JSONB LANGUAGE SQL STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+ WITH subjects AS (
+  SELECT DISTINCT event_value.subject_key assignment_id
+  FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
+  WHERE event_value.organization_id=org AND event_value.source_kind='canonical_schedule_assignments'
+   AND event_value.observed_at<end_value
+ ), accepted AS (
+  SELECT assignment_payload,revision_payload,
+   COALESCE(completion_lifecycle,assignment_payload->>'appointment_status') appointment_status,
+   COALESCE(completion_decided_at,assignment_event.observed_at) status_observed_at,
+   COALESCE((human_payload->>'approved_at')::timestamptz,(approval_payload->>'approved_at')::timestamptz) decision_at
+  FROM subjects subject_value
+  CROSS JOIN LATERAL (SELECT public.canonical_forecast_constrained_capacity_v1_source_payload_at(
+    org,'canonical_schedule_assignments',subject_value.assignment_id,end_value) assignment_payload) assignment_source
+  CROSS JOIN LATERAL (SELECT event_value.observed_at
+    FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
+    WHERE event_value.organization_id=org AND event_value.source_kind='canonical_schedule_assignments'
+     AND event_value.subject_key=subject_value.assignment_id AND event_value.observed_at<end_value
+    ORDER BY event_value.observed_at DESC,event_value.source_order DESC LIMIT 1) assignment_event
+  CROSS JOIN LATERAL (SELECT public.canonical_forecast_constrained_capacity_v1_source_payload_at(
+    org,'canonical_schedule_assignment_revisions',subject_value.assignment_id,end_value) revision_payload) revision_source
+  LEFT JOIN LATERAL (
+   SELECT latest.lifecycle_after completion_lifecycle,
+    CASE WHEN latest.lifecycle_after IN('completed','cancelled') THEN COALESCE((
+      SELECT min(root_value.decided_at) FROM public.canonical_completion_records root_value
+       WHERE root_value.organization_id=org AND root_value.execution_id=latest.execution_id
+        AND (root_value.id=COALESCE(latest.root_id,latest.id)
+         OR root_value.root_id=COALESCE(latest.root_id,latest.id))
+        AND root_value.decided_at<end_value),latest.decided_at) ELSE latest.decided_at END completion_decided_at
+   FROM (SELECT record_value.* FROM public.canonical_field_executions execution_value
+     JOIN public.canonical_completion_records record_value
+      ON record_value.organization_id=execution_value.organization_id AND record_value.execution_id=execution_value.id
+     JOIN public.canonical_forecast_constrained_capacity_source_events_v1 completion_event
+      ON completion_event.organization_id=record_value.organization_id
+       AND completion_event.source_kind='canonical_completion_records'
+       AND completion_event.subject_key=record_value.execution_id::text
+       AND completion_event.after_payload->>'id'=record_value.id::text
+    WHERE execution_value.organization_id=org AND execution_value.assignment_id=subject_value.assignment_id::uuid
+     AND record_value.decided_at<end_value
+    ORDER BY record_value.decided_at DESC,completion_event.source_order DESC LIMIT 1) latest) completion_source ON TRUE
+  LEFT JOIN LATERAL (SELECT event_value.after_payload human_payload
+    FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
+    WHERE event_value.organization_id=org AND event_value.source_kind='canonical_schedule_human_approvals'
+     AND event_value.subject_key=subject_value.assignment_id AND event_value.observed_at<end_value
+     AND event_value.after_payload->>'id'=revision_payload->>'human_approval_id'
+    ORDER BY event_value.observed_at DESC,event_value.source_order DESC LIMIT 1) human_source ON TRUE
+  LEFT JOIN LATERAL (SELECT event_value.after_payload approval_payload
+    FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
+    WHERE event_value.organization_id=org AND event_value.source_kind='canonical_schedule_approvals'
+     AND event_value.subject_key=subject_value.assignment_id AND event_value.observed_at<end_value
+     AND event_value.after_payload->>'id'=revision_payload->>'approval_id'
+    ORDER BY event_value.observed_at DESC,event_value.source_order DESC LIMIT 1) approval_source ON TRUE
+  WHERE assignment_payload IS NOT NULL AND revision_payload IS NOT NULL
+ ), eligible AS (
+  SELECT * FROM accepted WHERE decision_at IS NOT NULL AND decision_at<end_value
+   AND revision_payload->>'target_state'='assigned'
+   AND revision_payload->>'schedule_state' IN('scheduled','unscheduled')
+   AND (revision_payload->>'schedule_state'='unscheduled' OR
+    ((revision_payload->>'scheduled_start')::timestamptz<end_value
+     AND (revision_payload->>'scheduled_end')::timestamptz>start_value))
+  ORDER BY assignment_payload->>'appointment_id' LIMIT 501
+ ) SELECT jsonb_build_object('count',count(*),'rows',COALESCE(jsonb_agg(jsonb_build_object(
+   'appointmentId',assignment_payload->>'appointment_id','assignmentId',revision_payload->>'assignment_id',
+   'assignmentRevision',(revision_payload->>'revision')::bigint,
+   'assignmentDigest',rtrim(revision_payload->>'canonical_digest'),
+   'scheduleState',revision_payload->>'schedule_state','decisionAt',decision_at,
+   'appointmentStatus',appointment_status,'statusObservedAt',status_observed_at)
    ORDER BY assignment_payload->>'appointment_id'),'[]'::jsonb)) FROM eligible
 $$;
 
 CREATE FUNCTION public.canonical_forecast_constrained_capacity_v1_complete_input(
- org UUID,cutoff_value TIMESTAMPTZ)
+ org UUID,cutoff_value TIMESTAMPTZ,period_start_value TIMESTAMPTZ DEFAULT NULL)
 RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE backlog_value JSONB;row_value JSONB;job_review public.canonical_forecast_constrained_capacity_reviews_v1%ROWTYPE;
  scope_review public.canonical_forecast_constrained_capacity_reviews_v1%ROWTYPE;alternative_value TEXT;
@@ -1562,7 +1830,9 @@ BEGIN
  method_review:=public.canonical_forecast_constrained_capacity_v1_review_at(org,'method',NULL,NULL,cutoff_value);
  IF method_review.id IS NULL THEN
   RAISE EXCEPTION 'Constrained-capacity method unavailable' USING ERRCODE='22023';END IF;
- backlog_value:=public.canonical_forecast_constrained_capacity_v1_work_census(org,cutoff_value);
+ backlog_value:=CASE WHEN period_start_value IS NULL THEN
+  public.canonical_forecast_constrained_capacity_v1_work_census(org,cutoff_value)
+ ELSE public.canonical_forecast_constrained_capacity_v1_work_census_period(org,period_start_value,cutoff_value) END;
  IF (backlog_value->>'count')::int>500 THEN RAISE EXCEPTION 'Approved work census exceeds bound' USING ERRCODE='54000';END IF;
  FOR scope_review IN SELECT value.* FROM public.canonical_forecast_constrained_capacity_reviews_v1 value
   WHERE value.organization_id=org AND value.review_kind='scope' AND value.action='approve'
@@ -1665,6 +1935,7 @@ BEGIN
    'workforceProfileId',job_review.source_identity->'workforceProfileId',
    'workforceCrewId',job_review.source_identity->'workforceCrewId',
    'revision',job_review.revision,'digest',rtrim(job_review.digest),'scheduleState',row_value->>'scheduleState',
+   'appointmentStatus',row_value->>'appointmentStatus','statusObservedAt',row_value->'statusObservedAt',
    'assignmentRevision',row_value->'assignmentRevision','assignmentDigest',row_value->'assignmentDigest'));
  END LOOP;
  END LOOP;
@@ -1708,7 +1979,7 @@ DECLARE scope_item JSONB;scope_review public.canonical_forecast_constrained_capa
  result_value JSONB;results_value JSONB:='[]'::jsonb;effective_input JSONB:=input_value;current_input JSONB;
 BEGIN
  IF as_of_value>start_value THEN
-  current_input:=public.canonical_forecast_constrained_capacity_v1_complete_input(org,as_of_value);
+  current_input:=public.canonical_forecast_constrained_capacity_v1_complete_input(org,as_of_value,start_value);
   IF (SELECT jsonb_agg((entry->>'alternativeKey')||':'||(entry->>'scopeKey') ORDER BY entry->>'alternativeKey',entry->>'scopeKey')
        FROM jsonb_array_elements(current_input->'scopes') entries(entry)) IS DISTINCT FROM
      (SELECT jsonb_agg((entry->>'alternativeKey')||':'||(entry->>'scopeKey') ORDER BY entry->>'alternativeKey',entry->>'scopeKey')
@@ -1875,6 +2146,14 @@ BEGIN
      AND EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(event_value.after_payload->'intervals','[]'::jsonb)) interval_value
        WHERE (interval_value->>'start')::timestamptz<origin_value.horizon_ends_at
         AND (interval_value->>'end')::timestamptz>origin_value.prediction_cutoff_at))
+  OR EXISTS(SELECT 1
+    FROM public.canonical_forecast_constrained_capacity_source_events_v1 event_value
+    JOIN public.canonical_field_executions execution_value
+      ON execution_value.organization_id=org AND execution_value.id::text=event_value.subject_key
+    WHERE event_value.organization_id=org AND event_value.observed_at>value.captured_at
+     AND event_value.source_kind='canonical_completion_records'
+     AND event_value.after_payload->>'record_kind'='correction'
+     AND value.source_manifest->'assignmentIds' ? execution_value.assignment_id::text)
   THEN RETURN FALSE;END IF;
  RETURN value.source_manifest#>>'{origin,digest}'=rtrim(origin_value.digest)
   AND value.source_manifest->>'resultDigest'=public.canonical_completion_digest(value.private_results)
@@ -1900,7 +2179,7 @@ DECLARE authority JSONB;origin_value public.canonical_forecast_constrained_capac
  old public.canonical_forecast_constrained_capacity_outcomes_v1%ROWTYPE;
  current_value public.canonical_forecast_constrained_capacity_outcomes_v1%ROWTYPE;
  inserted public.canonical_forecast_constrained_capacity_outcomes_v1%ROWTYPE;
- now_value TIMESTAMPTZ;results_value JSONB;manifest_value JSONB;
+ now_value TIMESTAMPTZ;results_value JSONB;manifest_value JSONB;period_input JSONB;
  key_hash TEXT:=encode(sha256(convert_to(key_value,'UTF8')),'hex');request_hash TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable'
@@ -1925,10 +2204,15 @@ BEGIN
    RAISE EXCEPTION 'Constrained-capacity outcome replay conflict' USING ERRCODE='40001';END IF;
   authority:=public.canonical_forecast_workload_capacity_v1_access_recheck(org,actor,role_value,session_value,csrf,TRUE);
   RETURN public.canonical_forecast_constrained_capacity_v1_outcome_projection(old,'constrained_capacity_outcome_saved',TRUE);END IF;
+ period_input:=public.canonical_forecast_constrained_capacity_v1_complete_input(
+  org,origin_value.horizon_ends_at,origin_value.prediction_cutoff_at);
  results_value:=public.canonical_forecast_constrained_capacity_v1_results(org,origin_value.prediction_cutoff_at,
   origin_value.horizon_ends_at,origin_value.horizon_ends_at,origin_value.input_manifest);
- manifest_value:=jsonb_build_object('origin',jsonb_build_object('id',origin_value.id,'digest',rtrim(origin_value.digest)),
+manifest_value:=jsonb_build_object('origin',jsonb_build_object('id',origin_value.id,'digest',rtrim(origin_value.digest)),
   'window',jsonb_build_object('start',origin_value.prediction_cutoff_at,'end',origin_value.horizon_ends_at),
+  'periodInputDigest',public.canonical_completion_digest(period_input),
+  'assignmentIds',(SELECT COALESCE(jsonb_agg(DISTINCT job_value->>'assignmentId'
+    ORDER BY job_value->>'assignmentId'),'[]'::jsonb) FROM jsonb_array_elements(period_input->'jobs') job_value),
   'resultDigest',public.canonical_completion_digest(results_value));
  SELECT * INTO current_value FROM public.canonical_forecast_constrained_capacity_outcomes_v1
   WHERE organization_id=org AND origin_id=origin_id_value ORDER BY revision DESC LIMIT 1;
@@ -2075,18 +2359,22 @@ REVOKE ALL ON FUNCTION public.canonical_forecast_constrained_capacity_v1_source_
  public.canonical_forecast_constrained_capacity_v1_uuid_array(jsonb,integer),
  public.canonical_forecast_constrained_capacity_v1_intervals(jsonb),
  public.canonical_forecast_constrained_capacity_v1_definition_valid(text,jsonb),
- public.canonical_forecast_constrained_capacity_v1_source_identity(uuid,text,text,uuid,jsonb),
- public.canonical_forecast_constrained_capacity_v1_review_current_internal(uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_at(uuid,text,text,uuid,timestamptz),
- public.canonical_forecast_constrained_capacity_v1_job_review_covers(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz),
+	 public.canonical_forecast_constrained_capacity_v1_source_identity(uuid,text,text,uuid,jsonb),
+	 public.canonical_forecast_constrained_capacity_v1_review_current_internal(uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_at(uuid,text,text,uuid,timestamptz),
+	 public.canonical_forecast_constrained_capacity_v1_m24_bases_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1),
+	 public.canonical_forecast_constrained_capacity_v1_job_review_covers(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz),
  public.canonical_forecast_constrained_capacity_v1_review_is_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1),
  public.canonical_forecast_constrained_capacity_v1_review_projection(public.canonical_forecast_constrained_capacity_reviews_v1,boolean),
  public.canonical_forecast_constrained_capacity_v1_interval_minutes(jsonb,timestamptz,timestamptz),
  public.canonical_forecast_constrained_capacity_v1_scope_calculation(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,timestamptz,jsonb),
  public.canonical_forecast_constrained_capacity_v1_working_windows(jsonb,timestamptz,timestamptz,text),
- public.canonical_forecast_constrained_capacity_v1_subject_present(uuid,text,text,timestamptz),
- public.canonical_forecast_constrained_capacity_v1_scope_segment(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,jsonb,text),
- public.canonical_forecast_constrained_capacity_v1_work_census(uuid,timestamptz),
- public.canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz),
+	 public.canonical_forecast_constrained_capacity_v1_subject_present(uuid,text,text,timestamptz),
+	 public.canonical_forecast_constrained_capacity_v1_exact_pack(jsonb),
+	 public.canonical_forecast_constrained_capacity_v1_exact_match(jsonb,jsonb,jsonb,text),
+	 public.canonical_forecast_constrained_capacity_v1_scope_segment(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,jsonb,text),
+	 public.canonical_forecast_constrained_capacity_v1_work_census(uuid,timestamptz),
+	 public.canonical_forecast_constrained_capacity_v1_work_census_period(uuid,timestamptz,timestamptz),
+	 public.canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz,timestamptz),
  public.canonical_forecast_constrained_capacity_v1_results(uuid,timestamptz,timestamptz,timestamptz,jsonb),
  public.canonical_forecast_constrained_capacity_v1_origin_current(uuid,public.canonical_forecast_constrained_capacity_origins_v1),
  public.canonical_forecast_constrained_capacity_v1_origin_projection(public.canonical_forecast_constrained_capacity_origins_v1,text,boolean),
@@ -2112,7 +2400,7 @@ DO $$DECLARE runtime_role TEXT:=NULLIF(current_setting('northstar.runtime_role',
  IF runtime_role IS NOT NULL AND runtime_role<>'' AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=runtime_role) THEN
   EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_constrained_capacity_source_fences_v1,public.canonical_forecast_constrained_capacity_source_events_v1,public.canonical_forecast_constrained_capacity_methods_v1,public.canonical_forecast_constrained_capacity_epochs_v1,public.canonical_forecast_constrained_capacity_reviews_v1,public.canonical_forecast_constrained_capacity_origins_v1,public.canonical_forecast_constrained_capacity_outcomes_v1,public.canonical_forecast_constrained_capacity_evaluations_v1 FROM %I',runtime_role);
    EXECUTE format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_constrained_capacity_source_order_v1 FROM %I',runtime_role);
-   EXECUTE format('REVOKE ALL ON FUNCTION public.canonical_forecast_constrained_capacity_v1_source_capture(),public.canonical_forecast_constrained_capacity_v1_immutable(),public.canonical_forecast_constrained_capacity_v1_lock_sources(uuid),public.canonical_forecast_constrained_capacity_v1_source_baseline(uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_source_payload_at(uuid,text,text,timestamptz),public.canonical_forecast_constrained_capacity_v1_source_subject(text,jsonb),public.canonical_forecast_constrained_capacity_v1_uuid_array(jsonb,integer),public.canonical_forecast_constrained_capacity_v1_intervals(jsonb),public.canonical_forecast_constrained_capacity_v1_definition_valid(text,jsonb),public.canonical_forecast_constrained_capacity_v1_source_identity(uuid,text,text,uuid,jsonb),public.canonical_forecast_constrained_capacity_v1_review_current_internal(uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_at(uuid,text,text,uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_job_review_covers(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz),public.canonical_forecast_constrained_capacity_v1_review_is_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1),public.canonical_forecast_constrained_capacity_v1_review_projection(public.canonical_forecast_constrained_capacity_reviews_v1,boolean),public.canonical_forecast_constrained_capacity_v1_interval_minutes(jsonb,timestamptz,timestamptz),public.canonical_forecast_constrained_capacity_v1_scope_calculation(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,timestamptz,jsonb),public.canonical_forecast_constrained_capacity_v1_working_windows(jsonb,timestamptz,timestamptz,text),public.canonical_forecast_constrained_capacity_v1_subject_present(uuid,text,text,timestamptz),public.canonical_forecast_constrained_capacity_v1_scope_segment(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,jsonb,text),public.canonical_forecast_constrained_capacity_v1_work_census(uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_results(uuid,timestamptz,timestamptz,timestamptz,jsonb),public.canonical_forecast_constrained_capacity_v1_origin_current(uuid,public.canonical_forecast_constrained_capacity_origins_v1),public.canonical_forecast_constrained_capacity_v1_origin_projection(public.canonical_forecast_constrained_capacity_origins_v1,text,boolean),public.canonical_forecast_constrained_capacity_v1_outcome_current(uuid,public.canonical_forecast_constrained_capacity_outcomes_v1),public.canonical_forecast_constrained_capacity_v1_outcome_projection(public.canonical_forecast_constrained_capacity_outcomes_v1,text,boolean),public.canonical_forecast_constrained_capacity_v1_evaluation_current(uuid,public.canonical_forecast_constrained_capacity_evaluations_v1),public.canonical_forecast_constrained_capacity_v1_evaluation_projection(public.canonical_forecast_constrained_capacity_evaluations_v1,text,boolean) FROM %I',runtime_role);
+	   EXECUTE format('REVOKE ALL ON FUNCTION public.canonical_forecast_constrained_capacity_v1_source_capture(),public.canonical_forecast_constrained_capacity_v1_immutable(),public.canonical_forecast_constrained_capacity_v1_lock_sources(uuid),public.canonical_forecast_constrained_capacity_v1_source_baseline(uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_source_payload_at(uuid,text,text,timestamptz),public.canonical_forecast_constrained_capacity_v1_source_subject(text,jsonb),public.canonical_forecast_constrained_capacity_v1_uuid_array(jsonb,integer),public.canonical_forecast_constrained_capacity_v1_intervals(jsonb),public.canonical_forecast_constrained_capacity_v1_definition_valid(text,jsonb),public.canonical_forecast_constrained_capacity_v1_source_identity(uuid,text,text,uuid,jsonb),public.canonical_forecast_constrained_capacity_v1_review_current_internal(uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_at(uuid,text,text,uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_m24_bases_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1),public.canonical_forecast_constrained_capacity_v1_job_review_covers(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz),public.canonical_forecast_constrained_capacity_v1_review_is_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1),public.canonical_forecast_constrained_capacity_v1_review_projection(public.canonical_forecast_constrained_capacity_reviews_v1,boolean),public.canonical_forecast_constrained_capacity_v1_interval_minutes(jsonb,timestamptz,timestamptz),public.canonical_forecast_constrained_capacity_v1_scope_calculation(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,timestamptz,jsonb),public.canonical_forecast_constrained_capacity_v1_working_windows(jsonb,timestamptz,timestamptz,text),public.canonical_forecast_constrained_capacity_v1_subject_present(uuid,text,text,timestamptz),public.canonical_forecast_constrained_capacity_v1_exact_pack(jsonb),public.canonical_forecast_constrained_capacity_v1_exact_match(jsonb,jsonb,jsonb,text),public.canonical_forecast_constrained_capacity_v1_scope_segment(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,jsonb,text),public.canonical_forecast_constrained_capacity_v1_work_census(uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_work_census_period(uuid,timestamptz,timestamptz),public.canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz,timestamptz),public.canonical_forecast_constrained_capacity_v1_results(uuid,timestamptz,timestamptz,timestamptz,jsonb),public.canonical_forecast_constrained_capacity_v1_origin_current(uuid,public.canonical_forecast_constrained_capacity_origins_v1),public.canonical_forecast_constrained_capacity_v1_origin_projection(public.canonical_forecast_constrained_capacity_origins_v1,text,boolean),public.canonical_forecast_constrained_capacity_v1_outcome_current(uuid,public.canonical_forecast_constrained_capacity_outcomes_v1),public.canonical_forecast_constrained_capacity_v1_outcome_projection(public.canonical_forecast_constrained_capacity_outcomes_v1,text,boolean),public.canonical_forecast_constrained_capacity_v1_evaluation_current(uuid,public.canonical_forecast_constrained_capacity_evaluations_v1),public.canonical_forecast_constrained_capacity_v1_evaluation_projection(public.canonical_forecast_constrained_capacity_evaluations_v1,text,boolean) FROM %I',runtime_role);
    EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_constrained_capacity_v1_prerequisites(uuid,uuid,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_current(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,uuid,text,bigint,text,jsonb,text,text),public.canonical_forecast_constrained_capacity_v1_epoch_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_constrained_capacity_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_constrained_capacity_v1_origin_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_constrained_capacity_v1_outcome_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_outcome_read(uuid,uuid,text,uuid,uuid,uuid),public.canonical_forecast_constrained_capacity_v1_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,uuid),public.canonical_forecast_constrained_capacity_v1_evaluation_read(uuid,uuid,text,uuid,uuid,uuid) TO %I',runtime_role);
  END IF;
 END $$;

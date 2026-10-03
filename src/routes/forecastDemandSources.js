@@ -30,6 +30,13 @@ const REVIEW_BOUNDARY =
 const REVIEWED_BOUNDARY =
   'Reviewed identities only; no caller consent, retention, provider coverage or forecast is certified.';
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])-01$/;
+const TRANSITION_TARGETS = [
+  'demand.qualification_transition.v1',
+  'demand.estimate_request_transition.v1',
+  'demand.booking_transition.v1',
+  'demand.booking_cancellation.v1',
+];
+const TRANSITION_METHOD_REVIEW_VERSION = 'm26-transition-method-review-v2';
 
 function exact(value, keys) {
   const prototype = value && typeof value === 'object' ?
@@ -102,6 +109,11 @@ function validUtcInstant(value) {
 function validMonth(value) {
   return typeof value === 'string' && MONTH.test(value) &&
     Number.isFinite(Date.parse(value + 'T00:00:00.000Z'));
+}
+
+function validTransitionTargets(value) {
+  return Array.isArray(value) && value.length === TRANSITION_TARGETS.length &&
+    value.every((target, index) => target === TRANSITION_TARGETS[index]);
 }
 
 function utcMicros(value) {
@@ -193,6 +205,11 @@ function createForecastDemandSourcesRouter(options = {}) {
       `forecast-period-certification:${req.tenantContext.organizationId}`);
   const reviewThrottle = options.reviewThrottle || rateLimit('forecast-source-review', req =>
     `forecast-demand-source-review:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
+  const originThrottle = options.originThrottle || rateLimit('forecast-transition-origin', req =>
+    `forecast-transition-origin:${req.tenantContext.organizationId}`);
+  const evaluationThrottle = options.evaluationThrottle ||
+    rateLimit('forecast-evaluation-capture', req =>
+      `forecast-transition-evaluation:${req.tenantContext.organizationId}`);
 
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
@@ -772,6 +789,271 @@ function createForecastDemandSourcesRouter(options = {}) {
             providerIndependentVerified: false, wholeBusinessCoverageVerified: false,
             realForecastEligible: false, paidNumericServing: false,
             forecastServingEnabled: false, forecastIssued: false };
+        } });
+    });
+
+  router.post('/transitions/method-reviews', auth,
+    requirePermission('forecast', 'update'), reviewThrottle, async (req, res) => {
+      const body = req.body, key = req.get('Idempotency-Key');
+      if (!exact(req.query, []) || !exact(body, ['action', 'expectedRevision',
+        'expectedDigest', 'reason', 'confirmed', 'confirmationVersion']) ||
+          !['approve', 'reject'].includes(body.action) ||
+          !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0 ||
+          body.expectedRevision > 10000 ||
+          !(body.expectedDigest === 'none' || DIGEST.test(body.expectedDigest || '')) ||
+          ((body.expectedRevision === 0) !== (body.expectedDigest === 'none')) ||
+          typeof body.reason !== 'string' || body.reason.trim().length < 10 ||
+          body.reason.length > 1000 || Buffer.byteLength(body.reason) > 4000 ||
+          body.confirmed !== true ||
+          body.confirmationVersion !== TRANSITION_METHOD_REVIEW_VERSION ||
+          !KEY.test(key || '')) return invalid(res);
+      return run(req, res, { isolation: 'SERIALIZABLE', write: true,
+        sql: `SELECT public.canonical_forecast_transition_method_review_v2_mutate(
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value`,
+        params: [req.get('X-CSRF-Token'), key, body.action, body.reason,
+          body.expectedRevision, body.expectedDigest, true, body.confirmationVersion],
+        validate(value) {
+          if (!value || value.state !== 'transition_method_review_recorded' ||
+              !UUID.test(value.id || '') || !UUID.test(value.methodId || '') ||
+              !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+              !['approve', 'reject'].includes(value.action) ||
+              !DIGEST.test(value.reviewDigest || '') ||
+              !DIGEST.test(value.methodDigest || '') ||
+              typeof value.replayed !== 'boolean' || value.researchOnly !== true ||
+              value.automaticSelection !== false || value.automaticActionTaken !== false ||
+              value.paidNumericServing !== false ||
+              value.forecastServingEnabled !== false) return null;
+          return { state: value.state, id: value.id, revision: value.revision,
+            action: value.action, reviewDigest: value.reviewDigest,
+            methodId: value.methodId, methodDigest: value.methodDigest,
+            replayed: value.replayed, approved: value.action === 'approve',
+            researchOnly: true, automaticSelection: false,
+            automaticActionTaken: false, forecastIssued: false,
+            paidNumericServing: false, forecastServingEnabled: false };
+        } });
+    });
+
+  router.get('/transitions/method-reviews/current', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!exact(req.query, [])) return invalid(res);
+      return run(req, res, {
+        sql: `SELECT public.canonical_forecast_transition_method_review_v2_read(
+          $1,$2,$3,$4) value`, params: [], validate(value) {
+          if (!value || !['transition_method_review_current',
+            'transition_method_review_unavailable'].includes(value.state) ||
+              value.researchOnly !== true || value.automaticSelection !== false ||
+              value.automaticActionTaken !== false || value.paidNumericServing !== false ||
+              value.forecastServingEnabled !== false) return null;
+          if (value.state === 'transition_method_review_unavailable') {
+            if (value.reason !== 'review_missing' || value.expectedRevision !== 0 ||
+                value.expectedDigest !== 'none' || value.approved !== false) return null;
+            return { state: value.state, reason: value.reason,
+              expectedRevision: 0, expectedDigest: 'none', approved: false,
+              researchOnly: true, automaticSelection: false,
+              automaticActionTaken: false, forecastIssued: false,
+              paidNumericServing: false, forecastServingEnabled: false };
+          }
+          if (!UUID.test(value.id || '') || !UUID.test(value.methodId || '') ||
+              !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+              !['approve', 'reject'].includes(value.action) ||
+              value.approved !== (value.action === 'approve') ||
+              !DIGEST.test(value.reviewDigest || '') || !DIGEST.test(value.methodDigest || '') ||
+              typeof value.methodVersion !== 'string' ||
+              typeof value.calculationVersion !== 'string' ||
+              typeof value.reviewVersion !== 'string' ||
+              !validTransitionTargets(value.targets) || !validTimestamp(value.reviewedAt)) {
+            return null;
+          }
+          return { state: value.state, id: value.id, revision: value.revision,
+            action: value.action, approved: value.approved,
+            reviewDigest: value.reviewDigest, methodId: value.methodId,
+            methodDigest: value.methodDigest, methodVersion: value.methodVersion,
+            calculationVersion: value.calculationVersion,
+            reviewVersion: value.reviewVersion, targets: value.targets,
+            reviewedAt: value.reviewedAt, researchOnly: true,
+            automaticSelection: false, automaticActionTaken: false,
+            forecastIssued: false, paidNumericServing: false,
+            forecastServingEnabled: false };
+        } });
+    });
+
+  router.post('/transitions/future-origins', auth,
+    requirePermission('forecast', 'update'), originThrottle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!exact(req.query, []) || !exact(req.body, []) || !KEY.test(key || '')) {
+        return invalid(res);
+      }
+      return run(req, res, { isolation: 'READ COMMITTED', write: true,
+        sql: `SELECT public.canonical_forecast_transition_origin_v2_capture(
+          $1,$2,$3,$4,$5,$6) value`,
+        params: [req.get('X-CSRF-Token'), key], validate(value) {
+          if (!value || !['transition_origin_saved', 'transition_origin_unavailable',
+            'transition_origin_stale'].includes(value.state) ||
+              value.researchOnly !== true || value.paidNumericServing !== false ||
+              value.forecastServingEnabled !== false) return null;
+          if (value.state !== 'transition_origin_saved') {
+            if (typeof value.reason !== 'string' || !value.reason) return null;
+            return { state: value.state, reason: value.reason,
+              refreshRequired: value.state === 'transition_origin_stale',
+              researchOnly: true, probabilityWithheld: true,
+              outputDigestWithheld: true, sourceCoverageComplete: false,
+              providerCoverageVerified: false, offPlatformCoverageVerified: false,
+              wholeBusinessCoverageVerified: false, empiricalCalibrationVerified: false,
+              empiricalDriftVerified: false, realForecastEligible: false,
+              forecastIssued: false, paidNumericServing: false,
+              forecastServingEnabled: false };
+          }
+          if (!UUID.test(value.id || '') || !validTimestamp(value.asOf) ||
+              !validTimestamp(value.predictionCutoffAt) ||
+              !validTimestamp(value.horizonEndsAt) ||
+              !validTransitionTargets(value.targets) ||
+              value.sourceCoverageComplete !== true ||
+              value.sourceCoverageScope !==
+                'post_installation_northstar_selected_sources_only' ||
+              value.uncertaintyState !==
+                'unavailable_insufficient_natural_calibration' ||
+              value.probabilityWithheld !== true || value.outputDigestWithheld !== true ||
+              typeof value.replayed !== 'boolean') return null;
+          return { state: value.state, id: value.id, asOf: value.asOf,
+            predictionCutoffAt: value.predictionCutoffAt,
+            horizonEndsAt: value.horizonEndsAt, targets: value.targets,
+            sourceCoverageComplete: true,
+            sourceCoverageScope: value.sourceCoverageScope,
+            uncertaintyState: value.uncertaintyState, replayed: value.replayed,
+            researchOnly: true, probabilityWithheld: true,
+            outputDigestWithheld: true, providerCoverageVerified: false,
+            offPlatformCoverageVerified: false, wholeBusinessCoverageVerified: false,
+            naturalProductionHistoryVerified: false,
+            empiricalCalibrationVerified: false, empiricalDriftVerified: false,
+            realForecastEligible: false, forecastIssued: false,
+            paidNumericServing: false, forecastServingEnabled: false };
+        } });
+    });
+
+  router.get('/transitions/future-origins/:originId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.originId || '') || !exact(req.query, [])) return invalid(res);
+      return run(req, res, { sql: `SELECT public.canonical_forecast_transition_origin_v2_read(
+        $1,$2,$3,$4,$5) value`, params: [req.params.originId.toLowerCase()],
+      validate(value) {
+        if (value === null) return { state: 'not_found' };
+        if (!value || !['transition_origin_current', 'transition_origin_stale']
+          .includes(value.state)) return null;
+        if (value.state === 'transition_origin_stale') {
+          if (!UUID.test(value.id || '') || value.refreshRequired !== true ||
+              typeof value.reason !== 'string' || !value.reason) return null;
+          return { state: value.state, id: value.id, reason: value.reason,
+            refreshRequired: true, researchOnly: true, probabilityWithheld: true,
+            outputDigestWithheld: true, sourceCoverageComplete: false,
+            realForecastEligible: false, forecastIssued: false,
+            paidNumericServing: false, forecastServingEnabled: false };
+        }
+        if (!UUID.test(value.id || '') || value.id !== req.params.originId.toLowerCase() ||
+            !validTimestamp(value.asOf) ||
+            !validTimestamp(value.predictionCutoffAt) ||
+            !validTimestamp(value.horizonEndsAt) ||
+            typeof value.timeZone !== 'string' || !value.timeZone ||
+            typeof value.methodVersion !== 'string' || !value.methodVersion ||
+            typeof value.calculationVersion !== 'string' || !value.calculationVersion ||
+            typeof value.reviewVersion !== 'string' || !value.reviewVersion ||
+            !validTransitionTargets(value.targets) ||
+            value.sourceCoverageComplete !== true ||
+            value.sourceCoverageScope !==
+              'post_installation_northstar_selected_sources_only' ||
+            value.uncertaintyState !==
+              'unavailable_insufficient_natural_calibration' ||
+            value.probabilityWithheld !== true || value.outputDigestWithheld !== true ||
+            value.paidNumericServing !== false ||
+            value.forecastServingEnabled !== false) return null;
+        return { state: value.state, id: value.id, asOf: value.asOf,
+          predictionCutoffAt: value.predictionCutoffAt,
+          horizonEndsAt: value.horizonEndsAt, timeZone: value.timeZone,
+          methodVersion: value.methodVersion,
+          calculationVersion: value.calculationVersion,
+          reviewVersion: value.reviewVersion, targets: value.targets,
+          sourceCoverageComplete: true, sourceCoverageScope: value.sourceCoverageScope,
+          uncertaintyState: value.uncertaintyState,
+          researchOnly: true, probabilityWithheld: true,
+          outputDigestWithheld: true, providerCoverageVerified: false,
+          offPlatformCoverageVerified: false, wholeBusinessCoverageVerified: false,
+          naturalProductionHistoryVerified: false,
+          empiricalCalibrationVerified: false, empiricalDriftVerified: false,
+          realForecastEligible: false, forecastIssued: false,
+          paidNumericServing: false, forecastServingEnabled: false };
+      } });
+    });
+
+  router.post('/transitions/future-origins/:originId/evaluations', auth,
+    requirePermission('forecast', 'update'), evaluationThrottle, async (req, res) => {
+      const key = req.get('Idempotency-Key');
+      if (!UUID.test(req.params.originId || '') || !exact(req.query, []) ||
+          !exact(req.body, []) || !KEY.test(key || '')) return invalid(res);
+      return run(req, res, { isolation: 'READ COMMITTED', write: true,
+        sql: `SELECT public.canonical_forecast_transition_evaluation_v2_capture(
+          $1,$2,$3,$4,$5,$6,$7) value`,
+        params: [req.get('X-CSRF-Token'), key, req.params.originId.toLowerCase()],
+        validate(value) {
+          if (value === null) return { state: 'not_found' };
+          if (!value || !['transition_evaluation_saved',
+            'transition_evaluation_unavailable'].includes(value.state) ||
+              value.researchOnly !== true || value.metricsWithheld !== true) return null;
+          if (value.state === 'transition_evaluation_unavailable') {
+            if (typeof value.reason !== 'string' || !value.reason) return null;
+            return { state: value.state, reason: value.reason, researchOnly: true,
+              metricsWithheld: true, calibrationClaimed: false,
+              driftVerdictIssued: false, automaticActionTaken: false,
+              paidNumericServing: false, forecastServingEnabled: false };
+          }
+          if (!UUID.test(value.id || '') ||
+              value.originId !== req.params.originId.toLowerCase() ||
+              !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+              typeof value.replayed !== 'boolean' || value.calibrationClaimed !== false ||
+              value.driftVerdictIssued !== false || value.automaticActionTaken !== false ||
+              value.paidNumericServing !== false ||
+              value.forecastServingEnabled !== false) {
+            return null;
+          }
+          return { state: value.state, id: value.id, originId: value.originId,
+            revision: value.revision, replayed: value.replayed,
+            researchOnly: true, metricsWithheld: true, calibrationClaimed: false,
+            driftVerdictIssued: false, automaticActionTaken: false,
+            paidNumericServing: false, forecastServingEnabled: false };
+        } });
+    });
+
+  router.get('/transitions/evaluations/:evaluationId', auth,
+    requirePermission('forecast', 'read'), throttle, async (req, res) => {
+      if (!UUID.test(req.params.evaluationId || '') || !exact(req.query, [])) {
+        return invalid(res);
+      }
+      return run(req, res, {
+        sql: `SELECT public.canonical_forecast_transition_evaluation_v2_read(
+          $1,$2,$3,$4,$5) value`, params: [req.params.evaluationId.toLowerCase()],
+        validate(value) {
+          if (value === null) return { state: 'not_found' };
+          if (!value || !['transition_evaluation_current',
+            'transition_evaluation_stale'].includes(value.state) ||
+              !UUID.test(value.id || '') || !UUID.test(value.originId || '') ||
+              value.researchOnly !== true || value.metricsWithheld !== true) return null;
+          if (value.state === 'transition_evaluation_stale') {
+            if (value.refreshRequired !== true || typeof value.reason !== 'string' ||
+                !value.reason) return null;
+            return { state: value.state, id: value.id, originId: value.originId,
+              reason: value.reason, refreshRequired: true, researchOnly: true,
+              metricsWithheld: true, calibrationClaimed: false,
+              driftVerdictIssued: false, automaticActionTaken: false,
+              paidNumericServing: false, forecastServingEnabled: false };
+          }
+          if (!Number.isSafeInteger(value.revision) || value.revision < 1 ||
+              !validTimestamp(value.evaluatedAt) || value.calibrationClaimed !== false ||
+              value.driftVerdictIssued !== false || value.automaticActionTaken !== false ||
+              value.paidNumericServing !== false ||
+              value.forecastServingEnabled !== false) return null;
+          return { state: value.state, id: value.id, originId: value.originId,
+            revision: value.revision, evaluatedAt: value.evaluatedAt,
+            researchOnly: true, metricsWithheld: true, calibrationClaimed: false,
+            driftVerdictIssued: false, automaticActionTaken: false,
+            paidNumericServing: false, forecastServingEnabled: false };
         } });
     });
 

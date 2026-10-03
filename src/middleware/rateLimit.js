@@ -79,6 +79,10 @@ function getLimitConfig(group, plan = 'starter') {
     'forecast-evaluation-capture': { default: 6, window: 60 * 60 * 1000 },
     'forecast-algorithm-origin': { default: 4, window: 60 * 60 * 1000 },
     'forecast-active-origin': { default: 6, window: 60 * 60 * 1000 },
+    // A complete four-target transition workflow establishes an epoch, saves
+    // and replays an origin, and exercises fail-closed recovery without
+    // consuming the narrower source-receipt quota.
+    'forecast-transition-origin': { default: 12, window: 60 * 60 * 1000 },
     'auth': { default: 5, window: 15 * 60 * 1000 }, // 5 attempts per 15 min
     'auth-total': { default: 20, window: 15 * 60 * 1000 } // 20 total per 15 min
   };
@@ -92,7 +96,8 @@ function getLimitConfig(group, plan = 'starter') {
       group === 'forecast-source-review' ||
       group === 'forecast-evaluation-capture' ||
       group === 'forecast-algorithm-origin' ||
-      group === 'forecast-active-origin') {
+      group === 'forecast-active-origin' ||
+      group === 'forecast-transition-origin') {
     return { limit: config.default, window: config.window };
   }
 

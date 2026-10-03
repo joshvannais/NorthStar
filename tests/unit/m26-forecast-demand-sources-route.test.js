@@ -16,6 +16,7 @@ const SNAPSHOT = '44444444-4444-4444-8444-444444444444';
 const CALL = '55555555-5555-4555-8555-555555555555';
 const REVIEW = '66666666-6666-4666-8666-666666666666';
 const ORIGIN = '77777777-7777-4777-8777-777777777777';
+const EVALUATION = '99999999-9999-4999-8999-999999999999';
 const OWNERSHIP = '88888888-8888-4888-8888-888888888888';
 const AGENT = 'synthetic-agent';
 const DIGEST = 'a'.repeat(64);
@@ -56,10 +57,16 @@ function snapshot(extra = {}) {
     identityBoundary: SNAPSHOT_BOUNDARY, ...extra };
 }
 
+const TRANSITION_TARGETS = ['demand.qualification_transition.v1',
+  'demand.estimate_request_transition.v1', 'demand.booking_transition.v1',
+  'demand.booking_cancellation.v1'];
+
 function application({ role = 'owner', consentRead, consentWrite, capture,
   snapshotRead, reviews, reviewWrite, readReviewed, databaseError,
   periodEvidence, periodMutation, futureCapture, futureRead, inspectWindow,
-  periodSnapshot, periodRead, scanInputs, fetchRetellPage } = {}) {
+  periodSnapshot, periodRead, scanInputs, fetchRetellPage,
+  transitionCapture, transitionRead, transitionEvaluationCapture,
+  transitionEvaluationRead, transitionMethodWrite, transitionMethodRead } = {}) {
   const app = express();
   // Express's production "simple" parser returns null-prototype objects.
   app.set('query parser', querystring.parse);
@@ -141,6 +148,63 @@ function application({ role = 'owner', consentRead, consentWrite, capture,
         serviceMixAvailable: false, areaForecastAvailable: false,
         providerIndependentVerified: false, wholeBusinessCoverageVerified: false,
         paidNumericServing: false, forecastServingEnabled: false } }] };
+    if (sql.includes('transition_origin_v2_capture')) return { rows: [{ value:
+      transitionCapture || { state: 'transition_origin_saved', id: ORIGIN,
+        asOf: CAPTURED, predictionCutoffAt: '2026-11-01T04:00:00.000000Z',
+        horizonEndsAt: '2026-12-01T05:00:00.000000Z', targets: TRANSITION_TARGETS,
+        sourceCoverageComplete: true,
+        sourceCoverageScope: 'post_installation_northstar_selected_sources_only',
+        uncertaintyState: 'unavailable_insufficient_natural_calibration',
+        replayed: false, researchOnly: true, probabilityWithheld: true,
+        outputDigestWithheld: true, realForecastEligible: false,
+        forecastIssued: false, paidNumericServing: false,
+        forecastServingEnabled: false } }] };
+    if (sql.includes('transition_origin_v2_read')) return { rows: [{ value:
+      transitionRead || { state: 'transition_origin_current', id: ORIGIN,
+        asOf: CAPTURED, predictionCutoffAt: '2026-11-01T04:00:00.000000Z',
+        horizonEndsAt: '2026-12-01T05:00:00.000000Z', timeZone: 'America/New_York',
+        profileId: SNAPSHOT, methodVersion: 'm26-transition-four-target-research-v2',
+        calculationVersion: 'm26-two-complete-local-month-weighted-rate-v2',
+        reviewVersion: 'm26-source-finalization-human-review-v2',
+        targets: TRANSITION_TARGETS, sourceCoverageComplete: true,
+        sourceCoverageScope: 'post_installation_northstar_selected_sources_only',
+        uncertaintyState: 'unavailable_insufficient_natural_calibration',
+        researchOnly: true, probabilityWithheld: true, outputDigestWithheld: true,
+        providerCoverageVerified: false, offPlatformCoverageVerified: false,
+        wholeBusinessCoverageVerified: false, naturalProductionHistoryVerified: false,
+        empiricalCalibrationVerified: false, empiricalDriftVerified: false,
+        realForecastEligible: false, forecastIssued: false,
+        paidNumericServing: false, forecastServingEnabled: false } }] };
+    if (sql.includes('transition_method_review_v2_mutate')) return { rows: [{ value:
+      transitionMethodWrite || { state: 'transition_method_review_recorded', id: REVIEW,
+        revision: 1, action: 'approve', reviewDigest: DIGEST, methodId: SNAPSHOT,
+        methodDigest: DIGEST, replayed: false, researchOnly: true,
+        automaticSelection: false, automaticActionTaken: false,
+        paidNumericServing: false, forecastServingEnabled: false } }] };
+    if (sql.includes('transition_method_review_v2_read')) return { rows: [{ value:
+      transitionMethodRead || { state: 'transition_method_review_current', id: REVIEW,
+        revision: 1, action: 'approve', approved: true, reviewDigest: DIGEST,
+        methodId: SNAPSHOT, methodDigest: DIGEST,
+        methodVersion: 'm26-transition-four-target-research-v2',
+        calculationVersion: 'm26-two-complete-local-month-weighted-rate-v2',
+        reviewVersion: 'm26-source-finalization-human-review-v2',
+        targets: TRANSITION_TARGETS, reviewedAt: CAPTURED, researchOnly: true,
+        automaticSelection: false, automaticActionTaken: false,
+        paidNumericServing: false, forecastServingEnabled: false } }] };
+    if (sql.includes('transition_evaluation_v2_capture')) return { rows: [{ value:
+      transitionEvaluationCapture || { state: 'transition_evaluation_saved',
+        id: EVALUATION, originId: ORIGIN, revision: 1, replayed: false,
+        researchOnly: true, metricsWithheld: true, calibrationClaimed: false,
+        driftVerdictIssued: false, automaticActionTaken: false,
+        paidNumericServing: false, forecastServingEnabled: false,
+        privateMetrics: { actualProbability: '1.000000' } } }] };
+    if (sql.includes('transition_evaluation_v2_read')) return { rows: [{ value:
+      transitionEvaluationRead || { state: 'transition_evaluation_current',
+        id: EVALUATION, originId: ORIGIN, revision: 1, evaluatedAt: CAPTURED,
+        researchOnly: true, metricsWithheld: true, calibrationClaimed: false,
+        driftVerdictIssued: false, automaticActionTaken: false,
+        paidNumericServing: false, forecastServingEnabled: false,
+        privateMetrics: { actualProbability: '1.000000' } } }] };
     return { rows: [] };
   }), release: jest.fn() };
   const pool = { connect: jest.fn(async () => client),
@@ -356,6 +420,9 @@ test('post endpoints reject query authority and review uses a separate bounded a
     limit: 120, window: 60 * 60 * 1000,
   });
   expect(getLimitConfig('forecast-period-certification')).toEqual({
+    limit: 12, window: 60 * 60 * 1000,
+  });
+  expect(getLimitConfig('forecast-transition-origin')).toEqual({
     limit: 12, window: 60 * 60 * 1000,
   });
 });
@@ -598,4 +665,129 @@ test('member and caller-supplied extra future authority fail before database use
     .set('Idempotency-Key', KEY).send({ localHorizonStart: '2026-11-01',
       amount: '99' })).status).toBe(400);
   expect(owner.pool.connect).not.toHaveBeenCalled();
+});
+
+test('four-target transition origin is server-selected and withholds private probability', async () => {
+  const { app } = application();
+  const created = await request(app).post('/sources/transitions/future-origins')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf').send({});
+  expect(created.status).toBe(201);
+  expect(created.body.data).toMatchObject({ state: 'transition_origin_saved',
+    targets: TRANSITION_TARGETS, sourceCoverageComplete: true,
+    uncertaintyState: 'unavailable_insufficient_natural_calibration',
+    probabilityWithheld: true, outputDigestWithheld: true,
+    paidNumericServing: false, forecastServingEnabled: false });
+  expect(JSON.stringify(created.body)).not.toMatch(/"probability"|"outputDigest"/);
+  const read = await request(app).get(`/sources/transitions/future-origins/${ORIGIN}`);
+  expect(read.status).toBe(200);
+  expect(read.body.data).toMatchObject({ state: 'transition_origin_current',
+    targets: TRANSITION_TARGETS, researchOnly: true, probabilityWithheld: true,
+    empiricalCalibrationVerified: false, empiricalDriftVerified: false });
+  expect(JSON.stringify(read.body)).not.toMatch(/"probability"|"outputDigest"/);
+});
+
+test('human method review is exact, append-only shaped, and remains research-only', async () => {
+  const { app, client } = application();
+  const body = { action: 'approve', expectedRevision: 0, expectedDigest: 'none',
+    reason: 'Approve this exact deterministic four-target research method.',
+    confirmed: true, confirmationVersion: 'm26-transition-method-review-v2' };
+  const created = await request(app).post('/sources/transitions/method-reviews')
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf').send(body);
+  expect(created.status).toBe(201);
+  expect(created.body.data).toMatchObject({ state: 'transition_method_review_recorded',
+    revision: 1, action: 'approve', approved: true, researchOnly: true,
+    automaticSelection: false, automaticActionTaken: false,
+    paidNumericServing: false, forecastServingEnabled: false });
+  expect(client.query.mock.calls[3][1].slice(4)).toEqual([
+    'validated-csrf', KEY, 'approve', body.reason, 0, 'none', true,
+    'm26-transition-method-review-v2',
+  ]);
+  const read = await request(app).get('/sources/transitions/method-reviews/current');
+  expect(read.status).toBe(200);
+  expect(read.body.data).toMatchObject({ state: 'transition_method_review_current',
+    revision: 1, action: 'approve', approved: true, targets: TRANSITION_TARGETS,
+    automaticSelection: false, automaticActionTaken: false, forecastIssued: false });
+});
+
+test('method review rejects member, csrf-shaped extras, and invalid optimistic tokens', async () => {
+  const member = application({ role: 'member' });
+  expect((await request(member.app).post('/sources/transitions/method-reviews')
+    .set('Idempotency-Key', KEY).send({})).status).toBe(403);
+  expect(member.pool.connect).not.toHaveBeenCalled();
+  const owner = application();
+  const valid = { action: 'reject', expectedRevision: 1, expectedDigest: DIGEST,
+    reason: 'Reject this reviewed method until the source contract changes.',
+    confirmed: true, confirmationVersion: 'm26-transition-method-review-v2' };
+  expect((await request(owner.app).post('/sources/transitions/method-reviews')
+    .set('Idempotency-Key', KEY).send({ ...valid, probability: '0.5' })).status).toBe(400);
+  expect((await request(owner.app).post('/sources/transitions/method-reviews')
+    .set('Idempotency-Key', KEY).send({ ...valid, expectedDigest: 'none' })).status).toBe(400);
+  expect(owner.pool.connect).not.toHaveBeenCalled();
+});
+
+test('current transition origin uses an explicit allowlist against poisoned private fields', async () => {
+  const transitionRead = { state: 'transition_origin_current', id: ORIGIN,
+    asOf: CAPTURED, predictionCutoffAt: '2026-11-01T04:00:00.000000Z',
+    horizonEndsAt: '2026-12-01T05:00:00.000000Z', timeZone: 'America/New_York',
+    profileId: SNAPSHOT, methodVersion: 'm26-transition-four-target-research-v2',
+    calculationVersion: 'm26-two-complete-local-month-weighted-rate-v2',
+    reviewVersion: 'm26-source-finalization-human-review-v2', targets: TRANSITION_TARGETS,
+    sourceCoverageComplete: true,
+    sourceCoverageScope: 'post_installation_northstar_selected_sources_only',
+    uncertaintyState: 'unavailable_insufficient_natural_calibration',
+    researchOnly: true, probabilityWithheld: true, outputDigestWithheld: true,
+    paidNumericServing: false, forecastServingEnabled: false,
+    probability: '0.75', outputDigest: DIGEST,
+    privateOutput: { targets: [{ probability: '0.75' }] }, eligibleCount: 999,
+    identityFields: { cohortIds: [CALL] } };
+  const { app } = application({ transitionRead });
+  const response = await request(app).get(`/sources/transitions/future-origins/${ORIGIN}`);
+  expect(response.status).toBe(200);
+  expect(response.body.data).toMatchObject({ state: 'transition_origin_current',
+    probabilityWithheld: true, outputDigestWithheld: true });
+  expect(response.body.data).not.toHaveProperty('profileId');
+  expect(response.body.data).not.toHaveProperty('probability');
+  expect(response.body.data).not.toHaveProperty('outputDigest');
+  expect(response.body.data).not.toHaveProperty('privateOutput');
+  expect(response.body.data).not.toHaveProperty('eligibleCount');
+  expect(response.body.data).not.toHaveProperty('identityFields');
+});
+
+test('transition evaluation withholds metrics and takes no automatic action', async () => {
+  const { app } = application();
+  const created = await request(app)
+    .post(`/sources/transitions/future-origins/${ORIGIN}/evaluations`)
+    .set('Idempotency-Key', KEY).set('X-CSRF-Token', 'validated-csrf').send({});
+  expect(created.status).toBe(201);
+  expect(created.body.data).toMatchObject({ state: 'transition_evaluation_saved',
+    metricsWithheld: true, calibrationClaimed: false, driftVerdictIssued: false,
+    automaticActionTaken: false });
+  expect(JSON.stringify(created.body)).not.toMatch(/absoluteError|actualProbability/);
+  const read = await request(app).get(`/sources/transitions/evaluations/${EVALUATION}`);
+  expect(read.status).toBe(200);
+  expect(read.body.data).toMatchObject({ state: 'transition_evaluation_current',
+    metricsWithheld: true, paidNumericServing: false, forecastServingEnabled: false });
+});
+
+test('transition routes reject caller authority and member access before database use', async () => {
+  const member = application({ role: 'member' });
+  expect((await request(member.app).post('/sources/transitions/future-origins')
+    .set('Idempotency-Key', KEY).send({})).status).toBe(403);
+  expect(member.pool.connect).not.toHaveBeenCalled();
+  const owner = application();
+  expect((await request(owner.app).post('/sources/transitions/future-origins')
+    .set('Idempotency-Key', KEY).send({ probability: '0.5' })).status).toBe(400);
+  expect(owner.pool.connect).not.toHaveBeenCalled();
+});
+
+test('transition stale and unavailable states remain numeric-free', async () => {
+  const stale = application({ transitionRead: { state: 'transition_origin_stale',
+    id: ORIGIN, reason: 'source_changed', refreshRequired: true } });
+  const response = await request(stale.app)
+    .get(`/sources/transitions/future-origins/${ORIGIN}`);
+  expect(response.status).toBe(200);
+  expect(response.body.data).toMatchObject({ state: 'transition_origin_stale',
+    refreshRequired: true, sourceCoverageComplete: false,
+    paidNumericServing: false });
+  expect(JSON.stringify(response.body)).not.toMatch(/"probability":|"outputDigest":/);
 });

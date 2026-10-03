@@ -10,7 +10,7 @@ const output = path.resolve(process.argv[3]);
 fs.mkdirSync(output, { recursive: true });
 const html = fs.readFileSync(path.resolve('public/demo-dashboard.html'), 'utf8');
 const start = html.indexOf('<section class="demo-panel command-center-demand-outlook"');
-const end = html.indexOf('</section>', start) + '</section>'.length;
+const end = html.indexOf('<section class="demo-panel command-center-resource-outlook"', start);
 assert(start > 0 && end > start);
 const fragment = html.slice(start, end);
 
@@ -28,8 +28,11 @@ const snapshot = {
   sourceAuthenticated: true, knownSubsetOnly: true, sourceCoverageComplete: false,
   offPlatformCoverageVerified: false, providerCoverageVerified: false,
   probabilityCalibrated: false, forecastIssued: false, paidNumericServing: false,
-  replayed: false,
 };
+const fact = { state: 'backlog_fact_saved', id: '22222222-2222-4222-8222-222222222222',
+  backlogSnapshotId: snapshot.id, factDigest: 'c'.repeat(64), replayed: false,
+  knownSubsetOnly: true, wholeBusinessCoverageVerified: false,
+  researchOnly: true, forecastIssued: false };
 
 (async () => {
   let browser;
@@ -38,7 +41,7 @@ const snapshot = {
   try {
     const runtime = resolveBrowserRuntime(engine);
     browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
-    for (const missingDependency of ['demand', 'contract', 'session']) {
+    for (const missingDependency of ['demand', 'research', 'contract', 'session']) {
       const context = await browser.newContext({ viewport: { width: 1024, height: 900 } });
       const page = await context.newPage();
       const dashboard = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
@@ -63,9 +66,12 @@ const snapshot = {
       if (missingDependency !== 'demand') {
         await page.addScriptTag({ path: path.resolve('public/js/command-center-demand-position.js') });
       }
+      if (missingDependency !== 'research') {
+        await page.addScriptTag({ path: path.resolve('public/js/command-center-demand-research.js') });
+      }
       await page.addScriptTag({ path: path.resolve('public/js/command-center-page.js') });
       assert.equal(await page.getByRole('button', { name: 'Capture current backlog', exact: true }).isDisabled(), true);
-      assert.equal(await page.getByRole('button', { name: 'Load receipt', exact: true }).isDisabled(), true);
+      assert.equal(await page.locator('#commandCenterBacklogRead').isDisabled(), true);
       assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Workspace unavailable/);
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
       result.cases.push({ mode: 'paid', width: 1024, theme: 'light',
@@ -88,17 +94,23 @@ const snapshot = {
         document.querySelector('main').innerHTML = fragment;
       }, { fragment, theme: item.theme });
       await page.addScriptTag({ path: path.resolve('public/js/command-center-demand-position.js') });
-      await page.evaluate(({ mode, snapshot, dependenciesReady }) => {
+      await page.addScriptTag({ path: path.resolve('public/js/command-center-demand-research.js') });
+      await page.evaluate(({ mode, snapshot, fact, dependenciesReady }) => {
         window.__calls = [];
         window.__controller = NorthStarDemandPosition.create({ mode, document,
           workspaceAvailable: dependenciesReady !== false,
           idempotency: () => 'browser-part4d-capture-key',
           fetcher: async (url, options) => {
             window.__calls.push({ url, method: options.method });
-            return { ok: true, status: 201,
-              json: async () => ({ success: true, data: snapshot }) };
+            return { ok: true, status: options.method === 'POST' ? 201 : 200,
+              json: async () => ({ success: true,
+                data: options.method === 'POST' ? fact : snapshot }) };
           } });
-      }, { mode: item.mode, snapshot, dependenciesReady: item.dependenciesReady });
+        window.__research = NorthStarDemandResearch.create({ mode, document,
+          workspaceAvailable: dependenciesReady !== false,
+          idempotency: () => 'browser-part4d-research-key',
+          fetcher: async () => { throw new Error('No research request expected in this component case.'); } });
+      }, { mode: item.mode, snapshot, fact, dependenciesReady: item.dependenciesReady });
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
       if (item.dependenciesReady === false) {
         assert.equal(await page.getByRole('button', { name: 'Capture current backlog', exact: true }).isDisabled(), true);
@@ -109,13 +121,38 @@ const snapshot = {
         assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Nothing is captured on page load/);
         await page.getByRole('button', { name: 'Capture current backlog', exact: true }).click();
         await page.waitForFunction(() => window.__controller.state().kind === 'available');
-        assert.equal(await page.evaluate(() => window.__calls.length), 1);
+        assert.equal(await page.evaluate(() => window.__calls.length), 2);
         assert.match(await page.locator('.command-center-demand-outlook').innerText(), /13 person-hours/);
-        assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Demand forecast[\s\S]*Unavailable/);
+        assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Demand forecast/);
       } else {
         assert.equal(await page.locator('#commandCenterBacklogActions').isHidden(), true);
         assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Fictional isolated demo/);
         assert.match(await page.locator('.command-center-demand-outlook').innerText(), /13 person-hours/);
+        await page.evaluate(async () => {
+          await window.__research.action('transition-review-approve');
+          window.__research.demoAdvance();
+        });
+        assert.match(await page.locator('.command-center-demand-outlook').innerText(), /Fictional origins saved/);
+        const firstTransition = await page.locator('#commandCenterResearchTransitionId').inputValue();
+        await page.getByRole('button', { name: 'Reject method', exact: true }).click();
+        await page.locator('#commandCenterDemandState').getByText('Fictional source changed').waitFor();
+        await page.getByRole('button', { name: 'Recover with new origins', exact: true }).click();
+        assert.equal(await page.locator('#commandCenterResearchTransitionEvaluationId').inputValue(), '');
+        await page.getByRole('button', { name: 'Approve method', exact: true }).click();
+        await page.getByRole('button', { name: 'Recover with new origins', exact: true }).click();
+        const recoveredTransition = await page.locator('#commandCenterResearchTransitionId').inputValue();
+        assert.notEqual(recoveredTransition, firstTransition);
+        await page.getByRole('button', { name: 'Advance recovered horizon', exact: true }).click();
+        await page.locator('#commandCenterDemandState').getByText('Fictional evaluations ready').waitFor();
+        const evaluation = await page.locator('#commandCenterResearchTransitionEvaluationId').inputValue();
+        assert.match(evaluation, /^[0-9a-f-]{36}$/);
+        await page.getByRole('button', { name: 'Reject method', exact: true }).click();
+        await page.locator('#commandCenterDemandState').getByText('Fictional source changed').waitFor();
+        await page.evaluate(async () => {
+          await window.__research.action('transition-load');
+          await window.__research.action('transition-evaluation-load');
+        });
+        assert.match(await page.locator('#commandCenterResearchTransitions').innerText(), /stale/i);
       }
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       const tag = `${item.mode}-${item.width}-${item.theme}` +

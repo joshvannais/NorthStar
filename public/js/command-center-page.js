@@ -11,17 +11,23 @@
     typeof contract.validateWorkspace === 'function' && global.NorthStarAccountSession &&
     typeof global.NorthStarAccountSession.fetch === 'function' &&
     global.NorthStarDemandPosition &&
-    typeof global.NorthStarDemandPosition.create === 'function');
+    typeof global.NorthStarDemandPosition.create === 'function' &&
+    global.NorthStarDemandResearch &&
+    typeof global.NorthStarDemandResearch.create === 'function');
   var workspace = null;
   var loading = false;
   var chartPeriod = 'daily';
   var schedulingCategory = 'atRisk';
   var schedulingCursor = null;
   var demandPosition = null;
+  var demandResearch = null;
 
   function byId(id) { return document.getElementById(id); }
 
   function demandWorkspaceUnavailable() {
+    if (demandResearch && typeof demandResearch.workspaceUnavailable === 'function') {
+      demandResearch.workspaceUnavailable();
+    }
     if (demandPosition && typeof demandPosition.workspaceUnavailable === 'function') {
       demandPosition.workspaceUnavailable();
       return;
@@ -733,16 +739,22 @@
   }
 
   function renderDemandOutlook() {
-    if (demandPosition) demandPosition.workspaceReady();
-    // The backlog controller is a present-state receipt reader. Never turn it,
-    // the workspace graph or fictional demo leads into a prediction.
-    byId('commandCenterDemandState').textContent = 'Forecast unavailable';
-    byId('commandCenterDemandExplanation').textContent = mode === 'demo'
-      ? 'This demo shows fictional leads. No demand forecast has been issued for this demo workspace.'
-      : 'No demand forecast is ready for this workspace. NorthStar needs complete, verified lead history before it can prepare one.';
-    byId('commandCenterDemandBoundary').textContent = mode === 'demo'
-      ? 'The recorded demo leads and appointments above are fictional examples, not a prediction of future work.'
-      : 'Current leads and scheduled work above are recorded activity, not a prediction of future work.';
+    var identity = workspace && workspace.tenant && workspace.integrity
+      ? [mode, workspace.tenant.id, workspace.integrity.revision,
+        workspace.integrity.digest, workspace.session && workspace.session.id,
+        workspace.session && workspace.session.workspaceGeneration,
+        workspace.session && workspace.session.expiresAt].join(':') : null;
+    if (demandPosition) demandPosition.workspaceReady(identity);
+    if (demandResearch) demandResearch.workspaceReady(identity);
+    // Current backlog remains a present fact. The research controller owns
+    // only explicit, guarded future-origin and evaluation presentation.
+    if (mode !== 'demo') {
+      byId('commandCenterDemandState').textContent = 'Research only';
+      byId('commandCenterDemandExplanation').textContent =
+        'Guarded research receipts can be prepared below when their exact sources and human reviews are current.';
+      byId('commandCenterDemandBoundary').textContent =
+        'Current leads and scheduled work are recorded activity. Research receipts do not issue a production forecast.';
+    }
   }
 
   function renderResourceOutlook() {
@@ -828,9 +840,11 @@
       workspace = null;
       byId('commandCenterContent').setAttribute('aria-busy', 'false');
       demandWorkspaceUnavailable();
-      byId('commandCenterDemandState').textContent = 'Forecast unavailable';
-      byId('commandCenterDemandExplanation').textContent = 'No demand forecast has been issued.';
-      byId('commandCenterDemandBoundary').textContent = 'No forecast value is shown while workspace data is unavailable.';
+      byId('commandCenterDemandState').textContent = 'Workspace unavailable';
+      byId('commandCenterDemandExplanation').textContent =
+        'Refresh the workspace before using private demand research actions.';
+      byId('commandCenterDemandBoundary').textContent =
+        'No research receipt or forecast value is shown while workspace data is unavailable.';
       byId('commandCenterResourceState').textContent = 'Workspace unavailable';
       byId('commandCenterResourceExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
       byId('commandCenterResourceBoundary').textContent = 'No resource forecast is shown while workspace data is unavailable.';
@@ -859,6 +873,15 @@
     });
   } else {
     demandWorkspaceUnavailable();
+  }
+  if (global.NorthStarDemandResearch &&
+      typeof global.NorthStarDemandResearch.create === 'function') {
+    demandResearch = global.NorthStarDemandResearch.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+      idempotency: function () { return global.crypto.randomUUID(); },
+      workspaceAvailable: workspaceDependenciesReady,
+    });
   }
   byId('commandCenterRefresh').addEventListener('click', function () { load(); });
   document.querySelectorAll('[data-chart-period]').forEach(function (button) {

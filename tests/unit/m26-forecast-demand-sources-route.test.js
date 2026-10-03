@@ -576,6 +576,10 @@ test('owner certifies one exact server-derived Retell period after the bounded s
     forecastIssued: false, paidNumericServing: false });
   expect(inspectWindow).toHaveBeenCalledWith(expect.objectContaining({
     snapshotId: SNAPSHOT, startsAt: START, endsAt: END }));
+  const begins = client.query.mock.calls.filter(call =>
+    typeof call[0] === 'string' && call[0].startsWith('BEGIN'));
+  expect(begins[0][0]).toBe('BEGIN ISOLATION LEVEL READ COMMITTED');
+  expect(begins[0][0]).not.toContain('READ ONLY');
   const mutation = client.query.mock.calls.find(call =>
     call[0].includes('period_certification_v2_mutate'));
   expect(mutation).toBeDefined();

@@ -622,7 +622,11 @@ function createForecastDemandSourcesRouter(options = {}) {
           const prepareClient = await poolProvider().connect();
           let evidence;
           try {
-            await prepareClient.query('BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY');
+            // The guarded period reader takes source/profile SHARE locks to
+            // prevent a concurrent correction from crossing this scan. Keep
+            // the route side-effect free, but do not declare the transaction
+            // READ ONLY because PostgreSQL forbids those required row locks.
+            await prepareClient.query('BEGIN ISOLATION LEVEL READ COMMITTED');
             await prepareClient.query("SET LOCAL statement_timeout = '10000ms'");
             await prepareClient.query("SET LOCAL lock_timeout = '2000ms'");
             evidence = (await prepareClient.query(

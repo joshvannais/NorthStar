@@ -17,6 +17,42 @@
   var DATABASE_INSTANT = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.(\d{1,6}))?(Z|[+-]\d\d:\d\d)$/;
   var COMPOSED_ACTIVE_HOURS_REASONS = ['reviewed_person_hour_plan_missing',
     'reviewed_person_hour_plan_not_current'];
+  var SNAPSHOT_KEYS = ['id', 'version', 'personPlanCompositionVersion', 'targetKey',
+    'state', 'reason', 'capturedAt', 'approvedUnscheduledCount',
+    'approvedScheduledCount', 'workInProgressCount', 'completedCount',
+    'unresolvedLinkageCount', 'knownBacklogCount', 'plannedPersonMinutes',
+    'backlogHoursState', 'backlogHoursReason', 'sourceDigest', 'snapshotDigest',
+    'sourceAuthority', 'sourceAuthenticated', 'knownSubsetOnly',
+    'sourceCoverageComplete', 'offPlatformCoverageVerified',
+    'providerCoverageVerified', 'probabilityCalibrated', 'forecastIssued',
+    'paidNumericServing'];
+  var PRIVATE_KEYS = ['probability', 'outputDigest', 'privateOutput', 'privatePoint',
+    'expectedCount', 'actualLeadCount', 'actualFirstBookedCount', 'absoluteError',
+    'members', 'periods', 'evidence', 'privateMetrics'];
+
+  function record(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    var prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  function exact(value, keys) {
+    return record(value) && Object.keys(value).length === keys.length &&
+      keys.every(function (key) { return Object.prototype.hasOwnProperty.call(value, key); }) &&
+      Object.keys(value).every(function (key) { return keys.includes(key); });
+  }
+
+  function hasPrivatePoison(value, seen) {
+    if (!value || typeof value !== 'object') return false;
+    if (seen.includes(value)) return true;
+    seen.push(value);
+    if (Array.isArray(value)) return value.some(function (entry) {
+      return hasPrivatePoison(entry, seen);
+    });
+    return Object.keys(value).some(function (key) {
+      return PRIVATE_KEYS.includes(key) || hasPrivatePoison(value[key], seen);
+    });
+  }
 
   function validInstant(value) {
     var match = typeof value === 'string' ? DATABASE_INSTANT.exec(value) : null;
@@ -33,7 +69,8 @@
   }
 
   function validSnapshot(value) {
-    if (!value || typeof value !== 'object' || !UUID.test(value.id || '') ||
+    if (!exact(value, SNAPSHOT_KEYS) || hasPrivatePoison(value, []) ||
+        !UUID.test(value.id || '') ||
         value.version !== 'm26-current-backlog-position-v1' ||
         !['none', 'm26-current-backlog-person-plan-composition-v1']
           .includes(value.personPlanCompositionVersion) ||
@@ -92,6 +129,23 @@
       value.plannedPersonMinutes === null && value.backlogHoursState === 'unavailable' &&
       value.backlogHoursReason === (legacy ? 'approved_person_hour_plan_missing' :
         'no_active_backlog');
+  }
+
+  function validFact(value, expectedId) {
+    if (!record(value) || hasPrivatePoison(value, []) || !UUID.test(value.id || '') ||
+        (expectedId && value.id !== expectedId) || value.knownSubsetOnly !== true ||
+        value.wholeBusinessCoverageVerified !== false || value.researchOnly !== true ||
+        value.forecastIssued !== false) return false;
+    var common = ['state', 'id', 'backlogSnapshotId', 'factDigest', 'knownSubsetOnly',
+      'wholeBusinessCoverageVerified', 'researchOnly', 'forecastIssued'];
+    if (value.state === 'backlog_fact_stale') return value.refreshRequired === true &&
+      exact(value, ['state', 'id', 'refreshRequired', 'knownSubsetOnly',
+        'wholeBusinessCoverageVerified', 'researchOnly', 'forecastIssued']);
+    if (value.state === 'backlog_fact_saved') return exact(value, common.concat(['replayed'])) &&
+      UUID.test(value.backlogSnapshotId || '') && DIGEST.test(value.factDigest || '') &&
+      typeof value.replayed === 'boolean';
+    return value.state === 'backlog_fact_current' && exact(value, common) &&
+      UUID.test(value.backlogSnapshotId || '') && DIGEST.test(value.factDigest || '');
   }
 
   function hours(minutes) {
@@ -169,6 +223,7 @@
     var doc = options.document, mode = options.mode === 'demo' ? 'demo' : 'paid';
     var fetcher = options.fetcher, lastOperation = null, pendingCaptureKey = null;
     var operationGeneration = 0, workspaceAvailable = options.workspaceAvailable !== false;
+    var workspaceIdentity = null;
     var current = { kind: 'initial', badge: 'Receipt required',
       title: 'Choose a saved backlog receipt',
       explanation: 'Capture a bounded current fact, or enter an exact saved receipt ID to read it. Nothing is captured on page load.',
@@ -222,7 +277,7 @@
           'Idempotency-Key': operation.key }, body: '{}' } : {
         method: 'GET', cache: 'no-store', headers: { Accept: 'application/json' },
       };
-      var url = '/api/v1/forecast/current-backlog/snapshots' +
+      var url = '/api/v1/forecast/demand-to-schedule/backlog-facts' +
         (operation.kind === 'read' ? '/' + encodeURIComponent(operation.id) : '');
       return fetcher(url, settings).then(function (response) {
         return response.json().catch(function () { return null; }).then(function (body) {
@@ -231,21 +286,36 @@
             failure(response.status, body && body.error && body.error.category);
             return null;
           }
-          if (operation.kind === 'read' && body.data.id !== operation.id) {
+          if (!validFact(body.data, operation.kind === 'read' ? operation.id : null)) {
             failure(503, 'FORECAST_CURRENT_BACKLOG_UNAVAILABLE');
             return null;
           }
-          var model = project(body.data, false);
-          if (!model) {
-            failure(503, 'FORECAST_CURRENT_BACKLOG_UNAVAILABLE');
-            return null;
+          if (body.data.state === 'backlog_fact_stale') {
+            node('commandCenterBacklogReceipt').value = body.data.id;
+            paint({ kind: 'stale', badge: 'Receipt is stale', title: 'Refresh required',
+              explanation: 'The saved backlog source changed. Capture a new current fact; values remain withheld.',
+              metrics: [], receiptId: body.data.id });
+            return current;
           }
-          if (operation.kind === 'capture' && pendingCaptureKey === operation.key) {
-            pendingCaptureKey = null;
-          }
-          node('commandCenterBacklogReceipt').value = body.data.id;
-          paint(model);
-          return model;
+          var fact = body.data;
+          return fetcher('/api/v1/forecast/current-backlog/snapshots/' +
+            encodeURIComponent(fact.backlogSnapshotId), { method: 'GET', cache: 'no-store',
+            headers: { Accept: 'application/json' } }).then(function (snapshotResponse) {
+              return snapshotResponse.json().catch(function () { return null; }).then(function (snapshotBody) {
+                if (generation !== operationGeneration || !workspaceAvailable) return null;
+                if (!snapshotResponse.ok || !snapshotBody || snapshotBody.success !== true ||
+                    !snapshotBody.data || snapshotBody.data.id !== fact.backlogSnapshotId) {
+                  failure(snapshotResponse.status, snapshotBody && snapshotBody.error &&
+                    snapshotBody.error.category); return null;
+                }
+                var model = project(snapshotBody.data, false);
+                if (!model) { failure(503, 'FORECAST_CURRENT_BACKLOG_UNAVAILABLE'); return null; }
+                model.receiptId = fact.id;
+                if (operation.kind === 'capture' && pendingCaptureKey === operation.key) pendingCaptureKey = null;
+                node('commandCenterBacklogReceipt').value = fact.id;
+                paint(model); return model;
+              });
+            });
         });
       }).catch(function () {
         if (generation !== operationGeneration || !workspaceAvailable) return null;
@@ -279,9 +349,24 @@
       paint({ kind: 'workspace', badge: 'Workspace unavailable', title: 'Backlog view could not load',
         explanation: 'Refresh the workspace before capturing or reading a receipt. No value is shown.', metrics: [] });
     }
-    function workspaceReady() {
+    function workspaceReady(identity) {
+      if (typeof identity === 'string' && identity && workspaceIdentity !== identity) {
+        operationGeneration += 1;
+        workspaceIdentity = identity;
+        lastOperation = null;
+        pendingCaptureKey = null;
+        node('commandCenterBacklogReceipt').value = '';
+        current = { kind: 'initial', badge: 'Receipt required',
+          title: 'Choose a saved backlog receipt',
+          explanation: 'Capture a bounded current fact, or enter an exact saved receipt ID to read it. Nothing is captured on page load.',
+          metrics: [] };
+      }
       workspaceAvailable = true;
-      if (current.kind !== 'workspace') return;
+      if (current.kind !== 'workspace') {
+        if (mode === 'demo') paint(project(demoSnapshot(), true));
+        else paint(current);
+        return;
+      }
       if (mode === 'demo') {
         paint(project(demoSnapshot(), true));
         return;
@@ -309,6 +394,6 @@
       state: function () { return current; } };
   }
 
-  return Object.freeze({ validSnapshot: validSnapshot, project: project,
+  return Object.freeze({ validSnapshot: validSnapshot, validFact: validFact, project: project,
     demoSnapshot: demoSnapshot, create: create });
 });

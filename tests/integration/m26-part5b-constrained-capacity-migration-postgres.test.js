@@ -98,8 +98,13 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
     await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_source_baseline(uuid,timestamptz)
       SECURITY INVOKER`, 'Required constrained-capacity v1 entry security is missing');
     await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_scope_segment(
-      uuid,canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,jsonb)
+      uuid,canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,jsonb,text)
       SET search_path TO public`, 'Required constrained-capacity v1 entry security is missing');
+    await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_review_at(uuid,text,text,uuid,timestamptz)
+      SECURITY INVOKER`, 'Required constrained-capacity v1 entry security is missing');
+    await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_job_review_covers(
+      uuid,canonical_forecast_constrained_capacity_reviews_v1,timestamptz) SECURITY INVOKER`,
+    'Required constrained-capacity v1 entry security is missing');
     await fail(`ALTER FUNCTION canonical_forecast_constrained_capacity_v1_origin_projection(
       canonical_forecast_constrained_capacity_origins_v1,text,boolean) SECURITY DEFINER`,
     'Required constrained-capacity v1 projection security is missing');

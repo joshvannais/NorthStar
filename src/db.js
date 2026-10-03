@@ -1800,6 +1800,169 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_transition_evaluation_v2_capture(uuid,uuid,text,uuid,text,text,uuid) TO %I', runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_transition_evaluation_v2_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='222_canonical_forecast_demand_to_schedule_v1.sql') OR
+         pg_catalog.to_regclass('public.canonical_forecast_seasonal_origins_v1') IS NOT NULL OR
+         pg_catalog.to_regclass('public.canonical_forecast_pipeline_origins_v1') IS NOT NULL THEN
+        IF pg_catalog.to_regclass('public.canonical_forecast_demand_schedule_epochs_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_demand_schedule_methods_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_demand_schedule_method_reviews_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_demand_schedule_backlog_facts_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_seasonal_origins_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_seasonal_evaluations_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_origins_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_evaluations_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_eligibility_visibility_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_booking_visibility_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_seasonal_certification_visibility_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_seasonal_call_visibility_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_demand_schedule_test_clock_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_demand_schedule_source_test_clock_v1') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_demand_schedule_method_review_v1_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_demand_schedule_epoch_v1_capture(uuid,uuid,text,uuid,text,text,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_demand_schedule_backlog_v1_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_demand_schedule_backlog_v1_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_seasonal_origin_v1_capture(uuid,uuid,text,uuid,text,text,date)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_seasonal_origin_v1_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_seasonal_signal_v1(numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_seasonal_input_current_v1(uuid,uuid,text,uuid,public.canonical_forecast_seasonal_origins_v1)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_demand_schedule_epoch_current_v1(uuid,public.canonical_forecast_demand_schedule_epochs_v1)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_demand_schedule_source_test_clock_v1_set(timestamptz)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_demand_schedule_source_clock_v1_apply()') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_seasonal_call_visibility_v1_capture()') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_seasonal_call_generation_v1(uuid,timestamptz,timestamptz)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_seasonal_evaluation_v1_capture(uuid,uuid,text,uuid,text,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_seasonal_evaluation_v1_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_origin_v1_capture(uuid,uuid,text,uuid,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_origin_v1_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_evaluation_v1_capture(uuid,uuid,text,uuid,text,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_evaluation_v1_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+          RAISE EXCEPTION 'Required demand-to-schedule v1 authority is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_demand_schedule_epochs_v1'::regclass
+           AND tgname='canonical_forecast_demand_schedule_epochs_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_demand_schedule_methods_v1'::regclass
+           AND tgname='canonical_forecast_demand_schedule_methods_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_demand_schedule_method_reviews_v1'::regclass
+           AND tgname='canonical_forecast_demand_schedule_method_reviews_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_demand_schedule_backlog_facts_v1'::regclass
+           AND tgname='canonical_forecast_demand_schedule_backlog_facts_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_seasonal_origins_v1'::regclass
+           AND tgname='canonical_forecast_seasonal_origins_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_seasonal_evaluations_v1'::regclass
+           AND tgname='canonical_forecast_seasonal_evaluations_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_pipeline_origins_v1'::regclass
+           AND tgname='canonical_forecast_pipeline_origins_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_pipeline_evaluations_v1'::regclass
+           AND tgname='canonical_forecast_pipeline_evaluations_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_pipeline_eligibility_visibility_v1'::regclass
+           AND tgname='canonical_forecast_pipeline_eligibility_visibility_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_pipeline_booking_visibility_v1'::regclass
+           AND tgname='canonical_forecast_pipeline_booking_visibility_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_seasonal_certification_visibility_v1'::regclass
+           AND tgname='canonical_forecast_seasonal_certification_visibility_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_seasonal_call_visibility_v1'::regclass
+           AND tgname='canonical_forecast_seasonal_call_visibility_v1_immutable'
+           AND tgenabled='O' AND tgtype=58
+           AND tgfoid='public.canonical_forecast_transition_v2_immutable()'::regprocedure
+           AND NOT tgisinternal) THEN
+          RAISE EXCEPTION 'Required demand-to-schedule v1 immutability is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_opportunity_eligibility_events'::regclass
+           AND tgname='z_canonical_forecast_pipeline_eligibility_visibility_v1_capture'
+           AND tgenabled='O' AND tgtype=5
+           AND tgfoid='public.canonical_forecast_pipeline_eligibility_visibility_v1_capture()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_schedule_booking_events'::regclass
+           AND tgname='z_canonical_forecast_pipeline_booking_visibility_v1_capture'
+           AND tgenabled='O' AND tgtype=5
+           AND tgfoid='public.canonical_forecast_pipeline_booking_visibility_v1_capture()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_forecast_retell_period_certifications_v2'::regclass
+           AND tgname='z_canonical_forecast_seasonal_certification_visibility_v1_capture'
+           AND tgenabled='O' AND tgtype=5
+           AND tgfoid='public.canonical_forecast_seasonal_certification_visibility_v1_capture()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_operations'::regclass
+           AND tgname='z_canonical_forecast_seasonal_call_visibility_v1_capture'
+           AND tgenabled='O' AND tgtype=17
+           AND tgfoid='public.canonical_forecast_seasonal_call_visibility_v1_capture()'::regprocedure
+           AND NOT tgisinternal) THEN
+          RAISE EXCEPTION 'Required demand-to-schedule v1 prospective capture is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_operations'::regclass
+           AND tgname='b_canonical_forecast_demand_schedule_operation_test_clock_v1'
+           AND tgenabled='O' AND tgtype=19
+           AND tgfoid='public.canonical_forecast_demand_schedule_source_clock_v1_apply()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_schedule_approvals'::regclass
+           AND tgname='canonical_forecast_demand_schedule_approval_test_clock_v1'
+           AND tgenabled='O' AND tgtype=7
+           AND tgfoid='public.canonical_forecast_demand_schedule_source_clock_v1_apply()'::regprocedure
+           AND NOT tgisinternal) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger
+          WHERE tgrelid='public.canonical_schedule_human_approvals'::regclass
+           AND tgname='canonical_forecast_demand_schedule_human_approval_test_clock_v1'
+           AND tgenabled='O' AND tgtype=7
+           AND tgfoid='public.canonical_forecast_demand_schedule_source_clock_v1_apply()'::regprocedure
+           AND NOT tgisinternal) THEN
+          RAISE EXCEPTION 'Required demand-to-schedule v1 source clock boundary is missing';
+        END IF;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_demand_schedule_epochs_v1,public.canonical_forecast_demand_schedule_methods_v1,public.canonical_forecast_demand_schedule_method_reviews_v1,public.canonical_forecast_demand_schedule_backlog_facts_v1,public.canonical_forecast_seasonal_origins_v1,public.canonical_forecast_seasonal_evaluations_v1,public.canonical_forecast_pipeline_origins_v1,public.canonical_forecast_pipeline_evaluations_v1,public.canonical_forecast_pipeline_eligibility_visibility_v1,public.canonical_forecast_pipeline_booking_visibility_v1,public.canonical_forecast_seasonal_certification_visibility_v1,public.canonical_forecast_seasonal_call_visibility_v1,public.canonical_forecast_demand_schedule_test_clock_v1,public.canonical_forecast_demand_schedule_source_test_clock_v1 FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_demand_schedule_clock_v1(),public.canonical_forecast_demand_schedule_test_clock_v1_set(timestamptz),public.canonical_forecast_demand_schedule_source_test_clock_v1_set(timestamptz),public.canonical_forecast_demand_schedule_source_clock_v1_apply(),public.canonical_forecast_seasonal_call_visibility_v1_capture(),public.canonical_forecast_seasonal_call_generation_v1(uuid,timestamptz,timestamptz),public.canonical_forecast_pipeline_eligibility_visibility_v1_capture(),public.canonical_forecast_pipeline_booking_visibility_v1_capture(),public.canonical_forecast_seasonal_certification_visibility_v1_capture(),public.canonical_forecast_demand_schedule_child_key_v1(text,text),public.canonical_forecast_seasonal_signal_v1(numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric),public.canonical_forecast_seasonal_training_v1(uuid,uuid,text,uuid,date),public.canonical_forecast_seasonal_input_current_v1(uuid,uuid,text,uuid,public.canonical_forecast_seasonal_origins_v1),public.canonical_forecast_demand_schedule_epoch_current_v1(uuid,public.canonical_forecast_demand_schedule_epochs_v1),public.canonical_forecast_pipeline_cohort_v1(uuid,timestamptz,timestamptz,timestamptz),public.canonical_forecast_pipeline_risk_v1(uuid,timestamptz,timestamptz),public.canonical_forecast_pipeline_origin_input_current_v1(uuid,public.canonical_forecast_pipeline_origins_v1),public.canonical_forecast_pipeline_outcome_v1(uuid,public.canonical_forecast_pipeline_origins_v1) FROM %I', runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_demand_schedule_method_review_v1_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text,text),public.canonical_forecast_demand_schedule_epoch_v1_capture(uuid,uuid,text,uuid,text,text,text,uuid),public.canonical_forecast_demand_schedule_backlog_v1_capture(uuid,uuid,text,uuid,text,text),public.canonical_forecast_demand_schedule_backlog_v1_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_seasonal_origin_v1_capture(uuid,uuid,text,uuid,text,text,date),public.canonical_forecast_seasonal_origin_v1_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_seasonal_evaluation_v1_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_seasonal_evaluation_v1_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_pipeline_origin_v1_capture(uuid,uuid,text,uuid,text,text),public.canonical_forecast_pipeline_origin_v1_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_pipeline_evaluation_v1_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_pipeline_evaluation_v1_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -4172,6 +4335,51 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_material_balance_issue(uuid,uuid,text,text,text,numeric,text,text,text,text,text,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_material_request_digest(uuid,uuid,uuid,uuid,text,uuid,text,text,text,text,text,text,text,text,text,text,text,uuid,bigint,text,text,bigint,text,bigint,text,text,text)','EXECUTE')
        )) AS material_helpers_withheld,
+       (to_regclass('public.canonical_forecast_seasonal_origins_v1') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_forecast_demand_schedule_epochs_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_demand_schedule_methods_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_demand_schedule_method_reviews_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_demand_schedule_backlog_facts_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_seasonal_origins_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_seasonal_evaluations_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_pipeline_origins_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_pipeline_evaluations_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_pipeline_eligibility_visibility_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_forecast_pipeline_booking_visibility_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_forecast_seasonal_certification_visibility_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_forecast_seasonal_call_visibility_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_demand_schedule_test_clock_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_demand_schedule_source_test_clock_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND has_function_privilege($1,'public.canonical_forecast_demand_schedule_method_review_v1_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_demand_schedule_epoch_v1_capture(uuid,uuid,text,uuid,text,text,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_demand_schedule_backlog_v1_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_demand_schedule_backlog_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_seasonal_origin_v1_capture(uuid,uuid,text,uuid,text,text,date)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_seasonal_origin_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_seasonal_evaluation_v1_capture(uuid,uuid,text,uuid,text,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_seasonal_evaluation_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_pipeline_origin_v1_capture(uuid,uuid,text,uuid,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_pipeline_origin_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_pipeline_evaluation_v1_capture(uuid,uuid,text,uuid,text,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_pipeline_evaluation_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_demand_schedule_clock_v1()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_demand_schedule_test_clock_v1_set(timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_demand_schedule_source_test_clock_v1_set(timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_demand_schedule_source_clock_v1_apply()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_eligibility_visibility_v1_capture()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_booking_visibility_v1_capture()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_forecast_seasonal_certification_visibility_v1_capture()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_forecast_seasonal_call_visibility_v1_capture()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_forecast_seasonal_call_generation_v1(uuid,timestamp with time zone,timestamp with time zone)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_demand_schedule_child_key_v1(text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_seasonal_signal_v1(numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric,numeric)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_seasonal_training_v1(uuid,uuid,text,uuid,date)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_seasonal_input_current_v1(uuid,uuid,text,uuid,public.canonical_forecast_seasonal_origins_v1)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_demand_schedule_epoch_current_v1(uuid,public.canonical_forecast_demand_schedule_epochs_v1)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_cohort_v1(uuid,timestamptz,timestamptz,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_risk_v1(uuid,timestamptz,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_pipeline_outcome_v1(uuid,public.canonical_forecast_pipeline_origins_v1)','EXECUTE')
+       )) AS demand_schedule_v1_private,
        (to_regclass('public.polaris_provider_requests') IS NULL OR (
          NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')
          AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'INSERT')
@@ -4353,6 +4561,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.material_tables_withheld ||
       !runtimePrivileges.material_entry_execute ||
       !runtimePrivileges.material_helpers_withheld ||
+      !runtimePrivileges.demand_schedule_v1_private ||
       !runtimePrivileges.polaris_provider_usage_guarded ||
       !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
       !runtimePrivileges.ledger_sequence_withheld) {
@@ -4470,6 +4679,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('217_canonical_forecast_complete_window_mea
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('218_canonical_forecast_complete_window_governance_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('219_canonical_forecast_complete_window_governance_metrics.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('220_canonical_forecast_retell_future_origin_v2.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('221_canonical_forecast_transition_future_origins_v2.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('222_canonical_forecast_demand_to_schedule_v1.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

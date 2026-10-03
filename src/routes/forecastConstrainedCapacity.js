@@ -49,8 +49,8 @@ function safeOrigin(value, expectedId = null, allowNotFound = false) {
   return value;
 }
 
-function safeOutcome(value, expectedOrigin = null, expectedId = null, allowNotFound = false) {
-  if (value === null) return allowNotFound ? { state: 'not_found' } : null;
+function safeOutcome(value, expectedOrigin = null, expectedId = null) {
+  if (value === null) return null;
   const keys = ['state', 'id', 'originId', 'revision', 'capturedAt', 'refreshRequired',
     'allSevenDimensionsApplied', 'resultsWithheld', 'outputDigestsWithheld', 'researchOnly',
     'forecastIssued', 'paidNumericServing', 'forecastServingEnabled', 'automaticActionTaken', 'replayed'];
@@ -62,9 +62,8 @@ function safeOutcome(value, expectedOrigin = null, expectedId = null, allowNotFo
   return value;
 }
 
-function safeEvaluation(value, expectedOrigin = null, expectedId = null, expectedOutcome = null,
-  allowNotFound = false) {
-  if (value === null) return allowNotFound ? { state: 'not_found' } : null;
+function safeEvaluation(value, expectedOrigin = null, expectedId = null, expectedOutcome = null) {
+  if (value === null) return null;
   const keys = ['state', 'id', 'originId', 'outcomeId', 'revision', 'capturedAt', 'refreshRequired',
     'allSevenDimensionsApplied', 'metricsWithheld', 'researchOnly', 'forecastIssued', 'paidNumericServing',
     'forecastServingEnabled', 'automaticActionTaken', 'replayed'];
@@ -227,7 +226,7 @@ function createForecastConstrainedCapacityRouter(options = {}) {
     if (!exact(req.query, []) || !UUID.test(req.params.originId || '') || !UUID.test(req.params.id || '')) return invalid(res);
     return run(req, res, { sql: 'SELECT public.canonical_forecast_constrained_capacity_v1_outcome_read($1,$2,$3,$4,$5,$6) value',
       params: [req.params.originId, req.params.id],
-      validate: value => safeOutcome(value, req.params.originId, req.params.id, true) });
+      validate: value => safeOutcome(value, req.params.originId, req.params.id) });
   });
   router.post('/origins/:id/evaluations', auth, requirePermission('forecast', 'update'), writeThrottle, async (req, res) => {
     const key = req.get('Idempotency-Key'); if (!exact(req.query, []) || !exact(req.body, ['outcomeId']) ||
@@ -241,7 +240,7 @@ function createForecastConstrainedCapacityRouter(options = {}) {
     if (!exact(req.query, []) || !UUID.test(req.params.originId || '') || !UUID.test(req.params.id || '')) return invalid(res);
     return run(req, res, { sql: 'SELECT public.canonical_forecast_constrained_capacity_v1_evaluation_read($1,$2,$3,$4,$5,$6) value',
       params: [req.params.originId, req.params.id],
-      validate: value => safeEvaluation(value, req.params.originId, req.params.id, null, true) });
+      validate: value => safeEvaluation(value, req.params.originId, req.params.id) });
   });
   return router;
 }

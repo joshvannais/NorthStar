@@ -65,8 +65,8 @@ describe('Mission 26 Part 5B constrained-capacity boundary', () => {
     expect(safeOutcome(null)).toBeNull();
     expect(safeEvaluation(null)).toBeNull();
     expect(safeOrigin(null, ID, true)).toEqual({ state: 'not_found' });
-    expect(safeOutcome(null, OTHER, ID, true)).toEqual({ state: 'not_found' });
-    expect(safeEvaluation(null, OTHER, ID, null, true)).toEqual({ state: 'not_found' });
+    expect(safeOutcome(null, OTHER, ID)).toBeNull();
+    expect(safeEvaluation(null, OTHER, ID)).toBeNull();
   });
 
   test('rejects caller clocks, scopes, members, manifests and malformed human decisions before DB use', async () => {
@@ -134,6 +134,11 @@ describe('Mission 26 Part 5B constrained-capacity boundary', () => {
       .toEqual({ state: 'not_found' });
     expect((await request(application({ role: 'member' }).app)
       .get(`/api/v1/forecast/constrained-capacity/origins/${ID}`)).status).toBe(403);
+    const notFound = { code: 'P0002' };
+    expect((await request(application({ databaseError: notFound }).app)
+      .get(`/api/v1/forecast/constrained-capacity/origins/${OTHER}/outcomes/${ID}`)).status).toBe(404);
+    expect((await request(application({ databaseError: notFound }).app)
+      .get(`/api/v1/forecast/constrained-capacity/origins/${OTHER}/evaluations/${ID}`)).status).toBe(404);
   });
 
   test('maps guarded failures without leaking database details', async () => {
@@ -151,7 +156,9 @@ describe('Mission 26 Part 5B constrained-capacity boundary', () => {
       expect(sql).toContain(`'${dimension}'`);
     expect(sql).toContain('Constrained-capacity scopes share people or assets');
     expect(sql).toContain('Complete approved work constraint census unavailable');
-    expect(sql).toContain('Exact declared asset horizon unavailable');
+    expect(sql).toContain('Crew or asset travel interval unavailable');
+    expect(sql).toContain('canonical_estimates');
+    expect(sql).toContain("'alternativeKey'");
     expect(sql).toContain('REVOKE ALL ON FUNCTION public.canonical_forecast_constrained_capacity_v1_source_capture()');
     expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.canonical_forecast_constrained_capacity_v1_prerequisites');
   });

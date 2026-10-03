@@ -46,6 +46,15 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     }
     throw new Error(`Expected ${count} PostgreSQL lock waiter(s) for ${relation}`);
   };
+  const waitForAdvisoryWaiters = async count => {
+    for (let attempt = 0; attempt < 150; attempt += 1) {
+      const waiting = Number((await fixture.ownerPool.query(
+        "SELECT count(*) count FROM pg_locks WHERE locktype='advisory' AND NOT granted")).rows[0].count);
+      if (waiting >= count) return;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error(`Expected ${count} PostgreSQL advisory lock waiter(s)`);
+  };
 
   async function approveWorkProfile(name) {
     const member = actor(name); const reviewer = actor('owner');
@@ -86,11 +95,14 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
             AND value.availability_id=authority.id ORDER BY value.revision DESC LIMIT 1) revision ON TRUE
         WHERE authority.organization_id=$1 AND authority.workforce_profile_id=$2`,
       [fixture.org, profileId])).rows[0];
-    const response = await request(fixture.app).put(`/api/v1/canonical/availability/profiles/${profileId}`)
-      .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5b-availability-${uuid()}`)
-      .send({ expectedRevision: Number(current.revision), expectedDigest: current.digest,
-        expectedTimeZone: 'UTC', coverageStart: start.toISOString(), coverageEnd: end.toISOString(), intervals,
-        reason: 'Owner revised the exact bounded availability for authenticated complete-zero evidence.' });
+    const key = `m26-p5b-availability-${uuid()}`;
+    const body = { expectedRevision: Number(current.revision), expectedDigest: current.digest,
+      expectedTimeZone: 'UTC', coverageStart: start.toISOString(), coverageEnd: end.toISOString(), intervals,
+      reason: 'Owner revised the exact bounded availability for authenticated complete-zero evidence.' };
+    const send = () => request(fixture.app).put(`/api/v1/canonical/availability/profiles/${profileId}`)
+      .set(actor('owner').session.headers).set('Idempotency-Key', key).send(body);
+    let response = await send();
+    if (response.status === 503) response = await send();
     expect(response.status).toBe(200);
   }
 
@@ -112,9 +124,12 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
   }
 
   async function refreshP5aReview(kind, subjectId = null, role = null) {
-    const token = (await request(app).get('/api/v1/forecast/workload-capacity/reviews/current')
+    const current = await request(app).get('/api/v1/forecast/workload-capacity/reviews/current')
       .set('X-Test-Actor', 'owner').query({ kind, target: TARGET,
-        subjectId: subjectId || 'none', role: kind === 'capacity_role_scope' ? 'none' : (role || 'none') })).body.data;
+        subjectId: subjectId || 'none', role: kind === 'capacity_role_scope' ? 'none' : (role || 'none') });
+    if (current.status !== 200) throw new Error(`Part5A current review failed: ${JSON.stringify({ kind,
+      subjectId, role, status: current.status, body: current.body })}`);
+    const token = current.body.data;
     if (token.sourceCurrent) return token;
     await p5aReview({ kind, subjectId, role: token.role ?? role }, token);
     return token;
@@ -174,6 +189,8 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       `SELECT id,revision,rtrim(canonical_digest) digest
          FROM canonical_schedule_assignments
         WHERE organization_id=$1 AND appointment_id=$2`, [fixture.org, appointment])).rows[0];
+    const owningClock = new Date((await fixture.ownerPool.query('SELECT clock_timestamp() value')).rows[0].value);
+    if (owningClock.getTime() >= logicalNow.getTime()) await setClock(new Date(owningClock.getTime() + 1000));
     return { appointment, opportunity, assignment };
   }
 
@@ -268,13 +285,15 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
         expect(activated.status).toBe(200);
       }
     }
-    const updateVehicleConfiguration = async configuration => {
+    const updateVehicleConfiguration = async (configuration, overrides = {}) => {
       const row = (await fixture.ownerPool.query(
         'SELECT version FROM tenant_assets WHERE organization_id=$1 AND id=$2',
         [fixture.org, vehicle.body.data.id])).rows[0];
       const changed = await request(fixture.app).put(`/api/assets/${vehicle.body.data.id}`)
         .set(actor('owner').session.headers).send({
-          ...assetBody('vehicle', 'Fixture van', 'P5B-VAN'), version: Number(row.version), configuration,
+          ...assetBody(overrides.category || 'vehicle', 'Fixture van', 'P5B-VAN'),
+          version: Number(row.version), configuration,
+          homeLocationId: Object.hasOwn(overrides, 'homeLocationId') ? overrides.homeLocationId : 'headquarters',
         });
       if (changed.status !== 200) {
         throw new Error(`Vehicle configuration update failed: ${JSON.stringify(changed.body)}`);
@@ -324,13 +343,22 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const scopeKey = 'fixture-technician-supply';
     const assetCalendar = assetId => ({ assetId, availableIntervals: [{ start: logicalNow.toISOString(),
       end: new Date(logicalNow.getTime() + 32 * 86400000).toISOString() }], committedIntervals: [] });
-    const scopeDefinition = { scopeKey, role: 'technician', applicability: { crew: true, skill: true,
+    const scopeDefinition = { scopeKey, alternativeKey: 'baseline', role: 'technician', applicability: { crew: true, skill: true,
       workingHours: true, location: true, travel: true, vehicle: true, equipment: true },
       crewIds: [crew.body.data.id], crewRoleRequirements: [{ role: 'technician', count: 1 }],
+      crewAssignments: [{ profileId: actor('member').actorUserId, crewId: crew.body.data.id,
+        role: 'technician' }],
       skillIds: [skill.body.data.id], locationKey: 'site-one',
       travelPairs: [{ fromLocationKey: 'headquarters', toLocationKey: 'site-one', durationMinutes: 30, basis: 'estimated' },
         { fromLocationKey: 'site-one', toLocationKey: 'headquarters', durationMinutes: 30, basis: 'estimated' }],
       vehicleAssetIds: [vehicle.body.data.id], equipmentAssetIds: [equipment.body.data.id],
+      assetAssignments: [
+        { assetId: vehicle.body.data.id, crewId: crew.body.data.id, kind: 'vehicle',
+          operatorProfileId: actor('member').actorUserId },
+        { assetId: equipment.body.data.id, crewId: crew.body.data.id, kind: 'equipment',
+          operatorProfileId: actor('member').actorUserId },
+      ],
+      assetRequirements: { vehiclePerSeat: 1, equipmentPerSeat: 1 },
       operatorProfileIds: [actor('member').actorUserId],
       assetCalendars: [assetCalendar(vehicle.body.data.id), assetCalendar(equipment.body.data.id)] };
     const scopeReviewCountBeforeDuplicateEvidence = Number((await fixture.ownerPool.query(
@@ -344,6 +372,10 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       { ...scopeDefinition, assetCalendars: [{ ...scopeDefinition.assetCalendars[0],
         availableIntervals: [scopeDefinition.assetCalendars[0].availableIntervals[0],
           scopeDefinition.assetCalendars[0].availableIntervals[0]] }, scopeDefinition.assetCalendars[1]] },
+      { ...scopeDefinition, assetAssignments: [{ ...scopeDefinition.assetAssignments[0],
+        operatorProfileId: actor('dispatcher').actorUserId }, scopeDefinition.assetAssignments[1]] },
+      { ...scopeDefinition, assetAssignments: [{ ...scopeDefinition.assetAssignments[0], kind: 'equipment' },
+        scopeDefinition.assetAssignments[1]] },
     ]) expect((await post('/reviews', { kind: 'scope', scopeKey, subjectId: null, action: 'approve',
         expectedRevision: emptyScopeToken.expectedRevision, expectedDigest: emptyScopeToken.expectedDigest,
         definition: invalidDefinition, reason: 'Refuse duplicated route or asset interval evidence without a receipt.',
@@ -353,13 +385,13 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       [fixture.org])).rows[0].count)).toBe(scopeReviewCountBeforeDuplicateEvidence);
     await p5bReview('scope', scopeKey, null, scopeDefinition);
 
-    const packageReview = async (definition, jobs) => {
+    const packageReview = async (definition, jobs, reviewScopeKey = scopeKey) => {
       await advance(1); await p5bEpoch(); await advance(1);
       const entries = [['method', null, methodDefinition], ['scope', null, definition],
         ...jobs.map(job => ['job', job.appointmentId, job.definition])];
       for (const [kind, subject, reviewedDefinition] of entries) {
-        const token = (await get(`/reviews/current?kind=${kind}&scopeKey=${kind === 'method' ? 'none' : scopeKey}&subjectId=${subject || 'none'}`)).body.data;
-        await p5bReview(kind, kind === 'method' ? null : scopeKey, subject, reviewedDefinition, token);
+        const token = (await get(`/reviews/current?kind=${kind}&scopeKey=${kind === 'method' ? 'none' : reviewScopeKey}&subjectId=${subject || 'none'}`)).body.data;
+        await p5bReview(kind, kind === 'method' ? null : reviewScopeKey, subject, reviewedDefinition, token);
       }
     };
     const privateResults = async originId => (await fixture.ownerPool.query(
@@ -374,9 +406,15 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     if (!baseCapacity.classificationComplete || !baseCapacity.availabilityComplete || baseCapacity.overlap) {
       throw new Error(`Mounted base capacity incomplete: ${JSON.stringify(baseCapacity)}`);
     }
-    const freeResult = (await fixture.ownerPool.query(
-      'SELECT canonical_forecast_constrained_capacity_v1_results($1,$2,$3,$2,$4) value',
-      [fixture.org, logicalNow, new Date(logicalNow.getTime() + 30 * 86400000), freeInput])).rows[0].value;
+    let freeResult;
+    try {
+      freeResult = (await fixture.ownerPool.query(
+        'SELECT canonical_forecast_constrained_capacity_v1_results($1,$2,$3,$2,$4) value',
+        [fixture.org, logicalNow, new Date(logicalNow.getTime() + 30 * 86400000), freeInput])).rows[0].value;
+    } catch (error) {
+      throw new Error(`Constrained result failed: ${JSON.stringify({ message: error.message,
+        where: error.where, detail: error.detail })}`);
+    }
     expect(Number(freeResult[0].personMinutes)).toBe(6000);
 
     const firstKey = `m26-p5b-first-origin-${uuid()}`;
@@ -408,7 +446,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       start: new Date(logicalNow.getTime() + 86400000 + 10 * 3600000).toISOString() });
     await p5aUnschedule(unscheduledWork);
     await advance(1);
-    const unscheduledJobDefinition = { scopeKey, appointmentId: unscheduledWork.appointment,
+    const unscheduledJobDefinition = { scopeKey, alternativeKey: 'baseline', appointmentId: unscheduledWork.appointment,
       assignmentId: unscheduledWork.assignment.id,
       crewApplicable: true, skillApplicable: true, workingHoursApplicable: true, locationApplicable: true,
       travelApplicable: true, vehicleApplicable: true, equipmentApplicable: true,
@@ -428,7 +466,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       } catch (error) { detail = { error: error.message, code: error.code }; }
       throw new Error(`Part5B stale read failed: ${JSON.stringify({ body: stale.body, detail })}`);
     }
-    expect(stale.body.data.state).toBe('constrained_capacity_origin_stale');
+    expect(stale.body.data.state).toBe('constrained_capacity_origin_current');
 
     const unscheduledScopeDefinition = { ...scopeDefinition,
       assetCalendars: [assetCalendar(vehicle.body.data.id), assetCalendar(equipment.body.data.id)] };
@@ -511,7 +549,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       [fixture.org])).rows[0].count)).toBe(beforeBlockedOrigin);
     const sameCutoffStale = await get(`/origins/${unscheduledOrigin.body.data.id}`);
     expect(sameCutoffStale.status).toBe(200);
-    expect(sameCutoffStale.body.data.state).toBe('constrained_capacity_origin_stale');
+    expect(sameCutoffStale.body.data.state).toBe('constrained_capacity_origin_current');
 
     await advance(1);
     const committedWork = await createApprovedWork({ locationId: 'site-one', label: 'Committed supply proof',
@@ -539,8 +577,66 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const committedOrigin = await post('/origins', {
       reason: 'Prove an exact one-hour approved worker commitment reduces 100 hours to 99 without travel.',
       confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1' });
+    if (committedOrigin.status !== 201) {
+      let detail; const diagnostic = await fixture.ownerPool.connect();
+      try {
+        await diagnostic.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        detail = (await diagnostic.query(
+          'SELECT canonical_forecast_constrained_capacity_v1_origin_capture($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [fixture.org, actor('owner').actorUserId, actor('owner').actorAccessRole,
+            actor('owner').authSessionId, actor('owner').csrfToken, `m26-p5b-commit-diagnostic-${uuid()}`,
+            'Diagnose committed supply.', 'm26-constrained-capacity-origin-v1'])).rows[0].value;
+      } catch (error) { detail = { message: error.message, code: error.code, where: error.where }; }
+      finally { await diagnostic.query('ROLLBACK').catch(() => {}); diagnostic.release(); }
+      throw new Error(`Committed origin failed: ${JSON.stringify({ body: committedOrigin.body, detail })}`);
+    }
     expect(committedOrigin.status).toBe(201);
     const committedPrivate = await privateResults(committedOrigin.body.data.id);
+    if (Number(committedPrivate[0].personMinutes) !== 5940) {
+      const committedBase = (await fixture.ownerPool.query(
+        "SELECT canonical_forecast_workload_capacity_v1_capacity_calculation($1,$2,$3,$2,'technician') value",
+        [fixture.org, new Date(committedOrigin.body.data.predictionCutoffAt),
+          new Date(committedOrigin.body.data.horizonEndsAt)])).rows[0].value;
+      const segmentRows = [];
+      for (const interval of intervals) segmentRows.push((await fixture.ownerPool.query(
+        `SELECT canonical_forecast_constrained_capacity_v1_scope_segment($1,review_value,$2,$3,input_value) value
+           FROM canonical_forecast_constrained_capacity_reviews_v1 review_value
+           CROSS JOIN LATERAL (SELECT input_manifest->'jobs' input_value
+             FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1 AND id=$4) input
+          WHERE review_value.organization_id=$1 AND review_value.review_kind='scope'
+            AND review_value.scope_key=$5 ORDER BY review_value.revision DESC LIMIT 1`,
+        [fixture.org, interval.start, interval.end, committedOrigin.body.data.id, scopeKey])).rows[0].value);
+      const assignmentRows = (await fixture.ownerPool.query(
+        `SELECT revision_value.revision,revision_value.schedule_state,revision_value.scheduled_start,
+                revision_value.scheduled_end,revision_value.approval_id,revision_value.human_approval_id,
+                COALESCE(human_value.approved_at,approval_value.approved_at) decision_at
+           FROM canonical_schedule_assignment_revisions revision_value
+           LEFT JOIN canonical_schedule_human_approvals human_value
+             ON human_value.organization_id=revision_value.organization_id AND human_value.id=revision_value.human_approval_id
+           LEFT JOIN canonical_schedule_approvals approval_value
+             ON approval_value.organization_id=revision_value.organization_id AND approval_value.id=revision_value.approval_id
+          WHERE revision_value.organization_id=$1 AND revision_value.assignment_id=$2 ORDER BY revision_value.revision`,
+        [fixture.org, committedWork.assignment.id])).rows;
+      const scheduledStart = new Date(assignmentRows.at(-1).scheduled_start);
+      const scheduledEnd = new Date(assignmentRows.at(-1).scheduled_end);
+      const owningInterval = intervals.find(interval => new Date(interval.start) < scheduledEnd
+        && new Date(interval.end) > scheduledStart);
+      const exactSegments = [];
+      for (const [segmentStart, segmentEnd] of [[owningInterval.start, scheduledStart],
+        [scheduledStart, scheduledEnd], [scheduledEnd, owningInterval.end]]) {
+        exactSegments.push((await fixture.ownerPool.query(
+          `SELECT canonical_forecast_constrained_capacity_v1_scope_segment($1,review_value,$2,$3,input_value) value
+             FROM canonical_forecast_constrained_capacity_reviews_v1 review_value
+             CROSS JOIN LATERAL (SELECT input_manifest->'jobs' input_value
+               FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1 AND id=$4) input
+            WHERE review_value.organization_id=$1 AND review_value.review_kind='scope'
+              AND review_value.scope_key=$5 ORDER BY review_value.revision DESC LIMIT 1`,
+          [fixture.org, segmentStart, segmentEnd, committedOrigin.body.data.id, scopeKey])).rows[0].value);
+      }
+      throw new Error(`Committed arithmetic mismatch: ${JSON.stringify({ cutoff: committedOrigin.body.data.predictionCutoffAt,
+        horizonEnd: committedOrigin.body.data.horizonEndsAt, committedPrivate, committedBase, segmentRows,
+        assignmentRows, owningInterval, exactSegments })}`);
+    }
     expect(Number(committedPrivate[0].personMinutes)).toBe(5940);
     expect(Number(committedPrivate[0].travelPersonMinutes)).toBe(0);
 
@@ -567,10 +663,58 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       .set('Idempotency-Key', `m26-p5b-no-csrf-${uuid()}`).send(travelBody)).status).toBe(403);
     expect((await get(`/origins/${travelOrigin.body.data.id}`, 'otherOwner')).status).toBe(404);
 
+    // An ordinary, source-owned configuration change and restoration inside
+    // the forecast horizon is outcome evidence. It does not rewrite the
+    // immutable origin or require a replacement input receipt. Exact source
+    // event endpoints remove only the affected hour from the later result.
+    const ordinaryTransitionAt = new Date(new Date(travelOrigin.body.data.predictionCutoffAt).getTime()
+      + 2 * 86400000 + 10 * 3600000);
+    await setClock(ordinaryTransitionAt);
+    await updateVehicleConfiguration('In-horizon declared maintenance configuration', { category: 'equipment' });
+    expect((await get(`/origins/${travelOrigin.body.data.id}`)).body.data.state)
+      .toBe('constrained_capacity_origin_current');
+    await advance(1800);
+    await updateVehicleConfiguration('In-horizon declared maintenance configuration', { homeLocationId: null });
+    await advance(1800);
+    await updateVehicleConfiguration('Same-cutoff guarded source correction');
+    expect((await get(`/origins/${travelOrigin.body.data.id}`)).body.data.state)
+      .toBe('constrained_capacity_origin_current');
+
+    // A separately reviewed M22 availability transition inside the horizon is
+    // integrated over its owning half-hour interval. The later restoration is
+    // a new prospective review: it does not make the already elapsed gap
+    // available retroactively and it does not stale the immutable origin.
+    const availabilityGapStart = new Date(new Date(travelOrigin.body.data.predictionCutoffAt).getTime()
+      + 4 * 86400000 + 10 * 3600000);
+    const availabilityGapEnd = new Date(availabilityGapStart.getTime() + 1800000);
+    const gapInterval = intervals.find(interval => new Date(interval.start) < availabilityGapStart
+      && new Date(interval.end) > availabilityGapEnd);
+    const gapIntervals = intervals.filter(interval => interval !== gapInterval).concat([
+      { kind: 'available', start: gapInterval.start, end: availabilityGapStart.toISOString() },
+      { kind: 'available', start: availabilityGapEnd.toISOString(), end: gapInterval.end },
+    ]).sort((left, right) => new Date(left.start) - new Date(right.start));
+    await setClock(availabilityGapStart);
+    await replaceAvailability(actor('member').actorUserId, start,
+      new Date(horizonEnd.getTime() + 86400000), gapIntervals);
+    await refreshP5aReview('availability_basis', actor('member').actorUserId);
+    expect((await get(`/origins/${travelOrigin.body.data.id}`)).body.data.state)
+      .toBe('constrained_capacity_origin_current');
+    await setClock(availabilityGapEnd);
+    await replaceAvailability(actor('member').actorUserId, start,
+      new Date(horizonEnd.getTime() + 86400000), intervals);
+    await refreshP5aReview('availability_basis', actor('member').actorUserId);
+    expect((await get(`/origins/${travelOrigin.body.data.id}`)).body.data.state)
+      .toBe('constrained_capacity_origin_current');
+
     await setClock(travelOrigin.body.data.horizonEndsAt);
     const outcomeKey = `m26-p5b-travel-outcome-${uuid()}`;
     const outcome = await post(`/origins/${travelOrigin.body.data.id}/outcomes`, {}, outcomeKey);
     expect(outcome.status).toBe(201);
+    const outcomePrivate = (await fixture.ownerPool.query(
+      'SELECT private_results FROM canonical_forecast_constrained_capacity_outcomes_v1 WHERE organization_id=$1 AND id=$2',
+      [fixture.org, outcome.body.data.id])).rows[0].private_results;
+    expect(Number(outcomePrivate[0].personMinutes)).toBe(5790);
+    expect(Number(outcomePrivate[0].travelPersonMinutes)).toBe(60);
     const evaluationKey = `m26-p5b-travel-evaluation-${uuid()}`;
     const evaluationBody = { outcomeId: outcome.body.data.id };
     const evaluation = await post(`/origins/${travelOrigin.body.data.id}/evaluations`, evaluationBody, evaluationKey);
@@ -578,6 +722,13 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     expect(evaluation.body.data).toMatchObject({ originId: travelOrigin.body.data.id,
       outcomeId: outcome.body.data.id, metricsWithheld: true, researchOnly: true,
       forecastIssued: false, paidNumericServing: false, automaticActionTaken: false });
+    const missingOutcomeId = uuid(); const missingEvaluationId = uuid();
+    expect((await get(`/origins/${travelOrigin.body.data.id}/outcomes/${missingOutcomeId}`)).status).toBe(404);
+    expect((await get(`/origins/${travelOrigin.body.data.id}/evaluations/${missingEvaluationId}`)).status).toBe(404);
+    expect((await get(`/origins/${travelOrigin.body.data.id}/outcomes/${outcome.body.data.id}`, 'otherOwner')).status)
+      .toBe(404);
+    expect((await get(`/origins/${travelOrigin.body.data.id}/evaluations/${evaluation.body.data.id}`, 'otherOwner')).status)
+      .toBe(404);
     const revisedOutcomeKey = `m26-p5b-travel-outcome-revision-${uuid()}`;
     const revisedOutcome = await post(`/origins/${travelOrigin.body.data.id}/outcomes`, {}, revisedOutcomeKey);
     expect(revisedOutcome.status).toBe(201);
@@ -656,6 +807,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       assignmentId: zeroWork.assignment.id };
     const zeroJobs = [...jobs, { appointmentId: zeroWork.appointment, definition: zeroJobDefinition }];
     const zeroScopeDefinition = { ...travelScopeDefinition,
+      travelPairs: travelScopeDefinition.travelPairs.map(pair => ({ ...pair, durationMinutes: 0 })),
       assetCalendars: [assetCalendar(vehicle.body.data.id), assetCalendar(equipment.body.data.id)] };
     await packageReview(zeroScopeDefinition, zeroJobs);
     const zeroBase = (await fixture.ownerPool.query(
@@ -682,7 +834,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     expect(zeroOrigin.status).toBe(201);
     const zeroPrivate = await privateResults(zeroOrigin.body.data.id);
     expect(Number(zeroPrivate[0].personMinutes)).toBe(0);
-    expect(Number(zeroPrivate[0].travelPersonMinutes)).toBe(60);
+    expect(Number(zeroPrivate[0].travelPersonMinutes)).toBe(0);
 
     const sharedScopeKey = 'shared-technician-supply';
     const sharedScopeDefinition = { ...zeroScopeDefinition, scopeKey: sharedScopeKey };
@@ -709,6 +861,194 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     expect(sharedRejectReplay.status).toBe(200);
     expect(sharedRejectReplay.body.data).toMatchObject({ id: sharedRejected.body.data.id,
       action: 'reject', replayed: true });
+
+    // The same complete people/assets may support a distinct alternative, but
+    // each alternative remains a separate, non-summed result manifest.
+    const alternativeKey = 'alternative-two';
+    const alternativeScopeDefinition = { ...sharedScopeDefinition, alternativeKey };
+    await p5bReview('scope', sharedScopeKey, null, alternativeScopeDefinition);
+    for (const job of zeroJobs) await p5bReview('job', sharedScopeKey, job.appointmentId, {
+      ...job.definition, scopeKey: sharedScopeKey, alternativeKey,
+    });
+    const alternativeOrigin = await post('/origins', {
+      reason: 'Save distinct alternatives without pooling their shared people or assets.',
+      confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1',
+    });
+    expect(alternativeOrigin.status).toBe(201);
+    const alternativePrivate = await privateResults(alternativeOrigin.body.data.id);
+    expect(alternativePrivate).toHaveLength(2);
+    expect(alternativePrivate.map(value => value.alternativeKey).sort()).toEqual(['alternative-two', 'baseline']);
+    expect(alternativePrivate.every(value => Number(value.personMinutes) === 0)).toBe(true);
+
+    // A complete reviewed formation contains two qualified target workers and
+    // one separately qualified support-role worker. Two distinct vehicle/tool
+    // pairs remove the asset bottleneck; the support worker's five-day partial
+    // calendar is therefore the exact limiting interval. The result is 50
+    // worker-hours, never two technicians multiplied by one shared support
+    // person, and no person or asset is allocated twice at an instant.
+    await p5bReview('scope', scopeKey, null, zeroScopeDefinition, null, 'reject');
+    await p5bReview('scope', sharedScopeKey, null, alternativeScopeDefinition, null, 'reject');
+    await p5aUnschedule(committedWork);
+    await p5aUnschedule(zeroWork);
+    const adminProfile = await request(fixture.app).put(`/api/workforce/profiles/${actor('admin').actorUserId}`)
+      .set(actor('owner').session.headers).send({ operationalRole: 'technician',
+        homeLocationId: 'headquarters', skillIds: [skill.body.data.id] });
+    const dispatcherProfile = await request(fixture.app).put(`/api/workforce/profiles/${actor('dispatcher').actorUserId}`)
+      .set(actor('owner').session.headers).send({ operationalRole: 'dispatcher',
+        homeLocationId: 'headquarters', skillIds: [skill.body.data.id] });
+    expect(adminProfile.status).toBe(200); expect(dispatcherProfile.status).toBe(200);
+    const crewUpdated = await request(fixture.app).put(`/api/workforce/crews/${crew.body.data.id}`)
+      .set(actor('owner').session.headers).send({ name: 'Fixture crew', homeLocationId: 'headquarters', members: [
+        { profileId: actor('member').actorUserId, role: 'lead' },
+        { profileId: actor('admin').actorUserId, role: 'member' },
+        { profileId: actor('dispatcher').actorUserId, role: 'member' },
+      ] });
+    expect(crewUpdated.status).toBe(200);
+    const secondVehicle = await request(fixture.app).post('/api/assets').set(actor('owner').session.headers)
+      .send(assetBody('vehicle', 'Fixture second van', 'P5B-VAN-2'));
+    const secondEquipment = await request(fixture.app).post('/api/assets').set(actor('owner').session.headers)
+      .send(assetBody('equipment', 'Fixture second machine', 'P5B-MACHINE-2'));
+    expect(secondVehicle.status).toBe(201); expect(secondEquipment.status).toBe(201);
+    for (const asset of [secondVehicle.body.data, secondEquipment.body.data]) {
+      if (asset.catalogueState !== 'active') {
+        const activated = await request(fixture.app).patch(`/api/assets/${asset.id}/catalogue-state`)
+          .set(actor('owner').session.headers).send({ version: asset.version, catalogueState: 'active' });
+        expect(activated.status).toBe(200);
+      }
+    }
+    await advance(1);
+    const formationStart = new Date(logicalNow);
+    const formationEnd = new Date(formationStart.getTime() + 31 * 86400000);
+    const targetIntervals = Array.from({ length: 10 }, (_, index) => ({ kind: 'available',
+      start: new Date(formationStart.getTime() + index * 86400000 + 9 * 3600000).toISOString(),
+      end: new Date(formationStart.getTime() + index * 86400000 + 19 * 3600000).toISOString() }));
+    const supportIntervals = targetIntervals.slice(0, 5);
+    await replaceAvailability(actor('member').actorUserId, formationStart, formationEnd, targetIntervals);
+    await declareAvailability(actor('admin').actorUserId, formationStart, formationEnd, targetIntervals);
+    await declareAvailability(actor('dispatcher').actorUserId, formationStart, formationEnd, supportIntervals);
+    await advance(1);
+    expect((await p5aPost('/epochs', { reason: 'Begin complete installed-source formation coverage.',
+      confirmed: true, confirmationVersion: 'm26-workload-capacity-epoch-v1' })).status).toBe(201);
+    for (const [name, role] of [['owner', 'owner'], ['admin', 'technician'], ['dispatcher', 'dispatcher'],
+      ['member', 'technician'], ['viewer', 'employee']]) {
+      if (name === 'admin') await p5aReview({ kind: 'role_qualification',
+        subjectId: actor(name).actorUserId, role });
+      else await refreshP5aReview('role_qualification', actor(name).actorUserId, role);
+    }
+    await refreshP5aReview('availability_basis', actor('member').actorUserId);
+    await p5aReview({ kind: 'availability_basis', subjectId: actor('admin').actorUserId });
+    await p5aReview({ kind: 'availability_basis', subjectId: actor('dispatcher').actorUserId });
+    await refreshP5aReview('capacity_role_scope', null, 'technician');
+
+    const formationScopeKey = 'formation-multirole-supply';
+    const formationAlternative = 'formation-proof';
+    const formationAssetCalendar = assetId => ({ assetId, availableIntervals: [{
+      start: formationStart.toISOString(), end: formationEnd.toISOString() }], committedIntervals: [] });
+    const formationScope = { ...scopeDefinition, scopeKey: formationScopeKey,
+      alternativeKey: formationAlternative,
+      travelPairs: scopeDefinition.travelPairs.map(pair => ({ ...pair, durationMinutes: 0 })),
+      crewRoleRequirements: [{ role: 'technician', count: 1 }, { role: 'dispatcher', count: 1 }],
+      crewAssignments: [
+        { profileId: actor('member').actorUserId, crewId: crew.body.data.id, role: 'technician' },
+        { profileId: actor('admin').actorUserId, crewId: crew.body.data.id, role: 'technician' },
+        { profileId: actor('dispatcher').actorUserId, crewId: crew.body.data.id, role: 'dispatcher' },
+      ],
+      vehicleAssetIds: [vehicle.body.data.id, secondVehicle.body.data.id],
+      equipmentAssetIds: [equipment.body.data.id, secondEquipment.body.data.id],
+      assetAssignments: [
+        { assetId: vehicle.body.data.id, crewId: crew.body.data.id, kind: 'vehicle',
+          operatorProfileId: actor('member').actorUserId },
+        { assetId: equipment.body.data.id, crewId: crew.body.data.id, kind: 'equipment',
+          operatorProfileId: actor('member').actorUserId },
+        { assetId: secondVehicle.body.data.id, crewId: crew.body.data.id, kind: 'vehicle',
+          operatorProfileId: actor('admin').actorUserId },
+        { assetId: secondEquipment.body.data.id, crewId: crew.body.data.id, kind: 'equipment',
+          operatorProfileId: actor('admin').actorUserId },
+      ],
+      operatorProfileIds: [actor('member').actorUserId, actor('admin').actorUserId],
+      assetCalendars: [vehicle.body.data.id, secondVehicle.body.data.id,
+        equipment.body.data.id, secondEquipment.body.data.id].map(formationAssetCalendar) };
+    const formationJobs = [unscheduledWork, committedWork, zeroWork].map(work => ({ appointmentId: work.appointment,
+      definition: { ...unscheduledJobDefinition, scopeKey: formationScopeKey,
+        alternativeKey: formationAlternative, appointmentId: work.appointment,
+        assignmentId: work.assignment.id,
+        vehicleAssetIds: formationScope.vehicleAssetIds,
+        equipmentAssetIds: formationScope.equipmentAssetIds } }));
+    await packageReview(formationScope, formationJobs, formationScopeKey);
+    const formationOriginKey = `m26-p5b-formation-origin-${uuid()}`;
+    const formationOriginBody = {
+      reason: 'Save the complete multiworker multirole formation without person or asset reuse.',
+      confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1' };
+    const formationOrigin = await post('/origins', formationOriginBody, formationOriginKey);
+    if (formationOrigin.status !== 201) {
+      const diagnostic = await fixture.ownerPool.connect(); let detail;
+      try {
+        await diagnostic.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        detail = (await diagnostic.query(
+          'SELECT canonical_forecast_constrained_capacity_v1_origin_capture($1,$2,$3,$4,$5,$6,$7,$8) value',
+          [fixture.org, actor('owner').actorUserId, actor('owner').actorAccessRole,
+            actor('owner').authSessionId, actor('owner').csrfToken, `m26-p5b-formation-diag-${uuid()}`,
+            'Diagnose the complete multiworker multirole formation.',
+            'm26-constrained-capacity-origin-v1'])).rows[0].value;
+      } catch (error) { detail = { code: error.code, message: error.message, detail: error.detail,
+        where: error.where }; }
+      finally { await diagnostic.query('ROLLBACK').catch(() => {}); diagnostic.release(); }
+      const census = (await fixture.ownerPool.query(
+        'SELECT canonical_forecast_constrained_capacity_v1_work_census($1,$2) value',
+        [fixture.org, logicalNow])).rows[0].value;
+      const reviewed = (await fixture.ownerPool.query(
+        `SELECT scope_key,subject_id,revision,action,definition->>'alternativeKey' alternative
+           FROM canonical_forecast_constrained_capacity_reviews_v1
+          WHERE organization_id=$1 AND review_kind='job' ORDER BY scope_key,subject_id,revision`,
+        [fixture.org])).rows;
+      throw new Error(`Formation origin failed: ${JSON.stringify({ body: formationOrigin.body, detail,
+        census, reviewed })}`);
+    }
+    const formationPrivate = await privateResults(formationOrigin.body.data.id);
+    expect(formationPrivate).toHaveLength(1);
+    expect(formationPrivate[0]).toMatchObject({ alternativeKey: formationAlternative,
+      scopeKey: formationScopeKey });
+    expect(Number(formationPrivate[0].personMinutes)).toBe(3000);
+
+    // The exact M24 estimate population is part of every reviewed job source,
+    // even when a job uses the narrow Part5B owner-reviewed bases. A second
+    // immutable estimate for one opportunity is an ambiguous owning-source
+    // population. The guarded read waits for the genuine estimate writer,
+    // then reports the old origin stale; its exact-key replay cannot revive it
+    // and the failed replay inserts no partial receipt. Canonical estimate
+    // rows are immutable, so recovery honestly requires source reconciliation
+    // outside this forecast authority followed by new job reviews and origin.
+    const estimateWriter = await fixture.ownerPool.connect();
+    const estimateReadCount = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    try {
+      const operationId = uuid(); const graphId = uuid(); const estimateId = uuid();
+      const estimateFingerprint = crypto.createHash('sha256').update(uuid()).digest('hex');
+      await estimateWriter.query('BEGIN');
+      await estimateWriter.query(
+        `INSERT INTO canonical_operations(id,organization_id,graph_id,idempotency_key_hash,
+           payload_fingerprint,state,lease_owner,lease_expires_at,result_status,result_body,completed_at)
+         VALUES($1,$2,$3,$4,$4,'completed',$1,NOW()+INTERVAL '1 hour',200,'{}',NOW())`,
+        [operationId, fixture.org, graphId, estimateFingerprint]);
+      await estimateWriter.query(
+        `INSERT INTO canonical_estimates(id,organization_id,operation_id,graph_id,opportunity_id,
+           calculation_version,normalized_input_fingerprint,business_profile_version,business_profile_hash,
+           currency,customer_price,line_items,calculation_output,snapshot_digest)
+         VALUES($1,$2,$3,$4,$5,'mounted-ambiguous-v1',$6,'org-profile-v1',$6,'USD',100,'[]','{}',$6)`,
+        [estimateId, fixture.org, operationId, graphId, zeroWork.opportunity, estimateFingerprint]);
+      const blockedFormationRead = get(`/origins/${formationOrigin.body.data.id}`).then(value => value);
+      await waitForAdvisoryWaiters(1);
+      await estimateWriter.query('COMMIT');
+      expect((await blockedFormationRead).body.data.state).toBe('constrained_capacity_origin_stale');
+    } catch (error) {
+      await estimateWriter.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally { estimateWriter.release(); }
+    expect((await post('/origins', formationOriginBody, formationOriginKey)).status).toBe(409);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(estimateReadCount);
 
     await p5bReview('method', null, null, methodDefinition, null, 'reject');
     expect((await get(`/origins/${zeroOrigin.body.data.id}`)).body.data.state)

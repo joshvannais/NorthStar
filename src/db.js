@@ -1983,6 +1983,175 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'GRANT EXECUTE ON FUNCTION public.canonical_forecast_demand_ui_prerequisites_v1_read(uuid,uuid,text,uuid) TO %I',
           runtime_role);
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='224_canonical_forecast_workload_capacity_v1.sql') OR
+         pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_origins_v1') IS NOT NULL THEN
+        IF pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_methods_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_crew_events_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_availability_events_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_profile_events_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_role_generations_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_epochs_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_reviews_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_windows_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_origins_v1') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_evaluations_v1') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_access_recheck(uuid,uuid,text,uuid,text,boolean)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_prerequisites(uuid,uuid,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_review_current(uuid,uuid,text,uuid,text,text,uuid,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_backlog_unschedule(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_epoch_capture(uuid,uuid,text,uuid,text,text,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,uuid,text,text,integer,text,bigint,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_window_finalize(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_origin_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_workload_capacity_v1_evaluation_read(uuid,uuid,text,uuid,uuid,uuid)') IS NULL THEN
+          RAISE EXCEPTION 'Required workload-capacity v1 authority is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('canonical_forecast_workload_capacity_crew_events_v1'),
+          ('canonical_forecast_workload_capacity_methods_v1'),
+          ('canonical_forecast_workload_capacity_epochs_v1'),
+          ('canonical_forecast_workload_capacity_reviews_v1'),
+          ('canonical_forecast_workload_capacity_windows_v1'),
+          ('canonical_forecast_workload_capacity_origins_v1'),
+          ('canonical_forecast_workload_capacity_evaluations_v1')) required(table_name)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+            WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.'||required.table_name)
+             AND trigger_value.tgname=required.table_name||'_immutable'
+             AND trigger_value.tgenabled='O' AND trigger_value.tgtype=58
+             AND trigger_value.tgfoid='public.canonical_forecast_workload_capacity_v1_immutable()'::regprocedure
+             AND NOT trigger_value.tgisinternal)) THEN
+          RAISE EXCEPTION 'Required workload-capacity v1 immutability is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+          WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_role_generations_v1')
+           AND trigger_value.tgname='z_m26_p5a_role_generations_immutable'
+           AND trigger_value.tgenabled='O' AND trigger_value.tgtype=58
+           AND trigger_value.tgfoid='public.canonical_forecast_workload_capacity_v1_immutable()'::regprocedure
+           AND NOT trigger_value.tgisinternal) THEN
+          RAISE EXCEPTION 'Required workload-capacity v1 role history immutability is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+          WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_availability_events_v1')
+           AND trigger_value.tgname='z_m26_p5a_availability_events_immutable'
+           AND trigger_value.tgenabled='O' AND trigger_value.tgtype=58
+           AND trigger_value.tgfoid='public.canonical_forecast_workload_capacity_v1_immutable()'::regprocedure
+           AND NOT trigger_value.tgisinternal) THEN
+          RAISE EXCEPTION 'Required workload-capacity v1 availability history immutability is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+          WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.canonical_forecast_workload_capacity_profile_events_v1')
+           AND trigger_value.tgname='z_m26_p5a_profile_events_immutable'
+           AND trigger_value.tgenabled='O' AND trigger_value.tgtype=58
+           AND trigger_value.tgfoid='public.canonical_forecast_workload_capacity_v1_immutable()'::regprocedure
+           AND NOT trigger_value.tgisinternal) THEN
+          RAISE EXCEPTION 'Required workload-capacity v1 profile history immutability is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('organization_memberships','z_m26_p5a_fence_memberships'),
+          ('users','z_m26_p5a_fence_users'),
+          ('workforce_profiles','z_m26_p5a_fence_profiles'),
+          ('workforce_crew_members','z_m26_p5a_fence_crew_members'),
+          ('canonical_work_profile_events','z_m26_p5a_fence_work_profiles'),
+          ('canonical_workforce_availability_authorities','z_m26_p5a_fence_availability_authorities'),
+          ('canonical_workforce_availability_revisions','z_m26_p5a_fence_availability_revisions'),
+          ('canonical_workforce_availability_intervals','z_m26_p5a_fence_availability_intervals'),
+          ('canonical_schedule_assignments','z_m26_p5a_fence_schedule_assignments'),
+          ('canonical_schedule_approvals','z_m26_p5a_fence_schedule_approvals'),
+          ('canonical_schedule_human_approvals','z_m26_p5a_fence_human_approvals'),
+          ('canonical_schedule_assignment_revisions','z_m26_p5a_fence_assignment_revisions'),
+          ('canonical_field_execution_events','z_m26_p5a_fence_execution_events'),
+          ('canonical_completion_records','z_m26_p5a_fence_completions'),
+          ('canonical_labor_intervals','z_m26_p5a_fence_labor_intervals'),
+          ('canonical_labor_events','z_m26_p5a_fence_labor_events'),
+          ('canonical_forecast_schedule_booking_events','z_m26_p5a_fence_booking_events'),
+          ('canonical_forecast_current_backlog_booking_positions','z_m26_p5a_fence_booking_positions'),
+          ('canonical_estimates','z_m26_p5a_fence_estimates'),
+          ('canonical_estimate_decisions','z_m26_p5a_fence_estimate_decisions'),
+          ('canonical_labor_plans','z_m26_p5a_fence_labor_plans'),
+          ('canonical_estimate_revisions','z_m26_p5a_fence_estimate_revisions'),
+          ('canonical_forecast_estimate_source_fences','z_m26_p5a_fence_estimate_source_fences'),
+          ('canonical_forecast_current_backlog_person_plan_reviews','z_m26_p5a_fence_person_plan_reviews')) required(table_name,trigger_name)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+            WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.'||required.table_name)
+             AND trigger_value.tgname=required.trigger_name
+             AND trigger_value.tgenabled='O' AND trigger_value.tgtype=29
+             AND trigger_value.tgfoid='public.canonical_forecast_workload_capacity_v1_source_fence()'::regprocedure
+             AND NOT trigger_value.tgisinternal)) THEN
+          RAISE EXCEPTION 'Required workload-capacity v1 source fence is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('canonical_completion_records','z_m26_p5a_disposable_completion_clock',
+           'public.canonical_forecast_workload_capacity_v1_completion_clock()'),
+          ('canonical_schedule_approvals','z_m26_p5a_disposable_schedule_approval_clock',
+           'public.canonical_forecast_workload_capacity_v1_schedule_clock()'),
+          ('canonical_schedule_human_approvals','z_m26_p5a_disposable_human_approval_clock',
+           'public.canonical_forecast_workload_capacity_v1_schedule_clock()'),
+          ('canonical_schedule_assignment_revisions','z_m26_p5a_disposable_schedule_revision_clock',
+           'public.canonical_forecast_workload_capacity_v1_schedule_revision_clock()'),
+          ('canonical_forecast_current_backlog_person_plan_reviews','z_m26_p5a_disposable_person_plan_clock',
+           'public.canonical_forecast_workload_capacity_v1_person_plan_clock()'))
+          required(table_name,trigger_name,function_signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+            WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.'||required.table_name)
+             AND trigger_value.tgname=required.trigger_name
+             AND trigger_value.tgenabled='O' AND trigger_value.tgtype=7
+             AND trigger_value.tgfoid=pg_catalog.to_regprocedure(required.function_signature)
+             AND NOT trigger_value.tgisinternal)) THEN
+          RAISE EXCEPTION 'Required workload-capacity disposable source clock is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_workload_capacity_v1_prerequisites(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_workload_capacity_v1_review_current(uuid,uuid,text,uuid,text,text,uuid,text)'),
+          ('public.canonical_forecast_workload_capacity_v1_backlog_unschedule(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,text)'),
+          ('public.canonical_forecast_workload_capacity_v1_epoch_capture(uuid,uuid,text,uuid,text,text,text,text)'),
+          ('public.canonical_forecast_workload_capacity_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,uuid,text,text,integer,text,bigint,text,text)'),
+          ('public.canonical_forecast_workload_capacity_v1_window_finalize(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz,text)'),
+          ('public.canonical_forecast_workload_capacity_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text)'),
+          ('public.canonical_forecast_workload_capacity_v1_origin_read(uuid,uuid,text,uuid,uuid)'),
+          ('public.canonical_forecast_workload_capacity_v1_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid)'),
+          ('public.canonical_forecast_workload_capacity_v1_evaluation_read(uuid,uuid,text,uuid,uuid,uuid)'),
+          ('public.canonical_forecast_workload_capacity_v1_clock()'),
+          ('public.canonical_forecast_workload_capacity_v1_test_clock_set(timestamptz)'),
+          ('public.canonical_forecast_workload_capacity_v1_completion_clock()'),
+          ('public.canonical_forecast_workload_capacity_v1_schedule_clock()'),
+          ('public.canonical_forecast_workload_capacity_v1_schedule_revision_clock()'),
+          ('public.canonical_forecast_workload_capacity_v1_person_plan_clock()'),
+          ('public.canonical_forecast_workload_capacity_v1_source_fence()'),
+          ('public.canonical_forecast_workload_capacity_v1_lock_sources(uuid)'),
+          ('public.canonical_forecast_workload_capacity_v1_access(uuid,uuid,text,uuid,text,boolean)'),
+          ('public.canonical_forecast_workload_capacity_v1_access_recheck(uuid,uuid,text,uuid,text,boolean)'),
+          ('public.canonical_forecast_workload_capacity_v1_immutable()'),
+          ('public.canonical_forecast_workload_capacity_v1_labor_evidence(uuid,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_workload_capacity_v1_backlog_evidence(uuid,timestamptz)'),
+          ('public.canonical_forecast_workload_capacity_v1_review_source(uuid,text,text,uuid,text)'),
+          ('public.canonical_forecast_workload_capacity_v1_capacity_calculation(uuid,timestamptz,timestamptz,timestamptz,text)'),
+          ('public.canonical_forecast_workload_capacity_v1_capacity_evidence(uuid,timestamptz,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_workload_capacity_v1_capacity_evidence(uuid,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_workload_capacity_v1_window_evidence(uuid,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_workload_capacity_v1_source_counts(uuid)'),
+          ('public.canonical_forecast_workload_capacity_v1_window_current(uuid,public.canonical_forecast_workload_capacity_windows_v1)'),
+          ('public.canonical_forecast_workload_capacity_v1_origin_input(uuid,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_workload_capacity_v1_origin_current(uuid,public.canonical_forecast_workload_capacity_origins_v1)'),
+          ('public.canonical_forecast_workload_capacity_v1_origin_projection(public.canonical_forecast_workload_capacity_origins_v1,text,boolean)'),
+          ('public.canonical_forecast_workload_capacity_v1_evaluation_projection(public.canonical_forecast_workload_capacity_evaluations_v1,text,boolean)'),
+          ('public.canonical_forecast_workload_capacity_v1_evaluation_current(uuid,public.canonical_forecast_workload_capacity_evaluations_v1)'),
+          ('public.canonical_field_execution_validate_complete()'),
+          ('public.canonical_labor_validate_complete()'),
+          ('public.canonical_completion_validate_complete()')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required workload-capacity v1 entry security is missing';
+        END IF;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_workload_capacity_test_clock_v1,public.canonical_forecast_workload_capacity_crew_events_v1,public.canonical_forecast_workload_capacity_availability_events_v1,public.canonical_forecast_workload_capacity_profile_events_v1,public.canonical_forecast_workload_capacity_role_generations_v1,public.canonical_forecast_workload_capacity_methods_v1,public.canonical_forecast_workload_capacity_epochs_v1,public.canonical_forecast_workload_capacity_reviews_v1,public.canonical_forecast_workload_capacity_windows_v1,public.canonical_forecast_workload_capacity_origins_v1,public.canonical_forecast_workload_capacity_evaluations_v1 FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_workload_capacity_source_order_v1 FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_workload_capacity_v1_clock(),public.canonical_forecast_workload_capacity_v1_test_clock_set(timestamptz),public.canonical_forecast_workload_capacity_v1_completion_clock(),public.canonical_forecast_workload_capacity_v1_schedule_clock(),public.canonical_forecast_workload_capacity_v1_schedule_revision_clock(),public.canonical_forecast_workload_capacity_v1_person_plan_clock(),public.canonical_forecast_workload_capacity_v1_source_fence(),public.canonical_forecast_workload_capacity_v1_lock_sources(uuid),public.canonical_forecast_workload_capacity_v1_access(uuid,uuid,text,uuid,text,boolean),public.canonical_forecast_workload_capacity_v1_access_recheck(uuid,uuid,text,uuid,text,boolean),public.canonical_forecast_workload_capacity_v1_immutable(),public.canonical_forecast_workload_capacity_v1_labor_evidence(uuid,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_backlog_evidence(uuid,timestamptz),public.canonical_forecast_workload_capacity_v1_capacity_calculation(uuid,timestamptz,timestamptz,timestamptz,text),public.canonical_forecast_workload_capacity_v1_capacity_evidence(uuid,timestamptz,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_capacity_evidence(uuid,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_window_evidence(uuid,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_source_counts(uuid),public.canonical_forecast_workload_capacity_v1_review_source(uuid,text,text,uuid,text),public.canonical_forecast_workload_capacity_v1_window_current(uuid,public.canonical_forecast_workload_capacity_windows_v1),public.canonical_forecast_workload_capacity_v1_origin_input(uuid,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_origin_current(uuid,public.canonical_forecast_workload_capacity_origins_v1),public.canonical_forecast_workload_capacity_v1_origin_projection(public.canonical_forecast_workload_capacity_origins_v1,text,boolean),public.canonical_forecast_workload_capacity_v1_evaluation_projection(public.canonical_forecast_workload_capacity_evaluations_v1,text,boolean),public.canonical_forecast_workload_capacity_v1_evaluation_current(uuid,public.canonical_forecast_workload_capacity_evaluations_v1) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_workload_capacity_v1_prerequisites(uuid,uuid,text,uuid),public.canonical_forecast_workload_capacity_v1_review_current(uuid,uuid,text,uuid,text,text,uuid,text),public.canonical_forecast_workload_capacity_v1_backlog_unschedule(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,text),public.canonical_forecast_workload_capacity_v1_epoch_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_workload_capacity_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,uuid,text,text,integer,text,bigint,text,text),public.canonical_forecast_workload_capacity_v1_window_finalize(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz,text),public.canonical_forecast_workload_capacity_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_workload_capacity_v1_origin_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_workload_capacity_v1_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_workload_capacity_v1_evaluation_read(uuid,uuid,text,uuid,uuid,uuid) TO %I',runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -4714,6 +4883,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('220_canonical_forecast_retell_future_origi
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('221_canonical_forecast_transition_future_origins_v2.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('222_canonical_forecast_demand_to_schedule_v1.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('223_canonical_forecast_demand_ui_prerequisites_v1.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('224_canonical_forecast_workload_capacity_v1.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

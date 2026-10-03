@@ -29,6 +29,8 @@ const { createForecastCurrentBacklogRouter } =
   require('./routes/forecastCurrentBacklog');
 const { createForecastDemandToScheduleRouter } =
   require('./routes/forecastDemandToSchedule');
+const { createForecastWorkloadCapacityRouter } =
+  require('./routes/forecastWorkloadCapacity');
 const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
 const { createProviderUsageLedger } = require('./polaris/providerLedger');
 const { recommendationBodyBoundary } = require('./scheduling/recommendationHttpBoundary');
@@ -302,6 +304,7 @@ app.use('/api/v1/forecast/demand-sources', createForecastDemandSourcesRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());
 app.use('/api/v1/forecast/current-backlog', createForecastCurrentBacklogRouter());
 app.use('/api/v1/forecast/demand-to-schedule', createForecastDemandToScheduleRouter());
+app.use('/api/v1/forecast/workload-capacity', createForecastWorkloadCapacityRouter());
 app.use('/api/v1/forecast/reporting-windows',
   require('./routes/forecastReportingWindows').createForecastReportingWindowsRouter());
 app.use('/api/v1', simulationsRoutes);

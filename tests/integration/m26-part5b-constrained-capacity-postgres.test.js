@@ -3359,6 +3359,100 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
         [fixture.org, preBoundaryContinuation.body.data.id])).rows[0]).toEqual(preBoundaryCounts);
     };
 
+    const sourceFence = (await fixture.ownerPool.query(
+      `SELECT generation,updated_at FROM canonical_forecast_constrained_capacity_source_fences_v1
+        WHERE organization_id=$1`, [fixture.org])).rows[0];
+    expect(sourceFence).toBeTruthy();
+
+    // Source-integrity failures happen before the completed authority fence and
+    // must escape as 22023. The private pending projection is never a recovery
+    // value for a missing, disabled, or misdirected owning source fence.
+    await fixture.ownerPool.query(
+      'DELETE FROM canonical_forecast_constrained_capacity_source_fences_v1 WHERE organization_id=$1',
+      [fixture.org]);
+    try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
+      await fixture.ownerPool.query(
+        `INSERT INTO canonical_forecast_constrained_capacity_source_fences_v1(
+          organization_id,generation,updated_at) VALUES($1,$2,$3)`,
+        [fixture.org, sourceFence.generation, sourceFence.updated_at]);
+    }
+
+    await fixture.ownerPool.query(
+      'ALTER TABLE workforce_crews DISABLE TRIGGER z_m26_p5b_source_crews');
+    try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
+      await fixture.ownerPool.query(
+        'ALTER TABLE workforce_crews ENABLE TRIGGER z_m26_p5b_source_crews');
+    }
+
+    await fixture.ownerPool.query('DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews');
+    await fixture.ownerPool.query(
+      `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
+        FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_immutable()`);
+    try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
+      await fixture.ownerPool.query('DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews');
+      await fixture.ownerPool.query(
+        `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
+          FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`);
+    }
+
+    // Exact wait ordering: activation passes initial access and waits on the
+    // owning source advisory lock while the exact capture trigger is disabled.
+    // Session revocation is serialized behind that retained access lock.
+    // Releasing the source blocker makes the same request rethrow 22023; only
+    // after its rollback can revocation commit, and a later retry then fails
+    // 42501. Neither request can return private receipt metadata.
+    const fenceBlocker = await fixture.ownerPool.connect();
+    const blockedActivation = await fixture.runtimePool.connect();
+    const sessionWriter = await fixture.ownerPool.connect();
+    try {
+      await fixture.ownerPool.query(
+        'ALTER TABLE workforce_crews DISABLE TRIGGER z_m26_p5b_source_crews');
+      await fenceBlocker.query('BEGIN');
+      await fenceBlocker.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended(
+          'm26:constrained-capacity-source:'||$1::uuid,0))`,
+        [fixture.org]);
+      await blockedActivation.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      const activationPid = Number((await blockedActivation.query('SELECT pg_backend_pid() pid')).rows[0].pid);
+      const activation = blockedActivation.query(
+        'SELECT canonical_forecast_capacity_advisory_v1_continuation_activate($1,$2)',
+        [fixture.org, preBoundaryContinuation.body.data.id]);
+      await waitForBackendLock(activationPid);
+      await sessionWriter.query('BEGIN');
+      let sessionRevoked = false;
+      const revoke = sessionWriter.query(
+        "UPDATE auth_sessions SET status='revoked',revoked_at=clock_timestamp(),revoke_reason='m26_p5c_fence_wait' WHERE id=$1",
+        [actor('owner').authSessionId]).then(() => { sessionRevoked = true; });
+      await new Promise(resolve => setTimeout(resolve, 80));
+      expect(sessionRevoked).toBe(false);
+      await fenceBlocker.query('COMMIT');
+      await expect(activation).rejects.toMatchObject({ code: '22023' });
+      await blockedActivation.query('ROLLBACK');
+      await revoke; await sessionWriter.query('COMMIT');
+      await expectPrivatePreBoundaryRefusal('42501');
+    } catch (error) {
+      await fenceBlocker.query('ROLLBACK').catch(() => {});
+      await blockedActivation.query('ROLLBACK').catch(() => {});
+      await sessionWriter.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      fenceBlocker.release(); blockedActivation.release(); sessionWriter.release();
+      await fixture.ownerPool.query(
+        'ALTER TABLE workforce_crews ENABLE TRIGGER z_m26_p5b_source_crews');
+      await fixture.ownerPool.query(
+        "UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+        [actor('owner').authSessionId]);
+    }
+    await expect((await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1) workload,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1) advice,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1
+          WHERE organization_id=$1 AND continuation_id=$2) events,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_attempts_v1
+          WHERE organization_id=$1 AND continuation_id=$2) attempts`,
+      [fixture.org, preBoundaryContinuation.body.data.id])).rows[0]).toEqual(preBoundaryCounts);
+
     // The private runtime entry is an independently granted authority surface.
     // Even before the period boundary it cannot return tenant-private pending
     // metadata until paid session and subscription authority have passed.

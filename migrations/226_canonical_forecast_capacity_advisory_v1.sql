@@ -2613,6 +2613,7 @@ DECLARE value public.canonical_forecast_capacity_advisory_continuations_v1%ROWTY
  inserted public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;
  authority JSONB;constraint_input JSONB;policy_manifest JSONB;demand_manifest JSONB;results_value JSONB;input_value JSONB;
  provisional_input JSONB;now_value TIMESTAMPTZ;generation_value BIGINT;previous_value UUID;
+ authority_fenced BOOLEAN:=FALSE;
  request_hash TEXT;key_hash TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' THEN
@@ -2631,6 +2632,7 @@ BEGIN
  now_value:=public.canonical_forecast_workload_capacity_v1_clock();
 	 IF public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(org,value) IS NOT TRUE THEN
   RAISE EXCEPTION 'Capacity advisory continuation authority stale' USING ERRCODE='40001';END IF;
+ authority_fenced:=TRUE;
  IF event_value.id IS NOT NULL THEN
   RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,TRUE);END IF;
  IF now_value<value.period_start THEN
@@ -2708,6 +2710,7 @@ BEGIN
   org,value.actor_id,value.actor_role,value.session_id,NULL,FALSE);
  RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);
 EXCEPTION WHEN SQLSTATE '22023' THEN
+ IF authority_fenced IS NOT TRUE THEN RAISE;END IF;
  RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);
 END $$;
 
@@ -2716,6 +2719,37 @@ RETURNS VOID LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catal
 BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended('m26:capacity-advisory-source:'||org,0));
  PERFORM public.canonical_forecast_constrained_capacity_v1_lock_sources(org);
+ IF EXISTS(
+  SELECT 1 FROM (VALUES
+   ('workforce_crews','z_m26_p5b_source_crews'),
+   ('workforce_crew_members','z_m26_p5b_source_crew_members'),
+   ('workforce_skills','z_m26_p5b_source_skills'),
+   ('workforce_profile_skills','z_m26_p5b_source_profile_skills'),
+   ('canonical_business_profiles','z_m26_p5b_source_business_profiles'),
+   ('tenant_assets','z_m26_p5b_source_assets'),
+   ('tenant_asset_service_capabilities','z_m26_p5b_source_asset_capabilities'),
+   ('canonical_equipment_events','z_m26_p5b_source_equipment_events'),
+   ('canonical_equipment_plans','z_m26_p5b_source_equipment_plans'),
+   ('canonical_equipment_readiness_plans','z_m26_p5b_source_equipment_readiness'),
+   ('canonical_travel_plans','z_m26_p5b_source_travel_plans'),
+   ('canonical_schedule_assignments','z_m26_p5b_source_schedule_assignments'),
+   ('canonical_schedule_assignment_revisions','z_m26_p5b_source_schedule_revisions'),
+   ('canonical_schedule_approvals','z_m26_p5b_source_schedule_approvals'),
+   ('canonical_schedule_human_approvals','z_m26_p5b_source_human_approvals'),
+   ('canonical_workforce_availability_revisions','z_m26_p5b_source_availability_revisions'),
+   ('canonical_estimates','z_m26_p5b_source_estimates'),
+   ('canonical_completion_records','z_m26_p5b_source_completion_records'),
+   ('canonical_opportunities','z_m26_p5b_source_opportunities')
+  ) expected(table_name,trigger_name)
+  WHERE NOT EXISTS(
+   SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+   JOIN pg_catalog.pg_class table_value ON table_value.oid=trigger_value.tgrelid
+   JOIN pg_catalog.pg_namespace namespace_value ON namespace_value.oid=table_value.relnamespace
+   WHERE namespace_value.nspname='public' AND table_value.relname=expected.table_name
+    AND trigger_value.tgname=expected.trigger_name AND trigger_value.tgenabled='O'
+    AND trigger_value.tgfoid='public.canonical_forecast_constrained_capacity_v1_source_capture()'::regprocedure
+    AND trigger_value.tgisinternal IS FALSE)) THEN
+  RAISE EXCEPTION 'Capacity advisory source-fence authority unavailable' USING ERRCODE='22023';END IF;
  PERFORM 1 FROM public.canonical_forecast_capacity_advisory_reviews_v1 WHERE organization_id=org FOR SHARE;
  PERFORM 1 FROM public.canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=org FOR SHARE;
  PERFORM 1 FROM public.canonical_forecast_capacity_advisory_continuations_v1 WHERE organization_id=org FOR SHARE;

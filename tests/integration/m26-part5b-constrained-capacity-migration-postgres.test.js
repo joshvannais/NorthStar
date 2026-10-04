@@ -123,6 +123,49 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
       'Required constrained-capacity v1 source capture is missing');
     await fail(`ALTER TABLE canonical_completion_records DISABLE TRIGGER z_m26_p5b_source_completion_records`,
       'Required constrained-capacity v1 source capture is missing');
+    await fail(`DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews;
+      CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
+        FOR EACH ROW WHEN (false) EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`,
+    'Required constrained-capacity v1 source capture is missing');
+    await fail(`DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews;
+      CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OF name OR DELETE ON workforce_crews
+        FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`,
+    'Required constrained-capacity v1 source capture is missing');
+    await fail(`CREATE TABLE m26_p5c_v10_inherited_crews () INHERITS (workforce_crews)`,
+      'Required constrained-capacity v1 source capture is missing');
+    expect((await pool.query(`SELECT count(*)::integer count FROM (VALUES
+      ('workforce_crews','z_m26_p5b_source_crews'),
+      ('workforce_crew_members','z_m26_p5b_source_crew_members'),
+      ('workforce_skills','z_m26_p5b_source_skills'),
+      ('workforce_profile_skills','z_m26_p5b_source_profile_skills'),
+      ('canonical_business_profiles','z_m26_p5b_source_business_profiles'),
+      ('tenant_assets','z_m26_p5b_source_assets'),
+      ('tenant_asset_service_capabilities','z_m26_p5b_source_asset_capabilities'),
+      ('canonical_equipment_events','z_m26_p5b_source_equipment_events'),
+      ('canonical_equipment_plans','z_m26_p5b_source_equipment_plans'),
+      ('canonical_equipment_readiness_plans','z_m26_p5b_source_equipment_readiness'),
+      ('canonical_travel_plans','z_m26_p5b_source_travel_plans'),
+      ('canonical_schedule_assignments','z_m26_p5b_source_schedule_assignments'),
+      ('canonical_schedule_assignment_revisions','z_m26_p5b_source_schedule_revisions'),
+      ('canonical_schedule_approvals','z_m26_p5b_source_schedule_approvals'),
+      ('canonical_schedule_human_approvals','z_m26_p5b_source_human_approvals'),
+      ('canonical_workforce_availability_revisions','z_m26_p5b_source_availability_revisions'),
+      ('canonical_estimates','z_m26_p5b_source_estimates'),
+      ('canonical_completion_records','z_m26_p5b_source_completion_records'),
+      ('canonical_opportunities','z_m26_p5b_source_opportunities')) required(table_name,trigger_name)
+      JOIN pg_class table_value ON table_value.oid=to_regclass('public.'||required.table_name)
+       AND table_value.relkind='r' AND NOT table_value.relispartition
+       AND NOT EXISTS(SELECT 1 FROM pg_inherits inheritance_value
+         WHERE inheritance_value.inhrelid=table_value.oid OR inheritance_value.inhparent=table_value.oid)
+      JOIN pg_trigger trigger_value ON trigger_value.tgrelid=table_value.oid
+       AND trigger_value.tgname=required.trigger_name AND trigger_value.tgenabled='O'
+       AND trigger_value.tgtype=31 AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
+       AND trigger_value.tgattr=''::pg_catalog.int2vector
+       AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0 AND trigger_value.tgconstrindid=0
+       AND NOT trigger_value.tgdeferrable AND NOT trigger_value.tginitdeferred
+       AND trigger_value.tgparentid=0 AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
+       AND trigger_value.tgfoid='canonical_forecast_constrained_capacity_v1_source_capture()'::regprocedure
+       AND NOT trigger_value.tgisinternal`)).rows[0].count).toBe(19);
   }, 120000);
 
   test('keeps the half-open future horizon at exactly 2,592,000 elapsed seconds through DST', async () => {

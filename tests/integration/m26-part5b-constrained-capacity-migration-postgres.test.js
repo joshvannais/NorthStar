@@ -127,6 +127,10 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
       CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
         FOR EACH ROW WHEN (false) EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`,
     'Required constrained-capacity v1 source capture is missing');
+    await fail(`DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews;
+      CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OF name OR DELETE ON workforce_crews
+        FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`,
+    'Required constrained-capacity v1 source capture is missing');
     expect((await pool.query(`SELECT count(*)::integer count FROM (VALUES
       ('workforce_crews','z_m26_p5b_source_crews'),
       ('workforce_crew_members','z_m26_p5b_source_crew_members'),
@@ -150,6 +154,10 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
       JOIN pg_trigger trigger_value ON trigger_value.tgrelid=to_regclass('public.'||required.table_name)
        AND trigger_value.tgname=required.trigger_name AND trigger_value.tgenabled='O'
        AND trigger_value.tgtype=31 AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
+       AND trigger_value.tgattr=''::pg_catalog.int2vector
+       AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0 AND trigger_value.tgconstrindid=0
+       AND NOT trigger_value.tgdeferrable AND NOT trigger_value.tginitdeferred
+       AND trigger_value.tgparentid=0 AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
        AND trigger_value.tgfoid='canonical_forecast_constrained_capacity_v1_source_capture()'::regprocedure
        AND NOT trigger_value.tgisinternal`)).rows[0].count).toBe(19);
   }, 120000);

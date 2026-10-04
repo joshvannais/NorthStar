@@ -2748,6 +2748,10 @@ BEGIN
    WHERE namespace_value.nspname='public' AND table_value.relname=expected.table_name
     AND trigger_value.tgname=expected.trigger_name AND trigger_value.tgenabled='O'
     AND trigger_value.tgtype=31 AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
+    AND trigger_value.tgattr=''::pg_catalog.int2vector
+    AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0 AND trigger_value.tgconstrindid=0
+    AND trigger_value.tgdeferrable IS FALSE AND trigger_value.tginitdeferred IS FALSE
+    AND trigger_value.tgparentid=0 AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
     AND trigger_value.tgfoid='public.canonical_forecast_constrained_capacity_v1_source_capture()'::regprocedure
     AND trigger_value.tgisinternal IS FALSE)) THEN
   RAISE EXCEPTION 'Capacity advisory source-fence authority unavailable' USING ERRCODE='22023';END IF;

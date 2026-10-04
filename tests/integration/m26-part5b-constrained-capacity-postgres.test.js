@@ -3334,7 +3334,9 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1
           WHERE organization_id=$1 AND continuation_id=$2) events,
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_attempts_v1
-          WHERE organization_id=$1 AND continuation_id=$2) attempts`,
+          WHERE organization_id=$1 AND continuation_id=$2) attempts,
+        (SELECT count(*)::integer FROM canonical_forecast_constrained_capacity_source_events_v1
+          WHERE organization_id=$1) source_events`,
       [fixture.org, preBoundaryContinuation.body.data.id])).rows[0];
     const expectPrivatePreBoundaryRefusal = async code => {
       const client = await fixture.runtimePool.connect();
@@ -3355,7 +3357,9 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
           (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1
             WHERE organization_id=$1 AND continuation_id=$2) events,
           (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_attempts_v1
-            WHERE organization_id=$1 AND continuation_id=$2) attempts`,
+            WHERE organization_id=$1 AND continuation_id=$2) attempts,
+          (SELECT count(*)::integer FROM canonical_forecast_constrained_capacity_source_events_v1
+            WHERE organization_id=$1) source_events`,
         [fixture.org, preBoundaryContinuation.body.data.id])).rows[0]).toEqual(preBoundaryCounts);
     };
 
@@ -3418,6 +3422,44 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     await fixture.ownerPool.query(
       `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
         FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture('unexpected')`);
+    try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
+      await restoreCrewCapture();
+    }
+
+    await fixture.ownerPool.query('DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews');
+    await fixture.ownerPool.query(
+      `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OF name OR DELETE ON workforce_crews
+        FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`);
+    const partialClient = await fixture.ownerPool.connect();
+    try {
+      const partialCrew = uuid();
+      await partialClient.query('BEGIN');
+      await partialClient.query(
+        `INSERT INTO workforce_crews(id,organization_id,crew_key,name,home_location_id,created_by_user_id,updated_by_user_id)
+          VALUES($1,$2,$3,$4,'north',$5,$5)`,
+        [partialCrew, fixture.org, `v9-${partialCrew}`, 'V9 update-column proof', actor('owner').actorUserId]);
+      const generationBeforeSkippedUpdate = Number((await partialClient.query(
+        `SELECT generation FROM canonical_forecast_constrained_capacity_source_fences_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].generation);
+      const eventsBeforeSkippedUpdate = Number((await partialClient.query(
+        `SELECT count(*) count FROM canonical_forecast_constrained_capacity_source_events_v1
+          WHERE organization_id=$1 AND source_kind='workforce_crews' AND subject_key=$2`,
+        [fixture.org, partialCrew])).rows[0].count);
+      await partialClient.query(
+        `UPDATE workforce_crews SET home_location_id='south',updated_at=clock_timestamp()
+          WHERE organization_id=$1 AND id=$2`, [fixture.org, partialCrew]);
+      expect(Number((await partialClient.query(
+        `SELECT generation FROM canonical_forecast_constrained_capacity_source_fences_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].generation)).toBe(generationBeforeSkippedUpdate);
+      expect(Number((await partialClient.query(
+        `SELECT count(*) count FROM canonical_forecast_constrained_capacity_source_events_v1
+          WHERE organization_id=$1 AND source_kind='workforce_crews' AND subject_key=$2`,
+        [fixture.org, partialCrew])).rows[0].count)).toBe(eventsBeforeSkippedUpdate);
+      await partialClient.query('ROLLBACK');
+    } finally {
+      await partialClient.query('ROLLBACK').catch(() => {});
+      partialClient.release();
+    }
     try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
       await restoreCrewCapture();
     }
@@ -3518,7 +3560,9 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1
           WHERE organization_id=$1 AND continuation_id=$2) events,
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_attempts_v1
-          WHERE organization_id=$1 AND continuation_id=$2) attempts`,
+          WHERE organization_id=$1 AND continuation_id=$2) attempts,
+        (SELECT count(*)::integer FROM canonical_forecast_constrained_capacity_source_events_v1
+          WHERE organization_id=$1) source_events`,
       [fixture.org, preBoundaryContinuation.body.data.id])).rows[0]).toEqual(preBoundaryCounts);
 
     // The private runtime entry is an independently granted authority surface.
@@ -3553,7 +3597,9 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1
           WHERE organization_id=$1 AND continuation_id=$2) events,
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_attempts_v1
-          WHERE organization_id=$1 AND continuation_id=$2) attempts`,
+          WHERE organization_id=$1 AND continuation_id=$2) attempts,
+        (SELECT count(*)::integer FROM canonical_forecast_constrained_capacity_source_events_v1
+          WHERE organization_id=$1) source_events`,
       [fixture.org, preBoundaryContinuation.body.data.id])).rows[0]).toEqual(preBoundaryCounts);
     await p5cReview('demand', { alternativeKey: advisoryAlternative,
       definition: await p5cDefinition(advisoryAlternative) });

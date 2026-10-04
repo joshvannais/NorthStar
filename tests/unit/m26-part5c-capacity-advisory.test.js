@@ -203,6 +203,11 @@ describe('Mission 26 Part 5C qualitative capacity-advisory boundary', () => {
     const response = await request(application({ databaseError: { code: 'XX000', detail: 'private 6000' } }).app)
       .get(`/api/v1/forecast/capacity-advice/origins/${ID}`);
     expect(response.status).toBe(503); expect(JSON.stringify(response.body)).not.toContain('6000');
+    const invalidUuidResponse = await request(application({
+      databaseError: { code: '22P02', detail: 'invalid uuid detail' },
+    }).app).get(`/api/v1/forecast/capacity-advice/origins/${ID}`);
+    expect(invalidUuidResponse.status).toBe(400);
+    expect(JSON.stringify(invalidUuidResponse.body)).not.toContain('invalid uuid detail');
   });
 
   test('migration fixes five qualitative categories, exact upstream composition and no action authority', () => {

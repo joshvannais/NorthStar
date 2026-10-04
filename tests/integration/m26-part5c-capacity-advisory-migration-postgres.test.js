@@ -58,6 +58,9 @@ realPostgres('Mission 26 Part 5C migration225 to capacity-advisory v1', () => {
       .rows.map(row => row.filename)).toEqual([
       '225_canonical_forecast_constrained_capacity_v1.sql', filename,
     ]);
+    expect((await pool.query(`SELECT pg_get_indexdef(indexrelid) definition
+      FROM pg_index WHERE indexrelid='canonical_forecast_capacity_advisory_origin_generation_v1'::regclass`))
+      .rows[0].definition).toContain('generation');
   }, 120000);
 
   test('grants only guarded entries and keeps tables and helpers private', async () => {

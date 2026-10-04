@@ -793,7 +793,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
 
     const horizonEnd = new Date(start.getTime() + 30 * 86400000);
     const firstAvailabilityDay = new Date(start); firstAvailabilityDay.setUTCHours(0, 0, 0, 0);
-    const intervals = Array.from({ length: 10 }, (_, index) => ({ kind: 'available',
+    let intervals = Array.from({ length: 10 }, (_, index) => ({ kind: 'available',
       start: new Date(firstAvailabilityDay.getTime() + index * 86400000 + 12 * 3600000).toISOString(),
       end: new Date(firstAvailabilityDay.getTime() + index * 86400000 + 22 * 3600000).toISOString() }));
     await declareAvailability(actor('member').actorUserId, start,
@@ -949,7 +949,26 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     expect(productionCutoff.getTime()).toBeLessThanOrEqual(productionClockAfter.getTime());
     expect(Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_workload_capacity_test_clock_v1')).rows[0].count)).toBe(0);
-    await setClock(productionCutoff);
+    // Keep the remaining mounted chronology independent of the wall-clock
+    // hour at which Jest happens to run. The genuine no-clock-row origin above
+    // remains bounded by production time; subsequent owner-only disposable
+    // evidence advances to the next 05:00 UTC so every +10-hour commitment and
+    // return leg falls inside the already-declared 12:00-22:00 UTC intervals.
+    const stableScenarioStart = new Date(productionCutoff);
+    stableScenarioStart.setUTCDate(stableScenarioStart.getUTCDate() + 1);
+    stableScenarioStart.setUTCHours(5, 0, 0, 0);
+    await setClock(stableScenarioStart);
+    const stableAvailabilityDay = new Date(stableScenarioStart);
+    stableAvailabilityDay.setUTCHours(0, 0, 0, 0);
+    intervals = Array.from({ length: 10 }, (_, index) => ({ kind: 'available',
+      start: new Date(stableAvailabilityDay.getTime() + index * 86400000 + 12 * 3600000).toISOString(),
+      end: new Date(stableAvailabilityDay.getTime() + index * 86400000 + 22 * 3600000).toISOString() }));
+    await replaceAvailability(actor('member').actorUserId, start,
+      new Date(horizonEnd.getTime() + 86400000), intervals);
+    await replaceAvailability(actor('dispatcher').actorUserId, start,
+      new Date(horizonEnd.getTime() + 86400000), intervals);
+    await refreshP5aReview('availability_basis', actor('member').actorUserId);
+    await refreshP5aReview('availability_basis', actor('dispatcher').actorUserId);
     await advance(1); await p5bEpoch();
     expect((await get(`/origins/${firstOrigin.body.data.id}`)).body.data.state)
       .toBe('constrained_capacity_origin_stale');
@@ -2331,9 +2350,11 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       definition: policyDefinition });
     const demandDefinition = await p5cDefinition(advisoryAlternative);
     await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: demandDefinition });
-    const advisoryEpoch = await p5cPost('/epochs', {
+    const advisoryEpochBody = {
       reason: 'Begin exact prospective five-category capacity advice under current human reviews.',
-      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' });
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' };
+    const advisoryEpochKey = `m26-p5c-epoch-${uuid()}`;
+    const advisoryEpoch = await p5cPost('/epochs', advisoryEpochBody, advisoryEpochKey);
     expect(advisoryEpoch.status).toBe(201);
     const advisoryOriginKey = `m26-p5c-origin-${uuid()}`;
     const advisoryOriginBody = { reason: 'Save the exact private five-category advice research origin.',
@@ -2361,6 +2382,20 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       automaticActionTaken: false, replayed: false });
     expect(JSON.stringify(advisoryOrigin.body)).not.toMatch(
       /"(?:personMinutes|demandMinutes|constrainedMinutes|gapMinutes|outputDigest)"\s*:/i);
+    // One current canonical generation owns an exact epoch/cutoff/horizon.
+    // A different key cannot create an unapproved sibling that would make
+    // consecutive hiring history depend on an arbitrary PostgreSQL row.
+    const samePeriodCounts = (await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1) advisory,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1) workload`,
+      [fixture.org])).rows[0];
+    expect((await p5cPost('/origins', advisoryOriginBody, `m26-p5c-same-period-${uuid()}`)).status).toBe(409);
+    expect((await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1) advisory,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1) workload`,
+      [fixture.org])).rows[0]).toEqual(samePeriodCounts);
     const decision = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/decisions`, {
       action: 'approve', expectedRevision: 0, expectedDigest: 'none',
       reason: 'Approve this exact private research receipt for later non-action evaluation.',
@@ -2515,16 +2550,34 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const retiredOriginCount = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count);
-    const replacementEpoch = await p5cPost('/epochs', {
+    const replacementEpochBody = {
       reason: 'Explicitly begin a new advice coverage epoch without inheriting prior hiring history.',
-      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' });
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' };
+    const replacementEpochKey = `m26-p5c-replacement-epoch-${uuid()}`;
+    const replacementEpoch = await p5cPost('/epochs', replacementEpochBody, replacementEpochKey);
     expect(replacementEpoch.status).toBe(201);
+    expect((await p5cPost('/epochs', replacementEpochBody, replacementEpochKey)).status).toBe(200);
     expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}`)).body.data.state)
       .toBe('capacity_advisory_origin_stale');
     expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/outcomes/${correctedOutcome.body.data.id}`))
       .body.data.state).toBe('capacity_advisory_outcome_stale');
     expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${correctedEvaluation.body.data.id}`))
       .body.data.state).toBe('capacity_advisory_evaluation_stale');
+    const retiredPreparationCounts = (await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_windows_v1 WHERE organization_id=$1) windows,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_evaluations_v1 WHERE organization_id=$1) evaluations`,
+      [fixture.org])).rows[0];
+    const retiredPreparationKey = `m26-p5c-retired-preparation-${uuid()}`;
+    expect((await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcome-preparations`, {},
+      retiredPreparationKey)).status).toBe(409);
+    expect((await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcome-preparations`, {},
+      retiredPreparationKey)).status).toBe(409);
+    expect((await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_windows_v1 WHERE organization_id=$1) windows,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_evaluations_v1 WHERE organization_id=$1) evaluations`,
+      [fixture.org])).rows[0]).toEqual(retiredPreparationCounts);
     expect((await p5cPost('/origins', advisoryOriginBody, advisoryOriginKey)).status).toBe(409);
     expect(Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
@@ -2546,11 +2599,40 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: correctedDemand });
     expect((await p5cGet(`/origins/${recoveredOrigin.body.data.id}`)).body.data.state)
       .toBe('capacity_advisory_origin_stale');
+    const correctedDemandChildCounts = (await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_windows_v1 WHERE organization_id=$1) windows,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_evaluations_v1 WHERE organization_id=$1) evaluations`,
+      [fixture.org])).rows[0];
+    const correctedDemandPreparationKey = `m26-p5c-corrected-demand-preparation-${uuid()}`;
+    expect((await p5cPost(`/origins/${recoveredOrigin.body.data.id}/outcome-preparations`, {},
+      correctedDemandPreparationKey)).status).toBe(409);
+    expect((await p5cPost(`/origins/${recoveredOrigin.body.data.id}/outcome-preparations`, {},
+      correctedDemandPreparationKey)).status).toBe(409);
+    expect((await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_windows_v1 WHERE organization_id=$1) windows,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_evaluations_v1 WHERE organization_id=$1) evaluations`,
+      [fixture.org])).rows[0]).toEqual(correctedDemandChildCounts);
     const demandRetiredCount = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count);
     const demandRecoveredOrigin = await p5cPost('/origins', advisoryOriginBody);
     expect(demandRecoveredOrigin.status).toBe(201);
+    const demandGenerations = (await fixture.ownerPool.query(
+      `SELECT id,generation,previous_id FROM canonical_forecast_capacity_advisory_origins_v1
+        WHERE organization_id=$1 AND epoch_id=(SELECT epoch_id FROM canonical_forecast_capacity_advisory_origins_v1
+          WHERE organization_id=$1 AND id=$2)
+         AND prediction_cutoff_at=(SELECT prediction_cutoff_at FROM canonical_forecast_capacity_advisory_origins_v1
+          WHERE organization_id=$1 AND id=$2)
+         AND horizon_ends_at=(SELECT horizon_ends_at FROM canonical_forecast_capacity_advisory_origins_v1
+          WHERE organization_id=$1 AND id=$2)
+        ORDER BY generation`, [fixture.org, recoveredOrigin.body.data.id])).rows;
+    expect(demandGenerations.slice(-2)).toEqual([
+      expect.objectContaining({ id: recoveredOrigin.body.data.id, generation: '1', previous_id: null }),
+      expect.objectContaining({ id: demandRecoveredOrigin.body.data.id, generation: '2',
+        previous_id: recoveredOrigin.body.data.id }),
+    ]);
     expect(Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count)).toBe(demandRetiredCount + 1);
@@ -2561,15 +2643,103 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       definition: policyDefinition });
     expect((await p5cGet(`/origins/${demandRecoveredOrigin.body.data.id}`)).body.data.state)
       .toBe('capacity_advisory_origin_stale');
+    const stalePolicyEpochCount = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    expect((await p5cPost('/epochs', replacementEpochBody, replacementEpochKey)).status).toBe(409);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(stalePolicyEpochCount);
     expect((await p5cPost('/origins', advisoryOriginBody)).status).toBe(400);
-    const policyEpoch = await p5cPost('/epochs', {
+    const policyEpochBody = {
       reason: 'Explicitly bind a new advice epoch to the current restored policy generation.',
-      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' });
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' };
+    const policyEpochKey = `m26-p5c-policy-epoch-${uuid()}`;
+    const policyEpoch = await p5cPost('/epochs', policyEpochBody, policyEpochKey);
     expect(policyEpoch.status).toBe(201);
     const policyRecoveredOrigin = await p5cPost('/origins', advisoryOriginBody);
     expect(policyRecoveredOrigin.status).toBe(201);
     expect((await p5cGet(`/origins/${demandRecoveredOrigin.body.data.id}`)).body.data.state)
       .toBe('capacity_advisory_origin_stale');
+
+    // A newer accepted Part 5B epoch retires the still-latest Part 5C epoch.
+    // Exact epoch replay and both fresh/exact-key outcome preparation refuse
+    // before either accepted Part 5A child receipt can persist.
+    const stalePreparationCounts = (await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_windows_v1 WHERE organization_id=$1) windows,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_evaluations_v1 WHERE organization_id=$1) evaluations`,
+      [fixture.org])).rows[0];
+    const upstreamStaleEpochCount = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    await advance(1); await p5bEpoch();
+    // The new upstream epoch first makes the policy/source prerequisites
+    // unavailable, so the exact old key refuses as an invalid stale request
+    // before replay lookup. Policy-only staleness above reaches the explicit
+    // epoch-current replay conflict. Neither path may return the old success.
+    expect((await p5cPost('/epochs', policyEpochBody, policyEpochKey)).status).toBe(400);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(upstreamStaleEpochCount);
+    const stalePreparationKey = `m26-p5c-stale-preparation-${uuid()}`;
+    expect((await p5cPost(`/origins/${policyRecoveredOrigin.body.data.id}/outcome-preparations`, {},
+      stalePreparationKey)).status).toBe(409);
+    expect((await p5cPost(`/origins/${policyRecoveredOrigin.body.data.id}/outcome-preparations`, {},
+      stalePreparationKey)).status).toBe(409);
+    expect((await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_windows_v1 WHERE organization_id=$1) windows,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_evaluations_v1 WHERE organization_id=$1) evaluations`,
+      [fixture.org])).rows[0]).toEqual(stalePreparationCounts);
+    await packageReview(advisoryScope, advisoryWorks.map(entry => ({
+      appointmentId: entry.work.appointment, definition: entry.jobDefinition,
+    })));
+    await p5cReview('policy', { alternativeKey: advisoryAlternative, scopeKey, role: 'technician',
+      definition: policyDefinition });
+    await p5cReview('demand', { alternativeKey: advisoryAlternative,
+      definition: await p5cDefinition(advisoryAlternative) });
+    const upstreamEpoch = await p5cPost('/epochs', {
+      reason: 'Explicitly bind advice to the new accepted constrained-capacity source epoch.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' });
+    expect(upstreamEpoch.status).toBe(201);
+    const upstreamRecoveredOrigin = await p5cPost('/origins', advisoryOriginBody);
+    expect(upstreamRecoveredOrigin.status).toBe(201);
+
+    // A genuine accepted Part 5B source rereview also retires a dependent
+    // Part 5C origin. Both fresh and exact-key preparation refuse before any
+    // accepted Part 5A child row, and recovery requires new upstream and
+    // Part 5C epochs plus a new immutable origin.
+    const sourceCorrectionCounts = (await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_windows_v1 WHERE organization_id=$1) windows,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_evaluations_v1 WHERE organization_id=$1) evaluations`,
+      [fixture.org])).rows[0];
+    await p5bReview('scope', scopeKey, null, advisoryScope);
+    expect((await p5cGet(`/origins/${upstreamRecoveredOrigin.body.data.id}`)).body.data.state)
+      .toBe('capacity_advisory_origin_stale');
+    const sourceCorrectionPreparationKey = `m26-p5c-source-correction-preparation-${uuid()}`;
+    expect((await p5cPost(`/origins/${upstreamRecoveredOrigin.body.data.id}/outcome-preparations`, {},
+      sourceCorrectionPreparationKey)).status).toBe(409);
+    expect((await p5cPost(`/origins/${upstreamRecoveredOrigin.body.data.id}/outcome-preparations`, {},
+      sourceCorrectionPreparationKey)).status).toBe(409);
+    expect((await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_windows_v1 WHERE organization_id=$1) windows,
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_evaluations_v1 WHERE organization_id=$1) evaluations`,
+      [fixture.org])).rows[0]).toEqual(sourceCorrectionCounts);
+    await packageReview(advisoryScope, advisoryWorks.map(entry => ({
+      appointmentId: entry.work.appointment, definition: entry.jobDefinition,
+    })));
+    await p5cReview('policy', { alternativeKey: advisoryAlternative, scopeKey, role: 'technician',
+      definition: policyDefinition });
+    await p5cReview('demand', { alternativeKey: advisoryAlternative,
+      definition: await p5cDefinition(advisoryAlternative) });
+    expect((await p5cPost('/epochs', {
+      reason: 'Bind advice to the explicitly rereviewed constrained-capacity source generation.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' })).status).toBe(201);
+    const sourceRecoveredOrigin = await p5cPost('/origins', advisoryOriginBody);
+    expect(sourceRecoveredOrigin.status).toBe(201);
 
     // Genuine post-cutoff completion is authorized future progress, not an
     // input correction. It leaves the saved origin current, while a later
@@ -2577,7 +2747,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     // receipt and never conflates it with missing demand evidence.
     await advance(1);
     for (const entry of advisoryWorks) await completeApprovedWork(entry.work, 'complete', 'member');
-    const postCompletionOrigin = await p5cGet(`/origins/${policyRecoveredOrigin.body.data.id}`);
+    const postCompletionOrigin = await p5cGet(`/origins/${sourceRecoveredOrigin.body.data.id}`);
     if (postCompletionOrigin.body.data.state !== 'capacity_advisory_origin_current') {
       const diagnostic = (await fixture.ownerPool.query(
         `SELECT canonical_forecast_capacity_advisory_v1_epoch_current($1,epoch_value) epoch_current,
@@ -2597,7 +2767,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
              ON workload_value.organization_id=origin_value.organization_id
             AND workload_value.id=(origin_value.input_manifest#>>'{workloadOrigin,id}')::uuid
           WHERE origin_value.organization_id=$1 AND origin_value.id=$2`,
-        [fixture.org, policyRecoveredOrigin.body.data.id])).rows[0];
+        [fixture.org, sourceRecoveredOrigin.body.data.id])).rows[0];
       throw new Error(`Post-completion origin unexpectedly stale: ${JSON.stringify({
         projection: postCompletionOrigin.body.data, diagnostic })}`);
     }
@@ -2621,6 +2791,22 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const advisoryReviewCount = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count);
+    const malformedOutcomeDemand = { ...outcomeDemand, originId: '-'.repeat(36) };
+    expect((await fixture.ownerPool.query(
+      "SELECT canonical_forecast_capacity_advisory_v1_demand_valid($1,'outcome_demand') valid",
+      [malformedOutcomeDemand])).rows[0].valid).toBe(false);
+    const outcomeToken = (await p5cGet('/reviews/current?' + new URLSearchParams({
+      kind: 'outcome_demand', alternativeKey: advisoryAlternative, scopeKey: 'none', role: 'none',
+      subjectId: advisoryOrigin.body.data.id }).toString())).body.data;
+    expect((await p5cPost('/reviews', { kind: 'outcome_demand', alternativeKey: advisoryAlternative,
+      scopeKey: null, role: null, subjectId: advisoryOrigin.body.data.id, action: 'approve',
+      expectedRevision: outcomeToken.expectedRevision, expectedDigest: outcomeToken.expectedDigest,
+      definition: malformedOutcomeDemand,
+      reason: 'Reject a malformed nested origin identity without reaching a UUID cast.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-review-v1' })).status).toBe(400);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(advisoryReviewCount);
     const demandToken = (await p5cGet('/reviews/current?' + new URLSearchParams({ kind: 'demand',
       alternativeKey: advisoryAlternative, scopeKey: 'none', role: 'none', subjectId: 'none' }).toString())).body.data;
     const invalidAllocation = { ...zeroDemand, allocations: [{ appointmentId: uuid(), assignmentId: uuid(),

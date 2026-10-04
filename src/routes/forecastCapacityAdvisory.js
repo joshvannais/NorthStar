@@ -23,7 +23,7 @@ const baseFlags = value => value?.researchOnly === true && value.forecastIssued 
 function failure(res, error) {
   if (error?.code === '42501') return res.status(403).json({ success: false, error: 'Forbidden' });
   if (error?.code === 'P0002') return res.status(404).json({ success: false, error: 'Not found' });
-  if (error?.code === '22023') return res.status(400).json({ success: false, error: 'Invalid request' });
+  if (error?.code === '22023' || error?.code === '22P02') return res.status(400).json({ success: false, error: 'Invalid request' });
   if (error?.code === '23505' || error?.code === '40001') return res.status(409).json({ success: false, error: 'Conflict' });
   if (error?.code === '54000') return res.status(413).json({ success: false, error: 'Evidence exceeds bounds' });
   return res.status(503).json({ success: false, error: 'Capacity advice research unavailable' });

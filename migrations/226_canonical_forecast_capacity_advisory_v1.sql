@@ -79,16 +79,21 @@ CREATE UNIQUE INDEX canonical_forecast_capacity_advisory_epoch_key_v1
 CREATE TABLE public.canonical_forecast_capacity_advisory_origins_v1 (
  organization_id UUID NOT NULL REFERENCES public.organizations(id),id UUID NOT NULL DEFAULT gen_random_uuid(),
  epoch_id UUID NOT NULL,prediction_cutoff_at TIMESTAMPTZ NOT NULL,horizon_ends_at TIMESTAMPTZ NOT NULL,
+ generation BIGINT NOT NULL CHECK(generation>=1),previous_id UUID,
  input_manifest JSONB NOT NULL,private_results JSONB NOT NULL,scope_count INTEGER NOT NULL CHECK(scope_count BETWEEN 1 AND 20),
  actor_id UUID NOT NULL REFERENCES public.users(id),membership_id UUID NOT NULL,session_id UUID NOT NULL,
  idempotency_key_hash TEXT NOT NULL CHECK(idempotency_key_hash~'^[0-9a-f]{64}$'),
  request_digest TEXT NOT NULL CHECK(request_digest~'^[0-9a-f]{64}$'),captured_at TIMESTAMPTZ NOT NULL,
  digest TEXT NOT NULL CHECK(digest~'^[0-9a-f]{64}$'),PRIMARY KEY(organization_id,id),
  FOREIGN KEY(organization_id,epoch_id) REFERENCES public.canonical_forecast_capacity_advisory_epochs_v1(organization_id,id),
+ FOREIGN KEY(organization_id,previous_id) REFERENCES public.canonical_forecast_capacity_advisory_origins_v1(organization_id,id),
  CHECK(horizon_ends_at=prediction_cutoff_at+INTERVAL '2592000 seconds')
 );
 CREATE UNIQUE INDEX canonical_forecast_capacity_advisory_origin_key_v1
  ON public.canonical_forecast_capacity_advisory_origins_v1(organization_id,actor_id,idempotency_key_hash);
+CREATE UNIQUE INDEX canonical_forecast_capacity_advisory_origin_generation_v1
+ ON public.canonical_forecast_capacity_advisory_origins_v1(
+ organization_id,epoch_id,prediction_cutoff_at,horizon_ends_at,generation);
 
 CREATE TABLE public.canonical_forecast_capacity_advisory_decisions_v1 (
  organization_id UUID NOT NULL,id UUID NOT NULL DEFAULT gen_random_uuid(),origin_id UUID NOT NULL,
@@ -189,7 +194,7 @@ BEGIN
   OR value->>'methodVersion'<>(CASE WHEN kind_value='demand' THEN 'm26-capacity-advisory-demand-allocation-v1'
     ELSE 'm26-capacity-advisory-outcome-allocation-v1' END)
   OR value->>'alternativeKey'!~'^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
-  OR (kind_value='outcome_demand' AND value->>'originId'!~*'^[0-9a-f-]{36}$')
+  OR (kind_value='outcome_demand' AND value->>'originId'!~*'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
   OR jsonb_typeof(value->'scopeApplicability')<>'array'
   OR jsonb_array_length(value->'scopeApplicability') NOT BETWEEN 1 AND 20
   OR jsonb_typeof(value->'allocations')<>'array' OR jsonb_array_length(value->'allocations')>1000 THEN RETURN FALSE;END IF;
@@ -215,7 +220,8 @@ BEGIN
  END LOOP;
  FOR item IN SELECT entry FROM jsonb_array_elements(value->'allocations') entries(entry) LOOP
   IF NOT public.canonical_field_evidence_object_keys_exact(item,ARRAY['appointmentId','assignmentId','scopeKey','role','personMinutes'])
-   OR item->>'appointmentId'!~*'^[0-9a-f-]{36}$' OR item->>'assignmentId'!~*'^[0-9a-f-]{36}$'
+   OR item->>'appointmentId'!~*'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+   OR item->>'assignmentId'!~*'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
    OR item->>'scopeKey'!~'^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
    OR item->>'role'!~'^(owner|administrator|dispatcher|estimator|crew_lead|technician|accounting|employee|other)$'
    OR item->>'personMinutes'!~'^(0|[1-9][0-9]{0,8})$' THEN RETURN FALSE;END IF;
@@ -616,6 +622,8 @@ DECLARE latest public.canonical_forecast_capacity_advisory_reviews_v1%ROWTYPE;so
  current_scope public.canonical_forecast_constrained_capacity_reviews_v1%ROWTYPE;
  workload_method public.canonical_forecast_workload_capacity_reviews_v1%ROWTYPE;
  constraint_method public.canonical_forecast_constrained_capacity_reviews_v1%ROWTYPE;
+ outcome_origin public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;
+ outcome_epoch public.canonical_forecast_capacity_advisory_epochs_v1%ROWTYPE;
 BEGIN
  latest:=public.canonical_forecast_capacity_advisory_v1_review_current_internal(
  org,value.review_kind,value.alternative_key,value.scope_key,value.role_name,value.subject_id);
@@ -652,6 +660,18 @@ BEGIN
   END IF;
   IF value.review_kind='demand' THEN
    RETURN public.canonical_forecast_capacity_advisory_v1_demand_review_historical_current(org,value);
+  END IF;
+  IF value.review_kind='outcome_demand' THEN
+   SELECT * INTO outcome_origin FROM public.canonical_forecast_capacity_advisory_origins_v1
+    WHERE organization_id=org AND id=value.subject_id;
+   SELECT * INTO outcome_epoch FROM public.canonical_forecast_capacity_advisory_epochs_v1
+    WHERE organization_id=org AND id=outcome_origin.epoch_id;
+   IF outcome_origin.id IS NULL OR public.canonical_forecast_capacity_advisory_v1_epoch_current(org,outcome_epoch) IS NOT TRUE
+    OR EXISTS(SELECT 1 FROM public.canonical_forecast_capacity_advisory_origins_v1 newer
+      WHERE newer.organization_id=org AND newer.epoch_id=outcome_origin.epoch_id
+       AND newer.prediction_cutoff_at=outcome_origin.prediction_cutoff_at
+       AND newer.horizon_ends_at=outcome_origin.horizon_ends_at
+       AND newer.generation>outcome_origin.generation) THEN RETURN FALSE;END IF;
   END IF;
   source_value:=CASE WHEN value.review_kind='demand' THEN
   public.canonical_forecast_capacity_advisory_v1_demand_source(org,value.review_kind,value.alternative_key,NULL,value.definition,
@@ -698,6 +718,7 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_cata
 DECLARE authority JSONB;old public.canonical_forecast_capacity_advisory_reviews_v1%ROWTYPE;
  current_value public.canonical_forecast_capacity_advisory_reviews_v1%ROWTYPE;
  inserted public.canonical_forecast_capacity_advisory_reviews_v1%ROWTYPE;source_value JSONB;
+ outcome_origin public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;
  key_hash TEXT:=encode(sha256(convert_to(key_value,'UTF8')),'hex');request_hash TEXT;now_value TIMESTAMPTZ;
 BEGIN
  IF current_setting('transaction_isolation')<>'serializable' OR kind_value NOT IN('method','policy','demand','outcome_demand')
@@ -717,6 +738,13 @@ BEGIN
  authority:=public.canonical_forecast_workload_capacity_v1_access(org,actor,actor_role,session_value,csrf,TRUE);
  PERFORM public.canonical_forecast_capacity_advisory_v1_lock_sources(org);
  authority:=public.canonical_forecast_workload_capacity_v1_access_recheck(org,actor,actor_role,session_value,csrf,TRUE);
+ IF kind_value='outcome_demand' THEN
+  SELECT * INTO outcome_origin FROM public.canonical_forecast_capacity_advisory_origins_v1
+   WHERE organization_id=org AND id=subject_value;
+  IF outcome_origin.id IS NULL THEN RAISE EXCEPTION 'Capacity advisory receipt unavailable' USING ERRCODE='P0002';END IF;
+  IF public.canonical_forecast_capacity_advisory_v1_origin_current(org,outcome_origin) IS NOT TRUE THEN
+   RAISE EXCEPTION 'Capacity advisory origin stale' USING ERRCODE='40001';END IF;
+ END IF;
  request_hash:=public.canonical_completion_digest(jsonb_build_object('kind',kind_value,'alternative',alternative_value,
   'scope',scope_value,'role',role_value,'subjectId',subject_value,'action',action_value,'expectedRevision',expected_revision,
   'expectedDigest',expected_digest,'definition',definition_value,'reason',btrim(reason_value),'confirmation',confirmation_value));
@@ -846,7 +874,9 @@ BEGIN
  SELECT * INTO old FROM public.canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=org AND actor_id=actor AND idempotency_key_hash=key_hash;
  IF FOUND THEN
   SELECT * INTO current_value FROM public.canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=org ORDER BY revision DESC LIMIT 1;
-  IF old.request_digest<>request_hash OR current_value.id IS DISTINCT FROM old.id THEN RAISE EXCEPTION 'Capacity advisory epoch replay conflict' USING ERRCODE='40001';END IF;
+  IF old.request_digest<>request_hash OR current_value.id IS DISTINCT FROM old.id
+   OR public.canonical_forecast_capacity_advisory_v1_epoch_current(org,old) IS NOT TRUE THEN
+   RAISE EXCEPTION 'Capacity advisory epoch replay conflict' USING ERRCODE='40001';END IF;
   authority:=public.canonical_forecast_workload_capacity_v1_access_recheck(org,actor,actor_role,session_value,csrf,TRUE);
   RETURN jsonb_build_object('state','capacity_advisory_epoch_recorded','id',old.id,'revision',old.revision,
    'installedAt',old.installed_at,'digest',rtrim(old.digest),'replayed',TRUE);END IF;
@@ -910,7 +940,7 @@ BEGIN
   WHILE prior_count<required_periods-1 LOOP
    SELECT origin_value.* INTO prior_origin FROM public.canonical_forecast_capacity_advisory_origins_v1 origin_value
     WHERE origin_value.organization_id=org AND origin_value.horizon_ends_at=prior_cursor
-    ORDER BY origin_value.prediction_cutoff_at DESC LIMIT 1;
+    ORDER BY origin_value.prediction_cutoff_at DESC,origin_value.generation DESC,origin_value.id DESC LIMIT 1;
    EXIT WHEN prior_origin.id IS NULL OR prior_origin.epoch_id IS DISTINCT FROM latest_epoch_id;
    SELECT value.* INTO prior_evaluation FROM public.canonical_forecast_capacity_advisory_evaluations_v1 value
     WHERE value.organization_id=org AND value.origin_id=prior_origin.id ORDER BY value.revision DESC LIMIT 1;
@@ -1000,6 +1030,10 @@ DECLARE epoch_value public.canonical_forecast_capacity_advisory_epochs_v1%ROWTYP
 BEGIN
  SELECT * INTO epoch_value FROM public.canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=org AND id=value.epoch_id;
  IF epoch_value.id IS NULL OR public.canonical_forecast_capacity_advisory_v1_epoch_current(org,epoch_value) IS NOT TRUE THEN RETURN FALSE;END IF;
+ IF EXISTS(SELECT 1 FROM public.canonical_forecast_capacity_advisory_origins_v1 newer
+   WHERE newer.organization_id=org AND newer.epoch_id=value.epoch_id
+    AND newer.prediction_cutoff_at=value.prediction_cutoff_at AND newer.horizon_ends_at=value.horizon_ends_at
+    AND newer.generation>value.generation) THEN RETURN FALSE;END IF;
  SELECT * INTO workload_origin FROM public.canonical_forecast_workload_capacity_origins_v1
   WHERE organization_id=org AND id=(value.input_manifest#>>'{workloadOrigin,id}')::uuid;
  IF workload_origin.id IS NULL OR rtrim(workload_origin.digest) IS DISTINCT FROM value.input_manifest#>>'{workloadOrigin,digest}'
@@ -1050,9 +1084,10 @@ CREATE FUNCTION public.canonical_forecast_capacity_advisory_v1_origin_capture(
  org UUID,actor UUID,actor_role TEXT,session_value UUID,csrf TEXT,key_value TEXT,reason_value TEXT,confirmation_value TEXT)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB;epoch_value public.canonical_forecast_capacity_advisory_epochs_v1%ROWTYPE;
- old public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;inserted public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;
+ old public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;current_generation public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;
+ inserted public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;
  workload_origin public.canonical_forecast_workload_capacity_origins_v1%ROWTYPE;workload_response JSONB;
- cutoff_value TIMESTAMPTZ;end_value TIMESTAMPTZ;constraint_input JSONB;policy_manifest JSONB;demand_manifest JSONB;
+ candidate_cutoff TIMESTAMPTZ;cutoff_value TIMESTAMPTZ;end_value TIMESTAMPTZ;constraint_input JSONB;policy_manifest JSONB;demand_manifest JSONB;
  results_value JSONB;input_value JSONB;child_key TEXT;
  key_hash TEXT:=encode(sha256(convert_to(key_value,'UTF8')),'hex');request_hash TEXT;
 BEGIN
@@ -1073,6 +1108,16 @@ BEGIN
  SELECT * INTO epoch_value FROM public.canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=org ORDER BY revision DESC LIMIT 1;
  IF epoch_value.id IS NULL OR public.canonical_forecast_capacity_advisory_v1_epoch_current(org,epoch_value) IS NOT TRUE THEN
   RAISE EXCEPTION 'Capacity advisory epoch unavailable' USING ERRCODE='22023';END IF;
+ -- Reject an already-current exact server instant before invoking the accepted
+ -- Part 5A child. This makes exact-time duplicate attempts side-effect free.
+ candidate_cutoff:=public.canonical_forecast_workload_capacity_v1_clock();
+ PERFORM pg_advisory_xact_lock(hashtextextended('m26:capacity-advisory-period:'||org||':'||epoch_value.id||':'||candidate_cutoff||':'||(candidate_cutoff+INTERVAL '2592000 seconds'),0));
+ SELECT * INTO current_generation FROM public.canonical_forecast_capacity_advisory_origins_v1
+  WHERE organization_id=org AND epoch_id=epoch_value.id AND prediction_cutoff_at=candidate_cutoff
+   AND horizon_ends_at=candidate_cutoff+INTERVAL '2592000 seconds' ORDER BY generation DESC LIMIT 1;
+ IF current_generation.id IS NOT NULL
+  AND public.canonical_forecast_capacity_advisory_v1_origin_current(org,current_generation) IS TRUE THEN
+  RAISE EXCEPTION 'Capacity advisory period already has a current origin' USING ERRCODE='40001';END IF;
  -- The accepted Part 5A action owns the forecast cutoff, 60-day prospective
  -- training requirement, method reviews, two atomic training windows and the
  -- immutable future workload origin.  Part 5C cannot replace it with a current
@@ -1101,13 +1146,25 @@ BEGIN
    'capacityRole',workload_origin.capacity_role,'cutoff',workload_origin.prediction_cutoff_at,
    'horizon',workload_origin.horizon_ends_at));
  IF octet_length(input_value::text)+octet_length(results_value::text)>524288 THEN RAISE EXCEPTION 'Capacity advisory evidence exceeds bounds' USING ERRCODE='54000';END IF;
+ -- Different request keys for one exact period serialize here. A current
+ -- canonical generation refuses duplication; a genuinely stale generation
+ -- may be superseded append-only without making the old lineage selectable.
+ PERFORM pg_advisory_xact_lock(hashtextextended('m26:capacity-advisory-period:'||org||':'||epoch_value.id||':'||cutoff_value||':'||end_value,0));
+ SELECT * INTO current_generation FROM public.canonical_forecast_capacity_advisory_origins_v1
+  WHERE organization_id=org AND epoch_id=epoch_value.id AND prediction_cutoff_at=cutoff_value
+   AND horizon_ends_at=end_value ORDER BY generation DESC LIMIT 1;
+ IF current_generation.id IS NOT NULL
+  AND public.canonical_forecast_capacity_advisory_v1_origin_current(org,current_generation) IS TRUE THEN
+  RAISE EXCEPTION 'Capacity advisory period already has a current origin' USING ERRCODE='40001';END IF;
  INSERT INTO public.canonical_forecast_capacity_advisory_origins_v1(
-  organization_id,epoch_id,prediction_cutoff_at,horizon_ends_at,input_manifest,private_results,scope_count,
+  organization_id,epoch_id,prediction_cutoff_at,horizon_ends_at,generation,previous_id,input_manifest,private_results,scope_count,
   actor_id,membership_id,session_id,idempotency_key_hash,request_digest,captured_at,digest)
- VALUES(org,epoch_value.id,cutoff_value,end_value,input_value,results_value,jsonb_array_length(results_value),actor,
+ VALUES(org,epoch_value.id,cutoff_value,end_value,COALESCE(current_generation.generation,0)+1,current_generation.id,
+  input_value,results_value,jsonb_array_length(results_value),actor,
   (authority->>'membershipId')::uuid,session_value,key_hash,request_hash,cutoff_value,
   public.canonical_completion_digest(jsonb_build_object('organizationId',org,'epochId',epoch_value.id,'cutoff',cutoff_value,
-   'end',end_value,'inputDigest',public.canonical_completion_digest(input_value),'outputDigest',public.canonical_completion_digest(results_value))))
+   'end',end_value,'generation',COALESCE(current_generation.generation,0)+1,'previousId',current_generation.id,
+   'inputDigest',public.canonical_completion_digest(input_value),'outputDigest',public.canonical_completion_digest(results_value))))
  RETURNING * INTO inserted;
  authority:=public.canonical_forecast_workload_capacity_v1_access_recheck(org,actor,actor_role,session_value,csrf,TRUE);
  RETURN public.canonical_forecast_capacity_advisory_v1_origin_projection(inserted,'capacity_advisory_origin_saved',FALSE,NULL);
@@ -1229,6 +1286,8 @@ BEGIN
  SELECT * INTO origin_row FROM public.canonical_forecast_capacity_advisory_origins_v1
   WHERE organization_id=org AND id=origin_value;
  IF origin_row.id IS NULL THEN RAISE EXCEPTION 'Capacity advisory receipt unavailable' USING ERRCODE='P0002';END IF;
+ IF public.canonical_forecast_capacity_advisory_v1_origin_current(org,origin_row) IS NOT TRUE THEN
+  RAISE EXCEPTION 'Capacity advisory origin stale' USING ERRCODE='40001';END IF;
  decision_value:=public.canonical_forecast_capacity_advisory_v1_latest_decision(org,origin_value);
  IF decision_value.id IS NULL OR decision_value.action<>'approve' THEN
   RAISE EXCEPTION 'Approved capacity advice unavailable' USING ERRCODE='22023';END IF;
@@ -1238,6 +1297,8 @@ BEGIN
   WHERE organization_id=org AND id=(origin_row.input_manifest#>>'{workloadOrigin,id}')::uuid;
  IF workload_origin.id IS NULL OR rtrim(workload_origin.digest) IS DISTINCT FROM origin_row.input_manifest#>>'{workloadOrigin,digest}' THEN
   RAISE EXCEPTION 'Accepted workload forecast unavailable' USING ERRCODE='22023';END IF;
+ IF public.canonical_forecast_capacity_advisory_v1_origin_current(org,origin_row) IS NOT TRUE THEN
+  RAISE EXCEPTION 'Capacity advisory origin stale' USING ERRCODE='40001';END IF;
  window_key:='m26p5c:'||encode(sha256(convert_to(key_value||':accepted-p5a-outcome-window:'||origin_value,'UTF8')),'hex');
  evaluation_key:='m26p5c:'||encode(sha256(convert_to(key_value||':accepted-p5a-evaluation:'||origin_value,'UTF8')),'hex');
  window_response:=public.canonical_forecast_workload_capacity_v1_window_finalize(
@@ -1250,6 +1311,8 @@ BEGIN
  IF workload_evaluation.id IS NULL OR
    public.canonical_forecast_capacity_advisory_v1_workload_evaluation_historical_current(org,workload_evaluation) IS NOT TRUE THEN
   RAISE EXCEPTION 'Accepted workload outcome unavailable' USING ERRCODE='22023';END IF;
+ IF public.canonical_forecast_capacity_advisory_v1_origin_current(org,origin_row) IS NOT TRUE THEN
+  RAISE EXCEPTION 'Capacity advisory origin stale' USING ERRCODE='40001';END IF;
  SELECT jsonb_agg(value ORDER BY value) INTO alternatives
  FROM jsonb_array_elements_text(origin_row.input_manifest#>'{constraintInput,alternatives}') value;
  authority:=public.canonical_forecast_workload_capacity_v1_access_recheck(org,actor,actor_role,session_value,csrf,TRUE);
@@ -1270,7 +1333,12 @@ DECLARE origin_row public.canonical_forecast_capacity_advisory_origins_v1%ROWTYP
 BEGIN
  SELECT * INTO origin_row FROM public.canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=org AND id=value.origin_id;
  SELECT * INTO epoch_value FROM public.canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=org AND id=origin_row.epoch_id;
- IF origin_row.id IS NULL OR public.canonical_forecast_capacity_advisory_v1_epoch_current(org,epoch_value) IS NOT TRUE THEN RETURN FALSE;END IF;
+ IF origin_row.id IS NULL OR public.canonical_forecast_capacity_advisory_v1_epoch_current(org,epoch_value) IS NOT TRUE
+  OR EXISTS(SELECT 1 FROM public.canonical_forecast_capacity_advisory_origins_v1 newer
+    WHERE newer.organization_id=org AND newer.epoch_id=origin_row.epoch_id
+     AND newer.prediction_cutoff_at=origin_row.prediction_cutoff_at
+     AND newer.horizon_ends_at=origin_row.horizon_ends_at
+     AND newer.generation>origin_row.generation) THEN RETURN FALSE;END IF;
  SELECT * INTO workload_evaluation FROM public.canonical_forecast_workload_capacity_evaluations_v1
   WHERE organization_id=org AND id=(value.source_manifest->>'workloadEvaluationId')::uuid;
  IF workload_evaluation.id IS NULL OR rtrim(workload_evaluation.digest) IS DISTINCT FROM value.source_manifest->>'workloadEvaluationDigest'
@@ -1324,6 +1392,8 @@ BEGIN
  authority:=public.canonical_forecast_workload_capacity_v1_access_recheck(org,actor,actor_role,session_value,csrf,TRUE);
  SELECT * INTO origin_row FROM public.canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=org AND id=origin_value;
  IF NOT FOUND THEN RAISE EXCEPTION 'Capacity advisory receipt unavailable' USING ERRCODE='P0002';END IF;
+ IF public.canonical_forecast_capacity_advisory_v1_origin_current(org,origin_row) IS NOT TRUE THEN
+  RAISE EXCEPTION 'Capacity advisory origin stale' USING ERRCODE='40001';END IF;
  SELECT * INTO epoch_value FROM public.canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=org AND id=origin_row.epoch_id;
  IF public.canonical_forecast_capacity_advisory_v1_epoch_current(org,epoch_value) IS NOT TRUE THEN RAISE EXCEPTION 'Capacity advisory epoch stale' USING ERRCODE='40001';END IF;
  decision_value:=public.canonical_forecast_capacity_advisory_v1_latest_decision(org,origin_value);

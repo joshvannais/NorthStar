@@ -2623,8 +2623,6 @@ BEGIN
  IF value.id IS NULL THEN RAISE EXCEPTION 'Capacity advisory receipt unavailable' USING ERRCODE='P0002';END IF;
  SELECT * INTO event_value FROM public.canonical_forecast_capacity_advisory_continuation_events_v1
   WHERE organization_id=org AND continuation_id=value.id;
- now_value:=public.canonical_forecast_workload_capacity_v1_clock();
- IF now_value<value.period_start THEN RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
  authority:=public.canonical_forecast_workload_capacity_v1_access(
   org,value.actor_id,value.actor_role,value.session_id,NULL,FALSE);
  PERFORM public.canonical_forecast_capacity_advisory_v1_lock_sources(org);
@@ -2635,6 +2633,8 @@ BEGIN
   RAISE EXCEPTION 'Capacity advisory continuation authority stale' USING ERRCODE='40001';END IF;
  IF event_value.id IS NOT NULL THEN
   RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,TRUE);END IF;
+ IF now_value<value.period_start THEN
+  RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
  IF now_value>value.activation_deadline THEN
   INSERT INTO public.canonical_forecast_capacity_advisory_continuation_events_v1(
    organization_id,continuation_id,event_kind,origin_id,observed_at,detail_code,digest)

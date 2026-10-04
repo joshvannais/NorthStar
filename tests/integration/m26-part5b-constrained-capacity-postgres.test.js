@@ -3332,14 +3332,56 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
         (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1) workload,
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1) advice,
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1
-          WHERE organization_id=$1 AND continuation_id=$2) events`,
+          WHERE organization_id=$1 AND continuation_id=$2) events,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_attempts_v1
+          WHERE organization_id=$1 AND continuation_id=$2) attempts`,
       [fixture.org, preBoundaryContinuation.body.data.id])).rows[0];
+    const expectPrivatePreBoundaryRefusal = async code => {
+      const client = await fixture.runtimePool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await expect(client.query(
+          'SELECT canonical_forecast_capacity_advisory_v1_continuation_activate($1,$2)',
+          [fixture.org, preBoundaryContinuation.body.data.id])).rejects.toMatchObject({ code });
+        await client.query('ROLLBACK');
+      } finally {
+        await client.query('ROLLBACK').catch(() => {});
+        client.release();
+      }
+      expect((await fixture.ownerPool.query(
+        `SELECT
+          (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1) workload,
+          (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1) advice,
+          (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1
+            WHERE organization_id=$1 AND continuation_id=$2) events,
+          (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_attempts_v1
+            WHERE organization_id=$1 AND continuation_id=$2) attempts`,
+        [fixture.org, preBoundaryContinuation.body.data.id])).rows[0]).toEqual(preBoundaryCounts);
+    };
+
+    // The private runtime entry is an independently granted authority surface.
+    // Even before the period boundary it cannot return tenant-private pending
+    // metadata until paid session and subscription authority have passed.
+    await fixture.ownerPool.query(
+      "UPDATE auth_sessions SET status='revoked',revoked_at=clock_timestamp(),revoke_reason='m26_p5c_preboundary_entry' WHERE id=$1",
+      [actor('owner').authSessionId]);
+    await expectPrivatePreBoundaryRefusal('42501');
+    await fixture.ownerPool.query(
+      "UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+      [actor('owner').authSessionId]);
+    await fixture.ownerPool.query(
+      "UPDATE subscriptions SET status='past_due' WHERE organization_id=$1", [fixture.org]);
+    await expectPrivatePreBoundaryRefusal('42501');
+    await fixture.ownerPool.query(
+      "UPDATE subscriptions SET status='active' WHERE organization_id=$1", [fixture.org]);
+
     await p5cReview('demand', { alternativeKey: advisoryAlternative,
       definition: preBoundaryDefinition, correctionOfReviewId: preBoundaryReview.id });
     expect((await p5cGet(`/continuations/${preBoundaryContinuation.body.data.id}`)).body.data.state)
       .toBe('capacity_advisory_continuation_stale');
     expect((await p5cPost(`/origins/${preBoundaryOrigin.body.data.id}/continuations`, continuationBody,
       preBoundaryContinuationKey)).status).toBe(409);
+    await expectPrivatePreBoundaryRefusal('40001');
     expect(await (new CapacityAdvisoryContinuationWorker({
       getPool: () => fixture.runtimePool, batchSize: 1 })).drainOnce()).toEqual({ due: 0, attempted: 0 });
     expect((await fixture.ownerPool.query(
@@ -3347,7 +3389,9 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
         (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1) workload,
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1) advice,
         (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1
-          WHERE organization_id=$1 AND continuation_id=$2) events`,
+          WHERE organization_id=$1 AND continuation_id=$2) events,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_attempts_v1
+          WHERE organization_id=$1 AND continuation_id=$2) attempts`,
       [fixture.org, preBoundaryContinuation.body.data.id])).rows[0]).toEqual(preBoundaryCounts);
     await p5cReview('demand', { alternativeKey: advisoryAlternative,
       definition: await p5cDefinition(advisoryAlternative) });

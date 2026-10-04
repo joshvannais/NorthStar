@@ -2263,7 +2263,11 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           ('canonical_completion_records','z_m26_p5b_source_completion_records'),
           ('canonical_opportunities','z_m26_p5b_source_opportunities')) required(table_name,trigger_name)
           WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
-            WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.'||required.table_name)
+            JOIN pg_catalog.pg_class table_value ON table_value.oid=trigger_value.tgrelid
+            WHERE table_value.oid=pg_catalog.to_regclass('public.'||required.table_name)
+             AND table_value.relkind='r' AND NOT table_value.relispartition
+             AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_inherits inheritance_value
+               WHERE inheritance_value.inhrelid=table_value.oid OR inheritance_value.inhparent=table_value.oid)
              AND trigger_value.tgname=required.trigger_name AND trigger_value.tgenabled='O'
              AND trigger_value.tgtype=31 AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
              AND trigger_value.tgattr=''::pg_catalog.int2vector

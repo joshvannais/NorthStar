@@ -131,6 +131,8 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
       CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OF name OR DELETE ON workforce_crews
         FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`,
     'Required constrained-capacity v1 source capture is missing');
+    await fail(`CREATE TABLE m26_p5c_v10_inherited_crews () INHERITS (workforce_crews)`,
+      'Required constrained-capacity v1 source capture is missing');
     expect((await pool.query(`SELECT count(*)::integer count FROM (VALUES
       ('workforce_crews','z_m26_p5b_source_crews'),
       ('workforce_crew_members','z_m26_p5b_source_crew_members'),
@@ -151,7 +153,11 @@ realPostgres('Mission 26 Part 5B migration224 to constrained capacity v1', () =>
       ('canonical_estimates','z_m26_p5b_source_estimates'),
       ('canonical_completion_records','z_m26_p5b_source_completion_records'),
       ('canonical_opportunities','z_m26_p5b_source_opportunities')) required(table_name,trigger_name)
-      JOIN pg_trigger trigger_value ON trigger_value.tgrelid=to_regclass('public.'||required.table_name)
+      JOIN pg_class table_value ON table_value.oid=to_regclass('public.'||required.table_name)
+       AND table_value.relkind='r' AND NOT table_value.relispartition
+       AND NOT EXISTS(SELECT 1 FROM pg_inherits inheritance_value
+         WHERE inheritance_value.inhrelid=table_value.oid OR inheritance_value.inhparent=table_value.oid)
+      JOIN pg_trigger trigger_value ON trigger_value.tgrelid=table_value.oid
        AND trigger_value.tgname=required.trigger_name AND trigger_value.tgenabled='O'
        AND trigger_value.tgtype=31 AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
        AND trigger_value.tgattr=''::pg_catalog.int2vector

@@ -2746,6 +2746,9 @@ BEGIN
    JOIN pg_catalog.pg_class table_value ON table_value.oid=trigger_value.tgrelid
    JOIN pg_catalog.pg_namespace namespace_value ON namespace_value.oid=table_value.relnamespace
    WHERE namespace_value.nspname='public' AND table_value.relname=expected.table_name
+    AND table_value.relkind='r' AND table_value.relispartition IS FALSE
+    AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_inherits inheritance_value
+     WHERE inheritance_value.inhrelid=table_value.oid OR inheritance_value.inhparent=table_value.oid)
     AND trigger_value.tgname=expected.trigger_name AND trigger_value.tgenabled='O'
     AND trigger_value.tgtype=31 AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
     AND trigger_value.tgattr=''::pg_catalog.int2vector

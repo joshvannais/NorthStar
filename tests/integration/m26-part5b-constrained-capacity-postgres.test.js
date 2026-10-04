@@ -3464,6 +3464,42 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       await restoreCrewCapture();
     }
 
+    // A traditional inheritance child participates in ordinary parent reads,
+    // but the parent's row trigger is not inherited. The complete source
+    // relation authority therefore refuses either side of an inheritance edge.
+    await fixture.ownerPool.query(
+      'CREATE TABLE m26_p5c_v10_inherited_crews () INHERITS (workforce_crews)');
+    const inheritedCrew = uuid();
+    try {
+      const generationBeforeInheritedInsert = Number((await fixture.ownerPool.query(
+        `SELECT generation FROM canonical_forecast_constrained_capacity_source_fences_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].generation);
+      const eventsBeforeInheritedInsert = Number((await fixture.ownerPool.query(
+        `SELECT count(*) count FROM canonical_forecast_constrained_capacity_source_events_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].count);
+      await fixture.ownerPool.query(
+        `INSERT INTO m26_p5c_v10_inherited_crews(
+          id,organization_id,crew_key,name,home_location_id,created_by_user_id,updated_by_user_id)
+          VALUES($1,$2,$3,$4,'north',$5,$5)`,
+        [inheritedCrew, fixture.org, `v10-${inheritedCrew}`, 'V10 inherited source proof',
+          actor('owner').actorUserId]);
+      expect(Number((await fixture.ownerPool.query(
+        'SELECT count(*) count FROM workforce_crews WHERE organization_id=$1 AND id=$2',
+        [fixture.org, inheritedCrew])).rows[0].count)).toBe(1);
+      expect(Number((await fixture.ownerPool.query(
+        'SELECT count(*) count FROM ONLY workforce_crews WHERE organization_id=$1 AND id=$2',
+        [fixture.org, inheritedCrew])).rows[0].count)).toBe(0);
+      expect(Number((await fixture.ownerPool.query(
+        `SELECT generation FROM canonical_forecast_constrained_capacity_source_fences_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].generation)).toBe(generationBeforeInheritedInsert);
+      expect(Number((await fixture.ownerPool.query(
+        `SELECT count(*) count FROM canonical_forecast_constrained_capacity_source_events_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].count)).toBe(eventsBeforeInheritedInsert);
+      await expectPrivatePreBoundaryRefusal('22023');
+    } finally {
+      await fixture.ownerPool.query('DROP TABLE IF EXISTS m26_p5c_v10_inherited_crews');
+    }
+
     // The restored unqualified all-event trigger captures real UPDATE and DELETE
     // operations. Keep the proof transactional so this authority-shape test does
     // not retire the unrelated prospective predecessor used by later lifecycle cases.

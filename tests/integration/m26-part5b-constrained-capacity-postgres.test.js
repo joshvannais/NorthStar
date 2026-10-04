@@ -179,6 +179,32 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     return { scheduledStart, scheduledEnd, receipt };
   }
 
+  async function changeApprovedWorkTarget(work, action, target, label) {
+    const before = (await fixture.ownerPool.query(
+      `SELECT revision,rtrim(canonical_digest) digest,appointment_status,scheduled_start,scheduled_end
+         FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND id=$2`, [fixture.org, work.assignment.id])).rows[0];
+    const preview = await request(fixture.app)
+      .post(`/api/v1/canonical/appointments/${work.appointment}/mutation-previews`)
+      .set(actor('owner').session.headers).send({
+        expectedRevision: Number(before.revision), expectedDigest: before.digest, expectedTimeZone: 'UTC',
+        action, target, scheduledStart: before.scheduled_start && new Date(before.scheduled_start).toISOString(),
+        scheduledEnd: before.scheduled_end && new Date(before.scheduled_end).toISOString(),
+        appointmentStatus: before.appointment_status, reason: label,
+      });
+    if (preview.status !== 201) throw new Error(
+      `Scheduling ${action} preview failed: ${JSON.stringify(preview.body)}`);
+    const approval = await request(fixture.app)
+      .post(`/api/v1/canonical/appointments/${work.appointment}/mutation-approvals`)
+      .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5b-target-${uuid()}`)
+      .send({ previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
+        acknowledgedWarningDigests: preview.body.data.warningDigests,
+        acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests, reason: label });
+    if (approval.status !== 200) throw new Error(
+      `Scheduling ${action} approval failed: ${JSON.stringify({ approval: approval.body, preview: preview.body.data })}`);
+    return approval.body.data;
+  }
+
   async function createApprovedWork({ start, locationId, label, target = null }) {
     const created = await request(fixture.app).post('/api/leads')
       .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5b-lead-${uuid()}`)
@@ -972,6 +998,14 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     await p5aUnschedule(laterWork);
     await p5bReview('job', scopeKey, laterWork.appointment, laterJobDefinition);
     await advance(1);
+    await changeApprovedWorkTarget(laterWork, 'unassign', { kind: 'unassigned', id: null },
+      'End the prior target authority without erasing its elapsed approved commitment.');
+    await advance(1);
+    await changeApprovedWorkTarget(laterWork, 'assign',
+      { kind: 'profile', id: actor('member').actorUserId },
+      'Begin a distinct later target authority before a new approved commitment.');
+    await p5bReview('job', scopeKey, laterWork.appointment, laterJobDefinition);
+    await advance(1);
     const secondLaterSchedule = await rescheduleApprovedWork(laterWork,
       new Date(new Date(firstLaterSchedule.scheduled_end).getTime() + 3 * 3600000),
       'Create a distinct later approved commitment without rewriting the elapsed interval.');
@@ -980,11 +1014,14 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       `SELECT canonical_forecast_constrained_capacity_v1_schedule_timeline($1,$2,$3,$4,$4,false) value`,
       [fixture.org, laterWork.assignment.id, travelOrigin.body.data.predictionCutoffAt,
         travelOrigin.body.data.horizonEndsAt])).rows[0].value;
-    expect(scheduleTimeline.map(value => value.scheduleState)).toEqual(['scheduled', 'unscheduled', 'scheduled']);
+    expect(scheduleTimeline.map(value => [value.targetState, value.scheduleState])).toEqual([
+      ['assigned', 'scheduled'], ['assigned', 'unscheduled'], ['unassigned', 'unscheduled'],
+      ['assigned', 'unscheduled'], ['assigned', 'scheduled'],
+    ]);
     expect(scheduleTimeline.filter(value => value.commitmentStart !== null)).toHaveLength(2);
     expect(new Date(scheduleTimeline[0].commitmentEnd).getTime())
       .toBe(new Date(firstLaterSchedule.scheduled_end).getTime());
-    expect(new Date(scheduleTimeline[2].commitmentStart).getTime())
+    expect(new Date(scheduleTimeline[4].commitmentStart).getTime())
       .toBe(secondLaterSchedule.scheduledStart.getTime());
 
     // The later-created work completes through the genuine M23 execution and
@@ -1009,6 +1046,12 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
 
     await setClock(travelOrigin.body.data.horizonEndsAt);
     await p5aUnschedule(committedWork);
+    await changeApprovedWorkTarget(committedWork, 'unassign', { kind: 'unassigned', id: null },
+      'Record an exclusive-end target change for the next capacity period only.');
+    await setClock(new Date(new Date(travelOrigin.body.data.horizonEndsAt).getTime() + 1000));
+    await changeApprovedWorkTarget(committedWork, 'assign',
+      { kind: 'profile', id: actor('member').actorUserId },
+      'Record a post-end reassignment without rewriting the ended capacity period.');
     const historicalWork = (await fixture.ownerPool.query(
       'SELECT canonical_forecast_constrained_capacity_v1_work_census_period($1,$2,$3) value',
       [fixture.org, travelOrigin.body.data.predictionCutoffAt, travelOrigin.body.data.horizonEndsAt])).rows[0].value;
@@ -1027,6 +1070,8 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       .toBe(new Date(travelOrigin.body.data.predictionCutoffAt).getTime());
     expect(committedHistory.scheduleTimeline.some(value => new Date(value.decisionAt).getTime()
       === new Date(travelOrigin.body.data.horizonEndsAt).getTime())).toBe(false);
+    expect(committedHistory.scheduleTimeline.every(value => new Date(value.authorityStart).getTime()
+      < new Date(travelOrigin.body.data.horizonEndsAt).getTime())).toBe(true);
     const outcomeKey = `m26-p5b-travel-outcome-${uuid()}`;
     const outcome = await post(`/origins/${travelOrigin.body.data.id}/outcomes`, {}, outcomeKey);
     if (outcome.status !== 201) {
@@ -1691,6 +1736,139 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       reason: 'Save a new future origin after full Mission24 and installed-source recovery.',
       confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1' });
     expect(postM24Origin.status).toBe(201);
+
+    // Scope uniqueness is a common interval invariant for the entire
+    // alternative, not a final-cutoff comparison. Two initially disjoint
+    // outputs are saved. A genuine crew update and explicit scope rereview
+    // transiently make the crew scope share the direct scope's technician,
+    // then a second human review restores the original population. The saved
+    // origin remains permanently stale and cannot persist an outcome because
+    // the elapsed overlap is immutable evidence.
+    await p5bReview('scope', formationScopeKey, null, postM24Scope, null, 'reject');
+    const isolatedCrewMembers = [
+      { profileId: actor('owner').actorUserId, role: 'lead' },
+      { profileId: actor('dispatcher').actorUserId, role: 'member' },
+    ];
+    expect((await request(fixture.app).put(`/api/workforce/crews/${crew.body.data.id}`)
+      .set(actor('owner').session.headers).send({ name: 'Fixture crew', homeLocationId: 'headquarters',
+        members: isolatedCrewMembers })).status).toBe(200);
+    expect((await request(fixture.app).put(`/api/workforce/crews/${secondCrew.body.data.id}`)
+      .set(actor('owner').session.headers).send({ name: 'Fixture crew two', homeLocationId: 'headquarters',
+        members: isolatedCrewMembers })).status).toBe(200);
+    await advance(1); await p5bEpoch(); await advance(1);
+    await p5bReview('method', null, null, methodDefinition);
+    const overlapAlternative = 'transient-overlap-proof';
+    const overlapDirectKey = 'transient-direct-member';
+    const overlapCrewKey = 'transient-dispatcher-crew';
+    const overlapDirectScope = { ...directScope, scopeKey: overlapDirectKey,
+      alternativeKey: overlapAlternative };
+    const overlapCrewScope = { ...directScope, scopeKey: overlapCrewKey,
+      alternativeKey: overlapAlternative, role: 'dispatcher',
+      applicability: { ...directScope.applicability, crew: true, skill: false }, skillIds: [],
+      crewIds: [crew.body.data.id, secondCrew.body.data.id],
+      crewRoleRequirements: [{ role: 'dispatcher', count: 2 }],
+      crewAssignments: [
+        { profileId: actor('owner').actorUserId, crewId: crew.body.data.id, role: 'dispatcher' },
+        { profileId: actor('dispatcher').actorUserId, crewId: crew.body.data.id, role: 'dispatcher' },
+        { profileId: actor('owner').actorUserId, crewId: secondCrew.body.data.id, role: 'dispatcher' },
+        { profileId: actor('dispatcher').actorUserId, crewId: secondCrew.body.data.id, role: 'dispatcher' },
+      ] };
+    await p5bReview('scope', overlapDirectKey, null, overlapDirectScope);
+    await p5bReview('scope', overlapCrewKey, null, overlapCrewScope);
+    const reviewOverlapJob = async (work, selectedScopeKey, selectedScope) => p5bReview('job',
+      selectedScopeKey, work.appointment, {
+        ...unscheduledJobDefinition, scopeKey: selectedScopeKey, alternativeKey: overlapAlternative,
+        appointmentId: work.appointment, assignmentId: work.assignment.id,
+        crewApplicable: selectedScope.applicability.crew, skillApplicable: selectedScope.applicability.skill,
+        locationKey: work === laterWork ? 'site-two' : 'site-one', vehicleApplicable: false,
+        equipmentApplicable: false, travelApplicable: false, vehicleAssetIds: [], equipmentAssetIds: [],
+        equipmentBasis: { kind: 'not_applicable', receiptId: null, digest: null },
+        readinessBasis: { kind: 'not_applicable', receiptId: null, digest: null },
+        travelBasis: { kind: 'not_applicable', receiptId: null, digest: null },
+      });
+    for (const work of allMultiWorks) {
+      const crewAssigned = work === crewOneWork || work === crewTwoWork;
+      const selectedScopeKey = crewAssigned ? overlapCrewKey : overlapDirectKey;
+      const selectedScope = crewAssigned ? overlapCrewScope : overlapDirectScope;
+      await reviewOverlapJob(work, selectedScopeKey, selectedScope);
+    }
+    const transientOriginKey = `m26-p5b-transient-origin-${uuid()}`;
+    const transientOriginBody = { reason: 'Save disjoint direct and crew outputs before prospective rereviews.',
+      confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1' };
+    const transientOrigin = await post('/origins', transientOriginBody, transientOriginKey);
+    expect(transientOrigin.status).toBe(201);
+    const transientOutcomeCount = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_constrained_capacity_outcomes_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    await setClock(new Date(new Date(transientOrigin.body.data.predictionCutoffAt).getTime() + 86400000));
+    expect((await request(fixture.app).put(`/api/workforce/crews/${secondCrew.body.data.id}`)
+      .set(actor('owner').session.headers).send({ name: 'Fixture crew two', homeLocationId: 'headquarters',
+        members: [...isolatedCrewMembers, { profileId: actor('member').actorUserId, role: 'member' }] })).status).toBe(200);
+    await p5bReview('scope', overlapCrewKey, null, overlapCrewScope);
+    await reviewOverlapJob(crewOneWork, overlapCrewKey, overlapCrewScope);
+    await reviewOverlapJob(crewTwoWork, overlapCrewKey, overlapCrewScope);
+    expect((await get(`/origins/${transientOrigin.body.data.id}`)).body.data.state)
+      .toBe('constrained_capacity_origin_stale');
+    await setClock(new Date(new Date(transientOrigin.body.data.predictionCutoffAt).getTime() + 2 * 86400000));
+    expect((await request(fixture.app).put(`/api/workforce/crews/${secondCrew.body.data.id}`)
+      .set(actor('owner').session.headers).send({ name: 'Fixture crew two', homeLocationId: 'headquarters',
+        members: isolatedCrewMembers })).status).toBe(200);
+    await p5bReview('scope', overlapCrewKey, null, overlapCrewScope);
+    await reviewOverlapJob(crewOneWork, overlapCrewKey, overlapCrewScope);
+    await reviewOverlapJob(crewTwoWork, overlapCrewKey, overlapCrewScope);
+    expect((await get(`/origins/${transientOrigin.body.data.id}`)).body.data.state)
+      .toBe('constrained_capacity_origin_stale');
+    expect((await post('/origins', transientOriginBody, transientOriginKey)).status).toBe(409);
+    await setClock(transientOrigin.body.data.horizonEndsAt);
+    expect((await post(`/origins/${transientOrigin.body.data.id}/outcomes`, {},
+      `m26-p5b-transient-outcome-${uuid()}`)).status).toBe(409);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_constrained_capacity_outcomes_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(transientOutcomeCount);
+
+    const overlapRecoveryStart = new Date(logicalNow.getTime() + 1000);
+    await setClock(overlapRecoveryStart);
+    const overlapRecoveryEnd = new Date(overlapRecoveryStart.getTime() + 31 * 86400000);
+    const overlapRecoveryIntervals = Array.from({ length: 10 }, (_, index) => ({ kind: 'available',
+      start: new Date(overlapRecoveryStart.getTime() + index * 86400000 + 9 * 3600000).toISOString(),
+      end: new Date(overlapRecoveryStart.getTime() + index * 86400000 + 19 * 3600000).toISOString() }));
+    for (const name of ['member', 'admin', 'dispatcher', 'owner']) {
+      await replaceAvailability(actor(name).actorUserId, overlapRecoveryStart, overlapRecoveryEnd,
+        overlapRecoveryIntervals);
+    }
+    await advance(1);
+    expect((await p5aPost('/epochs', { reason: 'Begin complete recovery coverage after the invalid scope interval.',
+      confirmed: true, confirmationVersion: 'm26-workload-capacity-epoch-v1' })).status).toBe(201);
+    for (const [name, role] of [['owner', 'dispatcher'], ['admin', 'technician'], ['dispatcher', 'dispatcher'],
+      ['member', 'technician'], ['viewer', 'employee']]) {
+      await refreshP5aReview('role_qualification', actor(name).actorUserId, role);
+    }
+    for (const name of ['member', 'admin', 'dispatcher', 'owner']) {
+      await refreshP5aReview('availability_basis', actor(name).actorUserId);
+    }
+    await refreshP5aReview('capacity_role_scope', null, 'technician');
+    await advance(1); await p5bEpoch(); await advance(1);
+    await p5bReview('method', null, null, methodDefinition);
+    await p5bReview('scope', overlapDirectKey, null, overlapDirectScope);
+    await p5bReview('scope', overlapCrewKey, null, overlapCrewScope);
+    for (const work of allMultiWorks) {
+      const crewAssigned = work === crewOneWork || work === crewTwoWork;
+      const selectedScopeKey = crewAssigned ? overlapCrewKey : overlapDirectKey;
+      const selectedScope = crewAssigned ? overlapCrewScope : overlapDirectScope;
+      await reviewOverlapJob(work, selectedScopeKey, selectedScope);
+    }
+    const overlapRecoveryOrigin = await post('/origins', {
+      reason: 'Save a new origin only after a new prospective epoch and current disjoint reviews.',
+      confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1' });
+    expect(overlapRecoveryOrigin.status).toBe(201);
+    expect((await request(fixture.app).put(`/api/workforce/crews/${crew.body.data.id}`)
+      .set(actor('owner').session.headers).send({ name: 'Fixture crew', homeLocationId: 'headquarters',
+        members: [{ profileId: actor('member').actorUserId, role: 'lead' },
+          { profileId: actor('dispatcher').actorUserId, role: 'member' }] })).status).toBe(200);
+    expect((await request(fixture.app).put(`/api/workforce/crews/${secondCrew.body.data.id}`)
+      .set(actor('owner').session.headers).send({ name: 'Fixture crew two', homeLocationId: 'headquarters',
+        members: [{ profileId: actor('admin').actorUserId, role: 'lead' },
+          { profileId: actor('owner').actorUserId, role: 'member' }] })).status).toBe(200);
 
     // The exact M24 estimate population is part of every reviewed job source,
     // even when a job uses the narrow Part5B owner-reviewed bases. A second

@@ -2152,6 +2152,129 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_workload_capacity_v1_clock(),public.canonical_forecast_workload_capacity_v1_test_clock_set(timestamptz),public.canonical_forecast_workload_capacity_v1_completion_clock(),public.canonical_forecast_workload_capacity_v1_schedule_clock(),public.canonical_forecast_workload_capacity_v1_schedule_revision_clock(),public.canonical_forecast_workload_capacity_v1_person_plan_clock(),public.canonical_forecast_workload_capacity_v1_source_fence(),public.canonical_forecast_workload_capacity_v1_lock_sources(uuid),public.canonical_forecast_workload_capacity_v1_access(uuid,uuid,text,uuid,text,boolean),public.canonical_forecast_workload_capacity_v1_access_recheck(uuid,uuid,text,uuid,text,boolean),public.canonical_forecast_workload_capacity_v1_immutable(),public.canonical_forecast_workload_capacity_v1_labor_evidence(uuid,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_backlog_evidence(uuid,timestamptz),public.canonical_forecast_workload_capacity_v1_capacity_calculation(uuid,timestamptz,timestamptz,timestamptz,text),public.canonical_forecast_workload_capacity_v1_capacity_evidence(uuid,timestamptz,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_capacity_evidence(uuid,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_window_evidence(uuid,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_source_counts(uuid),public.canonical_forecast_workload_capacity_v1_review_source(uuid,text,text,uuid,text),public.canonical_forecast_workload_capacity_v1_window_current(uuid,public.canonical_forecast_workload_capacity_windows_v1),public.canonical_forecast_workload_capacity_v1_origin_input(uuid,timestamptz,timestamptz),public.canonical_forecast_workload_capacity_v1_origin_current(uuid,public.canonical_forecast_workload_capacity_origins_v1),public.canonical_forecast_workload_capacity_v1_origin_projection(public.canonical_forecast_workload_capacity_origins_v1,text,boolean),public.canonical_forecast_workload_capacity_v1_evaluation_projection(public.canonical_forecast_workload_capacity_evaluations_v1,text,boolean),public.canonical_forecast_workload_capacity_v1_evaluation_current(uuid,public.canonical_forecast_workload_capacity_evaluations_v1) FROM %I',runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_workload_capacity_v1_prerequisites(uuid,uuid,text,uuid),public.canonical_forecast_workload_capacity_v1_review_current(uuid,uuid,text,uuid,text,text,uuid,text),public.canonical_forecast_workload_capacity_v1_backlog_unschedule(uuid,uuid,text,uuid,text,text,uuid,bigint,text,text,text),public.canonical_forecast_workload_capacity_v1_epoch_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_workload_capacity_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,uuid,text,text,integer,text,bigint,text,text),public.canonical_forecast_workload_capacity_v1_window_finalize(uuid,uuid,text,uuid,text,text,timestamptz,timestamptz,text),public.canonical_forecast_workload_capacity_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_workload_capacity_v1_origin_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_workload_capacity_v1_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_workload_capacity_v1_evaluation_read(uuid,uuid,text,uuid,uuid,uuid) TO %I',runtime_role);
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='225_canonical_forecast_constrained_capacity_v1.sql') OR
+         pg_catalog.to_regclass('public.canonical_forecast_constrained_capacity_origins_v1') IS NOT NULL THEN
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('canonical_forecast_constrained_capacity_source_fences_v1'),
+          ('canonical_forecast_constrained_capacity_source_events_v1'),
+          ('canonical_forecast_constrained_capacity_methods_v1'),
+          ('canonical_forecast_constrained_capacity_epochs_v1'),
+          ('canonical_forecast_constrained_capacity_reviews_v1'),
+          ('canonical_forecast_constrained_capacity_origins_v1'),
+          ('canonical_forecast_constrained_capacity_outcomes_v1'),
+          ('canonical_forecast_constrained_capacity_evaluations_v1')) required(table_name)
+          WHERE pg_catalog.to_regclass('public.'||required.table_name) IS NULL) THEN
+          RAISE EXCEPTION 'Required constrained-capacity v1 authority is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_constrained_capacity_v1_prerequisites(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_constrained_capacity_v1_review_current(uuid,uuid,text,uuid,text,text,uuid)'),
+          ('public.canonical_forecast_constrained_capacity_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,uuid,text,bigint,text,jsonb,text,text)'),
+          ('public.canonical_forecast_constrained_capacity_v1_epoch_capture(uuid,uuid,text,uuid,text,text,text,text)'),
+          ('public.canonical_forecast_constrained_capacity_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text)'),
+          ('public.canonical_forecast_constrained_capacity_v1_origin_read(uuid,uuid,text,uuid,uuid)'),
+          ('public.canonical_forecast_constrained_capacity_v1_outcome_capture(uuid,uuid,text,uuid,text,text,uuid)'),
+          ('public.canonical_forecast_constrained_capacity_v1_outcome_read(uuid,uuid,text,uuid,uuid,uuid)'),
+          ('public.canonical_forecast_constrained_capacity_v1_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,uuid)'),
+          ('public.canonical_forecast_constrained_capacity_v1_evaluation_read(uuid,uuid,text,uuid,uuid,uuid)'),
+          ('public.canonical_forecast_constrained_capacity_v1_source_capture()'),
+          ('public.canonical_forecast_constrained_capacity_v1_immutable()'),
+          ('public.canonical_forecast_constrained_capacity_v1_lock_sources(uuid)'),
+          ('public.canonical_forecast_constrained_capacity_v1_source_baseline(uuid,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_source_payload_at(uuid,text,text,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_source_identity(uuid,text,text,uuid,jsonb)'),
+	          ('public.canonical_forecast_constrained_capacity_v1_review_current_internal(uuid,text,text,uuid)'),
+	          ('public.canonical_forecast_constrained_capacity_v1_review_at(uuid,text,text,uuid,timestamptz)'),
+	          ('public.canonical_forecast_constrained_capacity_v1_scope_population_valid(uuid,jsonb,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_m24_bases_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1)'),
+          ('public.canonical_forecast_constrained_capacity_v1_job_review_covers(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_review_is_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1)'),
+          ('public.canonical_forecast_constrained_capacity_v1_scope_calculation(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,timestamptz,jsonb)'),
+          ('public.canonical_forecast_constrained_capacity_v1_working_windows(jsonb,timestamptz,timestamptz,text)'),
+          ('public.canonical_forecast_constrained_capacity_v1_subject_present(uuid,text,text,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_exact_pack(jsonb)'),
+          ('public.canonical_forecast_constrained_capacity_v1_exact_match(jsonb,jsonb,jsonb,text)'),
+          ('public.canonical_forecast_constrained_capacity_v1_scope_segment(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,jsonb,text)'),
+          ('public.canonical_forecast_constrained_capacity_v1_work_census(uuid,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_schedule_timeline(uuid,uuid,timestamptz,timestamptz,timestamptz,boolean)'),
+          ('public.canonical_forecast_constrained_capacity_v1_work_census_period(uuid,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_results(uuid,timestamptz,timestamptz,timestamptz,jsonb)'),
+          ('public.canonical_forecast_constrained_capacity_v1_origin_current(uuid,public.canonical_forecast_constrained_capacity_origins_v1)'),
+          ('public.canonical_forecast_constrained_capacity_v1_outcome_current(uuid,public.canonical_forecast_constrained_capacity_outcomes_v1)'),
+          ('public.canonical_forecast_constrained_capacity_v1_evaluation_current(uuid,public.canonical_forecast_constrained_capacity_evaluations_v1)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required constrained-capacity v1 entry security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_constrained_capacity_v1_uuid_array(jsonb,integer)'),
+          ('public.canonical_forecast_constrained_capacity_v1_intervals(jsonb)'),
+          ('public.canonical_forecast_constrained_capacity_v1_definition_valid(text,jsonb)'),
+          ('public.canonical_forecast_constrained_capacity_v1_source_subject(text,jsonb)'),
+          ('public.canonical_forecast_constrained_capacity_v1_review_projection(public.canonical_forecast_constrained_capacity_reviews_v1,boolean)'),
+          ('public.canonical_forecast_constrained_capacity_v1_interval_minutes(jsonb,timestamptz,timestamptz)'),
+          ('public.canonical_forecast_constrained_capacity_v1_origin_projection(public.canonical_forecast_constrained_capacity_origins_v1,text,boolean)'),
+          ('public.canonical_forecast_constrained_capacity_v1_outcome_projection(public.canonical_forecast_constrained_capacity_outcomes_v1,text,boolean)'),
+          ('public.canonical_forecast_constrained_capacity_v1_evaluation_projection(public.canonical_forecast_constrained_capacity_evaluations_v1,text,boolean)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND NOT routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required constrained-capacity v1 projection security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('canonical_forecast_constrained_capacity_source_events_v1','z_m26_p5b_immutable_source_events'),
+          ('canonical_forecast_constrained_capacity_methods_v1','z_m26_p5b_immutable_methods'),
+          ('canonical_forecast_constrained_capacity_epochs_v1','z_m26_p5b_immutable_epochs'),
+          ('canonical_forecast_constrained_capacity_reviews_v1','z_m26_p5b_immutable_reviews'),
+          ('canonical_forecast_constrained_capacity_origins_v1','z_m26_p5b_immutable_origins'),
+          ('canonical_forecast_constrained_capacity_outcomes_v1','z_m26_p5b_immutable_outcomes'),
+          ('canonical_forecast_constrained_capacity_evaluations_v1','z_m26_p5b_immutable_evaluations')) required(table_name,trigger_name)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+            WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.'||required.table_name)
+             AND trigger_value.tgname=required.trigger_name
+             AND trigger_value.tgenabled='O' AND trigger_value.tgtype=58
+             AND trigger_value.tgfoid='public.canonical_forecast_constrained_capacity_v1_immutable()'::regprocedure
+             AND NOT trigger_value.tgisinternal)) THEN
+          RAISE EXCEPTION 'Required constrained-capacity v1 immutability is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('workforce_crews','z_m26_p5b_source_crews'),
+          ('workforce_crew_members','z_m26_p5b_source_crew_members'),
+          ('workforce_skills','z_m26_p5b_source_skills'),
+          ('workforce_profile_skills','z_m26_p5b_source_profile_skills'),
+          ('canonical_business_profiles','z_m26_p5b_source_business_profiles'),
+          ('tenant_assets','z_m26_p5b_source_assets'),
+          ('tenant_asset_service_capabilities','z_m26_p5b_source_asset_capabilities'),
+          ('canonical_equipment_events','z_m26_p5b_source_equipment_events'),
+          ('canonical_equipment_plans','z_m26_p5b_source_equipment_plans'),
+          ('canonical_equipment_readiness_plans','z_m26_p5b_source_equipment_readiness'),
+          ('canonical_travel_plans','z_m26_p5b_source_travel_plans'),
+          ('canonical_schedule_assignments','z_m26_p5b_source_schedule_assignments'),
+          ('canonical_schedule_assignment_revisions','z_m26_p5b_source_schedule_revisions'),
+          ('canonical_schedule_approvals','z_m26_p5b_source_schedule_approvals'),
+          ('canonical_schedule_human_approvals','z_m26_p5b_source_human_approvals'),
+          ('canonical_workforce_availability_revisions','z_m26_p5b_source_availability_revisions'),
+          ('canonical_estimates','z_m26_p5b_source_estimates'),
+          ('canonical_completion_records','z_m26_p5b_source_completion_records'),
+          ('canonical_opportunities','z_m26_p5b_source_opportunities')) required(table_name,trigger_name)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+            WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.'||required.table_name)
+             AND trigger_value.tgname=required.trigger_name AND trigger_value.tgenabled='O'
+             AND trigger_value.tgtype=31
+             AND trigger_value.tgfoid='public.canonical_forecast_constrained_capacity_v1_source_capture()'::regprocedure
+             AND NOT trigger_value.tgisinternal)) THEN
+          RAISE EXCEPTION 'Required constrained-capacity v1 source capture is missing';
+        END IF;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_constrained_capacity_source_fences_v1,public.canonical_forecast_constrained_capacity_source_events_v1,public.canonical_forecast_constrained_capacity_methods_v1,public.canonical_forecast_constrained_capacity_epochs_v1,public.canonical_forecast_constrained_capacity_reviews_v1,public.canonical_forecast_constrained_capacity_origins_v1,public.canonical_forecast_constrained_capacity_outcomes_v1,public.canonical_forecast_constrained_capacity_evaluations_v1 FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_constrained_capacity_source_order_v1 FROM %I',runtime_role);
+	        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_constrained_capacity_v1_source_capture(),public.canonical_forecast_constrained_capacity_v1_immutable(),public.canonical_forecast_constrained_capacity_v1_lock_sources(uuid),public.canonical_forecast_constrained_capacity_v1_source_baseline(uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_source_payload_at(uuid,text,text,timestamptz),public.canonical_forecast_constrained_capacity_v1_source_subject(text,jsonb),public.canonical_forecast_constrained_capacity_v1_uuid_array(jsonb,integer),public.canonical_forecast_constrained_capacity_v1_intervals(jsonb),public.canonical_forecast_constrained_capacity_v1_definition_valid(text,jsonb),public.canonical_forecast_constrained_capacity_v1_source_identity(uuid,text,text,uuid,jsonb),public.canonical_forecast_constrained_capacity_v1_review_current_internal(uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_at(uuid,text,text,uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_scope_population_valid(uuid,jsonb,timestamptz,timestamptz),public.canonical_forecast_constrained_capacity_v1_m24_bases_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1),public.canonical_forecast_constrained_capacity_v1_job_review_covers(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz),public.canonical_forecast_constrained_capacity_v1_review_is_current(uuid,public.canonical_forecast_constrained_capacity_reviews_v1),public.canonical_forecast_constrained_capacity_v1_review_projection(public.canonical_forecast_constrained_capacity_reviews_v1,boolean),public.canonical_forecast_constrained_capacity_v1_interval_minutes(jsonb,timestamptz,timestamptz),public.canonical_forecast_constrained_capacity_v1_scope_calculation(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,timestamptz,jsonb),public.canonical_forecast_constrained_capacity_v1_working_windows(jsonb,timestamptz,timestamptz,text),public.canonical_forecast_constrained_capacity_v1_subject_present(uuid,text,text,timestamptz),public.canonical_forecast_constrained_capacity_v1_exact_pack(jsonb),public.canonical_forecast_constrained_capacity_v1_exact_match(jsonb,jsonb,jsonb,text),public.canonical_forecast_constrained_capacity_v1_scope_segment(uuid,public.canonical_forecast_constrained_capacity_reviews_v1,timestamptz,timestamptz,jsonb,text),public.canonical_forecast_constrained_capacity_v1_work_census(uuid,timestamptz),public.canonical_forecast_constrained_capacity_v1_schedule_timeline(uuid,uuid,timestamptz,timestamptz,timestamptz,boolean),public.canonical_forecast_constrained_capacity_v1_work_census_period(uuid,timestamptz,timestamptz),public.canonical_forecast_constrained_capacity_v1_complete_input(uuid,timestamptz,timestamptz),public.canonical_forecast_constrained_capacity_v1_results(uuid,timestamptz,timestamptz,timestamptz,jsonb),public.canonical_forecast_constrained_capacity_v1_origin_current(uuid,public.canonical_forecast_constrained_capacity_origins_v1),public.canonical_forecast_constrained_capacity_v1_origin_projection(public.canonical_forecast_constrained_capacity_origins_v1,text,boolean),public.canonical_forecast_constrained_capacity_v1_outcome_current(uuid,public.canonical_forecast_constrained_capacity_outcomes_v1),public.canonical_forecast_constrained_capacity_v1_outcome_projection(public.canonical_forecast_constrained_capacity_outcomes_v1,text,boolean),public.canonical_forecast_constrained_capacity_v1_evaluation_current(uuid,public.canonical_forecast_constrained_capacity_evaluations_v1),public.canonical_forecast_constrained_capacity_v1_evaluation_projection(public.canonical_forecast_constrained_capacity_evaluations_v1,text,boolean) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_constrained_capacity_v1_prerequisites(uuid,uuid,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_current(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,uuid,text,bigint,text,jsonb,text,text),public.canonical_forecast_constrained_capacity_v1_epoch_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_constrained_capacity_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_constrained_capacity_v1_origin_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_constrained_capacity_v1_outcome_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_constrained_capacity_v1_outcome_read(uuid,uuid,text,uuid,uuid,uuid),public.canonical_forecast_constrained_capacity_v1_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,uuid),public.canonical_forecast_constrained_capacity_v1_evaluation_read(uuid,uuid,text,uuid,uuid,uuid) TO %I',runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -4884,6 +5007,7 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('221_canonical_forecast_transition_future_o
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('222_canonical_forecast_demand_to_schedule_v1.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('223_canonical_forecast_demand_ui_prerequisites_v1.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('224_canonical_forecast_workload_capacity_v1.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('225_canonical_forecast_constrained_capacity_v1.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

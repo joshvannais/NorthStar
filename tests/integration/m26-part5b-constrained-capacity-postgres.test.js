@@ -7,6 +7,7 @@ const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixtur
 const { createForecastConstrainedCapacityRouter } = require('../../src/routes/forecastConstrainedCapacity');
 const { createForecastWorkloadCapacityRouter } = require('../../src/routes/forecastWorkloadCapacity');
 const { createForecastCapacityAdvisoryRouter } = require('../../src/routes/forecastCapacityAdvisory');
+const { CapacityAdvisoryContinuationWorker } = require('../../src/services/capacityAdvisoryContinuationWorker');
 const { ingestLead } = require('../../src/services/canonicalGraphService');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -622,16 +623,19 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     .get('/api/v1/forecast/capacity-advice' + path).set('X-Test-Actor', name);
 
   async function p5cReview(kind, { alternativeKey = null, scopeKey = null, role = null,
-    subjectId = null, definition = {}, action = 'approve' } = {}) {
+    subjectId = null, definition = {}, action = 'approve', continuationId = null,
+    correctionOfReviewId = null, key = `m26-p5c-${uuid()}` } = {}) {
     const query = { kind, alternativeKey: alternativeKey || 'none', scopeKey: scopeKey || 'none',
       role: role || 'none', subjectId: subjectId || 'none' };
     const current = await p5cGet('/reviews/current?' + new URLSearchParams(query).toString());
     expect(current.status).toBe(200);
     const token = current.body.data;
-    const response = await p5cPost('/reviews', { kind, alternativeKey, scopeKey, role, subjectId,
+    const body = { kind, alternativeKey, scopeKey, role, subjectId,
       action, expectedRevision: token.expectedRevision, expectedDigest: token.expectedDigest, definition,
       reason: `Owner explicitly reviewed the exact ${kind.replaceAll('_', ' ')} advisory authority.`,
-      confirmed: true, confirmationVersion: 'm26-capacity-advisory-review-v1' });
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-review-v1' };
+    if (continuationId || correctionOfReviewId) Object.assign(body, { continuationId, correctionOfReviewId });
+    const response = await p5cPost('/reviews', body, key);
     if (response.status !== 201) throw new Error(
       `Part5C ${kind} review failed: ${JSON.stringify({ status: response.status, body: response.body, definition })}`);
     return response.body.data;
@@ -792,7 +796,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     };
 
     const horizonEnd = new Date(start.getTime() + 30 * 86400000);
-    const firstAvailabilityDay = new Date(start); firstAvailabilityDay.setUTCHours(0, 0, 0, 0);
+    const firstAvailabilityDay = new Date(start.getTime() + 86400000); firstAvailabilityDay.setUTCHours(0, 0, 0, 0);
     let intervals = Array.from({ length: 10 }, (_, index) => ({ kind: 'available',
       start: new Date(firstAvailabilityDay.getTime() + index * 86400000 + 12 * 3600000).toISOString(),
       end: new Date(firstAvailabilityDay.getTime() + index * 86400000 + 22 * 3600000).toISOString() }));
@@ -2349,7 +2353,9 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     await p5cReview('policy', { alternativeKey: advisoryAlternative, scopeKey, role: 'technician',
       definition: policyDefinition });
     const demandDefinition = await p5cDefinition(advisoryAlternative);
-    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: demandDefinition });
+    const initialDemandReview = await p5cReview('demand', {
+      alternativeKey: advisoryAlternative, definition: demandDefinition });
+    let currentDemandReview = initialDemandReview;
     const advisoryEpochBody = {
       reason: 'Begin exact prospective five-category capacity advice under current human reviews.',
       confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' };
@@ -2428,6 +2434,26 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     expect((await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcome-preparations`, {})).status)
       .toBe(400);
 
+    // The owner prospectively reserves the next exact server-owned period.
+    // Neither this request nor the later worker supplies a cutoff or horizon.
+    const continuationBody = {
+      reason: 'Reserve the next exact gap-free private advisory period before the current horizon ends.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-continuation-v1' };
+    const continuationKey = `m26-p5c-continuation-${uuid()}`;
+    const continuation = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/continuations`,
+      continuationBody, continuationKey);
+    expect(continuation.status).toBe(201);
+    expect(continuation.body.data).toMatchObject({ state: 'capacity_advisory_continuation_pending',
+      predecessorOriginId: advisoryOrigin.body.data.id, periodStart: advisoryOrigin.body.data.horizonEndsAt,
+      originId: null, replayed: false });
+    expect((await p5cPost(`/origins/${advisoryOrigin.body.data.id}/continuations`,
+      continuationBody, continuationKey)).headers['idempotency-replayed']).toBe('true');
+    expect((await p5cPost(`/origins/${advisoryOrigin.body.data.id}/continuations`,
+      { ...continuationBody, reason: `${continuationBody.reason} changed` }, continuationKey)).status).toBe(409);
+    const beforeBoundaryWorker = new CapacityAdvisoryContinuationWorker({ getPool: () => fixture.runtimePool });
+    expect(await beforeBoundaryWorker.drainOnce()).toEqual({ due: 0, attempted: 0 });
+    beforeBoundaryWorker.stop();
+
     // The later outcome is built only after the accepted Part5A outcome and
     // evaluation are prepared for the same immutable period.  The separate
     // historical allocation review pins the exact end-period population.
@@ -2437,7 +2463,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const outcomeDemand = await p5cDefinition(advisoryAlternative, advisoryOrigin.body.data.id);
     outcomeDemand.methodVersion = 'm26-capacity-advisory-outcome-allocation-v1';
     outcomeDemand.originId = advisoryOrigin.body.data.id;
-    await p5cReview('outcome_demand', { alternativeKey: advisoryAlternative,
+    let currentOutcomeDemandReview = await p5cReview('outcome_demand', { alternativeKey: advisoryAlternative,
       subjectId: advisoryOrigin.body.data.id, definition: outcomeDemand });
     const advisoryOutcomeKey = `m26-p5c-outcome-${uuid()}`;
     const advisoryOutcome = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcomes`, {},
@@ -2472,8 +2498,9 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     // A corrected historical allocation is append-only. It stales the prior
     // outcome/evaluation without rewriting the immutable origin, then requires
     // explicit recapture and reevaluation under the same original period.
-    await p5cReview('outcome_demand', { alternativeKey: advisoryAlternative,
-      subjectId: advisoryOrigin.body.data.id, definition: outcomeDemand });
+    currentOutcomeDemandReview = await p5cReview('outcome_demand', { alternativeKey: advisoryAlternative,
+      subjectId: advisoryOrigin.body.data.id, definition: outcomeDemand,
+      correctionOfReviewId: currentOutcomeDemandReview.id });
     expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/outcomes/${advisoryOutcome.body.data.id}`))
       .body.data.state).toBe('capacity_advisory_outcome_stale');
     expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${advisoryEvaluation.body.data.id}`))
@@ -2493,13 +2520,38 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     // recomputes, and the explicit two-period owner policy can now produce a
     // positive hiring-attention state from consecutive evaluated receipts.
     const secondDemand = await p5cDefinition(advisoryAlternative);
-    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: secondDemand });
+    const secondDemandReview = await p5cReview('demand', { alternativeKey: advisoryAlternative,
+      definition: secondDemand, continuationId: continuation.body.data.id });
+    currentDemandReview = secondDemandReview;
     expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}`)).body.data.state)
       .toBe('capacity_advisory_origin_current');
     expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${correctedEvaluation.body.data.id}`))
       .body.data.state).toBe('capacity_advisory_evaluation_current');
-    const secondOrigin = await p5cPost('/origins', advisoryOriginBody);
-    expect(secondOrigin.status).toBe(201);
+    const continuationWorker = new CapacityAdvisoryContinuationWorker({ getPool: () => fixture.runtimePool });
+    expect(await continuationWorker.drainOnce()).toEqual({ due: 1, attempted: 1 });
+    const activatedContinuation = await p5cGet(`/continuations/${continuation.body.data.id}`);
+    if (activatedContinuation.status !== 200) {
+      const diagnostic = (await fixture.ownerPool.query(
+        `SELECT event_value.event_kind,event_value.origin_id,
+                canonical_forecast_capacity_advisory_v1_continuation_current($1,value) continuation_current,
+                canonical_forecast_capacity_advisory_v1_continuation_projection(value,false) projection,
+                CASE WHEN origin_value.id IS NULL THEN NULL
+                  ELSE canonical_forecast_capacity_advisory_v1_origin_current($1,origin_value) END origin_current
+           FROM canonical_forecast_capacity_advisory_continuations_v1 value
+           LEFT JOIN canonical_forecast_capacity_advisory_continuation_events_v1 event_value
+             ON event_value.organization_id=value.organization_id AND event_value.continuation_id=value.id
+           LEFT JOIN canonical_forecast_capacity_advisory_origins_v1 origin_value
+             ON origin_value.organization_id=event_value.organization_id AND origin_value.id=event_value.origin_id
+          WHERE value.organization_id=$1 AND value.id=$2`, [fixture.org, continuation.body.data.id])).rows[0];
+      throw new Error(`Part5C continuation projection failed: ${JSON.stringify({
+        response: activatedContinuation.body, diagnostic })}`);
+    }
+    expect(activatedContinuation.body.data).toMatchObject({ state: 'capacity_advisory_continuation_activated',
+      predecessorOriginId: advisoryOrigin.body.data.id, periodStart: advisoryOrigin.body.data.horizonEndsAt,
+      replayed: false });
+    const secondOrigin = { status: 201, body: { data: (await p5cGet(
+      `/origins/${activatedContinuation.body.data.originId}`)).body.data } };
+    expect(secondOrigin.body.data.id).toBe(activatedContinuation.body.data.originId);
     const secondDecision = await p5cPost(`/origins/${secondOrigin.body.data.id}/decisions`, {
       action: 'approve', expectedRevision: 0, expectedDigest: 'none',
       reason: 'Approve the second exact private period for the owner-reviewed consecutive criterion.',
@@ -2543,6 +2595,44 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       reason: 'Explicitly reapprove this unchanged private research receipt for later evaluation.',
       confirmed: true, confirmationVersion: 'm26-capacity-advisory-decision-v1' });
     expect(secondReapproved.status).toBe(201);
+
+    // A genuinely later correction explicitly targets the immutable first
+    // period rather than borrowing the review wall clock. It immediately
+    // retires the origin and its already-saved outcome/evaluation before any
+    // successor generation exists; equal restored bytes cannot revive them.
+    const firstPeriodCorrectedDemand = await p5cDefinition(advisoryAlternative, advisoryOrigin.body.data.id);
+    firstPeriodCorrectedDemand.methodVersion = 'm26-capacity-advisory-demand-allocation-v1';
+    delete firstPeriodCorrectedDemand.originId;
+    currentDemandReview = await p5cReview('demand', { alternativeKey: advisoryAlternative,
+      definition: firstPeriodCorrectedDemand, correctionOfReviewId: initialDemandReview.id });
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}`)).body.data.state)
+      .toBe('capacity_advisory_origin_stale');
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/outcomes/${correctedOutcome.body.data.id}`))
+      .body.data.state).toBe('capacity_advisory_outcome_stale');
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${correctedEvaluation.body.data.id}`))
+      .body.data.state).toBe('capacity_advisory_evaluation_stale');
+    const beforeInputCorrectionChildren = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_evaluations_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    expect((await p5cPost(`/origins/${advisoryOrigin.body.data.id}/evaluations`, {
+      outcomeId: correctedOutcome.body.data.id })).status).toBe(409);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_evaluations_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(beforeInputCorrectionChildren);
+    const correctedFirstOrigin = await p5cPost('/origins', {
+      ...advisoryOriginBody, correctionOriginId: advisoryOrigin.body.data.id });
+    if (correctedFirstOrigin.status !== 201) {
+      const targetRow = (await fixture.ownerPool.query(
+        `SELECT canonical_forecast_capacity_advisory_v1_origin_non_demand_current($1,value) non_demand,
+                canonical_forecast_capacity_advisory_v1_origin_input_demand_current($1,value) input_demand,
+                canonical_forecast_capacity_advisory_v1_origin_current($1,value) full_current
+           FROM canonical_forecast_capacity_advisory_origins_v1 value
+          WHERE organization_id=$1 AND id=$2`, [fixture.org, advisoryOrigin.body.data.id])).rows[0];
+      throw new Error(`Part5C corrected origin failed: ${JSON.stringify({
+        response: correctedFirstOrigin.body, targetRow })}`);
+    }
+    currentDemandReview = await p5cReview('demand', { alternativeKey: advisoryAlternative,
+      definition: secondDemand, correctionOfReviewId: secondDemandReview.id });
 
     // A new Part 5C epoch permanently retires every older Part 5C receipt even
     // when no upstream value changed. Old exact-key replay cannot revive it;
@@ -2596,7 +2686,8 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     // progress. Restoring identical bytes cannot revive the pinned generation;
     // explicit recapture under the current review is required.
     const correctedDemand = await p5cDefinition(advisoryAlternative);
-    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: correctedDemand });
+    currentDemandReview = await p5cReview('demand', { alternativeKey: advisoryAlternative,
+      definition: correctedDemand, correctionOfReviewId: currentDemandReview.id });
     expect((await p5cGet(`/origins/${recoveredOrigin.body.data.id}`)).body.data.state)
       .toBe('capacity_advisory_origin_stale');
     const correctedDemandChildCounts = (await fixture.ownerPool.query(
@@ -2617,7 +2708,8 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const demandRetiredCount = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count);
-    const demandRecoveredOrigin = await p5cPost('/origins', advisoryOriginBody);
+    const demandRecoveredOrigin = await p5cPost('/origins', {
+      ...advisoryOriginBody, correctionOriginId: recoveredOrigin.body.data.id });
     expect(demandRecoveredOrigin.status).toBe(201);
     const demandGenerations = (await fixture.ownerPool.query(
       `SELECT id,generation,previous_id FROM canonical_forecast_capacity_advisory_origins_v1
@@ -2825,6 +2917,55 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     expect(Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count)).toBe(advisoryReviewCount);
+
+    // A reserved boundary that is not activated within the fixed server
+    // deadline becomes immutable unavailable evidence. Restarting the worker
+    // cannot backdate the missed cutoff or create a partial origin.
+    const missedContinuation = await p5cPost(`/origins/${advisoryZeroOrigin.body.data.id}/continuations`,
+      continuationBody);
+    expect(missedContinuation.status).toBe(201);
+    const originCountBeforeMiss = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    await setClock(new Date(new Date(missedContinuation.body.data.activationDeadline).getTime() + 1000));
+    const restartedWorker = new CapacityAdvisoryContinuationWorker({ getPool: () => fixture.runtimePool });
+    expect(await restartedWorker.drainOnce()).toEqual({ due: 1, attempted: 1 });
+    expect((await p5cGet(`/continuations/${missedContinuation.body.data.id}`)).body.data)
+      .toMatchObject({ state: 'capacity_advisory_continuation_missed', originId: null, refreshRequired: true });
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(originCountBeforeMiss);
+
+    // Exact replay belongs to the latest exact human revision for every
+    // action. Obsolete reject and withdraw receipts cannot be reported as
+    // restored after a later decision, and conflicts append no rows.
+    const methodQuery = '/reviews/current?' + new URLSearchParams({ kind: 'method', alternativeKey: 'none',
+      scopeKey: 'none', role: 'none', subjectId: 'none' }).toString();
+    const staleReplay = async action => {
+      const token = (await p5cGet(methodQuery)).body.data;
+      const key = `m26-p5c-stale-${action}-${uuid()}`;
+      const body = { kind: 'method', alternativeKey: null, scopeKey: null, role: null, subjectId: null,
+        action, expectedRevision: token.expectedRevision, expectedDigest: token.expectedDigest,
+        definition: { methodVersion: 'm26-capacity-advisory-five-category-v1' },
+        reason: `Record the explicit ${action} decision for stale replay evidence.`, confirmed: true,
+        confirmationVersion: 'm26-capacity-advisory-review-v1' };
+      expect((await p5cPost('/reviews', body, key)).status).toBe(201);
+      const after = (await p5cGet(methodQuery)).body.data;
+      const restore = { ...body, action: 'approve', expectedRevision: after.expectedRevision,
+        expectedDigest: after.expectedDigest,
+        reason: `Restore the exact method after the explicit ${action} evidence.` };
+      expect((await p5cPost('/reviews', restore)).status).toBe(201);
+      const rows = Number((await fixture.ownerPool.query(
+        'SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1 WHERE organization_id=$1',
+        [fixture.org])).rows[0].count);
+      expect((await p5cPost('/reviews', body, key)).status).toBe(409);
+      expect((await p5cPost('/reviews', { ...body, reason: `${body.reason} changed` }, key)).status).toBe(409);
+      expect(Number((await fixture.ownerPool.query(
+        'SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1 WHERE organization_id=$1',
+        [fixture.org])).rows[0].count)).toBe(rows);
+    };
+    await staleReplay('reject');
+    await staleReplay('withdraw');
 
     const originCount = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1',

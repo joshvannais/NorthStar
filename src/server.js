@@ -69,6 +69,8 @@ const { mountInvestorForecast } = require('./routes/investorForecast');
 const { SupportCaseOutboxWorker } = require('./support/outbox');
 const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
 const { HomepageDemoAdmissionHousekeepingWorker } = require('./services/homepageDemoAdmission');
+const { CapacityAdvisoryContinuationWorker } =
+  require('./services/capacityAdvisoryContinuationWorker');
 const commandCenterContract = require('../public/js/command-center-contract');
 const db = require('./db');
 const cache = require('./cache/client');
@@ -256,6 +258,9 @@ const productionTaxResearchWorker = new (require('./estimating/taxResearchWorker
 app.locals.taxAcquisitionStatus = require('./estimating/taxSourceBinding').createTaxAcquisitionStatus(process.env,{getAcquire:()=>productionTaxResearchWorker.acquire});
 const productionTaxPreparationWorker = new (require('./estimating/taxPreparationWorker').TaxPreparationWorker)({getPool:()=>db.getPool(),onPrepared:org=>productionTaxResearchWorker.enqueue(org)});
 const productionHomepageDemoAdmissionHousekeepingWorker = new HomepageDemoAdmissionHousekeepingWorker();
+const productionCapacityAdvisoryContinuationWorker = new CapacityAdvisoryContinuationWorker({
+  getPool: () => db.getPool(),
+});
 const productionPolarisRuntime = createProductionOpenAIRuntime(process.env);
 app.locals.connectedCallGenerate=require('./polaris/callGenerationBinding').createProductionCallGenerate(process.env,{getPool:()=>db.getPool(),runtime:productionPolarisRuntime});
 // A separate, reviewed activation is required for publicly funded generation.
@@ -370,6 +375,7 @@ async function start(options) {
     app.locals.connectedKnowledgeWorker.start();
   }
   productionHomepageDemoAdmissionHousekeepingWorker.start();
+  productionCapacityAdvisoryContinuationWorker.start();
 
 
   const onListening = () => {
@@ -415,6 +421,7 @@ async function start(options) {
     app.locals.connectedCallGenerate?.stop();
     app.locals.connectedKnowledgeWorker?.stop();
     productionHomepageDemoAdmissionHousekeepingWorker.stop();
+    productionCapacityAdvisoryContinuationWorker.stop();
     voiceWebhook.shutdown();
   });
 

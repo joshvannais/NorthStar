@@ -87,6 +87,23 @@ function safeEvaluation(value, expectedOrigin = null, expectedId = null, expecte
     value.metricsWithheld === true && baseFlags(value) ? value : null;
 }
 
+function safeContinuation(value, expectedId = null, expectedPredecessor = null) {
+  const keys = ['state', 'id', 'predecessorOriginId', 'periodStart', 'periodEnd', 'activationDeadline',
+    'originId', 'refreshRequired', 'valuesWithheld', 'researchOnly', 'forecastIssued', 'paidNumericServing',
+    'forecastServingEnabled', 'automaticActionTaken', 'replayed'];
+  return exact(value, keys) && ['capacity_advisory_continuation_pending', 'capacity_advisory_continuation_activated',
+    'capacity_advisory_continuation_missed', 'capacity_advisory_continuation_stale'].includes(value.state) &&
+    UUID.test(value.id || '') && UUID.test(value.predecessorOriginId || '') &&
+    (!expectedId || value.id === expectedId) && (!expectedPredecessor || value.predecessorOriginId === expectedPredecessor) &&
+    instant(value.periodStart) && instant(value.periodEnd) && instant(value.activationDeadline) &&
+    Date.parse(value.periodEnd) - Date.parse(value.periodStart) === 2592000000 &&
+    Date.parse(value.activationDeadline) - Date.parse(value.periodStart) === 3600000 &&
+    ((value.state === 'capacity_advisory_continuation_activated' && UUID.test(value.originId || '')) ||
+      (value.state !== 'capacity_advisory_continuation_activated' && value.originId === null)) &&
+    value.refreshRequired === ['capacity_advisory_continuation_missed', 'capacity_advisory_continuation_stale'].includes(value.state) &&
+    value.valuesWithheld === true && baseFlags(value) ? value : null;
+}
+
 function createForecastCapacityAdvisoryRouter(options = {}) {
   const router = express.Router();
   const poolProvider = options.poolProvider || (() => db.getPool());
@@ -173,11 +190,18 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
 
   router.post('/reviews', auth, requirePermission('forecast', 'update'), writeThrottle, async (req, res) => {
     const body = req.body; const key = req.get('Idempotency-Key');
-    if (!exact(req.query, []) || !exact(body, ['kind', 'alternativeKey', 'scopeKey', 'role', 'subjectId', 'action',
-      'expectedRevision', 'expectedDigest', 'definition', 'reason', 'confirmed', 'confirmationVersion']) ||
+    const ordinaryKeys = ['kind', 'alternativeKey', 'scopeKey', 'role', 'subjectId', 'action',
+      'expectedRevision', 'expectedDigest', 'definition', 'reason', 'confirmed', 'confirmationVersion'];
+    const extendedKeys = [...ordinaryKeys, 'continuationId', 'correctionOfReviewId'];
+    const extended = exact(body, extendedKeys);
+    const continuationId = extended ? body.continuationId : null;
+    const correctionOfReviewId = extended ? body.correctionOfReviewId : null;
+    if (!exact(req.query, []) || !(exact(body, ordinaryKeys) || extended) ||
       !['method', 'policy', 'demand', 'outcome_demand'].includes(body.kind) || !['approve', 'reject', 'withdraw'].includes(body.action) ||
       !(body.alternativeKey === null || TOKEN.test(body.alternativeKey)) || !(body.scopeKey === null || TOKEN.test(body.scopeKey)) ||
       !(body.role === null || ROLE.test(body.role)) || !(body.subjectId === null || UUID.test(body.subjectId)) ||
+      !(continuationId === null || UUID.test(continuationId)) || !(correctionOfReviewId === null || UUID.test(correctionOfReviewId)) ||
+      (body.kind !== 'demand' && continuationId !== null) || (continuationId !== null && correctionOfReviewId !== null) ||
       (body.kind === 'method' && (body.alternativeKey || body.scopeKey || body.role || body.subjectId)) ||
       (body.kind === 'policy' && !(body.alternativeKey && body.scopeKey && body.role && body.subjectId === null)) ||
       (body.kind === 'demand' && !(body.alternativeKey && body.scopeKey === null && body.role === null && body.subjectId === null)) ||
@@ -188,9 +212,10 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       typeof body.reason !== 'string' || body.reason.trim().length < 10 || body.reason.length > 1000 ||
       body.confirmed !== true || body.confirmationVersion !== 'm26-capacity-advisory-review-v1' || !KEY.test(key || '')) return invalid(res);
     return run(req, res, { write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_advisory_v1_review_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) value',
+      sql: 'SELECT public.canonical_forecast_capacity_advisory_v1_review_mutate_v2($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) value',
       params: [req.get('X-CSRF-Token'), key, body.kind, body.alternativeKey, body.scopeKey, body.role, body.subjectId, body.action,
-        body.expectedRevision, body.expectedDigest, body.definition, body.reason, body.confirmationVersion],
+        body.expectedRevision, body.expectedDigest, body.definition, body.reason, body.confirmationVersion,
+        continuationId, correctionOfReviewId],
       validate(value) {
         const keys = ['state', 'id', 'kind', 'alternativeKey', 'scopeKey', 'role', 'subjectId', 'action', 'revision', 'digest', 'replayed'];
         return exact(value, keys) && value.state === 'capacity_advisory_review_recorded' && UUID.test(value.id || '') &&
@@ -215,11 +240,17 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   });
 
   router.post('/origins', auth, requirePermission('forecast', 'update'), writeThrottle, async (req, res) => {
-    const key = req.get('Idempotency-Key'); if (!exact(req.query, []) ||
-      !writeBody(req.body, 'm26-capacity-advisory-origin-v1') || !KEY.test(key || '')) return invalid(res);
+    const key = req.get('Idempotency-Key'); const body = req.body;
+    const ordinary = writeBody(body, 'm26-capacity-advisory-origin-v1');
+    const corrected = exact(body, ['reason', 'confirmed', 'confirmationVersion', 'correctionOriginId']) &&
+      typeof body.reason === 'string' && body.reason.trim().length >= 10 && body.reason.length <= 1000 &&
+      body.confirmed === true && body.confirmationVersion === 'm26-capacity-advisory-origin-v1' &&
+      UUID.test(body.correctionOriginId || '');
+    if (!exact(req.query, []) || !(ordinary || corrected) || !KEY.test(key || '')) return invalid(res);
     return run(req, res, { write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_advisory_v1_origin_capture($1,$2,$3,$4,$5,$6,$7,$8) value',
-      params: [req.get('X-CSRF-Token'), key, req.body.reason, req.body.confirmationVersion],
+      sql: 'SELECT public.canonical_forecast_capacity_advisory_v1_origin_capture_v2($1,$2,$3,$4,$5,$6,$7,$8,$9) value',
+      params: [req.get('X-CSRF-Token'), key, body.reason, body.confirmationVersion,
+        corrected ? body.correctionOriginId : null],
       validate: value => value?.state === 'capacity_advisory_origin_saved' ? safeOrigin(value) : null });
   });
   router.get('/origins/:id', auth, requirePermission('forecast', 'read'), throttle, async (req, res) => {
@@ -227,6 +258,23 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
     return run(req, res, { sql: 'SELECT public.canonical_forecast_capacity_advisory_v1_origin_read($1,$2,$3,$4,$5) value',
       params: [req.params.id], validate: value => value?.state !== 'capacity_advisory_origin_saved' &&
         value?.replayed === false ? safeOrigin(value, req.params.id) : null });
+  });
+
+  router.post('/origins/:id/continuations', auth, requirePermission('forecast', 'update'), writeThrottle, async (req, res) => {
+    const key = req.get('Idempotency-Key');
+    if (!exact(req.query, []) || !UUID.test(req.params.id || '') ||
+      !writeBody(req.body, 'm26-capacity-advisory-continuation-v1') || !KEY.test(key || '')) return invalid(res);
+    return run(req, res, { write: true,
+      sql: 'SELECT public.canonical_forecast_capacity_advisory_v1_continuation_reserve($1,$2,$3,$4,$5,$6,$7,$8,$9) value',
+      params: [req.get('X-CSRF-Token'), key, req.params.id, req.body.reason, req.body.confirmationVersion],
+      validate: value => safeContinuation(value, null, req.params.id) });
+  });
+  router.get('/continuations/:id', auth, requirePermission('forecast', 'read'), throttle, async (req, res) => {
+    if (!exact(req.query, []) || !UUID.test(req.params.id || '')) return invalid(res);
+    return run(req, res, {
+      sql: 'SELECT public.canonical_forecast_capacity_advisory_v1_continuation_read($1,$2,$3,$4,$5) value',
+      params: [req.params.id], validate: value => value?.replayed === false ? safeContinuation(value, req.params.id) : null,
+    });
   });
 
   router.post('/origins/:id/decisions', auth, requirePermission('forecast', 'update'), writeThrottle, async (req, res) => {
@@ -308,4 +356,4 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   return router;
 }
 
-module.exports = { createForecastCapacityAdvisoryRouter, safeOrigin, safeOutcome, safeEvaluation, safeCategories };
+module.exports = { createForecastCapacityAdvisoryRouter, safeOrigin, safeOutcome, safeEvaluation, safeContinuation, safeCategories };

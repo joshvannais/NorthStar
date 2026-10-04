@@ -67,7 +67,7 @@ realPostgres('Mission 26 Part 5C migration225 to capacity-advisory v1', () => {
     const row = (await pool.query(`SELECT
       has_table_privilege($1,'canonical_forecast_capacity_advisory_origins_v1','SELECT') runtime_table,
       has_table_privilege('public','canonical_forecast_capacity_advisory_origins_v1','SELECT') public_table,
-      has_function_privilege($1,'canonical_forecast_capacity_advisory_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text)','EXECUTE') runtime_entry,
+      has_function_privilege($1,'canonical_forecast_capacity_advisory_v1_origin_capture_v2(uuid,uuid,text,uuid,text,text,text,text,uuid)','EXECUTE') runtime_entry,
       has_function_privilege('public','canonical_forecast_capacity_advisory_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text)','EXECUTE') public_entry,
       has_function_privilege($1,'canonical_forecast_capacity_advisory_v1_lock_sources(uuid)','EXECUTE') runtime_helper,
       has_function_privilege($1,'canonical_forecast_capacity_advisory_v1_constraint_manifest_current(uuid,jsonb,timestamptz,timestamptz)','EXECUTE') runtime_manifest_helper`,
@@ -77,7 +77,7 @@ realPostgres('Mission 26 Part 5C migration225 to capacity-advisory v1', () => {
     expect((await pool.query(`SELECT count(*)::integer count FROM pg_trigger
       WHERE NOT tgisinternal AND tgenabled='O' AND tgtype=58
        AND tgfoid='canonical_forecast_capacity_advisory_v1_immutable()'::regprocedure`))
-      .rows[0].count).toBe(7);
+      .rows[0].count).toBe(9);
   });
 
   test('startup fails closed for missing entry, altered helper security and disabled immutability', async () => {
@@ -98,6 +98,11 @@ realPostgres('Mission 26 Part 5C migration225 to capacity-advisory v1', () => {
       SET search_path TO public`, 'Required capacity-advisory v1 entry security is missing');
     await fail(`ALTER TABLE canonical_forecast_capacity_advisory_evaluations_v1 DISABLE TRIGGER
       canonical_forecast_capacity_advisory_evaluations_v1_immutable`,
+    'Required capacity-advisory v1 immutability is missing');
+    await fail(`ALTER FUNCTION canonical_forecast_capacity_advisory_v1_continuation_activate(uuid,uuid) SECURITY INVOKER`,
+      'Required capacity-advisory v1 entry security is missing');
+    await fail(`ALTER TABLE canonical_forecast_capacity_advisory_continuations_v1 DISABLE TRIGGER
+      canonical_forecast_capacity_advisory_continuations_v1_immutable`,
     'Required capacity-advisory v1 immutability is missing');
   }, 120000);
 });

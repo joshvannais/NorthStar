@@ -3,7 +3,7 @@
 const express = require('express');
 const request = require('supertest');
 const fs = require('node:fs');
-const { createForecastCapacityAdvisoryRouter, safeOrigin, safeOutcome, safeEvaluation, safeCategories } =
+const { createForecastCapacityAdvisoryRouter, safeOrigin, safeOutcome, safeEvaluation, safeContinuation, safeCategories } =
   require('../../src/routes/forecastCapacityAdvisory');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -83,7 +83,7 @@ describe('Mission 26 Part 5C qualitative capacity-advisory boundary', () => {
     expect(response.status).toBe(200); expect(response.headers['idempotency-replayed']).toBe('true');
     expect(client.query.mock.calls.find(([sql]) => sql.includes('_origin_capture'))[1]).toEqual([
       ORG, USER, 'owner', SESSION, 'csrf', KEY,
-      'Save the complete private qualitative advisory origin.', 'm26-capacity-advisory-origin-v1']);
+      'Save the complete private qualitative advisory origin.', 'm26-capacity-advisory-origin-v1', null]);
     for (const replayed of ['true', null, undefined]) {
       const malformed = { ...saved }; if (replayed === undefined) delete malformed.replayed; else malformed.replayed = replayed;
       expect((await request(application({ values: { capacity_advisory_v1_origin_capture: malformed } }).app)
@@ -91,6 +91,30 @@ describe('Mission 26 Part 5C qualitative capacity-advisory boundary', () => {
         .set('Idempotency-Key', KEY).send({ reason: 'Save the complete private qualitative advisory origin.',
           confirmed: true, confirmationVersion: 'm26-capacity-advisory-origin-v1' })).status).toBe(503);
     }
+  });
+
+  test('binds prospective continuations and correction identities without caller period inputs', async () => {
+    const continuation = { state: 'capacity_advisory_continuation_pending', id: ID,
+      predecessorOriginId: OTHER, periodStart: '2027-01-31T00:00:00Z',
+      periodEnd: '2027-03-02T00:00:00Z', activationDeadline: '2027-01-31T01:00:00Z',
+      originId: null, refreshRequired: false, valuesWithheld: true, ...flags };
+    expect(safeContinuation(continuation, ID, OTHER)).toEqual(continuation);
+    for (const poison of [{ ...continuation, periodStart: '2027-02-01T00:00:00Z' },
+      { ...continuation, originId: ID }, { ...continuation, privateManifest: {} }])
+      expect(safeContinuation(poison, ID, OTHER)).toBeNull();
+    const body = { reason: 'Reserve the next exact server-owned advisory period.', confirmed: true,
+      confirmationVersion: 'm26-capacity-advisory-continuation-v1' };
+    const { app, client } = application({ values: { capacity_advisory_v1_continuation_reserve: continuation } });
+    const response = await request(app).post(`/api/v1/forecast/capacity-advice/origins/${OTHER}/continuations`)
+      .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(body);
+    expect(response.status).toBe(201);
+    expect(client.query.mock.calls.find(([sql]) => sql.includes('_continuation_reserve'))[1])
+      .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, OTHER, body.reason,
+        'm26-capacity-advisory-continuation-v1']);
+    expect((await request(application().app)
+      .post(`/api/v1/forecast/capacity-advice/origins/${OTHER}/continuations`)
+      .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY)
+      .send({ ...body, periodStart: continuation.periodStart })).status).toBe(400);
   });
 
   test('enforces exact state and replay contracts on every receipt write and read', async () => {

@@ -6,6 +6,8 @@ const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const { createForecastConstrainedCapacityRouter } = require('../../src/routes/forecastConstrainedCapacity');
 const { createForecastWorkloadCapacityRouter } = require('../../src/routes/forecastWorkloadCapacity');
+const { createForecastCapacityAdvisoryRouter } = require('../../src/routes/forecastCapacityAdvisory');
+const { ingestLead } = require('../../src/services/canonicalGraphService');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const uuid = () => crypto.randomUUID();
@@ -103,7 +105,9 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       .set(actor('owner').session.headers).set('Idempotency-Key', key).send(body);
     let response = await send();
     if (response.status === 503) response = await send();
-    expect(response.status).toBe(200);
+    if (response.status !== 200) throw new Error(
+      `Availability replacement failed: ${JSON.stringify({ status: response.status, body: response.body,
+        profileId, start, end, intervalCount: intervals.length })}`);
   }
 
   async function p5aPost(path, body, key = `m26-p5b-p5a-${uuid()}`) {
@@ -114,24 +118,26 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
 
   async function p5aReview(body, token = null) {
     const response = await p5aPost('/reviews', {
-      kind: body.kind, target: TARGET, subjectId: body.subjectId ?? null, role: body.role ?? null,
+      kind: body.kind, target: body.target || TARGET, subjectId: body.subjectId ?? null, role: body.role ?? null,
       action: 'approve', expectedRevision: token?.expectedRevision ?? 0,
-      expectedDigest: token?.expectedDigest ?? 'none', remainingPersonMinutes: null,
+      expectedDigest: token?.expectedDigest ?? 'none', remainingPersonMinutes: body.remainingPersonMinutes ?? null,
       reason: 'Owner explicitly reviewed this installed-source capacity basis.', confirmed: true,
       confirmationVersion: 'm26-workload-capacity-review-v1',
     });
-    if (response.status !== 201) throw new Error(`Part5A review failed: ${JSON.stringify(response.body)}`);
+    if (response.status !== 201) throw new Error(`Part5A review failed: ${JSON.stringify({ body: response.body,
+      request: body, token })}`);
   }
 
-  async function refreshP5aReview(kind, subjectId = null, role = null) {
+  async function refreshP5aReview(kind, subjectId = null, role = null, target = TARGET,
+    remainingPersonMinutes = null) {
     const current = await request(app).get('/api/v1/forecast/workload-capacity/reviews/current')
-      .set('X-Test-Actor', 'owner').query({ kind, target: TARGET,
+      .set('X-Test-Actor', 'owner').query({ kind, target,
         subjectId: subjectId || 'none', role: kind === 'capacity_role_scope' ? 'none' : (role || 'none') });
     if (current.status !== 200) throw new Error(`Part5A current review failed: ${JSON.stringify({ kind,
       subjectId, role, status: current.status, body: current.body })}`);
     const token = current.body.data;
     if (token.sourceCurrent) return token;
-    await p5aReview({ kind, subjectId, role: token.role ?? role }, token);
+    await p5aReview({ kind, target, subjectId, role: token.role ?? role, remainingPersonMinutes }, token);
     return token;
   }
 
@@ -167,14 +173,19 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
           action, target, scheduledStart: scheduledStart.toISOString(), scheduledEnd: scheduledEnd.toISOString(),
           appointmentStatus: before.appointment_status, reason: label,
         });
-      expect(preview.status).toBe(201);
+      if (preview.status !== 201) throw new Error(
+        `Reschedule ${action} preview failed: ${JSON.stringify({ status: preview.status,
+          body: preview.body, before, scheduledStart, scheduledEnd })}`);
       const approval = await request(fixture.app)
         .post(`/api/v1/canonical/appointments/${work.appointment}/mutation-approvals`)
         .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5b-reschedule-${uuid()}`)
         .send({ previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
           acknowledgedWarningDigests: preview.body.data.warningDigests,
           acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests, reason: label });
-      expect(approval.status).toBe(200); receipt = approval.body.data;
+      if (approval.status !== 200) throw new Error(
+        `Reschedule ${action} approval failed: ${JSON.stringify({ status: approval.status,
+          body: approval.body, preview: preview.body.data })}`);
+      receipt = approval.body.data;
     }
     return { scheduledStart, scheduledEnd, receipt };
   }
@@ -251,12 +262,82 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     return { appointment, opportunity, assignment };
   }
 
-  async function completeApprovedWork(work, finalAction = 'complete') {
+  async function createAcceptedApprovedWork({ start, locationId, label, target = null }) {
+    const graphKey = `m26-p5c-canonical-graph-${uuid()}`;
+    const scheduledStart = new Date(start);
+    const scheduledEnd = new Date(scheduledStart.getTime() + 3600000);
+    const activeProfile = (await fixture.ownerPool.query(
+      `SELECT id,version_label,rtrim(normalized_profile_hash) profile_hash
+         FROM canonical_business_profiles
+        WHERE organization_id=$1 AND is_active=TRUE`, [fixture.org])).rows[0];
+    expect(activeProfile).toBeTruthy();
+    const ingested = await ingestLead(fixture.runtimePool, {
+      tenantContext: { organizationId: fixture.org, trusted: true },
+      idempotencyKey: graphKey,
+      sourceVersion: 'm26-capacity-advisory-canonical-lead-v1',
+      businessProfileAuthorityId: activeProfile.id,
+      businessProfileAuthorityVersion: activeProfile.version_label,
+      businessProfileAuthorityHash: activeProfile.profile_hash,
+      external: { customerId: graphKey, callId: graphKey, transcriptId: graphKey,
+        communicationId: graphKey, appointmentId: graphKey },
+      customer: { name: label, phone: `+1555${crypto.randomInt(1000000, 9999999)}`,
+        email: `${graphKey}@example.test`,
+        address: { line1: '1 Mounted Evidence Way', city: 'Boston', state: 'MA', postalCode: '02108' } },
+      transcript: [{ turnId: 'scope', speaker: 'customer',
+        text: 'Please schedule this exact synthetic installed-source service visit.' }],
+      facts: [{ variable: 'serviceLocation', normalizedValue: locationId,
+        evidenceText: 'this exact synthetic installed-source service visit', speaker: 'customer',
+        evidenceTurnId: 'scope', confidence: 1 }],
+      service: { key: 'plumbing', scope: { locationId, sourcePurpose: 'm26-part5c-mounted-evidence' } },
+      scheduledAppointment: { start: scheduledStart.toISOString(), end: scheduledEnd.toISOString(),
+        status: 'scheduled' },
+    });
+    if (ingested.status !== 201) throw new Error(
+      `Part5C canonical lead ingestion failed: ${JSON.stringify(ingested)}`);
+    const appointment = ingested.body.ids.appointment;
+    const opportunity = ingested.body.ids.opportunity;
+    for (const action of ['assign', 'dispatch']) {
+      const before = (await fixture.ownerPool.query(
+        `SELECT revision,rtrim(canonical_digest) digest,appointment_status,scheduled_start,scheduled_end
+           FROM canonical_schedule_assignments
+          WHERE organization_id=$1 AND appointment_id=$2`, [fixture.org, appointment])).rows[0];
+      const preview = await request(fixture.app)
+        .post(`/api/v1/canonical/appointments/${appointment}/mutation-previews`)
+        .set(actor('owner').session.headers).send({
+          expectedRevision: Number(before.revision), expectedDigest: before.digest, expectedTimeZone: 'UTC',
+          action, target: target || { kind: 'profile', id: actor('member').actorUserId },
+          scheduledStart: new Date(before.scheduled_start).toISOString(),
+          scheduledEnd: new Date(before.scheduled_end).toISOString(),
+          appointmentStatus: before.appointment_status,
+          reason: 'Explicit guarded scheduling action for accepted Part5C demand evidence.',
+        });
+      if (preview.status !== 201) throw new Error(
+        `Part5C accepted work ${action} preview failed: ${JSON.stringify(preview.body)}`);
+      const approval = await request(fixture.app)
+        .post(`/api/v1/canonical/appointments/${appointment}/mutation-approvals`)
+        .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5c-schedule-${uuid()}`)
+        .send({ previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
+          acknowledgedWarningDigests: preview.body.data.warningDigests,
+          acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests,
+          reason: 'Explicit guarded scheduling action for accepted Part5C demand evidence.' });
+      if (approval.status !== 200) throw new Error(
+        `Part5C accepted work ${action} approval failed: ${JSON.stringify(approval.body)}`);
+    }
+    const assignment = (await fixture.ownerPool.query(
+      `SELECT id,revision,rtrim(canonical_digest) digest
+         FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`, [fixture.org, appointment])).rows[0];
+    const owningClock = new Date((await fixture.ownerPool.query('SELECT clock_timestamp() value')).rows[0].value);
+    if (owningClock.getTime() >= logicalNow.getTime()) await setClock(new Date(owningClock.getTime() + 1000));
+    return { appointment, opportunity, assignment };
+  }
+
+  async function completeApprovedWork(work, finalAction = 'complete', workerName = 'member') {
     const operations = require('../../src/operations/repository');
     const { normalizeCompletionAction } = require('../../src/completion/contract');
     const { mutateCompletion } = require('../../src/completion/repository');
     const owner = actor('owner');
-    const worker = actor('member');
+    const worker = actor(workerName);
     const assignment = (await fixture.ownerPool.query(
       `SELECT revision,rtrim(canonical_digest) digest
          FROM canonical_schedule_assignments
@@ -391,6 +472,86 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     };
   }
 
+  async function saveLaborAndApprovePersonPlan(work, workerHours = '70') {
+    const estimate = (await fixture.ownerPool.query(
+      'SELECT id FROM canonical_estimates WHERE organization_id=$1 AND opportunity_id=$2',
+      [fixture.org, work.opportunity])).rows[0];
+    expect(estimate).toBeTruthy();
+    const route = `/api/v1/canonical/estimates/${estimate.id}`;
+    const read = async () => {
+      const response = await request(fixture.app).get(`${route}/review`).set(actor('owner').session.headers);
+      expect(response.status).toBe(200); return response.body.data;
+    };
+    let review = await read();
+    if (Number(review.decisions.writeBasis.revision) === 0) {
+      const decision = await request(fixture.app).post(`${route}/decisions`)
+        .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5c-estimate-${uuid()}`).send({
+          action: 'approve', expectedRevision: 0, expectedDigest: 'none', sourcePins: review.pins,
+          scopeSummary: 'Owner-reviewed exact synthetic capacity-advice workload.',
+          priceBeforeTax: '500.00', currency: review.currency,
+          reason: 'Owner approves this exact synthetic estimate before accepting booked work.',
+          confirmed: true, confirmationVersion: 'estimate-quote-preparation-v1' });
+      if (decision.status !== 201) throw new Error(
+        `Part5C estimate decision failed: ${JSON.stringify({ status: decision.status, body: decision.body })}`);
+      review = await read();
+    }
+    const labor = require('../helpers/m24-labor-input');
+    const laborInputs = labor.inputs([labor.line({ task: 'Exact advisory workload basis', basis: 'worker_hours',
+      workerHours, people: null, elapsedHours: null })]);
+    laborInputs.serviceKey = review.materialSourceContext.serviceKey;
+    const body = { action: 'save', expectedRevision: review.laborPlans.current?.revision || 0,
+      expectedDigest: review.laborPlans.current?.digest || 'none', sourcePins: review.pins,
+      expectedDecisionRevision: review.decisions.writeBasis.revision,
+      expectedDecisionDigest: review.decisions.writeBasis.digest, inputs: laborInputs,
+      currency: review.currency, reason: 'Review the exact internal worker-hour plan for capacity advice.',
+      confirmed: true, confirmationVersion: 'estimate-labor-plan-v1' };
+    let response = await request(fixture.app).post(`${route}/labor-plan-preview`)
+      .set(actor('owner').session.headers).send(body);
+    expect(response.status).toBe(200);
+    body.inputs.assessment = { ...response.body.data.result.assessment, acknowledged: true,
+      explanation: 'Owner reviewed exact internal worker-hour assumptions for this synthetic installed-source proof.' };
+    response = await request(fixture.app).post(`${route}/labor-plans`)
+      .set(actor('owner').session.headers).set('Idempotency-Key', uuid()).send(body);
+    if (response.status !== 201) throw new Error(
+      `Part5C labor plan failed: ${JSON.stringify({ status: response.status, body: response.body,
+        preview: body.inputs.assessment })}`);
+    review = await read();
+    const assignment = (await fixture.ownerPool.query(
+      `SELECT id,revision,rtrim(canonical_digest) digest FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`, [fixture.org, work.appointment])).rows[0];
+    const personPlanBody = {
+      action: 'approve', expectedCurrentReviewId: null, expectedCurrentReviewDigest: 'none',
+      assignmentId: assignment.id, expectedAssignmentRevision: Number(assignment.revision),
+      expectedAssignmentDigest: assignment.digest, estimateId: estimate.id,
+      laborPlanId: review.laborPlans.current.id,
+      expectedLaborPlanRevision: Number(review.laborPlans.current.revision),
+      expectedLaborPlanDigest: review.laborPlans.current.digest,
+      reason: 'Owner reviewed this exact work identity and worker-hour plan for Part5C.', confirmed: true,
+      confirmationVersion: 'm26-current-backlog-person-plan-v1' };
+    const personPlanKey = `m26-p5c-person-plan-${uuid()}`;
+    response = await request(fixture.app)
+      .post(`/api/v1/forecast/current-backlog/person-plan-sources/${work.appointment}/reviews`)
+      .set(actor('owner').session.headers).set('Idempotency-Key', personPlanKey).send(personPlanBody);
+    if (response.status !== 201) {
+      let diagnostic = null; const client = await fixture.runtimePool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await client.query(
+          'SELECT canonical_forecast_backlog_person_plan_mutate($1,$2,$3,$4,$5,$6,$7,$8)',
+          [fixture.org, actor('owner').actorUserId, actor('owner').actorAccessRole,
+            actor('owner').authSessionId, actor('owner').csrfToken, personPlanKey,
+            work.appointment, personPlanBody]);
+      } catch (error) {
+        diagnostic = { code: error.code, message: error.message, detail: error.detail,
+          hint: error.hint, where: error.where };
+      } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
+      throw new Error(
+        `Part5C person-plan review failed: ${JSON.stringify({ status: response.status, body: response.body,
+          assignment, estimateId: estimate.id, laborPlan: review.laborPlans.current, diagnostic })}`);
+    }
+    return { estimateId: estimate.id, laborPlan: review.laborPlans.current, assignment };
+  }
+
   async function withdrawAdoptedM24Basis(work, kind) {
     const estimate = (await fixture.ownerPool.query(
       'SELECT id FROM canonical_estimates WHERE organization_id=$1 AND opportunity_id=$2',
@@ -454,6 +615,99 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     return response.body.data;
   }
 
+  const p5cPost = (path, body, key = `m26-p5c-${uuid()}`, name = 'owner') => request(app)
+    .post('/api/v1/forecast/capacity-advice' + path).set('X-Test-Actor', name)
+    .set('X-CSRF-Token', actor(name).csrfToken).set('Idempotency-Key', key).send(body);
+  const p5cGet = (path, name = 'owner') => request(app)
+    .get('/api/v1/forecast/capacity-advice' + path).set('X-Test-Actor', name);
+
+  async function p5cReview(kind, { alternativeKey = null, scopeKey = null, role = null,
+    subjectId = null, definition = {}, action = 'approve' } = {}) {
+    const query = { kind, alternativeKey: alternativeKey || 'none', scopeKey: scopeKey || 'none',
+      role: role || 'none', subjectId: subjectId || 'none' };
+    const current = await p5cGet('/reviews/current?' + new URLSearchParams(query).toString());
+    expect(current.status).toBe(200);
+    const token = current.body.data;
+    const response = await p5cPost('/reviews', { kind, alternativeKey, scopeKey, role, subjectId,
+      action, expectedRevision: token.expectedRevision, expectedDigest: token.expectedDigest, definition,
+      reason: `Owner explicitly reviewed the exact ${kind.replaceAll('_', ' ')} advisory authority.`,
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-review-v1' });
+    if (response.status !== 201) throw new Error(
+      `Part5C ${kind} review failed: ${JSON.stringify({ status: response.status, body: response.body, definition })}`);
+    return response.body.data;
+  }
+
+  const p5cDefinition = async (alternativeKey, originId = null) => {
+    const instant = logicalNow;
+    const workload = originId
+      ? (await fixture.ownerPool.query(
+        `SELECT window_value.evidence->'backlog'->'rows' rows
+           FROM canonical_forecast_capacity_advisory_origins_v1 advice
+           JOIN canonical_forecast_workload_capacity_evaluations_v1 evaluation_value
+             ON evaluation_value.organization_id=advice.organization_id
+            AND evaluation_value.origin_id=(advice.input_manifest#>>'{workloadOrigin,id}')::uuid
+           JOIN canonical_forecast_workload_capacity_windows_v1 window_value
+             ON window_value.organization_id=evaluation_value.organization_id
+            AND window_value.id=evaluation_value.outcome_window_id
+          WHERE advice.organization_id=$1 AND advice.id=$2
+          ORDER BY evaluation_value.revision DESC LIMIT 1`, [fixture.org, originId])).rows[0]?.rows
+      : (await fixture.ownerPool.query(
+        `SELECT public.canonical_forecast_workload_capacity_v1_backlog_evidence($1,$2)->'rows' rows`,
+        [fixture.org, instant])).rows[0]?.rows;
+    const periodStart = originId ? (await fixture.ownerPool.query(
+      'SELECT prediction_cutoff_at FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1 AND id=$2',
+      [fixture.org, originId])).rows[0].prediction_cutoff_at : null;
+    let constraint;
+    try {
+      constraint = await fixture.ownerPool.query(
+        `SELECT public.canonical_forecast_constrained_capacity_v1_complete_input($1,$2,$3) value`,
+        [fixture.org, instant, periodStart]);
+    } catch (error) {
+      const diagnostic = (await fixture.ownerPool.query(
+        `WITH census AS (SELECT public.canonical_forecast_constrained_capacity_v1_work_census($1,$2) value),
+         scopes AS (SELECT jsonb_agg(jsonb_build_object('scopeKey',scope_key,'action',action,'revision',revision)
+           ORDER BY scope_key) value FROM (SELECT DISTINCT ON(scope_key) scope_key,action,revision
+            FROM canonical_forecast_constrained_capacity_reviews_v1 WHERE organization_id=$1 AND review_kind='scope'
+            ORDER BY scope_key,revision DESC) current_scopes),
+         jobs AS (SELECT jsonb_agg(jsonb_build_object('subjectId',subject_id,'scopeKey',scope_key,'action',action,
+           'revision',revision,'covers',canonical_forecast_constrained_capacity_v1_job_review_covers($1,value,$2))
+           ORDER BY subject_id,scope_key) value FROM (SELECT DISTINCT ON(scope_key,subject_id) *
+            FROM canonical_forecast_constrained_capacity_reviews_v1 WHERE organization_id=$1 AND review_kind='job'
+            ORDER BY scope_key,subject_id,revision DESC) value)
+         SELECT jsonb_build_object('census',(SELECT value FROM census),'scopes',(SELECT value FROM scopes),
+           'jobs',(SELECT value FROM jobs)) value`, [fixture.org, instant])).rows[0].value;
+      throw new Error(`Part5C constraint input unavailable: ${JSON.stringify({
+        code: error.code, message: error.message, instant, periodStart, diagnostic })}`);
+    }
+    const input = constraint.rows[0].value;
+    const scopes = input.scopes.filter(item => item.alternativeKey === alternativeKey);
+    const jobs = input.jobs.filter(item => item.alternativeKey === alternativeKey);
+    const allocations = workload.filter(item => Number(item.personMinutes) > 0).map(item => {
+      const job = jobs.find(candidate => candidate.appointmentId === item.appointmentId &&
+        candidate.assignmentId === item.assignmentId);
+      if (!job) throw new Error(`Missing exact Part5B job mapping for ${item.appointmentId}/${item.assignmentId}`);
+      return { appointmentId: item.appointmentId, assignmentId: item.assignmentId,
+        scopeKey: job.scopeKey, role: job.assignedRole, personMinutes: Number(item.personMinutes) };
+    });
+    const scopeApplicability = [];
+    for (const item of scopes) {
+      const review = (await fixture.ownerPool.query(
+        `SELECT definition FROM canonical_forecast_constrained_capacity_reviews_v1
+          WHERE organization_id=$1 AND id=$2`, [fixture.org, item.reviewId])).rows[0];
+      if (!review) throw new Error(`Missing exact Part5B scope review ${item.reviewId}`);
+      const definition = review.definition;
+      scopeApplicability.push({ scopeKey: item.scopeKey, targetRole: definition.role,
+        targetSeats: Number(definition.crewRoleRequirements.find(row => row.role === definition.role)?.count || 1),
+        supportRoles: definition.crewRoleRequirements.filter(row => row.role !== definition.role)
+          .map(row => ({ role: row.role, count: Number(row.count) })),
+        operatorRoles: [...new Set(definition.crewAssignments
+          .filter(row => definition.operatorProfileIds.includes(row.profileId))
+          .map(row => row.role))].sort() });
+    }
+    return { methodVersion: 'm26-capacity-advisory-demand-allocation-v1', alternativeKey,
+      allocations, scopeApplicability };
+  };
+
   beforeAll(async () => {
     fixture = await createDatabaseFixture({ operationalSchedule: true });
     endpoint = '/api/v1/forecast/constrained-capacity';
@@ -469,12 +723,18 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       writeThrottle: bypass, poolProvider: () => fixture.runtimePool }));
     app.use('/api/v1/forecast/workload-capacity', createForecastWorkloadCapacityRouter({ auth,
       throttle: bypass, writeThrottle: bypass, poolProvider: () => fixture.runtimePool }));
+    app.use('/api/v1/forecast/capacity-advice', createForecastCapacityAdvisoryRouter({ auth,
+      throttle: bypass, writeThrottle: bypass, poolProvider: () => fixture.runtimePool }));
   }, 180000);
 
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 60000);
 
   test('guarded seven-dimension origin, later outcome and evaluation preserve role-worker-hour supply', async () => {
-    const start = new Date((await fixture.ownerPool.query("SELECT date_trunc('second',clock_timestamp()) - interval '120 seconds' value")).rows[0].value);
+    // Keep every genuine owning-source observation before the first modeled
+    // interval. The disposable clock remains future-only and owner controlled;
+    // it does not backdate any source receipt or alter production clock paths.
+    const start = new Date((await fixture.ownerPool.query(
+      "SELECT date_trunc('second',clock_timestamp()) value")).rows[0].value);
     await setClock(start);
     await approveWorkProfile('dispatcher');
     await approveWorkProfile('member');
@@ -532,9 +792,10 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     };
 
     const horizonEnd = new Date(start.getTime() + 30 * 86400000);
+    const firstAvailabilityDay = new Date(start); firstAvailabilityDay.setUTCHours(0, 0, 0, 0);
     const intervals = Array.from({ length: 10 }, (_, index) => ({ kind: 'available',
-      start: new Date(start.getTime() + index * 86400000 + 9 * 3600000).toISOString(),
-      end: new Date(start.getTime() + index * 86400000 + 19 * 3600000).toISOString() }));
+      start: new Date(firstAvailabilityDay.getTime() + index * 86400000 + 12 * 3600000).toISOString(),
+      end: new Date(firstAvailabilityDay.getTime() + index * 86400000 + 22 * 3600000).toISOString() }));
     await declareAvailability(actor('member').actorUserId, start,
       new Date(horizonEnd.getTime() + 86400000), intervals);
     await declareAvailability(actor('dispatcher').actorUserId, start,
@@ -651,11 +912,33 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       throw new Error(`Constrained result failed: ${JSON.stringify({ message: error.message,
         where: error.where, detail: error.detail })}`);
     }
-    expect(Number(freeResult[0].personMinutes)).toBe(6000);
+    if (Number(freeResult[0].personMinutes) !== 6000) {
+      const supportCapacity = (await fixture.ownerPool.query(
+        "SELECT canonical_forecast_workload_capacity_v1_capacity_calculation($1,$2,$3,$2,'dispatcher') value",
+        [fixture.org, logicalNow, new Date(logicalNow.getTime() + 30 * 86400000)])).rows[0].value;
+      const intervalSegments = [];
+      for (const interval of intervals) intervalSegments.push((await fixture.ownerPool.query(
+        `SELECT canonical_forecast_constrained_capacity_v1_scope_segment($1,review_value,$2,$3,'[]'::jsonb) value
+           FROM canonical_forecast_constrained_capacity_reviews_v1 review_value
+          WHERE review_value.organization_id=$1 AND review_value.review_kind='scope'
+            AND review_value.scope_key=$4 ORDER BY review_value.revision DESC LIMIT 1`,
+        [fixture.org, interval.start, interval.end, scopeKey])).rows[0].value);
+      throw new Error(`Free-capacity arithmetic mismatch: ${JSON.stringify({ start, logicalNow,
+        result: freeResult[0], baseCapacity, supportCapacity, intervalSegments, freeInput })}`);
+    }
 
     const firstKey = `m26-p5b-first-origin-${uuid()}`;
     const firstBody = { reason: 'Save the exact declared seven-dimension compatible role supply.',
       confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1' };
+    // The production-clock proof must issue after every genuine prospective
+    // source/review decision. Wait for wall time to pass the disposable logical
+    // clock instead of backdating evidence or carrying a test clock into capture.
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const wallNow = new Date((await fixture.ownerPool.query('SELECT clock_timestamp() value')).rows[0].value);
+      if (wallNow.getTime() > logicalNow.getTime()) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (attempt === 99) throw new Error('Production clock did not pass the prospective source decisions');
+    }
     await fixture.ownerPool.query('DELETE FROM canonical_forecast_workload_capacity_test_clock_v1');
     const productionClockBefore = new Date((await fixture.ownerPool.query('SELECT clock_timestamp() value')).rows[0].value);
     const firstOrigin = await post('/origins', firstBody, firstKey);
@@ -1369,11 +1652,17 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       }
     }
     await advance(1);
+    const formationOwningClock = new Date((await fixture.ownerPool.query(
+      'SELECT clock_timestamp() value')).rows[0].value);
+    if (formationOwningClock.getTime() >= logicalNow.getTime())
+      await setClock(new Date(formationOwningClock.getTime() + 1000));
     const formationStart = new Date(logicalNow);
     const formationEnd = new Date(formationStart.getTime() + 31 * 86400000);
+    const formationAvailabilityDay = new Date(formationStart);
+    formationAvailabilityDay.setUTCHours(0, 0, 0, 0);
     const targetIntervals = Array.from({ length: 10 }, (_, index) => ({ kind: 'available',
-      start: new Date(formationStart.getTime() + index * 86400000 + 9 * 3600000).toISOString(),
-      end: new Date(formationStart.getTime() + index * 86400000 + 19 * 3600000).toISOString() }));
+      start: new Date(formationAvailabilityDay.getTime() + index * 86400000 + 12 * 3600000).toISOString(),
+      end: new Date(formationAvailabilityDay.getTime() + index * 86400000 + 22 * 3600000).toISOString() }));
     const supportIntervals = targetIntervals;
     await replaceAvailability(actor('member').actorUserId, formationStart, formationEnd, targetIntervals);
     await declareAvailability(actor('admin').actorUserId, formationStart, formationEnd, targetIntervals);
@@ -1917,6 +2206,440 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     expect((await get(`/origins/${zeroOrigin.body.data.id}`)).body.data.state)
       .toBe('constrained_capacity_origin_stale');
 
+    // Part 5C composes the accepted Part 5A forecast package and Part 5B
+    // constrained role supply without changing either authority.  Start from
+    // an exact complete installed-source population: remove prior mounted work
+    // through its owning completion authority, then prospectively establish a
+    // 60-day Part 5A history and a fresh Part 5B scope.
+    for (const [cleanupIndex, work] of [unscheduledWork, committedWork, zeroWork, crewOneWork, crewTwoWork].entries()) {
+      const state = (await fixture.ownerPool.query(
+        `SELECT appointment_status FROM canonical_schedule_assignments
+          WHERE organization_id=$1 AND appointment_id=$2`, [fixture.org, work.appointment])).rows[0];
+      if (state && !['completed', 'cancelled'].includes(state.appointment_status)) {
+        try {
+          await completeApprovedWork(work, 'cancel', work === crewTwoWork ? 'admin' : 'member');
+        } catch (error) {
+          if (error.code !== 'M23_EXECUTION_DISPATCH_REQUIRED') throw error;
+          await rescheduleApprovedWork(work,
+            new Date(logicalNow.getTime() + (400 + cleanupIndex) * 86400000 + 3600000),
+            'Restore a current dispatch only to close this earlier mounted fixture through its owning authority.');
+          await completeApprovedWork(work, 'cancel', work === crewTwoWork ? 'admin' : 'member');
+        }
+      }
+    }
+    const activeScopes = (await fixture.ownerPool.query(
+      `SELECT DISTINCT ON(scope_key) scope_key,definition,action
+         FROM canonical_forecast_constrained_capacity_reviews_v1
+        WHERE organization_id=$1 AND review_kind='scope'
+        ORDER BY scope_key,revision DESC`, [fixture.org])).rows.filter(value => value.action === 'approve');
+    for (const value of activeScopes) {
+      for (const crewId of value.definition.crewIds || []) {
+        const crewRow = (await fixture.ownerPool.query(
+          'SELECT name,home_location_id FROM workforce_crews WHERE organization_id=$1 AND id=$2',
+          [fixture.org, crewId])).rows[0];
+        const assignments = (value.definition.crewAssignments || [])
+          .filter(item => item.crewId === crewId);
+        if (crewRow && assignments.length > 0) {
+          const members = assignments.map((item, index) => ({ profileId: item.profileId,
+            role: index === 0 ? 'lead' : 'member' }));
+          const response = await request(fixture.app).put(`/api/workforce/crews/${crewId}`)
+            .set(actor('owner').session.headers).send({ name: crewRow.name,
+              homeLocationId: crewRow.home_location_id, members });
+          expect(response.status).toBe(200);
+        }
+      }
+      await p5bReview('scope', value.scope_key, null, value.definition, null, 'reject');
+    }
+
+    const advisoryCoverageStart = new Date(logicalNow.getTime() + 1000);
+    await setClock(advisoryCoverageStart);
+    expect((await request(fixture.app).put(`/api/workforce/profiles/${actor('admin').actorUserId}`)
+      .set(actor('owner').session.headers).send({ operationalRole: 'administrator',
+        homeLocationId: 'headquarters', skillIds: [skill.body.data.id] })).status).toBe(200);
+    expect((await request(fixture.app).put(`/api/workforce/profiles/${actor('owner').actorUserId}`)
+      .set(actor('owner').session.headers).send({ operationalRole: 'owner',
+        homeLocationId: 'headquarters', skillIds: [skill.body.data.id] })).status).toBe(200);
+    const advisoryCoverageEnd = new Date(advisoryCoverageStart.getTime() + 260 * 86400000);
+    const advisoryAvailabilityDays = [5, 25, 65, 66, 95, 115, 125, 145, 185, 205];
+    const advisoryIntervals = advisoryAvailabilityDays.map(day => ({ kind: 'available',
+      start: new Date(advisoryCoverageStart.getTime() + day * 86400000 + 8 * 3600000)
+        .toISOString(),
+      end: new Date(advisoryCoverageStart.getTime() + day * 86400000 + 18 * 3600000)
+        .toISOString() }));
+    for (const name of ['member', 'admin', 'dispatcher']) {
+      await replaceAvailability(actor(name).actorUserId, advisoryCoverageStart, advisoryCoverageEnd,
+        advisoryIntervals);
+    }
+    expect((await request(fixture.app).put(`/api/workforce/crews/${crew.body.data.id}`)
+      .set(actor('owner').session.headers).send({ name: 'Fixture crew', homeLocationId: 'headquarters',
+        members: [{ profileId: actor('member').actorUserId, role: 'lead' },
+          { profileId: actor('dispatcher').actorUserId, role: 'member' }] })).status).toBe(200);
+    const advisoryWorks = [];
+    for (let index = 0; index < 2; index += 1) {
+      const work = await createAcceptedApprovedWork({ locationId: 'site-one',
+        label: `Part5C demand ${index + 1}`,
+        start: new Date(advisoryCoverageStart.getTime() + (index + 65) * 86400000 + 10 * 3600000)
+          .toISOString() });
+      await saveLaborAndApprovePersonPlan(work, '70');
+      await refreshP5aReview('remaining_work', work.appointment, null,
+        'workload.end_backlog_hours.v1', 4200);
+      advisoryWorks.push({ work });
+    }
+    await advance(1);
+    expect((await p5aPost('/epochs', { reason: 'Begin prospective accepted Part5A history for capacity advice.',
+      confirmed: true, confirmationVersion: 'm26-workload-capacity-epoch-v1' })).status).toBe(201);
+    for (const target of ['workload.accepted_person_hours.v1', 'workload.end_backlog_hours.v1',
+      'capacity.available_role_hours.v1']) await refreshP5aReview('method', null, null, target);
+    for (const [name, role] of [['owner', 'owner'], ['admin', 'administrator'], ['dispatcher', 'dispatcher'],
+      ['member', 'technician'], ['viewer', 'employee']]) {
+      await refreshP5aReview('role_qualification', actor(name).actorUserId, role);
+    }
+    await refreshP5aReview('availability_basis', actor('member').actorUserId);
+    await refreshP5aReview('availability_basis', actor('admin').actorUserId);
+    await refreshP5aReview('availability_basis', actor('dispatcher').actorUserId);
+    await refreshP5aReview('capacity_role_scope', null, 'technician');
+    await setClock(new Date(advisoryCoverageStart.getTime() + 61 * 86400000));
+
+    const advisoryAssetCalendar = assetId => ({ assetId, availableIntervals: [{
+      start: logicalNow.toISOString(), end: new Date(logicalNow.getTime() + 200 * 86400000).toISOString(),
+    }], committedIntervals: [] });
+    const advisoryScope = { ...scopeDefinition,
+      assetCalendars: [advisoryAssetCalendar(vehicle.body.data.id),
+        advisoryAssetCalendar(equipment.body.data.id)] };
+    await p5bEpoch(); await advance(1);
+    await p5bReview('method', null, null, methodDefinition);
+    await p5bReview('scope', scopeKey, null, advisoryScope);
+    for (const entry of advisoryWorks) {
+      entry.jobDefinition = { ...committedJobDefinition, appointmentId: entry.work.appointment,
+        assignmentId: entry.work.assignment.id };
+      await p5bReview('job', scopeKey, entry.work.appointment, entry.jobDefinition);
+    }
+    // All accepted source authorities use strict cutoff visibility.  Move the
+    // private disposable evidence clock forward only after every guarded
+    // decision is durable so the future origin cannot include same-instant
+    // rows retroactively.
+    await advance(1);
+
+    const advisoryAlternative = 'baseline';
+    const policyDefinition = { methodVersion: 'm26-capacity-advisory-five-category-v1',
+      alternativeKey: advisoryAlternative, scopeKey, role: 'technician', backlogThresholdMinutes: 1,
+      bottleneckGapThresholdMinutes: 1, overtimeReviewEnabled: true, overtimeGapThresholdMinutes: 1,
+      contractorReviewEnabled: true, contractorGapThresholdMinutes: 1,
+      hiringReviewEnabled: true, hiringGapThresholdMinutes: 1, hiringConsecutivePeriods: 2 };
+    await p5cReview('method', { definition: { methodVersion: 'm26-capacity-advisory-five-category-v1' } });
+    await p5cReview('policy', { alternativeKey: advisoryAlternative, scopeKey, role: 'technician',
+      definition: policyDefinition });
+    const demandDefinition = await p5cDefinition(advisoryAlternative);
+    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: demandDefinition });
+    const advisoryEpoch = await p5cPost('/epochs', {
+      reason: 'Begin exact prospective five-category capacity advice under current human reviews.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' });
+    expect(advisoryEpoch.status).toBe(201);
+    const advisoryOriginKey = `m26-p5c-origin-${uuid()}`;
+    const advisoryOriginBody = { reason: 'Save the exact private five-category advice research origin.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-origin-v1' };
+    const advisoryOrigin = await p5cPost('/origins', advisoryOriginBody, advisoryOriginKey);
+    if (advisoryOrigin.status !== 201) {
+      let diagnostic = null; const client = await fixture.runtimePool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        await client.query(
+          'SELECT public.canonical_forecast_capacity_advisory_v1_origin_capture($1,$2,$3,$4,$5,$6,$7,$8)',
+          [fixture.org, actor('owner').actorUserId, actor('owner').actorAccessRole,
+            actor('owner').authSessionId, actor('owner').csrfToken, advisoryOriginKey,
+            advisoryOriginBody.reason, advisoryOriginBody.confirmationVersion]);
+      } catch (error) {
+        diagnostic = { code: error.code, message: error.message, detail: error.detail,
+          hint: error.hint, where: error.where };
+      } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
+      throw new Error(`Part5C origin failed: ${JSON.stringify({ response: advisoryOrigin.body, diagnostic })}`);
+    }
+    expect(advisoryOrigin.body.data).toMatchObject({ state: 'capacity_advisory_origin_saved', scopeCount: 1,
+      categoryCount: 5, decisionAction: null, categories: null, valuesWithheld: true,
+      thresholdsWithheld: true, outputDigestsWithheld: true, researchOnly: true,
+      forecastIssued: false, paidNumericServing: false, forecastServingEnabled: false,
+      automaticActionTaken: false, replayed: false });
+    expect(JSON.stringify(advisoryOrigin.body)).not.toMatch(
+      /"(?:personMinutes|demandMinutes|constrainedMinutes|gapMinutes|outputDigest)"\s*:/i);
+    const decision = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/decisions`, {
+      action: 'approve', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Approve this exact private research receipt for later non-action evaluation.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-decision-v1' });
+    expect(decision.status).toBe(201);
+    const currentAdvice = await p5cGet(`/origins/${advisoryOrigin.body.data.id}`);
+    if (currentAdvice.status !== 200) {
+      let diagnostic; try {
+        diagnostic = (await fixture.ownerPool.query(
+          'SELECT public.canonical_forecast_capacity_advisory_v1_origin_read($1,$2,$3,$4,$5) value',
+          [fixture.org, actor('owner').actorUserId, actor('owner').actorAccessRole,
+            actor('owner').authSessionId, advisoryOrigin.body.data.id])).rows[0].value;
+      } catch (error) { diagnostic = { code: error.code, message: error.message, where: error.where }; }
+      throw new Error(`Part5C current origin projection failed: ${JSON.stringify({
+        status: currentAdvice.status, body: currentAdvice.body, diagnostic })}`);
+    }
+    expect(currentAdvice.body.data.categories[0].categories).toEqual({
+      bottleneck: { state: 'attention' }, backlog: { state: 'attention' },
+      overtime: { state: 'attention' }, contractor: { state: 'attention' },
+      hiring_need: { state: 'insufficient_history' } });
+    const adviceReplay = await p5cPost('/origins', advisoryOriginBody, advisoryOriginKey);
+    expect(adviceReplay.status).toBe(200);
+    expect(adviceReplay.headers['idempotency-replayed']).toBe('true');
+    expect((await p5cPost('/origins', { ...advisoryOriginBody, reason: `${advisoryOriginBody.reason} changed` },
+      advisoryOriginKey)).status).toBe(409);
+    expect((await p5cPost('/origins', advisoryOriginBody, `m26-p5c-member-${uuid()}`, 'member')).status).toBe(403);
+    expect((await request(app).post('/api/v1/forecast/capacity-advice/origins').set('X-Test-Actor', 'owner')
+      .set('Idempotency-Key', `m26-p5c-no-csrf-${uuid()}`).send(advisoryOriginBody)).status).toBe(403);
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}`, 'otherOwner')).status).toBe(404);
+    expect((await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcome-preparations`, {})).status)
+      .toBe(400);
+
+    // The later outcome is built only after the accepted Part5A outcome and
+    // evaluation are prepared for the same immutable period.  The separate
+    // historical allocation review pins the exact end-period population.
+    await setClock(advisoryOrigin.body.data.horizonEndsAt);
+    const prepared = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcome-preparations`, {});
+    expect(prepared.status).toBe(201);
+    const outcomeDemand = await p5cDefinition(advisoryAlternative, advisoryOrigin.body.data.id);
+    outcomeDemand.methodVersion = 'm26-capacity-advisory-outcome-allocation-v1';
+    outcomeDemand.originId = advisoryOrigin.body.data.id;
+    await p5cReview('outcome_demand', { alternativeKey: advisoryAlternative,
+      subjectId: advisoryOrigin.body.data.id, definition: outcomeDemand });
+    const advisoryOutcomeKey = `m26-p5c-outcome-${uuid()}`;
+    const advisoryOutcome = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcomes`, {},
+      advisoryOutcomeKey);
+    if (advisoryOutcome.status !== 201) {
+      throw new Error(`Part5C outcome failed: ${JSON.stringify(advisoryOutcome.body)}`);
+    }
+    expect(advisoryOutcome.body.data).toMatchObject({ originId: advisoryOrigin.body.data.id,
+      state: 'capacity_advisory_outcome_saved', revision: 1, valuesWithheld: true,
+      outputDigestsWithheld: true, automaticActionTaken: false });
+    const outcomeReplay = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcomes`, {},
+      advisoryOutcomeKey);
+    expect(outcomeReplay.status).toBe(200);
+    expect(outcomeReplay.headers['idempotency-replayed']).toBe('true');
+    const advisoryEvaluationKey = `m26-p5c-evaluation-${uuid()}`;
+    const advisoryEvaluation = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/evaluations`, {
+      outcomeId: advisoryOutcome.body.data.id }, advisoryEvaluationKey);
+    expect(advisoryEvaluation.status).toBe(201);
+    expect(advisoryEvaluation.body.data).toMatchObject({ originId: advisoryOrigin.body.data.id,
+      outcomeId: advisoryOutcome.body.data.id, state: 'capacity_advisory_evaluation_saved',
+      revision: 1, metricsWithheld: true, automaticActionTaken: false });
+    expect((await p5cPost(`/origins/${advisoryOrigin.body.data.id}/evaluations`, {
+      outcomeId: advisoryOutcome.body.data.id }, advisoryEvaluationKey)).headers['idempotency-replayed'])
+      .toBe('true');
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/outcomes/${uuid()}`)).status).toBe(404);
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${uuid()}`)).status).toBe(404);
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/outcomes/${advisoryOutcome.body.data.id}`,
+      'otherOwner')).status).toBe(404);
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${advisoryEvaluation.body.data.id}`,
+      'otherOwner')).status).toBe(404);
+
+    // A corrected historical allocation is append-only. It stales the prior
+    // outcome/evaluation without rewriting the immutable origin, then requires
+    // explicit recapture and reevaluation under the same original period.
+    await p5cReview('outcome_demand', { alternativeKey: advisoryAlternative,
+      subjectId: advisoryOrigin.body.data.id, definition: outcomeDemand });
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/outcomes/${advisoryOutcome.body.data.id}`))
+      .body.data.state).toBe('capacity_advisory_outcome_stale');
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${advisoryEvaluation.body.data.id}`))
+      .body.data.state).toBe('capacity_advisory_evaluation_stale');
+    const correctedOutcome = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/outcomes`, {});
+    expect(correctedOutcome.status).toBe(201);
+    expect(correctedOutcome.body.data).toMatchObject({ revision: 2,
+      state: 'capacity_advisory_outcome_saved' });
+    const correctedEvaluation = await p5cPost(`/origins/${advisoryOrigin.body.data.id}/evaluations`, {
+      outcomeId: correctedOutcome.body.data.id });
+    expect(correctedEvaluation.status).toBe(201);
+    expect(correctedEvaluation.body.data).toMatchObject({ revision: 2,
+      state: 'capacity_advisory_evaluation_saved' });
+
+    // A new period receives a new current allocation review. The earlier
+    // immutable period remains current because its exact cutoff source still
+    // recomputes, and the explicit two-period owner policy can now produce a
+    // positive hiring-attention state from consecutive evaluated receipts.
+    const secondDemand = await p5cDefinition(advisoryAlternative);
+    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: secondDemand });
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}`)).body.data.state)
+      .toBe('capacity_advisory_origin_current');
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${correctedEvaluation.body.data.id}`))
+      .body.data.state).toBe('capacity_advisory_evaluation_current');
+    const secondOrigin = await p5cPost('/origins', advisoryOriginBody);
+    expect(secondOrigin.status).toBe(201);
+    const secondDecision = await p5cPost(`/origins/${secondOrigin.body.data.id}/decisions`, {
+      action: 'approve', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Approve the second exact private period for the owner-reviewed consecutive criterion.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-decision-v1' });
+    expect(secondDecision.status).toBe(201);
+    const secondCurrent = await p5cGet(`/origins/${secondOrigin.body.data.id}`);
+    expect(secondCurrent.status).toBe(200);
+    if (secondCurrent.body.data.categories[0].categories.hiring_need.state !== 'attention') {
+      const historyDiagnostic = (await fixture.ownerPool.query(
+        `SELECT jsonb_build_object(
+          'priorOriginId',prior.id,'priorEpochId',prior.epoch_id,'latestEpochId',(SELECT id FROM canonical_forecast_capacity_advisory_epochs_v1 WHERE organization_id=$1 ORDER BY revision DESC LIMIT 1),
+          'priorEvaluationId',evaluation_value.id,'priorEvaluationCurrent',canonical_forecast_capacity_advisory_v1_evaluation_current($1,evaluation_value),
+          'priorOutcomeId',outcome_value.id,'priorOutcomeCurrent',canonical_forecast_capacity_advisory_v1_outcome_current($1,outcome_value),
+          'priorWorkloadEvaluationId',outcome_value.source_manifest->>'workloadEvaluationId',
+          'priorWorkloadEvaluationCurrent',canonical_forecast_workload_capacity_v1_evaluation_current($1,workload_evaluation),
+          'priorResults',outcome_value.private_results,'secondResults',second.private_results) value
+         FROM canonical_forecast_capacity_advisory_origins_v1 second
+         LEFT JOIN canonical_forecast_capacity_advisory_origins_v1 prior ON prior.organization_id=second.organization_id AND prior.horizon_ends_at=second.prediction_cutoff_at
+         LEFT JOIN LATERAL (SELECT * FROM canonical_forecast_capacity_advisory_evaluations_v1 value WHERE value.organization_id=prior.organization_id AND value.origin_id=prior.id ORDER BY revision DESC LIMIT 1) evaluation_value ON TRUE
+         LEFT JOIN canonical_forecast_capacity_advisory_outcomes_v1 outcome_value ON outcome_value.organization_id=evaluation_value.organization_id AND outcome_value.id=evaluation_value.outcome_id
+         LEFT JOIN canonical_forecast_workload_capacity_evaluations_v1 workload_evaluation ON workload_evaluation.organization_id=outcome_value.organization_id AND workload_evaluation.id=(outcome_value.source_manifest->>'workloadEvaluationId')::uuid
+         WHERE second.organization_id=$1 AND second.id=$2`, [fixture.org, secondOrigin.body.data.id])).rows[0].value;
+      throw new Error(`Part5C consecutive history unavailable: ${JSON.stringify(historyDiagnostic)}`);
+    }
+
+    // Human control remains explicit after a saved origin. Rejection hides the
+    // advice and prevents downstream evidence; explicit rereview restores only
+    // this immutable origin under the same exact method/source identity.
+    const secondRejected = await p5cPost(`/origins/${secondOrigin.body.data.id}/decisions`, {
+      action: 'reject', expectedRevision: secondDecision.body.data.revision,
+      expectedDigest: secondDecision.body.data.digest,
+      reason: 'Reject this exact research receipt without taking an operational action.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-decision-v1' });
+    expect(secondRejected.status).toBe(201);
+    expect((await p5cGet(`/origins/${secondOrigin.body.data.id}`)).body.data).toMatchObject({
+      decisionAction: 'reject', categories: null });
+    expect((await p5cPost(`/origins/${secondOrigin.body.data.id}/outcomes`, {})).status).toBe(400);
+    const secondReapproved = await p5cPost(`/origins/${secondOrigin.body.data.id}/decisions`, {
+      action: 'approve', expectedRevision: secondRejected.body.data.revision,
+      expectedDigest: secondRejected.body.data.digest,
+      reason: 'Explicitly reapprove this unchanged private research receipt for later evaluation.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-decision-v1' });
+    expect(secondReapproved.status).toBe(201);
+
+    // A new Part 5C epoch permanently retires every older Part 5C receipt even
+    // when no upstream value changed. Old exact-key replay cannot revive it;
+    // a new explicit origin starts with insufficient history in the new epoch.
+    const retiredOriginCount = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    const replacementEpoch = await p5cPost('/epochs', {
+      reason: 'Explicitly begin a new advice coverage epoch without inheriting prior hiring history.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' });
+    expect(replacementEpoch.status).toBe(201);
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}`)).body.data.state)
+      .toBe('capacity_advisory_origin_stale');
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/outcomes/${correctedOutcome.body.data.id}`))
+      .body.data.state).toBe('capacity_advisory_outcome_stale');
+    expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${correctedEvaluation.body.data.id}`))
+      .body.data.state).toBe('capacity_advisory_evaluation_stale');
+    expect((await p5cPost('/origins', advisoryOriginBody, advisoryOriginKey)).status).toBe(409);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(retiredOriginCount);
+    const recoveredOrigin = await p5cPost('/origins', advisoryOriginBody);
+    expect(recoveredOrigin.status).toBe(201);
+    const recoveredDecision = await p5cPost(`/origins/${recoveredOrigin.body.data.id}/decisions`, {
+      action: 'approve', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Approve only the new-epoch private research receipt after explicit recapture.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-decision-v1' });
+    expect(recoveredDecision.status).toBe(201);
+    expect((await p5cGet(`/origins/${recoveredOrigin.body.data.id}`)).body.data.categories[0]
+      .categories.hiring_need.state).toBe('insufficient_history');
+
+    // A same-cutoff demand rereview is a correction, not ordinary next-period
+    // progress. Restoring identical bytes cannot revive the pinned generation;
+    // explicit recapture under the current review is required.
+    const correctedDemand = await p5cDefinition(advisoryAlternative);
+    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: correctedDemand });
+    expect((await p5cGet(`/origins/${recoveredOrigin.body.data.id}`)).body.data.state)
+      .toBe('capacity_advisory_origin_stale');
+    const demandRetiredCount = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    const demandRecoveredOrigin = await p5cPost('/origins', advisoryOriginBody);
+    expect(demandRecoveredOrigin.status).toBe(201);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(demandRetiredCount + 1);
+
+    // A policy rereview also retires its epoch. Even a byte-identical restored
+    // policy is a new human authority generation and cannot revive old advice.
+    await p5cReview('policy', { alternativeKey: advisoryAlternative, scopeKey, role: 'technician',
+      definition: policyDefinition });
+    expect((await p5cGet(`/origins/${demandRecoveredOrigin.body.data.id}`)).body.data.state)
+      .toBe('capacity_advisory_origin_stale');
+    expect((await p5cPost('/origins', advisoryOriginBody)).status).toBe(400);
+    const policyEpoch = await p5cPost('/epochs', {
+      reason: 'Explicitly bind a new advice epoch to the current restored policy generation.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-epoch-v1' });
+    expect(policyEpoch.status).toBe(201);
+    const policyRecoveredOrigin = await p5cPost('/origins', advisoryOriginBody);
+    expect(policyRecoveredOrigin.status).toBe(201);
+    expect((await p5cGet(`/origins/${demandRecoveredOrigin.body.data.id}`)).body.data.state)
+      .toBe('capacity_advisory_origin_stale');
+
+    // Genuine post-cutoff completion is authorized future progress, not an
+    // input correction. It leaves the saved origin current, while a later
+    // origin sees the exact authenticated zero backlog through the owning 5A
+    // receipt and never conflates it with missing demand evidence.
+    await advance(1);
+    for (const entry of advisoryWorks) await completeApprovedWork(entry.work, 'complete', 'member');
+    const postCompletionOrigin = await p5cGet(`/origins/${policyRecoveredOrigin.body.data.id}`);
+    if (postCompletionOrigin.body.data.state !== 'capacity_advisory_origin_current') {
+      const diagnostic = (await fixture.ownerPool.query(
+        `SELECT canonical_forecast_capacity_advisory_v1_epoch_current($1,epoch_value) epoch_current,
+                canonical_forecast_workload_capacity_v1_origin_current($1,workload_value) workload_current,
+                canonical_forecast_capacity_advisory_v1_workload_origin_historical_current($1,workload_value) workload_historical_current,
+                origin_value.input_manifest->>'constraintDigest' saved_constraint_digest,
+                canonical_completion_digest(canonical_forecast_constrained_capacity_v1_complete_input(
+                  $1,origin_value.prediction_cutoff_at)) current_constraint_digest,
+                origin_value.input_manifest->>'policyDigest' saved_policy_digest,
+                canonical_completion_digest(canonical_forecast_capacity_advisory_v1_policy_manifest(
+                  $1,origin_value.prediction_cutoff_at)) current_policy_digest,
+                canonical_forecast_capacity_advisory_v1_origin_current($1,origin_value) advisory_current
+           FROM canonical_forecast_capacity_advisory_origins_v1 origin_value
+           JOIN canonical_forecast_capacity_advisory_epochs_v1 epoch_value
+             ON epoch_value.organization_id=origin_value.organization_id AND epoch_value.id=origin_value.epoch_id
+           JOIN canonical_forecast_workload_capacity_origins_v1 workload_value
+             ON workload_value.organization_id=origin_value.organization_id
+            AND workload_value.id=(origin_value.input_manifest#>>'{workloadOrigin,id}')::uuid
+          WHERE origin_value.organization_id=$1 AND origin_value.id=$2`,
+        [fixture.org, policyRecoveredOrigin.body.data.id])).rows[0];
+      throw new Error(`Post-completion origin unexpectedly stale: ${JSON.stringify({
+        projection: postCompletionOrigin.body.data, diagnostic })}`);
+    }
+    await advance(1);
+    const zeroDemand = await p5cDefinition(advisoryAlternative);
+    expect(zeroDemand.allocations).toEqual([]);
+    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: zeroDemand });
+    const advisoryZeroOrigin = await p5cPost('/origins', advisoryOriginBody);
+    expect(advisoryZeroOrigin.status).toBe(201);
+    const advisoryZeroDecision = await p5cPost(`/origins/${advisoryZeroOrigin.body.data.id}/decisions`, {
+      action: 'approve', expectedRevision: 0, expectedDigest: 'none',
+      reason: 'Approve the authenticated complete-zero research receipt for explicit review.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-decision-v1' });
+    expect(advisoryZeroDecision.status).toBe(201);
+    expect((await p5cGet(`/origins/${advisoryZeroOrigin.body.data.id}`)).body.data.categories[0].categories)
+      .toEqual({ bottleneck: { state: 'clear' }, backlog: { state: 'clear' },
+        overtime: { state: 'clear' }, contractor: { state: 'clear' }, hiring_need: { state: 'clear' } });
+
+    // Invalid or oversized crosswalks fail before any append-only review row.
+    // Authenticated complete zero remains distinct from an invented allocation.
+    const advisoryReviewCount = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    const demandToken = (await p5cGet('/reviews/current?' + new URLSearchParams({ kind: 'demand',
+      alternativeKey: advisoryAlternative, scopeKey: 'none', role: 'none', subjectId: 'none' }).toString())).body.data;
+    const invalidAllocation = { ...zeroDemand, allocations: [{ appointmentId: uuid(), assignmentId: uuid(),
+      scopeKey, role: 'technician', personMinutes: 1 }] };
+    const demandReviewBody = definition => ({ kind: 'demand', alternativeKey: advisoryAlternative,
+      scopeKey: null, role: null, subjectId: null, action: 'approve',
+      expectedRevision: demandToken.expectedRevision, expectedDigest: demandToken.expectedDigest, definition,
+      reason: 'Refuse an incomplete or oversized private demand allocation without partial evidence.',
+      confirmed: true, confirmationVersion: 'm26-capacity-advisory-review-v1' });
+    expect((await p5cPost('/reviews', demandReviewBody(invalidAllocation))).status).toBe(400);
+    const oversizedAllocation = { ...zeroDemand, allocations: Array.from({ length: 1001 }, (_, index) => ({
+      appointmentId: uuid(), assignmentId: uuid(), scopeKey, role: 'technician', personMinutes: index + 1 })) };
+    // Express rejects this bounded public body before a database transaction;
+    // the SQL validator independently retains the exact 1,000-row ceiling.
+    expect((await p5cPost('/reviews', demandReviewBody(oversizedAllocation))).status).toBe(413);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(advisoryReviewCount);
+
     const originCount = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count);
@@ -1940,7 +2663,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       await accessReader.query('BEGIN ISOLATION LEVEL READ COMMITTED');
       const backendPid = Number((await accessReader.query('SELECT pg_backend_pid() pid')).rows[0].pid);
       const waiting = accessReader.query(
-        'SELECT canonical_forecast_constrained_capacity_v1_prerequisites($1,$2,$3,$4) value',
+        'SELECT canonical_forecast_capacity_advisory_v1_prerequisites($1,$2,$3,$4) value',
         [fixture.org, actor('owner').actorUserId, actor('owner').actorAccessRole,
           actor('owner').authSessionId]);
       await waitForBackendLock(backendPid);
@@ -1952,10 +2675,10 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       await new Promise(resolve => setTimeout(resolve, 80));
       expect(revoked).toBe(false);
       await sourceBlocker.query('COMMIT');
-      expect((await waiting).rows[0].value.state).toBe('constrained_capacity_prerequisites_current');
+      expect((await waiting).rows[0].value.state).toBe('capacity_advisory_prerequisites_current');
       await accessReader.query('COMMIT');
       await revoke; await subscriptionWriter.query('COMMIT');
-      expect((await get('/prerequisites/current')).status).toBe(403);
+      expect((await p5cGet('/prerequisites/current')).status).toBe(403);
     } catch (error) {
       await sourceBlocker.query('ROLLBACK').catch(() => {});
       await accessReader.query('ROLLBACK').catch(() => {});

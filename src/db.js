@@ -2265,7 +2265,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
             WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.'||required.table_name)
              AND trigger_value.tgname=required.trigger_name AND trigger_value.tgenabled='O'
-             AND trigger_value.tgtype=31
+             AND trigger_value.tgtype=31 AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
              AND trigger_value.tgfoid='public.canonical_forecast_constrained_capacity_v1_source_capture()'::regprocedure
              AND NOT trigger_value.tgisinternal)) THEN
           RAISE EXCEPTION 'Required constrained-capacity v1 source capture is missing';

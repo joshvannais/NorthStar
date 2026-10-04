@@ -3363,6 +3363,12 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       `SELECT generation,updated_at FROM canonical_forecast_constrained_capacity_source_fences_v1
         WHERE organization_id=$1`, [fixture.org])).rows[0];
     expect(sourceFence).toBeTruthy();
+    const restoreCrewCapture = async () => {
+      await fixture.ownerPool.query('DROP TRIGGER IF EXISTS z_m26_p5b_source_crews ON workforce_crews');
+      await fixture.ownerPool.query(
+        `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
+          FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`);
+    };
 
     // Source-integrity failures happen before the completed authority fence and
     // must escape as 22023. The private pending projection is never a recovery
@@ -3389,12 +3395,74 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
         FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_immutable()`);
     try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
-      await fixture.ownerPool.query('DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews');
-      await fixture.ownerPool.query(
-        `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
-          FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`);
+      await restoreCrewCapture();
     }
 
+    await fixture.ownerPool.query('DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews');
+    await fixture.ownerPool.query(
+      `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT ON workforce_crews
+        FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`);
+    try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
+      await restoreCrewCapture();
+    }
+
+    await fixture.ownerPool.query('DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews');
+    await fixture.ownerPool.query(
+      `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
+        FOR EACH ROW WHEN (false) EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture()`);
+    try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
+      await restoreCrewCapture();
+    }
+
+    await fixture.ownerPool.query('DROP TRIGGER z_m26_p5b_source_crews ON workforce_crews');
+    await fixture.ownerPool.query(
+      `CREATE TRIGGER z_m26_p5b_source_crews BEFORE INSERT OR UPDATE OR DELETE ON workforce_crews
+        FOR EACH ROW EXECUTE FUNCTION canonical_forecast_constrained_capacity_v1_source_capture('unexpected')`);
+    try { await expectPrivatePreBoundaryRefusal('22023'); } finally {
+      await restoreCrewCapture();
+    }
+
+    // The restored unqualified all-event trigger captures real UPDATE and DELETE
+    // operations. Keep the proof transactional so this authority-shape test does
+    // not retire the unrelated prospective predecessor used by later lifecycle cases.
+    const captureClient = await fixture.ownerPool.connect();
+    try {
+      const proofCrew = uuid();
+      await captureClient.query('BEGIN');
+      const generationBefore = Number((await captureClient.query(
+        `SELECT generation FROM canonical_forecast_constrained_capacity_source_fences_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].generation);
+      await captureClient.query(
+        `INSERT INTO workforce_crews(id,organization_id,crew_key,name,created_by_user_id,updated_by_user_id)
+          VALUES($1,$2,$3,$4,$5,$5)`,
+        [proofCrew, fixture.org, `v8-${proofCrew}`, 'V8 trigger shape proof', actor('owner').actorUserId]);
+      const generationAfterInsert = Number((await captureClient.query(
+        `SELECT generation FROM canonical_forecast_constrained_capacity_source_fences_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].generation);
+      await captureClient.query(
+        `UPDATE workforce_crews SET name='V8 trigger shape proof updated',updated_at=clock_timestamp()
+          WHERE organization_id=$1 AND id=$2`, [fixture.org, proofCrew]);
+      const generationAfterUpdate = Number((await captureClient.query(
+        `SELECT generation FROM canonical_forecast_constrained_capacity_source_fences_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].generation);
+      await captureClient.query(
+        'DELETE FROM workforce_crews WHERE organization_id=$1 AND id=$2', [fixture.org, proofCrew]);
+      const generationAfterDelete = Number((await captureClient.query(
+        `SELECT generation FROM canonical_forecast_constrained_capacity_source_fences_v1
+          WHERE organization_id=$1`, [fixture.org])).rows[0].generation);
+      expect(generationAfterInsert).toBeGreaterThan(generationBefore);
+      expect(generationAfterUpdate).toBeGreaterThan(generationAfterInsert);
+      expect(generationAfterDelete).toBeGreaterThan(generationAfterUpdate);
+      expect((await captureClient.query(
+        `SELECT operation FROM canonical_forecast_constrained_capacity_source_events_v1
+          WHERE organization_id=$1 AND source_kind='workforce_crews'
+           AND subject_key=$2 ORDER BY source_order`, [fixture.org, proofCrew])).rows.map(row => row.operation))
+        .toEqual(['INSERT', 'UPDATE', 'DELETE']);
+      await captureClient.query('ROLLBACK');
+    } finally {
+      await captureClient.query('ROLLBACK').catch(() => {});
+      captureClient.release();
+    }
     // Exact wait ordering: activation passes initial access and waits on the
     // owning source advisory lock while the exact capture trigger is disabled.
     // Session revocation is serialized behind that retained access lock.

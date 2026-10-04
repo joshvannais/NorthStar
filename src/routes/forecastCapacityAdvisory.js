@@ -119,7 +119,11 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
     try {
       client = await poolProvider().connect();
       await client.query(write ? 'BEGIN ISOLATION LEVEL SERIALIZABLE' : 'BEGIN');
-      await client.query("SET LOCAL statement_timeout='10000ms'");
+      // Currentness can traverse the exact accepted Part5A/Part5B lineage and
+      // the pinned predecessor decision/outcome/evaluation chain. Keep the
+      // request bounded while allowing the complete tenant-private proof to
+      // finish instead of converting a valid receipt into a transient 503.
+      await client.query("SET LOCAL statement_timeout='30000ms'");
       const identity = [req.tenantContext.organizationId, req.tenantContext.userId, req.userRole, req.authSession.id];
       const value = (await client.query(sql, [...identity, ...params])).rows[0]?.value;
       const data = validate(value); if (!data) throw new Error('Invalid capacity-advice projection');

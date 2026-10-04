@@ -1823,6 +1823,7 @@ CREATE FUNCTION public.canonical_forecast_capacity_advisory_v1_review_period_his
  org UUID,value public.canonical_forecast_capacity_advisory_reviews_v1)
 RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE period_authority UUID;
+ continuation_value public.canonical_forecast_capacity_advisory_continuations_v1%ROWTYPE;
 BEGIN
  IF value.review_kind NOT IN('demand','outcome_demand') OR value.action<>'approve'
   OR public.canonical_forecast_capacity_advisory_v1_demand_valid(value.definition,value.review_kind) IS NOT TRUE
@@ -1832,6 +1833,13 @@ BEGIN
   OR (value.source_identity->>'effectiveEnd')::timestamptz<>(value.source_identity->>'effectiveStart')::timestamptz+INTERVAL '2592000 seconds'
   OR value.source_digest<>public.canonical_completion_digest(value.source_identity) THEN RETURN FALSE;END IF;
  period_authority:=(value.source_identity->>'periodAuthorityId')::uuid;
+ IF value.review_kind='demand' AND value.source_identity->>'continuationId' IS NOT NULL THEN
+  SELECT * INTO continuation_value FROM public.canonical_forecast_capacity_advisory_continuations_v1
+   WHERE organization_id=org AND id=(value.source_identity->>'continuationId')::uuid;
+  IF continuation_value.id IS NULL
+   OR public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(org,continuation_value) IS NOT TRUE THEN
+   RETURN FALSE;END IF;
+ END IF;
  RETURN NOT EXISTS(SELECT 1 FROM public.canonical_forecast_capacity_advisory_reviews_v1 newer
   WHERE newer.organization_id=org AND newer.review_kind=value.review_kind
    AND newer.alternative_key=value.alternative_key AND newer.subject_id IS NOT DISTINCT FROM value.subject_id
@@ -1857,6 +1865,9 @@ DECLARE epoch_value public.canonical_forecast_capacity_advisory_epochs_v1%ROWTYP
  predecessor public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;
  decision_value public.canonical_forecast_capacity_advisory_decisions_v1%ROWTYPE;
  predecessor_evaluation public.canonical_forecast_capacity_advisory_evaluations_v1%ROWTYPE;
+ predecessor_outcome public.canonical_forecast_capacity_advisory_outcomes_v1%ROWTYPE;
+ pinned_review public.canonical_forecast_capacity_advisory_reviews_v1%ROWTYPE;
+ before_boundary BOOLEAN;
 BEGIN
  SELECT * INTO epoch_value FROM public.canonical_forecast_capacity_advisory_epochs_v1
   WHERE organization_id=org AND id=value.epoch_id;
@@ -1865,14 +1876,32 @@ BEGIN
  decision_value:=public.canonical_forecast_capacity_advisory_v1_latest_decision(org,value.predecessor_origin_id);
  SELECT * INTO predecessor_evaluation FROM public.canonical_forecast_capacity_advisory_evaluations_v1
   WHERE organization_id=org AND origin_id=value.predecessor_origin_id ORDER BY revision DESC LIMIT 1;
+ IF predecessor_evaluation.id IS NOT NULL THEN
+  SELECT * INTO predecessor_outcome FROM public.canonical_forecast_capacity_advisory_outcomes_v1
+   WHERE organization_id=org AND id=predecessor_evaluation.outcome_id;
+ END IF;
+ SELECT * INTO pinned_review FROM public.canonical_forecast_capacity_advisory_reviews_v1
+  WHERE organization_id=org AND review_kind='demand' AND action='approve'
+   AND source_identity->>'continuationId'=value.id::text
+  ORDER BY decided_at,id LIMIT 1;
+ before_boundary:=public.canonical_forecast_workload_capacity_v1_clock()<value.period_start;
  RETURN value.period_start=predecessor.horizon_ends_at
   AND value.period_end=value.period_start+INTERVAL '2592000 seconds'
   AND value.activation_deadline=value.period_start+INTERVAL '1 hour'
   AND epoch_value.id IS NOT NULL AND public.canonical_forecast_capacity_advisory_v1_epoch_current(org,epoch_value)
-  AND predecessor.id IS NOT NULL AND decision_value.id IS NOT NULL AND decision_value.action='approve'
-  AND ((public.canonical_forecast_workload_capacity_v1_clock()<value.period_start
-      AND public.canonical_forecast_capacity_advisory_v1_origin_current(org,predecessor))
-    OR predecessor_evaluation.id IS NOT NULL);
+  AND predecessor.id IS NOT NULL AND public.canonical_forecast_capacity_advisory_v1_origin_current(org,predecessor)
+  AND decision_value.id IS NOT NULL AND decision_value.action='approve'
+  AND (before_boundary OR (predecessor_evaluation.id IS NOT NULL
+    AND predecessor_outcome.id IS NOT NULL
+    AND public.canonical_forecast_capacity_advisory_v1_outcome_current(org,predecessor_outcome)
+    AND public.canonical_forecast_capacity_advisory_v1_evaluation_current(org,predecessor_evaluation)
+    AND (pinned_review.id IS NULL OR (
+      pinned_review.source_identity->>'predecessorDecisionId'=decision_value.id::text
+      AND pinned_review.source_identity->>'predecessorDecisionDigest'=rtrim(decision_value.digest)
+      AND pinned_review.source_identity->>'predecessorOutcomeId'=predecessor_outcome.id::text
+      AND pinned_review.source_identity->>'predecessorOutcomeDigest'=rtrim(predecessor_outcome.digest)
+      AND pinned_review.source_identity->>'predecessorEvaluationId'=predecessor_evaluation.id::text
+      AND pinned_review.source_identity->>'predecessorEvaluationDigest'=rtrim(predecessor_evaluation.digest)))));
 EXCEPTION WHEN SQLSTATE '22023' OR SQLSTATE '54000' THEN RETURN FALSE;END $$;
 
 CREATE OR REPLACE FUNCTION public.canonical_forecast_capacity_advisory_v1_demand_manifest_pinned(
@@ -1902,7 +1931,9 @@ BEGIN
    org,'demand',alternative_value,review_value.definition,backlog_rows,constraint_input);
   IF public.canonical_completion_digest(basis) IS DISTINCT FROM saved_item->>'basisDigest'
    OR (review_value.source_identity-ARRAY['sourceCutoff','periodAuthorityId','effectiveStart','effectiveEnd',
-      'correctionOfReviewId','correctionGeneration','observedAt','continuationId']::text[]) IS DISTINCT FROM basis THEN
+      'correctionOfReviewId','correctionGeneration','observedAt','continuationId',
+      'predecessorDecisionId','predecessorDecisionDigest','predecessorOutcomeId','predecessorOutcomeDigest',
+      'predecessorEvaluationId','predecessorEvaluationDigest']::text[]) IS DISTINCT FROM basis THEN
    RAISE EXCEPTION 'Pinned capacity advisory demand source changed' USING ERRCODE='22023';END IF;
   result_value:=result_value||jsonb_build_array(saved_item);alternative_count:=alternative_count+1;
  END LOOP;
@@ -1943,7 +1974,9 @@ BEGIN
 	  IF kind_value='demand' AND EXISTS(SELECT 1 FROM public.canonical_forecast_capacity_advisory_continuations_v1 continuation_value
 	      WHERE continuation_value.organization_id=org AND continuation_value.id=period_authority)
 	   AND (review_value.source_identity-ARRAY['sourceCutoff','periodAuthorityId','effectiveStart','effectiveEnd',
-	      'correctionOfReviewId','correctionGeneration','observedAt','continuationId']::text[]) IS DISTINCT FROM basis THEN
+	      'correctionOfReviewId','correctionGeneration','observedAt','continuationId',
+	      'predecessorDecisionId','predecessorDecisionDigest','predecessorOutcomeId','predecessorOutcomeDigest',
+	      'predecessorEvaluationId','predecessorEvaluationDigest']::text[]) IS DISTINCT FROM basis THEN
 	   RAISE EXCEPTION 'Capacity advisory reviewed demand source changed' USING ERRCODE='22023';END IF;
 	  result_value:=result_value||jsonb_build_array(jsonb_build_object('alternativeKey',alternative_value,
    'reviewId',review_value.id,'revision',review_value.revision,'digest',rtrim(review_value.digest),
@@ -2084,6 +2117,9 @@ CREATE FUNCTION public.canonical_forecast_capacity_advisory_v1_review_source_v2(
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE base JSONB;continuation_row public.canonical_forecast_capacity_advisory_continuations_v1%ROWTYPE;
  corrected public.canonical_forecast_capacity_advisory_reviews_v1%ROWTYPE;cutoff_value TIMESTAMPTZ;
+ predecessor_decision public.canonical_forecast_capacity_advisory_decisions_v1%ROWTYPE;
+ predecessor_outcome public.canonical_forecast_capacity_advisory_outcomes_v1%ROWTYPE;
+ predecessor_evaluation public.canonical_forecast_capacity_advisory_evaluations_v1%ROWTYPE;
  period_authority UUID;effective_start TIMESTAMPTZ;effective_end TIMESTAMPTZ;generation_value BIGINT:=1;
  now_value TIMESTAMPTZ:=public.canonical_forecast_workload_capacity_v1_clock();
 BEGIN
@@ -2105,6 +2141,15 @@ BEGIN
    OR public.canonical_forecast_capacity_advisory_v1_review_period_historical_current(org,corrected) IS NOT TRUE THEN
    RAISE EXCEPTION 'Capacity advisory correction target unavailable' USING ERRCODE='40001';END IF;
   period_authority:=(corrected.source_identity->>'periodAuthorityId')::uuid;
+  IF corrected.source_identity->>'continuationId' IS NOT NULL THEN
+   continuation_value:=(corrected.source_identity->>'continuationId')::uuid;
+   SELECT * INTO predecessor_decision FROM public.canonical_forecast_capacity_advisory_decisions_v1
+    WHERE organization_id=org AND id=(corrected.source_identity->>'predecessorDecisionId')::uuid;
+   SELECT * INTO predecessor_outcome FROM public.canonical_forecast_capacity_advisory_outcomes_v1
+    WHERE organization_id=org AND id=(corrected.source_identity->>'predecessorOutcomeId')::uuid;
+   SELECT * INTO predecessor_evaluation FROM public.canonical_forecast_capacity_advisory_evaluations_v1
+    WHERE organization_id=org AND id=(corrected.source_identity->>'predecessorEvaluationId')::uuid;
+  END IF;
   effective_start:=(corrected.source_identity->>'effectiveStart')::timestamptz;
   effective_end:=(corrected.source_identity->>'effectiveEnd')::timestamptz;
   generation_value:=COALESCE((corrected.source_identity->>'correctionGeneration')::bigint,1)+1;
@@ -2116,6 +2161,17 @@ BEGIN
    OR now_value<continuation_row.period_start OR now_value>continuation_row.activation_deadline THEN
    RAISE EXCEPTION 'Capacity advisory continuation review unavailable' USING ERRCODE='40001';END IF;
   period_authority:=continuation_row.id;effective_start:=continuation_row.period_start;effective_end:=continuation_row.period_end;
+  predecessor_decision:=public.canonical_forecast_capacity_advisory_v1_latest_decision(org,continuation_row.predecessor_origin_id);
+  SELECT * INTO predecessor_evaluation FROM public.canonical_forecast_capacity_advisory_evaluations_v1
+   WHERE organization_id=org AND origin_id=continuation_row.predecessor_origin_id ORDER BY revision DESC LIMIT 1;
+  IF predecessor_evaluation.id IS NOT NULL THEN
+   SELECT * INTO predecessor_outcome FROM public.canonical_forecast_capacity_advisory_outcomes_v1
+    WHERE organization_id=org AND id=predecessor_evaluation.outcome_id;
+  END IF;
+  IF predecessor_decision.id IS NULL OR predecessor_evaluation.id IS NULL OR predecessor_outcome.id IS NULL
+   OR public.canonical_forecast_capacity_advisory_v1_outcome_current(org,predecessor_outcome) IS NOT TRUE
+   OR public.canonical_forecast_capacity_advisory_v1_evaluation_current(org,predecessor_evaluation) IS NOT TRUE THEN
+   RAISE EXCEPTION 'Capacity advisory predecessor authority unavailable' USING ERRCODE='40001';END IF;
  ELSE
   period_authority:=CASE WHEN kind_value='outcome_demand' THEN subject_value ELSE new_review_id END;
   IF kind_value='outcome_demand' THEN
@@ -2129,7 +2185,10 @@ BEGIN
   org,kind_value,alternative_value,subject_value,definition_value,cutoff_value);
  RETURN base||jsonb_build_object('sourceCutoff',cutoff_value,'periodAuthorityId',period_authority,
   'effectiveStart',effective_start,'effectiveEnd',effective_end,'correctionOfReviewId',correction_value,
-  'correctionGeneration',generation_value,'observedAt',now_value,'continuationId',continuation_value);
+  'correctionGeneration',generation_value,'observedAt',now_value,'continuationId',continuation_value,
+  'predecessorDecisionId',predecessor_decision.id,'predecessorDecisionDigest',rtrim(predecessor_decision.digest),
+  'predecessorOutcomeId',predecessor_outcome.id,'predecessorOutcomeDigest',rtrim(predecessor_outcome.digest),
+  'predecessorEvaluationId',predecessor_evaluation.id,'predecessorEvaluationDigest',rtrim(predecessor_evaluation.digest));
 END $$;
 
 CREATE FUNCTION public.canonical_forecast_capacity_advisory_v1_review_mutate_v2(
@@ -2277,7 +2336,9 @@ BEGIN
    CASE WHEN value.review_kind='demand' THEN (value.source_identity->>'effectiveStart')::timestamptz
     ELSE (value.source_identity->>'effectiveEnd')::timestamptz END);
   base_source:=value.source_identity-ARRAY['sourceCutoff','periodAuthorityId','effectiveStart','effectiveEnd',
-   'correctionOfReviewId','correctionGeneration','observedAt','continuationId']::text[];
+   'correctionOfReviewId','correctionGeneration','observedAt','continuationId',
+   'predecessorDecisionId','predecessorDecisionDigest','predecessorOutcomeId','predecessorOutcomeDigest',
+   'predecessorEvaluationId','predecessorEvaluationDigest']::text[];
   RETURN source_value=base_source;
  END IF;
  source_value:=public.canonical_forecast_capacity_advisory_v1_review_source(org,value.review_kind,
@@ -2525,6 +2586,7 @@ BEGIN
   ON attempt.organization_id=value.organization_id AND attempt.continuation_id=value.id
  WHERE value.period_start<=public.canonical_forecast_workload_capacity_v1_clock()
    AND NOT (value.organization_id::text||':'||value.id::text)=ANY(COALESCE(excluded_values,'{}'::text[]))
+   AND public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(value.organization_id,value)
    AND (attempt.continuation_id IS NULL OR attempt.next_attempt_at<=now_value)
    AND NOT EXISTS(SELECT 1 FROM public.canonical_forecast_capacity_advisory_continuation_events_v1 event_value
     WHERE event_value.organization_id=value.organization_id AND event_value.continuation_id=value.id)
@@ -2561,22 +2623,18 @@ BEGIN
  IF value.id IS NULL THEN RAISE EXCEPTION 'Capacity advisory receipt unavailable' USING ERRCODE='P0002';END IF;
  SELECT * INTO event_value FROM public.canonical_forecast_capacity_advisory_continuation_events_v1
   WHERE organization_id=org AND continuation_id=value.id;
- IF event_value.id IS NOT NULL THEN RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,TRUE);END IF;
  now_value:=public.canonical_forecast_workload_capacity_v1_clock();
  IF now_value<value.period_start THEN RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
- IF now_value>value.activation_deadline THEN
-  INSERT INTO public.canonical_forecast_capacity_advisory_continuation_events_v1(
-   organization_id,continuation_id,event_kind,origin_id,observed_at,detail_code,digest)
-  VALUES(org,value.id,'missed',NULL,now_value,'activation_deadline_missed',
-   public.canonical_completion_digest(jsonb_build_object('organizationId',org,'continuationId',value.id,
-    'event','missed','observedAt',now_value))) RETURNING * INTO event_value;
-  RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
  authority:=public.canonical_forecast_workload_capacity_v1_access(
   org,value.actor_id,value.actor_role,value.session_id,NULL,FALSE);
  PERFORM public.canonical_forecast_capacity_advisory_v1_lock_sources(org);
  authority:=public.canonical_forecast_workload_capacity_v1_access_recheck(
   org,value.actor_id,value.actor_role,value.session_id,NULL,FALSE);
  now_value:=public.canonical_forecast_workload_capacity_v1_clock();
+	 IF public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(org,value) IS NOT TRUE THEN
+  RAISE EXCEPTION 'Capacity advisory continuation authority stale' USING ERRCODE='40001';END IF;
+ IF event_value.id IS NOT NULL THEN
+  RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,TRUE);END IF;
  IF now_value>value.activation_deadline THEN
   INSERT INTO public.canonical_forecast_capacity_advisory_continuation_events_v1(
    organization_id,continuation_id,event_kind,origin_id,observed_at,detail_code,digest)
@@ -2584,19 +2642,11 @@ BEGIN
    public.canonical_completion_digest(jsonb_build_object('organizationId',org,'continuationId',value.id,
     'event','missed','observedAt',now_value))) RETURNING * INTO event_value;
   RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
-	 IF public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(org,value) IS NOT TRUE THEN
-  INSERT INTO public.canonical_forecast_capacity_advisory_continuation_events_v1(
-   organization_id,continuation_id,event_kind,origin_id,observed_at,detail_code,digest)
-  VALUES(org,value.id,'retired',NULL,now_value,'source_authority_retired',
-   public.canonical_completion_digest(jsonb_build_object('organizationId',org,'continuationId',value.id,
-    'event','retired','observedAt',now_value))) RETURNING * INTO event_value;
-  RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
  SELECT * INTO predecessor_evaluation FROM public.canonical_forecast_capacity_advisory_evaluations_v1
   WHERE organization_id=org AND origin_id=value.predecessor_origin_id ORDER BY revision DESC LIMIT 1;
-  -- The immutable predecessor evaluation establishes that the prior period was
-  -- actually reviewed before continuation. A later source correction may make
-  -- it ineligible for hiring history, but cannot erase the next reserved period;
-  -- results() independently admits only current evaluated history.
+  -- The exact predecessor chain remains current through activation. The first
+  -- continuation demand review permanently pins its decision, outcome and
+  -- evaluation identities; a corrected generation cannot revive this receipt.
   IF predecessor_evaluation.id IS NULL THEN
    RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
  -- Validate every period-dependent human/source input before the first child

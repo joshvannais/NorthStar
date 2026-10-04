@@ -22,9 +22,13 @@ class CapacityAdvisoryContinuationWorker {
     let discard = false;
     try {
       await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-      await client.query("SET LOCAL statement_timeout='15000ms'");
+      // A complete activation captures and revalidates the accepted Part5A,
+      // Part5B and Part5C authorities in one transaction. Keep the source-lock
+      // wait bounded separately, while allowing that deterministic calculation
+      // enough time to finish for a bounded tenant population.
+      await client.query("SET LOCAL statement_timeout='60000ms'");
       await client.query("SET LOCAL lock_timeout='5000ms'");
-      await client.query("SET LOCAL idle_in_transaction_session_timeout='15000ms'");
+      await client.query("SET LOCAL idle_in_transaction_session_timeout='75000ms'");
       const value = await callback(client);
       await client.query('COMMIT');
       return value;

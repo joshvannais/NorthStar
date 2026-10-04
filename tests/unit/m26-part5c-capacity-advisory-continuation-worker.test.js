@@ -6,7 +6,10 @@ const { CapacityAdvisoryContinuationWorker } =
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';
 const ID_A = '33333333-3333-4333-8333-333333333333';
-const ID_B = '44444444-4444-4444-8444-444444444444';
+// UUIDs are tenant scoped.  Deliberately reuse one UUID across both tenants so
+// the worker proof fails if either its in-memory exclusion or the durable claim
+// identity ever drops organization_id.
+const ID_B = ID_A;
 
 function mockPool(items, { failIds = new Set() } = {}) {
   const claimed = new Set();
@@ -17,11 +20,11 @@ function mockPool(items, { failIds = new Set() } = {}) {
       const excluded = new Set(params[0] || []);
       const item = items.find(value => !claimed.has(`${value.organization_id}:${value.continuation_id}`) &&
         !excluded.has(`${value.organization_id}:${value.continuation_id}`));
-      if (item) claimed.add(item.continuation_id);
+      if (item) claimed.add(`${item.organization_id}:${item.continuation_id}`);
       return { rows: item ? [item] : [] };
     }
     if (sql.includes('_continuation_activate')) {
-      if (failIds.has(params[1])) throw new Error('private tenant detail');
+      if (failIds.has(`${params[0]}:${params[1]}`)) throw new Error('private tenant detail');
       return { rows: [{ value: { state: 'capacity_advisory_continuation_activated' } }] };
     }
     return { rows: [] };
@@ -48,12 +51,13 @@ describe('Mission 26 Part 5C prospective continuation worker', () => {
     const { pool, queries } = mockPool([
       { organization_id: ORG_A, continuation_id: ID_A },
       { organization_id: ORG_B, continuation_id: ID_B },
-    ], { failIds: new Set([ID_A]) });
+    ], { failIds: new Set([`${ORG_A}:${ID_A}`]) });
     const worker = new CapacityAdvisoryContinuationWorker({ getPool: () => pool, batchSize: 2 });
     await expect(worker.drainOnce()).resolves.toEqual({ due: 2, attempted: 2 });
     expect(queries.filter(([sql]) => sql === 'ROLLBACK')).toHaveLength(1);
     expect(queries.filter(([sql]) => sql === 'COMMIT')).toHaveLength(3);
-    expect(queries.filter(([sql, params]) => sql.includes('_continuation_activate') && params[1] === ID_B))
+    expect(queries.filter(([sql, params]) => sql.includes('_continuation_activate') &&
+      params[0] === ORG_B && params[1] === ID_B))
       .toHaveLength(1);
     const secondClaim = queries.filter(([sql]) => sql.includes('_continuation_claim_due'))[1];
     expect(secondClaim[1][0]).toEqual([`${ORG_A}:${ID_A}`]);

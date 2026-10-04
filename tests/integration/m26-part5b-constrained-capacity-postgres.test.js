@@ -149,6 +149,36 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     return response.body.data;
   }
 
+  async function rescheduleApprovedWork(work, start, label = 'Reschedule through the owning M22 authority.') {
+    const scheduledStart = new Date(start); const scheduledEnd = new Date(scheduledStart.getTime() + 3600000);
+    let receipt;
+    for (const action of ['schedule', 'dispatch']) {
+      const before = (await fixture.ownerPool.query(
+        `SELECT revision,rtrim(canonical_digest) digest,appointment_status,workforce_profile_id,workforce_crew_id
+           FROM canonical_schedule_assignments
+          WHERE organization_id=$1 AND id=$2`, [fixture.org, work.assignment.id])).rows[0];
+      const target = before.workforce_profile_id
+        ? { kind: 'profile', id: before.workforce_profile_id }
+        : { kind: 'crew', id: before.workforce_crew_id };
+      const preview = await request(fixture.app)
+        .post(`/api/v1/canonical/appointments/${work.appointment}/mutation-previews`)
+        .set(actor('owner').session.headers).send({
+          expectedRevision: Number(before.revision), expectedDigest: before.digest, expectedTimeZone: 'UTC',
+          action, target, scheduledStart: scheduledStart.toISOString(), scheduledEnd: scheduledEnd.toISOString(),
+          appointmentStatus: before.appointment_status, reason: label,
+        });
+      expect(preview.status).toBe(201);
+      const approval = await request(fixture.app)
+        .post(`/api/v1/canonical/appointments/${work.appointment}/mutation-approvals`)
+        .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5b-reschedule-${uuid()}`)
+        .send({ previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
+          acknowledgedWarningDigests: preview.body.data.warningDigests,
+          acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests, reason: label });
+      expect(approval.status).toBe(200); receipt = approval.body.data;
+    }
+    return { scheduledStart, scheduledEnd, receipt };
+  }
+
   async function createApprovedWork({ start, locationId, label, target = null }) {
     const created = await request(fixture.app).post('/api/leads')
       .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5b-lead-${uuid()}`)
@@ -931,6 +961,32 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     expect((await get(`/origins/${travelOrigin.body.data.id}`)).body.data.state)
       .toBe('constrained_capacity_origin_current');
 
+    // The owning M22 schedule is a half-open authority timeline. The first
+    // commitment elapses, a guarded unschedule stops future consumption, and
+    // a guarded reschedule creates a distinct later commitment. Neither human
+    // decision can move or erase the earlier approved interval.
+    const firstLaterSchedule = (await fixture.ownerPool.query(
+      `SELECT scheduled_start,scheduled_end FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND id=$2`, [fixture.org, laterWork.assignment.id])).rows[0];
+    await setClock(new Date(new Date(firstLaterSchedule.scheduled_end).getTime() + 1000));
+    await p5aUnschedule(laterWork);
+    await p5bReview('job', scopeKey, laterWork.appointment, laterJobDefinition);
+    await advance(1);
+    const secondLaterSchedule = await rescheduleApprovedWork(laterWork,
+      new Date(new Date(firstLaterSchedule.scheduled_end).getTime() + 3 * 3600000),
+      'Create a distinct later approved commitment without rewriting the elapsed interval.');
+    await p5bReview('job', scopeKey, laterWork.appointment, laterJobDefinition);
+    const scheduleTimeline = (await fixture.ownerPool.query(
+      `SELECT canonical_forecast_constrained_capacity_v1_schedule_timeline($1,$2,$3,$4,$4,false) value`,
+      [fixture.org, laterWork.assignment.id, travelOrigin.body.data.predictionCutoffAt,
+        travelOrigin.body.data.horizonEndsAt])).rows[0].value;
+    expect(scheduleTimeline.map(value => value.scheduleState)).toEqual(['scheduled', 'unscheduled', 'scheduled']);
+    expect(scheduleTimeline.filter(value => value.commitmentStart !== null)).toHaveLength(2);
+    expect(new Date(scheduleTimeline[0].commitmentEnd).getTime())
+      .toBe(new Date(firstLaterSchedule.scheduled_end).getTime());
+    expect(new Date(scheduleTimeline[2].commitmentStart).getTime())
+      .toBe(secondLaterSchedule.scheduledStart.getTime());
+
     // The later-created work completes through the genuine M23 execution and
     // completion authority before the exclusive horizon end. Its scheduled
     // commitment and reviewed route remain period evidence; completion is
@@ -952,6 +1008,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       .toBe('constrained_capacity_origin_current');
 
     await setClock(travelOrigin.body.data.horizonEndsAt);
+    await p5aUnschedule(committedWork);
     const historicalWork = (await fixture.ownerPool.query(
       'SELECT canonical_forecast_constrained_capacity_v1_work_census_period($1,$2,$3) value',
       [fixture.org, travelOrigin.body.data.predictionCutoffAt, travelOrigin.body.data.horizonEndsAt])).rows[0].value;
@@ -962,6 +1019,14 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       .toMatchObject({ appointmentStatus: 'completed' });
     expect(historicalWork.rows.find(value => value.appointmentId === cancelledWork.appointment))
       .toMatchObject({ appointmentStatus: 'cancelled' });
+    const committedHistory = historicalWork.rows.find(value => value.appointmentId === committedWork.appointment);
+    const committedScheduledHistory = committedHistory.scheduleTimeline.find(value => value.scheduleState === 'scheduled'
+      && value.commitmentStart !== null);
+    expect(committedScheduledHistory).toBeDefined();
+    expect(new Date(committedScheduledHistory.authorityStart).getTime())
+      .toBe(new Date(travelOrigin.body.data.predictionCutoffAt).getTime());
+    expect(committedHistory.scheduleTimeline.some(value => new Date(value.decisionAt).getTime()
+      === new Date(travelOrigin.body.data.horizonEndsAt).getTime())).toBe(false);
     const outcomeKey = `m26-p5b-travel-outcome-${uuid()}`;
     const outcome = await post(`/origins/${travelOrigin.body.data.id}/outcomes`, {}, outcomeKey);
     if (outcome.status !== 201) {
@@ -980,12 +1045,13 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const outcomePrivate = (await fixture.ownerPool.query(
       'SELECT private_results FROM canonical_forecast_constrained_capacity_outcomes_v1 WHERE organization_id=$1 AND id=$2',
       [fixture.org, outcome.body.data.id])).rows[0].private_results;
-    // 6,000 declared minutes minus three exact one-hour worker commitments,
+    // 6,000 declared minutes minus four exact one-hour worker commitments,
     // one ordinary one-hour asset-calendar commitment, the reviewed 30-minute
-    // availability gap and 110 reviewed travel minutes = 5,620. The completed
+    // availability gap and 160 reviewed travel minutes = 5,510. The elapsed
+    // commitment survives its later unschedule/reschedule, while completed
     // and cancelled work both remain in the historical half-open census.
-    if (Number(outcomePrivate[0].personMinutes) !== 5620 ||
-      Number(outcomePrivate[0].travelPersonMinutes) !== 110) {
+    if (Number(outcomePrivate[0].personMinutes) !== 5510 ||
+      Number(outcomePrivate[0].travelPersonMinutes) !== 160) {
       const historicalInput = (await fixture.ownerPool.query(
         'SELECT canonical_forecast_constrained_capacity_v1_complete_input($1,$2,$3) value',
         [fixture.org, travelOrigin.body.data.horizonEndsAt, travelOrigin.body.data.predictionCutoffAt])).rows[0].value;
@@ -1014,6 +1080,15 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       .toBe(404);
     expect((await get(`/origins/${travelOrigin.body.data.id}/evaluations/${evaluation.body.data.id}`, 'otherOwner')).status)
       .toBe(404);
+    await advance(1);
+    await rescheduleApprovedWork(committedWork,
+      new Date(new Date(travelOrigin.body.data.horizonEndsAt).getTime() + 2 * 86400000),
+      'Post-end ordinary schedule progress belongs only to the next period.');
+    await p5bReview('job', scopeKey, committedWork.appointment, committedJobDefinition);
+    expect((await get(`/origins/${travelOrigin.body.data.id}/outcomes/${outcome.body.data.id}`)).body.data.state)
+      .toBe('constrained_capacity_outcome_current');
+    expect((await get(`/origins/${travelOrigin.body.data.id}/evaluations/${evaluation.body.data.id}`)).body.data.state)
+      .toBe('constrained_capacity_evaluation_current');
     await advance(1);
     const correctedLaterWork = await correctCompletedWork(laterWork, completedLaterWork);
     expect(correctedLaterWork.completion).toMatchObject({ recordKind: 'correction',
@@ -1432,6 +1507,41 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const directPrivate = await privateResults(directOrigin.body.data.id);
     expect(directPrivate.some(value => value.alternativeKey === directAlternative &&
       value.scopeKey === directScopeKey && Number(value.personMinutes) >= 0)).toBe(true);
+
+    // Effective people are unique within one alternative even when no crew,
+    // operator or asset identity can trigger the other overlap guards.  Both
+    // direct/direct and direct/crew reuse refuse atomically before an origin.
+    const directDuplicateKey = 'direct-profile-person-only-overlap';
+    const directDuplicate = { ...directScope, scopeKey: directDuplicateKey };
+    await p5bReview('scope', directDuplicateKey, null, directDuplicate);
+    const personOverlapCount = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count);
+    expect((await post('/origins', {
+      reason: 'Refuse direct scopes that would reuse the same reviewed people.',
+      confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1' })).status).toBe(400);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(personOverlapCount);
+    await p5bReview('scope', directDuplicateKey, null, directDuplicate, null, 'reject');
+
+    const directCrewKey = 'direct-crew-person-only-overlap';
+    const directCrewScope = { ...directScope, scopeKey: directCrewKey,
+      applicability: { ...directScope.applicability, crew: true },
+      crewIds: [crew.body.data.id],
+      crewRoleRequirements: [{ role: 'technician', count: 1 }, { role: 'dispatcher', count: 1 }],
+      crewAssignments: [
+        { profileId: actor('member').actorUserId, crewId: crew.body.data.id, role: 'technician' },
+        { profileId: actor('dispatcher').actorUserId, crewId: crew.body.data.id, role: 'dispatcher' },
+      ] };
+    await p5bReview('scope', directCrewKey, null, directCrewScope);
+    expect((await post('/origins', {
+      reason: 'Refuse direct and crew scopes that would reuse the same reviewed person.',
+      confirmed: true, confirmationVersion: 'm26-constrained-capacity-origin-v1' })).status).toBe(400);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1',
+      [fixture.org])).rows[0].count)).toBe(personOverlapCount);
+    await p5bReview('scope', directCrewKey, null, directCrewScope, null, 'reject');
 
     // Two simultaneous crews retain separate routes and exact assignment
     // identities. A source-owned crew revision removes the earlier formation

@@ -1676,6 +1676,17 @@ CREATE TABLE public.canonical_forecast_capacity_advisory_continuation_events_v1 
        (event_kind='missed' AND origin_id IS NULL AND detail_code='activation_deadline_missed') OR
        (event_kind='retired' AND origin_id IS NULL AND detail_code='source_authority_retired'))
 );
+-- Operational retry state is deliberately separate from immutable research
+-- evidence. A short server-owned lease prevents a revoked tenant or lock
+-- failure from being selected repeatedly ahead of unrelated due reservations.
+CREATE TABLE public.canonical_forecast_capacity_advisory_continuation_attempts_v1 (
+ organization_id UUID NOT NULL,continuation_id UUID NOT NULL,attempt_count BIGINT NOT NULL CHECK(attempt_count>0),
+ claimed_at TIMESTAMPTZ NOT NULL,next_attempt_at TIMESTAMPTZ NOT NULL,
+ CONSTRAINT capacity_advisory_continuation_attempts_v1_pk PRIMARY KEY(organization_id,continuation_id),
+ FOREIGN KEY(organization_id,continuation_id)
+  REFERENCES public.canonical_forecast_capacity_advisory_continuations_v1(organization_id,id),
+ CHECK(next_attempt_at>claimed_at)
+);
 CREATE TRIGGER canonical_forecast_capacity_advisory_continuations_v1_immutable
  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_forecast_capacity_advisory_continuations_v1
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_capacity_advisory_v1_immutable();
@@ -1835,6 +1846,35 @@ RETURNS BOOLEAN LANGUAGE SQL VOLATILE SECURITY DEFINER SET search_path=pg_catalo
   AND public.canonical_forecast_capacity_advisory_v1_review_period_historical_current(org,value)
 $$;
 
+-- Validate the immutable reservation and its predecessor without following the
+-- reservation's eventual child origin. Demand reviews use this helper so the
+-- activated continuation can require the child's full currentness without a
+-- circular review -> continuation -> origin -> review dependency.
+CREATE FUNCTION public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(
+ org UUID,value public.canonical_forecast_capacity_advisory_continuations_v1)
+RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE epoch_value public.canonical_forecast_capacity_advisory_epochs_v1%ROWTYPE;
+ predecessor public.canonical_forecast_capacity_advisory_origins_v1%ROWTYPE;
+ decision_value public.canonical_forecast_capacity_advisory_decisions_v1%ROWTYPE;
+ predecessor_evaluation public.canonical_forecast_capacity_advisory_evaluations_v1%ROWTYPE;
+BEGIN
+ SELECT * INTO epoch_value FROM public.canonical_forecast_capacity_advisory_epochs_v1
+  WHERE organization_id=org AND id=value.epoch_id;
+ SELECT * INTO predecessor FROM public.canonical_forecast_capacity_advisory_origins_v1
+  WHERE organization_id=org AND id=value.predecessor_origin_id;
+ decision_value:=public.canonical_forecast_capacity_advisory_v1_latest_decision(org,value.predecessor_origin_id);
+ SELECT * INTO predecessor_evaluation FROM public.canonical_forecast_capacity_advisory_evaluations_v1
+  WHERE organization_id=org AND origin_id=value.predecessor_origin_id ORDER BY revision DESC LIMIT 1;
+ RETURN value.period_start=predecessor.horizon_ends_at
+  AND value.period_end=value.period_start+INTERVAL '2592000 seconds'
+  AND value.activation_deadline=value.period_start+INTERVAL '1 hour'
+  AND epoch_value.id IS NOT NULL AND public.canonical_forecast_capacity_advisory_v1_epoch_current(org,epoch_value)
+  AND predecessor.id IS NOT NULL AND decision_value.id IS NOT NULL AND decision_value.action='approve'
+  AND ((public.canonical_forecast_workload_capacity_v1_clock()<value.period_start
+      AND public.canonical_forecast_capacity_advisory_v1_origin_current(org,predecessor))
+    OR predecessor_evaluation.id IS NOT NULL);
+EXCEPTION WHEN SQLSTATE '22023' OR SQLSTATE '54000' THEN RETURN FALSE;END $$;
+
 CREATE OR REPLACE FUNCTION public.canonical_forecast_capacity_advisory_v1_demand_manifest_pinned(
  org UUID,saved_manifest JSONB,backlog_rows JSONB,constraint_input JSONB)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
@@ -1898,9 +1938,14 @@ BEGIN
   IF review_value.id IS NULL OR review_value.action<>'approve'
    OR public.canonical_forecast_capacity_advisory_v1_review_period_historical_current(org,review_value) IS NOT TRUE THEN
    RAISE EXCEPTION 'Complete capacity advisory demand allocation unavailable' USING ERRCODE='22023';END IF;
-  basis:=public.canonical_forecast_capacity_advisory_v1_demand_basis(
-   org,kind_value,alternative_value,review_value.definition,backlog_rows,constraint_input);
-  result_value:=result_value||jsonb_build_array(jsonb_build_object('alternativeKey',alternative_value,
+	  basis:=public.canonical_forecast_capacity_advisory_v1_demand_basis(
+	   org,kind_value,alternative_value,review_value.definition,backlog_rows,constraint_input);
+	  IF kind_value='demand' AND EXISTS(SELECT 1 FROM public.canonical_forecast_capacity_advisory_continuations_v1 continuation_value
+	      WHERE continuation_value.organization_id=org AND continuation_value.id=period_authority)
+	   AND (review_value.source_identity-ARRAY['sourceCutoff','periodAuthorityId','effectiveStart','effectiveEnd',
+	      'correctionOfReviewId','correctionGeneration','observedAt','continuationId']::text[]) IS DISTINCT FROM basis THEN
+	   RAISE EXCEPTION 'Capacity advisory reviewed demand source changed' USING ERRCODE='22023';END IF;
+	  result_value:=result_value||jsonb_build_array(jsonb_build_object('alternativeKey',alternative_value,
    'reviewId',review_value.id,'revision',review_value.revision,'digest',rtrim(review_value.digest),
    'definition',review_value.definition,'basisDigest',public.canonical_completion_digest(basis)));
  END LOOP;
@@ -2067,7 +2112,7 @@ BEGIN
   SELECT * INTO continuation_row FROM public.canonical_forecast_capacity_advisory_continuations_v1
    WHERE organization_id=org AND id=continuation_value;
   IF continuation_row.id IS NULL THEN RAISE EXCEPTION 'Capacity advisory receipt unavailable' USING ERRCODE='P0002';END IF;
-  IF public.canonical_forecast_capacity_advisory_v1_continuation_current(org,continuation_row) IS NOT TRUE
+	  IF public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(org,continuation_row) IS NOT TRUE
    OR now_value<continuation_row.period_start OR now_value>continuation_row.activation_deadline THEN
    RAISE EXCEPTION 'Capacity advisory continuation review unavailable' USING ERRCODE='40001';END IF;
   period_authority:=continuation_row.id;effective_start:=continuation_row.period_start;effective_end:=continuation_row.period_end;
@@ -2265,10 +2310,6 @@ BEGIN
   AND value.input_manifest->>'policyDigest'=public.canonical_completion_digest(current_policy);
 EXCEPTION WHEN SQLSTATE '22023' OR SQLSTATE '54000' THEN RETURN FALSE;END $$;
 
--- Activated continuation currentness deliberately checks only the resulting
--- origin's non-demand authority here. The period demand review itself names
--- this continuation, so calling full origin_current would create a circular
--- currentness dependency. Full origin reads still require both halves.
 CREATE OR REPLACE FUNCTION public.canonical_forecast_capacity_advisory_v1_continuation_current(
  org UUID,value public.canonical_forecast_capacity_advisory_continuations_v1)
 RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
@@ -2285,15 +2326,14 @@ BEGIN
  decision_value:=public.canonical_forecast_capacity_advisory_v1_latest_decision(org,value.predecessor_origin_id);
  SELECT * INTO event_value FROM public.canonical_forecast_capacity_advisory_continuation_events_v1
   WHERE organization_id=org AND continuation_id=value.id;
- IF epoch_value.id IS NULL OR public.canonical_forecast_capacity_advisory_v1_epoch_current(org,epoch_value) IS NOT TRUE
-  OR predecessor.id IS NULL OR decision_value.id IS NULL OR decision_value.action<>'approve' THEN RETURN FALSE;END IF;
- IF event_value.id IS NULL THEN RETURN public.canonical_forecast_capacity_advisory_v1_origin_current(org,predecessor);END IF;
+	 IF public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(org,value) IS NOT TRUE THEN RETURN FALSE;END IF;
+	 IF event_value.id IS NULL THEN RETURN TRUE;END IF;
  IF event_value.event_kind<>'activated' OR event_value.origin_id IS NULL THEN RETURN FALSE;END IF;
  SELECT * INTO origin_value FROM public.canonical_forecast_capacity_advisory_origins_v1
   WHERE organization_id=org AND id=event_value.origin_id;
  RETURN origin_value.id IS NOT NULL AND origin_value.input_manifest->>'continuationId'=value.id::text
   AND origin_value.prediction_cutoff_at=value.period_start AND origin_value.horizon_ends_at=value.period_end
-  AND public.canonical_forecast_capacity_advisory_v1_origin_non_demand_current(org,origin_value);
+	  AND public.canonical_forecast_capacity_advisory_v1_origin_current(org,origin_value);
 EXCEPTION WHEN SQLSTATE '22023' OR SQLSTATE '54000' THEN RETURN FALSE;END $$;
 
 CREATE FUNCTION public.canonical_forecast_capacity_advisory_v1_origin_input_demand_current(
@@ -2463,6 +2503,45 @@ SET search_path=pg_catalog,public,pg_temp AS $$
  ORDER BY value.period_start,value.id LIMIT LEAST(GREATEST(limit_value,1),25)
 $$;
 
+-- The runtime worker claims one immutable reservation per serializable item
+-- transaction. SKIP LOCKED prevents concurrent workers from repeatedly
+-- prioritizing the same failing reservation; excluded IDs prevent one failed
+-- item from starving later work in the same drain.
+CREATE FUNCTION public.canonical_forecast_capacity_advisory_v1_continuation_claim_due(excluded_values TEXT[] DEFAULT '{}')
+RETURNS TABLE(organization_id UUID,continuation_id UUID) LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE claimed_org UUID;claimed_id UUID;now_value TIMESTAMPTZ;
+BEGIN
+ IF current_setting('transaction_isolation')<>'serializable'
+  OR COALESCE(cardinality(excluded_values),0)>25 THEN
+  RAISE EXCEPTION 'Capacity advisory continuation claim invalid' USING ERRCODE='22023';END IF;
+ -- Retry fairness is operational queue time, not forecast evidence time. Keep
+ -- it on the production server clock so disposable research-time advancement
+ -- cannot manufacture or suppress worker eligibility.
+ now_value:=clock_timestamp();
+ SELECT value.organization_id,value.id INTO claimed_org,claimed_id
+ FROM public.canonical_forecast_capacity_advisory_continuations_v1 value
+ LEFT JOIN public.canonical_forecast_capacity_advisory_continuation_attempts_v1 attempt
+  ON attempt.organization_id=value.organization_id AND attempt.continuation_id=value.id
+ WHERE value.period_start<=public.canonical_forecast_workload_capacity_v1_clock()
+   AND NOT (value.organization_id::text||':'||value.id::text)=ANY(COALESCE(excluded_values,'{}'::text[]))
+   AND (attempt.continuation_id IS NULL OR attempt.next_attempt_at<=now_value)
+   AND NOT EXISTS(SELECT 1 FROM public.canonical_forecast_capacity_advisory_continuation_events_v1 event_value
+    WHERE event_value.organization_id=value.organization_id AND event_value.continuation_id=value.id)
+  ORDER BY value.period_start,value.id
+  FOR UPDATE OF value SKIP LOCKED LIMIT 1;
+ IF claimed_id IS NULL THEN RETURN;END IF;
+ INSERT INTO public.canonical_forecast_capacity_advisory_continuation_attempts_v1(
+  organization_id,continuation_id,attempt_count,claimed_at,next_attempt_at)
+ VALUES(claimed_org,claimed_id,1,now_value,now_value+INTERVAL '1 second')
+ ON CONFLICT ON CONSTRAINT capacity_advisory_continuation_attempts_v1_pk DO UPDATE SET
+  attempt_count=public.canonical_forecast_capacity_advisory_continuation_attempts_v1.attempt_count+1,
+  claimed_at=EXCLUDED.claimed_at,
+  next_attempt_at=EXCLUDED.claimed_at+
+   (LEAST(public.canonical_forecast_capacity_advisory_continuation_attempts_v1.attempt_count+1,30)*INTERVAL '1 second');
+ RETURN QUERY SELECT claimed_org,claimed_id;
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_capacity_advisory_v1_continuation_activate(org UUID,id_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE value public.canonical_forecast_capacity_advisory_continuations_v1%ROWTYPE;
@@ -2505,7 +2584,7 @@ BEGIN
    public.canonical_completion_digest(jsonb_build_object('organizationId',org,'continuationId',value.id,
     'event','missed','observedAt',now_value))) RETURNING * INTO event_value;
   RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
- IF public.canonical_forecast_capacity_advisory_v1_continuation_current(org,value) IS NOT TRUE THEN
+	 IF public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(org,value) IS NOT TRUE THEN
   INSERT INTO public.canonical_forecast_capacity_advisory_continuation_events_v1(
    organization_id,continuation_id,event_kind,origin_id,observed_at,detail_code,digest)
   VALUES(org,value.id,'retired',NULL,now_value,'source_authority_retired',
@@ -2514,9 +2593,12 @@ BEGIN
   RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
  SELECT * INTO predecessor_evaluation FROM public.canonical_forecast_capacity_advisory_evaluations_v1
   WHERE organization_id=org AND origin_id=value.predecessor_origin_id ORDER BY revision DESC LIMIT 1;
- IF predecessor_evaluation.id IS NULL
-  OR public.canonical_forecast_capacity_advisory_v1_evaluation_current(org,predecessor_evaluation) IS NOT TRUE THEN
-  RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
+  -- The immutable predecessor evaluation establishes that the prior period was
+  -- actually reviewed before continuation. A later source correction may make
+  -- it ineligible for hiring history, but cannot erase the next reserved period;
+  -- results() independently admits only current evaluated history.
+  IF predecessor_evaluation.id IS NULL THEN
+   RETURN public.canonical_forecast_capacity_advisory_v1_continuation_projection(value,FALSE);END IF;
  -- Validate every period-dependent human/source input before the first child
  -- write. A missing rereview leaves the reservation pending and the transaction
  -- side-effect free so the worker may retry before the immutable deadline.
@@ -2552,16 +2634,22 @@ BEGIN
  key_hash:=encode(sha256(convert_to(value.id::text||':capacity-advisory-origin','UTF8')),'hex');
  request_hash:=public.canonical_completion_digest(jsonb_build_object('continuationId',value.id,
   'predecessorOriginId',value.predecessor_origin_id,'periodStart',value.period_start,'periodEnd',value.period_end));
- INSERT INTO public.canonical_forecast_capacity_advisory_origins_v1(
+	 INSERT INTO public.canonical_forecast_capacity_advisory_origins_v1(
   organization_id,epoch_id,prediction_cutoff_at,horizon_ends_at,generation,previous_id,input_manifest,private_results,
   scope_count,actor_id,membership_id,session_id,idempotency_key_hash,request_digest,captured_at,digest)
  VALUES(org,value.epoch_id,value.period_start,value.period_end,1,NULL,input_value,results_value,
   jsonb_array_length(results_value),value.actor_id,value.membership_id,value.session_id,key_hash,request_hash,now_value,
-  public.canonical_completion_digest(jsonb_build_object('organizationId',org,'epochId',value.epoch_id,
+	  public.canonical_completion_digest(jsonb_build_object('organizationId',org,'epochId',value.epoch_id,
    'cutoff',value.period_start,'end',value.period_end,'generation',1,'previousId',NULL,
    'inputDigest',public.canonical_completion_digest(input_value),'outputDigest',public.canonical_completion_digest(results_value),
-   'continuationId',value.id))) RETURNING * INTO inserted;
- INSERT INTO public.canonical_forecast_capacity_advisory_continuation_events_v1(
+	   'continuationId',value.id))) RETURNING * INTO inserted;
+	 -- Full linked-origin currentness includes the exact reviewed demand source.
+	 -- This check occurs after every blocking source/access wait and before the
+	 -- activation event; any failure rolls the child Part5A and Part5C inserts
+	 -- back atomically.
+	 IF public.canonical_forecast_capacity_advisory_v1_origin_current(org,inserted) IS NOT TRUE THEN
+	  RAISE EXCEPTION 'Continuation origin authority changed' USING ERRCODE='40001';END IF;
+	 INSERT INTO public.canonical_forecast_capacity_advisory_continuation_events_v1(
   organization_id,continuation_id,event_kind,origin_id,observed_at,detail_code,digest)
  VALUES(org,value.id,'activated',inserted.id,now_value,'activated',
   public.canonical_completion_digest(jsonb_build_object('organizationId',org,'continuationId',value.id,
@@ -2585,9 +2673,11 @@ BEGIN
 END $$;
 
 REVOKE ALL ON TABLE public.canonical_forecast_capacity_advisory_continuations_v1,
- public.canonical_forecast_capacity_advisory_continuation_events_v1 FROM PUBLIC;
+ public.canonical_forecast_capacity_advisory_continuation_events_v1,
+ public.canonical_forecast_capacity_advisory_continuation_attempts_v1 FROM PUBLIC;
 REVOKE ALL ON FUNCTION
- public.canonical_forecast_capacity_advisory_v1_continuation_current(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),
+	 public.canonical_forecast_capacity_advisory_v1_continuation_current(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),
+	 public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),
  public.canonical_forecast_capacity_advisory_v1_continuation_projection(public.canonical_forecast_capacity_advisory_continuations_v1,boolean),
  public.canonical_forecast_capacity_advisory_v1_continuation_workload_capture(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),
  public.canonical_forecast_capacity_advisory_v1_review_period_historical_current(uuid,public.canonical_forecast_capacity_advisory_reviews_v1),
@@ -2600,14 +2690,15 @@ REVOKE ALL ON FUNCTION
  public.canonical_forecast_capacity_advisory_v1_continuation_reserve(uuid,uuid,text,uuid,text,text,uuid,text,text),
  public.canonical_forecast_capacity_advisory_v1_continuation_read(uuid,uuid,text,uuid,uuid),
  public.canonical_forecast_capacity_advisory_v1_review_mutate_v2(uuid,uuid,text,uuid,text,text,text,text,text,text,uuid,text,bigint,text,jsonb,text,text,uuid,uuid),
- public.canonical_forecast_capacity_advisory_v1_origin_capture_v2(uuid,uuid,text,uuid,text,text,text,text,uuid),
- public.canonical_forecast_capacity_advisory_v1_continuation_due(integer),
- public.canonical_forecast_capacity_advisory_v1_continuation_activate(uuid,uuid) FROM PUBLIC;
+	 public.canonical_forecast_capacity_advisory_v1_origin_capture_v2(uuid,uuid,text,uuid,text,text,text,text,uuid),
+	 public.canonical_forecast_capacity_advisory_v1_continuation_due(integer),
+	 public.canonical_forecast_capacity_advisory_v1_continuation_claim_due(text[]),
+	 public.canonical_forecast_capacity_advisory_v1_continuation_activate(uuid,uuid) FROM PUBLIC;
 
 DO $$ DECLARE runtime_role TEXT:=NULLIF(current_setting('northstar.runtime_role',TRUE),'');BEGIN
  IF runtime_role IS NOT NULL AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=runtime_role) THEN
-  EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_capacity_advisory_continuations_v1,public.canonical_forecast_capacity_advisory_continuation_events_v1 FROM %I',runtime_role);
-  EXECUTE format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_advisory_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,text,text,uuid,text,bigint,text,jsonb,text,text),public.canonical_forecast_capacity_advisory_v1_continuation_current(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),public.canonical_forecast_capacity_advisory_v1_continuation_projection(public.canonical_forecast_capacity_advisory_continuations_v1,boolean),public.canonical_forecast_capacity_advisory_v1_continuation_workload_capture(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),public.canonical_forecast_capacity_advisory_v1_review_period_historical_current(uuid,public.canonical_forecast_capacity_advisory_reviews_v1),public.canonical_forecast_capacity_advisory_v1_demand_manifest_period(uuid,text,uuid,uuid,jsonb,jsonb),public.canonical_forecast_capacity_advisory_v1_review_source_v2(uuid,text,text,text,text,uuid,jsonb,uuid,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_origin_non_demand_current(uuid,public.canonical_forecast_capacity_advisory_origins_v1),public.canonical_forecast_capacity_advisory_v1_origin_input_demand_current(uuid,public.canonical_forecast_capacity_advisory_origins_v1),public.canonical_forecast_capacity_advisory_v1_demand_manifest_corrected(uuid,jsonb,jsonb,jsonb) FROM %I',runtime_role);
-  EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_advisory_v1_continuation_reserve(uuid,uuid,text,uuid,text,text,uuid,text,text),public.canonical_forecast_capacity_advisory_v1_continuation_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_review_mutate_v2(uuid,uuid,text,uuid,text,text,text,text,text,text,uuid,text,bigint,text,jsonb,text,text,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_origin_capture_v2(uuid,uuid,text,uuid,text,text,text,text,uuid),public.canonical_forecast_capacity_advisory_v1_continuation_due(integer),public.canonical_forecast_capacity_advisory_v1_continuation_activate(uuid,uuid) TO %I',runtime_role);
+  EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_capacity_advisory_continuations_v1,public.canonical_forecast_capacity_advisory_continuation_events_v1,public.canonical_forecast_capacity_advisory_continuation_attempts_v1 FROM %I',runtime_role);
+	  EXECUTE format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_advisory_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,text,text,uuid,text,bigint,text,jsonb,text,text),public.canonical_forecast_capacity_advisory_v1_continuation_current(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),public.canonical_forecast_capacity_advisory_v1_continuation_authority_current(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),public.canonical_forecast_capacity_advisory_v1_continuation_projection(public.canonical_forecast_capacity_advisory_continuations_v1,boolean),public.canonical_forecast_capacity_advisory_v1_continuation_workload_capture(uuid,public.canonical_forecast_capacity_advisory_continuations_v1),public.canonical_forecast_capacity_advisory_v1_review_period_historical_current(uuid,public.canonical_forecast_capacity_advisory_reviews_v1),public.canonical_forecast_capacity_advisory_v1_demand_manifest_period(uuid,text,uuid,uuid,jsonb,jsonb),public.canonical_forecast_capacity_advisory_v1_review_source_v2(uuid,text,text,text,text,uuid,jsonb,uuid,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_origin_non_demand_current(uuid,public.canonical_forecast_capacity_advisory_origins_v1),public.canonical_forecast_capacity_advisory_v1_origin_input_demand_current(uuid,public.canonical_forecast_capacity_advisory_origins_v1),public.canonical_forecast_capacity_advisory_v1_demand_manifest_corrected(uuid,jsonb,jsonb,jsonb) FROM %I',runtime_role);
+	  EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_advisory_v1_continuation_reserve(uuid,uuid,text,uuid,text,text,uuid,text,text),public.canonical_forecast_capacity_advisory_v1_continuation_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_review_mutate_v2(uuid,uuid,text,uuid,text,text,text,text,text,text,uuid,text,bigint,text,jsonb,text,text,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_origin_capture_v2(uuid,uuid,text,uuid,text,text,text,text,uuid),public.canonical_forecast_capacity_advisory_v1_continuation_due(integer),public.canonical_forecast_capacity_advisory_v1_continuation_claim_due(text[]),public.canonical_forecast_capacity_advisory_v1_continuation_activate(uuid,uuid) TO %I',runtime_role);
  END IF;
 END $$;

@@ -39,19 +39,38 @@ class CapacityAdvisoryContinuationWorker {
   async drainOnce() {
     const pool = this.getPool();
     if (!pool) return { due: 0, attempted: 0 };
-    const due = (await pool.query(
-      'SELECT organization_id,continuation_id FROM public.canonical_forecast_capacity_advisory_v1_continuation_due($1)',
-      [this.batchSize]
-    )).rows;
     let attempted = 0;
-    for (const item of due) {
-      await this.transaction(client => client.query(
-        'SELECT public.canonical_forecast_capacity_advisory_v1_continuation_activate($1,$2)',
-        [item.organization_id, item.continuation_id]
-      ));
-      attempted += 1;
+    const excluded = [];
+    for (let index = 0; index < this.batchSize; index += 1) {
+      let claimed;
+      try {
+        claimed = await this.transaction(async client => {
+          return (await client.query(
+            'SELECT organization_id,continuation_id FROM public.canonical_forecast_capacity_advisory_v1_continuation_claim_due($1)',
+            [excluded]
+          )).rows[0] || null;
+        });
+        if (!claimed) break;
+        excluded.push(`${claimed.organization_id}:${claimed.continuation_id}`);
+        attempted += 1;
+        try {
+          await this.transaction(async client => {
+            await client.query(
+              'SELECT public.canonical_forecast_capacity_advisory_v1_continuation_activate($1,$2)',
+              [claimed.organization_id, claimed.continuation_id]
+            );
+          });
+        } catch (_error) {
+          // The committed private retry lease preserves deterministic retry and
+          // lets this drain continue without exposing tenant failure details.
+        }
+      } catch (_error) {
+        // A pre-claim failure supplies no durable identity to exclude. Stop the
+        // bounded drain without logging source or tenant details.
+        break;
+      }
     }
-    return { due: due.length, attempted };
+    return { due: attempted, attempted };
   }
 
   async tick() {

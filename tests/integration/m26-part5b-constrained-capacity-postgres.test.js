@@ -520,8 +520,14 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     const assignment = (await fixture.ownerPool.query(
       `SELECT id,revision,rtrim(canonical_digest) digest FROM canonical_schedule_assignments
         WHERE organization_id=$1 AND appointment_id=$2`, [fixture.org, work.appointment])).rows[0];
+    const currentPersonPlan = (await fixture.ownerPool.query(
+      `SELECT id,rtrim(digest) digest
+         FROM canonical_forecast_current_backlog_person_plan_reviews
+        WHERE organization_id=$1 AND appointment_id=$2 ORDER BY revision DESC LIMIT 1`,
+      [fixture.org, work.appointment])).rows[0] || null;
     const personPlanBody = {
-      action: 'approve', expectedCurrentReviewId: null, expectedCurrentReviewDigest: 'none',
+      action: 'approve', expectedCurrentReviewId: currentPersonPlan?.id || null,
+      expectedCurrentReviewDigest: currentPersonPlan?.digest || 'none',
       assignmentId: assignment.id, expectedAssignmentRevision: Number(assignment.revision),
       expectedAssignmentDigest: assignment.digest, estimateId: estimate.id,
       laborPlanId: review.laborPlans.current.id,
@@ -2527,10 +2533,38 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       .toBe('capacity_advisory_origin_current');
     expect((await p5cGet(`/origins/${advisoryOrigin.body.data.id}/evaluations/${correctedEvaluation.body.data.id}`))
       .body.data.state).toBe('capacity_advisory_evaluation_current');
+    // A genuine guarded Part 5B job rereview at the exact owning boundary is
+    // visible to the <= cutoff constraint census after the human allocation
+    // review while leaving the Part 5C epoch/policy identity intact.
+    // The worker must compare the human-pinned basis with that fresh source
+    // before creating either accepted Part 5A/Part 5C child or activation row.
+    const continuationChildrenBeforeCorrection = (await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1) workload_origins,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1) advisory_origins,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1 WHERE organization_id=$1) events`,
+      [fixture.org])).rows[0];
+    await p5bReview('job', scopeKey, advisoryWorks[0].work.appointment,
+      advisoryWorks[0].jobDefinition);
     const continuationWorker = new CapacityAdvisoryContinuationWorker({ getPool: () => fixture.runtimePool });
     expect(await continuationWorker.drainOnce()).toEqual({ due: 1, attempted: 1 });
+    expect((await p5cGet(`/continuations/${continuation.body.data.id}`)).body.data.state)
+      .toBe('capacity_advisory_continuation_pending');
+    expect((await fixture.ownerPool.query(
+      `SELECT
+        (SELECT count(*)::integer FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1) workload_origins,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1) advisory_origins,
+        (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_continuation_events_v1 WHERE organization_id=$1) events`,
+      [fixture.org])).rows[0]).toEqual(continuationChildrenBeforeCorrection);
+    let secondCurrentDemandReview = await p5cReview('demand', { alternativeKey: advisoryAlternative,
+      definition: await p5cDefinition(advisoryAlternative),
+      correctionOfReviewId: secondDemandReview.id });
+    currentDemandReview = secondCurrentDemandReview;
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    expect(await continuationWorker.drainOnce()).toEqual({ due: 1, attempted: 1 });
     const activatedContinuation = await p5cGet(`/continuations/${continuation.body.data.id}`);
-    if (activatedContinuation.status !== 200) {
+    if (activatedContinuation.status !== 200 ||
+      activatedContinuation.body?.data?.state !== 'capacity_advisory_continuation_activated') {
       const diagnostic = (await fixture.ownerPool.query(
         `SELECT event_value.event_kind,event_value.origin_id,
                 canonical_forecast_capacity_advisory_v1_continuation_current($1,value) continuation_current,
@@ -2632,7 +2666,8 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
         response: correctedFirstOrigin.body, targetRow })}`);
     }
     currentDemandReview = await p5cReview('demand', { alternativeKey: advisoryAlternative,
-      definition: secondDemand, correctionOfReviewId: secondDemandReview.id });
+      definition: secondDemand, correctionOfReviewId: secondCurrentDemandReview.id });
+    secondCurrentDemandReview = currentDemandReview;
 
     // A new Part 5C epoch permanently retires every older Part 5C receipt even
     // when no upstream value changed. Old exact-key replay cannot revive it;
@@ -2678,7 +2713,16 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       action: 'approve', expectedRevision: 0, expectedDigest: 'none',
       reason: 'Approve only the new-epoch private research receipt after explicit recapture.',
       confirmed: true, confirmationVersion: 'm26-capacity-advisory-decision-v1' });
-    expect(recoveredDecision.status).toBe(201);
+    if (recoveredDecision.status !== 201) {
+      const currentDiagnostic = (await fixture.ownerPool.query(
+        `SELECT canonical_forecast_capacity_advisory_v1_origin_non_demand_current($1,value) non_demand,
+                canonical_forecast_capacity_advisory_v1_origin_input_demand_current($1,value) input_demand,
+                canonical_forecast_capacity_advisory_v1_origin_current($1,value) full_current
+           FROM canonical_forecast_capacity_advisory_origins_v1 value
+          WHERE organization_id=$1 AND id=$2`, [fixture.org, recoveredOrigin.body.data.id])).rows[0];
+      throw new Error(`Recovered Part5C decision failed: ${JSON.stringify({
+        response: recoveredDecision.body, origin: recoveredOrigin.body.data, currentDiagnostic })}`);
+    }
     expect((await p5cGet(`/origins/${recoveredOrigin.body.data.id}`)).body.data.categories[0]
       .categories.hiring_need.state).toBe('insufficient_history');
 
@@ -2936,6 +2980,156 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
       'SELECT count(*) count FROM canonical_forecast_capacity_advisory_origins_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count)).toBe(originCountBeforeMiss);
 
+	    // Each worker first commits a private retry lease, then activates in its
+	    // own transaction. A revoked first actor cannot starve a later valid
+	    // reservation, and concurrent workers use SKIP LOCKED plus the lease
+	    // rather than repeatedly selecting the same poison row. The failed
+	    // immutable reservation remains pending and activates after its exact
+	    // session authority is restored and the bounded retry delay elapses.
+	    // Move prospectively into the already-reviewed installed-source interval
+	    // that contains declared target/support availability. No source row is
+	    // backdated or rewritten; a fresh human demand review binds this period.
+	    await setClock(new Date(advisoryCoverageStart.getTime() + 175 * 86400000));
+	    currentDemandReview = await p5cReview('demand', { alternativeKey: advisoryAlternative,
+	      definition: await p5cDefinition(advisoryAlternative) });
+	    const poisonOrigin = await p5cPost('/origins', advisoryOriginBody, `m26-p5c-worker-poison-origin-${uuid()}`);
+	    expect(poisonOrigin.status).toBe(201);
+	    expect((await p5cPost(`/origins/${poisonOrigin.body.data.id}/decisions`, {
+	      action: 'approve', expectedRevision: 0, expectedDigest: 'none',
+	      reason: 'Approve the exact first worker isolation receipt.', confirmed: true,
+	      confirmationVersion: 'm26-capacity-advisory-decision-v1' })).status).toBe(201);
+	    const poisonContinuation = await p5cPost(`/origins/${poisonOrigin.body.data.id}/continuations`,
+	      continuationBody, `m26-p5c-worker-poison-continuation-${uuid()}`);
+	    expect(poisonContinuation.status).toBe(201);
+	    await advance(1);
+	    const validOrigin = await p5cPost('/origins', advisoryOriginBody,
+	      `m26-p5c-worker-valid-origin-${uuid()}`, 'admin');
+	    expect(validOrigin.status).toBe(201);
+	    expect((await p5cPost(`/origins/${validOrigin.body.data.id}/decisions`, {
+	      action: 'approve', expectedRevision: 0, expectedDigest: 'none',
+	      reason: 'Approve the exact later worker isolation receipt.', confirmed: true,
+	      confirmationVersion: 'm26-capacity-advisory-decision-v1' }, `m26-p5c-worker-valid-decision-${uuid()}`,
+	    'admin')).status).toBe(201);
+	    const validContinuation = await p5cPost(`/origins/${validOrigin.body.data.id}/continuations`,
+	      continuationBody, `m26-p5c-worker-valid-continuation-${uuid()}`, 'admin');
+	    expect(validContinuation.status).toBe(201);
+	    await setClock(validContinuation.body.data.periodStart);
+	    const prepareWorkerPredecessor = async (origin, name) => {
+	      expect((await p5cPost(`/origins/${origin.body.data.id}/outcome-preparations`, {},
+	        `m26-p5c-worker-preparation-${uuid()}`, name)).status).toBe(201);
+	      const definition = await p5cDefinition(advisoryAlternative, origin.body.data.id);
+	      definition.methodVersion = 'm26-capacity-advisory-outcome-allocation-v1';
+	      definition.originId = origin.body.data.id;
+	      await p5cReview('outcome_demand', { alternativeKey: advisoryAlternative,
+	        subjectId: origin.body.data.id, definition });
+	      const outcome = await p5cPost(`/origins/${origin.body.data.id}/outcomes`, {},
+	        `m26-p5c-worker-outcome-${uuid()}`, name);
+	      expect(outcome.status).toBe(201);
+	      expect((await p5cPost(`/origins/${origin.body.data.id}/evaluations`, {
+	        outcomeId: outcome.body.data.id }, `m26-p5c-worker-evaluation-${uuid()}`, name)).status).toBe(201);
+	    };
+	    await prepareWorkerPredecessor(poisonOrigin, 'owner');
+	    await prepareWorkerPredecessor(validOrigin, 'admin');
+	    const poisonDemand = await p5cDefinition(advisoryAlternative);
+	    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: poisonDemand,
+	      continuationId: poisonContinuation.body.data.id });
+	    await p5cReview('demand', { alternativeKey: advisoryAlternative, definition: poisonDemand,
+	      continuationId: validContinuation.body.data.id });
+	    await fixture.ownerPool.query(
+	      "UPDATE auth_sessions SET status='revoked',revoked_at=clock_timestamp(),revoke_reason='m26_p5c_worker_isolation' WHERE id=$1",
+	      [actor('owner').authSessionId]);
+	    const isolationWorkers = [new CapacityAdvisoryContinuationWorker({ getPool: () => fixture.runtimePool, batchSize: 1 }),
+	      new CapacityAdvisoryContinuationWorker({ getPool: () => fixture.runtimePool, batchSize: 1 })];
+	    const isolationResults = await Promise.all(isolationWorkers.map(worker => worker.drainOnce()));
+	    expect(isolationResults.reduce((sum, result) => sum + result.attempted, 0)).toBe(2);
+	    // A source-lock serialization loser stays retryable. After the first
+	    // server-owned lease, one serial recovery drain skips/retries the poison
+	    // item and still activates the later valid reservation before deadline.
+	    await new Promise(resolve => setTimeout(resolve, 1100));
+	    const isolationRecovery = new CapacityAdvisoryContinuationWorker({
+	      getPool: () => fixture.runtimePool, batchSize: 2 });
+	    expect((await isolationRecovery.drainOnce()).attempted).toBeGreaterThanOrEqual(1);
+	    const validContinuationRead = await p5cGet(`/continuations/${validContinuation.body.data.id}`, 'admin');
+	    if (validContinuationRead.body.data.state !== 'capacity_advisory_continuation_activated') {
+	      const validDiagnostic = (await fixture.ownerPool.query(
+	        `SELECT canonical_forecast_capacity_advisory_v1_continuation_authority_current($1,value) authority_current,
+	                canonical_forecast_capacity_advisory_v1_continuation_current($1,value) continuation_current,
+	                (SELECT count(*)::integer FROM canonical_forecast_capacity_advisory_evaluations_v1 evaluation_value
+	                  WHERE evaluation_value.organization_id=value.organization_id
+	                    AND evaluation_value.origin_id=value.predecessor_origin_id) predecessor_evaluations,
+	                (SELECT jsonb_agg(jsonb_build_object('id',review_value.id,'revision',review_value.revision,
+	                  'action',review_value.action,'source',review_value.source_identity) ORDER BY review_value.revision)
+	                   FROM canonical_forecast_capacity_advisory_reviews_v1 review_value
+	                  WHERE review_value.organization_id=value.organization_id
+	                    AND review_value.review_kind='demand') demand_reviews
+	           FROM canonical_forecast_capacity_advisory_continuations_v1 value
+	          WHERE value.organization_id=$1 AND value.id=$2`,
+	        [fixture.org, validContinuation.body.data.id])).rows[0];
+	      let demandDiagnostic;
+	      try {
+	        demandDiagnostic = (await fixture.ownerPool.query(
+	          `SELECT canonical_forecast_capacity_advisory_v1_demand_manifest_period($1,'demand',NULL,$2,
+	             canonical_forecast_workload_capacity_v1_origin_input($1,value.period_start,value.period_end)#>'{backlog,rows}',
+	             canonical_forecast_constrained_capacity_v1_complete_input($1,value.period_start)) value
+	             FROM canonical_forecast_capacity_advisory_continuations_v1 value
+	            WHERE value.organization_id=$1 AND value.id=$2`,
+	          [fixture.org, validContinuation.body.data.id])).rows[0]?.value;
+	      } catch (error) { demandDiagnostic = { code: error.code, message: error.message }; }
+	      let workloadCaptureDiagnostic;
+	      let activationDiagnostic;
+	      const diagnosticClient = await fixture.ownerPool.connect();
+	      try {
+	        await diagnosticClient.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+	        workloadCaptureDiagnostic = (await diagnosticClient.query(
+	          `SELECT (canonical_forecast_capacity_advisory_v1_continuation_workload_capture($1,value)).id id
+	             FROM canonical_forecast_capacity_advisory_continuations_v1 value
+	            WHERE value.organization_id=$1 AND value.id=$2`,
+	          [fixture.org, validContinuation.body.data.id])).rows[0];
+	        workloadCaptureDiagnostic.results = (await diagnosticClient.query(
+	          `SELECT canonical_forecast_capacity_advisory_v1_results($1,value.period_start,value.period_end,
+	             value.period_start,canonical_forecast_constrained_capacity_v1_complete_input($1,value.period_start),
+	             canonical_forecast_capacity_advisory_v1_policy_manifest($1,value.period_start),
+	             canonical_forecast_capacity_advisory_v1_demand_manifest_period($1,'demand',NULL,value.id,
+	               workload.input_evidence#>'{backlog,rows}',
+	               canonical_forecast_constrained_capacity_v1_complete_input($1,value.period_start)),
+	             workload.private_results) value
+	             FROM canonical_forecast_capacity_advisory_continuations_v1 value
+	             JOIN canonical_forecast_workload_capacity_origins_v1 workload
+	               ON workload.organization_id=value.organization_id AND workload.id=$3
+	            WHERE value.organization_id=$1 AND value.id=$2`,
+	          [fixture.org, validContinuation.body.data.id, workloadCaptureDiagnostic.id])).rows[0]?.value;
+	        await diagnosticClient.query('ROLLBACK');
+	      } catch (error) {
+	        await diagnosticClient.query('ROLLBACK').catch(() => {});
+	        workloadCaptureDiagnostic = { code: error.code, message: error.message };
+	      } finally { diagnosticClient.release(); }
+	      const activationClient = await fixture.ownerPool.connect();
+	      try {
+	        await activationClient.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+	        activationDiagnostic = (await activationClient.query(
+	          'SELECT canonical_forecast_capacity_advisory_v1_continuation_activate($1,$2) value',
+	          [fixture.org, validContinuation.body.data.id])).rows[0]?.value;
+	        await activationClient.query('ROLLBACK');
+	      } catch (error) {
+	        await activationClient.query('ROLLBACK').catch(() => {});
+	        activationDiagnostic = { code: error.code, message: error.message };
+	      } finally { activationClient.release(); }
+	      throw new Error(`Valid isolated continuation did not activate: ${JSON.stringify({
+	        validContinuationRead: validContinuationRead.body.data, validDiagnostic, demandDiagnostic,
+	        workloadCaptureDiagnostic, activationDiagnostic })}`);
+	    }
+	    expect((await p5cGet(`/continuations/${poisonContinuation.body.data.id}`, 'admin')).body.data.state)
+	      .toBe('capacity_advisory_continuation_pending');
+	    await fixture.ownerPool.query(
+	      "UPDATE auth_sessions SET status='active',revoked_at=NULL,revoke_reason=NULL WHERE id=$1",
+	      [actor('owner').authSessionId]);
+	    await new Promise(resolve => setTimeout(resolve, 2200));
+	    const restartedIsolationWorker = new CapacityAdvisoryContinuationWorker({
+	      getPool: () => fixture.runtimePool, batchSize: 1 });
+	    expect(await restartedIsolationWorker.drainOnce()).toEqual({ due: 1, attempted: 1 });
+	    expect((await p5cGet(`/continuations/${poisonContinuation.body.data.id}`)).body.data.state)
+	      .toBe('capacity_advisory_continuation_activated');
+
     // Exact replay belongs to the latest exact human revision for every
     // action. Obsolete reject and withdraw receipts cannot be reported as
     // restored after a later decision, and conflicts append no rows.
@@ -2967,7 +3161,7 @@ realPostgres('Mission 26 Part 5B constrained role-capacity lifecycle', () => {
     await staleReplay('reject');
     await staleReplay('withdraw');
 
-    const originCount = Number((await fixture.ownerPool.query(
+	    const originCount = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_constrained_capacity_origins_v1 WHERE organization_id=$1',
       [fixture.org])).rows[0].count);
     for (let index = 0; index < 20; index += 1) {

@@ -253,7 +253,8 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       dimensions: { crew: 'applies', skill: 'applies', workingHours: 'applies', location: 'applies',
         travel: 'applies', vehicle: 'applies', equipment: 'applies' },
       targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: ['technician'],
-      targetRoleOptions: ['dispatcher', 'technician'], operatorRoleOptions: ['dispatcher', 'technician'],
+      targetRoleOptions: ['dispatcher', 'technician'], selectableTargetRoles: ['dispatcher'],
+      operatorRoleOptions: ['dispatcher', 'technician'],
       sourceState: 'source_backed', reviewState: 'needs_review' };
     const journey = capacity.demoJourney(0);
     journey.setup = { state: 'ready', action: 'constrained_work_scopes', token: 'a'.repeat(64), lane: 'all',
@@ -268,6 +269,8 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     for (const changed of [
       { ...review, assetId: USER }, { ...review, dimensions: { ...review.dimensions, location: 'unavailable' } },
       { ...review, targetRole: 'dispatcher' }, { ...review, supportRoles: [] },
+      { ...review, selectableTargetRoles: [] }, { ...review, selectableTargetRoles: ['owner'] },
+      { ...review, selectableTargetRoles: ['dispatcher', 'dispatcher'] },
       { ...review, operatorRoles: [] }, { ...review, operatorRoles: ['technician', 'technician'] },
       { ...review, operatorRoleOptions: [] }, { ...review, sourceState: 'caller_claimed' },
     ]) rejectProjection(changed);
@@ -302,6 +305,22 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     expect(migration).toContain("count(*) FILTER(WHERE member.crew_role='lead')");
     expect(migration).toContain('array_agg(profile.operational_role ORDER BY profile.id)');
     expect(migration).not.toMatch(/min\(profile\.operational_role\)[\s\S]*crew_role='lead'/);
+  });
+
+  test('the v5 planner preserves every same-role operator for exact non-reuse matching', () => {
+    const migration = fs.readFileSync(path.resolve(__dirname,
+      '../../migrations/231_canonical_forecast_capacity_ui_v5.sql'), 'utf8');
+    const route = fs.readFileSync(path.resolve(__dirname,
+      '../../src/routes/forecastCapacityAdvisory.js'), 'utf8');
+    expect(migration).toContain('eligible_operator_count');
+    expect(migration).toContain('Complete asset operator eligibility exceeds bound');
+    expect(migration).toContain('selectable_target_roles');
+    expect(migration).toContain("'selectableTargetRoles',selectable_target_roles");
+    expect(migration).toContain("WHERE operator_roles ? (assigned->>'role') ORDER BY assigned->>'profileId' LOOP");
+    expect(migration).toContain("'operatorProfileId',assigned_value->>'profileId'");
+    expect(migration).not.toContain('operator_index%operator_role_count');
+    expect(migration).not.toMatch(/WHERE assigned->>'role'=\(operator_roles[\s\S]{0,240}LIMIT 1/);
+    expect(route).toContain("SET LOCAL statement_timeout='60000ms'");
   });
 
   test('lane reasons stop at 900 while explicit review decisions accept 900, 901 and 1000', async () => {
@@ -386,7 +405,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       expect(result.status).toBe(200); expect(result.body.data.state).toBe('capacity_research_journey_current');
       expect(result.headers['cache-control']).toBe('private, no-store');
       expect(result.headers['referrer-policy']).toBe('no-referrer');
-      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v4_current'))[1])
+      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v5_current'))[1])
         .toEqual([ORG, USER, role, SESSION]);
     }
     expect((await request(application({ databaseError: { code: '42501', detail: 'tenant secret' } }).app)
@@ -408,7 +427,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const setup = await request(setupApp.app).post('/api/v1/forecast/capacity-advice/journey/setup')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(setupBody);
     expect(setup.status).toBe(201);
-    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v4_setup_mutate'))[1])
+    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v5_setup_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, setupBody.action, setupBody.token,
         setupBody.hiringConsecutivePeriods, '[]', setupBody.reason, setupBody.confirmationVersion]);
 
@@ -423,7 +442,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const saved = await request(actionApp.app).post('/api/v1/forecast/capacity-advice/journey/actions')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(body);
     expect(saved.status).toBe(201); expect(JSON.stringify(saved.body)).not.toContain('digest');
-    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v4_action_mutate'))[1])
+    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v5_action_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, body.action, null, null, null,
         null, body.reason, body.confirmationVersion]);
 

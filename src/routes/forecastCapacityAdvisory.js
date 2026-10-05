@@ -168,7 +168,7 @@ function safeSetup(value) {
     value.hiringConsecutivePeriods > 12 || !Array.isArray(value.scopeReviews)) return false;
   const reviewValid = item => {
     if (!exact(item, ['scopeKey', 'formation', 'dimensions', 'targetRole', 'supportRoles',
-      'operatorRoles', 'targetRoleOptions', 'operatorRoleOptions', 'sourceState', 'reviewState']) ||
+      'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleOptions', 'sourceState', 'reviewState']) ||
       !TOKEN.test(item.scopeKey || '') || !['profile', 'crew'].includes(item.formation) ||
       !exact(item.dimensions, DIMENSIONS) ||
       DIMENSIONS.some(name => !['applies', 'not_applicable'].includes(item.dimensions[name])) ||
@@ -176,13 +176,15 @@ function safeSetup(value) {
       (item.dimensions.crew === 'applies') !== (item.formation === 'crew') ||
       !ROLE.test(item.targetRole || '') || !['source_backed'].includes(item.sourceState) ||
       !['current', 'needs_review'].includes(item.reviewState)) return false;
-    const arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'operatorRoleOptions'];
+    const arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleOptions'];
     if (arrays.some(name => !Array.isArray(item[name]) || item[name].length > 9 ||
       item[name].some(role => typeof role !== 'string' || !ROLE.test(role)) ||
       new Set(item[name]).size !== item[name].length)) return false;
     const targetOptions = new Set(item.targetRoleOptions);
     const operatorOptions = new Set(item.operatorRoleOptions);
-    if (!targetOptions.has(item.targetRole) || item.supportRoles.length !== item.targetRoleOptions.length - 1 ||
+    if (!targetOptions.has(item.targetRole) || item.selectableTargetRoles.length < 1 ||
+      item.selectableTargetRoles.some(role => !targetOptions.has(role)) ||
+      item.supportRoles.length !== item.targetRoleOptions.length - 1 ||
       item.supportRoles.some(role => role === item.targetRole || !targetOptions.has(role)) ||
       item.operatorRoles.some(role => !operatorOptions.has(role)) ||
       (item.operatorRoleOptions.length > 0) !==
@@ -457,7 +459,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       // the pinned predecessor decision/outcome/evaluation chain. Keep the
       // request bounded while allowing the complete tenant-private proof to
       // finish instead of converting a valid receipt into a transient 503.
-      await client.query("SET LOCAL statement_timeout='30000ms'");
+      await client.query("SET LOCAL statement_timeout='60000ms'");
       const identity = [req.tenantContext.organizationId, req.tenantContext.userId, req.userRole, req.authSession.id];
       const value = (await client.query(sql, [...identity, ...params])).rows[0]?.value;
       const data = validate(value); if (!data) throw new Error('Invalid capacity-advice projection');
@@ -479,7 +481,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   router.get('/journey/current', auth, capacityUiAccess, throttle, async (req, res) => {
     if (!exact(req.query, [])) return invalid(res);
     return run(req, res, {
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v4_current($1,$2,$3,$4) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v5_current($1,$2,$3,$4) value',
       validate: safeJourney,
     });
   });
@@ -497,7 +499,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       !KEY.test(key || '')) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v4_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v5_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.token,
         body.hiringConsecutivePeriods, JSON.stringify(body.scopeReviews), body.reason, body.confirmationVersion],
       validate: value => safeSetupResult(value, body),
@@ -537,7 +539,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
         (!body.originId || !body.outcomeId || body.correctionOriginId !== null))) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v4_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v5_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.originId, body.outcomeId,
         body.correctionOriginId, body.expectedRevision, body.reason, body.confirmationVersion],
       validate: value => safeActionResult(value, body),

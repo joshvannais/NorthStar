@@ -132,6 +132,7 @@ function response(status, data) {
             travel: 'applies', vehicle: 'applies', equipment: 'applies' },
           targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: ['technician'],
           targetRoleOptions: ['dispatcher', 'technician'],
+          selectableTargetRoles: ['dispatcher'],
           operatorRoleOptions: ['dispatcher', 'technician'], sourceState: 'source_backed',
           reviewState: 'needs_review',
         }] };
@@ -142,13 +143,17 @@ function response(status, data) {
       const scopeText = await page.locator('#commandCenterCapacityScopeReviews').innerText();
       for (const copy of ['Accepted work formation 1', 'Source-backed Crew formation', 'Crew', 'Skill',
         'Working hours', 'Location', 'Travel', 'Vehicle', 'Equipment', 'Target capacity role',
-        'Supporting roles: Dispatcher', 'Roles authorized to operate the reviewed vehicle or equipment',
+        'Choose the target capacity role before approval', 'Roles authorized to operate the reviewed vehicle or equipment',
         "selected operators' accepted working-hours windows are the bounded vehicle and equipment calendar",
         'Private identities and amounts remain withheld']) assert.match(scopeText, new RegExp(copy));
       const setupButton = page.getByRole('button', { name: 'Approve accepted-work formations', exact: true });
       assert.equal(await setupButton.isDisabled(), true);
       await page.locator('#commandCenterCapacityReviewReason').fill(
         'Approve this exact nonnumeric seven-dimension and mixed-role classification review.');
+      assert.equal(await setupButton.isDisabled(), true);
+      const targetRole = page.locator('#commandCenterCapacityTargetRole0');
+      await targetRole.focus(); await targetRole.selectOption('dispatcher');
+      assert.match(await page.locator('#commandCenterCapacityScopeReviews').innerText(), /Supporting roles: Technician/);
       const dispatcherOperator = page.getByRole('checkbox', { name: 'Dispatcher', exact: true });
       await dispatcherOperator.focus(); await page.keyboard.press('Space');
       assert.equal(await dispatcherOperator.isChecked(), true);
@@ -168,7 +173,7 @@ function response(status, data) {
       const calls = await page.evaluate(() => window.__calls);
       const submitted = JSON.parse(calls.find(item => item.method === 'POST').body);
       assert.deepEqual(submitted.scopeReviews, [{ scopeKey: 'accepted_crew_safe_fixture',
-        targetRole: 'technician', operatorRoles: ['dispatcher', 'technician'] }]);
+        targetRole: 'dispatcher', operatorRoles: ['dispatcher', 'technician'] }]);
       assert.equal(/profileId|crewId|assetId|appointmentId|assignmentId|memberId|jobId|digest|Minutes/i
         .test(JSON.stringify(submitted.scopeReviews)), false);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

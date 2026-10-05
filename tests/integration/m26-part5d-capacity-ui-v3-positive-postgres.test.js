@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const express = require('express');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { createForecastCapacityAdvisoryRouter } = require('../../src/routes/forecastCapacityAdvisory');
 const { CapacityAdvisoryContinuationWorker } = require('../../src/services/capacityAdvisoryContinuationWorker');
 const { ingestLead } = require('../../src/services/canonicalGraphService');
@@ -50,7 +51,7 @@ function controllerFixture() {
   } };
 }
 
-realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-work journey', () => {
+realPostgres('Mission 26 Part 5D correction v5 mounted same-role operator positive-work journey', () => {
   let fixture; let app; let logicalNow; let ui; let controller; let controllerReady = false;
   let positiveWork; let secondPositiveWork; let mountedCrew; let mountedSkill;
   let mountedVehicle; let mountedEquipment;
@@ -284,6 +285,19 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
 
   beforeAll(async () => {
     fixture = await createDatabaseFixture({ operationalSchedule: true });
+    const secondTechnicianId = uuid();
+    await fixture.ownerPool.query(
+      "INSERT INTO users(id,organization_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'unused','member','active')",
+      [secondTechnicianId, fixture.org, 'Synthetic second technician', `${secondTechnicianId}@example.test`]);
+    const secondTechnicianSession = await provisionDurableSession(fixture.ownerPool, {
+      organizationId: fixture.org, userId: secondTechnicianId,
+      membershipId: secondTechnicianId, role: 'member',
+    });
+    fixture.actors.secondTechnician = {
+      organizationId: fixture.org, actorUserId: secondTechnicianId, actorAccessRole: 'member',
+      authSessionId: secondTechnicianSession.sessionId, csrfToken: secondTechnicianSession.csrfToken,
+      session: secondTechnicianSession,
+    };
     app = express(); app.use(express.json());
     const bypass = (_req, _res, next) => next();
     const auth = (req, _res, next) => {
@@ -296,7 +310,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
     app.use(endpoint, createForecastCapacityAdvisoryRouter({ auth, throttle: bypass,
       writeThrottle: bypass, poolProvider: () => fixture.runtimePool }));
     await setClock('2030-01-01T00:00:00.000Z');
-    for (const name of ['dispatcher', 'member']) {
+    for (const name of ['dispatcher', 'member', 'secondTechnician']) {
       const member = actor(name); const reviewer = actor('owner');
       let current = await request(fixture.app).get('/api/work-profiles/me').set(member.session.headers);
       expect(current.status).toBe(200);
@@ -325,6 +339,10 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
       .set(actor('owner').session.headers).send({ operationalRole: 'technician',
         homeLocationId: 'headquarters', skillIds: [mountedSkill.id] });
     expect(response.status).toBe(200);
+    response = await request(fixture.app).put(`/api/workforce/profiles/${actor('secondTechnician').actorUserId}`)
+      .set(actor('owner').session.headers).send({ operationalRole: 'technician',
+        homeLocationId: 'headquarters', skillIds: [mountedSkill.id] });
+    expect(response.status).toBe(200);
     response = await request(fixture.app).put(`/api/workforce/profiles/${actor('dispatcher').actorUserId}`)
       .set(actor('owner').session.headers).send({ operationalRole: 'dispatcher',
         homeLocationId: 'headquarters', skillIds: [mountedSkill.id] });
@@ -333,6 +351,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
       .set(actor('owner').session.headers).send({ key: 'm26-v4-mixed-crew',
         name: 'Mounted mixed-role crew', homeLocationId: 'headquarters', members: [
           { profileId: actor('member').actorUserId, role: 'lead' },
+          { profileId: actor('secondTechnician').actorUserId, role: 'member' },
           { profileId: actor('dispatcher').actorUserId, role: 'member' },
         ] });
     expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
@@ -362,14 +381,16 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
       start: new Date(availabilityStart.getTime() + index * 30 * 86400000).toISOString(),
       end: new Date(availabilityStart.getTime() + (index + 1) * 30 * 86400000).toISOString(),
     }));
-    for (const name of ['member', 'dispatcher']) {
+    for (const name of ['member', 'secondTechnician', 'dispatcher']) {
+      const actorIntervals = name === 'secondTechnician' ? availabilityIntervals.map((interval, index) =>
+        index === 0 ? { ...interval, start: '2030-01-02T00:00:00.000Z' } : interval) : availabilityIntervals;
       response = await request(fixture.app)
         .put(`/api/v1/canonical/availability/profiles/${actor(name).actorUserId}`)
         .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5d-v4-availability-${uuid()}`)
         .send({ expectedRevision: 0, expectedDigest: null, expectedTimeZone: 'UTC',
           coverageStart: availabilityStart.toISOString(),
           coverageEnd: new Date(availabilityStart.getTime() + 365 * 86400000).toISOString(),
-          intervals: availabilityIntervals,
+          intervals: actorIntervals,
           reason: 'Owner declared bounded future availability for the mounted positive-work proof.' });
       expect({ status: response.status, body: response.body }).toMatchObject({ status: 200 });
     }
@@ -407,7 +428,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
     const value = controller.inspect().journey;
     if (!value) {
       const raw = (await fixture.ownerPool.query(
-        'SELECT public.canonical_forecast_capacity_ui_v4_current($1,$2,$3,$4) value',
+        'SELECT public.canonical_forecast_capacity_ui_v5_current($1,$2,$3,$4) value',
         [actor('owner').organizationId, actor('owner').actorUserId, actor('owner').actorAccessRole,
           actor('owner').authSessionId])).rows[0].value;
       throw new Error(`Mounted controller journey failed: ${JSON.stringify({
@@ -433,9 +454,12 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
     if (current.setup.action === 'constrained_work_scopes') {
       expect(current.setup.scopeReviews).toHaveLength(1);
       offeredScopeReview = structuredClone(current.setup.scopeReviews[0]);
-      const dispatcher = ui.created.filter(element => element.type === 'checkbox' &&
-        element.value === 'dispatcher').at(-1);
-      expect(dispatcher).toBeTruthy(); dispatcher.checked = true; dispatcher.listeners.change();
+      ui.values.commandCenterCapacityReviewReason.value = 'Review the exact target role before approval.';
+      ui.values.commandCenterCapacityReviewReason.listeners.input();
+      expect(ui.values.commandCenterCapacitySetupAction.disabled).toBe(true);
+      const target = ui.created.filter(element =>
+        element.tagName === 'select' && element.id === 'commandCenterCapacityTargetRole0').at(-1);
+      expect(target).toBeTruthy(); target.value = 'dispatcher'; target.listeners.change();
     }
     ui.values.commandCenterCapacityHiringPeriods.value = String(periods);
     ui.values.commandCenterCapacityHiringPeriods.listeners.change();
@@ -526,7 +550,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
         try {
           await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
           await client.query(
-            'SELECT public.canonical_forecast_capacity_ui_v4_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+            'SELECT public.canonical_forecast_capacity_ui_v5_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
             [fixture.org, actor('owner').actorUserId, actor('owner').actorAccessRole,
               actor('owner').authSessionId, actor('owner').csrfToken, call.idempotencyKey,
               failedBody.action, failedBody.originId, failedBody.outcomeId, failedBody.correctionOriginId,
@@ -632,6 +656,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
         location: 'applies', travel: 'applies', vehicle: 'applies', equipment: 'applies' },
       targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: ['technician'],
       targetRoleOptions: ['dispatcher', 'technician'],
+      selectableTargetRoles: ['dispatcher'],
       operatorRoleOptions: ['dispatcher', 'technician'], sourceState: 'source_backed',
       reviewState: 'needs_review' });
     expect(JSON.stringify(beforeScopes.current.setup.scopeReviews)).not.toMatch(
@@ -652,7 +677,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
     await setupNext(3, 'constrained_work_scopes');
     expect(offeredScopeReview).toEqual(beforeScopes.current.setup.scopeReviews[0]);
     expect(submittedScopeChoice).toMatchObject({ scopeKey: offeredScopeReview.scopeKey,
-      targetRole: 'technician', operatorRoles: ['dispatcher', 'technician'] });
+      targetRole: 'dispatcher', operatorRoles: ['technician'] });
     const scopeSetupCall = mountedCalls.find(call => call.method === 'POST' && call.body &&
       JSON.parse(call.body).action === 'constrained_work_scopes');
     const scopeSetupBody = JSON.parse(scopeSetupCall.body);
@@ -660,7 +685,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
     expect(scopeReplay.status).toBe(200); expect(scopeReplay.headers['idempotency-replayed']).toBe('true');
     expect(scopeReplay.body.data).toMatchObject({ action: 'constrained_work_scopes', replayed: true });
     let scopeConflict = await post('/journey/setup', { ...scopeSetupBody,
-      scopeReviews: [{ ...scopeSetupBody.scopeReviews[0], operatorRoles: ['technician'] }] },
+      scopeReviews: [{ ...scopeSetupBody.scopeReviews[0], operatorRoles: ['dispatcher'] }] },
     scopeSetupCall.idempotencyKey);
     expect(scopeConflict.status).toBe(409);
     scopeConflict = await post('/journey/setup', scopeSetupBody, `m26-p5d-v4-changed-scope-key-${uuid()}`);
@@ -671,7 +696,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
         ORDER BY revision DESC LIMIT 1`, [fixture.org])).rows[0].definition;
     expect(privateScope.applicability).toEqual({ crew: true, skill: true, workingHours: true,
       location: true, travel: true, vehicle: true, equipment: true });
-    expect(privateScope.role).toBe('technician');
+    expect(privateScope.role).toBe('dispatcher');
     expect(privateScope.locationKey).toBe('headquarters');
     expect(privateScope.crewIds).toEqual([mountedCrew.id]);
     expect(privateScope.skillIds).toEqual([mountedSkill.id]);
@@ -683,17 +708,51 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
     expect(privateScope.vehicleAssetIds).toEqual([mountedVehicle.id]);
     expect(privateScope.equipmentAssetIds).toEqual([mountedEquipment.id]);
     expect(privateScope.crewRoleRequirements).toEqual(expect.arrayContaining([
-      { role: 'dispatcher', count: 1 }, { role: 'technician', count: 1 },
+      { role: 'dispatcher', count: 1 }, { role: 'technician', count: 2 },
     ]));
     expect(privateScope.crewAssignments).toEqual(expect.arrayContaining([
       { profileId: actor('member').actorUserId, crewId: mountedCrew.id, role: 'technician' },
+      { profileId: actor('secondTechnician').actorUserId, crewId: mountedCrew.id, role: 'technician' },
       { profileId: actor('dispatcher').actorUserId, crewId: mountedCrew.id, role: 'dispatcher' },
     ]));
     expect(privateScope.operatorProfileIds.slice().sort()).toEqual(
-      [actor('member').actorUserId, actor('dispatcher').actorUserId].sort());
-    expect(privateScope.assetAssignments.map(value => value.kind).sort()).toEqual(['equipment', 'vehicle']);
-    expect(privateScope.assetAssignments.map(value => value.operatorProfileId).sort()).toEqual(
-      [actor('member').actorUserId, actor('dispatcher').actorUserId].sort());
+      [actor('member').actorUserId, actor('secondTechnician').actorUserId].sort());
+    expect(privateScope.assetAssignments).toHaveLength(4);
+    for (const [assetId, kind] of [[mountedVehicle.id, 'vehicle'], [mountedEquipment.id, 'equipment']]) {
+      const eligibility = privateScope.assetAssignments.filter(value => value.assetId === assetId);
+      expect(eligibility.map(value => value.kind)).toEqual([kind, kind]);
+      expect(eligibility.map(value => value.operatorProfileId).sort()).toEqual(
+        [actor('member').actorUserId, actor('secondTechnician').actorUserId].sort());
+    }
+    expect(privateScope.assetCalendars.map(value => value.assetId).sort()).toEqual(
+      [mountedVehicle.id, mountedEquipment.id].sort());
+    const exactMatching = (await fixture.ownerPool.query(
+      `SELECT public.canonical_forecast_constrained_capacity_v1_exact_match($1::jsonb,$2::jsonb,$3::jsonb,NULL) positive,
+        public.canonical_forecast_constrained_capacity_v1_exact_match($1::jsonb,$2::jsonb,$4::jsonb,NULL) unavailable`,
+      [privateScope, JSON.stringify(privateScope.crewAssignments), JSON.stringify(privateScope.assetAssignments),
+        JSON.stringify(privateScope.assetAssignments.filter(value =>
+          value.operatorProfileId === actor('member').actorUserId))])).rows[0];
+    expect(Number(exactMatching.positive.targetSlots)).toBeGreaterThan(0);
+    expect(Number(exactMatching.positive.candidateCount)).toBeGreaterThan(0);
+    expect(exactMatching.unavailable).toMatchObject({ targetSlots: 0, candidateCount: 0 });
+    const unavailableStart = new Date(logicalNow);
+    const unavailableEnd = new Date(unavailableStart.getTime() + 3600000);
+    const availableStart = new Date('2030-01-03T00:00:00.000Z');
+    const availableEnd = new Date(availableStart.getTime() + 3600000);
+    const sourceAvailabilityMatching = (await fixture.ownerPool.query(
+      `SELECT public.canonical_forecast_constrained_capacity_v1_scope_segment(
+          $1,value,$2,$3,'[]'::jsonb,NULL) unavailable,
+        public.canonical_forecast_constrained_capacity_v1_scope_segment(
+          $1,value,$4,$5,'[]'::jsonb,NULL) current
+       FROM canonical_forecast_constrained_capacity_reviews_v1 value
+       WHERE organization_id=$1 AND review_kind='scope' AND action='approve'
+       ORDER BY revision DESC LIMIT 1`,
+      [fixture.org, unavailableStart, unavailableEnd, availableStart, availableEnd])).rows[0];
+    expect(sourceAvailabilityMatching.unavailable).toMatchObject({
+      personMinutes: 0, crewSlots: 0, targetSlots: 0,
+    });
+    expect(Number(sourceAvailabilityMatching.current.targetSlots)).toBeGreaterThan(0);
+    expect(Number(sourceAvailabilityMatching.current.crewSlots)).toBeGreaterThan(0);
 
     const beforeJobs = await runSetupUntilAction('constrained_job_census');
     expect(beforeJobs.actions).toEqual([]);
@@ -710,7 +769,7 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
     conflict = await post('/journey/setup', firstSetupBody, `m26-p5d-v3-changed-key-${uuid()}`);
     expect([400, 409]).toContain(conflict.status);
     const privateJobPlan = (await fixture.ownerPool.query(
-      'SELECT canonical_forecast_capacity_ui_v4_job_plan($1,$2) value',
+      'SELECT canonical_forecast_capacity_ui_v5_job_plan($1,$2) value',
       [fixture.org, logicalNow])).rows[0].value;
     expect(privateJobPlan.state).toBe('ready'); expect(privateJobPlan.entries).toHaveLength(2);
     const rejectedSubject = privateJobPlan.entries.map(value => value.subjectId).sort().at(-1);
@@ -942,5 +1001,5 @@ realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-
       /appointmentId|assignmentId|subjectId|workerId|jobId|assetId|memberId|personMinutes|demandMinutes/i);
     expect(controller.inspect()).toMatchObject({ identity:
       'paid:mounted-tenant:revision:digest:session:generation:expiry', uncertainAttempt: null, busy: false });
-  }, 300000);
+  }, 600000);
 });

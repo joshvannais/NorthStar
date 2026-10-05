@@ -217,19 +217,21 @@
       value.hiringConsecutivePeriods > 12 || !Array.isArray(value.scopeReviews)) return false;
     function reviewValid(item) {
       if (!exact(item, ['scopeKey', 'formation', 'dimensions', 'targetRole', 'supportRoles',
-        'operatorRoles', 'targetRoleOptions', 'operatorRoleOptions', 'sourceState', 'reviewState']) ||
+        'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleOptions', 'sourceState', 'reviewState']) ||
         !TOKEN.test(item.scopeKey || '') || !['profile', 'crew'].includes(item.formation) ||
         !exact(item.dimensions, DIMENSIONS) ||
         DIMENSIONS.some(function (name) { return !['applies', 'not_applicable'].includes(item.dimensions[name]); }) ||
         item.dimensions.workingHours !== 'applies' || item.dimensions.location !== 'applies' ||
         (item.dimensions.crew === 'applies') !== (item.formation === 'crew') || !ROLE.test(item.targetRole || '') ||
         item.sourceState !== 'source_backed' || !['current', 'needs_review'].includes(item.reviewState)) return false;
-      var arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'operatorRoleOptions'];
+      var arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleOptions'];
       if (arrays.some(function (name) { return !Array.isArray(item[name]) || item[name].length > 9 ||
         item[name].some(function (role) { return typeof role !== 'string' || !ROLE.test(role); }) ||
         new Set(item[name]).size !== item[name].length; })) return false;
       var targets = new Set(item.targetRoleOptions); var operators = new Set(item.operatorRoleOptions);
-      return targets.has(item.targetRole) && item.supportRoles.length === item.targetRoleOptions.length - 1 &&
+      return targets.has(item.targetRole) && item.selectableTargetRoles.length > 0 &&
+        item.selectableTargetRoles.every(function (role) { return targets.has(role); }) &&
+        item.supportRoles.length === item.targetRoleOptions.length - 1 &&
         item.supportRoles.every(function (role) { return role !== item.targetRole && targets.has(role); }) &&
         item.operatorRoles.every(function (role) { return operators.has(role); }) &&
         (item.operatorRoleOptions.length > 0) ===
@@ -732,7 +734,7 @@
       var choices = [];
       for (var index = 0; index < current.scopeReviews.length; index += 1) {
         var offered = current.scopeReviews[index]; var selected = scopeSelections[offered.scopeKey];
-        if (!selected || !offered.targetRoleOptions.includes(selected.targetRole) ||
+        if (!selected || !offered.selectableTargetRoles.includes(selected.targetRole) ||
             selected.operatorRoles.some(function (role) { return !offered.operatorRoleOptions.includes(role); }) ||
             (selected.operatorRoles.length > 0) !== (offered.operatorRoleOptions.length > 0)) return null;
         choices.push({ scopeKey: offered.scopeKey, targetRole: selected.targetRole,
@@ -746,7 +748,8 @@
       var reviews = current && current.action === 'constrained_work_scopes' ? current.scopeReviews : [];
       root.hidden = !reviews.length;
       reviews.forEach(function (review, index) {
-        scopeSelections[review.scopeKey] = { targetRole: review.targetRole,
+        var initialTarget = review.selectableTargetRoles.includes(review.targetRole) ? review.targetRole : '';
+        scopeSelections[review.scopeKey] = { targetRole: initialTarget,
           operatorRoles: review.operatorRoles.slice() };
         var card = node('section', 'command-center-capacity-scope-review');
         card.append(node('h4', '', 'Accepted work formation ' + String(index + 1)),
@@ -763,14 +766,20 @@
         var targetLabel = node('label', 'command-center-capacity-role-field');
         targetLabel.append(node('span', '', 'Target capacity role'));
         var target = node('select'); target.id = 'commandCenterCapacityTargetRole' + String(index);
-        review.targetRoleOptions.forEach(function (role) {
+        if (!initialTarget) {
+          var placeholder = node('option', '', 'Choose a target role'); placeholder.value = '';
+          placeholder.disabled = true; placeholder.selected = true; target.append(placeholder);
+        }
+        review.selectableTargetRoles.forEach(function (role) {
           var option = node('option', '', title(role)); option.value = role; target.append(option);
         });
-        target.value = review.targetRole; targetLabel.htmlFor = target.id; targetLabel.append(target); card.append(targetLabel);
+        target.value = initialTarget; targetLabel.htmlFor = target.id; targetLabel.append(target); card.append(targetLabel);
         var support = node('p', 'command-center-capacity-support-roles');
         function updateSupport() {
-          var roles = review.targetRoleOptions.filter(function (role) { return role !== scopeSelections[review.scopeKey].targetRole; });
-          support.textContent = roles.length ? 'Supporting roles: ' + roles.map(title).join(', ') + '.' :
+          var selectedTarget = scopeSelections[review.scopeKey].targetRole;
+          var roles = review.targetRoleOptions.filter(function (role) { return role !== selectedTarget; });
+          support.textContent = !selectedTarget ? 'Choose the target capacity role before approval.' : roles.length ?
+            'Supporting roles: ' + roles.map(title).join(', ') + '.' :
             'No separate supporting role applies to this formation.';
         }
         target.addEventListener('change', function () {

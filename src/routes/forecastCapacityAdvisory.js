@@ -19,7 +19,9 @@ const TARGETS = ['workload.accepted_person_hours.v1', 'workload.end_backlog_hour
   'capacity.available_role_hours.v1'];
 const DIMENSIONS = ['crew', 'skill', 'workingHours', 'location', 'travel', 'vehicle', 'equipment'];
 const SETUP_ACTIONS = ['workload_epoch', 'workload_methods', 'workload_roles', 'workload_role_scope',
-  'workload_availability', 'workload_outcome_window', 'constrained_epoch', 'constrained_method', 'constrained_scope',
+  'workload_availability', 'workload_remaining_census', 'workload_outcome_window',
+  'constrained_epoch', 'constrained_method', 'constrained_scope', 'constrained_work_scopes',
+  'constrained_job_census',
   'advisory_method', 'advisory_policy', 'advisory_demand', 'advisory_epoch',
   'advisory_outcome_demand', 'advisory_continuation_demand', 'advisory_correction_demand',
   'advisory_policy_revision'];
@@ -373,7 +375,8 @@ function safeJourney(value) {
   if (advisory.currentAction.name !== advisoryExpectedAction ||
       advisory.currentAction.expectedResultRevision !== advisoryExpectedRevision ||
       advisory.currentAction.correctionOriginId !==
-        (advisory.selectedOrigin && advisory.selectedOrigin.refreshRequired ? advisory.selectedOrigin.id : null)) return null;
+        (setupBlocksLane(value.setup, 'advisory') ? null :
+          (advisory.selectedOrigin && advisory.selectedOrigin.refreshRequired ? advisory.selectedOrigin.id : null))) return null;
 
   if (!safeSetup(value.setup) || !safeHiringPolicy(value.hiringPolicy) ||
       !safeCorrectionReview(value.correctionReview)) return null;
@@ -432,7 +435,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   router.get('/journey/current', auth, capacityUiAccess, throttle, async (req, res) => {
     if (!exact(req.query, [])) return invalid(res);
     return run(req, res, {
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v2_current($1,$2,$3,$4) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v3_current($1,$2,$3,$4) value',
       validate: safeJourney,
     });
   });
@@ -448,7 +451,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       !KEY.test(key || '')) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v2_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v3_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.token,
         body.hiringConsecutivePeriods, body.reason, body.confirmationVersion],
       validate: value => safeSetupResult(value, body),
@@ -488,7 +491,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
         (!body.originId || !body.outcomeId || body.correctionOriginId !== null))) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v2_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v3_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.originId, body.outcomeId,
         body.correctionOriginId, body.expectedRevision, body.reason, body.confirmationVersion],
       validate: value => safeActionResult(value, body),

@@ -16,7 +16,9 @@
   var CATEGORIES = ['bottleneck', 'backlog', 'overtime', 'contractor', 'hiring_need'];
   var EVIDENCE = ['authenticated_zero', 'bounded_value', 'unavailable'];
   var SETUP_ACTIONS = ['workload_epoch', 'workload_methods', 'workload_roles', 'workload_role_scope',
-    'workload_availability', 'workload_outcome_window', 'constrained_epoch', 'constrained_method', 'constrained_scope',
+    'workload_availability', 'workload_remaining_census', 'workload_outcome_window',
+    'constrained_epoch', 'constrained_method', 'constrained_scope', 'constrained_work_scopes',
+    'constrained_job_census',
     'advisory_method', 'advisory_policy', 'advisory_demand', 'advisory_epoch',
     'advisory_outcome_demand', 'advisory_continuation_demand', 'advisory_correction_demand',
     'advisory_policy_revision'];
@@ -345,9 +347,10 @@
       : advisoryExpectedAction === 'capture_evaluation'
         ? (a.selectedEvaluation ? a.selectedEvaluation.revision : 0) + 1 : null;
     if (a.currentAction.name !== advisoryExpectedAction ||
-        a.currentAction.expectedResultRevision !== advisoryExpectedRevision ||
-        a.currentAction.correctionOriginId !==
-          (a.selectedOrigin && a.selectedOrigin.refreshRequired ? a.selectedOrigin.id : null)) return null;
+      a.currentAction.expectedResultRevision !== advisoryExpectedRevision ||
+      a.currentAction.correctionOriginId !==
+          (setupBlocksLane('advisory') ? null :
+            (a.selectedOrigin && a.selectedOrigin.refreshRequired ? a.selectedOrigin.id : null))) return null;
     if (!setup(value.setup) || !hiringPolicy(value.hiringPolicy) || !correctionReview(value.correctionReview)) return null;
     if (!exact(value.boundaries, ['sourceLineage', 'calculationBoundary', 'uncertainty',
       'alternativesCombined', 'valuesWithheld', 'predictionIsFact']) ||
@@ -678,9 +681,13 @@
     function setupLabel(name) {
       return ({ workload_epoch: 'Start workload source coverage', workload_methods: 'Approve workload methods',
         workload_roles: 'Approve workforce role authority', workload_role_scope: 'Approve base capacity role',
-        workload_availability: 'Approve declared availability', workload_outcome_window: 'Finalize outcome window',
+        workload_availability: 'Approve declared availability',
+        workload_remaining_census: 'Approve remaining-work census',
+        workload_outcome_window: 'Finalize outcome window',
         constrained_epoch: 'Start constraint source coverage',
         constrained_method: 'Approve constraint method', constrained_scope: 'Approve seven-dimension scope',
+        constrained_work_scopes: 'Approve accepted-work formations',
+        constrained_job_census: 'Approve every accepted work constraint',
         advisory_method: 'Approve five-advisory method', advisory_policy: 'Approve private advisory policies',
         advisory_demand: 'Approve demand allocation', advisory_epoch: 'Install advisory coverage epoch',
         advisory_outcome_demand: 'Approve outcome allocation',

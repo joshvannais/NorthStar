@@ -123,8 +123,9 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const CORRECTION = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
     const OTHER = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
     const SETUP_ACTIONS = ['workload_epoch', 'workload_methods', 'workload_roles', 'workload_role_scope',
-      'workload_availability', 'workload_outcome_window', 'constrained_epoch', 'constrained_method',
-      'constrained_scope', 'advisory_method', 'advisory_policy', 'advisory_demand', 'advisory_epoch',
+      'workload_availability', 'workload_remaining_census', 'workload_outcome_window',
+      'constrained_epoch', 'constrained_method', 'constrained_scope', 'constrained_work_scopes',
+      'constrained_job_census', 'advisory_method', 'advisory_policy', 'advisory_demand', 'advisory_epoch',
       'advisory_outcome_demand', 'advisory_continuation_demand', 'advisory_correction_demand',
       'advisory_policy_revision'];
     for (const action of SETUP_ACTIONS) {
@@ -326,7 +327,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       expect(result.status).toBe(200); expect(result.body.data.state).toBe('capacity_research_journey_current');
       expect(result.headers['cache-control']).toBe('private, no-store');
       expect(result.headers['referrer-policy']).toBe('no-referrer');
-      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v2_current'))[1])
+      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v3_current'))[1])
         .toEqual([ORG, USER, role, SESSION]);
     }
     expect((await request(application({ databaseError: { code: '42501', detail: 'tenant secret' } }).app)
@@ -347,7 +348,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const setup = await request(setupApp.app).post('/api/v1/forecast/capacity-advice/journey/setup')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(setupBody);
     expect(setup.status).toBe(201);
-    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v2_setup_mutate'))[1])
+    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v3_setup_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, setupBody.action, setupBody.token,
         setupBody.hiringConsecutivePeriods, setupBody.reason, setupBody.confirmationVersion]);
 
@@ -362,7 +363,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const saved = await request(actionApp.app).post('/api/v1/forecast/capacity-advice/journey/actions')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(body);
     expect(saved.status).toBe(201); expect(JSON.stringify(saved.body)).not.toContain('digest');
-    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v2_action_mutate'))[1])
+    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v3_action_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, body.action, null, null, null,
         null, body.reason, body.confirmationVersion]);
 

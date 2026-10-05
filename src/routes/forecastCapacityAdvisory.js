@@ -18,6 +18,11 @@ const CATEGORIES = ['bottleneck', 'backlog', 'overtime', 'contractor', 'hiring_n
 const TARGETS = ['workload.accepted_person_hours.v1', 'workload.end_backlog_hours.v1',
   'capacity.available_role_hours.v1'];
 const DIMENSIONS = ['crew', 'skill', 'workingHours', 'location', 'travel', 'vehicle', 'equipment'];
+const SETUP_ACTIONS = ['workload_epoch', 'workload_methods', 'workload_roles', 'workload_role_scope',
+  'workload_availability', 'workload_outcome_window', 'constrained_epoch', 'constrained_method', 'constrained_scope',
+  'advisory_method', 'advisory_policy', 'advisory_demand', 'advisory_epoch',
+  'advisory_outcome_demand', 'advisory_continuation_demand', 'advisory_correction_demand',
+  'advisory_policy_revision'];
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 const instant = value => typeof value === 'string' && INSTANT.test(value) && Number.isFinite(Date.parse(value));
@@ -143,15 +148,120 @@ function safeHistory(value, kinds, continuation = false) {
 
 function safeAction(value, names) {
   return exact(value, ['name', 'originId', 'outcomeId', 'continuationId', 'correctionOriginId',
-    'expectedDecisionId', 'expectedDecisionRevision']) && names.includes(value.name) &&
+    'expectedDecisionId', 'expectedDecisionRevision', 'expectedResultRevision']) && names.includes(value.name) &&
     ['originId', 'outcomeId', 'continuationId', 'correctionOriginId', 'expectedDecisionId']
       .every(key => value[key] === null || UUID.test(value[key] || '')) &&
     (value.expectedDecisionRevision === null ||
-      (Number.isSafeInteger(value.expectedDecisionRevision) && value.expectedDecisionRevision >= 0));
+      (Number.isSafeInteger(value.expectedDecisionRevision) && value.expectedDecisionRevision >= 0)) &&
+    (value.expectedResultRevision === null ||
+      (Number.isSafeInteger(value.expectedResultRevision) && value.expectedResultRevision >= 1));
+}
+
+function safeSetup(value) {
+  if (!exact(value, ['state', 'action', 'token', 'lane', 'label', 'explanation', 'reasonLimit',
+    'hiringConsecutivePeriods']) || !['ready', 'waiting', 'unavailable', 'complete'].includes(value.state) ||
+    typeof value.label !== 'string' || value.label.length < 1 || value.label.length > 120 ||
+    typeof value.explanation !== 'string' || value.explanation.length < 1 || value.explanation.length > 500 ||
+    !Number.isSafeInteger(value.hiringConsecutivePeriods) || value.hiringConsecutivePeriods < 2 ||
+    value.hiringConsecutivePeriods > 12) return false;
+  if (value.state === 'ready') return SETUP_ACTIONS.includes(value.action) && DIGEST.test(value.token || '') &&
+    ['all', 'workload', 'advisory'].includes(value.lane) && value.reasonLimit === 1000;
+  return value.action === null && value.token === null && value.reasonLimit === null &&
+    (value.lane === null || ['all', 'workload', 'advisory'].includes(value.lane));
+}
+
+function safeHiringPolicy(value) {
+  return exact(value, ['state', 'token', 'consecutivePeriods', 'minimum', 'maximum']) &&
+    ['current', 'unavailable'].includes(value.state) &&
+    ((value.state === 'current' && DIGEST.test(value.token || '')) ||
+      (value.state === 'unavailable' && value.token === null)) &&
+    Number.isSafeInteger(value.consecutivePeriods) && value.consecutivePeriods >= 2 &&
+    value.consecutivePeriods <= 12 && value.minimum === 2 && value.maximum === 12;
+}
+
+function safeCorrectionReview(value) {
+  if (!exact(value, ['state', 'action', 'token', 'label', 'explanation', 'reasonLimit']) ||
+      !['ready', 'unavailable'].includes(value.state) || typeof value.label !== 'string' ||
+      value.label.length < 1 || value.label.length > 120 || typeof value.explanation !== 'string' ||
+      value.explanation.length < 1 || value.explanation.length > 500) return false;
+  return value.state === 'ready'
+    ? value.action === 'advisory_correction_demand' && DIGEST.test(value.token || '') && value.reasonLimit === 1000
+    : value.action === null && value.token === null && value.reasonLimit === null;
+}
+
+function safeActionResult(value, body) {
+  if (!exact(value, ['state', 'action', 'receiptId', 'originId', 'outcomeId', 'continuationId',
+    'correctionOriginId', 'revision', 'researchOnly', 'automaticActionTaken', 'replayed']) ||
+    value.state !== 'capacity_research_action_recorded' || value.action !== body.action ||
+    value.researchOnly !== true || value.automaticActionTaken !== false ||
+    typeof value.replayed !== 'boolean') return null;
+  const receipt = value.receiptId; const origin = value.originId; const outcome = value.outcomeId;
+  const continuation = value.continuationId; const correction = value.correctionOriginId;
+  const revision = value.revision;
+  if (body.action === 'workload_capture_origin' || body.action === 'constrained_capture_origin') {
+    return UUID.test(receipt || '') && origin === receipt && outcome === null && continuation === null &&
+      correction === null && revision === null ? value : null;
+  }
+  if (body.action === 'workload_capture_evaluation') {
+    return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === null &&
+      continuation === null && correction === null && revision === body.expectedRevision ? value : null;
+  }
+  if (body.action === 'constrained_capture_outcome' || body.action === 'advisory_capture_outcome') {
+    return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === receipt &&
+      continuation === null && correction === null && revision === body.expectedRevision ? value : null;
+  }
+  if (body.action === 'constrained_capture_evaluation' || body.action === 'advisory_capture_evaluation') {
+    return UUID.test(receipt || '') && receipt !== body.originId && receipt !== body.outcomeId &&
+      origin === body.originId && outcome === body.outcomeId && continuation === null && correction === null &&
+      revision === body.expectedRevision ? value : null;
+  }
+  if (body.action === 'advisory_capture_origin') {
+    return UUID.test(receipt || '') && origin === receipt && receipt !== body.correctionOriginId && outcome === null &&
+      continuation === null && correction === body.correctionOriginId && revision === null ? value : null;
+  }
+  if (body.action === 'advisory_reserve_continuation') {
+    return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === null &&
+      continuation === receipt && correction === null && revision === null ? value : null;
+  }
+  if (body.action === 'advisory_prepare_outcome') {
+    return receipt === null && origin === body.originId && outcome === null && continuation === null &&
+      correction === null && revision === null ? value : null;
+  }
+  return null;
+}
+
+function safeSetupResult(value, body) {
+  return exact(value, ['state', 'action', 'token', 'receiptId', 'revision', 'hiringConsecutivePeriods',
+    'researchOnly', 'automaticActionTaken', 'replayed']) && value.state === 'capacity_research_setup_recorded' &&
+    value.action === body.action && value.token === body.token && UUID.test(value.receiptId || '') &&
+    Number.isSafeInteger(value.revision) && value.revision >= 1 &&
+    value.hiringConsecutivePeriods === body.hiringConsecutivePeriods && value.researchOnly === true &&
+    value.automaticActionTaken === false && typeof value.replayed === 'boolean' ? value : null;
+}
+
+function safeDecisionResult(value, body, originId) {
+  return exact(value, ['state', 'id', 'originId', 'action', 'revision', 'researchOnly',
+    'automaticActionTaken', 'replayed', 'previousDecisionId', 'previousDecisionRevision']) &&
+    value.state === 'capacity_advisory_decision_recorded' && UUID.test(value.id || '') &&
+    value.id !== originId && value.id !== body.expectedDecisionId &&
+    value.originId === originId && value.action === body.action &&
+    value.revision === body.expectedDecisionRevision + 1 &&
+    value.previousDecisionId === body.expectedDecisionId &&
+    value.previousDecisionRevision === body.expectedDecisionRevision && value.researchOnly === true &&
+    value.automaticActionTaken === false && typeof value.replayed === 'boolean' ? value : null;
+}
+
+function setupBlocksLane(setup, lane) {
+  if (setup.state === 'complete') return false;
+  if (setup.state === 'ready' && setup.lane === 'advisory') return lane === 'advisory';
+  if (setup.state === 'ready' && setup.lane === 'workload' &&
+      setup.action === 'workload_outcome_window') return lane !== 'constrained';
+  return true;
 }
 
 function safeJourney(value) {
   if (!cleanJourney(value) || !exact(value, ['state', 'asOf', 'workload', 'constrained', 'advisory',
+    'setup', 'hiringPolicy', 'correctionReview',
     'boundaries', 'researchOnly', 'forecastIssued', 'paidNumericServing', 'forecastServingEnabled',
     'automaticActionTaken']) || value.state !== 'capacity_research_journey_current' || !instant(value.asOf) ||
     value.researchOnly !== true || value.forecastIssued !== false || value.paidNumericServing !== false ||
@@ -165,7 +275,7 @@ function safeJourney(value) {
       !(workload.selectedOrigin === null || workloadCapacity.safeOrigin(workload.selectedOrigin)) ||
       !(workload.selectedEvaluation === null || workloadCapacity.safeEvaluation(workload.selectedEvaluation)) ||
       !safeHistory(workload.history, ['origin', 'evaluation']) ||
-      !safeAction(workload.currentAction, ['capture_origin', 'recover_origin', 'wait_for_horizon',
+      !safeAction(workload.currentAction, ['review_prerequisites', 'capture_origin', 'recover_origin', 'wait_for_horizon',
         'capture_evaluation', 'complete'])) return null;
   if ((workload.selectedOrigin === null) !== (workload.currentAction.originId === null) ||
       (workload.selectedOrigin && workload.currentAction.originId !== workload.selectedOrigin.id) ||
@@ -174,11 +284,15 @@ function safeJourney(value) {
       workload.currentAction.outcomeId !== null || workload.currentAction.continuationId !== null ||
       workload.currentAction.correctionOriginId !== null || workload.currentAction.expectedDecisionId !== null ||
       workload.currentAction.expectedDecisionRevision !== null) return null;
-  const workloadExpectedAction = !workload.selectedOrigin ? 'capture_origin' :
+  const workloadExpectedAction = setupBlocksLane(value.setup, 'workload') ? 'review_prerequisites' :
+    !workload.selectedOrigin ? 'capture_origin' :
     workload.selectedOrigin.refreshRequired ? 'recover_origin' :
       Date.parse(value.asOf) < Date.parse(workload.selectedOrigin.horizonEndsAt) ? 'wait_for_horizon' :
         !workload.selectedEvaluation || workload.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
-  if (workload.currentAction.name !== workloadExpectedAction) return null;
+  const workloadExpectedRevision = workloadExpectedAction === 'capture_evaluation'
+    ? (workload.selectedEvaluation ? workload.selectedEvaluation.revision : 0) + 1 : null;
+  if (workload.currentAction.name !== workloadExpectedAction ||
+      workload.currentAction.expectedResultRevision !== workloadExpectedRevision) return null;
 
   const constrained = value.constrained;
   if (!exact(constrained, ['selectedOrigin', 'selectedOutcome', 'selectedEvaluation', 'scopes', 'history',
@@ -191,7 +305,7 @@ function safeJourney(value) {
         !exact(item.dimensions, DIMENSIONS) || DIMENSIONS.some(key => typeof item.dimensions[key] !== 'boolean') ||
         !['authenticated_zero', 'bounded_value', 'unavailable'].includes(item.evidenceState)) ||
       !safeHistory(constrained.history, ['origin', 'outcome', 'evaluation']) ||
-      !safeAction(constrained.currentAction, ['capture_origin', 'recover_origin', 'wait_for_horizon',
+      !safeAction(constrained.currentAction, ['review_prerequisites', 'capture_origin', 'recover_origin', 'wait_for_horizon',
         'capture_outcome', 'capture_evaluation', 'complete'])) return null;
   if ((constrained.selectedOrigin === null) !== (constrained.currentAction.originId === null) ||
       (constrained.selectedOrigin && constrained.currentAction.originId !== constrained.selectedOrigin.id) ||
@@ -204,12 +318,18 @@ function safeJourney(value) {
       (constrained.selectedOrigin && constrained.scopes.length !== constrained.selectedOrigin.scopeCount) ||
       constrained.currentAction.continuationId !== null || constrained.currentAction.correctionOriginId !== null ||
       constrained.currentAction.expectedDecisionId !== null || constrained.currentAction.expectedDecisionRevision !== null) return null;
-  const constrainedExpectedAction = !constrained.selectedOrigin ? 'capture_origin' :
+  const constrainedExpectedAction = setupBlocksLane(value.setup, 'constrained') ? 'review_prerequisites' :
+    !constrained.selectedOrigin ? 'capture_origin' :
     constrained.selectedOrigin.refreshRequired ? 'recover_origin' :
       Date.parse(value.asOf) < Date.parse(constrained.selectedOrigin.horizonEndsAt) ? 'wait_for_horizon' :
         !constrained.selectedOutcome || constrained.selectedOutcome.refreshRequired ? 'capture_outcome' :
           !constrained.selectedEvaluation || constrained.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
-  if (constrained.currentAction.name !== constrainedExpectedAction) return null;
+  const constrainedExpectedRevision = constrainedExpectedAction === 'capture_outcome'
+    ? (constrained.selectedOutcome ? constrained.selectedOutcome.revision : 0) + 1
+    : constrainedExpectedAction === 'capture_evaluation'
+      ? (constrained.selectedEvaluation ? constrained.selectedEvaluation.revision : 0) + 1 : null;
+  if (constrained.currentAction.name !== constrainedExpectedAction ||
+      constrained.currentAction.expectedResultRevision !== constrainedExpectedRevision) return null;
 
   const advisory = value.advisory;
   if (!exact(advisory, ['selectedOrigin', 'selectedOutcome', 'selectedEvaluation', 'selectedContinuation',
@@ -220,7 +340,7 @@ function safeJourney(value) {
       !(advisory.selectedContinuation === null || safeContinuation(advisory.selectedContinuation)) ||
       typeof advisory.preparationReady !== 'boolean' ||
       !safeHistory(advisory.history, ['origin', 'decision', 'outcome', 'evaluation', 'continuation'], true) ||
-      !safeAction(advisory.currentAction, ['capture_origin', 'recover_origin', 'review_advisory',
+      !safeAction(advisory.currentAction, ['review_prerequisites', 'capture_origin', 'recover_origin', 'review_advisory',
         'reserve_continuation', 'wait_for_horizon', 'prepare_outcome', 'capture_outcome',
         'capture_evaluation', 'complete'])) return null;
   if ((advisory.selectedOrigin === null) !== (advisory.currentAction.originId === null) ||
@@ -237,7 +357,8 @@ function safeJourney(value) {
         advisory.selectedContinuation.predecessorOriginId !== advisory.selectedOrigin.id)) ||
       ((advisory.currentAction.expectedDecisionRevision === 0) !==
         (advisory.currentAction.expectedDecisionId === null))) return null;
-  const advisoryExpectedAction = !advisory.selectedOrigin ? 'capture_origin' :
+  const advisoryExpectedAction = setupBlocksLane(value.setup, 'advisory') ? 'review_prerequisites' :
+    !advisory.selectedOrigin ? 'capture_origin' :
     advisory.selectedOrigin.refreshRequired ? 'recover_origin' :
       advisory.selectedOrigin.decisionAction !== 'approve' ? 'review_advisory' :
         Date.parse(value.asOf) < Date.parse(advisory.selectedOrigin.horizonEndsAt)
@@ -245,9 +366,17 @@ function safeJourney(value) {
           !advisory.preparationReady ? 'prepare_outcome' :
             !advisory.selectedOutcome || advisory.selectedOutcome.refreshRequired ? 'capture_outcome' :
               !advisory.selectedEvaluation || advisory.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
+  const advisoryExpectedRevision = advisoryExpectedAction === 'capture_outcome'
+    ? (advisory.selectedOutcome ? advisory.selectedOutcome.revision : 0) + 1
+    : advisoryExpectedAction === 'capture_evaluation'
+      ? (advisory.selectedEvaluation ? advisory.selectedEvaluation.revision : 0) + 1 : null;
   if (advisory.currentAction.name !== advisoryExpectedAction ||
+      advisory.currentAction.expectedResultRevision !== advisoryExpectedRevision ||
       advisory.currentAction.correctionOriginId !==
         (advisory.selectedOrigin && advisory.selectedOrigin.refreshRequired ? advisory.selectedOrigin.id : null)) return null;
+
+  if (!safeSetup(value.setup) || !safeHiringPolicy(value.hiringPolicy) ||
+      !safeCorrectionReview(value.correctionReview)) return null;
 
   if (!exact(value.boundaries, ['sourceLineage', 'calculationBoundary', 'uncertainty',
     'alternativesCombined', 'valuesWithheld', 'predictionIsFact']) ||
@@ -303,8 +432,26 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   router.get('/journey/current', auth, capacityUiAccess, throttle, async (req, res) => {
     if (!exact(req.query, [])) return invalid(res);
     return run(req, res, {
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v1_current($1,$2,$3,$4) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v2_current($1,$2,$3,$4) value',
       validate: safeJourney,
+    });
+  });
+
+  router.post('/journey/setup', auth, capacityUiAccess, writeThrottle, async (req, res) => {
+    const body = req.body; const key = req.get('Idempotency-Key');
+    if (!exact(req.query, []) || !exact(body, ['action', 'token', 'hiringConsecutivePeriods',
+      'reason', 'confirmed', 'confirmationVersion']) || !SETUP_ACTIONS.includes(body.action) ||
+      !DIGEST.test(body.token || '') || !Number.isSafeInteger(body.hiringConsecutivePeriods) ||
+      body.hiringConsecutivePeriods < 2 || body.hiringConsecutivePeriods > 12 ||
+      typeof body.reason !== 'string' || body.reason.trim().length < 10 || body.reason.length > 1000 ||
+      body.confirmed !== true || body.confirmationVersion !== 'm26-capacity-ui-setup-v2' ||
+      !KEY.test(key || '')) return invalid(res);
+    return run(req, res, {
+      write: true,
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v2_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
+      params: [req.get('X-CSRF-Token'), key, body.action, body.token,
+        body.hiringConsecutivePeriods, body.reason, body.confirmationVersion],
+      validate: value => safeSetupResult(value, body),
     });
   });
 
@@ -316,11 +463,16 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       'advisory_capture_outcome', 'advisory_capture_evaluation'];
     const reasonActions = ['workload_capture_origin', 'constrained_capture_origin',
       'advisory_capture_origin', 'advisory_reserve_continuation'];
+    const revisionActions = ['workload_capture_evaluation', 'constrained_capture_outcome',
+      'constrained_capture_evaluation', 'advisory_capture_outcome', 'advisory_capture_evaluation'];
     if (!exact(req.query, []) || !exact(body, ['action', 'originId', 'outcomeId', 'correctionOriginId',
-      'reason', 'confirmed', 'confirmationVersion']) || !actions.includes(body.action) ||
+      'expectedRevision', 'reason', 'confirmed', 'confirmationVersion']) || !actions.includes(body.action) ||
       !(body.originId === null || UUID.test(body.originId || '')) ||
       !(body.outcomeId === null || UUID.test(body.outcomeId || '')) ||
       !(body.correctionOriginId === null || UUID.test(body.correctionOriginId || '')) ||
+      (revisionActions.includes(body.action)
+        ? (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 1)
+        : body.expectedRevision !== null) ||
       body.confirmed !== true || body.confirmationVersion !== 'm26-capacity-ui-action-v1' ||
       !KEY.test(key || '') ||
       (reasonActions.includes(body.action)
@@ -336,21 +488,10 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
         (!body.originId || !body.outcomeId || body.correctionOriginId !== null))) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v1_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v2_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.originId, body.outcomeId,
-        body.correctionOriginId, body.reason, body.confirmationVersion],
-      validate(value) {
-        return exact(value, ['state', 'action', 'receiptId', 'originId', 'outcomeId', 'continuationId',
-          'revision', 'researchOnly', 'automaticActionTaken', 'replayed']) &&
-          value.state === 'capacity_research_action_recorded' && value.action === body.action &&
-          (value.receiptId === null || UUID.test(value.receiptId || '')) &&
-          (value.originId === null || UUID.test(value.originId || '')) &&
-          (value.outcomeId === null || UUID.test(value.outcomeId || '')) &&
-          (value.continuationId === null || UUID.test(value.continuationId || '')) &&
-          (value.revision === null || (Number.isSafeInteger(value.revision) && value.revision >= 1)) &&
-          value.researchOnly === true && value.automaticActionTaken === false &&
-          typeof value.replayed === 'boolean' ? value : null;
-      },
+        body.correctionOriginId, body.expectedRevision, body.reason, body.confirmationVersion],
+      validate: value => safeActionResult(value, body),
     });
   });
 
@@ -527,16 +668,10 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       !KEY.test(key || '')) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v1_decision_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v2_decision_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
       params: [req.get('X-CSRF-Token'), key, req.params.id, body.expectedDecisionId,
         body.expectedDecisionRevision, body.action, body.reason, body.confirmationVersion],
-      validate(value) {
-        return exact(value, ['state', 'id', 'originId', 'action', 'revision', 'researchOnly',
-          'automaticActionTaken', 'replayed']) && value.state === 'capacity_advisory_decision_recorded' &&
-          UUID.test(value.id || '') && value.originId === req.params.id && value.action === body.action &&
-          Number.isSafeInteger(value.revision) && value.revision >= 1 && value.researchOnly === true &&
-          value.automaticActionTaken === false && typeof value.replayed === 'boolean' ? value : null;
-      },
+      validate: value => safeDecisionResult(value, body, req.params.id),
     });
   });
   router.get('/origins/:originId/decisions/:id', auth, requirePermission('forecast', 'read'), throttle, async (req, res) => {
@@ -600,4 +735,5 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
 }
 
 module.exports = { createForecastCapacityAdvisoryRouter, safeOrigin, safeOutcome, safeEvaluation,
-  safeContinuation, safeCategories, safeJourney };
+  safeContinuation, safeCategories, safeJourney, safeSetup, safeHiringPolicy, safeActionResult,
+  safeCorrectionReview, safeSetupResult, safeDecisionResult };

@@ -7,6 +7,7 @@
   'use strict';
 
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  var DIGEST = /^[0-9a-f]{64}$/;
   var TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
   var ROLE = /^(owner|administrator|dispatcher|estimator|crew_lead|technician|accounting|employee|other)$/;
   var TARGETS = ['workload.accepted_person_hours.v1', 'workload.end_backlog_hours.v1',
@@ -14,6 +15,11 @@
   var DIMENSIONS = ['crew', 'skill', 'workingHours', 'location', 'travel', 'vehicle', 'equipment'];
   var CATEGORIES = ['bottleneck', 'backlog', 'overtime', 'contractor', 'hiring_need'];
   var EVIDENCE = ['authenticated_zero', 'bounded_value', 'unavailable'];
+  var SETUP_ACTIONS = ['workload_epoch', 'workload_methods', 'workload_roles', 'workload_role_scope',
+    'workload_availability', 'workload_outcome_window', 'constrained_epoch', 'constrained_method', 'constrained_scope',
+    'advisory_method', 'advisory_policy', 'advisory_demand', 'advisory_epoch',
+    'advisory_outcome_demand', 'advisory_continuation_demand', 'advisory_correction_demand',
+    'advisory_policy_revision'];
   var FORBIDDEN = /^(digest|expectedDigest|inputManifest|privateResults|privateManifest|metrics|payload|thresholds|personMinutes|demandMinutes|capacityMinutes|gapMinutes|workerId|jobId|assetId|memberId)$/i;
   var LABELS = {
     'workload.accepted_person_hours.v1': 'Accepted work demand',
@@ -192,14 +198,46 @@
   }
   function action(value, names) {
     return exact(value, ['name', 'originId', 'outcomeId', 'continuationId', 'correctionOriginId',
-      'expectedDecisionId', 'expectedDecisionRevision']) && names.includes(value.name) &&
+      'expectedDecisionId', 'expectedDecisionRevision', 'expectedResultRevision']) && names.includes(value.name) &&
       ['originId', 'outcomeId', 'continuationId', 'correctionOriginId', 'expectedDecisionId']
         .every(function (key) { return value[key] === null || UUID.test(value[key] || ''); }) &&
       (value.expectedDecisionRevision === null ||
-        (Number.isSafeInteger(value.expectedDecisionRevision) && value.expectedDecisionRevision >= 0));
+        (Number.isSafeInteger(value.expectedDecisionRevision) && value.expectedDecisionRevision >= 0)) &&
+      (value.expectedResultRevision === null ||
+        (Number.isSafeInteger(value.expectedResultRevision) && value.expectedResultRevision >= 1));
+  }
+  function setup(value) {
+    if (!exact(value, ['state', 'action', 'token', 'lane', 'label', 'explanation', 'reasonLimit',
+      'hiringConsecutivePeriods']) || !['ready', 'waiting', 'unavailable', 'complete'].includes(value.state) ||
+      typeof value.label !== 'string' || value.label.length < 1 || value.label.length > 120 ||
+      typeof value.explanation !== 'string' || value.explanation.length < 1 || value.explanation.length > 500 ||
+      !Number.isSafeInteger(value.hiringConsecutivePeriods) || value.hiringConsecutivePeriods < 2 ||
+      value.hiringConsecutivePeriods > 12) return false;
+    if (value.state === 'ready') return SETUP_ACTIONS.includes(value.action) && DIGEST.test(value.token || '') &&
+      ['all', 'workload', 'advisory'].includes(value.lane) && value.reasonLimit === 1000;
+    return value.action === null && value.token === null && value.reasonLimit === null &&
+      (value.lane === null || ['all', 'workload', 'advisory'].includes(value.lane));
+  }
+  function hiringPolicy(value) {
+    return exact(value, ['state', 'token', 'consecutivePeriods', 'minimum', 'maximum']) &&
+      ['current', 'unavailable'].includes(value.state) &&
+      ((value.state === 'current' && DIGEST.test(value.token || '')) ||
+        (value.state === 'unavailable' && value.token === null)) &&
+      Number.isSafeInteger(value.consecutivePeriods) && value.consecutivePeriods >= 2 &&
+      value.consecutivePeriods <= 12 && value.minimum === 2 && value.maximum === 12;
+  }
+  function correctionReview(value) {
+    if (!exact(value, ['state', 'action', 'token', 'label', 'explanation', 'reasonLimit']) ||
+        !['ready', 'unavailable'].includes(value.state) || typeof value.label !== 'string' ||
+        value.label.length < 1 || value.label.length > 120 || typeof value.explanation !== 'string' ||
+        value.explanation.length < 1 || value.explanation.length > 500) return false;
+    return value.state === 'ready'
+      ? value.action === 'advisory_correction_demand' && DIGEST.test(value.token || '') && value.reasonLimit === 1000
+      : value.action === null && value.token === null && value.reasonLimit === null;
   }
   function validateJourney(value) {
-    if (!clean(value) || !exact(value, ['state', 'asOf', 'workload', 'constrained', 'advisory', 'boundaries',
+    if (!clean(value) || !exact(value, ['state', 'asOf', 'workload', 'constrained', 'advisory', 'setup',
+      'hiringPolicy', 'correctionReview', 'boundaries',
       'researchOnly', 'forecastIssued', 'paidNumericServing', 'forecastServingEnabled', 'automaticActionTaken']) ||
       value.state !== 'capacity_research_journey_current' || !instant(value.asOf) ||
       value.researchOnly !== true || value.forecastIssued !== false || value.paidNumericServing !== false ||
@@ -211,7 +249,7 @@
       }) || !(w.selectedOrigin === null || workloadOrigin(w.selectedOrigin)) ||
       !(w.selectedEvaluation === null || workloadEvaluation(w.selectedEvaluation)) ||
       !history(w.history, ['origin', 'evaluation']) || !action(w.currentAction,
-        ['capture_origin', 'recover_origin', 'wait_for_horizon', 'capture_evaluation', 'complete'])) return null;
+        ['review_prerequisites', 'capture_origin', 'recover_origin', 'wait_for_horizon', 'capture_evaluation', 'complete'])) return null;
     if ((w.selectedOrigin === null) !== (w.currentAction.originId === null) ||
         (w.selectedOrigin && w.currentAction.originId !== w.selectedOrigin.id) ||
         (w.selectedEvaluation && (!w.selectedOrigin ||
@@ -219,11 +257,22 @@
         w.currentAction.outcomeId !== null || w.currentAction.continuationId !== null ||
         w.currentAction.correctionOriginId !== null || w.currentAction.expectedDecisionId !== null ||
         w.currentAction.expectedDecisionRevision !== null) return null;
-    var workloadExpectedAction = !w.selectedOrigin ? 'capture_origin' :
+    function setupBlocksLane(lane) {
+      if (value.setup.state === 'complete') return false;
+      if (value.setup.state === 'ready' && value.setup.lane === 'advisory') return lane === 'advisory';
+      if (value.setup.state === 'ready' && value.setup.lane === 'workload' &&
+          value.setup.action === 'workload_outcome_window') return lane !== 'constrained';
+      return true;
+    }
+    var workloadExpectedAction = setupBlocksLane('workload') ? 'review_prerequisites' :
+      !w.selectedOrigin ? 'capture_origin' :
       w.selectedOrigin.refreshRequired ? 'recover_origin' :
         Date.parse(value.asOf) < Date.parse(w.selectedOrigin.horizonEndsAt) ? 'wait_for_horizon' :
           !w.selectedEvaluation || w.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
-    if (w.currentAction.name !== workloadExpectedAction) return null;
+    var workloadExpectedRevision = workloadExpectedAction === 'capture_evaluation'
+      ? (w.selectedEvaluation ? w.selectedEvaluation.revision : 0) + 1 : null;
+    if (w.currentAction.name !== workloadExpectedAction ||
+        w.currentAction.expectedResultRevision !== workloadExpectedRevision) return null;
     var c = value.constrained;
     if (!exact(c, ['selectedOrigin', 'selectedOutcome', 'selectedEvaluation', 'scopes', 'history', 'currentAction']) ||
       !(c.selectedOrigin === null || constrainedProjection(c.selectedOrigin, 'origin')) ||
@@ -236,7 +285,7 @@
             return typeof item.dimensions[key] !== 'boolean';
           }) || !EVIDENCE.includes(item.evidenceState);
       }) || !history(c.history, ['origin', 'outcome', 'evaluation']) || !action(c.currentAction,
-        ['capture_origin', 'recover_origin', 'wait_for_horizon', 'capture_outcome', 'capture_evaluation', 'complete'])) return null;
+        ['review_prerequisites', 'capture_origin', 'recover_origin', 'wait_for_horizon', 'capture_outcome', 'capture_evaluation', 'complete'])) return null;
     if ((c.selectedOrigin === null) !== (c.currentAction.originId === null) ||
         (c.selectedOrigin && c.currentAction.originId !== c.selectedOrigin.id) ||
         (c.selectedOutcome === null) !== (c.currentAction.outcomeId === null) ||
@@ -247,12 +296,18 @@
         (c.selectedOrigin && c.scopes.length !== c.selectedOrigin.scopeCount) ||
         c.currentAction.continuationId !== null || c.currentAction.correctionOriginId !== null ||
         c.currentAction.expectedDecisionId !== null || c.currentAction.expectedDecisionRevision !== null) return null;
-    var constrainedExpectedAction = !c.selectedOrigin ? 'capture_origin' :
+    var constrainedExpectedAction = setupBlocksLane('constrained') ? 'review_prerequisites' :
+      !c.selectedOrigin ? 'capture_origin' :
       c.selectedOrigin.refreshRequired ? 'recover_origin' :
         Date.parse(value.asOf) < Date.parse(c.selectedOrigin.horizonEndsAt) ? 'wait_for_horizon' :
           !c.selectedOutcome || c.selectedOutcome.refreshRequired ? 'capture_outcome' :
             !c.selectedEvaluation || c.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
-    if (c.currentAction.name !== constrainedExpectedAction) return null;
+    var constrainedExpectedRevision = constrainedExpectedAction === 'capture_outcome'
+      ? (c.selectedOutcome ? c.selectedOutcome.revision : 0) + 1
+      : constrainedExpectedAction === 'capture_evaluation'
+        ? (c.selectedEvaluation ? c.selectedEvaluation.revision : 0) + 1 : null;
+    if (c.currentAction.name !== constrainedExpectedAction ||
+        c.currentAction.expectedResultRevision !== constrainedExpectedRevision) return null;
     var a = value.advisory;
     if (!exact(a, ['selectedOrigin', 'selectedOutcome', 'selectedEvaluation', 'selectedContinuation',
       'preparationReady', 'history', 'currentAction']) || !(a.selectedOrigin === null || advisoryOrigin(a.selectedOrigin)) ||
@@ -261,7 +316,7 @@
       !(a.selectedContinuation === null || continuation(a.selectedContinuation)) ||
       typeof a.preparationReady !== 'boolean' || !history(a.history,
         ['origin', 'decision', 'outcome', 'evaluation', 'continuation']) || !action(a.currentAction,
-        ['capture_origin', 'recover_origin', 'review_advisory', 'reserve_continuation', 'wait_for_horizon',
+        ['review_prerequisites', 'capture_origin', 'recover_origin', 'review_advisory', 'reserve_continuation', 'wait_for_horizon',
           'prepare_outcome', 'capture_outcome', 'capture_evaluation', 'complete'])) return null;
     if ((a.selectedOrigin === null) !== (a.currentAction.originId === null) ||
         (a.selectedOrigin && a.currentAction.originId !== a.selectedOrigin.id) ||
@@ -276,7 +331,8 @@
           a.selectedContinuation.predecessorOriginId !== a.selectedOrigin.id)) ||
         ((a.currentAction.expectedDecisionRevision === 0) !==
           (a.currentAction.expectedDecisionId === null))) return null;
-    var advisoryExpectedAction = !a.selectedOrigin ? 'capture_origin' :
+    var advisoryExpectedAction = setupBlocksLane('advisory') ? 'review_prerequisites' :
+      !a.selectedOrigin ? 'capture_origin' :
       a.selectedOrigin.refreshRequired ? 'recover_origin' :
         a.selectedOrigin.decisionAction !== 'approve' ? 'review_advisory' :
           Date.parse(value.asOf) < Date.parse(a.selectedOrigin.horizonEndsAt)
@@ -284,9 +340,15 @@
             !a.preparationReady ? 'prepare_outcome' :
               !a.selectedOutcome || a.selectedOutcome.refreshRequired ? 'capture_outcome' :
                 !a.selectedEvaluation || a.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
+    var advisoryExpectedRevision = advisoryExpectedAction === 'capture_outcome'
+      ? (a.selectedOutcome ? a.selectedOutcome.revision : 0) + 1
+      : advisoryExpectedAction === 'capture_evaluation'
+        ? (a.selectedEvaluation ? a.selectedEvaluation.revision : 0) + 1 : null;
     if (a.currentAction.name !== advisoryExpectedAction ||
+        a.currentAction.expectedResultRevision !== advisoryExpectedRevision ||
         a.currentAction.correctionOriginId !==
           (a.selectedOrigin && a.selectedOrigin.refreshRequired ? a.selectedOrigin.id : null)) return null;
+    if (!setup(value.setup) || !hiringPolicy(value.hiringPolicy) || !correctionReview(value.correctionReview)) return null;
     if (!exact(value.boundaries, ['sourceLineage', 'calculationBoundary', 'uncertainty',
       'alternativesCombined', 'valuesWithheld', 'predictionIsFact']) ||
       value.boundaries.sourceLineage !== 'accepted_installed_northstar_sources' ||
@@ -295,6 +357,58 @@
       value.boundaries.alternativesCombined !== false || value.boundaries.valuesWithheld !== true ||
       value.boundaries.predictionIsFact !== false) return null;
     return value;
+  }
+
+  function validateActionResponse(value, body) {
+    if (!exact(value, ['state', 'action', 'receiptId', 'originId', 'outcomeId', 'continuationId',
+      'correctionOriginId', 'revision', 'researchOnly', 'automaticActionTaken', 'replayed']) ||
+      value.state !== 'capacity_research_action_recorded' || value.action !== body.action ||
+      value.researchOnly !== true || value.automaticActionTaken !== false ||
+      typeof value.replayed !== 'boolean') return false;
+    var receipt = value.receiptId; var origin = value.originId; var outcome = value.outcomeId;
+    var continuationId = value.continuationId; var correction = value.correctionOriginId;
+    if (body.action === 'workload_capture_origin' || body.action === 'constrained_capture_origin')
+      return UUID.test(receipt || '') && origin === receipt && outcome === null && continuationId === null &&
+        correction === null && value.revision === null;
+    if (body.action === 'workload_capture_evaluation')
+      return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === null &&
+        continuationId === null && correction === null && value.revision === body.expectedRevision;
+    if (body.action === 'constrained_capture_outcome' || body.action === 'advisory_capture_outcome')
+      return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === receipt &&
+        continuationId === null && correction === null && value.revision === body.expectedRevision;
+    if (body.action === 'constrained_capture_evaluation' || body.action === 'advisory_capture_evaluation')
+      return UUID.test(receipt || '') && receipt !== body.originId && receipt !== body.outcomeId &&
+        origin === body.originId && outcome === body.outcomeId && continuationId === null && correction === null &&
+        value.revision === body.expectedRevision;
+    if (body.action === 'advisory_capture_origin')
+      return UUID.test(receipt || '') && origin === receipt && receipt !== body.correctionOriginId && outcome === null &&
+        continuationId === null && correction === body.correctionOriginId && value.revision === null;
+    if (body.action === 'advisory_reserve_continuation')
+      return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === null &&
+        continuationId === receipt && correction === null && value.revision === null;
+    if (body.action === 'advisory_prepare_outcome')
+      return receipt === null && origin === body.originId && outcome === null && continuationId === null &&
+        correction === null && value.revision === null;
+    return false;
+  }
+  function validateSetupResponse(value, body) {
+    return exact(value, ['state', 'action', 'token', 'receiptId', 'revision', 'hiringConsecutivePeriods',
+      'researchOnly', 'automaticActionTaken', 'replayed']) && value.state === 'capacity_research_setup_recorded' &&
+      value.action === body.action && value.token === body.token && UUID.test(value.receiptId || '') &&
+      Number.isSafeInteger(value.revision) && value.revision >= 1 &&
+      value.hiringConsecutivePeriods === body.hiringConsecutivePeriods && value.researchOnly === true &&
+      value.automaticActionTaken === false && typeof value.replayed === 'boolean';
+  }
+  function validateDecisionResponse(value, body, originId) {
+    return exact(value, ['state', 'id', 'originId', 'action', 'revision', 'researchOnly',
+      'automaticActionTaken', 'replayed', 'previousDecisionId', 'previousDecisionRevision']) &&
+      value.state === 'capacity_advisory_decision_recorded' && UUID.test(value.id || '') &&
+      value.id !== originId && value.id !== body.expectedDecisionId &&
+      value.originId === originId && value.action === body.action &&
+      value.revision === body.expectedDecisionRevision + 1 &&
+      value.previousDecisionId === body.expectedDecisionId &&
+      value.previousDecisionRevision === body.expectedDecisionRevision && value.researchOnly === true &&
+      value.automaticActionTaken === false && typeof value.replayed === 'boolean';
   }
 
   var IDS = {
@@ -423,25 +537,42 @@
         evidenceState: absent || stale ? 'unavailable' : index === 0 ? 'authenticated_zero' : 'bounded_value' }; }),
         selectedOrigin: wOrigin, selectedEvaluation: wEval,
         history: { records: wHistory, total: wHistory.length, truncated: false },
-        currentAction: { name: absent ? 'capture_origin' : stale ? 'recover_origin' : final ? 'complete' :
+        currentAction: { name: absent ? 'review_prerequisites' : stale ? 'recover_origin' : final ? 'complete' :
           stage === 4 ? 'capture_evaluation' : 'wait_for_horizon',
           originId: wOrigin && wOrigin.id, outcomeId: null, continuationId: null, correctionOriginId: null,
-          expectedDecisionId: null, expectedDecisionRevision: null } },
+          expectedDecisionId: null, expectedDecisionRevision: null,
+          expectedResultRevision: stage === 4 ? 1 : null } },
       constrained: { selectedOrigin: bOrigin, selectedOutcome: bOut, selectedEvaluation: bEval,
         scopes: absent ? [] : scope, history: { records: bHistory, total: bHistory.length, truncated: false },
-        currentAction: { name: absent ? 'capture_origin' : stale ? 'recover_origin' : final ? 'complete' :
+        currentAction: { name: absent ? 'review_prerequisites' : stale ? 'recover_origin' : final ? 'complete' :
           stage === 4 ? 'capture_outcome' : 'wait_for_horizon',
           originId: bOrigin && bOrigin.id, outcomeId: bOut && bOut.id, continuationId: null,
-          correctionOriginId: null, expectedDecisionId: null, expectedDecisionRevision: null } },
+          correctionOriginId: null, expectedDecisionId: null, expectedDecisionRevision: null,
+          expectedResultRevision: stage === 4 ? 1 : null } },
       advisory: { selectedOrigin: cOrigin, selectedOutcome: cOut, selectedEvaluation: cEval,
         selectedContinuation: selectedContinuation, preparationReady: stage === 5,
         history: { records: cHistory, total: cHistory.length, truncated: false },
-        currentAction: { name: absent ? 'capture_origin' : stale ? 'recover_origin' : stage === 1 ? 'review_advisory' :
+        currentAction: { name: absent ? 'review_prerequisites' : stale ? 'recover_origin' : stage === 1 ? 'review_advisory' :
           stage === 2 ? 'wait_for_horizon' : stage === 4 ? 'prepare_outcome' : 'complete', originId: cOrigin && cOrigin.id,
           outcomeId: cOut && cOut.id, continuationId: selectedContinuation && selectedContinuation.id,
           correctionOriginId: stale ? cId : null, expectedDecisionId: stage >= 2 && !stale ?
             (final ? IDS.decision3 : recovered ? IDS.decision2 : IDS.decision) : null,
-          expectedDecisionRevision: stage >= 2 && !stale ? 1 : 0 } },
+          expectedDecisionRevision: stage >= 2 && !stale ? 1 : 0, expectedResultRevision: null } },
+      setup: absent ? { state: 'ready', action: 'workload_epoch', token: 'a'.repeat(64), lane: 'all',
+        label: 'Start fictional source coverage',
+        explanation: 'The demo begins with a local fictional prerequisite review. Continuing changes only this demo workspace.',
+        reasonLimit: 1000, hiringConsecutivePeriods: 3 } :
+        { state: 'complete', action: null, token: null, lane: null, label: 'Fictional prerequisites current',
+          explanation: 'The deterministic fictional prerequisite reviews and coverage epochs are current.',
+          reasonLimit: null, hiringConsecutivePeriods: 3 },
+      hiringPolicy: { state: 'current', token: 'b'.repeat(64), consecutivePeriods: 3, minimum: 2, maximum: 12 },
+      correctionReview: absent || stale ? { state: 'unavailable', action: null, token: null,
+        label: 'Source correction review unavailable',
+        explanation: 'A current fictional advisory period is required before its source lineage can be reviewed again.',
+        reasonLimit: null } : { state: 'ready', action: 'advisory_correction_demand', token: 'c'.repeat(64),
+        label: 'Review a fictional source correction',
+        explanation: 'This local control demonstrates an explicit same-period source correction without calling paid APIs.',
+        reasonLimit: 1000 },
       boundaries: { sourceLineage: 'accepted_installed_northstar_sources',
         calculationBoundary: 'qualitative_capacity_research_only',
         uncertainty: 'natural_history_accuracy_calibration_confidence_unavailable',
@@ -538,23 +669,67 @@
     }
     function actionLabel(name) {
       return ({ capture_origin: 'Save current research origin', recover_origin: 'Append recovery origin',
+        review_prerequisites: 'Complete prerequisite review',
         wait_for_horizon: 'Waiting for the research horizon', capture_outcome: 'Save observed outcome',
         capture_evaluation: 'Save evaluation receipt', review_advisory: 'Choose a human review decision',
         reserve_continuation: 'Save successor research continuation', prepare_outcome: 'Prepare exact outcome evidence',
         complete: 'Research lifecycle complete' })[name] || 'Unavailable';
     }
-    function reasonReady() { return byId('commandCenterCapacityReason').value.trim().length >= 10; }
+    function setupLabel(name) {
+      return ({ workload_epoch: 'Start workload source coverage', workload_methods: 'Approve workload methods',
+        workload_roles: 'Approve workforce role authority', workload_role_scope: 'Approve base capacity role',
+        workload_availability: 'Approve declared availability', workload_outcome_window: 'Finalize outcome window',
+        constrained_epoch: 'Start constraint source coverage',
+        constrained_method: 'Approve constraint method', constrained_scope: 'Approve seven-dimension scope',
+        advisory_method: 'Approve five-advisory method', advisory_policy: 'Approve private advisory policies',
+        advisory_demand: 'Approve demand allocation', advisory_epoch: 'Install advisory coverage epoch',
+        advisory_outcome_demand: 'Approve outcome allocation',
+        advisory_continuation_demand: 'Approve successor allocation',
+        advisory_correction_demand: 'Approve corrected demand lineage',
+        advisory_policy_revision: 'Save policy revision' })[name] || 'Setup unavailable';
+    }
+    function reasonReady(id, maximum) {
+      var length = byId(id).value.trim().length; return length >= 10 && length <= maximum;
+    }
+    function renderSetup() {
+      var current = journey && journey.setup; var policy = journey && journey.hiringPolicy;
+      var correction = journey && journey.correctionReview;
+      byId('commandCenterCapacitySetupTitle').textContent = current ? current.label : 'Accepted prerequisites and review epochs';
+      byId('commandCenterCapacitySetupExplanation').textContent = current ? current.explanation :
+        'No current safe prerequisite discovery result is available.';
+      var select = byId('commandCenterCapacityHiringPeriods');
+      if (policy) select.value = String(policy.consecutivePeriods);
+      else if (current) select.value = String(current.hiringConsecutivePeriods);
+      byId('commandCenterCapacityHiringState').textContent = policy && policy.state === 'current'
+        ? 'Current policy: ' + policy.consecutivePeriods + ' consecutive, gap-free, current evaluated periods.'
+        : 'Hiring policy unavailable until a current source-backed scope and explicit policy review exist.';
+      byId('commandCenterCapacityCorrectionState').textContent = correction ?
+        correction.label + ': ' + correction.explanation : 'Source correction review unavailable.';
+    }
     function updateButtons() {
       doc.querySelectorAll('[data-capacity-lane]').forEach(function (button) {
         var lane = button.dataset.capacityLane; var selected = journey && journey[lane];
         var current = selected && selected.currentAction; button.textContent = current ? actionLabel(current.name) : 'Research unavailable';
         var needsReason = current && ['capture_origin', 'recover_origin', 'reserve_continuation'].includes(current.name);
-        button.disabled = mode === 'demo' || busy || !current || ['wait_for_horizon', 'complete', 'review_advisory'].includes(current.name) ||
-          (needsReason && !reasonReady());
+        button.disabled = mode === 'demo' || busy || !current || ['review_prerequisites', 'wait_for_horizon', 'complete', 'review_advisory'].includes(current.name) ||
+          (needsReason && !reasonReady('commandCenterCapacityLaneReason', 900));
       });
-      var advisory = journey && journey.advisory; var canReview = mode !== 'demo' && !busy && reasonReady() &&
+      var advisory = journey && journey.advisory; var canReview = mode !== 'demo' && !busy &&
+        reasonReady('commandCenterCapacityReviewReason', 1000) &&
         advisory && advisory.selectedOrigin && advisory.selectedOrigin.state === 'capacity_advisory_origin_current';
       doc.querySelectorAll('[data-capacity-decision]').forEach(function (button) { button.disabled = !canReview; });
+      var setupState = journey && journey.setup; var policy = journey && journey.hiringPolicy;
+      var correction = journey && journey.correctionReview;
+      var selectedPeriods = Number(byId('commandCenterCapacityHiringPeriods').value);
+      var canExplain = reasonReady('commandCenterCapacityReviewReason', 1000);
+      var setupButton = byId('commandCenterCapacitySetupAction');
+      setupButton.textContent = setupState ? setupLabel(setupState.action) : 'Setup unavailable';
+      setupButton.disabled = mode === 'demo' || busy || !setupState || setupState.state !== 'ready' || !canExplain;
+      var policyButton = byId('commandCenterCapacityPolicyAction');
+      policyButton.disabled = mode === 'demo' || busy || !policy || policy.state !== 'current' || !canExplain ||
+        selectedPeriods === policy.consecutivePeriods;
+      var correctionButton = byId('commandCenterCapacityCorrectionAction');
+      correctionButton.disabled = mode === 'demo' || busy || !correction || correction.state !== 'ready' || !canExplain;
       byId('commandCenterCapacityRefresh').disabled = mode === 'demo' || busy || !identity;
       byId('commandCenterCapacityRetry').hidden = !uncertainAttempt || mode === 'demo';
       byId('commandCenterCapacityRetry').disabled = busy;
@@ -570,8 +745,9 @@
         byId('commandCenterCapacityTargets').replaceChildren(node('li', '', 'No current workload evidence.'));
         renderDimensions([]); renderAlternatives([]); renderCategories(null);
         byId('commandCenterCapacityContinuation').textContent = 'No continuation receipt is selected.';
-        renderHistory(); updateButtons(); return;
+        renderSetup(); renderHistory(); updateButtons(); return;
       }
+      renderSetup();
       var ws = laneState(journey.workload.selectedOrigin, journey.workload.history);
       var cs = laneState(journey.constrained.selectedOrigin, journey.constrained.history);
       var as = laneState(journey.advisory.selectedOrigin, journey.advisory.history);
@@ -598,7 +774,13 @@
         var unavailable = laneStates.every(function (item) { return item.state === 'unavailable'; });
         var stale = laneStates.some(function (item) { return item.state === 'stale'; });
         var recovered = laneStates.some(function (item) { return item.label.startsWith('Recovered'); });
-        if (unavailable) setOverall('Unavailable', 'unavailable',
+        if (journey.setup.state === 'ready') setOverall('Prerequisite review ready', 'current',
+          journey.setup.explanation + ' This enabled control is bound to the current safe source token.');
+        else if (journey.setup.state === 'waiting') setOverall('Waiting for accepted history', 'unavailable',
+          journey.setup.explanation);
+        else if (journey.setup.state === 'unavailable') setOverall('Prerequisite unavailable', 'unavailable',
+          journey.setup.explanation);
+        else if (unavailable) setOverall('Unavailable', 'unavailable',
           'No current safe capacity research receipt is available. An authenticated zero would be shown separately.');
         else if (stale) setOverall('Stale · refresh required', 'stale',
           'Accepted source evidence changed. Older receipts remain immutable and no stale current claim is shown.');
@@ -616,21 +798,6 @@
       if (status === 409) return ['Conflict', 'conflict', 'The exact source or predecessor changed. Refresh before starting a new action.'];
       if (status >= 500) return ['Uncertain', 'uncertain', 'The result is uncertain. Retry only the exact endpoint, body and idempotency key shown by this action.'];
       return ['Failed', 'failed', 'The action was refused without a partial receipt. Review the current state before trying a new action.'];
-    }
-    function validateMutation(value, expectedAction) {
-      return exact(value, ['state', 'action', 'receiptId', 'originId', 'outcomeId', 'continuationId', 'revision',
-        'researchOnly', 'automaticActionTaken', 'replayed']) && value.state === 'capacity_research_action_recorded' &&
-        value.action === expectedAction && ['receiptId', 'originId', 'outcomeId', 'continuationId'].every(function (key) {
-          return value[key] === null || UUID.test(value[key] || '');
-        }) && (value.revision === null || (Number.isSafeInteger(value.revision) && value.revision >= 1)) &&
-        value.researchOnly === true && value.automaticActionTaken === false && typeof value.replayed === 'boolean';
-    }
-    function validateDecision(value, expectedAction) {
-      return exact(value, ['state', 'id', 'originId', 'action', 'revision', 'researchOnly',
-        'automaticActionTaken', 'replayed']) && value.state === 'capacity_advisory_decision_recorded' &&
-        UUID.test(value.id || '') && UUID.test(value.originId || '') && value.action === expectedAction &&
-        Number.isSafeInteger(value.revision) && value.revision >= 1 && value.researchOnly === true &&
-        value.automaticActionTaken === false && typeof value.replayed === 'boolean';
     }
     function load(force) {
       if (mode === 'demo') { journey = validateJourney(demoJourney(demoStage)); stateOverride = null; render(); return Promise.resolve(journey); }
@@ -668,7 +835,9 @@
               clearWith(failure[0], failure[1], failure[2]); return null;
             }
             var value = payload.data; var valid = attempt.kind === 'decision'
-              ? validateDecision(value, attempt.expectedAction) : validateMutation(value, attempt.expectedAction);
+              ? validateDecisionResponse(value, attempt.body, attempt.originId)
+              : attempt.kind === 'setup' ? validateSetupResponse(value, attempt.body)
+                : validateActionResponse(value, attempt.body);
             if (!valid) { uncertainAttempt = null; clearWith('Failed', 'failed', 'The response did not match the exact safe action schema. No current claim is shown.'); return null; }
             uncertainAttempt = null; loadedIdentity = null; stateOverride = null; return value;
           });
@@ -703,22 +872,50 @@
         'advisory_reserve_continuation'].includes(actionName);
       var body = { action: actionName, originId: current.originId, outcomeId: current.outcomeId,
         correctionOriginId: actionName === 'advisory_capture_origin' ? current.correctionOriginId : null,
-        reason: needsReason ? byId('commandCenterCapacityReason').value.trim() : null,
+        expectedRevision: current.expectedResultRevision,
+        reason: needsReason ? byId('commandCenterCapacityLaneReason').value.trim() : null,
         confirmed: true, confirmationVersion: 'm26-capacity-ui-action-v1' };
       if (['workload_capture_origin', 'constrained_capture_origin', 'advisory_capture_origin'].includes(actionName)) body.originId = null;
       if (!['constrained_capture_evaluation', 'advisory_capture_evaluation'].includes(actionName)) body.outcomeId = null;
       return { kind: 'action', url: '/api/v1/forecast/capacity-advice/journey/actions', key: key(),
-        bodyText: JSON.stringify(body), expectedAction: actionName, identity: identity };
+        body: body, bodyText: JSON.stringify(body), identity: identity };
     }
     function decisionAttempt(decision) {
       var current = journey && journey.advisory.currentAction; if (!current || !current.originId) return null;
       var body = { action: decision, expectedDecisionId: current.expectedDecisionId,
-        expectedDecisionRevision: current.expectedDecisionRevision, reason: byId('commandCenterCapacityReason').value.trim(),
+        expectedDecisionRevision: current.expectedDecisionRevision,
+        reason: byId('commandCenterCapacityReviewReason').value.trim(),
         confirmed: true, confirmationVersion: 'm26-capacity-ui-decision-v1' };
       return { kind: 'decision', url: '/api/v1/forecast/capacity-advice/origins/' + encodeURIComponent(current.originId) + '/safe-decisions',
-        key: key(), bodyText: JSON.stringify(body), expectedAction: decision, identity: identity };
+        key: key(), body: body, bodyText: JSON.stringify(body), originId: current.originId, identity: identity };
     }
-    byId('commandCenterCapacityReason').addEventListener('input', updateButtons);
+    function setupAttempt(kind) {
+      var current = journey && journey.setup; var policy = journey && journey.hiringPolicy;
+      var correction = journey && journey.correctionReview;
+      var actionName = kind === 'policy' ? 'advisory_policy_revision' : kind === 'correction'
+        ? correction && correction.action : current && current.action;
+      var token = kind === 'policy' ? policy && policy.token : kind === 'correction'
+        ? correction && correction.token : current && current.token;
+      if (!actionName || !token) return null;
+      var body = { action: actionName, token: token,
+        hiringConsecutivePeriods: Number(byId('commandCenterCapacityHiringPeriods').value),
+        reason: byId('commandCenterCapacityReviewReason').value.trim(), confirmed: true,
+        confirmationVersion: 'm26-capacity-ui-setup-v2' };
+      return { kind: 'setup', url: '/api/v1/forecast/capacity-advice/journey/setup', key: key(),
+        body: body, bodyText: JSON.stringify(body), identity: identity };
+    }
+    byId('commandCenterCapacityLaneReason').addEventListener('input', updateButtons);
+    byId('commandCenterCapacityReviewReason').addEventListener('input', updateButtons);
+    byId('commandCenterCapacityHiringPeriods').addEventListener('change', updateButtons);
+    byId('commandCenterCapacitySetupAction').addEventListener('click', function () {
+      var attempt = setupAttempt('setup'); return attempt ? sendAttempt(attempt) : null;
+    });
+    byId('commandCenterCapacityPolicyAction').addEventListener('click', function () {
+      var attempt = setupAttempt('policy'); return attempt ? sendAttempt(attempt) : null;
+    });
+    byId('commandCenterCapacityCorrectionAction').addEventListener('click', function () {
+      var attempt = setupAttempt('correction'); return attempt ? sendAttempt(attempt) : null;
+    });
     byId('commandCenterCapacityRefresh').addEventListener('click', function () { loadedIdentity = null; return load(true); });
     byId('commandCenterCapacityRetry').addEventListener('click', function () {
       if (uncertainAttempt && uncertainAttempt.identity === identity) return sendAttempt(uncertainAttempt);
@@ -745,18 +942,23 @@
       });
     });
     renderDimensions([]); renderCategories(null); render();
+    function clearInputs() {
+      byId('commandCenterCapacityLaneReason').value = '';
+      byId('commandCenterCapacityReviewReason').value = '';
+      byId('commandCenterCapacityHiringPeriods').value = '2';
+    }
     return {
       workspaceReady: function (nextIdentity) {
         if (typeof nextIdentity !== 'string' || !nextIdentity || nextIdentity.length > 4096) return this.workspaceUnavailable();
         if (identity !== nextIdentity) {
           identity = nextIdentity; identityRevision += 1; loadedIdentity = null; journey = null;
-          uncertainAttempt = null; demoStage = 0; busy = false; stateOverride = null;
+          uncertainAttempt = null; demoStage = 0; busy = false; stateOverride = null; clearInputs();
         }
         return load(false);
       },
       workspaceUnavailable: function () {
         identity = null; identityRevision += 1; loadedIdentity = null; uncertainAttempt = null;
-        busy = false; stateOverride = 'unavailable'; clearWith('Workspace unavailable', 'unavailable',
+        busy = false; stateOverride = 'unavailable'; clearInputs(); clearWith('Workspace unavailable', 'unavailable',
           'Workspace mode, tenant, session or generation is unavailable. Saved tokens and uncertain retries were cleared.');
         return null;
       },
@@ -767,5 +969,7 @@
   }
 
   return { create: create, validateJourney: validateJourney, demoJourney: demoJourney,
+    validateActionResponse: validateActionResponse, validateSetupResponse: validateSetupResponse,
+    validateDecisionResponse: validateDecisionResponse,
     targets: TARGETS.slice(), dimensions: DIMENSIONS.slice(), categories: CATEGORIES.slice() };
 });

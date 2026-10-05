@@ -318,6 +318,25 @@
 }
 .command-center-capacity-controls textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand-500) 28%, transparent); outline-offset: 2px; }
 .command-center-capacity-controls > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.command-center-capacity-setup {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, auto); gap: 16px; align-items: end;
+  padding: 16px; border: 1px solid var(--theme-border); border-radius: 14px; background: var(--theme-surface);
+}
+.command-center-capacity-setup h3 { margin: 4px 0 0; color: var(--theme-text); font-size: 16px; }
+.command-center-capacity-setup p:not(.demo-panel-kicker) { margin: 7px 0 0; color: var(--theme-muted); font-size: 13px; line-height: 1.5; }
+.command-center-capacity-setup-actions { display: grid; grid-template-columns: minmax(150px, 1fr) auto auto; gap: 8px; align-items: end; }
+.command-center-capacity-setup-actions label { grid-column: 1 / -1; color: var(--theme-text); font-size: 12px; font-weight: 750; }
+.command-center-capacity-setup-actions select {
+  min-height: 40px; padding: 8px 34px 8px 10px; border: 1px solid var(--theme-border); border-radius: 10px;
+  background: var(--theme-surface); color: var(--theme-text); font: inherit;
+}
+.command-center-capacity-policy,
+.command-center-capacity-policy-state { margin: 12px 0 0; color: var(--theme-muted); font-size: 12px; line-height: 1.55; }
+.command-center-capacity-policy-state { color: var(--theme-text); font-weight: 700; }
+.command-center-capacity-reasons { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px !important; margin-top: 14px !important; }
+.command-center-capacity-reasons label { display: flex; justify-content: space-between; gap: 8px; color: var(--theme-text); font-size: 13px; font-weight: 750; }
+.command-center-capacity-reasons label small { color: var(--theme-muted); font-size: 11px; font-weight: 650; }
+.command-center-capacity-reasons textarea { grid-row: 2; }
 .command-center-capacity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
 .command-center-capacity-step {
   min-width: 0; padding: 18px; border: 1px solid var(--theme-border); border-radius: 16px;
@@ -809,6 +828,11 @@ button.command-center-record-link {
   .command-center-capacity-grid,
   .command-center-capacity-dimensions,
   .command-center-capacity-categories { grid-template-columns: minmax(0, 1fr); }
+  .command-center-capacity-setup,
+  .command-center-capacity-setup-actions,
+  .command-center-capacity-reasons { grid-template-columns: minmax(0, 1fr); }
+  .command-center-capacity-setup-actions label { grid-column: auto; }
+  .command-center-capacity-reasons textarea { grid-row: auto; }
   .command-center-capacity-advisory { grid-column: auto; }
   .command-center-capacity-targets li,
   .command-center-capacity-alternative-scope { align-items: flex-start; flex-direction: column; }

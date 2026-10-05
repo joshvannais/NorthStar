@@ -340,8 +340,36 @@
             <p class="command-center-capacity-notice" id="commandCenterCapacityNotice">No paid research endpoint is called until the workspace identity is current.</p>
 
             <div class="command-center-capacity-controls" id="commandCenterCapacityPaidControls">
-              <label for="commandCenterCapacityReason">Reason for a saved research action</label>
-              <textarea id="commandCenterCapacityReason" rows="2" maxlength="1000" placeholder="Explain why this research receipt should be saved (at least 10 characters)."></textarea>
+              <section class="command-center-capacity-setup" aria-labelledby="commandCenterCapacitySetupTitle">
+                <div>
+                  <p class="demo-panel-kicker">Source-backed setup</p>
+                  <h3 id="commandCenterCapacitySetupTitle">Accepted prerequisites and review epochs</h3>
+                  <p id="commandCenterCapacitySetupExplanation">Refresh to discover the next safe prerequisite from accepted tenant sources.</p>
+                </div>
+                <div class="command-center-capacity-setup-actions">
+                  <label for="commandCenterCapacityHiringPeriods">Hiring attention run length</label>
+                  <select id="commandCenterCapacityHiringPeriods" aria-describedby="commandCenterCapacityHiringExplanation">
+                    <option value="2">2 periods</option><option value="3">3 periods</option>
+                    <option value="4">4 periods</option><option value="5">5 periods</option>
+                    <option value="6">6 periods</option><option value="7">7 periods</option>
+                    <option value="8">8 periods</option><option value="9">9 periods</option>
+                    <option value="10">10 periods</option><option value="11">11 periods</option>
+                    <option value="12">12 periods</option>
+                  </select>
+                  <button class="btn btn-primary" id="commandCenterCapacitySetupAction" type="button">Setup unavailable</button>
+                  <button class="btn btn-secondary" id="commandCenterCapacityPolicyAction" type="button">Save policy revision</button>
+                  <button class="btn btn-secondary" id="commandCenterCapacityCorrectionAction" type="button">Review source correction</button>
+                </div>
+              </section>
+              <p class="command-center-capacity-policy" id="commandCenterCapacityHiringExplanation">Hiring attention uses a human-selected run length from 2 to 12 consecutive, gap-free, current evaluated periods for the same alternative, scope, role, method, and policy. Insufficient history means the run is not complete; clear means the private rule was evaluated without crossing it; attention means it crossed. Private capacity, demand, and gap values stay hidden.</p>
+              <p class="command-center-capacity-policy-state" id="commandCenterCapacityHiringState">Hiring policy unavailable.</p>
+              <p class="command-center-capacity-policy-state" id="commandCenterCapacityCorrectionState">Source correction review unavailable.</p>
+              <div class="command-center-capacity-reasons">
+                <label for="commandCenterCapacityLaneReason"><span>Lane receipt reason</span><small>10–900 characters</small></label>
+                <textarea id="commandCenterCapacityLaneReason" rows="2" maxlength="900" placeholder="Explain why this workload, constraint or continuation receipt should be saved."></textarea>
+                <label for="commandCenterCapacityReviewReason"><span>Setup or human review reason</span><small>10–1000 characters</small></label>
+                <textarea id="commandCenterCapacityReviewReason" rows="2" maxlength="1000" placeholder="Explain why this prerequisite or explicit human review should be saved."></textarea>
+              </div>
               <div>
                 <button class="btn btn-secondary" id="commandCenterCapacityRefresh" type="button">Refresh research</button>
                 <button class="btn btn-secondary" id="commandCenterCapacityRetry" type="button" hidden>Retry exact uncertain action</button>

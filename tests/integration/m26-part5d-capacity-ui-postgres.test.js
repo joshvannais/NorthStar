@@ -36,6 +36,7 @@ realPostgres('Mission 26 Part 5D mounted paid capacity UI boundary', () => {
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
   test('owner and admin receive an empty nonnumeric journey while lower roles are restricted', async () => {
+    let setup;
     for (const name of ['owner', 'admin']) {
       const result = await get('/journey/current', name);
       expect(result.status).toBe(200);
@@ -47,19 +48,29 @@ realPostgres('Mission 26 Part 5D mounted paid capacity UI boundary', () => {
             { key: 'workload.accepted_person_hours.v1', evidenceState: 'unavailable' },
             { key: 'workload.end_backlog_hours.v1', evidenceState: 'unavailable' },
             { key: 'capacity.available_role_hours.v1', evidenceState: 'unavailable' }],
-          currentAction: { name: 'capture_origin', originId: null } },
+          currentAction: { name: 'review_prerequisites', originId: null } },
         constrained: { selectedOrigin: null, selectedOutcome: null, selectedEvaluation: null,
-          scopes: [], currentAction: { name: 'capture_origin', originId: null } },
+          scopes: [], currentAction: { name: 'review_prerequisites', originId: null } },
         advisory: { selectedOrigin: null, selectedOutcome: null, selectedEvaluation: null,
-          selectedContinuation: null, currentAction: { name: 'capture_origin', originId: null } },
+          selectedContinuation: null, currentAction: { name: 'review_prerequisites', originId: null } },
         boundaries: { alternativesCombined: false, valuesWithheld: true, predictionIsFact: false },
         researchOnly: true, forecastIssued: false, paidNumericServing: false,
         forecastServingEnabled: false, automaticActionTaken: false });
       expect(JSON.stringify(result.body.data)).not.toMatch(/privateResults|inputManifest|workerId|jobId|assetId|memberId|personMinutes|demandMinutes|capacityMinutes|gapMinutes|"digest"/i);
+      setup = result.body.data.setup;
     }
+    const setupBody = { action: setup.action, token: setup.token, hiringConsecutivePeriods: 3,
+      reason: 'Administrator explicitly starts this exact accepted source coverage epoch.',
+      confirmed: true, confirmationVersion: 'm26-capacity-ui-setup-v2' };
+    const adminSetup = await post('/journey/setup', setupBody, 'admin');
+    expect(adminSetup.status).toBe(201);
+    expect(adminSetup.body.data).toMatchObject({ action: 'workload_epoch', token: setup.token,
+      researchOnly: true, automaticActionTaken: false });
     for (const name of ['dispatcher', 'member']) {
       const result = await get('/journey/current', name);
       expect(result.status).toBe(403); expect(result.body).toEqual({ success: false, error: 'Forbidden' });
+      const denied = await post('/journey/setup', setupBody, name);
+      expect(denied.status).toBe(403); expect(denied.body).toEqual({ success: false, error: 'Forbidden' });
     }
   }, 120000);
 
@@ -97,17 +108,24 @@ realPostgres('Mission 26 Part 5D mounted paid capacity UI boundary', () => {
     const before = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_ui_action_requests_v1 WHERE organization_id=$1',
     [fixture.org])).rows[0].count);
+    const beforeV2 = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_ui_action_requests_v2 WHERE organization_id=$1',
+    [fixture.org])).rows[0].count);
     const actionBody = { action: 'workload_capture_origin', originId: null, outcomeId: null,
-      correctionOriginId: null, reason: 'Save an origin only if every accepted prerequisite is current.',
+      correctionOriginId: null, expectedRevision: null,
+      reason: 'Save an origin only if every accepted prerequisite is current.',
       confirmed: true, confirmationVersion: 'm26-capacity-ui-action-v1' };
     const invalidCsrf = await post('/journey/actions', actionBody, 'owner', 'x'.repeat(32));
     expect(invalidCsrf.status).toBe(403); expect(invalidCsrf.body).toEqual({ success: false, error: 'Forbidden' });
     const refused = await post('/journey/actions', actionBody);
-    expect(refused.status).toBe(400); expect(refused.body).toEqual({ success: false, error: 'Invalid request' });
+    expect(refused.status).toBe(409); expect(refused.body).toEqual({ success: false, error: 'Conflict' });
     const after = Number((await fixture.ownerPool.query(
       'SELECT count(*) count FROM canonical_forecast_capacity_ui_action_requests_v1 WHERE organization_id=$1',
     [fixture.org])).rows[0].count);
     expect(after).toBe(before);
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_forecast_capacity_ui_action_requests_v2 WHERE organization_id=$1',
+    [fixture.org])).rows[0].count)).toBe(beforeV2);
     expect((await fixture.ownerPool.query(
       'SELECT count(*)::integer count FROM canonical_forecast_workload_capacity_origins_v1 WHERE organization_id=$1',
     [fixture.org])).rows[0].count).toBe(0);
@@ -116,16 +134,18 @@ realPostgres('Mission 26 Part 5D mounted paid capacity UI boundary', () => {
   test('the UI registry refuses a changed body under the same exact idempotency key', async () => {
     const owner = actor('owner'); const key = `m26-part5d-registry-${crypto.randomUUID()}`;
     const body = { action: 'workload_capture_origin', originId: null, outcomeId: null,
-      correctionOriginId: null, reason: 'Save this exact accepted workload research position.',
+      correctionOriginId: null, expectedRevision: null,
+      reason: 'Save this exact accepted workload research position.',
       confirmed: true, confirmationVersion: 'm26-capacity-ui-action-v1' };
     const digest = (await fixture.ownerPool.query(`SELECT
       encode(sha256(convert_to($1,'UTF8')),'hex') key_hash,
       canonical_completion_digest(jsonb_build_object(
         'action',$2::text,'originId',$3::uuid,'outcomeId',$4::uuid,
-        'correctionOriginId',$5::uuid,'reason',btrim($6::text),'confirmation',$7::text)) request_digest`,
+        'correctionOriginId',$5::uuid,'expectedRevision',$6::bigint,
+        'reason',btrim($7::text),'confirmation',$8::text)) request_digest`,
     [key, body.action, body.originId, body.outcomeId, body.correctionOriginId,
-      body.reason, body.confirmationVersion])).rows[0];
-    await fixture.ownerPool.query(`INSERT INTO canonical_forecast_capacity_ui_action_requests_v1(
+      body.expectedRevision, body.reason, body.confirmationVersion])).rows[0];
+    await fixture.ownerPool.query(`INSERT INTO canonical_forecast_capacity_ui_action_requests_v2(
       organization_id,actor_id,idempotency_key_hash,request_digest,created_at)
       VALUES($1,$2,$3,$4,clock_timestamp())`,
     [fixture.org, owner.actorUserId, digest.key_hash, digest.request_digest]);
@@ -135,7 +155,7 @@ realPostgres('Mission 26 Part 5D mounted paid capacity UI boundary', () => {
     expect(refused.status).toBe(409);
     expect(refused.body).toEqual({ success: false, error: 'Conflict' });
     expect((await fixture.ownerPool.query(`SELECT count(*)::integer count
-      FROM canonical_forecast_capacity_ui_action_requests_v1
+      FROM canonical_forecast_capacity_ui_action_requests_v2
       WHERE organization_id=$1 AND actor_id=$2 AND idempotency_key_hash=$3`,
     [fixture.org, owner.actorUserId, digest.key_hash])).rows[0].count).toBe(1);
     expect((await fixture.ownerPool.query(`SELECT count(*)::integer count
@@ -189,12 +209,21 @@ realPostgres('Mission 26 Part 5D mounted paid capacity UI boundary', () => {
     const row = (await fixture.ownerPool.query(`SELECT
       has_table_privilege($1,'canonical_forecast_capacity_ui_action_requests_v1','SELECT') runtime_registry,
       has_table_privilege('public','canonical_forecast_capacity_ui_action_requests_v1','SELECT') public_registry,
+      has_table_privilege($1,'canonical_forecast_capacity_ui_setup_requests_v2','SELECT') runtime_setup_registry,
+      has_table_privilege('public','canonical_forecast_capacity_ui_setup_requests_v2','SELECT') public_setup_registry,
+      has_table_privilege($1,'canonical_forecast_capacity_ui_action_requests_v2','SELECT') runtime_action_registry,
+      has_table_privilege('public','canonical_forecast_capacity_ui_action_requests_v2','SELECT') public_action_registry,
       has_table_privilege($1,'canonical_forecast_workload_capacity_origins_v1','SELECT') runtime_workload,
       has_table_privilege($1,'canonical_forecast_constrained_capacity_origins_v1','SELECT') runtime_constrained,
       has_table_privilege($1,'canonical_forecast_capacity_advisory_origins_v1','SELECT') runtime_advisory,
-      has_function_privilege($1,'canonical_forecast_capacity_ui_v1_history_item(text,uuid,uuid,text,timestamptz,timestamptz,timestamptz,bigint,text)','EXECUTE') runtime_helper`,
+      has_function_privilege($1,'canonical_forecast_capacity_ui_v1_history_item(text,uuid,uuid,text,timestamptz,timestamptz,timestamptz,bigint,text)','EXECUTE') runtime_helper,
+      has_function_privilege($1,'canonical_forecast_capacity_ui_v2_setup_plan(uuid)','EXECUTE') runtime_v2_helper,
+      has_function_privilege($1,'canonical_forecast_capacity_ui_v2_current_actions(uuid)','EXECUTE') runtime_v2_action_helper`,
     [fixture.roles.runtime])).rows[0];
-    expect(row).toEqual({ runtime_registry: false, public_registry: false, runtime_workload: false,
-      runtime_constrained: false, runtime_advisory: false, runtime_helper: false });
+    expect(row).toEqual({ runtime_registry: false, public_registry: false,
+      runtime_setup_registry: false, public_setup_registry: false,
+      runtime_action_registry: false, public_action_registry: false,
+      runtime_workload: false, runtime_constrained: false, runtime_advisory: false,
+      runtime_helper: false, runtime_v2_helper: false, runtime_v2_action_helper: false });
   });
 });

@@ -2392,6 +2392,277 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_advisory_v1_review_mutate(uuid,uuid,text,uuid,text,text,text,text,text,text,uuid,text,bigint,text,jsonb,text,text),public.canonical_forecast_capacity_advisory_v1_origin_capture(uuid,uuid,text,uuid,text,text,text,text) FROM %I',runtime_role);
 	        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_advisory_v1_prerequisites(uuid,uuid,text,uuid),public.canonical_forecast_capacity_advisory_v1_review_current(uuid,uuid,text,uuid,text,text,text,text,uuid),public.canonical_forecast_capacity_advisory_v1_review_mutate_v2(uuid,uuid,text,uuid,text,text,text,text,text,text,uuid,text,bigint,text,jsonb,text,text,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_epoch_capture(uuid,uuid,text,uuid,text,text,text,text),public.canonical_forecast_capacity_advisory_v1_origin_capture_v2(uuid,uuid,text,uuid,text,text,text,text,uuid),public.canonical_forecast_capacity_advisory_v1_origin_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_continuation_reserve(uuid,uuid,text,uuid,text,text,uuid,text,text),public.canonical_forecast_capacity_advisory_v1_continuation_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_continuation_due(integer),public.canonical_forecast_capacity_advisory_v1_continuation_claim_due(text[]),public.canonical_forecast_capacity_advisory_v1_continuation_activate(uuid,uuid),public.canonical_forecast_capacity_advisory_v1_decision_mutate(uuid,uuid,text,uuid,text,text,uuid,text,bigint,text,text,text),public.canonical_forecast_capacity_advisory_v1_decision_read(uuid,uuid,text,uuid,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_outcome_prepare(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_capacity_advisory_v1_outcome_capture(uuid,uuid,text,uuid,text,text,uuid),public.canonical_forecast_capacity_advisory_v1_outcome_read(uuid,uuid,text,uuid,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,uuid),public.canonical_forecast_capacity_advisory_v1_evaluation_read(uuid,uuid,text,uuid,uuid,uuid) TO %I',runtime_role);
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='227_canonical_forecast_capacity_ui_v1.sql') OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_capacity_ui_v1_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v1_current(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_capacity_ui_v1_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,text,text)'),
+          ('public.canonical_forecast_capacity_ui_v1_decision_mutate(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,text)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v1 entry security is missing';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+          WHERE routine.oid=pg_catalog.to_regprocedure(
+            'public.canonical_forecast_capacity_ui_v1_history_item(text,uuid,uuid,text,timestamptz,timestamptz,timestamptz,bigint,text)')
+           AND NOT routine.prosecdef
+           AND routine.provolatile='i'
+           AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[]) THEN
+          RAISE EXCEPTION 'Required capacity UI v1 helper security is missing';
+        END IF;
+        IF pg_catalog.to_regclass('public.canonical_forecast_capacity_ui_action_requests_v1') IS NULL OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+            WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.canonical_forecast_capacity_ui_action_requests_v1')
+             AND trigger_value.tgenabled='O' AND trigger_value.tgtype=58
+             AND trigger_value.tgfoid='public.canonical_forecast_capacity_advisory_v1_immutable()'::regprocedure
+             AND NOT trigger_value.tgisinternal) THEN
+          RAISE EXCEPTION 'Required capacity UI v1 action authority is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_capacity_ui_v1_history_item(text,uuid,uuid,text,timestamptz,timestamptz,timestamptz,bigint,text),
+          public.canonical_forecast_capacity_ui_v1_current(uuid,uuid,text,uuid),
+          public.canonical_forecast_capacity_ui_v1_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,text,text),
+          public.canonical_forecast_capacity_ui_v1_decision_mutate(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,text)
+          FROM PUBLIC;
+        REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_capacity_ui_action_requests_v1 FROM PUBLIC;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_capacity_ui_action_requests_v1 FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_ui_v1_history_item(text,uuid,uuid,text,timestamptz,timestamptz,timestamptz,bigint,text),public.canonical_forecast_capacity_ui_v1_current(uuid,uuid,text,uuid),public.canonical_forecast_capacity_ui_v1_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,text,text),public.canonical_forecast_capacity_ui_v1_decision_mutate(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,text) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_ui_v1_current(uuid,uuid,text,uuid),public.canonical_forecast_capacity_ui_v1_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,text,text),public.canonical_forecast_capacity_ui_v1_decision_mutate(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,text) TO %I',runtime_role);
+      END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='228_canonical_forecast_capacity_ui_v2.sql') OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_capacity_ui_v2_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v2_current(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_capacity_ui_v2_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text)'),
+          ('public.canonical_forecast_capacity_ui_v2_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)'),
+          ('public.canonical_forecast_capacity_ui_v2_decision_mutate(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,text)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v2 entry security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v2_child_key(text,text)'),
+          ('public.canonical_forecast_capacity_ui_v2_scope_definition(text)'),
+           ('public.canonical_forecast_capacity_ui_v2_demand_definition(text,jsonb,text,uuid)'),
+           ('public.canonical_forecast_capacity_ui_v2_setup_plan(uuid)'),
+           ('public.canonical_forecast_capacity_ui_v2_hiring_policy(uuid)'),
+           ('public.canonical_forecast_capacity_ui_v2_correction_review(uuid)'),
+           ('public.canonical_forecast_capacity_ui_v2_current_actions(uuid)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v2 private helper security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('canonical_forecast_capacity_ui_setup_requests_v2'),
+          ('canonical_forecast_capacity_ui_action_requests_v2')) required(table_name)
+          WHERE pg_catalog.to_regclass('public.'||required.table_name) IS NULL OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+            WHERE trigger_value.tgrelid=pg_catalog.to_regclass('public.'||required.table_name)
+             AND trigger_value.tgenabled='O' AND trigger_value.tgtype=58
+             AND trigger_value.tgfoid='public.canonical_forecast_capacity_advisory_v1_immutable()'::regprocedure
+             AND NOT trigger_value.tgisinternal)) THEN
+          RAISE EXCEPTION 'Required capacity UI v2 setup authority is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_capacity_ui_v2_child_key(text,text),
+          public.canonical_forecast_capacity_ui_v2_scope_definition(text),
+          public.canonical_forecast_capacity_ui_v2_demand_definition(text,jsonb,text,uuid),
+           public.canonical_forecast_capacity_ui_v2_setup_plan(uuid),
+           public.canonical_forecast_capacity_ui_v2_hiring_policy(uuid),
+           public.canonical_forecast_capacity_ui_v2_correction_review(uuid),
+          public.canonical_forecast_capacity_ui_v2_current_actions(uuid),
+          public.canonical_forecast_capacity_ui_v2_current(uuid,uuid,text,uuid),
+          public.canonical_forecast_capacity_ui_v2_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text),
+          public.canonical_forecast_capacity_ui_v2_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text),
+          public.canonical_forecast_capacity_ui_v2_decision_mutate(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,text)
+          FROM PUBLIC;
+        REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_capacity_ui_setup_requests_v2,
+          public.canonical_forecast_capacity_ui_action_requests_v2 FROM PUBLIC;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_capacity_ui_setup_requests_v2,public.canonical_forecast_capacity_ui_action_requests_v2 FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_ui_v2_child_key(text,text),public.canonical_forecast_capacity_ui_v2_scope_definition(text),public.canonical_forecast_capacity_ui_v2_demand_definition(text,jsonb,text,uuid),public.canonical_forecast_capacity_ui_v2_setup_plan(uuid),public.canonical_forecast_capacity_ui_v2_hiring_policy(uuid),public.canonical_forecast_capacity_ui_v2_correction_review(uuid),public.canonical_forecast_capacity_ui_v2_current_actions(uuid) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_ui_v2_current(uuid,uuid,text,uuid),public.canonical_forecast_capacity_ui_v2_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text),public.canonical_forecast_capacity_ui_v2_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text),public.canonical_forecast_capacity_ui_v2_decision_mutate(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,text) TO %I',runtime_role);
+      END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='229_canonical_forecast_capacity_ui_v3.sql') OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_capacity_ui_v3_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v3_current(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_capacity_ui_v3_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text)'),
+          ('public.canonical_forecast_capacity_ui_v3_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v3 entry security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v3_remaining_plan(uuid,timestamptz)'),
+          ('public.canonical_forecast_capacity_ui_v3_scope_plan(uuid,timestamptz)'),
+          ('public.canonical_forecast_capacity_ui_v3_job_plan(uuid,timestamptz)'),
+          ('public.canonical_forecast_capacity_ui_v3_demand_definition(uuid,text,jsonb,text,uuid,jsonb)'),
+          ('public.canonical_forecast_capacity_ui_v3_setup_plan(uuid)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v3 private helper security is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_capacity_ui_v3_remaining_plan(uuid,timestamptz),
+          public.canonical_forecast_capacity_ui_v3_scope_plan(uuid,timestamptz),
+          public.canonical_forecast_capacity_ui_v3_job_plan(uuid,timestamptz),
+          public.canonical_forecast_capacity_ui_v3_demand_definition(uuid,text,jsonb,text,uuid,jsonb),
+          public.canonical_forecast_capacity_ui_v3_setup_plan(uuid),
+          public.canonical_forecast_capacity_ui_v3_current(uuid,uuid,text,uuid),
+          public.canonical_forecast_capacity_ui_v3_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text),
+          public.canonical_forecast_capacity_ui_v3_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_ui_v3_remaining_plan(uuid,timestamptz),public.canonical_forecast_capacity_ui_v3_scope_plan(uuid,timestamptz),public.canonical_forecast_capacity_ui_v3_job_plan(uuid,timestamptz),public.canonical_forecast_capacity_ui_v3_demand_definition(uuid,text,jsonb,text,uuid,jsonb),public.canonical_forecast_capacity_ui_v3_setup_plan(uuid) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_ui_v3_current(uuid,uuid,text,uuid),public.canonical_forecast_capacity_ui_v3_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,text,text),public.canonical_forecast_capacity_ui_v3_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text) TO %I',runtime_role);
+      END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='230_canonical_forecast_capacity_ui_v4.sql') OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_capacity_ui_v4_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v4_current(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_capacity_ui_v4_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text)'),
+          ('public.canonical_forecast_capacity_ui_v4_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v4 entry security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v4_scope_plan(uuid,timestamptz,jsonb)'),
+          ('public.canonical_forecast_capacity_ui_v4_job_plan(uuid,timestamptz)'),
+          ('public.canonical_forecast_capacity_ui_v4_setup_plan(uuid)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v4 private helper security is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_capacity_ui_v4_scope_plan(uuid,timestamptz,jsonb),
+          public.canonical_forecast_capacity_ui_v4_job_plan(uuid,timestamptz),
+          public.canonical_forecast_capacity_ui_v4_setup_plan(uuid),
+          public.canonical_forecast_capacity_ui_v4_current(uuid,uuid,text,uuid),
+          public.canonical_forecast_capacity_ui_v4_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text),
+          public.canonical_forecast_capacity_ui_v4_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_ui_v4_scope_plan(uuid,timestamptz,jsonb),public.canonical_forecast_capacity_ui_v4_job_plan(uuid,timestamptz),public.canonical_forecast_capacity_ui_v4_setup_plan(uuid) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_ui_v4_current(uuid,uuid,text,uuid),public.canonical_forecast_capacity_ui_v4_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text),public.canonical_forecast_capacity_ui_v4_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text) TO %I',runtime_role);
+      END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='231_canonical_forecast_capacity_ui_v5.sql') OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_capacity_ui_v5_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v5_current(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_capacity_ui_v5_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text)'),
+          ('public.canonical_forecast_capacity_ui_v5_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v5 entry security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v5_scope_plan(uuid,timestamptz,jsonb)'),
+          ('public.canonical_forecast_capacity_ui_v5_job_plan(uuid,timestamptz)'),
+          ('public.canonical_forecast_capacity_ui_v5_setup_plan(uuid)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v5 private helper security is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_capacity_ui_v5_scope_plan(uuid,timestamptz,jsonb),
+          public.canonical_forecast_capacity_ui_v5_job_plan(uuid,timestamptz),
+          public.canonical_forecast_capacity_ui_v5_setup_plan(uuid),
+          public.canonical_forecast_capacity_ui_v5_current(uuid,uuid,text,uuid),
+          public.canonical_forecast_capacity_ui_v5_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text),
+          public.canonical_forecast_capacity_ui_v5_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_ui_v5_scope_plan(uuid,timestamptz,jsonb),public.canonical_forecast_capacity_ui_v5_job_plan(uuid,timestamptz),public.canonical_forecast_capacity_ui_v5_setup_plan(uuid) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_ui_v5_current(uuid,uuid,text,uuid),public.canonical_forecast_capacity_ui_v5_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text),public.canonical_forecast_capacity_ui_v5_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text) TO %I',runtime_role);
+      END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='232_canonical_forecast_capacity_ui_v6.sql') OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_capacity_ui_v6_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v6_current(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_capacity_ui_v6_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text)'),
+          ('public.canonical_forecast_capacity_ui_v6_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v6 entry security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v6_scope_plan(uuid,timestamptz,jsonb)'),
+          ('public.canonical_forecast_capacity_ui_v6_job_plan(uuid,timestamptz)'),
+          ('public.canonical_forecast_capacity_ui_v6_setup_plan(uuid)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v6 private helper security is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_capacity_ui_v6_scope_plan(uuid,timestamptz,jsonb),
+          public.canonical_forecast_capacity_ui_v6_job_plan(uuid,timestamptz),
+          public.canonical_forecast_capacity_ui_v6_setup_plan(uuid),
+          public.canonical_forecast_capacity_ui_v6_current(uuid,uuid,text,uuid),
+          public.canonical_forecast_capacity_ui_v6_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text),
+          public.canonical_forecast_capacity_ui_v6_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_ui_v6_scope_plan(uuid,timestamptz,jsonb),public.canonical_forecast_capacity_ui_v6_job_plan(uuid,timestamptz),public.canonical_forecast_capacity_ui_v6_setup_plan(uuid) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_ui_v6_current(uuid,uuid,text,uuid),public.canonical_forecast_capacity_ui_v6_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text),public.canonical_forecast_capacity_ui_v6_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text) TO %I',runtime_role);
+      END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='233_canonical_forecast_capacity_ui_v7.sql') OR
+         pg_catalog.to_regprocedure('public.canonical_forecast_capacity_ui_v7_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v7_current(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_capacity_ui_v7_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text)'),
+          ('public.canonical_forecast_capacity_ui_v7_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v7 entry security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_capacity_ui_v7_scope_plan(uuid,timestamptz,jsonb)'),
+          ('public.canonical_forecast_capacity_ui_v7_job_plan(uuid,timestamptz)'),
+          ('public.canonical_forecast_capacity_ui_v7_setup_plan(uuid)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required capacity UI v7 private helper security is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_capacity_ui_v7_scope_plan(uuid,timestamptz,jsonb),
+          public.canonical_forecast_capacity_ui_v7_job_plan(uuid,timestamptz),
+          public.canonical_forecast_capacity_ui_v7_setup_plan(uuid),
+          public.canonical_forecast_capacity_ui_v7_current(uuid,uuid,text,uuid),
+          public.canonical_forecast_capacity_ui_v7_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text),
+          public.canonical_forecast_capacity_ui_v7_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_capacity_ui_v7_scope_plan(uuid,timestamptz,jsonb),public.canonical_forecast_capacity_ui_v7_job_plan(uuid,timestamptz),public.canonical_forecast_capacity_ui_v7_setup_plan(uuid) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capacity_ui_v7_current(uuid,uuid,text,uuid),public.canonical_forecast_capacity_ui_v7_setup_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,jsonb,text,text),public.canonical_forecast_capacity_ui_v7_action_mutate(uuid,uuid,text,uuid,text,text,text,uuid,uuid,uuid,bigint,text,text) TO %I',runtime_role);
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -5126,6 +5397,12 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('223_canonical_forecast_demand_ui_prerequis
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('224_canonical_forecast_workload_capacity_v1.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('225_canonical_forecast_constrained_capacity_v1.sql');
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('226_canonical_forecast_capacity_advisory_v1.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('228_canonical_forecast_capacity_ui_v2.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('229_canonical_forecast_capacity_ui_v3.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('230_canonical_forecast_capacity_ui_v4.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('231_canonical_forecast_capacity_ui_v5.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('232_canonical_forecast_capacity_ui_v6.sql');
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('233_canonical_forecast_capacity_ui_v7.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

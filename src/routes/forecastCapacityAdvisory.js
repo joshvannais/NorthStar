@@ -5,6 +5,8 @@ const db = require('../db');
 const { requireOnboardedInternal } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
+const workloadCapacity = require('./forecastWorkloadCapacity');
+const constrainedCapacity = require('./forecastConstrainedCapacity');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
@@ -13,6 +15,16 @@ const TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const ROLE = /^(owner|administrator|dispatcher|estimator|crew_lead|technician|accounting|employee|other)$/;
 const INSTANT = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/;
 const CATEGORIES = ['bottleneck', 'backlog', 'overtime', 'contractor', 'hiring_need'];
+const TARGETS = ['workload.accepted_person_hours.v1', 'workload.end_backlog_hours.v1',
+  'capacity.available_role_hours.v1'];
+const DIMENSIONS = ['crew', 'skill', 'workingHours', 'location', 'travel', 'vehicle', 'equipment'];
+const SETUP_ACTIONS = ['workload_epoch', 'workload_methods', 'workload_roles', 'workload_role_scope',
+  'workload_availability', 'workload_remaining_census', 'workload_outcome_window',
+  'constrained_epoch', 'constrained_method', 'constrained_scope', 'constrained_work_scopes',
+  'constrained_job_census',
+  'advisory_method', 'advisory_policy', 'advisory_demand', 'advisory_epoch',
+  'advisory_outcome_demand', 'advisory_continuation_demand', 'advisory_correction_demand',
+  'advisory_policy_revision'];
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 const instant = value => typeof value === 'string' && INSTANT.test(value) && Number.isFinite(Date.parse(value));
@@ -104,6 +116,342 @@ function safeContinuation(value, expectedId = null, expectedPredecessor = null) 
     value.valuesWithheld === true && baseFlags(value) ? value : null;
 }
 
+function cleanJourney(value) {
+  if (Array.isArray(value)) return value.every(cleanJourney);
+  if (!value || typeof value !== 'object') return true;
+  const forbidden = /^(digest|expectedDigest|inputManifest|privateResults|privateManifest|metrics|payload|thresholds|personMinutes|demandMinutes|capacityMinutes|gapMinutes|workerId|jobId|assetId|memberId)$/i;
+  return Object.entries(value).every(([key, item]) => !forbidden.test(key) && cleanJourney(item));
+}
+
+function safeHistory(value, kinds, continuation = false) {
+  if (!exact(value, ['records', 'total', 'truncated']) || !Array.isArray(value.records) ||
+      value.records.length > 40 || !Number.isSafeInteger(value.total) || value.total < value.records.length ||
+      typeof value.truncated !== 'boolean' || value.truncated !== (value.total > value.records.length)) return false;
+  const ids = new Set();
+  return value.records.every(item => {
+    if (!exact(item, ['kind', 'id', 'parentId', 'state', 'recordedAt', 'periodStart', 'periodEnd',
+      'revision', 'action']) || !kinds.includes(item.kind) || !UUID.test(item.id || '') || ids.has(item.id) ||
+      !(item.parentId === null || UUID.test(item.parentId || '')) || !instant(item.recordedAt) ||
+      !instant(item.periodStart) || !instant(item.periodEnd) ||
+      Date.parse(item.periodEnd) - Date.parse(item.periodStart) !== 2592000000 ||
+      !(item.revision === null || (Number.isSafeInteger(item.revision) && item.revision >= 1)) ||
+      !(item.action === null || ['approve', 'reject', 'withdraw'].includes(item.action))) return false;
+    ids.add(item.id);
+    const continuationState = item.kind === 'continuation' && continuation &&
+      ['capacity_advisory_continuation_pending', 'capacity_advisory_continuation_activated',
+        'capacity_advisory_continuation_missed', 'capacity_advisory_continuation_stale'].includes(item.state);
+    if (!(continuationState || ['current', 'stale'].includes(item.state))) return false;
+    if ((item.kind === 'origin') !== (item.parentId === null) && !(item.kind === 'origin' && item.parentId !== null)) return false;
+    if ((item.kind === 'decision') !== (item.action !== null) ||
+        (['evaluation', 'outcome', 'decision', 'continuation'].includes(item.kind) && item.parentId === null)) return false;
+    return true;
+  });
+}
+
+function safeAction(value, names) {
+  return exact(value, ['name', 'originId', 'outcomeId', 'continuationId', 'correctionOriginId',
+    'expectedDecisionId', 'expectedDecisionRevision', 'expectedResultRevision']) && names.includes(value.name) &&
+    ['originId', 'outcomeId', 'continuationId', 'correctionOriginId', 'expectedDecisionId']
+      .every(key => value[key] === null || UUID.test(value[key] || '')) &&
+    (value.expectedDecisionRevision === null ||
+      (Number.isSafeInteger(value.expectedDecisionRevision) && value.expectedDecisionRevision >= 0)) &&
+    (value.expectedResultRevision === null ||
+      (Number.isSafeInteger(value.expectedResultRevision) && value.expectedResultRevision >= 1));
+}
+
+function safeSetup(value) {
+  if (!exact(value, ['state', 'action', 'token', 'lane', 'label', 'explanation', 'reasonLimit',
+    'hiringConsecutivePeriods', 'scopeReviews']) || !['ready', 'waiting', 'unavailable', 'complete'].includes(value.state) ||
+    typeof value.label !== 'string' || value.label.length < 1 || value.label.length > 120 ||
+    typeof value.explanation !== 'string' || value.explanation.length < 1 || value.explanation.length > 500 ||
+    !Number.isSafeInteger(value.hiringConsecutivePeriods) || value.hiringConsecutivePeriods < 2 ||
+    value.hiringConsecutivePeriods > 12 || !Array.isArray(value.scopeReviews)) return false;
+  const reviewValid = item => {
+    if (!exact(item, ['scopeKey', 'formation', 'dimensions', 'targetRole', 'supportRoles',
+      'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleCombinations',
+      'sourceState', 'reviewState']) ||
+      !TOKEN.test(item.scopeKey || '') || !['profile', 'crew'].includes(item.formation) ||
+      !exact(item.dimensions, DIMENSIONS) ||
+      DIMENSIONS.some(name => !['applies', 'not_applicable'].includes(item.dimensions[name])) ||
+      item.dimensions.workingHours !== 'applies' || item.dimensions.location !== 'applies' ||
+      (item.dimensions.crew === 'applies') !== (item.formation === 'crew') ||
+      !ROLE.test(item.targetRole || '') || !['source_backed'].includes(item.sourceState) ||
+      !['current', 'needs_review'].includes(item.reviewState)) return false;
+    const arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles'];
+    if (arrays.some(name => !Array.isArray(item[name]) || item[name].length > 9 ||
+      item[name].some(role => typeof role !== 'string' || !ROLE.test(role)) ||
+      new Set(item[name]).size !== item[name].length) ||
+      !Array.isArray(item.operatorRoleCombinations) || item.operatorRoleCombinations.length < 1 ||
+      item.operatorRoleCombinations.length > 128) return false;
+    const targetOptions = new Set(item.targetRoleOptions);
+    const selectableTargets = new Set(item.selectableTargetRoles);
+    const assetsApply = item.dimensions.vehicle === 'applies' || item.dimensions.equipment === 'applies';
+    const combinations = new Set();
+    for (const combination of item.operatorRoleCombinations) {
+      if (!exact(combination, ['targetRole', 'operatorRoles']) ||
+        !ROLE.test(combination.targetRole || '') || !selectableTargets.has(combination.targetRole) ||
+        !Array.isArray(combination.operatorRoles) || combination.operatorRoles.length > 9 ||
+        combination.operatorRoles.some(role => typeof role !== 'string' || !ROLE.test(role) ||
+          !targetOptions.has(role)) ||
+        new Set(combination.operatorRoles).size !== combination.operatorRoles.length ||
+        assetsApply !== (combination.operatorRoles.length > 0)) return false;
+      const key = combination.targetRole + ':' + JSON.stringify(combination.operatorRoles);
+      if (combinations.has(key)) return false;
+      combinations.add(key);
+    }
+    const selectedKey = item.targetRole + ':' + JSON.stringify(item.operatorRoles);
+    return targetOptions.has(item.targetRole) && item.selectableTargetRoles.length > 0 &&
+      item.selectableTargetRoles.every(role => targetOptions.has(role) &&
+        item.operatorRoleCombinations.some(combination => combination.targetRole === role)) &&
+      item.supportRoles.length === item.targetRoleOptions.length - 1 &&
+      item.supportRoles.every(role => role !== item.targetRole && targetOptions.has(role)) &&
+      (selectableTargets.has(item.targetRole) ? combinations.has(selectedKey) : item.operatorRoles.length === 0);
+  };
+  if (value.state === 'ready') {
+    if (!SETUP_ACTIONS.includes(value.action) || !DIGEST.test(value.token || '') ||
+      !['all', 'workload', 'advisory'].includes(value.lane) || value.reasonLimit !== 1000) return false;
+    if (value.action === 'constrained_work_scopes') {
+      return value.scopeReviews.length >= 1 && value.scopeReviews.length <= 20 &&
+        value.scopeReviews.every(reviewValid) &&
+        new Set(value.scopeReviews.map(item => item.scopeKey)).size === value.scopeReviews.length;
+    }
+    return value.scopeReviews.length === 0;
+  }
+  return value.action === null && value.token === null && value.reasonLimit === null &&
+    value.scopeReviews.length === 0 && (value.lane === null || ['all', 'workload', 'advisory'].includes(value.lane));
+}
+
+function safeScopeReviewChoices(value) {
+  if (!Array.isArray(value) || value.length > 20) return false;
+  const scopes = new Set();
+  return value.every(item => {
+    if (!exact(item, ['scopeKey', 'targetRole', 'operatorRoles']) || !TOKEN.test(item.scopeKey || '') ||
+      !ROLE.test(item.targetRole || '') || !Array.isArray(item.operatorRoles) || item.operatorRoles.length > 9 ||
+      item.operatorRoles.some(role => typeof role !== 'string' || !ROLE.test(role)) ||
+      new Set(item.operatorRoles).size !== item.operatorRoles.length || scopes.has(item.scopeKey)) return false;
+    scopes.add(item.scopeKey); return true;
+  });
+}
+
+function safeHiringPolicy(value) {
+  return exact(value, ['state', 'token', 'consecutivePeriods', 'minimum', 'maximum']) &&
+    ['current', 'unavailable'].includes(value.state) &&
+    ((value.state === 'current' && DIGEST.test(value.token || '')) ||
+      (value.state === 'unavailable' && value.token === null)) &&
+    Number.isSafeInteger(value.consecutivePeriods) && value.consecutivePeriods >= 2 &&
+    value.consecutivePeriods <= 12 && value.minimum === 2 && value.maximum === 12;
+}
+
+function safeCorrectionReview(value) {
+  if (!exact(value, ['state', 'action', 'token', 'label', 'explanation', 'reasonLimit']) ||
+      !['ready', 'unavailable'].includes(value.state) || typeof value.label !== 'string' ||
+      value.label.length < 1 || value.label.length > 120 || typeof value.explanation !== 'string' ||
+      value.explanation.length < 1 || value.explanation.length > 500) return false;
+  return value.state === 'ready'
+    ? value.action === 'advisory_correction_demand' && DIGEST.test(value.token || '') && value.reasonLimit === 1000
+    : value.action === null && value.token === null && value.reasonLimit === null;
+}
+
+function safeActionResult(value, body) {
+  if (!exact(value, ['state', 'action', 'receiptId', 'originId', 'outcomeId', 'continuationId',
+    'correctionOriginId', 'revision', 'researchOnly', 'automaticActionTaken', 'replayed']) ||
+    value.state !== 'capacity_research_action_recorded' || value.action !== body.action ||
+    value.researchOnly !== true || value.automaticActionTaken !== false ||
+    typeof value.replayed !== 'boolean') return null;
+  const receipt = value.receiptId; const origin = value.originId; const outcome = value.outcomeId;
+  const continuation = value.continuationId; const correction = value.correctionOriginId;
+  const revision = value.revision;
+  if (body.action === 'workload_capture_origin' || body.action === 'constrained_capture_origin') {
+    return UUID.test(receipt || '') && origin === receipt && outcome === null && continuation === null &&
+      correction === null && revision === null ? value : null;
+  }
+  if (body.action === 'workload_capture_evaluation') {
+    return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === null &&
+      continuation === null && correction === null && revision === body.expectedRevision ? value : null;
+  }
+  if (body.action === 'constrained_capture_outcome' || body.action === 'advisory_capture_outcome') {
+    return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === receipt &&
+      continuation === null && correction === null && revision === body.expectedRevision ? value : null;
+  }
+  if (body.action === 'constrained_capture_evaluation' || body.action === 'advisory_capture_evaluation') {
+    return UUID.test(receipt || '') && receipt !== body.originId && receipt !== body.outcomeId &&
+      origin === body.originId && outcome === body.outcomeId && continuation === null && correction === null &&
+      revision === body.expectedRevision ? value : null;
+  }
+  if (body.action === 'advisory_capture_origin') {
+    return UUID.test(receipt || '') && origin === receipt && receipt !== body.correctionOriginId && outcome === null &&
+      continuation === null && correction === body.correctionOriginId && revision === null ? value : null;
+  }
+  if (body.action === 'advisory_reserve_continuation') {
+    return UUID.test(receipt || '') && receipt !== body.originId && origin === body.originId && outcome === null &&
+      continuation === receipt && correction === null && revision === null ? value : null;
+  }
+  if (body.action === 'advisory_prepare_outcome') {
+    return receipt === null && origin === body.originId && outcome === null && continuation === null &&
+      correction === null && revision === null ? value : null;
+  }
+  return null;
+}
+
+function safeSetupResult(value, body) {
+  return exact(value, ['state', 'action', 'token', 'receiptId', 'revision', 'hiringConsecutivePeriods',
+    'researchOnly', 'automaticActionTaken', 'replayed']) && value.state === 'capacity_research_setup_recorded' &&
+    value.action === body.action && value.token === body.token && UUID.test(value.receiptId || '') &&
+    Number.isSafeInteger(value.revision) && value.revision >= 1 &&
+    value.hiringConsecutivePeriods === body.hiringConsecutivePeriods && value.researchOnly === true &&
+    value.automaticActionTaken === false && typeof value.replayed === 'boolean' ? value : null;
+}
+
+function safeDecisionResult(value, body, originId) {
+  return exact(value, ['state', 'id', 'originId', 'action', 'revision', 'researchOnly',
+    'automaticActionTaken', 'replayed', 'previousDecisionId', 'previousDecisionRevision']) &&
+    value.state === 'capacity_advisory_decision_recorded' && UUID.test(value.id || '') &&
+    value.id !== originId && value.id !== body.expectedDecisionId &&
+    value.originId === originId && value.action === body.action &&
+    value.revision === body.expectedDecisionRevision + 1 &&
+    value.previousDecisionId === body.expectedDecisionId &&
+    value.previousDecisionRevision === body.expectedDecisionRevision && value.researchOnly === true &&
+    value.automaticActionTaken === false && typeof value.replayed === 'boolean' ? value : null;
+}
+
+function setupBlocksLane(setup, lane) {
+  if (setup.state === 'complete') return false;
+  if (setup.state === 'ready' && setup.lane === 'advisory') return lane === 'advisory';
+  if (setup.state === 'ready' && setup.lane === 'workload' &&
+      setup.action === 'workload_outcome_window') return lane !== 'constrained';
+  return true;
+}
+
+function safeJourney(value) {
+  if (!cleanJourney(value) || !exact(value, ['state', 'asOf', 'workload', 'constrained', 'advisory',
+    'setup', 'hiringPolicy', 'correctionReview',
+    'boundaries', 'researchOnly', 'forecastIssued', 'paidNumericServing', 'forecastServingEnabled',
+    'automaticActionTaken']) || value.state !== 'capacity_research_journey_current' || !instant(value.asOf) ||
+    value.researchOnly !== true || value.forecastIssued !== false || value.paidNumericServing !== false ||
+    value.forecastServingEnabled !== false || value.automaticActionTaken !== false) return null;
+
+  const workload = value.workload;
+  if (!exact(workload, ['targets', 'selectedOrigin', 'selectedEvaluation', 'history', 'currentAction']) ||
+      !Array.isArray(workload.targets) || workload.targets.length !== TARGETS.length ||
+      workload.targets.some((item, index) => !exact(item, ['key', 'evidenceState']) ||
+        item.key !== TARGETS[index] || !['authenticated_zero', 'bounded_value', 'unavailable'].includes(item.evidenceState)) ||
+      !(workload.selectedOrigin === null || workloadCapacity.safeOrigin(workload.selectedOrigin)) ||
+      !(workload.selectedEvaluation === null || workloadCapacity.safeEvaluation(workload.selectedEvaluation)) ||
+      !safeHistory(workload.history, ['origin', 'evaluation']) ||
+      !safeAction(workload.currentAction, ['review_prerequisites', 'capture_origin', 'recover_origin', 'wait_for_horizon',
+        'capture_evaluation', 'complete'])) return null;
+  if ((workload.selectedOrigin === null) !== (workload.currentAction.originId === null) ||
+      (workload.selectedOrigin && workload.currentAction.originId !== workload.selectedOrigin.id) ||
+      (workload.selectedEvaluation && (!workload.selectedOrigin ||
+        workload.selectedEvaluation.originId !== workload.selectedOrigin.id)) ||
+      workload.currentAction.outcomeId !== null || workload.currentAction.continuationId !== null ||
+      workload.currentAction.correctionOriginId !== null || workload.currentAction.expectedDecisionId !== null ||
+      workload.currentAction.expectedDecisionRevision !== null) return null;
+  const workloadExpectedAction = setupBlocksLane(value.setup, 'workload') ? 'review_prerequisites' :
+    !workload.selectedOrigin ? 'capture_origin' :
+    workload.selectedOrigin.refreshRequired ? 'recover_origin' :
+      Date.parse(value.asOf) < Date.parse(workload.selectedOrigin.horizonEndsAt) ? 'wait_for_horizon' :
+        !workload.selectedEvaluation || workload.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
+  const workloadExpectedRevision = workloadExpectedAction === 'capture_evaluation'
+    ? (workload.selectedEvaluation ? workload.selectedEvaluation.revision : 0) + 1 : null;
+  if (workload.currentAction.name !== workloadExpectedAction ||
+      workload.currentAction.expectedResultRevision !== workloadExpectedRevision) return null;
+
+  const constrained = value.constrained;
+  if (!exact(constrained, ['selectedOrigin', 'selectedOutcome', 'selectedEvaluation', 'scopes', 'history',
+    'currentAction']) || !(constrained.selectedOrigin === null || constrainedCapacity.safeOrigin(constrained.selectedOrigin)) ||
+      !(constrained.selectedOutcome === null || constrainedCapacity.safeOutcome(constrained.selectedOutcome)) ||
+      !(constrained.selectedEvaluation === null || constrainedCapacity.safeEvaluation(constrained.selectedEvaluation)) ||
+      !Array.isArray(constrained.scopes) || constrained.scopes.length > 20 ||
+      constrained.scopes.some(item => !exact(item, ['alternativeKey', 'scopeKey', 'role', 'dimensions', 'evidenceState']) ||
+        !TOKEN.test(item.alternativeKey || '') || !TOKEN.test(item.scopeKey || '') || !ROLE.test(item.role || '') ||
+        !exact(item.dimensions, DIMENSIONS) || DIMENSIONS.some(key => typeof item.dimensions[key] !== 'boolean') ||
+        !['authenticated_zero', 'bounded_value', 'unavailable'].includes(item.evidenceState)) ||
+      !safeHistory(constrained.history, ['origin', 'outcome', 'evaluation']) ||
+      !safeAction(constrained.currentAction, ['review_prerequisites', 'capture_origin', 'recover_origin', 'wait_for_horizon',
+        'capture_outcome', 'capture_evaluation', 'complete'])) return null;
+  if ((constrained.selectedOrigin === null) !== (constrained.currentAction.originId === null) ||
+      (constrained.selectedOrigin && constrained.currentAction.originId !== constrained.selectedOrigin.id) ||
+      (constrained.selectedOutcome === null) !== (constrained.currentAction.outcomeId === null) ||
+      (constrained.selectedOutcome && constrained.currentAction.outcomeId !== constrained.selectedOutcome.id) ||
+      (constrained.selectedOutcome && (!constrained.selectedOrigin ||
+        constrained.selectedOutcome.originId !== constrained.selectedOrigin.id)) ||
+      (constrained.selectedEvaluation && (!constrained.selectedOrigin ||
+        constrained.selectedEvaluation.originId !== constrained.selectedOrigin.id)) ||
+      (constrained.selectedOrigin && constrained.scopes.length !== constrained.selectedOrigin.scopeCount) ||
+      constrained.currentAction.continuationId !== null || constrained.currentAction.correctionOriginId !== null ||
+      constrained.currentAction.expectedDecisionId !== null || constrained.currentAction.expectedDecisionRevision !== null) return null;
+  const constrainedExpectedAction = setupBlocksLane(value.setup, 'constrained') ? 'review_prerequisites' :
+    !constrained.selectedOrigin ? 'capture_origin' :
+    constrained.selectedOrigin.refreshRequired ? 'recover_origin' :
+      Date.parse(value.asOf) < Date.parse(constrained.selectedOrigin.horizonEndsAt) ? 'wait_for_horizon' :
+        !constrained.selectedOutcome || constrained.selectedOutcome.refreshRequired ? 'capture_outcome' :
+          !constrained.selectedEvaluation || constrained.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
+  const constrainedExpectedRevision = constrainedExpectedAction === 'capture_outcome'
+    ? (constrained.selectedOutcome ? constrained.selectedOutcome.revision : 0) + 1
+    : constrainedExpectedAction === 'capture_evaluation'
+      ? (constrained.selectedEvaluation ? constrained.selectedEvaluation.revision : 0) + 1 : null;
+  if (constrained.currentAction.name !== constrainedExpectedAction ||
+      constrained.currentAction.expectedResultRevision !== constrainedExpectedRevision) return null;
+
+  const advisory = value.advisory;
+  if (!exact(advisory, ['selectedOrigin', 'selectedOutcome', 'selectedEvaluation', 'selectedContinuation',
+    'preparationReady', 'history', 'currentAction']) ||
+      !(advisory.selectedOrigin === null || safeOrigin(advisory.selectedOrigin)) ||
+      !(advisory.selectedOutcome === null || safeOutcome(advisory.selectedOutcome)) ||
+      !(advisory.selectedEvaluation === null || safeEvaluation(advisory.selectedEvaluation)) ||
+      !(advisory.selectedContinuation === null || safeContinuation(advisory.selectedContinuation)) ||
+      typeof advisory.preparationReady !== 'boolean' ||
+      !safeHistory(advisory.history, ['origin', 'decision', 'outcome', 'evaluation', 'continuation'], true) ||
+      !safeAction(advisory.currentAction, ['review_prerequisites', 'capture_origin', 'recover_origin', 'review_advisory',
+        'reserve_continuation', 'wait_for_horizon', 'prepare_outcome', 'capture_outcome',
+        'capture_evaluation', 'complete'])) return null;
+  if ((advisory.selectedOrigin === null) !== (advisory.currentAction.originId === null) ||
+      (advisory.selectedOrigin && advisory.currentAction.originId !== advisory.selectedOrigin.id) ||
+      (advisory.selectedOutcome === null) !== (advisory.currentAction.outcomeId === null) ||
+      (advisory.selectedOutcome && advisory.currentAction.outcomeId !== advisory.selectedOutcome.id) ||
+      (advisory.selectedContinuation === null) !== (advisory.currentAction.continuationId === null) ||
+      (advisory.selectedContinuation && advisory.currentAction.continuationId !== advisory.selectedContinuation.id) ||
+      (advisory.selectedOutcome && (!advisory.selectedOrigin ||
+        advisory.selectedOutcome.originId !== advisory.selectedOrigin.id)) ||
+      (advisory.selectedEvaluation && (!advisory.selectedOrigin ||
+        advisory.selectedEvaluation.originId !== advisory.selectedOrigin.id)) ||
+      (advisory.selectedContinuation && (!advisory.selectedOrigin ||
+        advisory.selectedContinuation.predecessorOriginId !== advisory.selectedOrigin.id)) ||
+      ((advisory.currentAction.expectedDecisionRevision === 0) !==
+        (advisory.currentAction.expectedDecisionId === null))) return null;
+  const advisoryExpectedAction = setupBlocksLane(value.setup, 'advisory') ? 'review_prerequisites' :
+    !advisory.selectedOrigin ? 'capture_origin' :
+    advisory.selectedOrigin.refreshRequired ? 'recover_origin' :
+      advisory.selectedOrigin.decisionAction !== 'approve' ? 'review_advisory' :
+        Date.parse(value.asOf) < Date.parse(advisory.selectedOrigin.horizonEndsAt)
+          ? (advisory.selectedContinuation ? 'wait_for_horizon' : 'reserve_continuation') :
+          !advisory.preparationReady ? 'prepare_outcome' :
+            !advisory.selectedOutcome || advisory.selectedOutcome.refreshRequired ? 'capture_outcome' :
+              !advisory.selectedEvaluation || advisory.selectedEvaluation.refreshRequired ? 'capture_evaluation' : 'complete';
+  const advisoryExpectedRevision = advisoryExpectedAction === 'capture_outcome'
+    ? (advisory.selectedOutcome ? advisory.selectedOutcome.revision : 0) + 1
+    : advisoryExpectedAction === 'capture_evaluation'
+      ? (advisory.selectedEvaluation ? advisory.selectedEvaluation.revision : 0) + 1 : null;
+  if (advisory.currentAction.name !== advisoryExpectedAction ||
+      advisory.currentAction.expectedResultRevision !== advisoryExpectedRevision ||
+      advisory.currentAction.correctionOriginId !==
+        (setupBlocksLane(value.setup, 'advisory') ? null :
+          (advisory.selectedOrigin && advisory.selectedOrigin.refreshRequired ? advisory.selectedOrigin.id : null))) return null;
+
+  if (!safeSetup(value.setup) || !safeHiringPolicy(value.hiringPolicy) ||
+      !safeCorrectionReview(value.correctionReview)) return null;
+
+  if (!exact(value.boundaries, ['sourceLineage', 'calculationBoundary', 'uncertainty',
+    'alternativesCombined', 'valuesWithheld', 'predictionIsFact']) ||
+      value.boundaries.sourceLineage !== 'accepted_installed_northstar_sources' ||
+      value.boundaries.calculationBoundary !== 'qualitative_capacity_research_only' ||
+      value.boundaries.uncertainty !== 'natural_history_accuracy_calibration_confidence_unavailable' ||
+      value.boundaries.alternativesCombined !== false || value.boundaries.valuesWithheld !== true ||
+      value.boundaries.predictionIsFact !== false) return null;
+  return value;
+}
+
 function createForecastCapacityAdvisoryRouter(options = {}) {
   const router = express.Router();
   const poolProvider = options.poolProvider || (() => db.getPool());
@@ -112,7 +460,10 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
     `forecast-capacity-advice:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
   const writeThrottle = options.writeThrottle || rateLimit('forecast-source-capture', req =>
     `forecast-capacity-advice-write:${req.tenantContext.organizationId}`);
-  router.use((_req, res, next) => { res.set('Cache-Control', 'private, no-store'); res.vary('Cookie'); next(); });
+  router.use((_req, res, next) => {
+    res.set('Cache-Control', 'private, no-store'); res.set('Referrer-Policy', 'no-referrer');
+    res.vary('Cookie'); next();
+  });
 
   async function run(req, res, { write = false, sql, params = [], validate }) {
     let client;
@@ -123,7 +474,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       // the pinned predecessor decision/outcome/evaluation chain. Keep the
       // request bounded while allowing the complete tenant-private proof to
       // finish instead of converting a valid receipt into a transient 503.
-      await client.query("SET LOCAL statement_timeout='30000ms'");
+      await client.query("SET LOCAL statement_timeout='60000ms'");
       const identity = [req.tenantContext.organizationId, req.tenantContext.userId, req.userRole, req.authSession.id];
       const value = (await client.query(sql, [...identity, ...params])).rows[0]?.value;
       const data = validate(value); if (!data) throw new Error('Invalid capacity-advice projection');
@@ -136,9 +487,79 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
     } finally { if (client) client.release(); }
   }
   const invalid = res => res.status(400).json({ success: false, error: 'Invalid request' });
+  const capacityUiAccess = (req, res, next) => ['owner', 'admin'].includes(req.userRole) ?
+    next() : res.status(403).json({ success: false, error: 'Forbidden' });
   const writeBody = (body, confirmation) => exact(body, ['reason', 'confirmed', 'confirmationVersion']) &&
     typeof body.reason === 'string' && body.reason.trim().length >= 10 && body.reason.length <= 1000 &&
     body.confirmed === true && body.confirmationVersion === confirmation;
+
+  router.get('/journey/current', auth, capacityUiAccess, throttle, async (req, res) => {
+    if (!exact(req.query, [])) return invalid(res);
+    return run(req, res, {
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v7_current($1,$2,$3,$4) value',
+      validate: safeJourney,
+    });
+  });
+
+  router.post('/journey/setup', auth, capacityUiAccess, writeThrottle, async (req, res) => {
+    const body = req.body; const key = req.get('Idempotency-Key');
+    if (!exact(req.query, []) || !exact(body, ['action', 'token', 'hiringConsecutivePeriods', 'scopeReviews',
+      'reason', 'confirmed', 'confirmationVersion']) || !SETUP_ACTIONS.includes(body.action) ||
+      !DIGEST.test(body.token || '') || !Number.isSafeInteger(body.hiringConsecutivePeriods) ||
+      body.hiringConsecutivePeriods < 2 || body.hiringConsecutivePeriods > 12 ||
+      !safeScopeReviewChoices(body.scopeReviews) ||
+      (body.action === 'constrained_work_scopes' ? body.scopeReviews.length < 1 : body.scopeReviews.length !== 0) ||
+      typeof body.reason !== 'string' || body.reason.trim().length < 10 || body.reason.length > 1000 ||
+      body.confirmed !== true || body.confirmationVersion !== 'm26-capacity-ui-setup-v2' ||
+      !KEY.test(key || '')) return invalid(res);
+    return run(req, res, {
+      write: true,
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v7_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
+      params: [req.get('X-CSRF-Token'), key, body.action, body.token,
+        body.hiringConsecutivePeriods, JSON.stringify(body.scopeReviews), body.reason, body.confirmationVersion],
+      validate: value => safeSetupResult(value, body),
+    });
+  });
+
+  router.post('/journey/actions', auth, capacityUiAccess, writeThrottle, async (req, res) => {
+    const body = req.body; const key = req.get('Idempotency-Key');
+    const actions = ['workload_capture_origin', 'workload_capture_evaluation',
+      'constrained_capture_origin', 'constrained_capture_outcome', 'constrained_capture_evaluation',
+      'advisory_capture_origin', 'advisory_reserve_continuation', 'advisory_prepare_outcome',
+      'advisory_capture_outcome', 'advisory_capture_evaluation'];
+    const reasonActions = ['workload_capture_origin', 'constrained_capture_origin',
+      'advisory_capture_origin', 'advisory_reserve_continuation'];
+    const revisionActions = ['workload_capture_evaluation', 'constrained_capture_outcome',
+      'constrained_capture_evaluation', 'advisory_capture_outcome', 'advisory_capture_evaluation'];
+    if (!exact(req.query, []) || !exact(body, ['action', 'originId', 'outcomeId', 'correctionOriginId',
+      'expectedRevision', 'reason', 'confirmed', 'confirmationVersion']) || !actions.includes(body.action) ||
+      !(body.originId === null || UUID.test(body.originId || '')) ||
+      !(body.outcomeId === null || UUID.test(body.outcomeId || '')) ||
+      !(body.correctionOriginId === null || UUID.test(body.correctionOriginId || '')) ||
+      (revisionActions.includes(body.action)
+        ? (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 1)
+        : body.expectedRevision !== null) ||
+      body.confirmed !== true || body.confirmationVersion !== 'm26-capacity-ui-action-v1' ||
+      !KEY.test(key || '') ||
+      (reasonActions.includes(body.action)
+        ? (typeof body.reason !== 'string' || body.reason.trim().length < 10 || body.reason.length > 900)
+        : body.reason !== null) ||
+      (['workload_capture_origin', 'constrained_capture_origin'].includes(body.action) &&
+        (body.originId !== null || body.outcomeId !== null || body.correctionOriginId !== null)) ||
+      (body.action === 'advisory_capture_origin' && (body.originId !== null || body.outcomeId !== null)) ||
+      (['workload_capture_evaluation', 'constrained_capture_outcome', 'advisory_reserve_continuation',
+        'advisory_prepare_outcome', 'advisory_capture_outcome'].includes(body.action) &&
+        (!body.originId || body.outcomeId !== null || body.correctionOriginId !== null)) ||
+      (['constrained_capture_evaluation', 'advisory_capture_evaluation'].includes(body.action) &&
+        (!body.originId || !body.outcomeId || body.correctionOriginId !== null))) return invalid(res);
+    return run(req, res, {
+      write: true,
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v7_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
+      params: [req.get('X-CSRF-Token'), key, body.action, body.originId, body.outcomeId,
+        body.correctionOriginId, body.expectedRevision, body.reason, body.confirmationVersion],
+      validate: value => safeActionResult(value, body),
+    });
+  });
 
   router.get('/prerequisites/current', auth, requirePermission('forecast', 'read'), throttle, async (req, res) => {
     if (!exact(req.query, [])) return invalid(res);
@@ -300,6 +721,25 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
           value.revision >= 1 && DIGEST.test(value.digest || '') && typeof value.replayed === 'boolean' ? value : null;
       } });
   });
+  router.post('/origins/:id/safe-decisions', auth, capacityUiAccess, writeThrottle, async (req, res) => {
+    const body = req.body; const key = req.get('Idempotency-Key');
+    if (!exact(req.query, []) || !exact(body, ['action', 'expectedDecisionId', 'expectedDecisionRevision',
+      'reason', 'confirmed', 'confirmationVersion']) || !UUID.test(req.params.id || '') ||
+      !['approve', 'reject', 'withdraw'].includes(body.action) ||
+      !(body.expectedDecisionId === null || UUID.test(body.expectedDecisionId || '')) ||
+      !Number.isSafeInteger(body.expectedDecisionRevision) || body.expectedDecisionRevision < 0 ||
+      ((body.expectedDecisionRevision === 0) !== (body.expectedDecisionId === null)) ||
+      typeof body.reason !== 'string' || body.reason.trim().length < 10 || body.reason.length > 1000 ||
+      body.confirmed !== true || body.confirmationVersion !== 'm26-capacity-ui-decision-v1' ||
+      !KEY.test(key || '')) return invalid(res);
+    return run(req, res, {
+      write: true,
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v2_decision_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
+      params: [req.get('X-CSRF-Token'), key, req.params.id, body.expectedDecisionId,
+        body.expectedDecisionRevision, body.action, body.reason, body.confirmationVersion],
+      validate: value => safeDecisionResult(value, body, req.params.id),
+    });
+  });
   router.get('/origins/:originId/decisions/:id', auth, requirePermission('forecast', 'read'), throttle, async (req, res) => {
     if (!exact(req.query, []) || !UUID.test(req.params.originId || '') || !UUID.test(req.params.id || '')) return invalid(res);
     return run(req, res, { sql: 'SELECT public.canonical_forecast_capacity_advisory_v1_decision_read($1,$2,$3,$4,$5,$6) value',
@@ -360,4 +800,6 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   return router;
 }
 
-module.exports = { createForecastCapacityAdvisoryRouter, safeOrigin, safeOutcome, safeEvaluation, safeContinuation, safeCategories };
+module.exports = { createForecastCapacityAdvisoryRouter, safeOrigin, safeOutcome, safeEvaluation,
+  safeContinuation, safeCategories, safeJourney, safeSetup, safeHiringPolicy, safeActionResult,
+  safeCorrectionReview, safeSetupResult, safeDecisionResult, safeScopeReviewChoices };

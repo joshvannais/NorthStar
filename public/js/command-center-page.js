@@ -21,10 +21,22 @@
   var schedulingCursor = null;
   var demandPosition = null;
   var demandResearch = null;
+  var capacityResearch = null;
 
   function byId(id) { return document.getElementById(id); }
 
   function demandWorkspaceUnavailable() {
+    if (capacityResearch && typeof capacityResearch.workspaceUnavailable === 'function') {
+      capacityResearch.workspaceUnavailable();
+    } else if (byId('commandCenterCapacityState')) {
+      byId('commandCenterCapacityState').textContent = 'Workspace unavailable';
+      byId('commandCenterCapacityState').dataset.state = 'unavailable';
+      byId('commandCenterCapacityNotice').textContent =
+        'Capacity research is unavailable. No receipt token or current claim is retained.';
+      document.querySelectorAll('#commandCenterCapacityRoot button').forEach(function (button) {
+        button.disabled = true;
+      });
+    }
     if (demandResearch && typeof demandResearch.workspaceUnavailable === 'function') {
       demandResearch.workspaceUnavailable();
     }
@@ -746,6 +758,7 @@
         workspace.session && workspace.session.expiresAt].join(':') : null;
     if (demandPosition) demandPosition.workspaceReady(identity);
     if (demandResearch) demandResearch.workspaceReady(identity);
+    if (capacityResearch) capacityResearch.workspaceReady(identity);
     // Current backlog remains a present fact. The research controller owns
     // only explicit, guarded future-origin and evaluation presentation.
     if (mode !== 'demo') {
@@ -881,6 +894,23 @@
       fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
       idempotency: function () { return global.crypto.randomUUID(); },
       workspaceAvailable: workspaceDependenciesReady,
+    });
+  }
+  if (global.NorthStarCapacityResearch &&
+      typeof global.NorthStarCapacityResearch.create === 'function') {
+    capacityResearch = global.NorthStarCapacityResearch.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+      idempotency: function () { return global.crypto.randomUUID(); },
+      workspaceAvailable: workspaceDependenciesReady,
+    });
+  } else if (byId('commandCenterCapacityState')) {
+    byId('commandCenterCapacityState').textContent = 'Workspace unavailable';
+    byId('commandCenterCapacityState').dataset.state = 'unavailable';
+    byId('commandCenterCapacityNotice').textContent =
+      'Capacity research is unavailable. No receipt token or current claim is retained.';
+    document.querySelectorAll('#commandCenterCapacityRoot button').forEach(function (button) {
+      button.disabled = true;
     });
   }
   byId('commandCenterRefresh').addEventListener('click', function () { load(); });

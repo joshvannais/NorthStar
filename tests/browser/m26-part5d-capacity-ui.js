@@ -133,7 +133,10 @@ function response(status, data) {
           targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: [],
           targetRoleOptions: ['dispatcher', 'technician'],
           selectableTargetRoles: ['dispatcher'],
-          operatorRoleCombinations: [{ targetRole: 'dispatcher', operatorRoles: ['technician'] }],
+          operatorRoleCombinations: [
+            { targetRole: 'dispatcher', operatorRoles: ['technician'] },
+            { targetRole: 'dispatcher', operatorRoles: ['dispatcher', 'technician'] },
+          ],
           sourceState: 'source_backed',
           reviewState: 'needs_review',
         }] };
@@ -158,6 +161,13 @@ function response(status, data) {
       assert.match(await page.locator('#commandCenterCapacityScopeReviews').innerText(), /Supporting roles: Technician/);
       assert.equal(await page.getByRole('radio', { name: 'Dispatcher', exact: true }).count(), 0);
       const technicianOperators = page.getByRole('radio', { name: 'Technician', exact: true });
+      const dispatcherTechnicianOperators = page.getByRole('radio', {
+        name: 'Dispatcher + Technician', exact: true,
+      });
+      assert.equal(await technicianOperators.count(), 1);
+      assert.equal(await dispatcherTechnicianOperators.count(), 1);
+      assert.match(await page.locator('#commandCenterCapacityScopeReviews').innerText(),
+        /Dispatcher \+ Technician/);
       await technicianOperators.focus(); await page.keyboard.press('Space');
       assert.equal(await technicianOperators.isChecked(), true);
       assert.equal(await setupButton.isDisabled(), false);

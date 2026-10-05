@@ -254,7 +254,10 @@ describe('Mission 26 Part 5D capacity research journey', () => {
         travel: 'applies', vehicle: 'applies', equipment: 'applies' },
       targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: [],
       targetRoleOptions: ['dispatcher', 'technician'], selectableTargetRoles: ['dispatcher'],
-      operatorRoleCombinations: [{ targetRole: 'dispatcher', operatorRoles: ['technician'] }],
+      operatorRoleCombinations: [
+        { targetRole: 'dispatcher', operatorRoles: ['technician'] },
+        { targetRole: 'dispatcher', operatorRoles: ['dispatcher', 'technician'] },
+      ],
       sourceState: 'source_backed', reviewState: 'needs_review' };
     const journey = capacity.demoJourney(0);
     journey.setup = { state: 'ready', action: 'constrained_work_scopes', token: 'a'.repeat(64), lane: 'all',
@@ -276,6 +279,10 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       { ...review, operatorRoleCombinations: [{ targetRole: 'technician', operatorRoles: ['technician'] }] },
       { ...review, operatorRoleCombinations: [{ targetRole: 'dispatcher', operatorRoles: ['technician', 'technician'] }] },
       { ...review, operatorRoleCombinations: [{ targetRole: 'dispatcher', operatorRoles: ['technician'], profileId: USER }] },
+      { ...review, operatorRoleCombinations: [
+        { targetRole: 'dispatcher', operatorRoles: ['technician'] },
+        { targetRole: 'dispatcher', operatorRoles: ['technician'] },
+      ] },
       { ...review, sourceState: 'caller_claimed' },
     ]) rejectProjection(changed);
     expect(safeScopeReviewChoices([SCOPE_CHOICE])).toBe(true);
@@ -340,10 +347,29 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     expect(migration).toContain('candidate_edge_count>40');
     expect(migration).toContain("'operatorRoleCombinations',feasible_operator_combinations");
     expect(migration).not.toContain('operatorRoleOptions');
-    expect(route).toContain('canonical_forecast_capacity_ui_v6_current');
     expect(route).toContain("'operatorRoleCombinations'");
     expect(controller).toContain('Only complete role combinations that current sources can assign without reusing a person are available.');
     expect(controller).not.toContain('operatorRoleOptions');
+  });
+
+  test('the v7 planner keeps every bounded feasible superset and fails closed on complete-population bounds', () => {
+    const migration = fs.readFileSync(path.resolve(__dirname,
+      '../../migrations/233_canonical_forecast_capacity_ui_v7.sql'), 'utf8');
+    const route = fs.readFileSync(path.resolve(__dirname,
+      '../../src/routes/forecastCapacityAdvisory.js'), 'utf8');
+    expect(migration).toContain('combination_evaluation_limit');
+    expect(migration).toContain('combination_evaluation_count<>combination_evaluation_limit');
+    expect(migration).toContain('feasible_combination_count:=feasible_combination_count+1');
+    expect(migration).toContain('IF feasible_combination_count<=128 THEN');
+    expect(migration).toContain('Complete feasible operator role population exceeds response bound');
+    expect(migration).toContain('exact_operator_population_exceeds_bound');
+    expect(migration).toContain('Complete operator eligibility relation exceeds bound');
+    expect(migration).not.toMatch(/feasible_operator_combinations\) existing[\s\S]{0,320}CONTINUE/);
+    expect(migration).not.toContain('candidate_edge_count>40 THEN CONTINUE');
+    expect(migration).toContain("'operatorRoleCombinations',feasible_operator_combinations");
+    expect(route).toContain('canonical_forecast_capacity_ui_v7_current');
+    expect(route).toContain('canonical_forecast_capacity_ui_v7_setup_mutate');
+    expect(route).toContain('canonical_forecast_capacity_ui_v7_action_mutate');
   });
 
   test('lane reasons stop at 900 while explicit review decisions accept 900, 901 and 1000', async () => {
@@ -428,7 +454,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       expect(result.status).toBe(200); expect(result.body.data.state).toBe('capacity_research_journey_current');
       expect(result.headers['cache-control']).toBe('private, no-store');
       expect(result.headers['referrer-policy']).toBe('no-referrer');
-      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v6_current'))[1])
+      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v7_current'))[1])
         .toEqual([ORG, USER, role, SESSION]);
     }
     expect((await request(application({ databaseError: { code: '42501', detail: 'tenant secret' } }).app)
@@ -450,7 +476,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const setup = await request(setupApp.app).post('/api/v1/forecast/capacity-advice/journey/setup')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(setupBody);
     expect(setup.status).toBe(201);
-    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v6_setup_mutate'))[1])
+    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v7_setup_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, setupBody.action, setupBody.token,
         setupBody.hiringConsecutivePeriods, '[]', setupBody.reason, setupBody.confirmationVersion]);
 
@@ -465,7 +491,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const saved = await request(actionApp.app).post('/api/v1/forecast/capacity-advice/journey/actions')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(body);
     expect(saved.status).toBe(201); expect(JSON.stringify(saved.body)).not.toContain('digest');
-    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v6_action_mutate'))[1])
+    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v7_action_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, body.action, null, null, null,
         null, body.reason, body.confirmationVersion]);
 

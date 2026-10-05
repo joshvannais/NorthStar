@@ -496,7 +496,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   router.get('/journey/current', auth, capacityUiAccess, throttle, async (req, res) => {
     if (!exact(req.query, [])) return invalid(res);
     return run(req, res, {
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v6_current($1,$2,$3,$4) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v7_current($1,$2,$3,$4) value',
       validate: safeJourney,
     });
   });
@@ -514,7 +514,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       !KEY.test(key || '')) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v6_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v7_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.token,
         body.hiringConsecutivePeriods, JSON.stringify(body.scopeReviews), body.reason, body.confirmationVersion],
       validate: value => safeSetupResult(value, body),
@@ -554,7 +554,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
         (!body.originId || !body.outcomeId || body.correctionOriginId !== null))) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v6_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v7_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.originId, body.outcomeId,
         body.correctionOriginId, body.expectedRevision, body.reason, body.confirmationVersion],
       validate: value => safeActionResult(value, body),

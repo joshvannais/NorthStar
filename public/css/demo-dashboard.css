@@ -330,6 +330,38 @@
   min-height: 40px; padding: 8px 34px 8px 10px; border: 1px solid var(--theme-border); border-radius: 10px;
   background: var(--theme-surface); color: var(--theme-text); font: inherit;
 }
+.command-center-capacity-scope-reviews {
+  display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px !important; margin-top: 12px !important;
+}
+.command-center-capacity-scope-reviews[hidden] { display: none !important; }
+.command-center-capacity-scope-review {
+  min-width: 0; padding: 15px; border: 1px solid var(--theme-border); border-radius: 14px;
+  background: color-mix(in srgb, var(--theme-surface) 94%, var(--brand-500) 3%);
+}
+.command-center-capacity-scope-review h4 { margin: 0; color: var(--theme-text); font-size: 15px; }
+.command-center-capacity-scope-source,
+.command-center-capacity-support-roles,
+.command-center-capacity-review-note { margin: 6px 0 0; color: var(--theme-muted); font-size: 12px; line-height: 1.5; }
+.command-center-capacity-scope-dimensions {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 12px 0;
+}
+.command-center-capacity-scope-dimensions > div {
+  display: flex; justify-content: space-between; gap: 8px; min-width: 0; padding: 7px 8px;
+  border: 1px solid var(--theme-border); border-radius: 9px; background: var(--theme-surface); font-size: 11px;
+}
+.command-center-capacity-scope-dimensions dt { color: var(--theme-text); font-weight: 750; }
+.command-center-capacity-scope-dimensions dd { margin: 0; color: var(--theme-muted); text-align: right; }
+.command-center-capacity-role-field { display: grid; gap: 6px; color: var(--theme-text); font-size: 12px; font-weight: 750; }
+.command-center-capacity-role-field select {
+  width: 100%; min-height: 40px; padding: 8px 34px 8px 10px; border: 1px solid var(--theme-border);
+  border-radius: 10px; background: var(--theme-surface); color: var(--theme-text); font: inherit;
+}
+.command-center-capacity-role-field select:focus-visible,
+.command-center-capacity-operator-roles input:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand-500) 28%, transparent); outline-offset: 2px; }
+.command-center-capacity-operator-roles { display: grid; gap: 7px; margin: 12px 0 0; padding: 0; border: 0; color: var(--theme-text); }
+.command-center-capacity-operator-roles legend { margin-bottom: 5px; font-size: 12px; font-weight: 750; }
+.command-center-capacity-operator-roles label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.command-center-capacity-operator-roles input { inline-size: 18px; block-size: 18px; accent-color: var(--brand-500); }
 .command-center-capacity-policy,
 .command-center-capacity-policy-state { margin: 12px 0 0; color: var(--theme-muted); font-size: 12px; line-height: 1.55; }
 .command-center-capacity-policy-state { color: var(--theme-text); font-weight: 700; }
@@ -830,7 +862,9 @@ button.command-center-record-link {
   .command-center-capacity-categories { grid-template-columns: minmax(0, 1fr); }
   .command-center-capacity-setup,
   .command-center-capacity-setup-actions,
+  .command-center-capacity-scope-reviews,
   .command-center-capacity-reasons { grid-template-columns: minmax(0, 1fr); }
+  .command-center-capacity-scope-dimensions { grid-template-columns: minmax(0, 1fr); }
   .command-center-capacity-setup-actions label { grid-column: auto; }
   .command-center-capacity-reasons textarea { grid-row: auto; }
   .command-center-capacity-advisory { grid-column: auto; }

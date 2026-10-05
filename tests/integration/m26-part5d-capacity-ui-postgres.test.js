@@ -60,6 +60,7 @@ realPostgres('Mission 26 Part 5D mounted paid capacity UI boundary', () => {
       setup = result.body.data.setup;
     }
     const setupBody = { action: setup.action, token: setup.token, hiringConsecutivePeriods: 3,
+      scopeReviews: [],
       reason: 'Administrator explicitly starts this exact accepted source coverage epoch.',
       confirmed: true, confirmationVersion: 'm26-capacity-ui-setup-v2' };
     const adminSetup = await post('/journey/setup', setupBody, 'admin');

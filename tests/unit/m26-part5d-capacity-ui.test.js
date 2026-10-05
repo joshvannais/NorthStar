@@ -6,13 +6,15 @@ const path = require('node:path');
 const request = require('supertest');
 const capacity = require('../../public/js/command-center-capacity-research');
 const { createForecastCapacityAdvisoryRouter, safeJourney, safeActionResult, safeSetupResult,
-  safeDecisionResult } =
+  safeDecisionResult, safeScopeReviewChoices } =
   require('../../src/routes/forecastCapacityAdvisory');
 
 const ORG = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const SESSION = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const KEY = 'm26-part5d-exact-key-0001';
+const SCOPE_CHOICE = { scopeKey: 'accepted_crew_1234567890abcdef', targetRole: 'technician',
+  operatorRoles: ['technician'] };
 
 function response(status, data) {
   return { ok: status >= 200 && status < 300, status,
@@ -24,7 +26,7 @@ function captureJourney() {
   const value = JSON.parse(JSON.stringify(capacity.demoJourney(0)));
   value.setup = { state: 'complete', action: null, token: null, lane: null,
     label: 'Prerequisites current', explanation: 'Accepted source prerequisites are current.',
-    reasonLimit: null, hiringConsecutivePeriods: 3 };
+    reasonLimit: null, hiringConsecutivePeriods: 3, scopeReviews: [] };
   for (const lane of ['workload', 'constrained', 'advisory']) value[lane].currentAction.name = 'capture_origin';
   return value;
 }
@@ -65,7 +67,7 @@ function fixture() {
     'commandCenterCapacityReviewReason', 'commandCenterCapacityHiringPeriods', 'commandCenterCapacitySetupAction',
     'commandCenterCapacityPolicyAction', 'commandCenterCapacityCorrectionAction',
     'commandCenterCapacitySetupTitle', 'commandCenterCapacitySetupExplanation',
-    'commandCenterCapacityHiringState', 'commandCenterCapacityCorrectionState',
+    'commandCenterCapacityHiringState', 'commandCenterCapacityCorrectionState', 'commandCenterCapacityScopeReviews',
     'commandCenterCapacityRefresh', 'commandCenterCapacityRetry', 'commandCenterCapacityWorkloadState',
     'commandCenterCapacityConstraintState', 'commandCenterCapacityAdvisoryState', 'commandCenterCapacityTargets',
     'commandCenterCapacityDimensions', 'commandCenterCapacityAlternatives', 'commandCenterCapacityCategories',
@@ -130,6 +132,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       'advisory_policy_revision'];
     for (const action of SETUP_ACTIONS) {
       const body = { action, token: 'a'.repeat(64), hiringConsecutivePeriods: 7,
+        scopeReviews: action === 'constrained_work_scopes' ? [SCOPE_CHOICE] : [],
         reason: 'Explicitly review the exact source-backed prerequisite.', confirmed: true,
         confirmationVersion: 'm26-capacity-ui-setup-v2' };
       const value = { state: 'capacity_research_setup_recorded', action, token: body.token,
@@ -245,6 +248,62 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     }
   });
 
+  test('seven-dimension setup projection and submitted role choices use exact safe-only schemas', async () => {
+    const review = { scopeKey: SCOPE_CHOICE.scopeKey, formation: 'crew',
+      dimensions: { crew: 'applies', skill: 'applies', workingHours: 'applies', location: 'applies',
+        travel: 'applies', vehicle: 'applies', equipment: 'applies' },
+      targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: ['technician'],
+      targetRoleOptions: ['dispatcher', 'technician'], operatorRoleOptions: ['dispatcher', 'technician'],
+      sourceState: 'source_backed', reviewState: 'needs_review' };
+    const journey = capacity.demoJourney(0);
+    journey.setup = { state: 'ready', action: 'constrained_work_scopes', token: 'a'.repeat(64), lane: 'all',
+      label: 'Review source-backed work formations', explanation: 'Review all seven dimensions and role classifications.',
+      reasonLimit: 1000, hiringConsecutivePeriods: 3, scopeReviews: [review] };
+    expect(safeJourney(journey)).toEqual(journey); expect(capacity.validateJourney(journey)).toEqual(journey);
+    const rejectProjection = changed => {
+      const candidate = structuredClone(journey); candidate.setup.scopeReviews[0] = changed;
+      expect(safeJourney(candidate)).toBeNull(); expect(capacity.validateJourney(candidate)).toBeNull();
+    };
+    for (const key of Object.keys(review)) { const changed = { ...review }; delete changed[key]; rejectProjection(changed); }
+    for (const changed of [
+      { ...review, assetId: USER }, { ...review, dimensions: { ...review.dimensions, location: 'unavailable' } },
+      { ...review, targetRole: 'dispatcher' }, { ...review, supportRoles: [] },
+      { ...review, operatorRoles: [] }, { ...review, operatorRoles: ['technician', 'technician'] },
+      { ...review, operatorRoleOptions: [] }, { ...review, sourceState: 'caller_claimed' },
+    ]) rejectProjection(changed);
+    expect(safeScopeReviewChoices([SCOPE_CHOICE])).toBe(true);
+    for (const choices of [[], [{ ...SCOPE_CHOICE, assetId: USER }],
+      [{ ...SCOPE_CHOICE, operatorRoles: ['technician', 'technician'] }],
+      [SCOPE_CHOICE, SCOPE_CHOICE]]) expect(safeScopeReviewChoices(choices)).toBe(choices.length === 0);
+
+    const result = { state: 'capacity_research_setup_recorded', action: 'constrained_work_scopes',
+      token: 'a'.repeat(64), receiptId: USER, revision: 1, hiringConsecutivePeriods: 3,
+      researchOnly: true, automaticActionTaken: false, replayed: false };
+    const body = { action: 'constrained_work_scopes', token: 'a'.repeat(64), hiringConsecutivePeriods: 3,
+      scopeReviews: [SCOPE_CHOICE], reason: 'Review the exact safe formation classifications.',
+      confirmed: true, confirmationVersion: 'm26-capacity-ui-setup-v2' };
+    expect((await request(application({ value: result }).app).post('/api/v1/forecast/capacity-advice/journey/setup')
+      .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(body)).status).toBe(201);
+    for (const poison of [
+      { ...body, scopeReviews: [] }, { ...body, scopeReviews: [{ ...SCOPE_CHOICE, profileId: USER }] },
+      { ...body, scopeReviews: [{ ...SCOPE_CHOICE, operatorRoles: ['technician', 'technician'] }] },
+      { ...body, workerId: USER },
+    ]) {
+      const target = application({ value: result });
+      expect((await request(target.app).post('/api/v1/forecast/capacity-advice/journey/setup')
+        .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(poison)).status).toBe(400);
+      expect(target.pool.connect).not.toHaveBeenCalled();
+    }
+  });
+
+  test('the v4 planner selects the sole accepted crew lead without a lexical role fallback', () => {
+    const migration = fs.readFileSync(path.resolve(__dirname,
+      '../../migrations/230_canonical_forecast_capacity_ui_v4.sql'), 'utf8');
+    expect(migration).toContain("count(*) FILTER(WHERE member.crew_role='lead')");
+    expect(migration).toContain('array_agg(profile.operational_role ORDER BY profile.id)');
+    expect(migration).not.toMatch(/min\(profile\.operational_role\)[\s\S]*crew_role='lead'/);
+  });
+
   test('lane reasons stop at 900 while explicit review decisions accept 900, 901 and 1000', async () => {
     const actionValue = { state: 'capacity_research_action_recorded', action: 'workload_capture_origin',
       receiptId: USER, originId: USER, outcomeId: null, continuationId: null, correctionOriginId: null,
@@ -327,7 +386,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       expect(result.status).toBe(200); expect(result.body.data.state).toBe('capacity_research_journey_current');
       expect(result.headers['cache-control']).toBe('private, no-store');
       expect(result.headers['referrer-policy']).toBe('no-referrer');
-      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v3_current'))[1])
+      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v4_current'))[1])
         .toEqual([ORG, USER, role, SESSION]);
     }
     expect((await request(application({ databaseError: { code: '42501', detail: 'tenant secret' } }).app)
@@ -343,14 +402,15 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       researchOnly: true, automaticActionTaken: false, replayed: false };
     const setupApp = application({ value: setupValue });
     const setupBody = { action: 'workload_epoch', token: 'a'.repeat(64), hiringConsecutivePeriods: 3,
+      scopeReviews: [],
       reason: 'Explicitly approve this exact source-backed workload coverage epoch.',
       confirmed: true, confirmationVersion: 'm26-capacity-ui-setup-v2' };
     const setup = await request(setupApp.app).post('/api/v1/forecast/capacity-advice/journey/setup')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(setupBody);
     expect(setup.status).toBe(201);
-    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v3_setup_mutate'))[1])
+    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v4_setup_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, setupBody.action, setupBody.token,
-        setupBody.hiringConsecutivePeriods, setupBody.reason, setupBody.confirmationVersion]);
+        setupBody.hiringConsecutivePeriods, '[]', setupBody.reason, setupBody.confirmationVersion]);
 
     const actionValue = { state: 'capacity_research_action_recorded', action: 'workload_capture_origin',
       receiptId: USER, originId: USER, outcomeId: null, continuationId: null, revision: null,
@@ -363,7 +423,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const saved = await request(actionApp.app).post('/api/v1/forecast/capacity-advice/journey/actions')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(body);
     expect(saved.status).toBe(201); expect(JSON.stringify(saved.body)).not.toContain('digest');
-    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v3_action_mutate'))[1])
+    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v4_action_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, body.action, null, null, null,
         null, body.reason, body.confirmationVersion]);
 
@@ -420,6 +480,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       { expectedDigest: 'none' }]) {
       const setupApp = application();
       const body = { action: 'workload_epoch', token: 'a'.repeat(64), hiringConsecutivePeriods: 3,
+        scopeReviews: [],
         reason: 'Explicitly approve this exact source-backed workload coverage epoch.',
         confirmed: true, confirmationVersion: 'm26-capacity-ui-setup-v2', ...poison };
       expect((await request(setupApp.app).post('/api/v1/forecast/capacity-advice/journey/setup')

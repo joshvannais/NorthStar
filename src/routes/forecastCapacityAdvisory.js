@@ -161,15 +161,59 @@ function safeAction(value, names) {
 
 function safeSetup(value) {
   if (!exact(value, ['state', 'action', 'token', 'lane', 'label', 'explanation', 'reasonLimit',
-    'hiringConsecutivePeriods']) || !['ready', 'waiting', 'unavailable', 'complete'].includes(value.state) ||
+    'hiringConsecutivePeriods', 'scopeReviews']) || !['ready', 'waiting', 'unavailable', 'complete'].includes(value.state) ||
     typeof value.label !== 'string' || value.label.length < 1 || value.label.length > 120 ||
     typeof value.explanation !== 'string' || value.explanation.length < 1 || value.explanation.length > 500 ||
     !Number.isSafeInteger(value.hiringConsecutivePeriods) || value.hiringConsecutivePeriods < 2 ||
-    value.hiringConsecutivePeriods > 12) return false;
-  if (value.state === 'ready') return SETUP_ACTIONS.includes(value.action) && DIGEST.test(value.token || '') &&
-    ['all', 'workload', 'advisory'].includes(value.lane) && value.reasonLimit === 1000;
+    value.hiringConsecutivePeriods > 12 || !Array.isArray(value.scopeReviews)) return false;
+  const reviewValid = item => {
+    if (!exact(item, ['scopeKey', 'formation', 'dimensions', 'targetRole', 'supportRoles',
+      'operatorRoles', 'targetRoleOptions', 'operatorRoleOptions', 'sourceState', 'reviewState']) ||
+      !TOKEN.test(item.scopeKey || '') || !['profile', 'crew'].includes(item.formation) ||
+      !exact(item.dimensions, DIMENSIONS) ||
+      DIMENSIONS.some(name => !['applies', 'not_applicable'].includes(item.dimensions[name])) ||
+      item.dimensions.workingHours !== 'applies' || item.dimensions.location !== 'applies' ||
+      (item.dimensions.crew === 'applies') !== (item.formation === 'crew') ||
+      !ROLE.test(item.targetRole || '') || !['source_backed'].includes(item.sourceState) ||
+      !['current', 'needs_review'].includes(item.reviewState)) return false;
+    const arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'operatorRoleOptions'];
+    if (arrays.some(name => !Array.isArray(item[name]) || item[name].length > 9 ||
+      item[name].some(role => typeof role !== 'string' || !ROLE.test(role)) ||
+      new Set(item[name]).size !== item[name].length)) return false;
+    const targetOptions = new Set(item.targetRoleOptions);
+    const operatorOptions = new Set(item.operatorRoleOptions);
+    if (!targetOptions.has(item.targetRole) || item.supportRoles.length !== item.targetRoleOptions.length - 1 ||
+      item.supportRoles.some(role => role === item.targetRole || !targetOptions.has(role)) ||
+      item.operatorRoles.some(role => !operatorOptions.has(role)) ||
+      (item.operatorRoleOptions.length > 0) !==
+        (item.dimensions.vehicle === 'applies' || item.dimensions.equipment === 'applies') ||
+      (item.operatorRoles.length > 0) !== (item.operatorRoleOptions.length > 0)) return false;
+    return true;
+  };
+  if (value.state === 'ready') {
+    if (!SETUP_ACTIONS.includes(value.action) || !DIGEST.test(value.token || '') ||
+      !['all', 'workload', 'advisory'].includes(value.lane) || value.reasonLimit !== 1000) return false;
+    if (value.action === 'constrained_work_scopes') {
+      return value.scopeReviews.length >= 1 && value.scopeReviews.length <= 20 &&
+        value.scopeReviews.every(reviewValid) &&
+        new Set(value.scopeReviews.map(item => item.scopeKey)).size === value.scopeReviews.length;
+    }
+    return value.scopeReviews.length === 0;
+  }
   return value.action === null && value.token === null && value.reasonLimit === null &&
-    (value.lane === null || ['all', 'workload', 'advisory'].includes(value.lane));
+    value.scopeReviews.length === 0 && (value.lane === null || ['all', 'workload', 'advisory'].includes(value.lane));
+}
+
+function safeScopeReviewChoices(value) {
+  if (!Array.isArray(value) || value.length > 20) return false;
+  const scopes = new Set();
+  return value.every(item => {
+    if (!exact(item, ['scopeKey', 'targetRole', 'operatorRoles']) || !TOKEN.test(item.scopeKey || '') ||
+      !ROLE.test(item.targetRole || '') || !Array.isArray(item.operatorRoles) || item.operatorRoles.length > 9 ||
+      item.operatorRoles.some(role => typeof role !== 'string' || !ROLE.test(role)) ||
+      new Set(item.operatorRoles).size !== item.operatorRoles.length || scopes.has(item.scopeKey)) return false;
+    scopes.add(item.scopeKey); return true;
+  });
 }
 
 function safeHiringPolicy(value) {
@@ -435,25 +479,27 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   router.get('/journey/current', auth, capacityUiAccess, throttle, async (req, res) => {
     if (!exact(req.query, [])) return invalid(res);
     return run(req, res, {
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v3_current($1,$2,$3,$4) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v4_current($1,$2,$3,$4) value',
       validate: safeJourney,
     });
   });
 
   router.post('/journey/setup', auth, capacityUiAccess, writeThrottle, async (req, res) => {
     const body = req.body; const key = req.get('Idempotency-Key');
-    if (!exact(req.query, []) || !exact(body, ['action', 'token', 'hiringConsecutivePeriods',
+    if (!exact(req.query, []) || !exact(body, ['action', 'token', 'hiringConsecutivePeriods', 'scopeReviews',
       'reason', 'confirmed', 'confirmationVersion']) || !SETUP_ACTIONS.includes(body.action) ||
       !DIGEST.test(body.token || '') || !Number.isSafeInteger(body.hiringConsecutivePeriods) ||
       body.hiringConsecutivePeriods < 2 || body.hiringConsecutivePeriods > 12 ||
+      !safeScopeReviewChoices(body.scopeReviews) ||
+      (body.action === 'constrained_work_scopes' ? body.scopeReviews.length < 1 : body.scopeReviews.length !== 0) ||
       typeof body.reason !== 'string' || body.reason.trim().length < 10 || body.reason.length > 1000 ||
       body.confirmed !== true || body.confirmationVersion !== 'm26-capacity-ui-setup-v2' ||
       !KEY.test(key || '')) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v3_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v4_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.token,
-        body.hiringConsecutivePeriods, body.reason, body.confirmationVersion],
+        body.hiringConsecutivePeriods, JSON.stringify(body.scopeReviews), body.reason, body.confirmationVersion],
       validate: value => safeSetupResult(value, body),
     });
   });
@@ -491,7 +537,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
         (!body.originId || !body.outcomeId || body.correctionOriginId !== null))) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v3_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v4_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.originId, body.outcomeId,
         body.correctionOriginId, body.expectedRevision, body.reason, body.confirmationVersion],
       validate: value => safeActionResult(value, body),
@@ -739,4 +785,4 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
 
 module.exports = { createForecastCapacityAdvisoryRouter, safeOrigin, safeOutcome, safeEvaluation,
   safeContinuation, safeCategories, safeJourney, safeSetup, safeHiringPolicy, safeActionResult,
-  safeCorrectionReview, safeSetupResult, safeDecisionResult };
+  safeCorrectionReview, safeSetupResult, safeDecisionResult, safeScopeReviewChoices };

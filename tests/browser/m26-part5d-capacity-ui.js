@@ -121,6 +121,69 @@ function response(status, data) {
     }
 
     {
+      const { context, page } = await makePage({ width: 390, height: 1200, theme: 'light', reducedMotion: true });
+      const scoped = capacity.demoJourney(0);
+      scoped.setup = { state: 'ready', action: 'constrained_work_scopes', token: 'd'.repeat(64), lane: 'all',
+        label: 'Review source-backed work formations',
+        explanation: 'Approve the complete accepted-work formation set after reviewing every dimension and role classification.',
+        reasonLimit: 1000, hiringConsecutivePeriods: 3, scopeReviews: [{
+          scopeKey: 'accepted_crew_safe_fixture', formation: 'crew',
+          dimensions: { crew: 'applies', skill: 'applies', workingHours: 'applies', location: 'applies',
+            travel: 'applies', vehicle: 'applies', equipment: 'applies' },
+          targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: ['technician'],
+          targetRoleOptions: ['dispatcher', 'technician'],
+          operatorRoleOptions: ['dispatcher', 'technician'], sourceState: 'source_backed',
+          reviewState: 'needs_review',
+        }] };
+      await page.evaluate(journey => {
+        window.__responses.push({ status: 200, data: journey });
+        return window.__controller.workspaceReady('paid:scope-review:revision:digest:session:generation:expiry');
+      }, scoped);
+      const scopeText = await page.locator('#commandCenterCapacityScopeReviews').innerText();
+      for (const copy of ['Accepted work formation 1', 'Source-backed Crew formation', 'Crew', 'Skill',
+        'Working hours', 'Location', 'Travel', 'Vehicle', 'Equipment', 'Target capacity role',
+        'Supporting roles: Dispatcher', 'Roles authorized to operate the reviewed vehicle or equipment',
+        "selected operators' accepted working-hours windows are the bounded vehicle and equipment calendar",
+        'Private identities and amounts remain withheld']) assert.match(scopeText, new RegExp(copy));
+      const setupButton = page.getByRole('button', { name: 'Approve accepted-work formations', exact: true });
+      assert.equal(await setupButton.isDisabled(), true);
+      await page.locator('#commandCenterCapacityReviewReason').fill(
+        'Approve this exact nonnumeric seven-dimension and mixed-role classification review.');
+      const dispatcherOperator = page.getByRole('checkbox', { name: 'Dispatcher', exact: true });
+      await dispatcherOperator.focus(); await page.keyboard.press('Space');
+      assert.equal(await dispatcherOperator.isChecked(), true);
+      assert.equal(await setupButton.isDisabled(), false);
+      await page.locator('#commandCenterCapacityRoot').screenshot({
+        path: path.join(output, 'paid-mobile-scope-review.png'),
+      });
+      await page.evaluate(({ saved, next }) => window.__responses.push(
+        { status: 201, data: saved }, { status: 200, data: next }), {
+        saved: { state: 'capacity_research_setup_recorded', action: 'constrained_work_scopes',
+          token: 'd'.repeat(64), receiptId: '44444444-4444-4444-8444-444444444445', revision: 1,
+          hiringConsecutivePeriods: 3, researchOnly: true, automaticActionTaken: false, replayed: false },
+        next: capacity.demoJourney(1),
+      });
+      await setupButton.focus(); await page.keyboard.press('Enter');
+      await page.waitForFunction(() => window.__calls.filter(item => item.method === 'POST').length === 1);
+      const calls = await page.evaluate(() => window.__calls);
+      const submitted = JSON.parse(calls.find(item => item.method === 'POST').body);
+      assert.deepEqual(submitted.scopeReviews, [{ scopeKey: 'accepted_crew_safe_fixture',
+        targetRole: 'technician', operatorRoles: ['dispatcher', 'technician'] }]);
+      assert.equal(/profileId|crewId|assetId|appointmentId|assignmentId|memberId|jobId|digest|Minutes/i
+        .test(JSON.stringify(submitted.scopeReviews)), false);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      const reduced = await page.locator('#commandCenterCapacityState').evaluate(element =>
+        Number.parseFloat(getComputedStyle(element).transitionDuration || '0') <= 0.001);
+      assert.equal(reduced, true);
+      await page.locator('#commandCenterCapacityRoot').screenshot({
+        path: path.join(output, 'paid-mobile-scope-review-complete.png'),
+      });
+      result.cases.push({ name: 'paid-mobile-seven-dimension-role-review', exactSafeDisclosure: true,
+        keyboard: true, reducedMotion: true, overflow: false, pass: true });
+      await context.close();
+    }
+
+    {
       const { context, page } = await makePage({ width: 1024, theme: 'light' });
       await page.evaluate(journey => {
         window.__responses.push({ status: 200, data: journey });

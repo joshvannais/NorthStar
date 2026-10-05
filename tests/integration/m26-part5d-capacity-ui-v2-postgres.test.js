@@ -28,7 +28,7 @@ function controllerFixture() {
     'commandCenterCapacityReviewReason', 'commandCenterCapacityHiringPeriods', 'commandCenterCapacitySetupAction',
     'commandCenterCapacityPolicyAction', 'commandCenterCapacityCorrectionAction',
     'commandCenterCapacitySetupTitle', 'commandCenterCapacitySetupExplanation',
-    'commandCenterCapacityHiringState', 'commandCenterCapacityCorrectionState',
+    'commandCenterCapacityHiringState', 'commandCenterCapacityCorrectionState', 'commandCenterCapacityScopeReviews',
     'commandCenterCapacityRefresh', 'commandCenterCapacityRetry', 'commandCenterCapacityWorkloadState',
     'commandCenterCapacityConstraintState', 'commandCenterCapacityAdvisoryState', 'commandCenterCapacityTargets',
     'commandCenterCapacityDimensions', 'commandCenterCapacityAlternatives', 'commandCenterCapacityCategories',

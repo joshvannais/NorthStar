@@ -210,15 +210,42 @@
   }
   function setup(value) {
     if (!exact(value, ['state', 'action', 'token', 'lane', 'label', 'explanation', 'reasonLimit',
-      'hiringConsecutivePeriods']) || !['ready', 'waiting', 'unavailable', 'complete'].includes(value.state) ||
+      'hiringConsecutivePeriods', 'scopeReviews']) || !['ready', 'waiting', 'unavailable', 'complete'].includes(value.state) ||
       typeof value.label !== 'string' || value.label.length < 1 || value.label.length > 120 ||
       typeof value.explanation !== 'string' || value.explanation.length < 1 || value.explanation.length > 500 ||
       !Number.isSafeInteger(value.hiringConsecutivePeriods) || value.hiringConsecutivePeriods < 2 ||
-      value.hiringConsecutivePeriods > 12) return false;
-    if (value.state === 'ready') return SETUP_ACTIONS.includes(value.action) && DIGEST.test(value.token || '') &&
-      ['all', 'workload', 'advisory'].includes(value.lane) && value.reasonLimit === 1000;
+      value.hiringConsecutivePeriods > 12 || !Array.isArray(value.scopeReviews)) return false;
+    function reviewValid(item) {
+      if (!exact(item, ['scopeKey', 'formation', 'dimensions', 'targetRole', 'supportRoles',
+        'operatorRoles', 'targetRoleOptions', 'operatorRoleOptions', 'sourceState', 'reviewState']) ||
+        !TOKEN.test(item.scopeKey || '') || !['profile', 'crew'].includes(item.formation) ||
+        !exact(item.dimensions, DIMENSIONS) ||
+        DIMENSIONS.some(function (name) { return !['applies', 'not_applicable'].includes(item.dimensions[name]); }) ||
+        item.dimensions.workingHours !== 'applies' || item.dimensions.location !== 'applies' ||
+        (item.dimensions.crew === 'applies') !== (item.formation === 'crew') || !ROLE.test(item.targetRole || '') ||
+        item.sourceState !== 'source_backed' || !['current', 'needs_review'].includes(item.reviewState)) return false;
+      var arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'operatorRoleOptions'];
+      if (arrays.some(function (name) { return !Array.isArray(item[name]) || item[name].length > 9 ||
+        item[name].some(function (role) { return typeof role !== 'string' || !ROLE.test(role); }) ||
+        new Set(item[name]).size !== item[name].length; })) return false;
+      var targets = new Set(item.targetRoleOptions); var operators = new Set(item.operatorRoleOptions);
+      return targets.has(item.targetRole) && item.supportRoles.length === item.targetRoleOptions.length - 1 &&
+        item.supportRoles.every(function (role) { return role !== item.targetRole && targets.has(role); }) &&
+        item.operatorRoles.every(function (role) { return operators.has(role); }) &&
+        (item.operatorRoleOptions.length > 0) ===
+          (item.dimensions.vehicle === 'applies' || item.dimensions.equipment === 'applies') &&
+        (item.operatorRoles.length > 0) === (item.operatorRoleOptions.length > 0);
+    }
+    if (value.state === 'ready') {
+      if (!SETUP_ACTIONS.includes(value.action) || !DIGEST.test(value.token || '') ||
+          !['all', 'workload', 'advisory'].includes(value.lane) || value.reasonLimit !== 1000) return false;
+      if (value.action === 'constrained_work_scopes') return value.scopeReviews.length >= 1 &&
+        value.scopeReviews.length <= 20 && value.scopeReviews.every(reviewValid) &&
+        new Set(value.scopeReviews.map(function (item) { return item.scopeKey; })).size === value.scopeReviews.length;
+      return value.scopeReviews.length === 0;
+    }
     return value.action === null && value.token === null && value.reasonLimit === null &&
-      (value.lane === null || ['all', 'workload', 'advisory'].includes(value.lane));
+      value.scopeReviews.length === 0 && (value.lane === null || ['all', 'workload', 'advisory'].includes(value.lane));
   }
   function hiringPolicy(value) {
     return exact(value, ['state', 'token', 'consecutivePeriods', 'minimum', 'maximum']) &&
@@ -564,10 +591,10 @@
       setup: absent ? { state: 'ready', action: 'workload_epoch', token: 'a'.repeat(64), lane: 'all',
         label: 'Start fictional source coverage',
         explanation: 'The demo begins with a local fictional prerequisite review. Continuing changes only this demo workspace.',
-        reasonLimit: 1000, hiringConsecutivePeriods: 3 } :
+        reasonLimit: 1000, hiringConsecutivePeriods: 3, scopeReviews: [] } :
         { state: 'complete', action: null, token: null, lane: null, label: 'Fictional prerequisites current',
           explanation: 'The deterministic fictional prerequisite reviews and coverage epochs are current.',
-          reasonLimit: null, hiringConsecutivePeriods: 3 },
+          reasonLimit: null, hiringConsecutivePeriods: 3, scopeReviews: [] },
       hiringPolicy: { state: 'current', token: 'b'.repeat(64), consecutivePeriods: 3, minimum: 2, maximum: 12 },
       correctionReview: absent || stale ? { state: 'unavailable', action: null, token: null,
         label: 'Source correction review unavailable',
@@ -591,7 +618,7 @@
     var fetcher = options.fetcher;
     var identity = null; var identityRevision = 0; var loadedIdentity = null;
     var journey = null; var busy = false; var uncertainAttempt = null; var demoStage = 0;
-    var stateOverride = null;
+    var stateOverride = null; var scopeSelections = {};
     function byId(id) { return doc.getElementById(id); }
     function node(tag, className, text) {
       var value = doc.createElement(tag); if (className) value.className = className;
@@ -698,6 +725,83 @@
     function reasonReady(id, maximum) {
       var length = byId(id).value.trim().length; return length >= 10 && length <= maximum;
     }
+    function selectedScopeReviews() {
+      var current = journey && journey.setup;
+      if (!current || current.action !== 'constrained_work_scopes') return [];
+      if (!current.scopeReviews.length) return null;
+      var choices = [];
+      for (var index = 0; index < current.scopeReviews.length; index += 1) {
+        var offered = current.scopeReviews[index]; var selected = scopeSelections[offered.scopeKey];
+        if (!selected || !offered.targetRoleOptions.includes(selected.targetRole) ||
+            selected.operatorRoles.some(function (role) { return !offered.operatorRoleOptions.includes(role); }) ||
+            (selected.operatorRoles.length > 0) !== (offered.operatorRoleOptions.length > 0)) return null;
+        choices.push({ scopeKey: offered.scopeKey, targetRole: selected.targetRole,
+          operatorRoles: offered.operatorRoleOptions.filter(function (role) { return selected.operatorRoles.includes(role); }) });
+      }
+      return choices;
+    }
+    function renderScopeReviews() {
+      var root = byId('commandCenterCapacityScopeReviews'); var current = journey && journey.setup;
+      root.replaceChildren(); scopeSelections = {};
+      var reviews = current && current.action === 'constrained_work_scopes' ? current.scopeReviews : [];
+      root.hidden = !reviews.length;
+      reviews.forEach(function (review, index) {
+        scopeSelections[review.scopeKey] = { targetRole: review.targetRole,
+          operatorRoles: review.operatorRoles.slice() };
+        var card = node('section', 'command-center-capacity-scope-review');
+        card.append(node('h4', '', 'Accepted work formation ' + String(index + 1)),
+          node('p', 'command-center-capacity-scope-source',
+            'Source-backed ' + title(review.formation) + ' formation · ' +
+            (review.reviewState === 'current' ? 'current review' : 'explicit review required')));
+        var dimensions = node('dl', 'command-center-capacity-scope-dimensions');
+        DIMENSIONS.forEach(function (name) {
+          var row = node('div'); row.append(node('dt', '', LABELS[name]),
+            node('dd', '', review.dimensions[name] === 'applies' ? 'Applies' : 'Not applicable'));
+          dimensions.append(row);
+        });
+        card.append(dimensions);
+        var targetLabel = node('label', 'command-center-capacity-role-field');
+        targetLabel.append(node('span', '', 'Target capacity role'));
+        var target = node('select'); target.id = 'commandCenterCapacityTargetRole' + String(index);
+        review.targetRoleOptions.forEach(function (role) {
+          var option = node('option', '', title(role)); option.value = role; target.append(option);
+        });
+        target.value = review.targetRole; targetLabel.htmlFor = target.id; targetLabel.append(target); card.append(targetLabel);
+        var support = node('p', 'command-center-capacity-support-roles');
+        function updateSupport() {
+          var roles = review.targetRoleOptions.filter(function (role) { return role !== scopeSelections[review.scopeKey].targetRole; });
+          support.textContent = roles.length ? 'Supporting roles: ' + roles.map(title).join(', ') + '.' :
+            'No separate supporting role applies to this formation.';
+        }
+        target.addEventListener('change', function () {
+          scopeSelections[review.scopeKey].targetRole = target.value; updateSupport(); updateButtons();
+        });
+        updateSupport(); card.append(support);
+        if (review.operatorRoleOptions.length) {
+          var operators = node('fieldset', 'command-center-capacity-operator-roles');
+          operators.append(node('legend', '', 'Roles authorized to operate the reviewed vehicle or equipment'));
+          review.operatorRoleOptions.forEach(function (role, roleIndex) {
+            var label = node('label'); var checkbox = node('input'); checkbox.type = 'checkbox';
+            checkbox.value = role; checkbox.id = 'commandCenterCapacityOperatorRole' + String(index) + '-' + String(roleIndex);
+            checkbox.checked = scopeSelections[review.scopeKey].operatorRoles.includes(role); label.htmlFor = checkbox.id;
+            checkbox.addEventListener('change', function () {
+              var selected = scopeSelections[review.scopeKey].operatorRoles;
+              if (checkbox.checked && !selected.includes(role)) selected.push(role);
+              if (!checkbox.checked) scopeSelections[review.scopeKey].operatorRoles = selected.filter(function (item) { return item !== role; });
+              updateButtons();
+            });
+            label.append(checkbox, node('span', '', title(role))); operators.append(label);
+          });
+          card.append(operators);
+        } else card.append(node('p', 'command-center-capacity-operator-roles',
+          'No vehicle or equipment operator classification applies.'));
+        if (review.operatorRoleOptions.length) card.append(node('p', 'command-center-capacity-review-note',
+          'For this research scope, the selected operators\' accepted working-hours windows are the bounded vehicle and equipment calendar.'));
+        card.append(node('p', 'command-center-capacity-review-note',
+          'Review all seven applicability labels and these role classifications before approval. Private identities and amounts remain withheld.'));
+        root.append(card);
+      });
+    }
     function renderSetup() {
       var current = journey && journey.setup; var policy = journey && journey.hiringPolicy;
       var correction = journey && journey.correctionReview;
@@ -712,6 +816,7 @@
         : 'Hiring policy unavailable until a current source-backed scope and explicit policy review exist.';
       byId('commandCenterCapacityCorrectionState').textContent = correction ?
         correction.label + ': ' + correction.explanation : 'Source correction review unavailable.';
+      renderScopeReviews();
     }
     function updateButtons() {
       doc.querySelectorAll('[data-capacity-lane]').forEach(function (button) {
@@ -731,7 +836,9 @@
       var canExplain = reasonReady('commandCenterCapacityReviewReason', 1000);
       var setupButton = byId('commandCenterCapacitySetupAction');
       setupButton.textContent = setupState ? setupLabel(setupState.action) : 'Setup unavailable';
-      setupButton.disabled = mode === 'demo' || busy || !setupState || setupState.state !== 'ready' || !canExplain;
+      var scopeChoices = selectedScopeReviews();
+      setupButton.disabled = mode === 'demo' || busy || !setupState || setupState.state !== 'ready' || !canExplain ||
+        (setupState.action === 'constrained_work_scopes' && !scopeChoices);
       var policyButton = byId('commandCenterCapacityPolicyAction');
       policyButton.disabled = mode === 'demo' || busy || !policy || policy.state !== 'current' || !canExplain ||
         selectedPeriods === policy.consecutivePeriods;
@@ -906,8 +1013,10 @@
       if (!actionName || !token) return null;
       var body = { action: actionName, token: token,
         hiringConsecutivePeriods: Number(byId('commandCenterCapacityHiringPeriods').value),
+        scopeReviews: kind === 'setup' ? selectedScopeReviews() : [],
         reason: byId('commandCenterCapacityReviewReason').value.trim(), confirmed: true,
         confirmationVersion: 'm26-capacity-ui-setup-v2' };
+      if (!body.scopeReviews) return null;
       return { kind: 'setup', url: '/api/v1/forecast/capacity-advice/journey/setup', key: key(),
         body: body, bodyText: JSON.stringify(body), identity: identity };
     }
@@ -953,6 +1062,7 @@
       byId('commandCenterCapacityLaneReason').value = '';
       byId('commandCenterCapacityReviewReason').value = '';
       byId('commandCenterCapacityHiringPeriods').value = '2';
+      scopeSelections = {};
     }
     return {
       workspaceReady: function (nextIdentity) {

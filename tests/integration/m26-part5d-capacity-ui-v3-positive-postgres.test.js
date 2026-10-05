@@ -24,12 +24,13 @@ class Element {
 }
 
 function controllerFixture() {
+  const created = [];
   const ids = ['commandCenterCapacityState', 'commandCenterCapacityAsOf', 'commandCenterCapacityNotice',
     'commandCenterCapacityPaidControls', 'commandCenterCapacityDemoControls', 'commandCenterCapacityLaneReason',
     'commandCenterCapacityReviewReason', 'commandCenterCapacityHiringPeriods', 'commandCenterCapacitySetupAction',
     'commandCenterCapacityPolicyAction', 'commandCenterCapacityCorrectionAction',
     'commandCenterCapacitySetupTitle', 'commandCenterCapacitySetupExplanation',
-    'commandCenterCapacityHiringState', 'commandCenterCapacityCorrectionState',
+    'commandCenterCapacityHiringState', 'commandCenterCapacityCorrectionState', 'commandCenterCapacityScopeReviews',
     'commandCenterCapacityRefresh', 'commandCenterCapacityRetry', 'commandCenterCapacityWorkloadState',
     'commandCenterCapacityConstraintState', 'commandCenterCapacityAdvisoryState', 'commandCenterCapacityTargets',
     'commandCenterCapacityDimensions', 'commandCenterCapacityAlternatives', 'commandCenterCapacityCategories',
@@ -42,15 +43,18 @@ function controllerFixture() {
     .map(name => [name, new Element({ capacityDecision: name })]));
   const selectors = { '[data-capacity-lane]': Object.values(lanes),
     '[data-capacity-decision]': Object.values(decisions), '[data-capacity-demo-action]': [] };
-  return { values, lanes, decisions, document: {
+  return { values, lanes, decisions, created, document: {
     getElementById: id => values[id] || null,
-    createElement: () => new Element(), querySelectorAll: selector => selectors[selector] || [],
+    createElement: tag => { const element = new Element(); element.tagName = tag; created.push(element); return element; },
+    querySelectorAll: selector => selectors[selector] || [],
   } };
 }
 
-realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', () => {
+realPostgres('Mission 26 Part 5D correction v4 mounted seven-dimension positive-work journey', () => {
   let fixture; let app; let logicalNow; let ui; let controller; let controllerReady = false;
-  let positiveWork; let secondPositiveWork;
+  let positiveWork; let secondPositiveWork; let mountedCrew; let mountedSkill;
+  let mountedVehicle; let mountedEquipment;
+  let offeredScopeReview; let submittedScopeChoice;
   let workSequence = 0;
   const mountedCalls = [];
   const endpoint = '/api/v1/forecast/capacity-advice';
@@ -87,11 +91,12 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
         address: { line1: '1 Mounted Evidence Way', city: 'Boston', state: 'MA', postalCode: '02108' } },
       transcript: [{ turnId: 'scope', speaker: 'customer',
         text: 'Please schedule this bounded synthetic installed-source service visit.' }],
-      facts: [{ variable: 'serviceLocation', normalizedValue: 'headquarters',
+      facts: [{ variable: 'serviceLocation', normalizedValue: 'site-one',
         evidenceText: 'this bounded synthetic installed-source service visit', speaker: 'customer',
         evidenceTurnId: 'scope', confidence: 1 }],
-      service: { key: 'plumbing', scope: { locationId: 'headquarters',
-        sourcePurpose: 'm26-part5d-v3-mounted-positive-evidence' } },
+      service: { key: 'plumbing', scope: { locationId: 'site-one',
+        address: '1 Mounted Evidence Way, Boston, MA 02108',
+        sourcePurpose: 'm26-part5d-v4-mounted-positive-evidence' } },
       scheduledAppointment: { start: scheduledStart.toISOString(), end: scheduledEnd.toISOString(),
         status: 'scheduled' },
     });
@@ -106,7 +111,7 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
         .post(`/api/v1/canonical/appointments/${appointment}/mutation-previews`)
         .set(actor('owner').session.headers).send({ expectedRevision: Number(before.revision),
           expectedDigest: before.digest, expectedTimeZone: 'UTC', action,
-          target: { kind: 'profile', id: actor('member').actorUserId },
+          target: { kind: 'crew', id: mountedCrew.id },
           scheduledStart: new Date(before.scheduled_start).toISOString(),
           scheduledEnd: new Date(before.scheduled_end).toISOString(),
           appointmentStatus: before.appointment_status,
@@ -189,6 +194,94 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
     expect(response.status).toBe(201);
   }
 
+  async function saveConstraintBases(work, { contradictoryTravel = false } = {}) {
+    const estimate = (await fixture.ownerPool.query(
+      'SELECT id FROM canonical_estimates WHERE organization_id=$1 AND opportunity_id=$2',
+      [fixture.org, work.opportunity])).rows[0];
+    expect(estimate).toBeTruthy();
+    const route = `/api/v1/canonical/estimates/${estimate.id}`;
+    const read = async () => {
+      const response = await request(fixture.app).get(`${route}/review`).set(actor('owner').session.headers);
+      expect(response.status).toBe(200); return response.body.data;
+    };
+    const send = (path, body) => request(fixture.app).post(route + path)
+      .set(actor('owner').session.headers).set('Idempotency-Key', uuid()).send(body);
+    let review = await read();
+    const equipment = require('../helpers/m24-equipment-input');
+    const identityFields = require('../../src/estimating/equipmentPlanContract').IDENTITY;
+    const sourceAsset = asset => {
+      const source = review.equipmentPlans.sources.assets.find(value => value.id === asset.id);
+      expect(source).toBeTruthy();
+      return source;
+    };
+    const exactIdentity = source => Object.fromEntries(identityFields.map(key => [key,
+      source.privateConfiguration ? (source.privateConfiguration[key] ?? null) :
+        key === 'manufacturer' ? source.manufacturer : key === 'model' ? source.model :
+          key === 'modelYear' && source.modelYear !== null ? String(source.modelYear) : null]));
+    const vehicleSource = sourceAsset(mountedVehicle);
+    const equipmentSource = sourceAsset(mountedEquipment);
+    const equipmentInputs = equipment.inputs([
+      equipment.line({ task: 'Transport the accepted service visit', assetId: mountedVehicle.id,
+        identity: exactIdentity(vehicleSource), accessBasis: 'owned',
+        ownerReview: 'Owner reviewed the exact active service vehicle source.' }),
+      equipment.line({ task: 'Complete the accepted repair scope', assetId: mountedEquipment.id,
+        identity: exactIdentity(equipmentSource), accessBasis: 'owned',
+        ownerReview: 'Owner reviewed the exact active service equipment source.' }),
+    ]);
+    equipmentInputs.serviceKey = review.equipmentPlans.sources.serviceKey;
+    const equipmentBody = { action: 'save', expectedRevision: review.equipmentPlans.current?.revision || 0,
+      expectedDigest: review.equipmentPlans.current?.digest || 'none', sourcePins: review.pins,
+      expectedDecisionRevision: review.decisions.writeBasis.revision,
+      expectedDecisionDigest: review.decisions.writeBasis.digest, inputs: equipmentInputs,
+      currency: review.currency, reason: 'Review the exact active vehicle and equipment for capacity research.',
+      confirmed: true, confirmationVersion: 'estimate-equipment-plan-v1' };
+    let response = await send('/equipment-plan-preview', equipmentBody);
+    if (response.status !== 200) throw new Error(
+      `Mounted equipment preview failed: ${JSON.stringify({ status: response.status, body: response.body,
+        sourceAssets: review.equipmentPlans.sources.assets })}`);
+    equipmentBody.inputs.assessment = { ...response.body.data.assessment, acknowledged: true };
+    response = await send('/equipment-plans', equipmentBody);
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
+
+    review = await read();
+    const readinessBody = require('../helpers/m24-readiness-input').body(review);
+    response = await send('/equipment-readiness-preview', readinessBody);
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 200 });
+    readinessBody.inputs.assessment = { ...response.body.data.assessment, acknowledged: true };
+    response = await send('/equipment-readiness-plans', readinessBody);
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
+
+    review = await read();
+    const travel = require('../helpers/m24-travel-input');
+    const travelInputs = travel.fixture();
+    travelInputs.serviceKey = review.travelPlans.serviceKey;
+    const origin = review.travelPlans.sources.locations.find(value =>
+      value.kind === 'business_location' && value.sourceId === 'headquarters');
+    const destination = review.travelPlans.sources.locations.find(value =>
+      value.kind === 'recorded_job' && value.sourceId === estimate.id);
+    if (!origin || !destination) throw new Error(
+      `Mounted travel locations unavailable: ${JSON.stringify(review.travelPlans.sources.locations)}`);
+    travelInputs.trips[0].origin = contradictoryTravel ?
+      travel.location('A declared route that contradicts the accepted formation home') : structuredClone(origin);
+    travelInputs.trips[0].destination = structuredClone(destination);
+    travelInputs.trips[0].vehicles = 1; travelInputs.trips[0].people = 2;
+    const travelBody = { action: 'save', expectedRevision: review.travelPlans.current?.revision || 0,
+      expectedDigest: review.travelPlans.current?.digest || 'none', sourcePins: review.pins,
+      expectedDecisionRevision: review.decisions.writeBasis.revision,
+      expectedDecisionDigest: review.decisions.writeBasis.digest, inputs: travelInputs,
+      currency: review.currency, reason: contradictoryTravel ?
+        'Record the guarded but contradictory declared route for fail-closed proof.' :
+        'Review the exact business-location to recorded-job route for capacity research.',
+      confirmed: true, confirmationVersion: 'estimate-travel-plan-v1' };
+    response = await send('/travel-plan-preview', travelBody);
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 200 });
+    travelBody.inputs.assessment = { ...response.body.data.assessment, acknowledged: true,
+      explanation: 'Owner reviewed the bounded internal route basis; provider routing is unavailable.' };
+    response = await send('/travel-plans', travelBody);
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
+    return read();
+  }
+
   beforeAll(async () => {
     fixture = await createDatabaseFixture({ operationalSchedule: true });
     app = express(); app.use(express.json());
@@ -223,25 +316,63 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
         });
       expect(response.status).toBe(200);
     }
-    let response = await request(fixture.app).put(`/api/workforce/profiles/${actor('member').actorUserId}`)
+    let response = await request(fixture.app).post('/api/workforce/skills')
+      .set(actor('owner').session.headers).send({ key: 'm26-v4-fixture-repair', name: 'Fixture repair',
+        description: 'Mounted source-backed skill declaration.', serviceId: 'plumbing' });
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
+    mountedSkill = response.body.data;
+    response = await request(fixture.app).put(`/api/workforce/profiles/${actor('member').actorUserId}`)
       .set(actor('owner').session.headers).send({ operationalRole: 'technician',
-        homeLocationId: 'headquarters', skillIds: [] });
+        homeLocationId: 'headquarters', skillIds: [mountedSkill.id] });
     expect(response.status).toBe(200);
+    response = await request(fixture.app).put(`/api/workforce/profiles/${actor('dispatcher').actorUserId}`)
+      .set(actor('owner').session.headers).send({ operationalRole: 'dispatcher',
+        homeLocationId: 'headquarters', skillIds: [mountedSkill.id] });
+    expect(response.status).toBe(200);
+    response = await request(fixture.app).post('/api/workforce/crews')
+      .set(actor('owner').session.headers).send({ key: 'm26-v4-mixed-crew',
+        name: 'Mounted mixed-role crew', homeLocationId: 'headquarters', members: [
+          { profileId: actor('member').actorUserId, role: 'lead' },
+          { profileId: actor('dispatcher').actorUserId, role: 'member' },
+        ] });
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
+    mountedCrew = response.body.data;
+    const assetBody = (category, name, reference) => ({ category, name, internalReference: reference,
+      manufacturer: 'Example', model: `${category}-one`, modelYear: 2026,
+      configuration: 'Mounted source-owned configuration', serialNumber: `${reference}-SERIAL`, vin: null,
+      homeLocationId: 'headquarters', serviceIds: ['plumbing'] });
+    response = await request(fixture.app).post('/api/assets').set(actor('owner').session.headers)
+      .send(assetBody('vehicle', 'Mounted fixture van', 'P5D-V4-VAN'));
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
+    mountedVehicle = response.body.data;
+    response = await request(fixture.app).post('/api/assets').set(actor('owner').session.headers)
+      .send(assetBody('equipment', 'Mounted fixture machine', 'P5D-V4-MACHINE'));
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
+    mountedEquipment = response.body.data;
+    for (const asset of [mountedVehicle, mountedEquipment]) {
+      if (asset.catalogueState !== 'active') {
+        const activated = await request(fixture.app).patch(`/api/assets/${asset.id}/catalogue-state`)
+          .set(actor('owner').session.headers).send({ version: asset.version, catalogueState: 'active' });
+        expect({ status: activated.status, body: activated.body }).toMatchObject({ status: 200 });
+      }
+    }
     const availabilityStart = new Date('2029-12-31T00:00:00.000Z');
     const availabilityIntervals = Array.from({ length: 12 }, (_, index) => ({
       kind: 'available',
       start: new Date(availabilityStart.getTime() + index * 30 * 86400000).toISOString(),
       end: new Date(availabilityStart.getTime() + (index + 1) * 30 * 86400000).toISOString(),
     }));
-    response = await request(fixture.app)
-      .put(`/api/v1/canonical/availability/profiles/${actor('member').actorUserId}`)
-      .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5d-v3-availability-${uuid()}`)
-      .send({ expectedRevision: 0, expectedDigest: null, expectedTimeZone: 'UTC',
-        coverageStart: availabilityStart.toISOString(),
-        coverageEnd: new Date(availabilityStart.getTime() + 365 * 86400000).toISOString(),
-        intervals: availabilityIntervals,
-        reason: 'Owner declared bounded future availability for the mounted positive-work proof.' });
-    expect({ status: response.status, body: response.body }).toMatchObject({ status: 200 });
+    for (const name of ['member', 'dispatcher']) {
+      response = await request(fixture.app)
+        .put(`/api/v1/canonical/availability/profiles/${actor(name).actorUserId}`)
+        .set(actor('owner').session.headers).set('Idempotency-Key', `m26-p5d-v4-availability-${uuid()}`)
+        .send({ expectedRevision: 0, expectedDigest: null, expectedTimeZone: 'UTC',
+          coverageStart: availabilityStart.toISOString(),
+          coverageEnd: new Date(availabilityStart.getTime() + 365 * 86400000).toISOString(),
+          intervals: availabilityIntervals,
+          reason: 'Owner declared bounded future availability for the mounted positive-work proof.' });
+      expect({ status: response.status, body: response.body }).toMatchObject({ status: 200 });
+    }
     positiveWork = await createAcceptedWork();
     await approvePersonPlan(positiveWork);
     secondPositiveWork = await createAcceptedWork();
@@ -264,7 +395,7 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
         return { ok: result.status >= 200 && result.status < 300, status: result.status,
           json: async () => result.body };
       } });
-  }, 120000);
+  }, 240000);
 
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
@@ -276,7 +407,7 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
     const value = controller.inspect().journey;
     if (!value) {
       const raw = (await fixture.ownerPool.query(
-        'SELECT public.canonical_forecast_capacity_ui_v3_current($1,$2,$3,$4) value',
+        'SELECT public.canonical_forecast_capacity_ui_v4_current($1,$2,$3,$4) value',
         [actor('owner').organizationId, actor('owner').actorUserId, actor('owner').actorAccessRole,
           actor('owner').authSessionId])).rows[0].value;
       throw new Error(`Mounted controller journey failed: ${JSON.stringify({
@@ -299,6 +430,13 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
     const current = await journey();
     expect(current.setup.state).toBe('ready');
     if (expectedAction) expect(current.setup.action).toBe(expectedAction);
+    if (current.setup.action === 'constrained_work_scopes') {
+      expect(current.setup.scopeReviews).toHaveLength(1);
+      offeredScopeReview = structuredClone(current.setup.scopeReviews[0]);
+      const dispatcher = ui.created.filter(element => element.type === 'checkbox' &&
+        element.value === 'dispatcher').at(-1);
+      expect(dispatcher).toBeTruthy(); dispatcher.checked = true; dispatcher.listeners.change();
+    }
     ui.values.commandCenterCapacityHiringPeriods.value = String(periods);
     ui.values.commandCenterCapacityHiringPeriods.listeners.change();
     ui.values.commandCenterCapacityReviewReason.value = 'Approve this exact source-backed research prerequisite.';
@@ -310,6 +448,9 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
     const call = actionCalls.find(entry => entry.method === 'POST');
     if (!call || call.method !== 'POST' || call.status !== 201) throw new Error(
       `Mounted setup ${current.setup.action} failed: ${JSON.stringify({ actionCalls, state: ui.values.commandCenterCapacityState.textContent })}`);
+    if (current.setup.action === 'constrained_work_scopes') {
+      submittedScopeChoice = structuredClone(JSON.parse(call.body).scopeReviews[0]);
+    }
     await setClock(new Date(logicalNow.getTime() + 1000));
     return controller.inspect().journey;
   }
@@ -377,6 +518,33 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
     await ui.lanes[lane].click();
     const call = mountedCalls.slice().reverse().find(item => item.method === 'POST');
     if (!call || call.method !== 'POST' || ![200, 201].includes(call.status)) {
+      let directError = null;
+      let advisoryDebug = null;
+      if (call && call.body) {
+        const failedBody = JSON.parse(call.body);
+        const client = await fixture.runtimePool.connect();
+        try {
+          await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+          await client.query(
+            'SELECT public.canonical_forecast_capacity_ui_v4_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+            [fixture.org, actor('owner').actorUserId, actor('owner').actorAccessRole,
+              actor('owner').authSessionId, actor('owner').csrfToken, call.idempotencyKey,
+              failedBody.action, failedBody.originId, failedBody.outcomeId, failedBody.correctionOriginId,
+              failedBody.expectedRevision, failedBody.reason, failedBody.confirmationVersion]);
+        } catch (error) { directError = { code: error.code, message: error.message, where: error.where }; }
+        finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
+      }
+      if (action === 'advisory_capture_origin') {
+        advisoryDebug = (await fixture.ownerPool.query(
+          `WITH inputs AS (SELECT public.canonical_forecast_constrained_capacity_v1_complete_input($1,$2) c,
+             public.canonical_forecast_workload_capacity_v1_backlog_evidence($1,$2) b)
+           SELECT alternative,
+            public.canonical_forecast_capacity_ui_v3_demand_definition($1,alternative,c,'demand',NULL,b->'rows') definition,
+            public.canonical_forecast_capacity_advisory_v1_demand_valid(
+             public.canonical_forecast_capacity_ui_v3_demand_definition($1,alternative,c,'demand',NULL,b->'rows'),'demand') valid
+           FROM inputs,jsonb_array_elements_text(c->'alternatives') alternative`,
+          [fixture.org, logicalNow])).rows;
+      }
       const constrainedDebug = action === 'constrained_capture_origin' ? (await fixture.ownerPool.query(
         `SELECT scope_key,definition,
           public.canonical_forecast_workload_capacity_v1_capacity_calculation(
@@ -385,7 +553,7 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
          FROM public.canonical_forecast_constrained_capacity_reviews_v1
          WHERE organization_id=$2 AND review_kind='scope' AND action='approve'
          ORDER BY decided_at DESC`, [logicalNow, fixture.org])).rows : null;
-      throw new Error(`${action} failed through mounted controller: ${JSON.stringify({ call, current,
+      throw new Error(`${action} failed through mounted controller: ${JSON.stringify({ call, current, directError, advisoryDebug,
         state: ui.values.commandCenterCapacityState.textContent,
         constrainedDebug,
         recent: mountedCalls.slice(-3).map(item => ({ method: item.method, url: item.url,
@@ -430,10 +598,105 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
       `SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1
         WHERE organization_id=$1 AND review_kind IN('demand','outcome_demand')`, [fixture.org])).rows[0].count)).toBe(0);
 
+    const beforeMethod = await runSetupUntilAction('constrained_method');
+    expect(beforeMethod.actions).toEqual(['workload_epoch', 'workload_methods', 'workload_roles',
+      'workload_role_scope', 'workload_remaining_census', 'constrained_epoch']);
+    await setupNext(3, 'constrained_method');
+    let unavailable = await journey();
+    expect(unavailable.setup.state).toBe('unavailable');
+    expect(unavailable.setup.scopeReviews).toEqual([]);
+    expect(Number((await fixture.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_constrained_capacity_reviews_v1
+        WHERE organization_id=$1 AND review_kind IN('scope','job')`, [fixture.org])).rows[0].count)).toBe(0);
+    expect(Number((await fixture.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1
+        WHERE organization_id=$1 AND review_kind IN('demand','outcome_demand')`, [fixture.org])).rows[0].count)).toBe(0);
+
+    await saveConstraintBases(secondPositiveWork);
+    await saveConstraintBases(positiveWork, { contradictoryTravel: true });
+    unavailable = await journey();
+    expect(unavailable.setup.state).toBe('unavailable');
+    expect(Number((await fixture.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_constrained_capacity_reviews_v1
+        WHERE organization_id=$1 AND review_kind IN('scope','job')`, [fixture.org])).rows[0].count)).toBe(0);
+    expect(Number((await fixture.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1
+        WHERE organization_id=$1 AND review_kind IN('demand','outcome_demand')`, [fixture.org])).rows[0].count)).toBe(0);
+    await saveConstraintBases(positiveWork);
+
+    const beforeScopes = await runSetupUntilAction('constrained_work_scopes');
+    expect(beforeScopes.actions).toEqual([]);
+    expect(beforeScopes.current.setup.scopeReviews).toHaveLength(1);
+    expect(beforeScopes.current.setup.scopeReviews[0]).toMatchObject({
+      formation: 'crew', dimensions: { crew: 'applies', skill: 'applies', workingHours: 'applies',
+        location: 'applies', travel: 'applies', vehicle: 'applies', equipment: 'applies' },
+      targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: ['technician'],
+      targetRoleOptions: ['dispatcher', 'technician'],
+      operatorRoleOptions: ['dispatcher', 'technician'], sourceState: 'source_backed',
+      reviewState: 'needs_review' });
+    expect(JSON.stringify(beforeScopes.current.setup.scopeReviews)).not.toMatch(
+      /profileId|crewId|assetId|appointmentId|assignmentId|memberId|jobId|digest|Minutes/i);
+    const invalidScopeBody = { action: 'constrained_work_scopes', token: beforeScopes.current.setup.token,
+      hiringConsecutivePeriods: 3, scopeReviews: [{ scopeKey: beforeScopes.current.setup.scopeReviews[0].scopeKey,
+        targetRole: 'owner', operatorRoles: ['technician'] }],
+      reason: 'Refuse a caller role classification outside the exact server-derived choices.',
+      confirmed: true, confirmationVersion: 'm26-capacity-ui-setup-v2' };
+    const invalidScope = await post('/journey/setup', invalidScopeBody, `m26-p5d-v4-invalid-scope-${uuid()}`);
+    expect([400, 409]).toContain(invalidScope.status);
+    expect(Number((await fixture.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_constrained_capacity_reviews_v1
+        WHERE organization_id=$1 AND review_kind IN('scope','job')`, [fixture.org])).rows[0].count)).toBe(0);
+    expect(Number((await fixture.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_capacity_advisory_reviews_v1
+        WHERE organization_id=$1 AND review_kind IN('demand','outcome_demand')`, [fixture.org])).rows[0].count)).toBe(0);
+    await setupNext(3, 'constrained_work_scopes');
+    expect(offeredScopeReview).toEqual(beforeScopes.current.setup.scopeReviews[0]);
+    expect(submittedScopeChoice).toMatchObject({ scopeKey: offeredScopeReview.scopeKey,
+      targetRole: 'technician', operatorRoles: ['dispatcher', 'technician'] });
+    const scopeSetupCall = mountedCalls.find(call => call.method === 'POST' && call.body &&
+      JSON.parse(call.body).action === 'constrained_work_scopes');
+    const scopeSetupBody = JSON.parse(scopeSetupCall.body);
+    let scopeReplay = await post('/journey/setup', scopeSetupBody, scopeSetupCall.idempotencyKey);
+    expect(scopeReplay.status).toBe(200); expect(scopeReplay.headers['idempotency-replayed']).toBe('true');
+    expect(scopeReplay.body.data).toMatchObject({ action: 'constrained_work_scopes', replayed: true });
+    let scopeConflict = await post('/journey/setup', { ...scopeSetupBody,
+      scopeReviews: [{ ...scopeSetupBody.scopeReviews[0], operatorRoles: ['technician'] }] },
+    scopeSetupCall.idempotencyKey);
+    expect(scopeConflict.status).toBe(409);
+    scopeConflict = await post('/journey/setup', scopeSetupBody, `m26-p5d-v4-changed-scope-key-${uuid()}`);
+    expect(scopeConflict.status).toBe(409);
+    const privateScope = (await fixture.ownerPool.query(
+      `SELECT definition FROM canonical_forecast_constrained_capacity_reviews_v1
+        WHERE organization_id=$1 AND review_kind='scope' AND action='approve'
+        ORDER BY revision DESC LIMIT 1`, [fixture.org])).rows[0].definition;
+    expect(privateScope.applicability).toEqual({ crew: true, skill: true, workingHours: true,
+      location: true, travel: true, vehicle: true, equipment: true });
+    expect(privateScope.role).toBe('technician');
+    expect(privateScope.locationKey).toBe('headquarters');
+    expect(privateScope.crewIds).toEqual([mountedCrew.id]);
+    expect(privateScope.skillIds).toEqual([mountedSkill.id]);
+    expect(privateScope.travelPairs).toHaveLength(2);
+    expect(privateScope.travelPairs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fromLocationKey: 'headquarters', toLocationKey: 'site-one', basis: 'estimated' }),
+      expect.objectContaining({ fromLocationKey: 'site-one', toLocationKey: 'headquarters', basis: 'estimated' }),
+    ]));
+    expect(privateScope.vehicleAssetIds).toEqual([mountedVehicle.id]);
+    expect(privateScope.equipmentAssetIds).toEqual([mountedEquipment.id]);
+    expect(privateScope.crewRoleRequirements).toEqual(expect.arrayContaining([
+      { role: 'dispatcher', count: 1 }, { role: 'technician', count: 1 },
+    ]));
+    expect(privateScope.crewAssignments).toEqual(expect.arrayContaining([
+      { profileId: actor('member').actorUserId, crewId: mountedCrew.id, role: 'technician' },
+      { profileId: actor('dispatcher').actorUserId, crewId: mountedCrew.id, role: 'dispatcher' },
+    ]));
+    expect(privateScope.operatorProfileIds.slice().sort()).toEqual(
+      [actor('member').actorUserId, actor('dispatcher').actorUserId].sort());
+    expect(privateScope.assetAssignments.map(value => value.kind).sort()).toEqual(['equipment', 'vehicle']);
+    expect(privateScope.assetAssignments.map(value => value.operatorProfileId).sort()).toEqual(
+      [actor('member').actorUserId, actor('dispatcher').actorUserId].sort());
+
     const beforeJobs = await runSetupUntilAction('constrained_job_census');
-    expect(beforeJobs.actions).toEqual(['workload_epoch', 'workload_methods', 'workload_roles',
-      'workload_role_scope', 'workload_remaining_census', 'constrained_epoch',
-      'constrained_method', 'constrained_work_scopes']);
+    expect(beforeJobs.actions).toEqual([]);
     const firstSetupCall = mountedCalls.find(call => call.method === 'POST' &&
       call.url.endsWith('/journey/setup'));
     const firstSetupBody = JSON.parse(firstSetupCall.body);
@@ -447,7 +710,7 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
     conflict = await post('/journey/setup', firstSetupBody, `m26-p5d-v3-changed-key-${uuid()}`);
     expect([400, 409]).toContain(conflict.status);
     const privateJobPlan = (await fixture.ownerPool.query(
-      'SELECT canonical_forecast_capacity_ui_v3_job_plan($1,$2) value',
+      'SELECT canonical_forecast_capacity_ui_v4_job_plan($1,$2) value',
       [fixture.org, logicalNow])).rows[0].value;
     expect(privateJobPlan.state).toBe('ready'); expect(privateJobPlan.entries).toHaveLength(2);
     const rejectedSubject = privateJobPlan.entries.map(value => value.subjectId).sort().at(-1);
@@ -459,7 +722,7 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
        ON public.canonical_forecast_constrained_capacity_reviews_v1 FOR EACH ROW
        EXECUTE FUNCTION public.m26_part5d_v3_test_reject_second_job()`);
     const atomicBody = { action: beforeJobs.current.setup.action, token: beforeJobs.current.setup.token,
-      hiringConsecutivePeriods: 3, reason: 'Prove this complete job census is atomic under a known failure.',
+      hiringConsecutivePeriods: 3, scopeReviews: [], reason: 'Prove this complete job census is atomic under a known failure.',
       confirmed: true, confirmationVersion: 'm26-capacity-ui-setup-v2' };
     try {
       const atomicFailure = await post('/journey/setup', atomicBody, `m26-p5d-v3-atomic-${uuid()}`);
@@ -475,6 +738,25 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
     expect(JSON.stringify(atomicBody)).not.toMatch(
       /appointmentId|assignmentId|subjectId|personMinutes|workerId|jobId|assetId|memberId/i);
     await setupNext(3, 'constrained_job_census');
+    const privateJobs = (await fixture.ownerPool.query(
+      `SELECT definition FROM canonical_forecast_constrained_capacity_reviews_v1 value
+        WHERE organization_id=$1 AND review_kind='job' AND action='approve'
+         AND id=(SELECT latest.id FROM canonical_forecast_constrained_capacity_reviews_v1 latest
+          WHERE latest.organization_id=value.organization_id AND latest.review_kind='job'
+           AND latest.scope_key=value.scope_key AND latest.subject_id=value.subject_id
+          ORDER BY latest.revision DESC LIMIT 1)
+        ORDER BY subject_id`, [fixture.org])).rows.map(row => row.definition);
+    expect(privateJobs).toHaveLength(2);
+    for (const definition of privateJobs) {
+      expect(definition).toMatchObject({ alternativeKey: 'accepted_team',
+        crewApplicable: true, skillApplicable: true, workingHoursApplicable: true,
+        locationApplicable: true, travelApplicable: true, vehicleApplicable: true,
+        equipmentApplicable: true, locationKey: 'site-one', previousLocationKey: 'headquarters',
+        nextLocationKey: 'headquarters', vehicleAssetIds: [mountedVehicle.id],
+        equipmentAssetIds: [mountedEquipment.id],
+        equipmentBasis: { kind: 'm24_adopted' }, readinessBasis: { kind: 'm24_adopted' },
+        travelBasis: { kind: 'm24_adopted' } });
+    }
     const waiting = await runSetupUntil(['waiting', 'unavailable', 'complete']);
     expect(waiting.current.setup.state).toBe('waiting');
     expect(waiting.actions).toEqual([]);
@@ -660,5 +942,5 @@ realPostgres('Mission 26 Part 5D correction v3 mounted positive-work journey', (
       /appointmentId|assignmentId|subjectId|workerId|jobId|assetId|memberId|personMinutes|demandMinutes/i);
     expect(controller.inspect()).toMatchObject({ identity:
       'paid:mounted-tenant:revision:digest:session:generation:expiry', uncertainAttempt: null, busy: false });
-  }, 120000);
+  }, 300000);
 });

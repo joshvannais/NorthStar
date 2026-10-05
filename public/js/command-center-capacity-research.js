@@ -217,26 +217,42 @@
       value.hiringConsecutivePeriods > 12 || !Array.isArray(value.scopeReviews)) return false;
     function reviewValid(item) {
       if (!exact(item, ['scopeKey', 'formation', 'dimensions', 'targetRole', 'supportRoles',
-        'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleOptions', 'sourceState', 'reviewState']) ||
+        'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleCombinations',
+        'sourceState', 'reviewState']) ||
         !TOKEN.test(item.scopeKey || '') || !['profile', 'crew'].includes(item.formation) ||
         !exact(item.dimensions, DIMENSIONS) ||
         DIMENSIONS.some(function (name) { return !['applies', 'not_applicable'].includes(item.dimensions[name]); }) ||
         item.dimensions.workingHours !== 'applies' || item.dimensions.location !== 'applies' ||
         (item.dimensions.crew === 'applies') !== (item.formation === 'crew') || !ROLE.test(item.targetRole || '') ||
         item.sourceState !== 'source_backed' || !['current', 'needs_review'].includes(item.reviewState)) return false;
-      var arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleOptions'];
+      var arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles'];
       if (arrays.some(function (name) { return !Array.isArray(item[name]) || item[name].length > 9 ||
         item[name].some(function (role) { return typeof role !== 'string' || !ROLE.test(role); }) ||
-        new Set(item[name]).size !== item[name].length; })) return false;
-      var targets = new Set(item.targetRoleOptions); var operators = new Set(item.operatorRoleOptions);
-      return targets.has(item.targetRole) && item.selectableTargetRoles.length > 0 &&
-        item.selectableTargetRoles.every(function (role) { return targets.has(role); }) &&
-        item.supportRoles.length === item.targetRoleOptions.length - 1 &&
+        new Set(item[name]).size !== item[name].length; }) ||
+        !Array.isArray(item.operatorRoleCombinations) || item.operatorRoleCombinations.length < 1 ||
+        item.operatorRoleCombinations.length > 128) return false;
+      var targets = new Set(item.targetRoleOptions); var selectableTargets = new Set(item.selectableTargetRoles);
+      var assetsApply = item.dimensions.vehicle === 'applies' || item.dimensions.equipment === 'applies';
+      var combinationKeys = new Set(); var combinationsValid = item.operatorRoleCombinations.every(function (combination) {
+        if (!exact(combination, ['targetRole', 'operatorRoles']) || !ROLE.test(combination.targetRole || '') ||
+            !selectableTargets.has(combination.targetRole) || !Array.isArray(combination.operatorRoles) ||
+            combination.operatorRoles.length > 9 ||
+            combination.operatorRoles.some(function (role) {
+              return typeof role !== 'string' || !ROLE.test(role) || !targets.has(role);
+            }) || new Set(combination.operatorRoles).size !== combination.operatorRoles.length ||
+            assetsApply !== (combination.operatorRoles.length > 0)) return false;
+        var key = combination.targetRole + ':' + JSON.stringify(combination.operatorRoles);
+        if (combinationKeys.has(key)) return false; combinationKeys.add(key); return true;
+      });
+      var selectedKey = item.targetRole + ':' + JSON.stringify(item.operatorRoles);
+      return combinationsValid && targets.has(item.targetRole) && item.selectableTargetRoles.length > 0 &&
+        item.selectableTargetRoles.every(function (role) {
+          return targets.has(role) && item.operatorRoleCombinations.some(function (combination) {
+            return combination.targetRole === role;
+          });
+        }) && item.supportRoles.length === item.targetRoleOptions.length - 1 &&
         item.supportRoles.every(function (role) { return role !== item.targetRole && targets.has(role); }) &&
-        item.operatorRoles.every(function (role) { return operators.has(role); }) &&
-        (item.operatorRoleOptions.length > 0) ===
-          (item.dimensions.vehicle === 'applies' || item.dimensions.equipment === 'applies') &&
-        (item.operatorRoles.length > 0) === (item.operatorRoleOptions.length > 0);
+        (selectableTargets.has(item.targetRole) ? combinationKeys.has(selectedKey) : item.operatorRoles.length === 0);
     }
     if (value.state === 'ready') {
       if (!SETUP_ACTIONS.includes(value.action) || !DIGEST.test(value.token || '') ||
@@ -727,6 +743,14 @@
     function reasonReady(id, maximum) {
       var length = byId(id).value.trim().length; return length >= 10 && length <= maximum;
     }
+    function combinationsFor(review, targetRole) {
+      return review.operatorRoleCombinations.filter(function (combination) {
+        return combination.targetRole === targetRole;
+      });
+    }
+    function sameRoles(left, right) {
+      return JSON.stringify(left) === JSON.stringify(right);
+    }
     function selectedScopeReviews() {
       var current = journey && journey.setup;
       if (!current || current.action !== 'constrained_work_scopes') return [];
@@ -734,11 +758,13 @@
       var choices = [];
       for (var index = 0; index < current.scopeReviews.length; index += 1) {
         var offered = current.scopeReviews[index]; var selected = scopeSelections[offered.scopeKey];
-        if (!selected || !offered.selectableTargetRoles.includes(selected.targetRole) ||
-            selected.operatorRoles.some(function (role) { return !offered.operatorRoleOptions.includes(role); }) ||
-            (selected.operatorRoles.length > 0) !== (offered.operatorRoleOptions.length > 0)) return null;
+        var exactCombination = selected && offered.operatorRoleCombinations.some(function (combination) {
+          return combination.targetRole === selected.targetRole &&
+            sameRoles(combination.operatorRoles, selected.operatorRoles);
+        });
+        if (!selected || !offered.selectableTargetRoles.includes(selected.targetRole) || !exactCombination) return null;
         choices.push({ scopeKey: offered.scopeKey, targetRole: selected.targetRole,
-          operatorRoles: offered.operatorRoleOptions.filter(function (role) { return selected.operatorRoles.includes(role); }) });
+          operatorRoles: selected.operatorRoles.slice() });
       }
       return choices;
     }
@@ -749,12 +775,16 @@
       root.hidden = !reviews.length;
       reviews.forEach(function (review, index) {
         var initialTarget = review.selectableTargetRoles.includes(review.targetRole) ? review.targetRole : '';
+        var initialCombinations = combinationsFor(review, initialTarget);
+        var initialCombination = initialCombinations.find(function (combination) {
+          return sameRoles(combination.operatorRoles, review.operatorRoles);
+        }) || initialCombinations[0];
         scopeSelections[review.scopeKey] = { targetRole: initialTarget,
-          operatorRoles: review.operatorRoles.slice() };
+          operatorRoles: initialCombination ? initialCombination.operatorRoles.slice() : [] };
         var card = node('section', 'command-center-capacity-scope-review');
         card.append(node('h4', '', 'Accepted work formation ' + String(index + 1)),
           node('p', 'command-center-capacity-scope-source',
-            'Source-backed ' + title(review.formation) + ' formation · ' +
+            'Source-backed ' + title(review.formation) + ' formation \u00b7 ' +
             (review.reviewState === 'current' ? 'current review' : 'explicit review required')));
         var dimensions = node('dl', 'command-center-capacity-scope-dimensions');
         DIMENSIONS.forEach(function (name) {
@@ -782,30 +812,45 @@
             'Supporting roles: ' + roles.map(title).join(', ') + '.' :
             'No separate supporting role applies to this formation.';
         }
-        target.addEventListener('change', function () {
-          scopeSelections[review.scopeKey].targetRole = target.value; updateSupport(); updateButtons();
-        });
-        updateSupport(); card.append(support);
-        if (review.operatorRoleOptions.length) {
-          var operators = node('fieldset', 'command-center-capacity-operator-roles');
-          operators.append(node('legend', '', 'Roles authorized to operate the reviewed vehicle or equipment'));
-          review.operatorRoleOptions.forEach(function (role, roleIndex) {
-            var label = node('label'); var checkbox = node('input'); checkbox.type = 'checkbox';
-            checkbox.value = role; checkbox.id = 'commandCenterCapacityOperatorRole' + String(index) + '-' + String(roleIndex);
-            checkbox.checked = scopeSelections[review.scopeKey].operatorRoles.includes(role); label.htmlFor = checkbox.id;
-            checkbox.addEventListener('change', function () {
-              var selected = scopeSelections[review.scopeKey].operatorRoles;
-              if (checkbox.checked && !selected.includes(role)) selected.push(role);
-              if (!checkbox.checked) scopeSelections[review.scopeKey].operatorRoles = selected.filter(function (item) { return item !== role; });
+        var operators = node('fieldset', 'command-center-capacity-operator-roles');
+        operators.append(node('legend', '', 'Feasible vehicle and equipment operator roles'));
+        var operatorChoices = node('div', 'command-center-capacity-operator-combinations');
+        operators.append(operatorChoices);
+        function renderOperatorCombinations() {
+          operatorChoices.replaceChildren();
+          var selected = scopeSelections[review.scopeKey];
+          var combinations = combinationsFor(review, selected.targetRole);
+          if (!selected.targetRole) {
+            operatorChoices.append(node('p', '', 'Choose the target capacity role to see a complete operator combination.'));
+            return;
+          }
+          combinations.forEach(function (combination, combinationIndex) {
+            var label = node('label'); var radio = node('input'); radio.type = 'radio';
+            radio.name = 'commandCenterCapacityOperatorCombination' + String(index);
+            radio.id = radio.name + '-' + String(combinationIndex);
+            radio.checked = sameRoles(selected.operatorRoles, combination.operatorRoles);
+            label.htmlFor = radio.id;
+            radio.addEventListener('change', function () {
+              if (radio.checked) scopeSelections[review.scopeKey].operatorRoles = combination.operatorRoles.slice();
               updateButtons();
             });
-            label.append(checkbox, node('span', '', title(role))); operators.append(label);
+            var copy = combination.operatorRoles.length ?
+              combination.operatorRoles.map(title).join(' + ') : 'No operator role needed';
+            label.append(radio, node('span', '', copy)); operatorChoices.append(label);
           });
-          card.append(operators);
-        } else card.append(node('p', 'command-center-capacity-operator-roles',
-          'No vehicle or equipment operator classification applies.'));
-        if (review.operatorRoleOptions.length) card.append(node('p', 'command-center-capacity-review-note',
-          'For this research scope, the selected operators\' accepted working-hours windows are the bounded vehicle and equipment calendar.'));
+        }
+        target.addEventListener('change', function () {
+          scopeSelections[review.scopeKey].targetRole = target.value;
+          var combinations = combinationsFor(review, target.value);
+          scopeSelections[review.scopeKey].operatorRoles = combinations.length ?
+            combinations[0].operatorRoles.slice() : [];
+          updateSupport(); renderOperatorCombinations(); updateButtons();
+        });
+        updateSupport(); card.append(support); renderOperatorCombinations(); card.append(operators);
+        card.append(node('p', 'command-center-capacity-review-note',
+          'Only complete role combinations that current sources can assign without reusing a person are available.'));
+        card.append(node('p', 'command-center-capacity-review-note',
+          'The accepted working-hours windows for that exact combination bound the vehicle and equipment calendar.'));
         card.append(node('p', 'command-center-capacity-review-note',
           'Review all seven applicability labels and these role classifications before approval. Private identities and amounts remain withheld.'));
         root.append(card);

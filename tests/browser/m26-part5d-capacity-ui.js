@@ -130,10 +130,11 @@ function response(status, data) {
           scopeKey: 'accepted_crew_safe_fixture', formation: 'crew',
           dimensions: { crew: 'applies', skill: 'applies', workingHours: 'applies', location: 'applies',
             travel: 'applies', vehicle: 'applies', equipment: 'applies' },
-          targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: ['technician'],
+          targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: [],
           targetRoleOptions: ['dispatcher', 'technician'],
           selectableTargetRoles: ['dispatcher'],
-          operatorRoleOptions: ['dispatcher', 'technician'], sourceState: 'source_backed',
+          operatorRoleCombinations: [{ targetRole: 'dispatcher', operatorRoles: ['technician'] }],
+          sourceState: 'source_backed',
           reviewState: 'needs_review',
         }] };
       await page.evaluate(journey => {
@@ -143,8 +144,9 @@ function response(status, data) {
       const scopeText = await page.locator('#commandCenterCapacityScopeReviews').innerText();
       for (const copy of ['Accepted work formation 1', 'Source-backed Crew formation', 'Crew', 'Skill',
         'Working hours', 'Location', 'Travel', 'Vehicle', 'Equipment', 'Target capacity role',
-        'Choose the target capacity role before approval', 'Roles authorized to operate the reviewed vehicle or equipment',
-        "selected operators' accepted working-hours windows are the bounded vehicle and equipment calendar",
+        'Choose the target capacity role before approval', 'Feasible vehicle and equipment operator roles',
+        'Only complete role combinations that current sources can assign without reusing a person are available',
+        'accepted working-hours windows for that exact combination bound the vehicle and equipment calendar',
         'Private identities and amounts remain withheld']) assert.match(scopeText, new RegExp(copy));
       const setupButton = page.getByRole('button', { name: 'Approve accepted-work formations', exact: true });
       assert.equal(await setupButton.isDisabled(), true);
@@ -154,9 +156,10 @@ function response(status, data) {
       const targetRole = page.locator('#commandCenterCapacityTargetRole0');
       await targetRole.focus(); await targetRole.selectOption('dispatcher');
       assert.match(await page.locator('#commandCenterCapacityScopeReviews').innerText(), /Supporting roles: Technician/);
-      const dispatcherOperator = page.getByRole('checkbox', { name: 'Dispatcher', exact: true });
-      await dispatcherOperator.focus(); await page.keyboard.press('Space');
-      assert.equal(await dispatcherOperator.isChecked(), true);
+      assert.equal(await page.getByRole('radio', { name: 'Dispatcher', exact: true }).count(), 0);
+      const technicianOperators = page.getByRole('radio', { name: 'Technician', exact: true });
+      await technicianOperators.focus(); await page.keyboard.press('Space');
+      assert.equal(await technicianOperators.isChecked(), true);
       assert.equal(await setupButton.isDisabled(), false);
       await page.locator('#commandCenterCapacityRoot').screenshot({
         path: path.join(output, 'paid-mobile-scope-review.png'),
@@ -173,7 +176,7 @@ function response(status, data) {
       const calls = await page.evaluate(() => window.__calls);
       const submitted = JSON.parse(calls.find(item => item.method === 'POST').body);
       assert.deepEqual(submitted.scopeReviews, [{ scopeKey: 'accepted_crew_safe_fixture',
-        targetRole: 'dispatcher', operatorRoles: ['dispatcher', 'technician'] }]);
+        targetRole: 'dispatcher', operatorRoles: ['technician'] }]);
       assert.equal(/profileId|crewId|assetId|appointmentId|assignmentId|memberId|jobId|digest|Minutes/i
         .test(JSON.stringify(submitted.scopeReviews)), false);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

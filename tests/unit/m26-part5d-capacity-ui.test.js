@@ -13,7 +13,7 @@ const ORG = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const SESSION = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const KEY = 'm26-part5d-exact-key-0001';
-const SCOPE_CHOICE = { scopeKey: 'accepted_crew_1234567890abcdef', targetRole: 'technician',
+const SCOPE_CHOICE = { scopeKey: 'accepted_crew_1234567890abcdef', targetRole: 'dispatcher',
   operatorRoles: ['technician'] };
 
 function response(status, data) {
@@ -252,9 +252,9 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const review = { scopeKey: SCOPE_CHOICE.scopeKey, formation: 'crew',
       dimensions: { crew: 'applies', skill: 'applies', workingHours: 'applies', location: 'applies',
         travel: 'applies', vehicle: 'applies', equipment: 'applies' },
-      targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: ['technician'],
+      targetRole: 'technician', supportRoles: ['dispatcher'], operatorRoles: [],
       targetRoleOptions: ['dispatcher', 'technician'], selectableTargetRoles: ['dispatcher'],
-      operatorRoleOptions: ['dispatcher', 'technician'],
+      operatorRoleCombinations: [{ targetRole: 'dispatcher', operatorRoles: ['technician'] }],
       sourceState: 'source_backed', reviewState: 'needs_review' };
     const journey = capacity.demoJourney(0);
     journey.setup = { state: 'ready', action: 'constrained_work_scopes', token: 'a'.repeat(64), lane: 'all',
@@ -271,8 +271,12 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       { ...review, targetRole: 'dispatcher' }, { ...review, supportRoles: [] },
       { ...review, selectableTargetRoles: [] }, { ...review, selectableTargetRoles: ['owner'] },
       { ...review, selectableTargetRoles: ['dispatcher', 'dispatcher'] },
-      { ...review, operatorRoles: [] }, { ...review, operatorRoles: ['technician', 'technician'] },
-      { ...review, operatorRoleOptions: [] }, { ...review, sourceState: 'caller_claimed' },
+      { ...review, operatorRoles: ['technician'] },
+      { ...review, operatorRoleCombinations: [] },
+      { ...review, operatorRoleCombinations: [{ targetRole: 'technician', operatorRoles: ['technician'] }] },
+      { ...review, operatorRoleCombinations: [{ targetRole: 'dispatcher', operatorRoles: ['technician', 'technician'] }] },
+      { ...review, operatorRoleCombinations: [{ targetRole: 'dispatcher', operatorRoles: ['technician'], profileId: USER }] },
+      { ...review, sourceState: 'caller_claimed' },
     ]) rejectProjection(changed);
     expect(safeScopeReviewChoices([SCOPE_CHOICE])).toBe(true);
     for (const choices of [[], [{ ...SCOPE_CHOICE, assetId: USER }],
@@ -321,6 +325,25 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     expect(migration).not.toContain('operator_index%operator_role_count');
     expect(migration).not.toMatch(/WHERE assigned->>'role'=\(operator_roles[\s\S]{0,240}LIMIT 1/);
     expect(route).toContain("SET LOCAL statement_timeout='60000ms'");
+  });
+
+  test('the v6 planner advertises only exact non-reusing operator-role combinations', () => {
+    const migration = fs.readFileSync(path.resolve(__dirname,
+      '../../migrations/232_canonical_forecast_capacity_ui_v6.sql'), 'utf8');
+    const route = fs.readFileSync(path.resolve(__dirname,
+      '../../src/routes/forecastCapacityAdvisory.js'), 'utf8');
+    const controller = fs.readFileSync(path.resolve(__dirname,
+      '../../public/js/command-center-capacity-research.js'), 'utf8');
+    expect(migration).toContain('feasible_operator_combinations');
+    expect(migration).toContain('canonical_forecast_constrained_capacity_v1_exact_match');
+    expect(migration).toContain('Operator role combination is not exactly feasible');
+    expect(migration).toContain('candidate_edge_count>40');
+    expect(migration).toContain("'operatorRoleCombinations',feasible_operator_combinations");
+    expect(migration).not.toContain('operatorRoleOptions');
+    expect(route).toContain('canonical_forecast_capacity_ui_v6_current');
+    expect(route).toContain("'operatorRoleCombinations'");
+    expect(controller).toContain('Only complete role combinations that current sources can assign without reusing a person are available.');
+    expect(controller).not.toContain('operatorRoleOptions');
   });
 
   test('lane reasons stop at 900 while explicit review decisions accept 900, 901 and 1000', async () => {
@@ -405,7 +428,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
       expect(result.status).toBe(200); expect(result.body.data.state).toBe('capacity_research_journey_current');
       expect(result.headers['cache-control']).toBe('private, no-store');
       expect(result.headers['referrer-policy']).toBe('no-referrer');
-      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v5_current'))[1])
+      expect(client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v6_current'))[1])
         .toEqual([ORG, USER, role, SESSION]);
     }
     expect((await request(application({ databaseError: { code: '42501', detail: 'tenant secret' } }).app)
@@ -427,7 +450,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const setup = await request(setupApp.app).post('/api/v1/forecast/capacity-advice/journey/setup')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(setupBody);
     expect(setup.status).toBe(201);
-    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v5_setup_mutate'))[1])
+    expect(setupApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v6_setup_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, setupBody.action, setupBody.token,
         setupBody.hiringConsecutivePeriods, '[]', setupBody.reason, setupBody.confirmationVersion]);
 
@@ -442,7 +465,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     const saved = await request(actionApp.app).post('/api/v1/forecast/capacity-advice/journey/actions')
       .set('X-CSRF-Token', 'csrf').set('Idempotency-Key', KEY).send(body);
     expect(saved.status).toBe(201); expect(JSON.stringify(saved.body)).not.toContain('digest');
-    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v5_action_mutate'))[1])
+    expect(actionApp.client.query.mock.calls.find(([sql]) => sql.includes('capacity_ui_v6_action_mutate'))[1])
       .toEqual([ORG, USER, 'owner', SESSION, 'csrf', KEY, body.action, null, null, null,
         null, body.reason, body.confirmationVersion]);
 

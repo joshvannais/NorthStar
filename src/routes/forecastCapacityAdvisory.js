@@ -168,7 +168,8 @@ function safeSetup(value) {
     value.hiringConsecutivePeriods > 12 || !Array.isArray(value.scopeReviews)) return false;
   const reviewValid = item => {
     if (!exact(item, ['scopeKey', 'formation', 'dimensions', 'targetRole', 'supportRoles',
-      'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleOptions', 'sourceState', 'reviewState']) ||
+      'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleCombinations',
+      'sourceState', 'reviewState']) ||
       !TOKEN.test(item.scopeKey || '') || !['profile', 'crew'].includes(item.formation) ||
       !exact(item.dimensions, DIMENSIONS) ||
       DIMENSIONS.some(name => !['applies', 'not_applicable'].includes(item.dimensions[name])) ||
@@ -176,21 +177,35 @@ function safeSetup(value) {
       (item.dimensions.crew === 'applies') !== (item.formation === 'crew') ||
       !ROLE.test(item.targetRole || '') || !['source_backed'].includes(item.sourceState) ||
       !['current', 'needs_review'].includes(item.reviewState)) return false;
-    const arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles', 'operatorRoleOptions'];
+    const arrays = ['supportRoles', 'operatorRoles', 'targetRoleOptions', 'selectableTargetRoles'];
     if (arrays.some(name => !Array.isArray(item[name]) || item[name].length > 9 ||
       item[name].some(role => typeof role !== 'string' || !ROLE.test(role)) ||
-      new Set(item[name]).size !== item[name].length)) return false;
+      new Set(item[name]).size !== item[name].length) ||
+      !Array.isArray(item.operatorRoleCombinations) || item.operatorRoleCombinations.length < 1 ||
+      item.operatorRoleCombinations.length > 128) return false;
     const targetOptions = new Set(item.targetRoleOptions);
-    const operatorOptions = new Set(item.operatorRoleOptions);
-    if (!targetOptions.has(item.targetRole) || item.selectableTargetRoles.length < 1 ||
-      item.selectableTargetRoles.some(role => !targetOptions.has(role)) ||
-      item.supportRoles.length !== item.targetRoleOptions.length - 1 ||
-      item.supportRoles.some(role => role === item.targetRole || !targetOptions.has(role)) ||
-      item.operatorRoles.some(role => !operatorOptions.has(role)) ||
-      (item.operatorRoleOptions.length > 0) !==
-        (item.dimensions.vehicle === 'applies' || item.dimensions.equipment === 'applies') ||
-      (item.operatorRoles.length > 0) !== (item.operatorRoleOptions.length > 0)) return false;
-    return true;
+    const selectableTargets = new Set(item.selectableTargetRoles);
+    const assetsApply = item.dimensions.vehicle === 'applies' || item.dimensions.equipment === 'applies';
+    const combinations = new Set();
+    for (const combination of item.operatorRoleCombinations) {
+      if (!exact(combination, ['targetRole', 'operatorRoles']) ||
+        !ROLE.test(combination.targetRole || '') || !selectableTargets.has(combination.targetRole) ||
+        !Array.isArray(combination.operatorRoles) || combination.operatorRoles.length > 9 ||
+        combination.operatorRoles.some(role => typeof role !== 'string' || !ROLE.test(role) ||
+          !targetOptions.has(role)) ||
+        new Set(combination.operatorRoles).size !== combination.operatorRoles.length ||
+        assetsApply !== (combination.operatorRoles.length > 0)) return false;
+      const key = combination.targetRole + ':' + JSON.stringify(combination.operatorRoles);
+      if (combinations.has(key)) return false;
+      combinations.add(key);
+    }
+    const selectedKey = item.targetRole + ':' + JSON.stringify(item.operatorRoles);
+    return targetOptions.has(item.targetRole) && item.selectableTargetRoles.length > 0 &&
+      item.selectableTargetRoles.every(role => targetOptions.has(role) &&
+        item.operatorRoleCombinations.some(combination => combination.targetRole === role)) &&
+      item.supportRoles.length === item.targetRoleOptions.length - 1 &&
+      item.supportRoles.every(role => role !== item.targetRole && targetOptions.has(role)) &&
+      (selectableTargets.has(item.targetRole) ? combinations.has(selectedKey) : item.operatorRoles.length === 0);
   };
   if (value.state === 'ready') {
     if (!SETUP_ACTIONS.includes(value.action) || !DIGEST.test(value.token || '') ||
@@ -481,7 +496,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
   router.get('/journey/current', auth, capacityUiAccess, throttle, async (req, res) => {
     if (!exact(req.query, [])) return invalid(res);
     return run(req, res, {
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v5_current($1,$2,$3,$4) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v6_current($1,$2,$3,$4) value',
       validate: safeJourney,
     });
   });
@@ -499,7 +514,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
       !KEY.test(key || '')) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v5_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v6_setup_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.token,
         body.hiringConsecutivePeriods, JSON.stringify(body.scopeReviews), body.reason, body.confirmationVersion],
       validate: value => safeSetupResult(value, body),
@@ -539,7 +554,7 @@ function createForecastCapacityAdvisoryRouter(options = {}) {
         (!body.originId || !body.outcomeId || body.correctionOriginId !== null))) return invalid(res);
     return run(req, res, {
       write: true,
-      sql: 'SELECT public.canonical_forecast_capacity_ui_v5_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
+      sql: 'SELECT public.canonical_forecast_capacity_ui_v6_action_mutate($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) value',
       params: [req.get('X-CSRF-Token'), key, body.action, body.originId, body.outcomeId,
         body.correctionOriginId, body.expectedRevision, body.reason, body.confirmationVersion],
       validate: value => safeActionResult(value, body),

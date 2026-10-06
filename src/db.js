@@ -977,6 +977,20 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       integrated_attached RECORD;
       integrated_trigger_count INTEGER;
       integrated_previous_search_path TEXT;
+      pipeline_pending OID[];
+      pipeline_visited OID[];
+      pipeline_entries TEXT[];
+      pipeline_current_oid OID;
+      pipeline_body TEXT;
+      pipeline_matched TEXT[];
+      pipeline_child OID;
+      pipeline_joined TEXT;
+      pipeline_closure TEXT;
+      pipeline_attached RECORD;
+      pipeline_trigger_count INTEGER;
+      pipeline_previous_search_path TEXT;
+      pipeline_relation REGCLASS;
+      pipeline_columns TEXT;
     BEGIN
       EXECUTE pg_catalog.format('REVOKE CREATE ON SCHEMA public FROM %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT USAGE ON SCHEMA public TO %I', runtime_role);
@@ -2988,6 +3002,538 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           RAISE EXCEPTION 'Required integrated commercial baseline runtime entry points are missing';
         END IF;
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='235_canonical_forecast_pipeline_scenarios.sql') OR
+         pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_origins') IS NOT NULL THEN
+        IF pg_catalog.to_regclass('public.canonical_forecast_pipeline_estimate_sources') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_test_clock') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_method_registration') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_policy_reviews') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_origins') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_evaluations') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_estimate_source_sequence') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_estimate_sources_recent') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_policy_recent') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_origins_recent') IS NULL OR
+           pg_catalog.to_regclass('public.canonical_forecast_pipeline_scenario_evaluations_recent') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_immutable()') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_estimate_source_insert()') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_clock()') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_test_clock_set(timestamptz)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_booking_review_clock()') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_method_closure_digest()') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_weighted_micro(jsonb,text,integer)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_total_weighted_micro(jsonb,integer,integer)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_sources(uuid,uuid,text,uuid,text,timestamptz)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_origin_input_current(uuid,public.canonical_forecast_pipeline_scenario_origins)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_outcome(uuid,public.canonical_forecast_pipeline_scenario_origins)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_policy_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,integer,integer,integer,integer,integer,integer,boolean,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_policy_read(uuid,uuid,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_origin_capture(uuid,uuid,text,uuid,text,text,text,boolean,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_origin_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,text,boolean,text)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_pipeline_scenario_evaluation_read(uuid,uuid,text,uuid,uuid)') IS NULL THEN
+          RAISE EXCEPTION 'Required pipeline scenario authority is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+          ('public.canonical_forecast_pipeline_estimate_source_insert()'),
+          ('public.canonical_forecast_pipeline_scenario_clock()'),
+          ('public.canonical_forecast_pipeline_scenario_test_clock_set(timestamptz)'),
+          ('public.canonical_forecast_pipeline_scenario_booking_review_clock()'),
+          ('public.canonical_forecast_pipeline_scenario_method_closure_digest()'),
+          ('public.canonical_forecast_pipeline_scenario_weighted_micro(jsonb,text,integer)'),
+          ('public.canonical_forecast_pipeline_scenario_total_weighted_micro(jsonb,integer,integer)'),
+          ('public.canonical_forecast_pipeline_scenario_sources(uuid,uuid,text,uuid,text,timestamptz)'),
+          ('public.canonical_forecast_pipeline_scenario_origin_input_current(uuid,public.canonical_forecast_pipeline_scenario_origins)'),
+          ('public.canonical_forecast_pipeline_scenario_outcome(uuid,public.canonical_forecast_pipeline_scenario_origins)'),
+          ('public.canonical_forecast_pipeline_scenario_policy_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,integer,integer,integer,integer,integer,integer,boolean,text)'),
+          ('public.canonical_forecast_pipeline_scenario_policy_read(uuid,uuid,text,uuid)'),
+          ('public.canonical_forecast_pipeline_scenario_origin_capture(uuid,uuid,text,uuid,text,text,text,boolean,text)'),
+          ('public.canonical_forecast_pipeline_scenario_origin_read(uuid,uuid,text,uuid,uuid)'),
+          ('public.canonical_forecast_pipeline_scenario_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,text,boolean,text)'),
+          ('public.canonical_forecast_pipeline_scenario_evaluation_read(uuid,uuid,text,uuid,uuid)')) required(signature)
+          WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
+             AND routine.prosecdef
+             AND pg_catalog.pg_get_userbyid(routine.proowner)=current_user
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid='public.canonical_forecast_pipeline_scenario_immutable()'::regprocedure
+             AND NOT routine.prosecdef
+             AND pg_catalog.pg_get_userbyid(routine.proowner)=current_user
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[]) THEN
+          RAISE EXCEPTION 'Required pipeline scenario function security is missing';
+        END IF;
+        IF EXISTS(SELECT 1 FROM (VALUES
+             ('public.canonical_forecast_pipeline_estimate_sources'::regclass,'r'::char),
+             ('public.canonical_forecast_pipeline_scenario_test_clock'::regclass,'r'::char),
+             ('public.canonical_forecast_pipeline_scenario_method_registration'::regclass,'r'::char),
+             ('public.canonical_forecast_pipeline_scenario_policy_reviews'::regclass,'r'::char),
+             ('public.canonical_forecast_pipeline_scenario_origins'::regclass,'r'::char),
+             ('public.canonical_forecast_pipeline_scenario_evaluations'::regclass,'r'::char),
+             ('public.canonical_forecast_pipeline_estimate_source_sequence'::regclass,'S'::char)
+            ) required(relation_id,relation_kind)
+            WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_class relation_value
+              WHERE relation_value.oid=required.relation_id
+               AND relation_value.relkind=required.relation_kind
+               AND relation_value.relpersistence='p'
+               AND pg_catalog.pg_get_userbyid(relation_value.relowner)=current_user
+               AND NOT relation_value.relispartition
+               AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_inherits inheritance
+                 WHERE inheritance.inhrelid=relation_value.oid
+                    OR inheritance.inhparent=relation_value.oid))) THEN
+           RAISE EXCEPTION 'Required pipeline scenario relation topology is invalid';
+         END IF;
+        -- Bind every reviewed column/default/nullability and every named
+        -- constraint, including all FK targets and actions. The expected
+        -- digests are over transparent catalog manifests, not migration rows
+        -- or a helper owned by the Part 6B authority.
+        IF EXISTS(
+          WITH required(relation_name,column_digest,constraint_digest) AS (VALUES
+            ('canonical_forecast_pipeline_estimate_sources',
+             '33cc297c03a883f40b1fdab7bae3db1eb98cd35bf103e132e8757645f4256e69',
+             '36f63ba7caab5864aff96418c89a9543be6d289c05e10253d5e54bdfd04c2bd0'),
+            ('canonical_forecast_pipeline_scenario_evaluations',
+             '4cc3d43684f5dcf885866bb7a09e1b719bf86769a635b8fea86518b132b62784',
+             'a705d47b5a4494cebf9138884e68f5cef1f5d7e7735a70897b285acb4cc9ba82'),
+            ('canonical_forecast_pipeline_scenario_method_registration',
+             'e8df7684097b1365264ce15e81b219a9be51791504bea3736c80a150465f59d9',
+             '358ef13e55b00a2899c2c8d3ad68b7ac4e02c8ab9ab7911a75cd3ff72accde27'),
+            ('canonical_forecast_pipeline_scenario_origins',
+             'e685b3b5fb4e1603f0c7513918810106715d767e37cc53ae2b5b6705efa521a3',
+             '5c55565c9d55c4530de7a1322990ce3194d1f57ea243a1bb50430e14f6c89f72'),
+            ('canonical_forecast_pipeline_scenario_policy_reviews',
+             '2569318c639926e6ea95d2e83f8d9ecfc118101712ab616fd57bcad42f9e1efd',
+             '96c3da130c0079b3eff0581764bb2006e0a999d7aff3b32f7e745852ed84ff4c'),
+            ('canonical_forecast_pipeline_scenario_test_clock',
+             '4c86766b8ca47adb1743ce53f3670f259bdb1fb27fe05fab1cb1bdf5254ab484',
+             '9025694fd040d3437183fa59649c0edfa7377e095febc91a94fe4ab3d84af0c8')
+          ), actual_columns AS (
+            SELECT required.relation_name,
+              pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+                pg_catalog.string_agg(attribute.attnum::text||':'||
+                  attribute.attname||':'||
+                  pg_catalog.format_type(attribute.atttypid,attribute.atttypmod)||':'||
+                  attribute.attnotnull::text||':'||COALESCE(
+                    pg_catalog.pg_get_expr(default_value.adbin,default_value.adrelid),''),
+                  E'\n' ORDER BY attribute.attnum),'UTF8')),'hex') digest
+            FROM required
+            JOIN pg_catalog.pg_attribute attribute
+              ON attribute.attrelid=required.relation_name::regclass
+            LEFT JOIN pg_catalog.pg_attrdef default_value
+              ON default_value.adrelid=attribute.attrelid
+             AND default_value.adnum=attribute.attnum
+            WHERE attribute.attnum>0 AND NOT attribute.attisdropped
+            GROUP BY required.relation_name
+          ), actual_constraints AS (
+            SELECT required.relation_name,
+              pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+                pg_catalog.string_agg(constraint_value.conname||':'||
+                  constraint_value.contype::text||':'||
+                  constraint_value.condeferrable::text||':'||
+                  constraint_value.condeferred::text||':'||
+                  constraint_value.convalidated::text||':'||
+                  pg_catalog.pg_get_constraintdef(constraint_value.oid,false),
+                  E'\n' ORDER BY constraint_value.conname),'UTF8')),'hex') digest
+            FROM required
+            JOIN pg_catalog.pg_constraint constraint_value
+              ON constraint_value.conrelid=required.relation_name::regclass
+             AND constraint_value.contype<>'n'
+            GROUP BY required.relation_name
+          )
+          SELECT 1 FROM required
+          LEFT JOIN actual_columns USING(relation_name)
+          LEFT JOIN actual_constraints USING(relation_name)
+          WHERE actual_columns.digest IS DISTINCT FROM required.column_digest
+             OR actual_constraints.digest IS DISTINCT FROM required.constraint_digest
+        ) THEN
+          RAISE EXCEPTION 'Required pipeline scenario table schema is invalid';
+        END IF;
+        IF NOT EXISTS(SELECT 1
+          FROM pg_catalog.pg_sequence sequence_value
+          JOIN pg_catalog.pg_class relation_value
+            ON relation_value.oid=sequence_value.seqrelid
+          WHERE relation_value.oid=
+            'public.canonical_forecast_pipeline_estimate_source_sequence'::regclass
+           AND relation_value.relkind='S' AND relation_value.relpersistence='p'
+           AND pg_catalog.pg_get_userbyid(relation_value.relowner)=current_user
+           AND sequence_value.seqtypid='bigint'::regtype
+           AND sequence_value.seqstart=1 AND sequence_value.seqincrement=1
+           AND sequence_value.seqmin=1
+           AND sequence_value.seqmax=9223372036854775807
+           AND sequence_value.seqcache=1 AND NOT sequence_value.seqcycle) THEN
+          RAISE EXCEPTION 'Required pipeline scenario sequence topology is invalid';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_class relation_value
+             JOIN pg_catalog.pg_index index_value
+               ON index_value.indexrelid=relation_value.oid
+             WHERE relation_value.oid=pg_catalog.to_regclass(
+               'public.canonical_forecast_pipeline_estimate_sources_recent')
+              AND relation_value.relkind='i' AND pg_catalog.pg_get_indexdef(
+                relation_value.oid) IS NOT DISTINCT FROM
+               'CREATE INDEX canonical_forecast_pipeline_estimate_sources_recent ON public.canonical_forecast_pipeline_estimate_sources USING btree (organization_id, source_order DESC)') OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_class relation_value
+             JOIN pg_catalog.pg_index index_value
+               ON index_value.indexrelid=relation_value.oid
+             WHERE relation_value.oid=pg_catalog.to_regclass(
+               'public.canonical_forecast_pipeline_scenario_policy_recent')
+              AND relation_value.relkind='i' AND pg_catalog.pg_get_indexdef(
+                relation_value.oid) IS NOT DISTINCT FROM
+               'CREATE INDEX canonical_forecast_pipeline_scenario_policy_recent ON public.canonical_forecast_pipeline_scenario_policy_reviews USING btree (organization_id, revision DESC, id DESC)') OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_class relation_value
+             JOIN pg_catalog.pg_index index_value
+               ON index_value.indexrelid=relation_value.oid
+             WHERE relation_value.oid=pg_catalog.to_regclass(
+               'public.canonical_forecast_pipeline_scenario_origins_recent')
+              AND relation_value.relkind='i' AND pg_catalog.pg_get_indexdef(
+                relation_value.oid) IS NOT DISTINCT FROM
+               'CREATE INDEX canonical_forecast_pipeline_scenario_origins_recent ON public.canonical_forecast_pipeline_scenario_origins USING btree (organization_id, captured_at DESC, id DESC)') OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_class relation_value
+             JOIN pg_catalog.pg_index index_value
+               ON index_value.indexrelid=relation_value.oid
+             WHERE relation_value.oid=pg_catalog.to_regclass(
+               'public.canonical_forecast_pipeline_scenario_evaluations_recent')
+              AND relation_value.relkind='i' AND pg_catalog.pg_get_indexdef(
+                relation_value.oid) IS NOT DISTINCT FROM
+               'CREATE INDEX canonical_forecast_pipeline_scenario_evaluations_recent ON public.canonical_forecast_pipeline_scenario_evaluations USING btree (organization_id, origin_id, revision DESC, id DESC)') THEN
+           RAISE EXCEPTION 'Required pipeline scenario index topology is invalid';
+         END IF;
+        IF EXISTS(SELECT 1
+          FROM pg_catalog.pg_index index_value
+          LEFT JOIN pg_catalog.pg_constraint constraint_value
+            ON constraint_value.conindid=index_value.indexrelid
+          WHERE index_value.indrelid IN (
+             'public.canonical_forecast_pipeline_estimate_sources'::regclass,
+             'public.canonical_forecast_pipeline_scenario_test_clock'::regclass,
+             'public.canonical_forecast_pipeline_scenario_method_registration'::regclass,
+             'public.canonical_forecast_pipeline_scenario_policy_reviews'::regclass,
+             'public.canonical_forecast_pipeline_scenario_origins'::regclass,
+             'public.canonical_forecast_pipeline_scenario_evaluations'::regclass)
+           AND constraint_value.oid IS NULL
+           AND index_value.indexrelid NOT IN (
+             'public.canonical_forecast_pipeline_estimate_sources_recent'::regclass,
+             'public.canonical_forecast_pipeline_scenario_policy_recent'::regclass,
+             'public.canonical_forecast_pipeline_scenario_origins_recent'::regclass,
+             'public.canonical_forecast_pipeline_scenario_evaluations_recent'::regclass)) THEN
+          RAISE EXCEPTION 'Required pipeline scenario index set contains an extra index';
+        END IF;
+        IF (SELECT pg_catalog.count(*)<>11 OR
+             pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+               pg_catalog.string_agg(trigger_value.tgrelid::regclass::text||':'||
+                 trigger_value.tgname||':'||trigger_value.tgenabled::text||':'||
+                 trigger_value.tgfoid::regprocedure::text||':'||
+                 pg_catalog.pg_get_triggerdef(trigger_value.oid,false),E'\n'
+                 ORDER BY trigger_value.tgrelid::regclass::text,trigger_value.tgname),
+               'UTF8')),'hex')<>
+              '63af132be6205cffc324dff0dd2286ec7c770bf33d1e2adf30198ee9f34e181d'
+            FROM pg_catalog.pg_trigger trigger_value
+            WHERE NOT trigger_value.tgisinternal AND trigger_value.tgrelid IN (
+              'public.canonical_estimates'::regclass,
+              'public.canonical_forecast_pipeline_estimate_sources'::regclass,
+              'public.canonical_forecast_pipeline_scenario_test_clock'::regclass,
+              'public.canonical_forecast_pipeline_scenario_method_registration'::regclass,
+              'public.canonical_forecast_pipeline_scenario_policy_reviews'::regclass,
+              'public.canonical_forecast_pipeline_scenario_origins'::regclass,
+              'public.canonical_forecast_pipeline_scenario_evaluations'::regclass)) THEN
+          RAISE EXCEPTION 'Required pipeline scenario local trigger set is invalid';
+        END IF;
+        -- Reconstruct the complete Part 6B closure independently. Startup does
+        -- not trust either the immutable registered digest or its digest helper.
+        pipeline_previous_search_path:=pg_catalog.current_setting('search_path');
+        PERFORM pg_catalog.set_config('search_path','pg_catalog, public, pg_temp',true);
+        pipeline_pending:=ARRAY[
+          'public.canonical_forecast_pipeline_scenario_immutable()'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_estimate_source_insert()'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_clock()'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_weighted_micro(jsonb,text,integer)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_total_weighted_micro(jsonb,integer,integer)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_sources(uuid,uuid,text,uuid,text,timestamptz)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_origin_input_current(uuid,public.canonical_forecast_pipeline_scenario_origins)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_policy_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,integer,integer,integer,integer,integer,integer,boolean,text)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_policy_read(uuid,uuid,text,uuid)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_origin_capture(uuid,uuid,text,uuid,text,text,text,boolean,text)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_origin_read(uuid,uuid,text,uuid,uuid)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_outcome(uuid,public.canonical_forecast_pipeline_scenario_origins)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,text,boolean,text)'::regprocedure::oid,
+          'public.canonical_forecast_pipeline_scenario_evaluation_read(uuid,uuid,text,uuid,uuid)'::regprocedure::oid
+        ];
+        pipeline_visited:=ARRAY[]::oid[];
+        pipeline_entries:=ARRAY[
+          'PART6A_CLOSURE:'||public.canonical_forecast_integrated_commercial_closure_digest(),
+          'METHOD:m26_pipeline_open_value_scenario_bounded_v1:'||
+          'authoritative_m222_open_risk_at_cutoff;categories=preliminary_estimate,'||
+          'approved_unbooked,withdrawn_excluded,reviewed_unconfirmed_excluded,'||
+          'confirmed_booked_excluded,cancelled_excluded,corrected_excluded;'||
+          'horizon=next_complete_tenant_local_month_[start,end);'||
+          'weights=owner_reviewed_scenario_assumptions_not_calibrated_probabilities;'||
+          'formula=sum_integer_cents_times_ppm_divide_100;'||
+          'rounding=single_nonnegative_half_up_to_currency_micro_units;'||
+          'bounds=256_members_12_integer_price_digits;'||
+          'applicability=private_research_only_same_cutoff_cohort;'||
+          'excludes=post_cutoff_entrants,formal_revenue.booked_work_value.v1,'||
+          'issued_or_paid_numeric_forecasts,earned_revenue,collected_cash,automatic_action'
+        ]::text[];
+        pipeline_trigger_count:=0;
+        FOR pipeline_attached IN SELECT trigger_value.tgrelid,
+            trigger_value.tgname,trigger_value.tgfoid,trigger_value.tgenabled,
+            pg_catalog.pg_get_triggerdef(trigger_value.oid) definition
+          FROM pg_catalog.pg_trigger trigger_value
+          WHERE NOT trigger_value.tgisinternal AND (
+            (trigger_value.tgrelid='public.canonical_forecast_pipeline_estimate_sources'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_estimate_sources_immutable') OR
+            (trigger_value.tgrelid='public.canonical_estimates'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_estimate_update_guard') OR
+            (trigger_value.tgrelid='public.canonical_estimates'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_estimate_source_insert') OR
+            (trigger_value.tgrelid='public.canonical_forecast_pipeline_scenario_method_registration'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_scenario_method_immutable') OR
+            (trigger_value.tgrelid='public.canonical_forecast_pipeline_scenario_policy_reviews'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_scenario_policy_immutable') OR
+            (trigger_value.tgrelid='public.canonical_forecast_pipeline_scenario_origins'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_scenario_origins_immutable') OR
+            (trigger_value.tgrelid='public.canonical_forecast_pipeline_scenario_evaluations'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_scenario_evaluations_immutable') OR
+            (trigger_value.tgrelid='public.canonical_operations'::regclass AND
+             trigger_value.tgname='a_canonical_forecast_opportunity_eligibility_lock') OR
+            (trigger_value.tgrelid='public.canonical_operations'::regclass AND
+             trigger_value.tgname='canonical_forecast_opportunity_eligibility_capture') OR
+            (trigger_value.tgrelid='public.canonical_forecast_opportunity_eligibility_events'::regclass AND
+             trigger_value.tgname='canonical_forecast_opportunity_eligibility_event_immutable') OR
+            (trigger_value.tgrelid='public.canonical_forecast_opportunity_eligibility_events'::regclass AND
+             trigger_value.tgname='z_canonical_forecast_pipeline_eligibility_visibility_v1_capture') OR
+            (trigger_value.tgrelid='public.canonical_forecast_pipeline_eligibility_visibility_v1'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_eligibility_visibility_v1_immutable') OR
+            (trigger_value.tgrelid='public.canonical_schedule_assignment_revisions'::regclass AND
+             trigger_value.tgname='a_canonical_forecast_schedule_booking_event_lock') OR
+            (trigger_value.tgrelid='public.canonical_schedule_assignment_revisions'::regclass AND
+             trigger_value.tgname='canonical_forecast_schedule_booking_event_capture') OR
+            (trigger_value.tgrelid='public.canonical_forecast_schedule_booking_events'::regclass AND
+             trigger_value.tgname='canonical_forecast_schedule_booking_event_immutable') OR
+            (trigger_value.tgrelid='public.canonical_forecast_schedule_booking_events'::regclass AND
+             trigger_value.tgname='z_canonical_forecast_pipeline_booking_visibility_v1_capture') OR
+            (trigger_value.tgrelid='public.canonical_forecast_pipeline_booking_visibility_v1'::regclass AND
+             trigger_value.tgname='canonical_forecast_pipeline_booking_visibility_v1_immutable') OR
+            (trigger_value.tgrelid='public.canonical_forecast_schedule_booking_lineage_gaps'::regclass AND
+             trigger_value.tgname='canonical_forecast_schedule_booking_lineage_gap_immutable') OR
+            (trigger_value.tgrelid='public.canonical_forecast_commercial_booking_reviews'::regclass AND
+             trigger_value.tgname='z_m26_part6b_disposable_booking_review_clock'))
+          ORDER BY trigger_value.tgrelid::regclass::text,trigger_value.tgname LOOP
+          pipeline_entries:=pg_catalog.array_append(pipeline_entries,'TRIGGER:'||
+            pipeline_attached.tgrelid::regclass::text||':'||
+            pipeline_attached.tgname||':'||pipeline_attached.tgenabled::text||':'||
+            pipeline_attached.definition);
+          pipeline_pending:=pg_catalog.array_append(
+            pipeline_pending,pipeline_attached.tgfoid);
+          pipeline_trigger_count:=pipeline_trigger_count+1;
+        END LOOP;
+        IF pipeline_trigger_count<>19 THEN
+          RAISE EXCEPTION 'Required pipeline scenario trigger topology is incomplete';
+        END IF;
+        WHILE pg_catalog.cardinality(pipeline_pending)>0 LOOP
+          pipeline_current_oid:=pipeline_pending[1];
+          pipeline_pending:=pipeline_pending[2:pg_catalog.cardinality(pipeline_pending)];
+          IF pipeline_current_oid=ANY(pipeline_visited) THEN CONTINUE; END IF;
+          pipeline_visited:=pg_catalog.array_append(
+            pipeline_visited,pipeline_current_oid);
+          IF pg_catalog.cardinality(pipeline_visited)>768 THEN
+            RAISE EXCEPTION 'Required pipeline scenario closure exceeds reviewed bound';
+          END IF;
+          pipeline_body:=pg_catalog.pg_get_functiondef(pipeline_current_oid);
+          IF pipeline_body IS NULL THEN
+            RAISE EXCEPTION 'Required pipeline scenario closure dependency is missing';
+          END IF;
+          pipeline_entries:=pg_catalog.array_append(pipeline_entries,'FUNCTION:'||
+            pipeline_current_oid::regprocedure::text||':'||
+            pg_catalog.encode(pg_catalog.sha256(
+              pg_catalog.convert_to(pipeline_body,'UTF8')),'hex'));
+          FOR pipeline_matched IN SELECT pg_catalog.regexp_matches(pipeline_body,
+              'public\\.([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*\\(', 'g') LOOP
+            FOR pipeline_child IN SELECT routine.oid
+              FROM pg_catalog.pg_proc routine
+              WHERE routine.pronamespace='public'::regnamespace
+               AND routine.proname=pipeline_matched[1]
+              ORDER BY routine.oid LOOP
+              IF NOT pipeline_child=ANY(pipeline_visited) THEN
+                pipeline_pending:=pg_catalog.array_append(
+                  pipeline_pending,pipeline_child);
+              END IF;
+            END LOOP;
+          END LOOP;
+        END LOOP;
+        SELECT pg_catalog.string_agg(item,E'\n' ORDER BY item)
+          INTO pipeline_joined FROM pg_catalog.unnest(pipeline_entries) item;
+        pipeline_closure:=pg_catalog.encode(pg_catalog.sha256(
+          pg_catalog.convert_to(pipeline_joined,'UTF8')),'hex');
+        PERFORM pg_catalog.set_config(
+          'search_path',pipeline_previous_search_path,true);
+        IF (SELECT count(*) FROM public.canonical_forecast_pipeline_scenario_method_registration)<>1 OR
+           (SELECT count(*) FROM public.canonical_forecast_pipeline_scenario_method_registration registration
+             WHERE registration.version='m26_pipeline_open_value_scenario_bounded_v1'
+              AND registration.target_key='pipeline.open_value_scenario'
+              AND registration.target_version='v1'
+              AND registration.evaluation_measurement_key=
+               'research.pipeline_cutoff_cohort_booked_work_value'
+              AND registration.evaluation_measurement_version='v1'
+              AND registration.calculation_version='m26-pipeline-scenario-v1'
+              AND registration.category_rule_version='m26-open-pipeline-category-v1'
+              AND registration.horizon_rule_version=
+               'next-complete-tenant-local-month-v1'
+              AND registration.arithmetic_rule=
+               'sum_integer_cents_times_ppm_then_half_up_six_decimal_dollars'
+              AND registration.maximum_members=256
+              AND registration.maximum_price_cents=99999999999999
+              AND rtrim(registration.dependency_closure_digest)=pipeline_closure
+              AND public.canonical_forecast_pipeline_scenario_method_closure_digest()=
+               pipeline_closure)<>1 OR
+           (SELECT rtrim(dependency_closure_digest)
+              FROM public.canonical_forecast_integrated_method_registration
+             WHERE version='m26_integrated_commercial_price_closure_v1') IS DISTINCT FROM
+             public.canonical_forecast_integrated_commercial_closure_digest() THEN
+          RAISE EXCEPTION 'Required pipeline scenario method registration is invalid';
+        END IF;
+        IF has_sequence_privilege('public',
+             'public.canonical_forecast_pipeline_estimate_source_sequence','USAGE,SELECT,UPDATE') OR
+           EXISTS(SELECT 1 FROM (VALUES
+             ('public.canonical_forecast_pipeline_estimate_sources'),
+             ('public.canonical_forecast_pipeline_scenario_test_clock'),
+             ('public.canonical_forecast_pipeline_scenario_method_registration'),
+             ('public.canonical_forecast_pipeline_scenario_policy_reviews'),
+             ('public.canonical_forecast_pipeline_scenario_origins'),
+             ('public.canonical_forecast_pipeline_scenario_evaluations')) required(relation_name)
+             WHERE has_table_privilege('public',required.relation_name,
+               'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) OR
+           EXISTS(SELECT 1 FROM (VALUES
+             ('public.canonical_forecast_pipeline_scenario_immutable()'),
+             ('public.canonical_forecast_pipeline_estimate_source_insert()'),
+             ('public.canonical_forecast_pipeline_scenario_clock()'),
+             ('public.canonical_forecast_pipeline_scenario_test_clock_set(timestamptz)'),
+             ('public.canonical_forecast_pipeline_scenario_booking_review_clock()'),
+             ('public.canonical_forecast_pipeline_scenario_method_closure_digest()'),
+             ('public.canonical_forecast_pipeline_scenario_weighted_micro(jsonb,text,integer)'),
+             ('public.canonical_forecast_pipeline_scenario_total_weighted_micro(jsonb,integer,integer)'),
+             ('public.canonical_forecast_pipeline_scenario_sources(uuid,uuid,text,uuid,text,timestamptz)'),
+             ('public.canonical_forecast_pipeline_scenario_origin_input_current(uuid,public.canonical_forecast_pipeline_scenario_origins)'),
+             ('public.canonical_forecast_pipeline_scenario_outcome(uuid,public.canonical_forecast_pipeline_scenario_origins)'),
+             ('public.canonical_forecast_pipeline_scenario_policy_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,integer,integer,integer,integer,integer,integer,boolean,text)'),
+             ('public.canonical_forecast_pipeline_scenario_policy_read(uuid,uuid,text,uuid)'),
+             ('public.canonical_forecast_pipeline_scenario_origin_capture(uuid,uuid,text,uuid,text,text,text,boolean,text)'),
+             ('public.canonical_forecast_pipeline_scenario_origin_read(uuid,uuid,text,uuid,uuid)'),
+             ('public.canonical_forecast_pipeline_scenario_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,text,boolean,text)'),
+             ('public.canonical_forecast_pipeline_scenario_evaluation_read(uuid,uuid,text,uuid,uuid)')) required(signature)
+             WHERE has_function_privilege('public',required.signature,'EXECUTE')) OR
+           EXISTS(SELECT 1 FROM (VALUES
+             ('public.canonical_forecast_pipeline_estimate_sources'),
+             ('public.canonical_forecast_pipeline_scenario_test_clock'),
+             ('public.canonical_forecast_pipeline_scenario_method_registration'),
+             ('public.canonical_forecast_pipeline_scenario_policy_reviews'),
+             ('public.canonical_forecast_pipeline_scenario_origins'),
+             ('public.canonical_forecast_pipeline_scenario_evaluations')) required(relation_name)
+             JOIN pg_catalog.pg_attribute attribute
+               ON attribute.attrelid=required.relation_name::regclass
+              AND attribute.attnum>0 AND NOT attribute.attisdropped
+             WHERE has_column_privilege('public',required.relation_name,
+               attribute.attname,'SELECT,INSERT,UPDATE,REFERENCES')) THEN
+          RAISE EXCEPTION 'Required pipeline scenario PUBLIC isolation is missing';
+        END IF;
+        REVOKE ALL PRIVILEGES ON TABLE
+          public.canonical_forecast_pipeline_estimate_sources,
+          public.canonical_forecast_pipeline_scenario_test_clock,
+          public.canonical_forecast_pipeline_scenario_method_registration,
+          public.canonical_forecast_pipeline_scenario_policy_reviews,
+          public.canonical_forecast_pipeline_scenario_origins,
+          public.canonical_forecast_pipeline_scenario_evaluations FROM PUBLIC;
+        FOR pipeline_relation IN SELECT relation_name::regclass FROM (VALUES
+          ('public.canonical_forecast_pipeline_estimate_sources'),
+          ('public.canonical_forecast_pipeline_scenario_test_clock'),
+          ('public.canonical_forecast_pipeline_scenario_method_registration'),
+          ('public.canonical_forecast_pipeline_scenario_policy_reviews'),
+          ('public.canonical_forecast_pipeline_scenario_origins'),
+          ('public.canonical_forecast_pipeline_scenario_evaluations')) required(relation_name)
+        LOOP
+          SELECT pg_catalog.string_agg(pg_catalog.quote_ident(attribute.attname),','
+            ORDER BY attribute.attnum) INTO pipeline_columns
+          FROM pg_catalog.pg_attribute attribute
+          WHERE attribute.attrelid=pipeline_relation
+            AND attribute.attnum>0 AND NOT attribute.attisdropped;
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL PRIVILEGES (%s) ON TABLE %s FROM PUBLIC',
+            pipeline_columns,pipeline_relation);
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL PRIVILEGES (%s) ON TABLE %s FROM %I',
+            pipeline_columns,pipeline_relation,runtime_role);
+        END LOOP;
+        REVOKE ALL PRIVILEGES ON SEQUENCE
+          public.canonical_forecast_pipeline_estimate_source_sequence FROM PUBLIC;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_pipeline_scenario_immutable(),
+          public.canonical_forecast_pipeline_estimate_source_insert(),
+          public.canonical_forecast_pipeline_scenario_clock(),
+          public.canonical_forecast_pipeline_scenario_test_clock_set(timestamptz),
+          public.canonical_forecast_pipeline_scenario_booking_review_clock(),
+          public.canonical_forecast_pipeline_scenario_method_closure_digest(),
+          public.canonical_forecast_pipeline_scenario_weighted_micro(jsonb,text,integer),
+          public.canonical_forecast_pipeline_scenario_total_weighted_micro(jsonb,integer,integer),
+          public.canonical_forecast_pipeline_scenario_sources(uuid,uuid,text,uuid,text,timestamptz),
+          public.canonical_forecast_pipeline_scenario_origin_input_current(uuid,public.canonical_forecast_pipeline_scenario_origins),
+          public.canonical_forecast_pipeline_scenario_outcome(uuid,public.canonical_forecast_pipeline_scenario_origins),
+          public.canonical_forecast_pipeline_scenario_policy_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,integer,integer,integer,integer,integer,integer,boolean,text),
+          public.canonical_forecast_pipeline_scenario_policy_read(uuid,uuid,text,uuid),
+          public.canonical_forecast_pipeline_scenario_origin_capture(uuid,uuid,text,uuid,text,text,text,boolean,text),
+          public.canonical_forecast_pipeline_scenario_origin_read(uuid,uuid,text,uuid,uuid),
+          public.canonical_forecast_pipeline_scenario_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,text,boolean,text),
+          public.canonical_forecast_pipeline_scenario_evaluation_read(uuid,uuid,text,uuid,uuid)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_pipeline_estimate_sources,public.canonical_forecast_pipeline_scenario_test_clock,public.canonical_forecast_pipeline_scenario_method_registration,public.canonical_forecast_pipeline_scenario_policy_reviews,public.canonical_forecast_pipeline_scenario_origins,public.canonical_forecast_pipeline_scenario_evaluations FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON SEQUENCE public.canonical_forecast_pipeline_estimate_source_sequence FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_pipeline_scenario_immutable(),public.canonical_forecast_pipeline_estimate_source_insert(),public.canonical_forecast_pipeline_scenario_clock(),public.canonical_forecast_pipeline_scenario_test_clock_set(timestamptz),public.canonical_forecast_pipeline_scenario_booking_review_clock(),public.canonical_forecast_pipeline_scenario_method_closure_digest(),public.canonical_forecast_pipeline_scenario_weighted_micro(jsonb,text,integer),public.canonical_forecast_pipeline_scenario_total_weighted_micro(jsonb,integer,integer),public.canonical_forecast_pipeline_scenario_sources(uuid,uuid,text,uuid,text,timestamptz),public.canonical_forecast_pipeline_scenario_origin_input_current(uuid,public.canonical_forecast_pipeline_scenario_origins),public.canonical_forecast_pipeline_scenario_outcome(uuid,public.canonical_forecast_pipeline_scenario_origins) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_pipeline_scenario_policy_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,integer,integer,integer,integer,integer,integer,boolean,text),public.canonical_forecast_pipeline_scenario_policy_read(uuid,uuid,text,uuid),public.canonical_forecast_pipeline_scenario_origin_capture(uuid,uuid,text,uuid,text,text,text,boolean,text),public.canonical_forecast_pipeline_scenario_origin_read(uuid,uuid,text,uuid,uuid),public.canonical_forecast_pipeline_scenario_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,text,boolean,text),public.canonical_forecast_pipeline_scenario_evaluation_read(uuid,uuid,text,uuid,uuid) TO %I',runtime_role);
+        IF has_sequence_privilege(runtime_role,
+             'public.canonical_forecast_pipeline_estimate_source_sequence','USAGE,SELECT,UPDATE') OR
+           EXISTS(SELECT 1 FROM (VALUES
+             ('public.canonical_forecast_pipeline_estimate_sources'),
+             ('public.canonical_forecast_pipeline_scenario_test_clock'),
+             ('public.canonical_forecast_pipeline_scenario_method_registration'),
+             ('public.canonical_forecast_pipeline_scenario_policy_reviews'),
+             ('public.canonical_forecast_pipeline_scenario_origins'),
+             ('public.canonical_forecast_pipeline_scenario_evaluations')) required(relation_name)
+             WHERE has_table_privilege(runtime_role,required.relation_name,
+               'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) OR
+           EXISTS(SELECT 1 FROM (VALUES
+             ('public.canonical_forecast_pipeline_estimate_sources'),
+             ('public.canonical_forecast_pipeline_scenario_test_clock'),
+             ('public.canonical_forecast_pipeline_scenario_method_registration'),
+             ('public.canonical_forecast_pipeline_scenario_policy_reviews'),
+             ('public.canonical_forecast_pipeline_scenario_origins'),
+             ('public.canonical_forecast_pipeline_scenario_evaluations')) required(relation_name)
+             JOIN pg_catalog.pg_attribute attribute
+               ON attribute.attrelid=required.relation_name::regclass
+              AND attribute.attnum>0 AND NOT attribute.attisdropped
+             WHERE has_column_privilege(runtime_role,required.relation_name,
+               attribute.attname,'SELECT,INSERT,UPDATE,REFERENCES')) OR
+           EXISTS(SELECT 1 FROM (VALUES
+             ('public.canonical_forecast_pipeline_scenario_immutable()'),
+             ('public.canonical_forecast_pipeline_estimate_source_insert()'),
+             ('public.canonical_forecast_pipeline_scenario_clock()'),
+             ('public.canonical_forecast_pipeline_scenario_test_clock_set(timestamptz)'),
+             ('public.canonical_forecast_pipeline_scenario_booking_review_clock()'),
+             ('public.canonical_forecast_pipeline_scenario_method_closure_digest()'),
+             ('public.canonical_forecast_pipeline_scenario_weighted_micro(jsonb,text,integer)'),
+             ('public.canonical_forecast_pipeline_scenario_total_weighted_micro(jsonb,integer,integer)'),
+             ('public.canonical_forecast_pipeline_scenario_sources(uuid,uuid,text,uuid,text,timestamptz)'),
+             ('public.canonical_forecast_pipeline_scenario_origin_input_current(uuid,public.canonical_forecast_pipeline_scenario_origins)'),
+             ('public.canonical_forecast_pipeline_scenario_outcome(uuid,public.canonical_forecast_pipeline_scenario_origins)')) required(signature)
+             WHERE has_function_privilege(runtime_role,required.signature,'EXECUTE')) OR
+           EXISTS(SELECT 1 FROM (VALUES
+             ('public.canonical_forecast_pipeline_scenario_policy_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,integer,integer,integer,integer,integer,integer,boolean,text)'),
+             ('public.canonical_forecast_pipeline_scenario_policy_read(uuid,uuid,text,uuid)'),
+             ('public.canonical_forecast_pipeline_scenario_origin_capture(uuid,uuid,text,uuid,text,text,text,boolean,text)'),
+             ('public.canonical_forecast_pipeline_scenario_origin_read(uuid,uuid,text,uuid,uuid)'),
+             ('public.canonical_forecast_pipeline_scenario_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,text,boolean,text)'),
+             ('public.canonical_forecast_pipeline_scenario_evaluation_read(uuid,uuid,text,uuid,uuid)')) required(signature)
+             WHERE NOT has_function_privilege(runtime_role,required.signature,'EXECUTE')) THEN
+          RAISE EXCEPTION 'Required pipeline scenario runtime authority is invalid';
+        END IF;
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -4443,7 +4989,63 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege('public','public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_integrated_commercial_immutable()','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_integrated_commercial_closure_digest()','EXECUTE')
-       )) AS integrated_commercial_baseline_private,
+        )) AS integrated_commercial_baseline_private,
+       (to_regclass('public.canonical_forecast_pipeline_scenario_origins') IS NULL OR (
+         to_regclass('public.canonical_forecast_pipeline_estimate_sources') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_pipeline_scenario_test_clock') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_pipeline_scenario_method_registration') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_pipeline_scenario_policy_reviews') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_pipeline_scenario_evaluations') IS NOT NULL
+         AND to_regclass('public.canonical_forecast_pipeline_estimate_source_sequence') IS NOT NULL
+         AND NOT has_sequence_privilege('public','public.canonical_forecast_pipeline_estimate_source_sequence','USAGE,SELECT,UPDATE')
+         AND NOT has_sequence_privilege($1,'public.canonical_forecast_pipeline_estimate_source_sequence','USAGE,SELECT,UPDATE')
+         AND NOT EXISTS(SELECT 1 FROM (VALUES
+           ('public.canonical_forecast_pipeline_estimate_sources'),
+           ('public.canonical_forecast_pipeline_scenario_test_clock'),
+           ('public.canonical_forecast_pipeline_scenario_method_registration'),
+           ('public.canonical_forecast_pipeline_scenario_policy_reviews'),
+           ('public.canonical_forecast_pipeline_scenario_origins'),
+           ('public.canonical_forecast_pipeline_scenario_evaluations')) required(relation_name)
+           WHERE has_table_privilege('public',required.relation_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+              OR has_table_privilege($1,required.relation_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'))
+         AND NOT EXISTS(SELECT 1 FROM (VALUES
+           ('public.canonical_forecast_pipeline_estimate_sources'),
+           ('public.canonical_forecast_pipeline_scenario_test_clock'),
+           ('public.canonical_forecast_pipeline_scenario_method_registration'),
+           ('public.canonical_forecast_pipeline_scenario_policy_reviews'),
+           ('public.canonical_forecast_pipeline_scenario_origins'),
+           ('public.canonical_forecast_pipeline_scenario_evaluations')) required(relation_name)
+           JOIN pg_catalog.pg_attribute attribute
+             ON attribute.attrelid=required.relation_name::regclass
+            AND attribute.attnum>0 AND NOT attribute.attisdropped
+           WHERE has_column_privilege('public',required.relation_name,
+               attribute.attname,'SELECT,INSERT,UPDATE,REFERENCES')
+              OR has_column_privilege($1,required.relation_name,
+               attribute.attname,'SELECT,INSERT,UPDATE,REFERENCES'))
+         AND NOT EXISTS(SELECT 1 FROM (VALUES
+           ('public.canonical_forecast_pipeline_scenario_immutable()'),
+           ('public.canonical_forecast_pipeline_estimate_source_insert()'),
+           ('public.canonical_forecast_pipeline_scenario_clock()'),
+           ('public.canonical_forecast_pipeline_scenario_test_clock_set(timestamptz)'),
+           ('public.canonical_forecast_pipeline_scenario_booking_review_clock()'),
+           ('public.canonical_forecast_pipeline_scenario_method_closure_digest()'),
+           ('public.canonical_forecast_pipeline_scenario_weighted_micro(jsonb,text,integer)'),
+           ('public.canonical_forecast_pipeline_scenario_total_weighted_micro(jsonb,integer,integer)'),
+           ('public.canonical_forecast_pipeline_scenario_sources(uuid,uuid,text,uuid,text,timestamptz)'),
+           ('public.canonical_forecast_pipeline_scenario_origin_input_current(uuid,public.canonical_forecast_pipeline_scenario_origins)'),
+           ('public.canonical_forecast_pipeline_scenario_outcome(uuid,public.canonical_forecast_pipeline_scenario_origins)')) required(signature)
+           WHERE has_function_privilege('public',required.signature,'EXECUTE')
+              OR has_function_privilege($1,required.signature,'EXECUTE'))
+         AND NOT EXISTS(SELECT 1 FROM (VALUES
+           ('public.canonical_forecast_pipeline_scenario_policy_mutate(uuid,uuid,text,uuid,text,text,text,text,integer,integer,integer,integer,integer,integer,integer,boolean,text)'),
+           ('public.canonical_forecast_pipeline_scenario_policy_read(uuid,uuid,text,uuid)'),
+           ('public.canonical_forecast_pipeline_scenario_origin_capture(uuid,uuid,text,uuid,text,text,text,boolean,text)'),
+           ('public.canonical_forecast_pipeline_scenario_origin_read(uuid,uuid,text,uuid,uuid)'),
+           ('public.canonical_forecast_pipeline_scenario_evaluation_capture(uuid,uuid,text,uuid,text,text,uuid,text,boolean,text)'),
+           ('public.canonical_forecast_pipeline_scenario_evaluation_read(uuid,uuid,text,uuid,uuid)')) required(signature)
+           WHERE has_function_privilege('public',required.signature,'EXECUTE')
+              OR NOT has_function_privilege($1,required.signature,'EXECUTE'))
+       )) AS pipeline_scenario_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -5542,8 +6144,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.forecast_snapshot_entries_allowed ||
       !runtimePrivileges.forecast_snapshot_helpers_withheld ||
       !runtimePrivileges.approved_estimate_v2_private ||
-      !runtimePrivileges.comparable_month_v2_private ||
-      !runtimePrivileges.integrated_commercial_baseline_private ||
+       !runtimePrivileges.comparable_month_v2_private ||
+       !runtimePrivileges.integrated_commercial_baseline_private ||
+       !runtimePrivileges.pipeline_scenario_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||
@@ -5756,6 +6359,9 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('233_canonical_forecast_capacity_ui_v7.sql'
 // The integrated commercial capture drains both issued-estimate and booking-
 // confirmation writers before installing their shared source fence.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('234_canonical_forecast_integrated_commercial_baseline.sql');
+// The Part 6B identity fence drains active estimate writers before installing
+// its source-order sidecar and complete immutable scenario authority.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('235_canonical_forecast_pipeline_scenarios.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

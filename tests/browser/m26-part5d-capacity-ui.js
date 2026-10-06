@@ -281,6 +281,13 @@ function response(status, data) {
       await technicianOperators.focus(); await page.keyboard.press('Space');
       assert.equal(await technicianOperators.isChecked(), true);
       assert.equal(await setupButton.isDisabled(), false);
+      const reviewReasonSize = await page.locator('#commandCenterCapacityReviewReason').evaluate(element => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+      }));
+      assert.ok(reviewReasonSize.clientHeight >= reviewReasonSize.scrollHeight,
+        `Review reason must remain fully readable after focus moves; clientHeight=${reviewReasonSize.clientHeight}, `
+        + `scrollHeight=${reviewReasonSize.scrollHeight}`);
       await page.locator('#commandCenterCapacityRoot').screenshot({
         path: path.join(output, 'paid-mobile-scope-review.png'),
       });

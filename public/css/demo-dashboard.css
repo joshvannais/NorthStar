@@ -542,7 +542,7 @@
 }
 .command-center-capacity-contextual-reason label small { color: var(--theme-muted); font-size: 11px; font-weight: 650; }
 .command-center-capacity-contextual-reason textarea {
-  width: 100%; min-height: 68px; resize: vertical; padding: 11px 12px; border: 1px solid var(--theme-border);
+  width: 100%; min-height: 104px; resize: vertical; padding: 11px 12px; border: 1px solid var(--theme-border);
   border-radius: 11px; background: var(--theme-surface); color: var(--theme-text); font: inherit;
 }
 .command-center-capacity-record-controls {

@@ -434,6 +434,9 @@
   --capacity-soft: color-mix(in srgb, var(--brand-500) 7%, var(--theme-surface));
 }
 .command-center-capacity .btn { font-family: var(--font-sans); }
+.command-center-capacity summary:focus-visible {
+  outline: 3px solid var(--theme-focus); outline-offset: -3px; border-radius: 10px; transition: none;
+}
 .command-center-capacity-heading { align-items: center; }
 .command-center-capacity-intro { max-width: 660px; margin-top: 5px; }
 .command-center-capacity-summary {

@@ -136,6 +136,24 @@ function response(status, data) {
       }
       assert.equal(darkPresentation.buttonFont, darkPresentation.northStarFont,
         'Capacity buttons must use the NorthStar interface typography');
+      const disclosureFocus = await page.locator('#commandCenterCapacityDetails > summary').evaluate(element => {
+        element.focus();
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--theme-focus)';
+        document.body.append(probe);
+        const style = getComputedStyle(element);
+        const state = { active: document.activeElement === element, outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth, outlineOffset: style.outlineOffset,
+          outlineColor: style.outlineColor, themeFocus: getComputedStyle(probe).color };
+        probe.remove();
+        return state;
+      });
+      assert.equal(disclosureFocus.active, true);
+      assert.equal(disclosureFocus.outlineStyle, 'solid');
+      assert.equal(disclosureFocus.outlineWidth, '3px');
+      assert.equal(disclosureFocus.outlineOffset, '-3px');
+      assert.equal(disclosureFocus.outlineColor, disclosureFocus.themeFocus,
+        'Capacity disclosures must use the theme-safe keyboard focus color');
       assert.match(await page.locator('#commandCenterCapacitySetupTitle').textContent(), /Confirm accepted-work period/);
       for (const button of await page.locator('[data-capacity-lane]').all()) assert.equal(await button.isDisabled(), true);
       assert.equal(await page.evaluate(() => window.__calls.map(item => item.method).join(',')), 'GET');

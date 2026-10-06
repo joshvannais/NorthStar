@@ -63,6 +63,6 @@ The writer package exercises migration 001 through 234 and the rolling 233-to-23
 
 Route-unit evidence rejects unknown nested or contradictory database shapes, strips unlisted top-level data, and rejects hostile nested fields, invalid timestamps and source orders, arbitrary unavailable reasons, missing replay/read markers, malformed inputs, and private-field reflection. The package also retains the owning Part 3B future-origin lifecycle and existing commercial-review compatibility proof.
 
-Because Part 6A adds no customer-facing UI, the existing Command Center received a fresh backend-compatibility smoke in both paid and isolated-demo modes: Chrome passed 8 of 8 cases and Playwright WebKit passed 8 of 8 cases across desktop/mobile, light/dark, daylight/standard-time presentation, no page errors, and no browser writes.
+Because Part 6A adds no customer-facing UI, the existing Command Center received a fresh backend-compatibility smoke in both paid and isolated-demo modes: Chrome passed 14 of 14 cases and Playwright WebKit passed 14 of 14 cases across desktop/mobile, light/dark, no page errors, and no browser writes.
 
 CI, private-production tenant data, live providers or credentials, physical Safari or devices, complete accessibility certification, natural production history, off-platform and whole-business completeness, empirical accuracy, calibration, drift, confidence, earned revenue, collections, cash, and a production forecast remain unavailable and are not claimed. Playwright WebKit is not physical Safari.

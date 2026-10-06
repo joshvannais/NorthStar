@@ -47,20 +47,12 @@ CREATE TRIGGER canonical_forecast_integrated_method_registration_immutable
  ON public.canonical_forecast_integrated_method_registration
  FOR EACH STATEMENT EXECUTE FUNCTION
   public.canonical_forecast_price_flow_origin_immutable();
-INSERT INTO public.canonical_forecast_integrated_method_registration(
- version,legacy_semantic_version,governance_lineage_version,
- governance_lineage_digest,dependency_closure_digest)
-SELECT 'm26_integrated_commercial_price_closure_v1',
- 'm26_selected_m24_deterministic_closure_v1',
- governance.version,governance.dependency_closure_digest,
- public.canonical_forecast_price_flow_method_closure_digest()
-FROM public.canonical_forecast_complete_window_governance_methods_v2 governance
-WHERE governance.version='m26_complete_window_deterministic_closure_v2';
-DO $$ BEGIN
- IF (SELECT count(*) FROM public.canonical_forecast_integrated_method_registration)<>1 THEN
-  RAISE EXCEPTION 'Integrated commercial method lineage unavailable'
-   USING ERRCODE='23514';
- END IF;
+CREATE FUNCTION public.canonical_forecast_integrated_commercial_closure_digest()
+RETURNS TEXT LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ RAISE EXCEPTION 'Integrated commercial closure is not installed'
+  USING ERRCODE='23514';
 END $$;
 
 -- Build the exact current supported-source position while the caller holds
@@ -513,7 +505,7 @@ BEGIN
     integrated_method_registration.governance_lineage_digest IS DISTINCT FROM
      method_registration_v2.dependency_closure_digest OR
     integrated_method_registration.dependency_closure_digest IS DISTINCT FROM
-     public.canonical_forecast_price_flow_method_closure_digest() OR
+     public.canonical_forecast_integrated_commercial_closure_digest() OR
     saved.output->'target'->>'key'<>'revenue.approved_price_flow' OR
    saved.output->'target'->>'definitionVersion'<>'v1' OR
    saved.output->'unit'->>'key'<>'money' OR
@@ -719,6 +711,12 @@ BEGIN
   'forecastIssued',FALSE,'automaticActionAuthorized',FALSE);
  authority:=public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,csrf,TRUE);
+ IF (future->>'horizonStartsAt')::timestamptz<=clock_timestamp() THEN
+  RETURN jsonb_build_object('state','integrated_commercial_baseline_unavailable',
+   'reason','future_horizon_elapsed_before_capture','sourceCurrent',FALSE,
+   'sourceCohortsCompleteAtRead',FALSE,'futureApprovedPriceBaselineVerified',FALSE,
+   'earnedRevenueMeasured',FALSE,'collectedCashMeasured',FALSE,'forecastIssued',FALSE);
+ END IF;
  INSERT INTO public.canonical_forecast_integrated_commercial_positions(
   organization_id,captured_at,source_digest,future_origin_id,position,
   position_digest,actor_user_id,membership_id,auth_session_id,reason,
@@ -795,6 +793,99 @@ BEGIN
   'sourceCurrent',TRUE,'currentAtRead',TRUE);
 END $$;
 
+-- Bind every new Part 6A computation, persistence entry and source-fence body.
+-- This closure is deliberately separate from the sealed price-flow closure:
+-- the inherited registration remains historical semantic/governance lineage,
+-- while this digest is the live executable identity for migration 234 itself.
+CREATE OR REPLACE FUNCTION public.canonical_forecast_integrated_commercial_closure_digest()
+RETURNS TEXT LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE pending OID[]:=ARRAY[
+  'public.canonical_forecast_integrated_issued_source_fence()'::regprocedure::oid,
+  'public.canonical_forecast_integrated_source_bound(text,integer,integer)'::regprocedure::oid,
+  'public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)'::regprocedure::oid,
+  'public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)'::regprocedure::oid,
+  'public.canonical_forecast_integrated_commercial_immutable()'::regprocedure::oid,
+  'public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)'::regprocedure::oid,
+  'public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)'::regprocedure::oid
+ ];
+ visited OID[]:=ARRAY[]::oid[];entries TEXT[]:=ARRAY[]::text[];
+ current_oid OID;body TEXT;matched TEXT[];child OID;joined TEXT;
+ attached RECORD;trigger_count INTEGER:=0;
+BEGIN
+ -- Preserve the current value of the inherited price-flow closure, whose
+ -- dynamic trigger and dependency inventory is broader than its own body.
+ entries:=array_append(entries,'PRICE_FLOW_CLOSURE:'||
+  public.canonical_forecast_price_flow_method_closure_digest());
+ FOR attached IN SELECT trigger_value.tgrelid,trigger_value.tgname,
+    trigger_value.tgfoid,trigger_value.tgenabled,
+    pg_get_triggerdef(trigger_value.oid) definition
+   FROM pg_trigger trigger_value
+   WHERE NOT trigger_value.tgisinternal AND (
+    (trigger_value.tgrelid='public.canonical_customer_estimate_versions'::regclass AND
+     trigger_value.tgname='canonical_forecast_integrated_issued_source_fence') OR
+    (trigger_value.tgrelid='public.canonical_forecast_booked_work_confirmations'::regclass AND
+     trigger_value.tgname='canonical_forecast_integrated_confirmation_source_fence') OR
+    (trigger_value.tgrelid='public.canonical_forecast_integrated_commercial_positions'::regclass AND
+     trigger_value.tgname='canonical_forecast_integrated_commercial_immutable') OR
+    (trigger_value.tgrelid='public.canonical_forecast_integrated_method_registration'::regclass AND
+     trigger_value.tgname='canonical_forecast_integrated_method_registration_immutable'))
+   ORDER BY trigger_value.tgrelid::regclass::text,trigger_value.tgname LOOP
+  entries:=array_append(entries,'TRIGGER:'||
+   attached.tgrelid::regclass::text||':'||attached.tgname||':'||
+   attached.tgenabled::text||':'||attached.definition);
+  pending:=array_append(pending,attached.tgfoid);
+  trigger_count:=trigger_count+1;
+ END LOOP;
+ IF trigger_count<>4 THEN
+  RAISE EXCEPTION 'Integrated commercial closure is incomplete' USING ERRCODE='23514';
+ END IF;
+ -- PL/pgSQL does not expose every invoked routine through pg_depend. Walk
+ -- every public routine named by each reached body, including all overloads.
+ WHILE cardinality(pending)>0 LOOP
+  current_oid:=pending[1];
+  pending:=pending[2:cardinality(pending)];
+  IF current_oid=ANY(visited) THEN CONTINUE; END IF;
+  visited:=array_append(visited,current_oid);
+  IF cardinality(visited)>512 THEN
+   RAISE EXCEPTION 'Integrated commercial dependency closure exceeds reviewed bound'
+    USING ERRCODE='23514';
+  END IF;
+  body:=pg_get_functiondef(current_oid);
+  IF body IS NULL THEN
+   RAISE EXCEPTION 'Integrated commercial dependency missing' USING ERRCODE='23514';
+  END IF;
+  entries:=array_append(entries,'FUNCTION:'||current_oid::regprocedure::text||':'||
+   encode(sha256(convert_to(body,'UTF8')),'hex'));
+  FOR matched IN SELECT regexp_matches(body,
+    'public\.([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*\(', 'g') LOOP
+   FOR child IN SELECT oid FROM pg_proc
+     WHERE pronamespace='public'::regnamespace AND proname=matched[1]
+     ORDER BY oid LOOP
+    IF NOT child=ANY(visited) THEN pending:=array_append(pending,child); END IF;
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ SELECT string_agg(item,E'\n' ORDER BY item) INTO joined FROM unnest(entries) item;
+ RETURN encode(sha256(convert_to(joined,'UTF8')),'hex');
+END $$;
+
+INSERT INTO public.canonical_forecast_integrated_method_registration(
+ version,legacy_semantic_version,governance_lineage_version,
+ governance_lineage_digest,dependency_closure_digest)
+SELECT 'm26_integrated_commercial_price_closure_v1',
+ 'm26_selected_m24_deterministic_closure_v1',
+ governance.version,governance.dependency_closure_digest,
+ public.canonical_forecast_integrated_commercial_closure_digest()
+FROM public.canonical_forecast_complete_window_governance_methods_v2 governance
+WHERE governance.version='m26_complete_window_deterministic_closure_v2';
+DO $$ BEGIN
+ IF (SELECT count(*) FROM public.canonical_forecast_integrated_method_registration)<>1 THEN
+  RAISE EXCEPTION 'Integrated commercial method lineage unavailable'
+   USING ERRCODE='23514';
+ END IF;
+END $$;
+
 REVOKE ALL ON TABLE public.canonical_forecast_integrated_commercial_positions,
  public.canonical_forecast_integrated_method_registration FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_integrated_issued_source_fence() FROM PUBLIC;
@@ -809,16 +900,19 @@ REVOKE ALL ON FUNCTION public.canonical_forecast_capture_integrated_commercial_p
  UUID,UUID,TEXT,UUID,TEXT,UUID,TEXT,TEXT,BOOLEAN,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_integrated_commercial_position_read(
  UUID,UUID,TEXT,UUID,UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_integrated_commercial_closure_digest()
+ FROM PUBLIC;
 DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='northstar_app_runtime') THEN
   REVOKE ALL PRIVILEGES ON TABLE
    public.canonical_forecast_integrated_commercial_positions,
    public.canonical_forecast_integrated_method_registration FROM northstar_app_runtime;
  REVOKE ALL ON FUNCTION public.canonical_forecast_integrated_issued_source_fence(),
   public.canonical_forecast_integrated_source_bound(TEXT,INTEGER,INTEGER),
-  public.canonical_forecast_integrated_commercial_sources(UUID,UUID,TEXT,UUID,TEXT),
-  public.canonical_forecast_integrated_future_price_origin(UUID,UUID,TEXT,UUID,UUID),
-  public.canonical_forecast_integrated_commercial_immutable()
-  FROM northstar_app_runtime;
+   public.canonical_forecast_integrated_commercial_sources(UUID,UUID,TEXT,UUID,TEXT),
+   public.canonical_forecast_integrated_future_price_origin(UUID,UUID,TEXT,UUID,UUID),
+   public.canonical_forecast_integrated_commercial_immutable(),
+   public.canonical_forecast_integrated_commercial_closure_digest()
+   FROM northstar_app_runtime;
  GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_integrated_commercial_position(
   UUID,UUID,TEXT,UUID,TEXT,UUID,TEXT,TEXT,BOOLEAN,TEXT),
   public.canonical_forecast_integrated_commercial_position_read(

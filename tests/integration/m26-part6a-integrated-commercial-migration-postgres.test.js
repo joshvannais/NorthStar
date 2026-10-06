@@ -162,6 +162,19 @@ realPostgres('Mission 26 Part 6A migration 233 to 234 rolling upgrade', () => {
         to_regprocedure('canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)')::text sources,
         to_regprocedure('canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)')::text capture,
         to_regprocedure('canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)')::text read,
+        to_regprocedure('canonical_forecast_integrated_commercial_closure_digest()')::text closure,
+        (SELECT registration.dependency_closure_digest=
+          canonical_forecast_integrated_commercial_closure_digest()
+          FROM canonical_forecast_integrated_method_registration registration
+          WHERE registration.version='m26_integrated_commercial_price_closure_v1') registration_current,
+        (SELECT routine.prosecdef AND routine.proconfig @>
+          ARRAY['search_path=pg_catalog, public, pg_temp']::text[]
+          FROM pg_proc routine WHERE routine.oid=
+           'canonical_forecast_integrated_commercial_closure_digest()'::regprocedure)
+          closure_security,
+        has_function_privilege('public',
+          'canonical_forecast_integrated_commercial_closure_digest()','EXECUTE')
+          public_closure_execute,
         pg_get_indexdef('canonical_forecast_integrated_commercial_positions_recent'::regclass) indexdef,
         (SELECT tgtype FROM pg_trigger WHERE
           tgrelid='canonical_customer_estimate_versions'::regclass AND
@@ -178,6 +191,9 @@ realPostgres('Mission 26 Part 6A migration 233 to 234 rolling upgrade', () => {
         sources: 'canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)',
         capture: 'canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)',
         read: 'canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)',
+        closure: 'canonical_forecast_integrated_commercial_closure_digest()',
+        registration_current: true, closure_security: true,
+        public_closure_execute: false,
         indexdef: 'CREATE INDEX canonical_forecast_integrated_commercial_positions_recent ON public.canonical_forecast_integrated_commercial_positions USING btree (organization_id, captured_at DESC, id DESC)',
         issued_trigger_type: 7, confirmation_trigger_type: 7,
         immutable_trigger_type: 58,

@@ -965,6 +965,18 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
     DO $northstar_runtime_grants$
     DECLARE
       runtime_role TEXT := pg_catalog.current_setting('northstar.runtime_role');
+      integrated_pending OID[];
+      integrated_visited OID[];
+      integrated_entries TEXT[];
+      integrated_current_oid OID;
+      integrated_body TEXT;
+      integrated_matched TEXT[];
+      integrated_child OID;
+      integrated_joined TEXT;
+      integrated_closure TEXT;
+      integrated_attached RECORD;
+      integrated_trigger_count INTEGER;
+      integrated_previous_search_path TEXT;
     BEGIN
       EXECUTE pg_catalog.format('REVOKE CREATE ON SCHEMA public FROM %I', runtime_role);
       EXECUTE pg_catalog.format('GRANT USAGE ON SCHEMA public TO %I', runtime_role);
@@ -2675,6 +2687,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            pg_catalog.to_regprocedure('public.canonical_forecast_integrated_commercial_immutable()') IS NULL OR
            pg_catalog.to_regprocedure('public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)') IS NULL OR
            pg_catalog.to_regprocedure('public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure('public.canonical_forecast_integrated_commercial_closure_digest()') IS NULL OR
            pg_catalog.to_regclass('public.canonical_forecast_integrated_commercial_positions_recent') IS NULL THEN
           RAISE EXCEPTION 'Required integrated commercial baseline authority is missing';
         END IF;
@@ -2684,7 +2697,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           ('public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)'),
           ('public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)'),
           ('public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)'),
-          ('public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)')) required(signature)
+          ('public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)'),
+          ('public.canonical_forecast_integrated_commercial_closure_digest()')) required(signature)
           WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
             WHERE routine.oid=pg_catalog.to_regprocedure(required.signature)
              AND routine.prosecdef
@@ -2697,7 +2711,173 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[]) THEN
           RAISE EXCEPTION 'Required integrated commercial baseline immutability security is missing';
         END IF;
-        IF (SELECT count(*) FROM public.canonical_forecast_integrated_method_registration registration
+        -- Check the exact trigger semantics before computing the live closure.
+        -- Trigger topology is itself closure input, so a poison must be
+        -- identified as a binding failure rather than merely a digest drift.
+        IF NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+             WHERE trigger_value.tgrelid='public.canonical_customer_estimate_versions'::regclass
+              AND trigger_value.tgname='canonical_forecast_integrated_issued_source_fence'
+              AND NOT trigger_value.tgisinternal AND trigger_value.tgenabled='O'
+              AND trigger_value.tgtype=7 AND trigger_value.tgqual IS NULL
+              AND trigger_value.tgnargs=0 AND trigger_value.tgattr=''::int2vector
+              AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0
+              AND trigger_value.tgconstrindid=0 AND NOT trigger_value.tgdeferrable
+              AND NOT trigger_value.tginitdeferred AND trigger_value.tgparentid=0
+              AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
+              AND trigger_value.tgfoid=
+               'public.canonical_forecast_integrated_issued_source_fence()'::regprocedure) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+             WHERE trigger_value.tgrelid='public.canonical_forecast_booked_work_confirmations'::regclass
+              AND trigger_value.tgname='canonical_forecast_integrated_confirmation_source_fence'
+              AND NOT trigger_value.tgisinternal AND trigger_value.tgenabled='O'
+              AND trigger_value.tgtype=7 AND trigger_value.tgqual IS NULL
+              AND trigger_value.tgnargs=0 AND trigger_value.tgattr=''::int2vector
+              AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0
+              AND trigger_value.tgconstrindid=0 AND NOT trigger_value.tgdeferrable
+              AND NOT trigger_value.tginitdeferred AND trigger_value.tgparentid=0
+              AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
+              AND trigger_value.tgfoid=
+               'public.canonical_forecast_integrated_issued_source_fence()'::regprocedure) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+             WHERE trigger_value.tgrelid='public.canonical_forecast_integrated_commercial_positions'::regclass
+              AND trigger_value.tgname='canonical_forecast_integrated_commercial_immutable'
+              AND NOT trigger_value.tgisinternal AND trigger_value.tgenabled='O'
+              AND trigger_value.tgtype=58 AND trigger_value.tgqual IS NULL
+              AND trigger_value.tgnargs=0 AND trigger_value.tgattr=''::int2vector
+              AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0
+              AND trigger_value.tgconstrindid=0 AND NOT trigger_value.tgdeferrable
+              AND NOT trigger_value.tginitdeferred AND trigger_value.tgparentid=0
+              AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
+              AND trigger_value.tgfoid=
+               'public.canonical_forecast_integrated_commercial_immutable()'::regprocedure) OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
+             WHERE trigger_value.tgrelid='public.canonical_forecast_integrated_method_registration'::regclass
+              AND trigger_value.tgname='canonical_forecast_integrated_method_registration_immutable'
+              AND NOT trigger_value.tgisinternal AND trigger_value.tgenabled='O'
+              AND trigger_value.tgtype=58 AND trigger_value.tgqual IS NULL
+              AND trigger_value.tgnargs=0 AND trigger_value.tgattr=''::int2vector
+              AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0
+              AND trigger_value.tgconstrindid=0 AND NOT trigger_value.tgdeferrable
+              AND NOT trigger_value.tginitdeferred AND trigger_value.tgparentid=0
+              AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
+              AND trigger_value.tgfoid=
+               'public.canonical_forecast_price_flow_origin_immutable()'::regprocedure) THEN
+          RAISE EXCEPTION 'Required integrated commercial baseline trigger binding is missing';
+        END IF;
+        -- Independently reconstruct migration 234's recursive live closure.
+        -- Startup must not trust the registered digest or the digest function
+        -- when deciding whether either one still describes the executable set.
+        -- Match the digest helper's pinned namespace visibility so catalog
+        -- display names contribute identical bytes under every caller path,
+        -- then restore the caller's setting before the remaining checks.
+        integrated_previous_search_path:=pg_catalog.current_setting('search_path');
+        PERFORM pg_catalog.set_config(
+          'search_path','pg_catalog, public, pg_temp',true);
+        integrated_pending:=ARRAY[
+          'public.canonical_forecast_integrated_issued_source_fence()'::regprocedure::oid,
+          'public.canonical_forecast_integrated_source_bound(text,integer,integer)'::regprocedure::oid,
+          'public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)'::regprocedure::oid,
+          'public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)'::regprocedure::oid,
+          'public.canonical_forecast_integrated_commercial_immutable()'::regprocedure::oid,
+          'public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)'::regprocedure::oid,
+          'public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)'::regprocedure::oid
+        ];
+        integrated_visited:=ARRAY[]::oid[];
+        integrated_entries:=ARRAY['PRICE_FLOW_CLOSURE:'||
+          public.canonical_forecast_price_flow_method_closure_digest()]::text[];
+        integrated_trigger_count:=0;
+        FOR integrated_attached IN SELECT trigger_value.tgrelid,
+            trigger_value.tgname,trigger_value.tgfoid,trigger_value.tgenabled,
+            pg_catalog.pg_get_triggerdef(trigger_value.oid) definition
+          FROM pg_catalog.pg_trigger trigger_value
+          WHERE NOT trigger_value.tgisinternal AND (
+            (trigger_value.tgrelid='public.canonical_customer_estimate_versions'::regclass AND
+             trigger_value.tgname='canonical_forecast_integrated_issued_source_fence') OR
+            (trigger_value.tgrelid='public.canonical_forecast_booked_work_confirmations'::regclass AND
+             trigger_value.tgname='canonical_forecast_integrated_confirmation_source_fence') OR
+            (trigger_value.tgrelid='public.canonical_forecast_integrated_commercial_positions'::regclass AND
+             trigger_value.tgname='canonical_forecast_integrated_commercial_immutable') OR
+            (trigger_value.tgrelid='public.canonical_forecast_integrated_method_registration'::regclass AND
+             trigger_value.tgname='canonical_forecast_integrated_method_registration_immutable'))
+          ORDER BY trigger_value.tgrelid::regclass::text,trigger_value.tgname LOOP
+          integrated_entries:=pg_catalog.array_append(integrated_entries,'TRIGGER:'||
+            integrated_attached.tgrelid::regclass::text||':'||
+            integrated_attached.tgname||':'||integrated_attached.tgenabled::text||':'||
+            integrated_attached.definition);
+          integrated_pending:=pg_catalog.array_append(
+            integrated_pending,integrated_attached.tgfoid);
+          integrated_trigger_count:=integrated_trigger_count+1;
+        END LOOP;
+        IF integrated_trigger_count<>4 THEN
+          RAISE EXCEPTION 'Required integrated commercial baseline closure is incomplete';
+        END IF;
+        WHILE pg_catalog.cardinality(integrated_pending)>0 LOOP
+          integrated_current_oid:=integrated_pending[1];
+          integrated_pending:=integrated_pending[2:pg_catalog.cardinality(integrated_pending)];
+          IF integrated_current_oid=ANY(integrated_visited) THEN CONTINUE; END IF;
+          integrated_visited:=pg_catalog.array_append(
+            integrated_visited,integrated_current_oid);
+          IF pg_catalog.cardinality(integrated_visited)>512 THEN
+            RAISE EXCEPTION 'Required integrated commercial baseline closure exceeds reviewed bound';
+          END IF;
+          integrated_body:=pg_catalog.pg_get_functiondef(integrated_current_oid);
+          IF integrated_body IS NULL THEN
+            RAISE EXCEPTION 'Required integrated commercial baseline closure dependency is missing';
+          END IF;
+          integrated_entries:=pg_catalog.array_append(integrated_entries,'FUNCTION:'||
+            integrated_current_oid::regprocedure::text||':'||
+            pg_catalog.encode(pg_catalog.sha256(
+              pg_catalog.convert_to(integrated_body,'UTF8')),'hex'));
+          FOR integrated_matched IN SELECT pg_catalog.regexp_matches(integrated_body,
+              'public\\.([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*\\(', 'g') LOOP
+            FOR integrated_child IN SELECT routine.oid
+              FROM pg_catalog.pg_proc routine
+              WHERE routine.pronamespace='public'::regnamespace
+               AND routine.proname=integrated_matched[1]
+              ORDER BY routine.oid LOOP
+              IF NOT integrated_child=ANY(integrated_visited) THEN
+                integrated_pending:=pg_catalog.array_append(
+                  integrated_pending,integrated_child);
+              END IF;
+            END LOOP;
+          END LOOP;
+        END LOOP;
+        SELECT pg_catalog.string_agg(item,E'\n' ORDER BY item)
+          INTO integrated_joined FROM pg_catalog.unnest(integrated_entries) item;
+        integrated_closure:=pg_catalog.encode(pg_catalog.sha256(
+          pg_catalog.convert_to(integrated_joined,'UTF8')),'hex');
+        PERFORM pg_catalog.set_config(
+          'search_path',integrated_previous_search_path,true);
+        IF (SELECT count(*) FROM pg_catalog.pg_constraint constraint_value
+              WHERE constraint_value.conrelid=
+               'public.canonical_forecast_integrated_method_registration'::regclass
+               AND constraint_value.contype IN ('p','c'))<>6 OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_constraint constraint_value
+             WHERE constraint_value.conrelid=
+              'public.canonical_forecast_integrated_method_registration'::regclass
+              AND constraint_value.conname=
+               'canonical_forecast_integrated_method_registration_pkey'
+              AND constraint_value.contype='p' AND constraint_value.convalidated
+              AND NOT constraint_value.condeferrable AND NOT constraint_value.condeferred
+              AND pg_catalog.pg_get_constraintdef(constraint_value.oid)=
+               'PRIMARY KEY (version)') OR
+           EXISTS(SELECT 1 FROM (VALUES
+             ('CHECK ((version = ''m26_integrated_commercial_price_closure_v1''::text))'),
+             ('CHECK ((legacy_semantic_version = ''m26_selected_m24_deterministic_closure_v1''::text))'),
+             ('CHECK ((governance_lineage_version = ''m26_complete_window_deterministic_closure_v2''::text))'),
+             ('CHECK ((governance_lineage_digest ~ ''^[0-9a-f]{64}$''::text))'),
+             ('CHECK ((dependency_closure_digest ~ ''^[0-9a-f]{64}$''::text))')
+            ) required(definition)
+            WHERE NOT EXISTS(SELECT 1 FROM pg_catalog.pg_constraint constraint_value
+             WHERE constraint_value.conrelid=
+              'public.canonical_forecast_integrated_method_registration'::regclass
+              AND constraint_value.contype='c' AND constraint_value.convalidated
+              AND NOT constraint_value.condeferrable AND NOT constraint_value.condeferred
+              AND constraint_value.conislocal AND constraint_value.coninhcount=0
+              AND NOT constraint_value.connoinherit
+              AND pg_catalog.pg_get_constraintdef(constraint_value.oid)=required.definition)) OR
+           (SELECT count(*) FROM public.canonical_forecast_integrated_method_registration)<>1 OR
+           (SELECT count(*) FROM public.canonical_forecast_integrated_method_registration registration
              WHERE registration.version='m26_integrated_commercial_price_closure_v1'
               AND registration.legacy_semantic_version=
                'm26_selected_m24_deterministic_closure_v1'
@@ -2707,7 +2887,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
                 FROM public.canonical_forecast_complete_window_governance_methods_v2
                 WHERE version='m26_complete_window_deterministic_closure_v2')
               AND registration.dependency_closure_digest=
-               public.canonical_forecast_price_flow_method_closure_digest())<>1 THEN
+               integrated_closure
+              AND public.canonical_forecast_integrated_commercial_closure_digest()=
+               integrated_closure)<>1 THEN
           RAISE EXCEPTION 'Required integrated commercial baseline method registration is invalid';
         END IF;
         IF EXISTS(SELECT 1 FROM (VALUES
@@ -2721,56 +2903,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
                AND relation_value.relkind='r' AND NOT relation_value.relispartition
                AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_inherits inheritance
                 WHERE inheritance.inhrelid=relation_value.oid
-                   OR inheritance.inhparent=relation_value.oid))) OR
-           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
-            WHERE trigger_value.tgrelid='public.canonical_customer_estimate_versions'::regclass
-             AND trigger_value.tgname='canonical_forecast_integrated_issued_source_fence'
-              AND NOT trigger_value.tgisinternal AND trigger_value.tgenabled='O'
-              AND trigger_value.tgtype=7
-              AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
-              AND trigger_value.tgattr=''::int2vector
-              AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0
-              AND trigger_value.tgconstrindid=0 AND NOT trigger_value.tgdeferrable
-              AND NOT trigger_value.tginitdeferred AND trigger_value.tgparentid=0
-              AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
-              AND trigger_value.tgfoid='public.canonical_forecast_integrated_issued_source_fence()'::regprocedure) OR
-           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
-            WHERE trigger_value.tgrelid='public.canonical_forecast_booked_work_confirmations'::regclass
-             AND trigger_value.tgname='canonical_forecast_integrated_confirmation_source_fence'
-              AND NOT trigger_value.tgisinternal AND trigger_value.tgenabled='O'
-              AND trigger_value.tgtype=7
-              AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
-              AND trigger_value.tgattr=''::int2vector
-              AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0
-              AND trigger_value.tgconstrindid=0 AND NOT trigger_value.tgdeferrable
-              AND NOT trigger_value.tginitdeferred AND trigger_value.tgparentid=0
-              AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
-              AND trigger_value.tgfoid='public.canonical_forecast_integrated_issued_source_fence()'::regprocedure) OR
-           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
-            WHERE trigger_value.tgrelid='public.canonical_forecast_integrated_commercial_positions'::regclass
-             AND trigger_value.tgname='canonical_forecast_integrated_commercial_immutable'
-              AND NOT trigger_value.tgisinternal AND trigger_value.tgenabled='O'
-              AND trigger_value.tgtype=58
-              AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
-              AND trigger_value.tgattr=''::int2vector
-              AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0
-              AND trigger_value.tgconstrindid=0 AND NOT trigger_value.tgdeferrable
-              AND NOT trigger_value.tginitdeferred AND trigger_value.tgparentid=0
-              AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
-              AND trigger_value.tgfoid='public.canonical_forecast_integrated_commercial_immutable()'::regprocedure) OR
-           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger trigger_value
-            WHERE trigger_value.tgrelid='public.canonical_forecast_integrated_method_registration'::regclass
-             AND trigger_value.tgname='canonical_forecast_integrated_method_registration_immutable'
-              AND NOT trigger_value.tgisinternal AND trigger_value.tgenabled='O'
-              AND trigger_value.tgtype=58
-              AND trigger_value.tgqual IS NULL AND trigger_value.tgnargs=0
-              AND trigger_value.tgattr=''::int2vector
-              AND trigger_value.tgconstraint=0 AND trigger_value.tgconstrrelid=0
-              AND trigger_value.tgconstrindid=0 AND NOT trigger_value.tgdeferrable
-              AND NOT trigger_value.tginitdeferred AND trigger_value.tgparentid=0
-              AND trigger_value.tgoldtable IS NULL AND trigger_value.tgnewtable IS NULL
-              AND trigger_value.tgfoid=
-               'public.canonical_forecast_price_flow_origin_immutable()'::regprocedure) THEN
+                   OR inheritance.inhparent=relation_value.oid))) THEN
           RAISE EXCEPTION 'Required integrated commercial baseline trigger binding is missing';
         END IF;
         IF pg_catalog.pg_get_indexdef(
@@ -2801,6 +2934,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              ('public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)'),
              ('public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)'),
              ('public.canonical_forecast_integrated_commercial_immutable()'),
+             ('public.canonical_forecast_integrated_commercial_closure_digest()'),
              ('public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)'),
              ('public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)')) required(signature)
             WHERE has_function_privilege('public',required.signature,'EXECUTE')) THEN
@@ -2815,11 +2949,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text),
           public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid),
           public.canonical_forecast_integrated_commercial_immutable(),
+          public.canonical_forecast_integrated_commercial_closure_digest(),
           public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text),
           public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)
           FROM PUBLIC;
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_integrated_commercial_positions,public.canonical_forecast_integrated_method_registration FROM %I',runtime_role);
-        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_integrated_issued_source_fence(),public.canonical_forecast_integrated_source_bound(text,integer,integer),public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text),public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid),public.canonical_forecast_integrated_commercial_immutable() FROM %I',runtime_role);
+        EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_integrated_issued_source_fence(),public.canonical_forecast_integrated_source_bound(text,integer,integer),public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text),public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid),public.canonical_forecast_integrated_commercial_immutable(),public.canonical_forecast_integrated_commercial_closure_digest() FROM %I',runtime_role);
         EXECUTE pg_catalog.format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text),public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid) TO %I',runtime_role);
         IF has_table_privilege(runtime_role,
              'public.canonical_forecast_integrated_commercial_positions','SELECT') OR
@@ -2843,7 +2978,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
              ('public.canonical_forecast_integrated_source_bound(text,integer,integer)'),
              ('public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)'),
              ('public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)'),
-             ('public.canonical_forecast_integrated_commercial_immutable()')) required(signature)
+             ('public.canonical_forecast_integrated_commercial_immutable()'),
+             ('public.canonical_forecast_integrated_commercial_closure_digest()')) required(signature)
              WHERE has_function_privilege(runtime_role,required.signature,'EXECUTE')) OR
            NOT has_function_privilege(runtime_role,
              'public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)','EXECUTE') OR
@@ -4296,13 +4432,17 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege('public','public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_integrated_issued_source_fence()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_integrated_source_bound(text,integer,integer)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_integrated_commercial_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_integrated_commercial_closure_digest()','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_integrated_issued_source_fence()','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_integrated_source_bound(text,integer,integer)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_integrated_commercial_immutable()','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_integrated_commercial_closure_digest()','EXECUTE')
        )) AS integrated_commercial_baseline_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,

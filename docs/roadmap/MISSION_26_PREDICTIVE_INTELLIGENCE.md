@@ -280,7 +280,7 @@ Part 11D has a [reviewed handoff gate](../architecture/MISSION_26_PART11D_REVIEW
 | E | Independent exact-head authority, privacy, security, mathematical, data-quality and regression audit. |
 | F | Normal merge, deployment, production health, founder visual verdict and final Mission 26 acceptance. |
 
-Part 12A has a [paid-journey readiness audit](../architecture/MISSION_26_PART12A_PAID_JOURNEY_READINESS.md). It selects Mission 26's `revenue.approved_price_flow.v1` target backed by Mission 24 decisions and identifies its first missing guarded event-flow/as-of reader; Part 12A acceptance remains open, and synthetic paid-tenant implementation proof and live tenant forecast validation remain separate.
+Part 12A has a [paid-journey readiness audit](../architecture/MISSION_26_PART12A_PAID_JOURNEY_READINESS.md). The Part 6A candidate now supplies the guarded supported-source capture-time position and genuinely future approved-price origin that were the first provider-independent precursor. The next missing paid-journey gate is Part 11B's authenticated immutable forecast-run ledger with controlled issue, read and rerun, followed by Part 11C correction/currentness propagation, customer-safe explanation and Part 11D reviewed handoff. Part 12A acceptance remains open, and synthetic paid-tenant implementation proof and live tenant forecast validation remain separate.
 
 The first Part 6A source extension was a [guarded approved-price decision event receipt](../architecture/MISSION_26_PART6A_PRICE_EVENT_SOURCE.md). It preserved bounded all-event Mission 24 approval/amendment/withdrawal history without issuing a forecast; by itself it did not close Part 6A or Part 12A acceptance.
 

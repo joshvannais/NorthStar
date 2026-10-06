@@ -895,6 +895,55 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       noConfirmationProbe.release();
     }
 
+    // A latest issued estimate without a matching current approved decision
+    // remains visible as stale status evidence but contributes no amount.
+    const staleIssuedProbe = await f.ownerPool.connect();
+    try {
+      await staleIssuedProbe.query('BEGIN');
+      await staleIssuedProbe.query(
+        dropForeignKeys('canonical_customer_estimate_versions'));
+      await staleIssuedProbe.query(`WITH synthetic AS (
+          SELECT gen_random_uuid() version_id,gen_random_uuid() estimate_id,
+            gen_random_uuid() approval_id,gen_random_uuid() terms_id,
+            gen_random_uuid() decision_id,
+            md5('m26-6a-stale-issued-a')||md5('m26-6a-stale-issued-b') hash_value
+        )
+        INSERT INTO canonical_customer_estimate_versions
+        SELECT (jsonb_populate_record(NULL::canonical_customer_estimate_versions,
+          to_jsonb(base)||jsonb_build_object(
+            'id',synthetic.version_id,'estimate_id',synthetic.estimate_id,
+            'revision',1,'previous_id',NULL,
+            'commercial_approval_id',synthetic.approval_id,
+            'terms_id',synthetic.terms_id,'decision_id',synthetic.decision_id,
+            'approval_pin',jsonb_set(base.approval_pin,'{id}',
+              to_jsonb(synthetic.approval_id::text)),
+            'document',jsonb_set(base.document,'{subtotal}',
+              to_jsonb('999999999999.99'::text)),
+            'document_digest',synthetic.hash_value,
+            'request_key_hash',synthetic.hash_value,
+            'request_digest',synthetic.hash_value,
+            'digest',synthetic.hash_value))).*
+        FROM (SELECT * FROM canonical_customer_estimate_versions
+          WHERE organization_id=$1 ORDER BY created_at,id LIMIT 1) base
+        CROSS JOIN synthetic`, [f.org]);
+      const staleIssued = await readIntegratedSources(staleIssuedProbe);
+      expect(staleIssued).toMatchObject({
+        state: 'current_integrated_commercial_sources',
+        authorizedEstimateBeforeTax: storedPrice.reviewed_price_before_tax,
+        approvedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
+        bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+        commercialStatuses: { currentIssuedEstimateCount: 1,
+          staleIssuedEstimateCount: 1, issuedVersionSourceCount: 2,
+          activeApprovedPriceCount: 1, ownerConfirmedBookedCount: 1 },
+        sourceCohortsCompleteAtRead: true, forecastIssued: false,
+      });
+      expect(staleIssued.authorizedEstimateBeforeTax)
+        .not.toBe('999999999999.99');
+    } finally {
+      await staleIssuedProbe.query('ROLLBACK').catch(() => {});
+      staleIssuedProbe.release();
+    }
+
     // Exercise every new 1,000-row source bound through the complete
     // production source helper. Each synthetic ledger expansion is rolled
     // back, so it proves exact-bound acceptance (or the later byte bound) and
@@ -1483,11 +1532,13 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .send({ reason: 'Cancel the duplicate synthetic appointment after refusal proof.' });
     expect(duplicateCancellation.status).toBe(201);
 
+    const beforeCorrectionKey = crypto.randomUUID();
+    const beforeCorrectionBody = { approvedPriceOriginId: futureOriginId,
+      reason: 'Pin the current source digest before correcting the original review.',
+      confirmed: true, confirmationVersion: 'integrated-commercial-baseline-v1' };
     const beforeCorrectionIntegrated = await request(f.app).post(integratedRoute)
-      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
-      .send({ approvedPriceOriginId: futureOriginId,
-        reason: 'Pin the current source digest before correcting the original review.',
-        confirmed: true, confirmationVersion: 'integrated-commercial-baseline-v1' });
+      .set(actor.session.headers).set('Idempotency-Key', beforeCorrectionKey)
+      .send(beforeCorrectionBody);
     expect(beforeCorrectionIntegrated.status).toBe(201);
     expect(beforeCorrectionIntegrated.body.data).toMatchObject({
       state: 'northstar_integrated_commercial_baseline',
@@ -1563,6 +1614,22 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       futureApprovedPriceBaselineVerified: false,
     });
     expect(correctionStalePosition.body.data).not.toHaveProperty('bookedWorkBeforeTax');
+    const correctionStaleCount = await integratedPositionCount();
+    const sameKeyAfterCorrection = await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('Idempotency-Key', beforeCorrectionKey)
+      .send(beforeCorrectionBody);
+    expect(sameKeyAfterCorrection.status).toBe(200);
+    expect(sameKeyAfterCorrection.headers['idempotency-replayed']).toBeUndefined();
+    expect(sameKeyAfterCorrection.body.data).toMatchObject({
+      state: 'integrated_commercial_baseline_unavailable',
+      reason: 'sources_changed_since_capture',
+      positionId: beforeCorrectionIntegrated.body.data.positionId,
+      sourceCurrent: false, sourceCohortsCompleteAtRead: false,
+      futureApprovedPriceBaselineVerified: false, forecastIssued: false,
+    });
+    expect(sameKeyAfterCorrection.body.data).not.toHaveProperty('replayed');
+    expect(sameKeyAfterCorrection.body.data).not.toHaveProperty('bookedWorkBeforeTax');
+    expect(await integratedPositionCount()).toBe(correctionStaleCount);
     const changedMonth = await request(f.app).get(observedMonthRoute)
       .set(actor.session.headers);
     expect(changedMonth.body.data).toMatchObject({

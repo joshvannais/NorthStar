@@ -509,6 +509,72 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         FROM canonical_forecast_integrated_commercial_positions
         WHERE organization_id=$1 AND actor_user_id=$2`,
       [f.org, owner().actorUserId])).rows[0].count).toBe(1);
+      // Test-only rollback: both direct replay and read recompute the saved
+      // position digest and fail closed rather than trusting corrupted JSON.
+      const corruptedIntegratedPosition = await f.ownerPool.connect();
+      try {
+        await corruptedIntegratedPosition.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        await corruptedIntegratedPosition.query(`DO $corrupt_position_constraint$
+          DECLARE constraint_name TEXT;
+          BEGIN
+            SELECT constraint_value.conname INTO constraint_name
+            FROM pg_constraint constraint_value
+            WHERE constraint_value.conrelid=
+              'canonical_forecast_integrated_commercial_positions'::regclass
+              AND constraint_value.contype='c'
+              AND pg_get_constraintdef(constraint_value.oid) LIKE '%position_digest%'
+              AND pg_get_constraintdef(constraint_value.oid) LIKE '%canonical_completion_digest%';
+            IF constraint_name IS NULL THEN
+              RAISE EXCEPTION 'Integrated position digest constraint missing';
+            END IF;
+            EXECUTE format('ALTER TABLE canonical_forecast_integrated_commercial_positions DROP CONSTRAINT %I',constraint_name);
+          END $corrupt_position_constraint$`);
+        await corruptedIntegratedPosition.query(`ALTER TABLE
+          canonical_forecast_integrated_commercial_positions DISABLE TRIGGER
+          canonical_forecast_integrated_commercial_immutable`);
+        await corruptedIntegratedPosition.query(`UPDATE
+          canonical_forecast_integrated_commercial_positions
+          SET position_digest=repeat('f',64)
+          WHERE organization_id=$1 AND id=$2`,
+        [f.org, integrated.body.data.positionId]);
+        await corruptedIntegratedPosition.query(`ALTER TABLE
+          canonical_forecast_integrated_commercial_positions ENABLE TRIGGER
+          canonical_forecast_integrated_commercial_immutable`);
+        const corruptedReplay = (await corruptedIntegratedPosition.query(
+          `SELECT public.canonical_forecast_capture_integrated_commercial_position(
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value`,
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, runId, integratedKey,
+          integratedBody.reason, integratedBody.confirmed,
+          integratedBody.confirmationVersion])).rows[0].value;
+        expect(corruptedReplay).toMatchObject({
+          state: 'integrated_commercial_baseline_unavailable',
+          reason: 'saved_position_integrity_invalid',
+          positionId: integrated.body.data.positionId,
+          sourceCurrent: false, futureApprovedPriceBaselineVerified: false,
+          forecastIssued: false,
+        });
+        expect(corruptedReplay).not.toHaveProperty('approvedPriceBeforeTax');
+        const corruptedRead = (await corruptedIntegratedPosition.query(
+          `SELECT public.canonical_forecast_integrated_commercial_position_read(
+            $1,$2,$3,$4,$5) value`, [f.org, owner().actorUserId,
+            owner().actorAccessRole, owner().authSessionId,
+            integrated.body.data.positionId])).rows[0].value;
+        expect(corruptedRead).toMatchObject({
+          state: 'integrated_commercial_baseline_unavailable',
+          reason: 'saved_position_integrity_invalid',
+          positionId: integrated.body.data.positionId,
+          sourceCurrent: false, futureApprovedPriceBaselineVerified: false,
+          forecastIssued: false,
+        });
+        expect((await corruptedIntegratedPosition.query(`SELECT count(*)::int count
+          FROM canonical_forecast_integrated_commercial_positions
+          WHERE organization_id=$1 AND actor_user_id=$2`,
+        [f.org, owner().actorUserId])).rows[0].count).toBe(1);
+      } finally {
+        await corruptedIntegratedPosition.query('ROLLBACK').catch(() => {});
+        corruptedIntegratedPosition.release();
+      }
       const firstIntegratedWriter = await f.runtimePool.connect();
       const secondIntegratedWriter = await f.runtimePool.connect();
       const concurrentIntegratedKey = key();
@@ -558,6 +624,161 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         positionId: integrated.body.data.positionId,
         currentAtRead: true, sourceCurrent: true });
       expect(integratedRead.body.data).not.toHaveProperty('replayed');
+      // Test-only rollback: a horizon elapsed at read never returns saved
+      // amounts and never mutates the immutable position ledger.
+      const elapsedFutureRead = await f.ownerPool.connect();
+      try {
+        await elapsedFutureRead.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const beforeElapsedReadCount = (await elapsedFutureRead.query(
+          `SELECT count(*)::int count
+          FROM canonical_forecast_integrated_commercial_positions
+          WHERE organization_id=$1`, [f.org])).rows[0].count;
+        await elapsedFutureRead.query(`ALTER TABLE
+          canonical_forecast_price_flow_saved_origins DISABLE TRIGGER
+          canonical_forecast_price_flow_origins_immutable`);
+        const elapsedHorizon = await elapsedFutureRead.query(`WITH expired AS (
+            SELECT greatest(saved.saved_at,activation.observed_at,
+              witness.observed_at,anchor.captured_at,
+              profile_activation.observed_at)+INTERVAL '1 microsecond' horizon_start
+            FROM canonical_forecast_price_flow_saved_origins saved
+            JOIN canonical_forecast_price_flow_origin_activations activation
+              ON activation.organization_id=saved.organization_id
+               AND activation.run_id=saved.id
+            JOIN canonical_forecast_price_flow_profile_witnesses witness
+              ON witness.organization_id=saved.organization_id
+               AND witness.run_id=saved.id
+            JOIN canonical_forecast_profile_effective_anchors anchor
+              ON anchor.organization_id=saved.organization_id
+               AND anchor.id=witness.profile_anchor_id
+            JOIN canonical_forecast_profile_effective_activations profile_activation
+              ON profile_activation.organization_id=saved.organization_id
+               AND profile_activation.anchor_id=anchor.id
+            WHERE saved.organization_id=$1 AND saved.id=$2
+          )
+          UPDATE canonical_forecast_price_flow_saved_origins saved
+          SET horizon_start=expired.horizon_start,
+            horizon_end=expired.horizon_start+INTERVAL '1 day'
+          FROM expired WHERE saved.organization_id=$1 AND saved.id=$2
+          RETURNING saved.horizon_start<clock_timestamp() elapsed`, [f.org, runId]);
+        expect(elapsedHorizon.rows[0].elapsed).toBe(true);
+        await elapsedFutureRead.query(`ALTER TABLE
+          canonical_forecast_price_flow_saved_origins ENABLE TRIGGER
+          canonical_forecast_price_flow_origins_immutable`);
+        const elapsedReadResult = (await elapsedFutureRead.query(
+          `SELECT public.canonical_forecast_integrated_commercial_position_read(
+            $1,$2,$3,$4,$5) value`, [f.org, owner().actorUserId,
+            owner().actorAccessRole, owner().authSessionId,
+            integrated.body.data.positionId])).rows[0].value;
+        expect(elapsedReadResult).toMatchObject({
+          state: 'integrated_commercial_baseline_unavailable',
+          reason: 'sources_changed_or_future_horizon_elapsed',
+          positionId: integrated.body.data.positionId,
+          sourceCurrent: false, futureApprovedPriceBaselineVerified: false,
+          forecastIssued: false,
+        });
+        expect(elapsedReadResult).not.toHaveProperty('approvedPriceBeforeTax');
+        expect((await elapsedFutureRead.query(`SELECT count(*)::int count
+          FROM canonical_forecast_integrated_commercial_positions
+          WHERE organization_id=$1`, [f.org])).rows[0].count)
+          .toBe(beforeElapsedReadCount);
+      } finally {
+        await elapsedFutureRead.query('ROLLBACK').catch(() => {});
+        elapsedFutureRead.release();
+      }
+      // Test-only rollback: delay only after the first captured-time horizon
+      // check, repin the private live closure to that exact temporary body,
+      // and prove the immediate pre-insert check refuses with zero persistence.
+      const elapsedBeforeInsert = await f.ownerPool.connect();
+      try {
+        await elapsedBeforeInsert.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const captureSignature =
+          'public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)';
+        const captureDefinition = (await elapsedBeforeInsert.query(
+          'SELECT pg_get_functiondef($1::regprocedure) definition',
+          [captureSignature])).rows[0].definition;
+        const finalHorizonNeedle =
+          " IF (future->>'horizonStartsAt')::timestamptz<=clock_timestamp() THEN";
+        const captureTimestampNeedle = ' captured:=clock_timestamp();';
+        expect(captureDefinition).toContain(finalHorizonNeedle);
+        expect(captureDefinition).toContain(captureTimestampNeedle);
+        await elapsedBeforeInsert.query(captureDefinition
+          .replace(captureTimestampNeedle,
+            ` future:=jsonb_set(jsonb_set(future,'{horizonStartsAt}',
+              to_jsonb(public.canonical_forecast_utc_instant(
+                clock_timestamp()+INTERVAL '5 seconds'))),'{horizonEndsAt}',
+              to_jsonb(public.canonical_forecast_utc_instant(
+                clock_timestamp()+INTERVAL '1 day 5 seconds')));
+${captureTimestampNeedle}`)
+          .replace(finalHorizonNeedle,
+            " PERFORM set_config('northstar.test_part6a_final_check_reached','yes',true);\n" +
+            " PERFORM pg_sleep_until((future->>'horizonStartsAt')::timestamptz+INTERVAL '100 milliseconds');\n" +
+            finalHorizonNeedle));
+        const temporaryCaptureClosureDigest = (await elapsedBeforeInsert.query(
+          `SELECT public.canonical_forecast_integrated_commercial_closure_digest() digest`))
+          .rows[0].digest;
+        await elapsedBeforeInsert.query(`ALTER TABLE
+          canonical_forecast_integrated_method_registration DISABLE TRIGGER
+          canonical_forecast_integrated_method_registration_immutable`);
+        await elapsedBeforeInsert.query(`UPDATE
+          canonical_forecast_integrated_method_registration
+          SET dependency_closure_digest=$1
+          WHERE version='m26_integrated_commercial_price_closure_v1'`,
+        [temporaryCaptureClosureDigest]);
+        await elapsedBeforeInsert.query(`ALTER TABLE
+          canonical_forecast_integrated_method_registration ENABLE TRIGGER
+          canonical_forecast_integrated_method_registration_immutable`);
+        const beforeElapsedInsertCount = (await elapsedBeforeInsert.query(
+          `SELECT count(*)::int count
+          FROM canonical_forecast_integrated_commercial_positions
+          WHERE organization_id=$1`, [f.org])).rows[0].count;
+        const elapsedCapture = (await elapsedBeforeInsert.query(
+          `SELECT public.canonical_forecast_capture_integrated_commercial_position(
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value`,
+        [f.org, owner().actorUserId, owner().actorAccessRole,
+          owner().authSessionId, owner().csrfToken, runId, key(),
+          'Prove the final future horizon check before persistence.', true,
+          'integrated-commercial-baseline-v1'])).rows[0].value;
+        expect(elapsedCapture).toMatchObject({
+          state: 'integrated_commercial_baseline_unavailable',
+          reason: 'future_horizon_elapsed_before_capture',
+          sourceCurrent: false, sourceCohortsCompleteAtRead: false,
+          futureApprovedPriceBaselineVerified: false, forecastIssued: false,
+        });
+        expect(elapsedCapture).not.toHaveProperty('positionId');
+        expect((await elapsedBeforeInsert.query(
+          `SELECT current_setting('northstar.test_part6a_final_check_reached',true) marker`))
+          .rows[0].marker).toBe('yes');
+        expect((await elapsedBeforeInsert.query(`SELECT count(*)::int count
+          FROM canonical_forecast_integrated_commercial_positions
+          WHERE organization_id=$1`, [f.org])).rows[0].count)
+          .toBe(beforeElapsedInsertCount);
+      } finally {
+        await elapsedBeforeInsert.query('ROLLBACK').catch(() => {});
+        elapsedBeforeInsert.release();
+      }
+      expect((await f.ownerPool.query(`SELECT
+        m.dependency_closure_digest=
+         public.canonical_forecast_integrated_commercial_closure_digest() current
+        FROM canonical_forecast_integrated_method_registration m
+        WHERE m.version='m26_integrated_commercial_price_closure_v1'`))
+        .rows[0].current).toBe(true);
+      const differentSearchPath = await f.ownerPool.connect();
+      try {
+        await differentSearchPath.query('BEGIN');
+        await differentSearchPath.query('SET LOCAL search_path=pg_catalog');
+        expect((await differentSearchPath.query(
+          `SELECT current_setting('search_path') search_path`))
+          .rows[0].search_path).toBe('pg_catalog');
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          differentSearchPath, { runtimeRole: f.roles.runtime }))
+          .resolves.toBeUndefined();
+        expect((await differentSearchPath.query(
+          `SELECT current_setting('search_path') search_path`))
+          .rows[0].search_path).toBe('pg_catalog');
+      } finally {
+        await differentSearchPath.query('ROLLBACK').catch(() => {});
+        differentSearchPath.release();
+      }
       const otherTenantRead = await request(f.app)
         .get(`${integratedRoute}/${integrated.body.data.positionId}`)
         .set(f.actors.otherOwner.session.headers);
@@ -579,47 +800,124 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
       await expect(f.runtimePool.query(
         `SELECT public.canonical_forecast_integrated_source_bound(
           'approved_price',0,2)`)).rejects.toMatchObject({ code: '42501' });
-      // Test-only rollback: replacing any function reached by the registered
-      // deterministic closure must also stale an already-saved integrated
-      // position. The rollback restores the exact reviewed function body.
-      const methodClosureChange = await f.ownerPool.connect();
-      try {
-        await methodClosureChange.query('BEGIN ISOLATION LEVEL READ COMMITTED');
-        const registeredInsertSignature =
-          'public.canonical_forecast_price_flow_registered_insert()';
-        const registeredInsertDefinition = (await methodClosureChange.query(
-          'SELECT pg_get_functiondef($1::regprocedure) definition',
-          [registeredInsertSignature])).rows[0].definition;
-        expect(registeredInsertDefinition).toContain('Price-flow algorithm not registered');
-        await methodClosureChange.query(registeredInsertDefinition.replace(
-          'Price-flow algorithm not registered',
-          'Price-flow algorithm not registered test-only closure change'));
-        expect((await methodClosureChange.query(`SELECT
+      await expect(f.runtimePool.query(
+        `SELECT public.canonical_forecast_integrated_commercial_closure_digest()`))
+        .rejects.toMatchObject({ code: '42501' });
+      // Test-only rollback: replacing a migration-234 computation body while
+      // preserving its signature, security and search path must invalidate
+      // the independently reconstructed Part 6A live closure, reject startup
+      // and stale an already-saved position.
+      const integratedClosurePoisons = [
+        {
+          signature: 'public.canonical_forecast_integrated_issued_source_fence()',
+          needle: 'm26:commercial-booking-order:',
+          replacement: 'm26:commercial-booking-order:test-only:',
+        },
+        {
+          signature: 'public.canonical_forecast_integrated_source_bound(text,integer,integer)',
+          needle: 'approved_price_source_limit',
+          replacement: 'approved_price_source_limit_test_only',
+        },
+        {
+          signature: 'public.canonical_forecast_integrated_commercial_sources(uuid,uuid,text,uuid,text)',
+          needle: 'Read committed required for integrated commercial sources',
+          replacement: 'Read committed required for integrated commercial sources test-only body change',
+        },
+        {
+          signature: 'public.canonical_forecast_integrated_future_price_origin(uuid,uuid,text,uuid,uuid)',
+          needle: 'future_approved_price_baseline_unavailable',
+          replacement: 'future_approved_price_baseline_unavailable_test_only',
+        },
+        {
+          signature: 'public.canonical_forecast_integrated_commercial_immutable()',
+          needle: 'Integrated commercial baselines are immutable',
+          replacement: 'Integrated commercial baselines are immutable test-only body change',
+        },
+        {
+          signature: 'public.canonical_forecast_capture_integrated_commercial_position(uuid,uuid,text,uuid,text,uuid,text,text,boolean,text)',
+          needle: 'Integrated commercial baseline input invalid',
+          replacement: 'Integrated commercial baseline input invalid test-only body change',
+        },
+        {
+          signature: 'public.canonical_forecast_integrated_commercial_position_read(uuid,uuid,text,uuid,uuid)',
+          needle: 'position_not_found',
+          replacement: 'position_not_found_test_only',
+        },
+        {
+          signature: 'public.canonical_forecast_integrated_commercial_closure_digest()',
+          needle: 'PRICE_FLOW_CLOSURE:',
+          replacement: 'PRICE_FLOW_CLOSURE_TEST_ONLY:',
+        },
+      ];
+      for (const closurePoison of integratedClosurePoisons) {
+        const methodClosureChange = await f.ownerPool.connect();
+        try {
+          await methodClosureChange.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+          const definition = (await methodClosureChange.query(
+            'SELECT pg_get_functiondef($1::regprocedure) definition',
+            [closurePoison.signature])).rows[0].definition;
+          expect(definition).toContain(closurePoison.needle);
+          await methodClosureChange.query(definition.replace(
+            closurePoison.needle, closurePoison.replacement));
+          expect((await methodClosureChange.query(`SELECT
+            m.dependency_closure_digest=
+             public.canonical_forecast_integrated_commercial_closure_digest() current
+            FROM canonical_forecast_integrated_method_registration m
+            WHERE m.version='m26_integrated_commercial_price_closure_v1'`))
+            .rows[0].current).toBe(false);
+          await methodClosureChange.query('SAVEPOINT startup_dependency_poison');
+          await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+            methodClosureChange, { runtimeRole: f.roles.runtime })).rejects.toThrow(
+            'Required integrated commercial baseline method registration is invalid');
+          await methodClosureChange.query('ROLLBACK TO SAVEPOINT startup_dependency_poison');
+          const positionCountBeforePoisonedCapture = (await methodClosureChange.query(
+            `SELECT count(*)::int count
+             FROM canonical_forecast_integrated_commercial_positions
+             WHERE organization_id=$1`, [f.org])).rows[0].count;
+          const poisonedCapture = (await methodClosureChange.query(
+            `SELECT public.canonical_forecast_capture_integrated_commercial_position(
+              $1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value`,
+          [f.org, owner().actorUserId, owner().actorAccessRole,
+            owner().authSessionId, owner().csrfToken, runId, key(),
+            'A stale Part 6A live closure cannot capture a commercial position.', true,
+            'integrated-commercial-baseline-v1'])).rows[0].value;
+          expect(poisonedCapture).toMatchObject({
+            state: 'integrated_commercial_baseline_unavailable',
+            reason: 'origin_stale_or_not_future',
+            futureApprovedPriceBaselineVerified: false,
+            sourceCurrent: false,
+            forecastIssued: false,
+          });
+          expect(poisonedCapture).not.toHaveProperty('positionId');
+          expect(poisonedCapture).not.toHaveProperty('replayed');
+          expect(poisonedCapture).not.toHaveProperty('approvedPriceBeforeTax');
+          expect((await methodClosureChange.query(
+            `SELECT count(*)::int count
+             FROM canonical_forecast_integrated_commercial_positions
+             WHERE organization_id=$1`, [f.org])).rows[0].count)
+            .toBe(positionCountBeforePoisonedCapture);
+          const methodStale = (await methodClosureChange.query(
+            `SELECT public.canonical_forecast_integrated_commercial_position_read(
+              $1,$2,$3,$4,$5) value`, [f.org, owner().actorUserId,
+              owner().actorAccessRole, owner().authSessionId,
+              integrated.body.data.positionId])).rows[0].value;
+          expect(methodStale).toMatchObject({
+            state: 'integrated_commercial_baseline_unavailable',
+            reason: 'sources_changed_or_future_horizon_elapsed',
+            positionId: integrated.body.data.positionId,
+            sourceCurrent: false, futureApprovedPriceBaselineVerified: false,
+            forecastIssued: false,
+          });
+        } finally {
+          await methodClosureChange.query('ROLLBACK').catch(() => {});
+          methodClosureChange.release();
+        }
+        expect((await f.ownerPool.query(`SELECT
           m.dependency_closure_digest=
-           public.canonical_forecast_price_flow_method_closure_digest() current
+           public.canonical_forecast_integrated_commercial_closure_digest() current
           FROM canonical_forecast_integrated_method_registration m
           WHERE m.version='m26_integrated_commercial_price_closure_v1'`))
-          .rows[0].current).toBe(false);
-        await methodClosureChange.query('SAVEPOINT startup_dependency_poison');
-        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
-          methodClosureChange, { runtimeRole: f.roles.runtime })).rejects.toThrow(
-          'Required integrated commercial baseline method registration is invalid');
-        await methodClosureChange.query('ROLLBACK TO SAVEPOINT startup_dependency_poison');
-        const methodStale = (await methodClosureChange.query(
-          `SELECT public.canonical_forecast_integrated_commercial_position_read(
-            $1,$2,$3,$4,$5) value`, [f.org, owner().actorUserId,
-            owner().actorAccessRole, owner().authSessionId,
-            integrated.body.data.positionId])).rows[0].value;
-        expect(methodStale).toMatchObject({
-          state: 'integrated_commercial_baseline_unavailable',
-          reason: 'sources_changed_or_future_horizon_elapsed',
-          positionId: integrated.body.data.positionId,
-          sourceCurrent: false, futureApprovedPriceBaselineVerified: false,
-          forecastIssued: false,
-        });
-      } finally {
-        await methodClosureChange.query('ROLLBACK').catch(() => {});
-        methodClosureChange.release();
+          .rows[0].current).toBe(true);
       }
       const methodClosureRecovery = await f.ownerPool.connect();
       try {
@@ -632,9 +930,58 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         await methodClosureRecovery.query('ROLLBACK').catch(() => {});
         methodClosureRecovery.release();
       }
+      // Test-only rollback: the fixed-version CHECK, exact constraint topology
+      // and singular immutable registration row are all startup authority.
+      const registrationTopologyPoison = await f.ownerPool.connect();
+      try {
+        await registrationTopologyPoison.query('BEGIN');
+        await registrationTopologyPoison.query(`DO $registration_check$
+          DECLARE constraint_name TEXT;
+          BEGIN
+            SELECT constraint_value.conname INTO constraint_name
+            FROM pg_constraint constraint_value
+            WHERE constraint_value.conrelid=
+              'canonical_forecast_integrated_method_registration'::regclass
+              AND constraint_value.contype='c'
+              AND pg_get_constraintdef(constraint_value.oid) LIKE '%version =%'
+              AND pg_get_constraintdef(constraint_value.oid) LIKE
+                '%m26_integrated_commercial_price_closure_v1%';
+            IF constraint_name IS NULL THEN
+              RAISE EXCEPTION 'Integrated registration version constraint missing';
+            END IF;
+            EXECUTE format('ALTER TABLE canonical_forecast_integrated_method_registration DROP CONSTRAINT %I',constraint_name);
+          END $registration_check$`);
+        await registrationTopologyPoison.query(`INSERT INTO
+          canonical_forecast_integrated_method_registration(
+            version,legacy_semantic_version,governance_lineage_version,
+            governance_lineage_digest,dependency_closure_digest)
+          SELECT 'm26_integrated_commercial_price_closure_test_extra',
+            legacy_semantic_version,governance_lineage_version,
+            governance_lineage_digest,dependency_closure_digest
+          FROM canonical_forecast_integrated_method_registration
+          WHERE version='m26_integrated_commercial_price_closure_v1'`);
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          registrationTopologyPoison, { runtimeRole: f.roles.runtime }))
+          .rejects.toThrow(
+            'Required integrated commercial baseline method registration is invalid');
+      } finally {
+        await registrationTopologyPoison.query('ROLLBACK').catch(() => {});
+        registrationTopologyPoison.release();
+      }
+      const registrationTopologyRecovery = await f.ownerPool.connect();
+      try {
+        await registrationTopologyRecovery.query('BEGIN');
+        await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
+          registrationTopologyRecovery, { runtimeRole: f.roles.runtime }))
+          .resolves.toBeUndefined();
+        await registrationTopologyRecovery.query('COMMIT');
+      } finally {
+        await registrationTopologyRecovery.query('ROLLBACK').catch(() => {});
+        registrationTopologyRecovery.release();
+      }
       expect((await f.ownerPool.query(`SELECT
         m.dependency_closure_digest=
-         public.canonical_forecast_price_flow_method_closure_digest() current
+         public.canonical_forecast_integrated_commercial_closure_digest() current
         FROM canonical_forecast_integrated_method_registration m
         WHERE m.version='m26_integrated_commercial_price_closure_v1'`))
         .rows[0].current).toBe(true);
@@ -1949,6 +2296,9 @@ realPostgres('Mission 26 Part 3B supported price-flow prediction origin', () => 
         await registrationDigestPoison.query(`UPDATE
           canonical_forecast_integrated_method_registration
           SET dependency_closure_digest=repeat('f',64)`);
+        await registrationDigestPoison.query(`ALTER TABLE
+          canonical_forecast_integrated_method_registration ENABLE TRIGGER
+          canonical_forecast_integrated_method_registration_immutable`);
         await expect(f.db.grantAndVerifyRuntimeAuthorityForTests(
           registrationDigestPoison, { runtimeRole: f.roles.runtime }))
           .rejects.toThrow(

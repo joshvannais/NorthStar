@@ -1,6 +1,6 @@
 'use strict';
 
-const { Pool } = require('pg');
+const { Client, Pool } = require('pg');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const { reviewedMigrationTimeoutValues } = require('../../src/db');
 
@@ -20,24 +20,76 @@ realPostgres('Mission 26 price-order migration recovery', () => {
       { lock_timeout: '200', statement_timeout: '1000' }))
       .toEqual({ lockTimeout: '200ms', statementTimeout: '1000ms' });
 
-    // Recreate the already-applied last migration as a pending migration in
-    // this disposable database. No production schema or migration is changed.
-    await fixture.ownerPool.query(
-      `DROP TRIGGER canonical_forecast_price_decision_order_insert
-       ON public.canonical_estimate_decisions`);
-    await fixture.ownerPool.query(
-      'DROP FUNCTION public.canonical_forecast_price_decision_order_insert()');
-    await fixture.ownerPool.query(
-      `DROP TRIGGER canonical_forecast_price_decision_order_immutable
-       ON public.canonical_forecast_price_decision_orders`);
-    await fixture.ownerPool.query(
-      'DROP FUNCTION public.canonical_forecast_price_decision_order_immutable()');
-    await fixture.ownerPool.query(
-      'DROP TABLE public.canonical_forecast_price_decision_orders');
-    await fixture.ownerPool.query(
-      'DROP SEQUENCE public.canonical_forecast_price_decision_order_sequence');
+    // Recreate migration 146 as pending without dropping the released
+    // authority out from under later migrations that now depend on it. The
+    // renamed authority stays reachable by OID for those later objects while
+    // 146 proves that it can install a fresh exact-name authority after the
+    // bounded lock failure. This database is disposable.
+    await fixture.ownerPool.query(`ALTER TRIGGER
+      canonical_forecast_price_decision_order_insert
+      ON public.canonical_estimate_decisions RENAME TO
+      canonical_forecast_price_decision_order_insert_pre146_test`);
+    await fixture.ownerPool.query(`ALTER FUNCTION
+      public.canonical_forecast_price_decision_order_insert() RENAME TO
+      canonical_forecast_price_decision_order_insert_pre146_test`);
+    await fixture.ownerPool.query(`ALTER INDEX
+      public.canonical_forecast_price_decision_orders_tenant_order_idx RENAME TO
+      canonical_forecast_price_decision_orders_tenant_order_idx_pre146_test`);
+    await fixture.ownerPool.query(`ALTER INDEX
+      public.canonical_forecast_price_decision_orders_tenant_time_idx RENAME TO
+      canonical_forecast_price_decision_orders_tenant_time_idx_pre146_test`);
+    await fixture.ownerPool.query(`ALTER INDEX
+      public.canonical_forecast_price_decision_orders_pkey RENAME TO
+      canonical_forecast_price_decision_orders_pkey_pre146_test`);
+    await fixture.ownerPool.query(`DO $rename_pre146_unique_index$
+      DECLARE index_name TEXT;
+      BEGIN
+        SELECT index_class.relname INTO STRICT index_name
+        FROM pg_index index_record
+        JOIN pg_class index_class ON index_class.oid=index_record.indexrelid
+        WHERE index_record.indrelid=
+          'public.canonical_forecast_price_decision_orders'::regclass
+          AND index_record.indisunique AND NOT index_record.indisprimary;
+        EXECUTE format('ALTER INDEX public.%I RENAME TO %I',index_name,
+          'm26_pre146_unique_idx');
+      END
+      $rename_pre146_unique_index$`);
+    await fixture.ownerPool.query(`ALTER TABLE
+      public.canonical_forecast_price_decision_orders RENAME TO
+      canonical_forecast_price_decision_orders_pre146_test`);
+    await fixture.ownerPool.query(`ALTER FUNCTION
+      public.canonical_forecast_price_decision_order_immutable() RENAME TO
+      canonical_forecast_price_decision_order_immutable_pre146_test`);
+    await fixture.ownerPool.query(`ALTER SEQUENCE
+      public.canonical_forecast_price_decision_order_sequence RENAME TO
+      canonical_forecast_price_decision_order_sequence_pre146_test`);
     await fixture.ownerPool.query(
       'DELETE FROM public._migrations WHERE filename=$1', [migration]);
+
+    // Migration 212 now adds a bounded read index to migration 146's table.
+    // A database-local test event trigger recreates that later index as soon
+    // as the fresh 146 table exists, so the current startup verifier can run
+    // after the historical migration retry without weakening either frozen
+    // migration. The disposable database and finally block contain it.
+    const adminUrl = new URL(process.env.M19_PG_ADMIN_URL);
+    adminUrl.pathname = new URL(fixture.ownerPool.options.connectionString).pathname;
+    const eventAdmin = new Client({ connectionString: adminUrl.toString() });
+    await eventAdmin.connect();
+    await fixture.ownerPool.query(`CREATE FUNCTION public.m26_pre146_test_later_index()
+      RETURNS event_trigger LANGUAGE plpgsql AS $event_function$
+      BEGIN
+        IF to_regclass('public.canonical_forecast_price_decision_orders') IS NOT NULL
+           AND to_regclass('public.canonical_forecast_price_decision_orders_tenant_time_idx') IS NULL THEN
+          CREATE INDEX canonical_forecast_price_decision_orders_tenant_time_idx
+          ON public.canonical_forecast_price_decision_orders(
+            organization_id,ordered_at,source_order)
+          INCLUDE(estimate_id,decision_id);
+        END IF;
+      END
+      $event_function$`);
+    await eventAdmin.query(`CREATE EVENT TRIGGER m26_pre146_test_later_index
+      ON ddl_command_end WHEN TAG IN ('CREATE TABLE')
+      EXECUTE FUNCTION public.m26_pre146_test_later_index()`);
 
     const migrationPool = new Pool({
       connectionString: fixture.ownerPool.options.connectionString,
@@ -72,6 +124,11 @@ realPostgres('Mission 26 price-order migration recovery', () => {
       await holder.query('ROLLBACK').catch(() => {});
       holder.release();
       await migrationPool.end();
+      await eventAdmin.query(
+        'DROP EVENT TRIGGER IF EXISTS m26_pre146_test_later_index').catch(() => {});
+      await eventAdmin.query(
+        'DROP FUNCTION IF EXISTS public.m26_pre146_test_later_index()').catch(() => {});
+      await eventAdmin.end().catch(() => {});
     }
   }, 120000);
 

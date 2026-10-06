@@ -13,6 +13,9 @@ const { fixture: commercialFixture, group } = require('../helpers/m24-commercial
 const { fixture: pricingFixture } = require('../helpers/m24-pricing-input');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
+const priceRoot = '/api/v1/forecast/price-history';
+const profileRoot = '/api/v1/forecast/reporting-windows/effective-anchors';
+const utc = day => `${day.toISOString().slice(0, 10)}T00:00:00.000000Z`;
 
 realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', () => {
   let f;
@@ -23,6 +26,87 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
   beforeAll(async () => { f = await createEstimateReviewFixture(); }, 120000);
   afterAll(async () => { if (f) await f.cleanup(); }, 120000);
 
+  async function primeFuturePriceCoverage(actor) {
+    const snapshot = await request(f.app).post(`${priceRoot}/ordered-snapshots`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID()).send({});
+    expect(snapshot.status).toBe(201);
+    const activation = await request(f.app).post(`${priceRoot}/ordered-anchor/activate`)
+      .set(actor.session.headers).send({});
+    expect(activation.status).toBe(200);
+  }
+
+  async function createWitnessedFuturePriceOrigin(actor, decisionId) {
+    const observed = await request(f.app)
+      .post(`${priceRoot}/decision-commit-observations`)
+      .set(actor.session.headers).send({ decisionId });
+    expect(observed.status).toBe(200);
+    const tomorrow = new Date();
+    tomorrow.setUTCHours(0, 0, 0, 0);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const priorStart = new Date(tomorrow);
+    priorStart.setUTCDate(priorStart.getUTCDate() - 3);
+    const date = new Date(priorStart.getTime() + 12 * 60 * 60 * 1000);
+    const before = new Date(priorStart.getTime() - 24 * 60 * 60 * 1000);
+    const guardedTables = [
+      ['canonical_estimate_decisions', 'canonical_estimate_decision_immutable'],
+      ['canonical_forecast_price_decision_orders',
+        'canonical_forecast_price_decision_order_immutable'],
+      ['canonical_forecast_price_ordered_anchors',
+        'canonical_forecast_price_ordered_anchors_immutable'],
+      ['canonical_forecast_price_anchor_activations',
+        'canonical_forecast_price_anchor_activations_immutable'],
+    ];
+    try {
+      for (const [table, trigger] of guardedTables) {
+        await f.ownerPool.query(`ALTER TABLE ${table} DISABLE TRIGGER ${trigger}`);
+      }
+      await f.ownerPool.query(
+        'UPDATE canonical_estimate_decisions SET created_at=$2 WHERE id=$1',
+        [decisionId, date]);
+      await f.ownerPool.query(
+        'UPDATE canonical_forecast_price_decision_orders SET ordered_at=$2 WHERE decision_id=$1',
+        [decisionId, date]);
+      await f.ownerPool.query(
+        'UPDATE canonical_forecast_price_ordered_anchors SET coverage_starts_at=$2 WHERE organization_id=$1',
+        [f.org, before]);
+      await f.ownerPool.query(
+        'UPDATE canonical_forecast_price_anchor_activations SET observed_at=$2 WHERE organization_id=$1',
+        [f.org, before]);
+    } finally {
+      for (const [table, trigger] of guardedTables.reverse()) {
+        await f.ownerPool.query(`ALTER TABLE ${table} ENABLE TRIGGER ${trigger}`);
+      }
+    }
+    const snapshot = await request(f.app).post(`${priceRoot}/ordered-snapshots`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID()).send({});
+    expect(snapshot.status).toBe(201);
+    const profile = await request(f.app).post(profileRoot)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ reason: 'Prospective UTC profile for integrated commercial proof.',
+        confirmed: true });
+    expect(profile.status).toBe(201);
+    expect((await request(f.app).post(
+      `${profileRoot}/${profile.body.data.anchorId}/activate`)
+      .set(actor.session.headers).send({})).status).toBe(200);
+    const horizonEnd = new Date(tomorrow);
+    horizonEnd.setUTCDate(horizonEnd.getUTCDate() + 1);
+    const origin = await request(f.app).post(`${priceRoot}/saved-price-flow-origins`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ sourceReceiptId: snapshot.body.data.snapshotId, currency: 'USD',
+        horizonStartsAt: utc(tomorrow), horizonEndsAt: utc(horizonEnd) });
+    expect(origin.status).toBe(201);
+    const runId = origin.body.data.runId;
+    expect((await request(f.app)
+      .post(`${priceRoot}/saved-price-flow-origins/${runId}/activate`)
+      .set(actor.session.headers).send({})).status).toBe(200);
+    const witness = await request(f.app)
+      .post(`${priceRoot}/saved-price-flow-origins/${runId}/profile-witness`)
+      .set(actor.session.headers).send({ profileAnchorId: profile.body.data.anchorId });
+    expect(witness.status).toBe(200);
+    expect(witness.body.data.state).toBe('profile_witness_recorded');
+    return runId;
+  }
+
   test('orders new accepted estimate, human schedule approval, and link revocation without booking-price promotion', async () => {
     const actor = f.actors.owner;
     const estimate = f.estimateGraphs[0].ids.estimate;
@@ -31,6 +115,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     const post = (suffix, body) => request(f.app).post(route + suffix)
       .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID()).send(body);
 
+    await primeFuturePriceCoverage(actor);
     let review = (await get('/review')).body.data;
     const pricing = review.pricingPlans;
     expect((await post('/pricing-plans', {
@@ -82,10 +167,39 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       exceptions: { policyReason: '', policyUnknownAcknowledged: true,
         ownerRecordedTaxAcknowledged: true },
     })).status).toBe(201);
-    const issued = await post('/customer-estimate-versions', {
-      reason: 'Synthetic issued customer estimate', confirmed: true,
-      confirmationVersion: 'customer-estimate-issue-v1',
-    });
+    // The actual issue-version writer reaches migration 234's BEFORE INSERT
+    // source fence without owning the price-decision lock. An integrated
+    // capture holding the commercial fence therefore makes issuance wait,
+    // rather than forming a price-to-commercial deadlock cycle.
+    const captureFence = await f.ownerPool.connect();
+    let issued;
+    try {
+      await captureFence.query('BEGIN');
+      await captureFence.query(`SELECT pg_advisory_xact_lock(
+        hashtextextended('m26:commercial-booking-order:'||$1::text,0))`, [f.org]);
+      let issueSettled = false;
+      const issuing = post('/customer-estimate-versions', {
+        reason: 'Synthetic issued customer estimate', confirmed: true,
+        confirmationVersion: 'customer-estimate-issue-v1',
+      }).then(result => { issueSettled = true; return result; });
+      const waitDeadline = Date.now() + 4000;
+      let advisoryWaiters = 0;
+      while (Date.now() < waitDeadline && advisoryWaiters === 0) {
+        advisoryWaiters = (await f.ownerPool.query(
+          `SELECT count(*)::int count FROM pg_locks
+            WHERE locktype='advisory' AND NOT granted AND
+             database=(SELECT oid FROM pg_database WHERE datname=current_database())`))
+          .rows[0].count;
+        if (advisoryWaiters === 0) await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(advisoryWaiters).toBeGreaterThanOrEqual(1);
+      expect(issueSettled).toBe(false);
+      await captureFence.query('COMMIT');
+      issued = await issuing;
+    } finally {
+      await captureFence.query('ROLLBACK').catch(() => {});
+      captureFence.release();
+    }
     expect(issued.status).toBe(201);
     issuedVersionId = issued.body.data.receipt.id;
     estimateRoute = route;
@@ -123,13 +237,65 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         reason: 'Match synthetic accepted estimate to this appointment' });
     if (preview.status !== 201) throw new Error('Matching preview failed: ' +
       JSON.stringify({ body: preview.body, before }));
-    const approval = await request(f.app).post(`/api/v1/canonical/appointments/${appointment}/mutation-approvals`)
-      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
-      .send({ previewId: preview.body.data.id, previewDigest: preview.body.data.previewDigest,
-        acknowledgedWarningDigests: preview.body.data.warningDigests,
-        acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests,
-        reason: 'Match synthetic accepted estimate to this appointment' });
+    // A real delivery-event writer that began before the schedule approval
+    // keeps the shared commercial fence until commit. The production M22
+    // approval must wait, then proceed only after the rolled-back acceptance
+    // disappears; it cannot observe a false commercial source order.
+    const approvalBody = { previewId: preview.body.data.id,
+      previewDigest: preview.body.data.previewDigest,
+      acknowledgedWarningDigests: preview.body.data.warningDigests,
+      acknowledgedReviewReasonDigests: preview.body.data.reviewReasonDigests,
+      reason: 'Match synthetic accepted estimate to this appointment' };
+    const approvalKey = crypto.randomUUID();
+    const raceLink = await post('/customer-estimate-links', {
+      versionId: issuedVersionId, expiresInDays: 14,
+      confirmed: true, confirmationVersion: 'customer-estimate-delivery-v1',
+    });
+    expect(raceLink.status).toBe(201);
+    const acceptanceWriter = await f.ownerPool.connect();
+    let approval;
+    try {
+      await acceptanceWriter.query('BEGIN');
+      await acceptanceWriter.query(
+        `INSERT INTO canonical_customer_estimate_delivery_events(
+           organization_id,estimate_id,version_id,link_id,kind,body,actor_user_id,
+           request_key_hash,request_digest,digest)
+         SELECT organization_id,estimate_id,version_id,id,'accepted',
+                $2::jsonb,NULL,$3,$4,$5
+           FROM canonical_customer_estimate_delivery_links WHERE id=$1`,
+        [raceLink.body.data.link.id,
+          JSON.stringify({ customerName: 'Concurrent synthetic customer', confirmed: true,
+            confirmationVersion: 'customer-estimate-accept-v1' }),
+          crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex')]);
+      let approvalSettled = false;
+      const approving = request(f.app)
+        .post(`/api/v1/canonical/appointments/${appointment}/mutation-approvals`)
+        .set(actor.session.headers).set('Idempotency-Key', approvalKey)
+        .send(approvalBody).then(result => { approvalSettled = true; return result; });
+      const waitDeadline = Date.now() + 4000;
+      let advisoryWaiters = 0;
+      while (Date.now() < waitDeadline && advisoryWaiters === 0) {
+        advisoryWaiters = (await f.ownerPool.query(
+          `SELECT count(*)::int count FROM pg_locks
+            WHERE locktype='advisory' AND NOT granted AND
+             database=(SELECT oid FROM pg_database WHERE datname=current_database())`))
+          .rows[0].count;
+        if (advisoryWaiters === 0) await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(advisoryWaiters).toBeGreaterThanOrEqual(1);
+      expect(approvalSettled).toBe(false);
+      await acceptanceWriter.query('ROLLBACK');
+      approval = await approving;
+    } finally {
+      await acceptanceWriter.query('ROLLBACK').catch(() => {});
+      acceptanceWriter.release();
+    }
     if (approval.status !== 200) throw new Error('Matching approval failed: ' + JSON.stringify(approval.body));
+    expect((await f.ownerPool.query(
+      `SELECT count(*)::int count FROM canonical_customer_estimate_delivery_events
+        WHERE organization_id=$1 AND link_id=$2 AND kind='accepted'`,
+      [f.org, raceLink.body.data.link.id])).rows[0].count).toBe(0);
     matchingApprovalId = (await f.ownerPool.query(
       'SELECT id FROM canonical_schedule_human_approvals WHERE organization_id=$1 AND appointment_id=$2 ORDER BY approved_at DESC LIMIT 1',
       [f.org, appointment])).rows[0].id;
@@ -374,6 +540,675 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       historicalCoverageVerified: false, wholeBusinessCoverageVerified: false,
       earnedRevenueMeasured: false, collectedCashMeasured: false,
       forecastIssued: false });
+    const issuedDecisionId = (await f.ownerPool.query(
+      `SELECT decision_id FROM canonical_customer_estimate_versions
+        WHERE organization_id=$1 AND id=$2`, [f.org, issuedVersionId])).rows[0].decision_id;
+    const futureOriginId = await createWitnessedFuturePriceOrigin(actor, issuedDecisionId);
+    const integratedRoute =
+      '/api/v1/forecast/booking-reviews/booked-work/integrated-commercial-baselines';
+    const positiveIntegrated = await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ approvedPriceOriginId: futureOriginId,
+        reason: 'Capture the positive owner-confirmed commercial position.',
+        confirmed: true,
+        confirmationVersion: 'integrated-commercial-baseline-v1' });
+    if (positiveIntegrated.status !== 201) {
+      const methodDebug = (await f.ownerPool.query(`SELECT
+        public.canonical_forecast_price_flow_method_closure_current() legacy_current,
+        m.dependency_closure_digest registered_v2,
+        public.canonical_forecast_price_flow_method_closure_digest() current_digest,
+        m.dependency_closure_digest=
+          public.canonical_forecast_price_flow_method_closure_digest() v2_current
+        FROM canonical_forecast_complete_window_governance_methods_v2 m
+        WHERE m.version='m26_complete_window_deterministic_closure_v2'`)).rows[0];
+      throw new Error('Positive integrated capture failed: ' +
+        JSON.stringify({ body: positiveIntegrated.body, methodDebug }));
+    }
+    expect(positiveIntegrated.body.data).toMatchObject({
+      state: 'northstar_integrated_commercial_baseline',
+      authorizedEstimateBeforeTax: storedPrice.reviewed_price_before_tax,
+      approvedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
+      bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+      commercialStatuses: { currentIssuedEstimateCount: 1,
+        activeApprovedPriceCount: 1, ownerConfirmedBookedCount: 1 },
+      sourceCurrent: true, futureApprovedPriceBaselineVerified: true,
+      earnedRevenueMeasured: false, collectedCashMeasured: false,
+      forecastIssued: false,
+    });
+    const positiveIntegratedRead = await request(f.app).get(
+      `${integratedRoute}/${positiveIntegrated.body.data.positionId}`)
+      .set(actor.session.headers);
+    expect(positiveIntegratedRead.status).toBe(200);
+    expect(positiveIntegratedRead.body.data).toMatchObject({
+      positionId: positiveIntegrated.body.data.positionId,
+      bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+      currentAtRead: true, sourceCurrent: true });
+    const integratedBody = {
+      approvedPriceOriginId: futureOriginId,
+      reason: 'Capture an authorization-bound integrated commercial position.',
+      confirmed: true,
+      confirmationVersion: 'integrated-commercial-baseline-v1',
+    };
+    const integratedPositionCount = async () => Number((await f.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_integrated_commercial_positions
+        WHERE organization_id=$1`, [f.org])).rows[0].count);
+    const adminIntegrated = await request(f.app).post(integratedRoute)
+      .set(f.actors.admin.session.headers)
+      .set('Idempotency-Key', crypto.randomUUID()).send({ ...integratedBody,
+        reason: 'Admin captures the same authorization-bound commercial position.' });
+    expect(adminIntegrated.status).toBe(201);
+    expect(adminIntegrated.body.data).toMatchObject({
+      state: 'northstar_integrated_commercial_baseline', sourceCurrent: true,
+      bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+      replayed: false,
+    });
+    const adminIntegratedRead = await request(f.app).get(
+      `${integratedRoute}/${adminIntegrated.body.data.positionId}`)
+      .set(f.actors.admin.session.headers);
+    expect(adminIntegratedRead.status).toBe(200);
+    expect(adminIntegratedRead.body.data).toMatchObject({
+      positionId: adminIntegrated.body.data.positionId,
+      state: 'northstar_integrated_commercial_baseline', sourceCurrent: true,
+      currentAtRead: true,
+    });
+
+    // A genuine M24 decision insert owns the price-decision source fence. The
+    // integrated writer may take its earlier locks, but it must return busy and
+    // persist nothing until that price writer commits or rolls back.
+    const decisionWriter = await f.ownerPool.connect();
+    const decisionRaceKey = crypto.randomUUID();
+    const countBeforeDecisionRace = await integratedPositionCount();
+    try {
+      await decisionWriter.query('BEGIN');
+      await decisionWriter.query(
+        `INSERT INTO canonical_estimate_decisions(
+           organization_id,estimate_id,revision,previous_id,action,actor_user_id,
+           membership_id,auth_session_id,actor_name,source_pins,scope_summary,
+           price_before_tax,currency,reason,confirmation_version,request_key_hash,
+           request_digest,digest)
+         SELECT organization_id,estimate_id,revision+1,id,'approve',actor_user_id,
+           membership_id,auth_session_id,actor_name,source_pins,scope_summary,
+           price_before_tax,currency,'Concurrent synthetic price review',
+           confirmation_version,$2,$3,$4
+         FROM canonical_estimate_decisions
+         WHERE organization_id=$1 AND id=$5`,
+        [f.org, crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex'),
+          issuedDecisionId]);
+      const busy = await request(f.app).post(integratedRoute)
+        .set(actor.session.headers).set('Idempotency-Key', decisionRaceKey)
+        .send({ ...integratedBody,
+          reason: 'Capture while a genuine approved-price writer is in flight.' });
+      expect(busy.status).toBe(409);
+      expect(busy.body.error.category).toBe('FORECAST_REVIEW_BUSY');
+      expect(await integratedPositionCount()).toBe(countBeforeDecisionRace);
+    } finally {
+      await decisionWriter.query('ROLLBACK').catch(() => {});
+      decisionWriter.release();
+    }
+    const afterDecisionRace = await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('Idempotency-Key', decisionRaceKey)
+      .send({ ...integratedBody,
+        reason: 'Capture while a genuine approved-price writer is in flight.' });
+    expect(afterDecisionRace.status).toBe(201);
+    expect(afterDecisionRace.body.data).toMatchObject({
+      state: 'northstar_integrated_commercial_baseline', sourceCurrent: true,
+      bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+    });
+
+    // The production correction writer owns the shared commercial fence. A
+    // simultaneous integrated capture must fail without a false-current row;
+    // rollback restores the exact source and the same request can then commit.
+    const reviewWriter = await f.runtimePool.connect();
+    const reviewRaceKey = crypto.randomUUID();
+    const countBeforeReviewRace = await integratedPositionCount();
+    try {
+      await reviewWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      const pendingCorrection = (await reviewWriter.query(
+        `SELECT public.canonical_forecast_correct_booking_review(
+          $1,$2,$3,$4,$5,$6,$7,$8,$9) value`,
+        [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+          firstReviewId, matchingApprovalId,
+          'Transactional correction writer ordering proof.', crypto.randomUUID(),
+          actor.csrfToken])).rows[0].value;
+      expect(pendingCorrection).toMatchObject({
+        state: 'booking_corrected', previousReviewId: firstReviewId, replayed: false,
+      });
+      const busy = await request(f.app).post(integratedRoute)
+        .set(actor.session.headers).set('Idempotency-Key', reviewRaceKey)
+        .send({ ...integratedBody,
+          reason: 'Capture while a production commercial review writer is in flight.' });
+      expect(busy.status).toBe(409);
+      expect(busy.body.error.category).toBe('FORECAST_REVIEW_BUSY');
+      expect(await integratedPositionCount()).toBe(countBeforeReviewRace);
+    } finally {
+      await reviewWriter.query('ROLLBACK').catch(() => {});
+      reviewWriter.release();
+    }
+    const afterReviewRace = await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('Idempotency-Key', reviewRaceKey)
+      .send({ ...integratedBody,
+        reason: 'Capture while a production commercial review writer is in flight.' });
+    expect(afterReviewRace.status).toBe(201);
+    expect(afterReviewRace.body.data).toMatchObject({
+      state: 'northstar_integrated_commercial_baseline', sourceCurrent: true,
+      bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+    });
+
+    // Keep one real integrated capture transaction open after it has acquired
+    // the commercial, profile, and price locks. An unrelated tenant still
+    // completes its own integrated call, proving the combined lock is tenant
+    // scoped rather than a global serialization point. Roll back the probe.
+    const combinedCapture = await f.runtimePool.connect();
+    const countBeforeCombinedProbe = await integratedPositionCount();
+    try {
+      await combinedCapture.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      const heldCapture = (await combinedCapture.query(
+        `SELECT public.canonical_forecast_capture_integrated_commercial_position(
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value`,
+        [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+          actor.csrfToken, futureOriginId, crypto.randomUUID(),
+          'Hold a real integrated capture while another tenant progresses.',
+          true, 'integrated-commercial-baseline-v1'])).rows[0].value;
+      expect(heldCapture).toMatchObject({
+        state: 'northstar_integrated_commercial_baseline', sourceCurrent: true,
+        replayed: false,
+      });
+      const unrelatedRequest = request(f.app).post(integratedRoute)
+        .set(f.actors.otherOwner.session.headers)
+        .set('Idempotency-Key', crypto.randomUUID()).send({ ...integratedBody,
+          reason: 'Unrelated tenant progresses during another tenant capture.' });
+      const unrelated = await Promise.race([
+        unrelatedRequest,
+        new Promise((_, reject) => setTimeout(() => reject(
+          new Error('Unrelated tenant integrated capture did not progress')), 3000)),
+      ]);
+      expect(unrelated.status).toBe(200);
+      expect(unrelated.body.data).toMatchObject({
+        state: 'integrated_commercial_baseline_unavailable',
+        reason: 'origin_or_activation_missing', sourceCurrent: false,
+      });
+      expect(await integratedPositionCount()).toBe(countBeforeCombinedProbe);
+    } finally {
+      await combinedCapture.query('ROLLBACK').catch(() => {});
+      combinedCapture.release();
+    }
+    expect(await integratedPositionCount()).toBe(countBeforeCombinedProbe);
+
+    const positionCountBeforeDenials = Number((await f.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_integrated_commercial_positions
+        WHERE organization_id=$1`, [f.org])).rows[0].count);
+    for (const deniedActor of [f.actors.dispatcher, f.actors.member, f.actors.viewer]) {
+      expect((await request(f.app).post(integratedRoute)
+        .set(deniedActor.session.headers)
+        .set('Idempotency-Key', crypto.randomUUID()).send(integratedBody)).status)
+        .toBe(403);
+      expect((await request(f.app).get(
+        `${integratedRoute}/${positiveIntegrated.body.data.positionId}`)
+        .set(deniedActor.session.headers)).status).toBe(403);
+    }
+    expect((await request(f.app).post(integratedRoute)
+      .set('Idempotency-Key', crypto.randomUUID()).send(integratedBody)).status)
+      .toBe(401);
+    expect((await request(f.app).get(
+      `${integratedRoute}/${positiveIntegrated.body.data.positionId}`)).status)
+      .toBe(401);
+    expect((await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('X-CSRF-Token', 'invalid-csrf-token')
+      .set('Idempotency-Key', crypto.randomUUID()).send(integratedBody)).status)
+      .toBe(403);
+    const otherTenantPosition = await request(f.app).get(
+      `${integratedRoute}/${positiveIntegrated.body.data.positionId}`)
+      .set(f.actors.otherOwner.session.headers);
+    expect(otherTenantPosition.status).toBe(404);
+    expect(JSON.stringify(otherTenantPosition.body)).not.toMatch(
+      /authorizedEstimate|approvedPrice|bookedWork|digest|sourceCapture/i);
+    await f.ownerPool.query(`UPDATE auth_sessions SET status='revoked',
+      revoked_at=clock_timestamp(),revoke_reason='m26_part6a_integrated_test'
+      WHERE id=$1`, [actor.authSessionId]);
+    try {
+      expect((await request(f.app).post(integratedRoute)
+        .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+        .send(integratedBody)).status).toBe(401);
+      expect((await request(f.app).get(
+        `${integratedRoute}/${positiveIntegrated.body.data.positionId}`)
+        .set(actor.session.headers)).status).toBe(401);
+    } finally {
+      await f.ownerPool.query(`UPDATE auth_sessions SET status='active',
+        revoked_at=NULL,revoke_reason=NULL WHERE id=$1`, [actor.authSessionId]);
+    }
+    await f.ownerPool.query(`UPDATE organization_memberships SET status='suspended'
+      WHERE organization_id=$1 AND user_id=$2`, [f.org, actor.actorUserId]);
+    try {
+      expect((await request(f.app).post(integratedRoute)
+        .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+        .send(integratedBody)).status).toBe(403);
+      expect((await request(f.app).get(
+        `${integratedRoute}/${positiveIntegrated.body.data.positionId}`)
+        .set(actor.session.headers)).status).toBe(403);
+    } finally {
+      await f.ownerPool.query(`UPDATE organization_memberships SET status='active'
+        WHERE organization_id=$1 AND user_id=$2`, [f.org, actor.actorUserId]);
+    }
+    await f.ownerPool.query(`UPDATE subscriptions SET status='past_due'
+      WHERE organization_id=$1`, [f.org]);
+    try {
+      expect((await request(f.app).post(integratedRoute)
+        .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+        .send(integratedBody)).status).toBe(403);
+      expect((await request(f.app).get(
+        `${integratedRoute}/${positiveIntegrated.body.data.positionId}`)
+        .set(actor.session.headers)).status).toBe(403);
+    } finally {
+      await f.ownerPool.query(`UPDATE subscriptions SET status='active'
+        WHERE organization_id=$1`, [f.org]);
+    }
+    expect(Number((await f.ownerPool.query(
+      `SELECT count(*) count FROM canonical_forecast_integrated_commercial_positions
+        WHERE organization_id=$1`, [f.org])).rows[0].count))
+      .toBe(positionCountBeforeDenials);
+    const integratedBooked = (await f.ownerPool.query(
+      `SELECT public.canonical_forecast_integrated_commercial_sources(
+        $1,$2,$3,$4,$5) value`, [f.org, actor.actorUserId,
+        actor.actorAccessRole, actor.authSessionId, storedPrice.currency]))
+      .rows[0].value;
+    expect(integratedBooked).toMatchObject({
+      state: 'current_integrated_commercial_sources',
+      authorizedEstimateBeforeTax: storedPrice.reviewed_price_before_tax,
+      approvedPriceBeforeTax: storedPrice.reviewed_price_before_tax,
+      bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+      commercialStatuses: { currentIssuedEstimateCount: 1,
+        activeApprovedPriceCount: 1, ownerConfirmedBookedCount: 1,
+        bookingConfirmationSourceCount: 1 },
+      sourceCohortsCompleteAtRead: true, forecastIssued: false,
+    });
+    const sourceArgs = [f.org, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId, storedPrice.currency];
+    const readIntegratedSources = async client => (await client.query(
+      `SELECT public.canonical_forecast_integrated_commercial_sources(
+        $1,$2,$3,$4,$5) value`, sourceArgs)).rows[0].value;
+    const dropForeignKeys = table => `DO $$
+      DECLARE constraint_value RECORD;
+      BEGIN
+       FOR constraint_value IN
+        SELECT conname FROM pg_catalog.pg_constraint
+         WHERE conrelid='public.${table}'::regclass AND contype='f'
+       LOOP
+        EXECUTE format('ALTER TABLE public.${table} DROP CONSTRAINT %I',
+          constraint_value.conname);
+       END LOOP;
+      END $$`;
+
+    // A currency disagreement is incomplete evidence, never an amount that
+    // can be coerced into the requested future-origin currency.
+    expect((await f.ownerPool.query(
+      `SELECT public.canonical_forecast_integrated_commercial_sources(
+        $1,$2,$3,$4,$5) value`, [...sourceArgs.slice(0, 4), 'CAD']))
+      .rows[0].value).toMatchObject({
+      state: 'integrated_commercial_sources_unavailable',
+      reason: 'mixed_currency', forecastIssued: false,
+    });
+
+    // A missing issued-version row inside a reviewed commercial lineage is
+    // different from an authenticated zero. The lineage must fail closed.
+    const missingIssuedProbe = await f.ownerPool.connect();
+    try {
+      await missingIssuedProbe.query('BEGIN');
+      await missingIssuedProbe.query(
+        dropForeignKeys('canonical_forecast_commercial_booking_reviews'));
+      await missingIssuedProbe.query(`ALTER TABLE
+        canonical_forecast_commercial_booking_reviews DISABLE TRIGGER
+        canonical_forecast_commercial_booking_review_immutable`);
+      await missingIssuedProbe.query(`UPDATE canonical_forecast_commercial_booking_reviews
+        SET issued_version_id=gen_random_uuid()
+        WHERE organization_id=$1 AND id=$2`, [f.org, firstReviewId]);
+      expect(await readIntegratedSources(missingIssuedProbe)).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'booked_work_lineage_unavailable', forecastIssued: false,
+      });
+    } finally {
+      await missingIssuedProbe.query('ROLLBACK').catch(() => {});
+      missingIssuedProbe.release();
+    }
+
+    // With complete ledgers but no confirmation row, the source remains
+    // authenticated and reports a reviewed-unconfirmed status plus 0.00
+    // booked work. That is not normalized into missing coverage.
+    const noConfirmationProbe = await f.ownerPool.connect();
+    try {
+      await noConfirmationProbe.query('BEGIN');
+      await noConfirmationProbe.query(`ALTER TABLE
+        canonical_forecast_booked_work_confirmations DISABLE TRIGGER
+        canonical_forecast_booked_work_confirmation_immutable`);
+      await noConfirmationProbe.query(`DELETE FROM
+        canonical_forecast_booked_work_confirmations
+        WHERE organization_id=$1 AND id=$2`, [f.org, confirmationId]);
+      expect(await readIntegratedSources(noConfirmationProbe)).toMatchObject({
+        state: 'current_integrated_commercial_sources',
+        bookedWorkBeforeTax: '0.00',
+        commercialStatuses: { ownerReviewedUnconfirmedCount: 1,
+          ownerConfirmedBookedCount: 0, bookingConfirmationSourceCount: 0 },
+        sourceCohortsCompleteAtRead: true, forecastIssued: false,
+      });
+    } finally {
+      await noConfirmationProbe.query('ROLLBACK').catch(() => {});
+      noConfirmationProbe.release();
+    }
+
+    // Exercise every new 1,000-row source bound through the complete
+    // production source helper. Each synthetic ledger expansion is rolled
+    // back, so it proves exact-bound acceptance (or the later byte bound) and
+    // +1 fail-close precedence without manufacturing durable evidence.
+    const approvedBound = await f.ownerPool.connect();
+    try {
+      await approvedBound.query('BEGIN');
+      await approvedBound.query(dropForeignKeys('canonical_estimate_decisions'));
+      await approvedBound.query(`ALTER TABLE canonical_estimate_decisions
+        DISABLE TRIGGER canonical_forecast_estimate_decision_source_fence`);
+      await approvedBound.query(`CREATE TEMP TABLE m26_integrated_approved_bound
+        ON COMMIT DROP AS SELECT value,
+         gen_random_uuid() estimate_id,gen_random_uuid() decision_id,
+         md5('m26-6a-approved-a-'||value::text)||
+          md5('m26-6a-approved-b-'||value::text) hash_value
+        FROM generate_series(1,1000) value`);
+      const insertApproved = `INSERT INTO canonical_estimate_decisions
+        SELECT (jsonb_populate_record(NULL::canonical_estimate_decisions,
+          to_jsonb(base)||jsonb_build_object(
+           'id',synthetic.decision_id,'estimate_id',synthetic.estimate_id,
+           'revision',1,'previous_id',NULL,
+           'request_key_hash',synthetic.hash_value,
+           'request_digest',synthetic.hash_value,
+           'digest',synthetic.hash_value))).*
+        FROM (SELECT * FROM canonical_estimate_decisions
+               WHERE organization_id=$1 AND action='approve'
+               ORDER BY revision DESC,id DESC LIMIT 1) base
+        CROSS JOIN m26_integrated_approved_bound synthetic
+        WHERE synthetic.value BETWEEN $2 AND $3`;
+      await approvedBound.query(insertApproved, [f.org, 1, 999]);
+      expect(await readIntegratedSources(approvedBound)).toMatchObject({
+        state: 'current_integrated_commercial_sources',
+        commercialStatuses: { activeApprovedPriceCount: 1000 },
+        sourceCohortsCompleteAtRead: true,
+      });
+      await approvedBound.query(insertApproved, [f.org, 1000, 1000]);
+      expect(await readIntegratedSources(approvedBound)).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'approved_price_source_limit', forecastIssued: false,
+      });
+    } finally {
+      await approvedBound.query('ROLLBACK').catch(() => {});
+      approvedBound.release();
+    }
+
+    // The aggregate amount ceiling deliberately takes precedence over the
+    // 1,001-row source ceiling. Exercise that ordering through the production
+    // helper, then prove the refused source evaluation stores no integrated
+    // position. All synthetic decisions remain rollback-only.
+    const approvedAmountBound = await f.ownerPool.connect();
+    try {
+      await approvedAmountBound.query('BEGIN');
+      await approvedAmountBound.query(
+        dropForeignKeys('canonical_estimate_decisions'));
+      await approvedAmountBound.query(`ALTER TABLE canonical_estimate_decisions
+        DISABLE TRIGGER canonical_forecast_estimate_decision_source_fence`);
+      // With 1,001 max-valued synthetic approvals plus the fixture approval,
+      // the helper's LIMIT 1001 necessarily sees either 1,001 maxima or 1,000
+      // maxima plus the fixture amount. The fixture amount exceeds the $9.99
+      // gap between 1,000 maxima and the aggregate ceiling.
+      expect(Number(storedPrice.reviewed_price_before_tax)).toBeGreaterThan(9.99);
+      await approvedAmountBound.query(`CREATE TEMP TABLE
+        m26_integrated_approved_amount_bound ON COMMIT DROP AS SELECT value,
+         gen_random_uuid() estimate_id,gen_random_uuid() decision_id,
+          md5('m26-6a-approved-amount-a-'||value::text)||
+          md5('m26-6a-approved-amount-b-'||value::text) hash_value
+        FROM generate_series(1,1001) value`);
+      await approvedAmountBound.query(`INSERT INTO canonical_estimate_decisions
+        SELECT (jsonb_populate_record(NULL::canonical_estimate_decisions,
+          to_jsonb(base)||jsonb_build_object(
+           'id',synthetic.decision_id,'estimate_id',synthetic.estimate_id,
+           'revision',1,'previous_id',NULL,
+           'price_before_tax','999999999999.99',
+           'request_key_hash',synthetic.hash_value,
+           'request_digest',synthetic.hash_value,
+           'digest',synthetic.hash_value))).*
+        FROM (SELECT * FROM canonical_estimate_decisions
+               WHERE organization_id=$1 AND action='approve'
+               ORDER BY revision DESC,id DESC LIMIT 1) base
+        CROSS JOIN m26_integrated_approved_amount_bound synthetic`, [f.org]);
+      const amountPositionCount = Number((await approvedAmountBound.query(
+        `SELECT count(*) count FROM canonical_forecast_integrated_commercial_positions
+          WHERE organization_id=$1`, [f.org])).rows[0].count);
+      expect(await readIntegratedSources(approvedAmountBound)).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'amount_exceeds_limit', forecastIssued: false,
+      });
+      // Source evaluation is side-effect free: the refused production-helper
+      // result cannot create an integrated receipt even inside this owner
+      // transaction.
+      expect(Number((await approvedAmountBound.query(
+        `SELECT count(*) count FROM canonical_forecast_integrated_commercial_positions
+          WHERE organization_id=$1`, [f.org])).rows[0].count))
+        .toBe(amountPositionCount);
+    } finally {
+      await approvedAmountBound.query('ROLLBACK').catch(() => {});
+      approvedAmountBound.release();
+    }
+
+    const issuedCurrentBound = await f.ownerPool.connect();
+    try {
+      await issuedCurrentBound.query('BEGIN');
+      await issuedCurrentBound.query(
+        dropForeignKeys('canonical_customer_estimate_versions'));
+      await issuedCurrentBound.query(
+        dropForeignKeys('canonical_forecast_approved_estimate_v2_current_sources'));
+      await issuedCurrentBound.query(`CREATE TEMP TABLE m26_integrated_issued_current
+        ON COMMIT DROP AS SELECT value,
+         gen_random_uuid() estimate_id,gen_random_uuid() version_id,
+         gen_random_uuid() decision_id,
+         md5('m26-6a-issued-current-a-'||value::text)||
+          md5('m26-6a-issued-current-b-'||value::text) hash_value
+        FROM generate_series(1,1000) value`);
+      const insertIssuedCurrent = `INSERT INTO canonical_customer_estimate_versions
+        SELECT (jsonb_populate_record(NULL::canonical_customer_estimate_versions,
+          to_jsonb(base)||jsonb_build_object(
+           'id',synthetic.version_id,'estimate_id',synthetic.estimate_id,
+           'revision',1,'previous_id',NULL,
+           'decision_id',synthetic.decision_id,
+           'document_digest',synthetic.hash_value,
+           'request_key_hash',synthetic.hash_value,
+           'request_digest',synthetic.hash_value,
+           'digest',synthetic.hash_value))).*
+        FROM (SELECT * FROM canonical_customer_estimate_versions
+               WHERE organization_id=$1 ORDER BY created_at,id LIMIT 1) base
+        CROSS JOIN m26_integrated_issued_current synthetic
+        WHERE synthetic.value BETWEEN $2 AND $3`;
+      const insertIssuedCurrentSources = `INSERT INTO
+          canonical_forecast_approved_estimate_v2_current_sources(
+           organization_id,estimate_id,decision_id,revision,action,digest,
+           recorded_at,source_order)
+        SELECT $1,synthetic.estimate_id,synthetic.decision_id,1,'approve',
+          synthetic.hash_value,clock_timestamp(),0
+        FROM m26_integrated_issued_current synthetic
+        WHERE synthetic.value BETWEEN $2 AND $3`;
+      await issuedCurrentBound.query(insertIssuedCurrent, [f.org, 1, 999]);
+      await issuedCurrentBound.query(insertIssuedCurrentSources, [f.org, 1, 999]);
+      const issuedCurrentExact = await readIntegratedSources(issuedCurrentBound);
+      expect(issuedCurrentExact).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'issued_estimate_manifest_size', forecastIssued: false,
+      });
+      expect(issuedCurrentExact.reason).not.toBe('issued_estimate_source_limit');
+      await issuedCurrentBound.query(insertIssuedCurrent, [f.org, 1000, 1000]);
+      await issuedCurrentBound.query(insertIssuedCurrentSources,
+        [f.org, 1000, 1000]);
+      expect(await readIntegratedSources(issuedCurrentBound)).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'issued_estimate_source_limit', forecastIssued: false,
+      });
+    } finally {
+      await issuedCurrentBound.query('ROLLBACK').catch(() => {});
+      issuedCurrentBound.release();
+    }
+
+    const issuedHistoryBound = await f.ownerPool.connect();
+    try {
+      await issuedHistoryBound.query('BEGIN');
+      await issuedHistoryBound.query(
+        dropForeignKeys('canonical_customer_estimate_versions'));
+      await issuedHistoryBound.query(`CREATE TEMP TABLE m26_integrated_issued_history
+        ON COMMIT DROP AS SELECT value,
+         gen_random_uuid() version_id,gen_random_uuid() approval_id,
+         md5('m26-6a-issued-history-a-'||value::text)||
+          md5('m26-6a-issued-history-b-'||value::text) hash_value
+        FROM generate_series(2,1001) value`);
+      const insertIssuedHistory = `INSERT INTO canonical_customer_estimate_versions
+        SELECT (jsonb_populate_record(NULL::canonical_customer_estimate_versions,
+          to_jsonb(base)||jsonb_build_object(
+           'id',synthetic.version_id,'revision',synthetic.value,
+           'previous_id',base.id,
+           'commercial_approval_id',synthetic.approval_id,
+           'approval_pin',jsonb_set(base.approval_pin,'{id}',
+             to_jsonb(synthetic.approval_id::text)),
+           'document_digest',synthetic.hash_value,
+           'request_key_hash',synthetic.hash_value,
+           'request_digest',synthetic.hash_value,
+           'digest',synthetic.hash_value))).*
+        FROM (SELECT * FROM canonical_customer_estimate_versions
+               WHERE organization_id=$1 ORDER BY created_at,id LIMIT 1) base
+        CROSS JOIN m26_integrated_issued_history synthetic
+        WHERE synthetic.value BETWEEN $2 AND $3`;
+      await issuedHistoryBound.query(insertIssuedHistory, [f.org, 2, 1000]);
+      const issuedHistoryExact = await readIntegratedSources(issuedHistoryBound);
+      expect(issuedHistoryExact).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'issued_estimate_manifest_size', forecastIssued: false,
+      });
+      expect(issuedHistoryExact.reason)
+        .not.toBe('issued_estimate_history_source_limit');
+      await issuedHistoryBound.query(insertIssuedHistory, [f.org, 1001, 1001]);
+      expect(await readIntegratedSources(issuedHistoryBound)).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'issued_estimate_history_source_limit', forecastIssued: false,
+      });
+    } finally {
+      await issuedHistoryBound.query('ROLLBACK').catch(() => {});
+      issuedHistoryBound.release();
+    }
+
+    const reviewBound = await f.ownerPool.connect();
+    try {
+      await reviewBound.query('BEGIN');
+      await reviewBound.query(
+        dropForeignKeys('canonical_forecast_commercial_booking_reviews'));
+      await reviewBound.query(`CREATE TEMP TABLE m26_integrated_review_bound
+        ON COMMIT DROP AS SELECT value,
+         gen_random_uuid() review_id,gen_random_uuid() appointment_id,
+         gen_random_uuid() opportunity_id,
+         md5('m26-6a-review-a-'||value::text)||
+          md5('m26-6a-review-b-'||value::text) hash_value
+        FROM generate_series(1,1000) value`);
+      const insertReviews = `INSERT INTO canonical_forecast_commercial_booking_reviews
+        SELECT (jsonb_populate_record(
+          NULL::canonical_forecast_commercial_booking_reviews,
+          to_jsonb(base)||jsonb_build_object(
+           'id',synthetic.review_id,
+           'appointment_id',synthetic.appointment_id,
+           'opportunity_id',synthetic.opportunity_id,
+           'action','booking_cancelled','previous_review_id',base.id,
+           'review_order',base.review_order+synthetic.value,
+           'request_key_hash',synthetic.hash_value,
+           'request_digest',synthetic.hash_value))).*
+        FROM canonical_forecast_commercial_booking_reviews base
+        CROSS JOIN m26_integrated_review_bound synthetic
+        WHERE base.organization_id=$1 AND base.id=$2
+         AND synthetic.value BETWEEN $3 AND $4`;
+      await reviewBound.query(insertReviews, [f.org, firstReviewId, 1, 999]);
+      const reviewExact = await readIntegratedSources(reviewBound);
+      expect(reviewExact).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'booked_work_manifest_size', forecastIssued: false,
+      });
+      expect(reviewExact.reason).not.toBe('commercial_review_source_limit');
+      await reviewBound.query(insertReviews, [f.org, firstReviewId, 1000, 1000]);
+      expect(await readIntegratedSources(reviewBound)).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'commercial_review_source_limit', forecastIssued: false,
+      });
+    } finally {
+      await reviewBound.query('ROLLBACK').catch(() => {});
+      reviewBound.release();
+    }
+
+    const confirmationBound = await f.ownerPool.connect();
+    try {
+      await confirmationBound.query('BEGIN');
+      await confirmationBound.query(`CREATE TEMP TABLE m26_integrated_confirmation_bound
+        ON COMMIT DROP AS SELECT value,
+         gen_random_uuid() review_id,gen_random_uuid() confirmation_id,
+         md5('m26-6a-confirm-a-'||value::text)||
+          md5('m26-6a-confirm-b-'||value::text) hash_value
+        FROM generate_series(1,1000) value`);
+      const insertConfirmationReviews = `
+        INSERT INTO canonical_forecast_commercial_booking_reviews
+        SELECT (jsonb_populate_record(
+          NULL::canonical_forecast_commercial_booking_reviews,
+          to_jsonb(base)||jsonb_build_object(
+           'id',synthetic.review_id,'action','booking_corrected',
+           'previous_review_id',base.id,
+           'review_order',base.review_order+synthetic.value,
+           'request_key_hash',synthetic.hash_value,
+           'request_digest',synthetic.hash_value))).*
+        FROM canonical_forecast_commercial_booking_reviews base
+        CROSS JOIN m26_integrated_confirmation_bound synthetic
+        WHERE base.organization_id=$1 AND base.id=$2
+         AND synthetic.value BETWEEN $3 AND $4`;
+      const insertConfirmations = `
+        INSERT INTO canonical_forecast_booked_work_confirmations
+        SELECT (jsonb_populate_record(
+          NULL::canonical_forecast_booked_work_confirmations,
+          to_jsonb(base)||jsonb_build_object(
+           'id',synthetic.confirmation_id,'review_id',synthetic.review_id,
+           'request_key_hash',synthetic.hash_value,
+           'request_digest',synthetic.hash_value))).*
+        FROM canonical_forecast_booked_work_confirmations base
+        CROSS JOIN m26_integrated_confirmation_bound synthetic
+        WHERE base.organization_id=$1 AND base.id=$2
+         AND synthetic.value BETWEEN $3 AND $4`;
+      await confirmationBound.query(insertConfirmationReviews,
+        [f.org, firstReviewId, 1, 999]);
+      await confirmationBound.query(insertConfirmations,
+        [f.org, confirmationId, 1, 999]);
+      await confirmationBound.query(`
+        INSERT INTO canonical_forecast_commercial_booking_reviews
+        SELECT (jsonb_populate_record(
+          NULL::canonical_forecast_commercial_booking_reviews,
+          to_jsonb(base)||jsonb_build_object(
+           'id',gen_random_uuid(),'action','booking_cancelled',
+           'previous_review_id',base.id,'review_order',base.review_order+2001,
+           'request_key_hash',md5('m26-6a-confirm-cancel-a')||
+             md5('m26-6a-confirm-cancel-b'),
+           'request_digest',md5('m26-6a-confirm-cancel-c')||
+             md5('m26-6a-confirm-cancel-d')))).*
+        FROM canonical_forecast_commercial_booking_reviews base
+        WHERE base.organization_id=$1 AND base.id=$2`, [f.org, firstReviewId]);
+      const confirmationExact = await readIntegratedSources(confirmationBound);
+      expect(confirmationExact).toMatchObject({
+        state: 'current_integrated_commercial_sources',
+        commercialStatuses: { bookingConfirmationSourceCount: 1000 },
+        sourceCohortsCompleteAtRead: true,
+      });
+      await confirmationBound.query(insertConfirmationReviews,
+        [f.org, firstReviewId, 1000, 1000]);
+      await confirmationBound.query(insertConfirmations,
+        [f.org, confirmationId, 1000, 1000]);
+      expect(await readIntegratedSources(confirmationBound)).toMatchObject({
+        state: 'integrated_commercial_sources_unavailable',
+        reason: 'booked_work_confirmation_source_limit', forecastIssued: false,
+      });
+    } finally {
+      await confirmationBound.query('ROLLBACK').catch(() => {});
+      confirmationBound.release();
+    }
     const confirmationMonth = (await f.ownerPool.query(
       `SELECT to_char(confirmed_at AT TIME ZONE 'UTC','YYYY-MM') AS month
          FROM canonical_forecast_booked_work_confirmations
@@ -504,6 +1339,162 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       .set(actor.session.headers).set('Idempotency-Key', confirmKey)
       .send({ ...confirmBody, reason: 'A different booking reason cannot reuse this key.' }))
       .status).toBe(409);
+
+    // One opportunity is one commercial sale even when two genuinely scheduled
+    // appointments are separately reviewed and confirmed. Exercise the mounted
+    // HTTP capture rather than only the private source helper, then cancel the
+    // duplicate appointment so the remaining lifecycle assertions stay focused
+    // on the original job.
+    const duplicateOperationId = crypto.randomUUID();
+    const duplicateAppointmentId = crypto.randomUUID();
+    const duplicateGraphId = crypto.randomUUID();
+    const originalCommercialIdentity = (await f.ownerPool.query(
+      `SELECT appointment.opportunity_id,opportunity.customer_id
+         FROM canonical_appointments appointment
+         JOIN canonical_opportunities opportunity
+           ON opportunity.organization_id=appointment.organization_id
+          AND opportunity.id=appointment.opportunity_id
+        WHERE appointment.organization_id=$1 AND appointment.id=$2`,
+      [f.org, appointment])).rows[0];
+    await f.ownerPool.query(
+      `INSERT INTO canonical_operations(
+         id,organization_id,graph_id,idempotency_key_hash,payload_fingerprint,
+         state,lease_owner,lease_expires_at,result_status,result_body,completed_at)
+       VALUES($1,$2,$3,$4,$5,'completed',$1,NOW()+INTERVAL '1 hour',200,'{}',NOW())`,
+      [duplicateOperationId, f.org, duplicateGraphId,
+        crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex')]);
+    await f.ownerPool.query(
+      `INSERT INTO canonical_transcripts(
+         id,organization_id,operation_id,graph_id,customer_id,source,source_version,
+         transcript_text,normalized_fingerprint)
+       VALUES($1,$2,$3,$4,$5,'manual','m26-part6a-duplicate-proof-v1',$6,$7)`,
+      [crypto.randomUUID(), f.org, duplicateOperationId, duplicateGraphId,
+        originalCommercialIdentity.customer_id,
+        'Second current appointment for duplicate commercial opportunity proof.',
+        crypto.randomBytes(32).toString('hex')]);
+    await f.ownerPool.query(
+      `INSERT INTO canonical_appointments(
+         id,organization_id,operation_id,graph_id,opportunity_id,status)
+       VALUES($1,$2,$3,$4,$5,'preferred')`,
+      [duplicateAppointmentId, f.org, duplicateOperationId, duplicateGraphId,
+        originalCommercialIdentity.opportunity_id]);
+    const duplicateBefore = (await f.ownerPool.query(
+      `SELECT revision,rtrim(canonical_digest) AS digest,appointment_status
+         FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`,
+      [f.org, duplicateAppointmentId])).rows[0];
+    const duplicatePreview = await request(f.app).post(
+      `/api/v1/canonical/appointments/${duplicateAppointmentId}/mutation-previews`)
+      .set(actor.session.headers).send({ expectedRevision: Number(duplicateBefore.revision),
+        expectedDigest: duplicateBefore.digest, expectedTimeZone: 'UTC', action: 'schedule',
+        target: { kind: 'unassigned', id: null },
+        scheduledStart: '2029-06-13T13:00:00.000Z',
+        scheduledEnd: '2029-06-13T14:00:00.000Z',
+        appointmentStatus: duplicateBefore.appointment_status,
+        reason: 'Schedule a second synthetic appointment for duplicate-sale refusal proof.' });
+    expect(duplicatePreview.status).toBe(201);
+    const duplicateApproval = await request(f.app).post(
+      `/api/v1/canonical/appointments/${duplicateAppointmentId}/mutation-approvals`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ previewId: duplicatePreview.body.data.id,
+        previewDigest: duplicatePreview.body.data.previewDigest,
+        acknowledgedWarningDigests: duplicatePreview.body.data.warningDigests,
+        acknowledgedReviewReasonDigests: duplicatePreview.body.data.reviewReasonDigests,
+        reason: 'Schedule a second synthetic appointment for duplicate-sale refusal proof.' });
+    expect(duplicateApproval.status).toBe(200);
+    const duplicateApprovalId = (await f.ownerPool.query(
+      `SELECT id FROM canonical_schedule_human_approvals
+        WHERE organization_id=$1 AND appointment_id=$2
+        ORDER BY approved_at DESC LIMIT 1`, [f.org, duplicateAppointmentId])).rows[0].id;
+    const duplicateReview = await request(f.app).post(`${bookingRoute}/first`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ approvalId: duplicateApprovalId,
+        reason: 'Review the second current appointment for duplicate-sale refusal proof.' });
+    expect(duplicateReview.status).toBe(201);
+    const duplicateReviewId = duplicateReview.body.data.reviewId;
+
+    // The production confirmation function reaches the migration-234 source
+    // fence before it inserts. While that transaction is open, integrated
+    // capture must report retryable contention and persist no position. The
+    // identical request succeeds after the confirmation writer rolls back.
+    const confirmationWriter = await f.runtimePool.connect();
+    const confirmationRaceKey = crypto.randomUUID();
+    const countBeforeConfirmationRace = await integratedPositionCount();
+    try {
+      await confirmationWriter.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      const pendingConfirmation = (await confirmationWriter.query(
+        `SELECT public.canonical_forecast_confirm_booked_work(
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value`,
+        [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+          duplicateReviewId, actor.csrfToken, crypto.randomUUID(),
+          'Transactional confirmation writer ordering proof.', true,
+          'owner-booked-work-confirm-v1'])).rows[0].value;
+      expect(pendingConfirmation).toMatchObject({
+        state: 'booking_confirmation_recorded', reviewId: duplicateReviewId,
+        replayed: false,
+      });
+      const busy = await request(f.app).post(integratedRoute)
+        .set(actor.session.headers).set('Idempotency-Key', confirmationRaceKey)
+        .send({ ...integratedBody,
+          reason: 'Capture while a production confirmation writer is in flight.' });
+      expect(busy.status).toBe(409);
+      expect(busy.body.error.category).toBe('FORECAST_REVIEW_BUSY');
+      expect(await integratedPositionCount()).toBe(countBeforeConfirmationRace);
+    } finally {
+      await confirmationWriter.query('ROLLBACK').catch(() => {});
+      confirmationWriter.release();
+    }
+    const afterConfirmationRace = await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('Idempotency-Key', confirmationRaceKey)
+      .send({ ...integratedBody,
+        reason: 'Capture while a production confirmation writer is in flight.' });
+    expect(afterConfirmationRace.status).toBe(201);
+    expect(afterConfirmationRace.body.data).toMatchObject({
+      state: 'northstar_integrated_commercial_baseline', sourceCurrent: true,
+      bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+    });
+    const duplicateConfirmation = await request(f.app)
+      .post(`${bookingRoute}/${duplicateReviewId}/confirm-booked`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ ...confirmBody,
+        reason: 'Confirm the second current appointment for duplicate-sale refusal proof.' });
+    expect(duplicateConfirmation.status).toBe(201);
+    const positionCountBeforeDuplicate = await integratedPositionCount();
+    const duplicateCapture = await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ approvedPriceOriginId: futureOriginId,
+        reason: 'Refuse duplicate current appointments for one commercial opportunity.',
+        confirmed: true, confirmationVersion: 'integrated-commercial-baseline-v1' });
+    expect(duplicateCapture.status).toBe(200);
+    expect(duplicateCapture.body.data).toMatchObject({
+      state: 'integrated_commercial_baseline_unavailable',
+      reason: 'duplicate_current_booked_opportunity', positionId: null,
+      sourceCurrent: false, sourceCohortsCompleteAtRead: false,
+      futureApprovedPriceBaselineVerified: false,
+    });
+    expect(duplicateCapture.body.data).not.toHaveProperty('bookedWorkBeforeTax');
+    expect((await f.ownerPool.query(
+      `SELECT count(*)::int count FROM canonical_forecast_integrated_commercial_positions
+        WHERE organization_id=$1`, [f.org])).rows[0].count)
+      .toBe(positionCountBeforeDuplicate);
+    const duplicateCancellation = await request(f.app)
+      .post(`${bookingRoute}/${duplicateReviewId}/cancel`)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ reason: 'Cancel the duplicate synthetic appointment after refusal proof.' });
+    expect(duplicateCancellation.status).toBe(201);
+
+    const beforeCorrectionIntegrated = await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ approvedPriceOriginId: futureOriginId,
+        reason: 'Pin the current source digest before correcting the original review.',
+        confirmed: true, confirmationVersion: 'integrated-commercial-baseline-v1' });
+    expect(beforeCorrectionIntegrated.status).toBe(201);
+    expect(beforeCorrectionIntegrated.body.data).toMatchObject({
+      state: 'northstar_integrated_commercial_baseline',
+      bookedWorkBeforeTax: storedPrice.reviewed_price_before_tax,
+      commercialStatuses: { ownerConfirmedBookedCount: 1,
+        cancelledBookingCount: 1, bookingConfirmationSourceCount: 2 },
+    });
     const currentnessParams = [f.org, actor.actorUserId, actor.actorAccessRole,
       actor.authSessionId, firstReviewId];
     expect((await f.runtimePool.query(
@@ -547,6 +1538,31 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(supersededConfirmation.body.data).toMatchObject({
       state: 'booking_confirmation_stale_or_unavailable', bookedWorkVerified: false });
     expect(supersededConfirmation.body.data).not.toHaveProperty('priceBeforeTax');
+    const integratedAfterCorrection = (await f.ownerPool.query(
+      `SELECT public.canonical_forecast_integrated_commercial_sources(
+        $1,$2,$3,$4,$5) value`, [f.org, actor.actorUserId,
+        actor.actorAccessRole, actor.authSessionId, storedPrice.currency]))
+      .rows[0].value;
+    expect(integratedAfterCorrection).toMatchObject({
+      state: 'current_integrated_commercial_sources', bookedWorkBeforeTax: '0.00',
+      commercialStatuses: { correctedAwaitingConfirmationCount: 1,
+        correctedFormerlyConfirmedCount: 1, ownerConfirmedBookedCount: 0,
+        cancelledBookingCount: 1, cancelledFormerlyConfirmedCount: 1,
+        bookingConfirmationSourceCount: 2 },
+      sourceCohortsCompleteAtRead: true, forecastIssued: false,
+    });
+    const correctionStalePosition = await request(f.app).get(
+      `${integratedRoute}/${beforeCorrectionIntegrated.body.data.positionId}`)
+      .set(actor.session.headers);
+    expect(correctionStalePosition.status).toBe(200);
+    expect(correctionStalePosition.body.data).toMatchObject({
+      state: 'integrated_commercial_baseline_unavailable',
+      reason: 'sources_changed_or_future_horizon_elapsed',
+      positionId: beforeCorrectionIntegrated.body.data.positionId,
+      sourceCurrent: false, sourceCohortsCompleteAtRead: false,
+      futureApprovedPriceBaselineVerified: false,
+    });
+    expect(correctionStalePosition.body.data).not.toHaveProperty('bookedWorkBeforeTax');
     const changedMonth = await request(f.app).get(observedMonthRoute)
       .set(actor.session.headers);
     expect(changedMonth.body.data).toMatchObject({
@@ -685,13 +1701,53 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     await f.createExecution({ approvedScheduling: true, stopAfterScheduling: true });
     const links = await get('/customer-estimate-links');
     expect(links.status).toBe(200);
-    const revoked = await post(`/customer-estimate-links/${link.body.data.link.id}/revoke`, {});
-    expect(revoked.status).toBe(201);
-    expect((await f.runtimePool.query(
-      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
-      currentnessParams)).rows[0].value).toMatchObject({
-      state: 'review_lineage_stale_or_unavailable',
-      reviewCurrentAtRead: false, bookedWorkVerified: false });
+    // A revoked acceptance must invalidate even an unconfirmed/corrected latest
+    // review. Keep the probe transactional so the following saved position can
+    // isolate cancellation as its only intervening source change.
+    const revokedLineageProbe = await f.ownerPool.connect();
+    try {
+      await revokedLineageProbe.query('BEGIN');
+      await revokedLineageProbe.query(
+        `INSERT INTO canonical_customer_estimate_delivery_events(
+           organization_id,estimate_id,version_id,link_id,kind,body,actor_user_id,
+           request_key_hash,request_digest,digest)
+         SELECT organization_id,estimate_id,version_id,id,'revoked',
+                $2::jsonb,$3,$4,$5,$6
+           FROM canonical_customer_estimate_delivery_links WHERE id=$1`,
+        [link.body.data.link.id,
+          JSON.stringify({ reason: 'Transactional revocation currentness probe.' }),
+          actor.actorUserId, crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex')]);
+      const revokedCapture = (await revokedLineageProbe.query(
+        `SELECT public.canonical_forecast_capture_integrated_commercial_position(
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value`,
+        [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+          actor.csrfToken, futureOriginId,
+          crypto.randomUUID(),
+          'Fail closed after a current commercial acceptance is revoked.',
+          true, 'integrated-commercial-baseline-v1'])).rows[0].value;
+      expect(revokedCapture).toMatchObject({
+        state: 'integrated_commercial_baseline_unavailable',
+        reason: 'booked_work_lineage_unavailable', sourceCurrent: false,
+        sourceCohortsCompleteAtRead: false,
+        futureApprovedPriceBaselineVerified: false,
+      });
+      expect(revokedCapture).not.toHaveProperty('bookedWorkBeforeTax');
+    } finally {
+      await revokedLineageProbe.query('ROLLBACK');
+      revokedLineageProbe.release();
+    }
+    const beforeCancellationIntegrated = await request(f.app).post(integratedRoute)
+      .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+      .send({ approvedPriceOriginId: futureOriginId,
+        reason: 'Pin the current zero source digest before cancelling the original review.',
+        confirmed: true, confirmationVersion: 'integrated-commercial-baseline-v1' });
+    expect(beforeCancellationIntegrated.status).toBe(201);
+    expect(beforeCancellationIntegrated.body.data).toMatchObject({
+      state: 'northstar_integrated_commercial_baseline', bookedWorkBeforeTax: '0.00',
+      commercialStatuses: { correctedAwaitingConfirmationCount: 1,
+        cancelledBookingCount: 1, bookingConfirmationSourceCount: 2 },
+    });
     const cancelParams = [f.org, actor.actorUserId, actor.actorAccessRole,
       actor.authSessionId, firstReviewId,
       'The synthetic customer cancelled the reviewed work before service.',
@@ -718,6 +1774,37 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     expect(cancelReplay.body.data).toMatchObject({ state: 'booking_cancelled',
       reviewId: cancellation.reviewId, replayed: true,
       schedulingNeedsReview: true, bookedWorkVerified: false });
+    const integratedAfterCancellation = (await f.ownerPool.query(
+      `SELECT public.canonical_forecast_integrated_commercial_sources(
+        $1,$2,$3,$4,$5) value`, [f.org, actor.actorUserId,
+        actor.actorAccessRole, actor.authSessionId, storedPrice.currency]))
+      .rows[0].value;
+    expect(integratedAfterCancellation).toMatchObject({
+      state: 'current_integrated_commercial_sources', bookedWorkBeforeTax: '0.00',
+      commercialStatuses: { cancelledBookingCount: 2,
+        cancelledFormerlyConfirmedCount: 2, ownerConfirmedBookedCount: 0,
+        bookingConfirmationSourceCount: 2 },
+      sourceCohortsCompleteAtRead: true, forecastIssued: false,
+    });
+    const cancellationStalePosition = await request(f.app).get(
+      `${integratedRoute}/${beforeCancellationIntegrated.body.data.positionId}`)
+      .set(actor.session.headers);
+    expect(cancellationStalePosition.status).toBe(200);
+    expect(cancellationStalePosition.body.data).toMatchObject({
+      state: 'integrated_commercial_baseline_unavailable',
+      reason: 'sources_changed_or_future_horizon_elapsed',
+      positionId: beforeCancellationIntegrated.body.data.positionId,
+      sourceCurrent: false, sourceCohortsCompleteAtRead: false,
+      futureApprovedPriceBaselineVerified: false,
+    });
+    expect(cancellationStalePosition.body.data).not.toHaveProperty('bookedWorkBeforeTax');
+    const revoked = await post(`/customer-estimate-links/${link.body.data.link.id}/revoke`, {});
+    expect(revoked.status).toBe(201);
+    expect((await f.runtimePool.query(
+      'SELECT public.canonical_forecast_commercial_review_currentness($1,$2,$3,$4,$5) value',
+      [...currentnessParams.slice(0, 4), cancellation.reviewId])).rows[0].value)
+      .toMatchObject({ state: 'booking_cancelled',
+        reviewCurrentAtRead: false, bookedWorkVerified: false });
     const memberCancel = await request(f.app)
       .post(`${bookingRoute}/${firstReviewId}/cancel`)
       .set(f.actors.member.session.headers)
@@ -785,13 +1872,13 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
          FROM canonical_forecast_commercial_booking_orders
         WHERE organization_id=$1 ORDER BY source_order`, [f.org])).rows;
     expect(ordered.map(row => row.source_kind)).toEqual([
-      'customer_estimate_acceptance', 'schedule_approval', 'schedule_approval', 'schedule_approval',
-      'customer_estimate_link_revocation',
+      'customer_estimate_acceptance', 'schedule_approval', 'schedule_approval',
+      'schedule_approval', 'schedule_approval', 'customer_estimate_link_revocation',
     ]);
-    expect(new Set(ordered.map(row => row.source_order))).toHaveProperty('size', 5);
+    expect(new Set(ordered.map(row => row.source_order))).toHaveProperty('size', 6);
     expect(ordered[0].delivery_event_id).toBeTruthy();
     expect(ordered[1].approval_id).toBeTruthy();
-    expect(ordered[4].delivery_event_id).toBeTruthy();
+    expect(ordered[5].delivery_event_id).toBeTruthy();
     await expect(f.runtimePool.query('SELECT * FROM canonical_forecast_commercial_booking_orders'))
       .rejects.toMatchObject({ code: '42501' });
     await expect(f.ownerPool.query(
@@ -899,9 +1986,24 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       savedRunCurrentnessVerified: false, forecastIssued: false });
     expect(changedPrice).not.toHaveProperty('priceBeforeTax');
     const unrelatedApproval = (await f.ownerPool.query(
-      `SELECT source.approval_id FROM canonical_forecast_commercial_booking_orders source
+      `SELECT source.approval_id
+         FROM canonical_forecast_commercial_booking_orders source
+         JOIN canonical_schedule_human_approvals approval
+           ON approval.organization_id=source.organization_id
+          AND approval.id=source.approval_id
+         JOIN canonical_appointments appointment
+           ON appointment.organization_id=approval.organization_id
+          AND appointment.id=approval.appointment_id
         WHERE source.organization_id=$1 AND source.source_kind='schedule_approval'
-          AND source.approval_id<>$2 ORDER BY source.source_order LIMIT 1`,
+          AND source.approval_id<>$2
+          AND appointment.opportunity_id<>(
+            SELECT matched_appointment.opportunity_id
+              FROM canonical_schedule_human_approvals matched_approval
+              JOIN canonical_appointments matched_appointment
+                ON matched_appointment.organization_id=matched_approval.organization_id
+               AND matched_appointment.id=matched_approval.appointment_id
+             WHERE matched_approval.organization_id=$1 AND matched_approval.id=$2)
+        ORDER BY source.source_order LIMIT 1`,
       [f.org, matchingApprovalId])).rows[0].approval_id;
     const unrelated = (await f.runtimePool.query(
       'SELECT public.canonical_forecast_acceptance_booking_pair($1,$2,$3,$4,$5) value',
@@ -1000,6 +2102,9 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
 
   test('customer acceptance waits on the tenant fence and rollback leaves no phantom event', async () => {
     const actor = f.actors.owner;
+    const baselineOrderCount = (await f.ownerPool.query(
+      `SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders
+        WHERE organization_id=$1`, [f.org])).rows[0].count;
     const createLink = async () => {
       const response = await request(f.app).post(estimateRoute + '/customer-estimate-links')
         .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
@@ -1038,7 +2143,7 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
       const beforeRelease = (await f.ownerPool.query(
         'SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1',
         [f.org])).rows[0].count;
-      expect(beforeRelease).toBe(7);
+      expect(beforeRelease).toBe(baselineOrderCount);
     } finally {
       await held.query('ROLLBACK');
       held.release();
@@ -1048,8 +2153,9 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
     const afterRelease = (await f.ownerPool.query(
       `SELECT source_kind FROM canonical_forecast_commercial_booking_orders
         WHERE organization_id=$1 ORDER BY source_order`, [f.org])).rows;
-    expect(afterRelease).toHaveLength(8);
-    expect(afterRelease.slice(7).filter(row => row.source_kind === 'customer_estimate_acceptance')).toHaveLength(1);
+    expect(afterRelease).toHaveLength(baselineOrderCount + 1);
+    expect(afterRelease.slice(baselineOrderCount)
+      .filter(row => row.source_kind === 'customer_estimate_acceptance')).toHaveLength(1);
 
     const rollbackLink = await createLink();
     const transaction = await f.ownerPool.connect();
@@ -1070,15 +2176,15 @@ realPostgres('Mission 26 Part 6A shared customer acceptance and booking order', 
         crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex'),
         crypto.randomBytes(32).toString('hex')]);
       expect((await transaction.query(
-        'SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1',
-        [f.org])).rows[0].count).toBe(9);
+         'SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1',
+        [f.org])).rows[0].count).toBe(baselineOrderCount + 2);
     } finally {
       await transaction.query('ROLLBACK');
       transaction.release();
     }
     expect((await f.ownerPool.query(
-      'SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1',
-      [f.org])).rows[0].count).toBe(8);
+       'SELECT count(*)::int count FROM canonical_forecast_commercial_booking_orders WHERE organization_id=$1',
+      [f.org])).rows[0].count).toBe(baselineOrderCount + 1);
     expect((await accept(rollbackLink.token)).status).toBe(201);
     const finalOrder = (await f.ownerPool.query(
       `SELECT source_order FROM canonical_forecast_commercial_booking_orders
@@ -1177,8 +2283,34 @@ realPostgres('Mission 26 Part 6A revoke-before-acceptance ordering', () => {
       }
       return 0;
     };
+    const raceAppointment = f.estimateGraphs[0].ids.appointment;
+    const raceAssignment = (await f.ownerPool.query(
+      `SELECT revision,rtrim(canonical_digest) AS digest,appointment_status
+         FROM canonical_schedule_assignments
+        WHERE organization_id=$1 AND appointment_id=$2`,
+      [f.org, raceAppointment])).rows[0];
+    const raceReason = 'Order revocation against a real schedule approval writer';
+    const racePreview = await request(f.app).post(
+      `/api/v1/canonical/appointments/${raceAppointment}/mutation-previews`)
+      .set(actor.session.headers).send({
+        expectedRevision: Number(raceAssignment.revision),
+        expectedDigest: raceAssignment.digest, expectedTimeZone: 'UTC',
+        action: 'schedule', target: { kind: 'unassigned', id: null },
+        scheduledStart: '2029-07-16T13:00:00.000Z',
+        scheduledEnd: '2029-07-16T14:00:00.000Z',
+        appointmentStatus: raceAssignment.appointment_status, reason: raceReason,
+      });
+    expect(racePreview.status).toBe(201);
+    const raceApprovalBody = {
+      previewId: racePreview.body.data.id,
+      previewDigest: racePreview.body.data.previewDigest,
+      acknowledgedWarningDigests: racePreview.body.data.warningDigests,
+      acknowledgedReviewReasonDigests: racePreview.body.data.reviewReasonDigests,
+      reason: raceReason,
+    };
     const held = await f.ownerPool.connect();
     let revocation;
+    let scheduleApproval;
     let acceptance;
     try {
       await held.query('BEGIN');
@@ -1188,21 +2320,47 @@ realPostgres('Mission 26 Part 6A revoke-before-acceptance ordering', () => {
       revocation = post(`/customer-estimate-links/${linkId}/revoke`, {})
         .then(response => response);
       expect(await waitForAdvisoryWaiters(1)).toBeGreaterThanOrEqual(1);
+      scheduleApproval = request(f.app)
+        .post(`/api/v1/canonical/appointments/${raceAppointment}/mutation-approvals`)
+        .set(actor.session.headers).set('Idempotency-Key', crypto.randomUUID())
+        .send(raceApprovalBody).then(response => response);
       acceptance = request(f.app).post(`/api/public/customer-estimates/${token}/accept`)
         .set({ Host: 'localhost', Origin: 'http://localhost' })
         .set('Idempotency-Key', crypto.randomUUID())
         .send({ customerName: 'Concurrent Revoked Customer', confirmed: true,
           confirmationVersion: 'customer-estimate-accept-v1' })
         .then(response => response);
-      expect(await waitForAdvisoryWaiters(2)).toBeGreaterThanOrEqual(2);
+      // The revocation is already queued first on the shared source lock.
+      // Give both downstream production requests a chance to enter their
+      // transactions, then release promptly inside the application lock
+      // timeout. Their durable results below prove the required order.
+      await new Promise(resolve => setTimeout(resolve, 100));
     } finally {
       await held.query('ROLLBACK');
       held.release();
     }
     const revokedResponse = await revocation;
+    const scheduleApprovalResponse = await scheduleApproval;
     const acceptedResponse = await acceptance;
     expect(revokedResponse.status).toBe(201);
+    expect(scheduleApprovalResponse.status).toBe(200);
     expect(acceptedResponse.status).toBe(409);
+    const raceApprovalId = (await f.ownerPool.query(
+      `SELECT id FROM canonical_schedule_human_approvals
+        WHERE organization_id=$1 AND appointment_id=$2
+        ORDER BY approved_at DESC LIMIT 1`, [f.org, raceAppointment])).rows[0].id;
+    const raceOrders = (await f.ownerPool.query(
+      `SELECT source_order,source_kind FROM canonical_forecast_commercial_booking_orders
+        WHERE organization_id=$1 AND
+          ((source_kind='customer_estimate_link_revocation' AND delivery_event_id=(
+            SELECT id FROM canonical_customer_estimate_delivery_events
+             WHERE organization_id=$1 AND link_id=$2 AND kind='revoked'
+             ORDER BY id DESC LIMIT 1)) OR
+           (source_kind='schedule_approval' AND approval_id=$3))
+        ORDER BY source_order`, [f.org, linkId, raceApprovalId])).rows;
+    expect(raceOrders.map(row => row.source_kind)).toEqual([
+      'customer_estimate_link_revocation', 'schedule_approval',
+    ]);
     const rejectedLinkOrder = (await f.ownerPool.query(
       `SELECT source.source_kind
          FROM canonical_forecast_commercial_booking_orders source
@@ -1254,7 +2412,7 @@ realPostgres('Mission 26 Part 6A revoke-before-acceptance ordering', () => {
     const reason = 'Review revoked-before-acceptance synthetic ordering';
     const preview = await request(f.app).post(`/api/v1/canonical/appointments/${appointment}/mutation-previews`)
       .set(actor.session.headers).send({ expectedRevision: Number(before.revision),
-        expectedDigest: before.digest, expectedTimeZone: 'UTC', action: 'schedule',
+        expectedDigest: before.digest, expectedTimeZone: 'UTC', action: 'reschedule',
         target: { kind: 'unassigned', id: null },
         scheduledStart: '2029-07-17T13:00:00.000Z',
         scheduledEnd: '2029-07-17T14:00:00.000Z',

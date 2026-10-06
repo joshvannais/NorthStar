@@ -60,7 +60,23 @@ establishes an approved earned-revenue recognition policy. That remains an
 `revenue.earned_value.v1` can issue. Mission 26 Parts 3B–D and 11 still own
 saved forecasts, later outcomes, calibration, promotion and immutable runs.
 
-This is a compatibility and refusal decision, not a new financial reader,
-provider connection, migration, route, UI, accounting policy or numerical
-forecast. Part 6C cannot be finally accepted as native cash forecasting
-before Mission 27 supplies compatible released evidence.
+## Scoped Part 6C acceptance
+
+Part 6C is scoped-accepted only as this architecture, compatibility and
+refusal decision. It maps the existing Mission 25 observations to their safe
+Mission 26 context uses, preserves explicit unavailable states and refuses to
+issue earned-revenue, collected-cash or native cash forecasts. It adds no new
+financial reader, provider connection, migration 236, route, UI, accounting
+policy, numerical forecast or automated action.
+
+Native invoice, payment, collection and cash authority remains unavailable
+until Mission 27 supplies compatible released evidence. Earned-revenue
+forecasting also remains unavailable until the founder approves an explicit
+recognition authority. Neither limitation is converted into a zero, inferred
+policy or claimed forecast by accepting this boundary.
+
+This exact documentation-only acceptance package has one normal release gate:
+one independent whole exact-head audit, one normal merge and the sole automatic
+Railway deployment verification. It has no separate documentation gate, second
+pull request or second deployment. Part 6D is next in founder order and cannot
+widen any authority refused here.

@@ -43,6 +43,8 @@ BEGIN
  FROM public.canonical_forecast_integrated_commercial_positions
  WHERE organization_id=org ORDER BY captured_at DESC,id DESC LIMIT 1;
  IF newest IS NULL THEN
+  PERFORM public.canonical_forecast_booking_ordered_access(
+   org,actor,role_value,session_value,NULL,FALSE);
   RETURN jsonb_build_object(
    'version','m26-revenue-cash-outlook-v1','state','unavailable',
    'reason','commercial_baseline_unavailable','fictional',FALSE,
@@ -80,6 +82,8 @@ BEGIN
    baseline->>'state' IS DISTINCT FROM 'northstar_integrated_commercial_baseline' OR
    baseline->'sourceCurrent' IS DISTINCT FROM 'true'::jsonb OR
    baseline->'currentAtRead' IS DISTINCT FROM 'true'::jsonb THEN
+  PERFORM public.canonical_forecast_booking_ordered_access(
+   org,actor,role_value,session_value,NULL,FALSE);
   RETURN jsonb_build_object(
    'version','m26-revenue-cash-outlook-v1','state','unavailable',
    'reason','commercial_baseline_not_current','fictional',FALSE,

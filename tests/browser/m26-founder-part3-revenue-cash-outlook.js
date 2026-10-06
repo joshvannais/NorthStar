@@ -96,16 +96,44 @@ async function pageFor(browser, { width, theme, mode, reducedMotion = false }) {
       assert.equal(await page.locator('#commandCenterRevenueCashOutlook').getAttribute('aria-busy'), 'true');
       await page.evaluate(() => window.__releaseOutlook());
       await page.evaluate(() => window.__pending);
-      assert.deepEqual(await page.evaluate(() => window.__calls), [{
-        url: '/api/v1/forecast/revenue-cash-outlook/current', method: 'GET', cache: 'no-store',
-      }]);
       assert.equal(await page.locator('#commandCenterRevenueCashState').innerText(), 'Current');
       assert.equal(await page.locator('#commandCenterRevenueCashOutlook .btn-primary').count(), 1);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       assert.deepEqual(errors, []);
       await page.locator('#commandCenterRevenueCashOutlook').screenshot({
         path: path.join(output, 'paid-desktop-light.png') });
-      result.cases.push({ name: 'paid-desktop-light', paidRequests: 1, pass: true });
+
+      await page.evaluate(data => {
+        document.querySelector('#commandCenterRevenueCashDetails').open = true;
+        window.__responses.push({ status: 200, payload: { success: true, data }, hold: true });
+        window.__refreshPending = window.__outlook.workspaceReady();
+      }, demo);
+      const loadingState = await page.evaluate(() => ({
+        busy: document.querySelector('#commandCenterRevenueCashOutlook').getAttribute('aria-busy'),
+        scope: document.querySelector('#commandCenterRevenueCashScope').textContent,
+        checkedAt: document.querySelector('#commandCenterRevenueCashCheckedAt').textContent,
+        facts: ['Authorized', 'Approved', 'Booked', 'ApprovedOpen', 'Preliminary', 'Earned', 'Cash']
+          .map(suffix => document.querySelector('#commandCenterRevenueCash' + suffix).textContent),
+        detailsBody: document.querySelector('#commandCenterRevenueCashDetailsBody').textContent,
+        detailsOpen: document.querySelector('#commandCenterRevenueCashDetails').open,
+        text: document.querySelector('#commandCenterRevenueCashOutlook').innerText,
+      }));
+      assert.equal(loadingState.busy, 'true');
+      assert.equal(loadingState.scope, 'Checking current scope');
+      assert.equal(loadingState.checkedAt, 'Checking now');
+      assert.deepEqual(loadingState.facts, ['', '', '', '', '', '', '']);
+      assert.equal(loadingState.detailsBody, '');
+      assert.equal(loadingState.detailsOpen, false);
+      assert.doesNotMatch(loadingState.text, /\$[0-9]|[0-9]+ open/i,
+        'Refresh loading must not retain prior commercial facts');
+      await page.evaluate(() => window.__releaseOutlook());
+      await page.evaluate(() => window.__refreshPending);
+      assert.deepEqual(await page.evaluate(() => window.__calls), [
+        { url: '/api/v1/forecast/revenue-cash-outlook/current', method: 'GET', cache: 'no-store' },
+        { url: '/api/v1/forecast/revenue-cash-outlook/current', method: 'GET', cache: 'no-store' },
+      ]);
+      result.cases.push({ name: 'paid-desktop-light', paidRequests: 2,
+        refreshClearedPriorFacts: true, pass: true });
 
       await page.evaluate(() => {
         window.__responses.push({ status: 503, payload: { success: false } });

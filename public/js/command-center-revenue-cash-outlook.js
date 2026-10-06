@@ -166,6 +166,14 @@
       id('commandCenterRevenueCashState').textContent = 'Loading';
       id('commandCenterRevenueCashState').dataset.state = 'loading';
       id('commandCenterRevenueCashAnswer').textContent = 'Checking the current supported commercial records.';
+      id('commandCenterRevenueCashScope').textContent = 'Checking current scope';
+      id('commandCenterRevenueCashCheckedAt').textContent = 'Checking now';
+      ['commandCenterRevenueCashAuthorized', 'commandCenterRevenueCashApproved',
+        'commandCenterRevenueCashBooked', 'commandCenterRevenueCashApprovedOpen',
+        'commandCenterRevenueCashPreliminary', 'commandCenterRevenueCashEarned',
+        'commandCenterRevenueCashCash'].forEach(function (name) { setFact(name, ''); });
+      id('commandCenterRevenueCashDetailsBody').textContent = '';
+      id('commandCenterRevenueCashDetails').open = false;
     }
     function render(value) {
       var safe = validateOutlook(value);

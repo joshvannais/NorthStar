@@ -4,6 +4,77 @@
 -- not claim earned revenue, company profit, utilization, delay probability,
 -- equipment downtime, inventory availability, or future performance.
 
+-- Rebuild the current M24 pricing sources inside this read-committed projection.
+-- The canonical interactive helper requires repeatable read because it returns a
+-- write basis. This helper is private to the read projection: the outer function
+-- owns authorization and the ordered locks, while this function only reconstructs
+-- the current profile, knowledge and direct-cost basis used for stale detection.
+CREATE FUNCTION public.canonical_forecast_cost_risk_pricing_sources_current(
+ org UUID,estimate UUID)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE profile JSONB;profile_id UUID;profile_hash TEXT;knowledge JSONB;
+ payload JSONB;service_key TEXT;
+BEGIN
+ SELECT p.raw_profile,p.id,rtrim(p.normalized_profile_hash)
+ INTO profile,profile_id,profile_hash
+ FROM public.organization_onboarding o
+ JOIN public.canonical_business_profiles p
+  ON p.organization_id=o.organization_id
+   AND p.id=o.active_business_profile_id AND p.is_active=TRUE
+ WHERE o.organization_id=org AND o.status='complete'
+ FOR SHARE OF o,p;
+ IF NOT FOUND THEN RETURN NULL; END IF;
+
+ SELECT snapshot#>>'{service,key}' INTO service_key
+ FROM public.canonical_polaris_snapshots
+ WHERE organization_id=org AND estimate_id=estimate;
+ IF NOT FOUND THEN RETURN NULL; END IF;
+
+ WITH latest AS (
+  SELECT DISTINCT ON(entry_id) *
+  FROM public.canonical_knowledge_publications
+  WHERE organization_id=org
+  ORDER BY entry_id,publication_number DESC,id
+ ),selected_rows AS (
+  SELECT e.id entry_id,e.canonical_key,e.entry_type,v.id version_id,
+   v.version_number,v.sensitivity,v.review_requirement,v.canonical_document,
+   v.canonical_digest,p.id publication_id,p.publication_number,
+   p.canonical_digest publication_digest
+  FROM latest p
+  JOIN public.canonical_knowledge_entries e
+   ON e.organization_id=p.organization_id AND e.id=p.entry_id
+  JOIN public.canonical_knowledge_versions v
+   ON v.organization_id=p.organization_id AND v.entry_id=p.entry_id
+    AND v.id=p.version_id
+  WHERE e.canonical_key IN(
+    'organization.financial-constraints','organization.services') OR
+   v.applicability->'projection'->'capabilities' ?|
+    ARRAY['financial_constraints','services']
+  ORDER BY e.canonical_key,p.id LIMIT 257
+ )
+ SELECT COALESCE(jsonb_agg(to_jsonb(selected_rows)),'[]'::jsonb)
+ INTO knowledge FROM selected_rows;
+ IF jsonb_array_length(knowledge)>256 THEN
+  RAISE EXCEPTION 'Pricing source limit' USING ERRCODE='54000';
+ END IF;
+
+ payload:=jsonb_build_object(
+  'serviceKey',service_key,
+  'basis',public.canonical_pricing_basis(org,estimate,NULL),
+  'asOfDate',(clock_timestamp() AT TIME ZONE 'UTC')::date::text,
+  'profilePin',jsonb_build_object('id',profile_id,'digest',profile_hash),
+  'pricingProfile',jsonb_build_object('pricing',profile->'canonicalPricing',
+   'overheadPercent',profile#>'{canonicalCosts,overheadPercent}'),
+  'knowledgeRows',knowledge);
+ RETURN payload||jsonb_build_object(
+  'digest',public.canonical_completion_digest(payload));
+END $$;
+
+REVOKE ALL ON FUNCTION
+ public.canonical_forecast_cost_risk_pricing_sources_current(UUID,UUID)
+ FROM PUBLIC;
+
 CREATE FUNCTION public.canonical_forecast_cost_risk_outlook_current(
  org UUID,actor UUID,role_value TEXT,session_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -14,6 +85,8 @@ DECLARE currency_value TEXT;sources JSONB;booked RECORD;
  approval public.canonical_commercial_approvals%ROWTYPE;
  decision public.canonical_estimate_decisions%ROWTYPE;
  commercial_sources JSONB;commercial_state JSONB;
+ current_pricing_sources JSONB;current_source_pins JSONB;
+ pricing_current BOOLEAN:=FALSE;
  booked_count INTEGER:=0;covered_count INTEGER:=0;
  booked_total NUMERIC(20,2):=0;cost_total NUMERIC(20,2):=0;
  largest_booked NUMERIC(20,2):=0;cost_value NUMERIC(20,2);
@@ -153,29 +226,43 @@ BEGIN
   SELECT * INTO approval FROM public.canonical_commercial_approvals a
    WHERE a.organization_id=org AND a.estimate_id=booked.estimate_id
    ORDER BY a.created_at DESC,a.id DESC LIMIT 1;
-  IF approval.id IS NOT NULL THEN
-   SELECT * INTO decision FROM public.canonical_estimate_decisions d
-    WHERE d.organization_id=org AND d.estimate_id=booked.estimate_id
-      AND d.id=approval.decision_id;
-  ELSE
-   decision:=NULL;
-  END IF;
+  SELECT * INTO decision FROM public.canonical_estimate_decisions d
+   WHERE d.organization_id=org AND d.estimate_id=booked.estimate_id
+   ORDER BY d.revision DESC,d.id DESC LIMIT 1;
   IF pricing.id IS NULL OR terms.id IS NULL OR approval.id IS NULL OR decision.id IS NULL THEN
    cost_complete:=FALSE; CONTINUE;
   END IF;
-  -- The protected M24 review helper requires a repeatable-read snapshot, while
-  -- this projection deliberately uses read committed so its final authorization
-  -- check can observe a concurrent revocation. Rebuild only the immutable
-  -- commercial evidence saved with the terms and replace its decision with the
-  -- exact current decision row. The estimate-row share lock above fences every
-  -- one of these M24 sources against a concurrent writer through return.
+  pricing_current:=FALSE;
+  BEGIN
+   current_pricing_sources:=
+    public.canonical_forecast_cost_risk_pricing_sources_current(
+     org,booked.estimate_id);
+   current_source_pins:=
+    public.canonical_estimate_decision_source(org,booked.estimate_id);
+   IF current_pricing_sources IS NOT NULL AND current_source_pins IS NOT NULL AND
+      pricing.action='save' AND pricing.source_pins=current_source_pins AND
+      pricing.currency=currency_value AND pricing.result->'directCosts'=
+       current_pricing_sources#>'{basis,directCosts}' THEN
+    PERFORM public.canonical_pricing_require(
+     pricing.inputs,current_pricing_sources);
+    pricing_current:=TRUE;
+   END IF;
+  EXCEPTION WHEN serialization_failure OR no_data_found THEN
+   pricing_current:=FALSE;
+  END;
+
+  -- Rebuild the saved commercial envelope with the latest human decision, then
+  -- separately require the pricing row against today's M24 sources above. The
+  -- estimate-row share lock fences estimate mutations; the profile row is also
+  -- held SHARE while the source set is reconstructed.
   commercial_sources:=terms.evidence||jsonb_build_object(
    'decision',public.canonical_estimate_decision_projection(decision),
    'decisionBasis',jsonb_build_object('revision',decision.revision,'digest',decision.digest));
   commercial_state:=public.canonical_commercial_current(
    public.canonical_commercial_projection(terms),commercial_sources,
    public.canonical_commercial_binding_projection(approval));
-  IF pricing.action<>'save' OR pricing.id::text IS DISTINCT FROM
+  IF pricing_current IS NOT TRUE OR pricing.action<>'save' OR
+     pricing.id::text IS DISTINCT FROM
        commercial_sources#>>'{pricingPin,id}' OR
      pricing.revision::text IS DISTINCT FROM commercial_sources#>>'{pricingPin,revision}' OR
      pricing.digest IS DISTINCT FROM commercial_sources#>>'{pricingPin,digest}' OR
@@ -186,6 +273,7 @@ BEGIN
      approval.authority_pin IS DISTINCT FROM terms.authority_pin OR
      approval.decision_id IS DISTINCT FROM booked.approved_decision_id OR
      decision.id IS DISTINCT FROM booked.approved_decision_id OR
+     decision.action<>'approve' OR
      commercial_state->'current' IS DISTINCT FROM 'true'::jsonb OR
      commercial_state->'linkedApproval' IS DISTINCT FROM 'true'::jsonb OR
      pricing.currency IS DISTINCT FROM currency_value OR

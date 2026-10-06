@@ -427,6 +427,54 @@ realPostgres('Mission 26 founder Part 5 fresh mounted refusal contract', () => {
       companyProfit: { state: 'unavailable', reason: 'complete_overhead_authority_unavailable' },
     });
 
+    const costDrift = await fixture.ownerPool.connect();
+    try {
+      await costDrift.query('BEGIN');
+      await costDrift.query('ALTER TABLE public.canonical_labor_plans DISABLE TRIGGER USER');
+      await costDrift.query(
+        `UPDATE public.canonical_labor_plans
+          SET inputs=jsonb_set(inputs,'{lines,0,hourlyCost}',to_jsonb('51.00'::text),false)
+          WHERE organization_id=$1 AND estimate_id=$2
+            AND id=(SELECT id FROM public.canonical_labor_plans
+              WHERE organization_id=$1 AND estimate_id=$2
+              ORDER BY revision DESC,id DESC LIMIT 1)`, [fixture.org, estimate]);
+      const staleCost = (await readOutlook(costDrift, fixture)).rows[0].value;
+      expect(staleCost.costBasis).toMatchObject({
+        state: 'unavailable', amount: null, reason: 'incomplete_current_cost_basis',
+      });
+      await costDrift.query('ROLLBACK');
+    } finally {
+      await costDrift.query('ROLLBACK').catch(() => {});
+      costDrift.release();
+    }
+
+    const decisionDrift = await fixture.ownerPool.connect();
+    try {
+      await decisionDrift.query('BEGIN');
+      await decisionDrift.query(
+        `INSERT INTO public.canonical_estimate_decisions(
+          organization_id,estimate_id,revision,previous_id,action,actor_user_id,
+          membership_id,auth_session_id,actor_name,source_pins,scope_summary,
+          price_before_tax,currency,reason,confirmation_version,request_key_hash,
+          request_digest,digest)
+         SELECT organization_id,estimate_id,revision+1,id,'withdraw',actor_user_id,
+          membership_id,auth_session_id,actor_name,source_pins,NULL,NULL,currency,
+          'Later decision withdrawal proof','estimate-quote-preparation-v1',$3,$4,$5
+         FROM public.canonical_estimate_decisions
+         WHERE organization_id=$1 AND estimate_id=$2
+         ORDER BY revision DESC,id DESC LIMIT 1`, [fixture.org, estimate,
+          crypto.randomBytes(32).toString('hex'), crypto.randomBytes(32).toString('hex'),
+          crypto.randomBytes(32).toString('hex')]);
+      const withdrawn = (await readOutlook(decisionDrift, fixture)).rows[0].value;
+      expect(withdrawn.costBasis).toMatchObject({
+        state: 'unavailable', amount: null, reason: 'current_cost_basis_unavailable',
+      });
+      await decisionDrift.query('ROLLBACK');
+    } finally {
+      await decisionDrift.query('ROLLBACK').catch(() => {});
+      decisionDrift.release();
+    }
+
     review = (await get('/review')).body.data;
     const nextPricing = review.pricingPlans;
     const nextBody = {

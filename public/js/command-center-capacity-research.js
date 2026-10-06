@@ -29,24 +29,24 @@
     'capacity.available_role_hours.v1': 'Role capacity available',
     crew: 'Crew', skill: 'Skill', workingHours: 'Working hours', location: 'Location',
     travel: 'Travel', vehicle: 'Vehicle', equipment: 'Equipment',
-    bottleneck: 'Bottleneck', backlog: 'Backlog pressure', overtime: 'Overtime pressure',
-    contractor: 'Contractor attention', hiring_need: 'Hiring attention',
+    bottleneck: 'Team coverage', backlog: 'Work remaining', overtime: 'Overtime pattern',
+    contractor: 'Contractor review', hiring_need: 'Hiring pattern',
   };
   var DIMENSION_COPY = {
-    crew: 'Whether a reviewed crew pool applies to this role and scope.',
-    skill: 'Whether reviewed role and skill eligibility applies.',
-    workingHours: 'Whether accepted working-time availability constrains the scope.',
-    location: 'Whether the reviewed work location limits who can serve it.',
-    travel: 'Whether accepted travel feasibility constrains the scope.',
-    vehicle: 'Whether an accepted vehicle requirement applies.',
-    equipment: 'Whether accepted equipment readiness applies.',
+    crew: 'Crew structure was included where the accepted work requires it.',
+    skill: 'Role and skill eligibility were included where required.',
+    workingHours: 'Accepted working hours were included in the check.',
+    location: 'The accepted service area was included where required.',
+    travel: 'Travel feasibility was included where required.',
+    vehicle: 'Vehicle coverage was included where required.',
+    equipment: 'Equipment readiness was included where required.',
   };
   var CATEGORY_COPY = {
-    bottleneck: 'Reviewed role demand may exceed constrained supply under the private policy.',
-    backlog: 'Reviewed work may remain beyond the research horizon.',
-    overtime: 'The private policy found an overtime attention condition.',
-    contractor: 'The private policy found a contractor attention condition, without recommending engagement.',
-    hiring_need: 'The reviewed qualitative history may need attention; this is never a hiring instruction.',
+    bottleneck: 'Current records may need a closer role-coverage review.',
+    backlog: 'Accepted work may remain beyond the review period.',
+    overtime: 'Current records may need an overtime-pattern review.',
+    contractor: 'Current records may need a contractor review. NorthStar has not contacted anyone.',
+    hiring_need: 'A repeated pattern may need review. This is never a hiring instruction.',
   };
 
   function exact(value, keys) {
@@ -643,31 +643,44 @@
       if (text !== undefined) value.textContent = text; return value;
     }
     function evidenceLabel(value) {
-      return value === 'authenticated_zero' ? 'Authenticated zero' :
-        value === 'bounded_value' ? 'Reviewed value withheld' : 'Unavailable';
+      return value === 'authenticated_zero' ? 'Reviewed: none found' :
+        value === 'bounded_value' ? 'Reviewed privately' : 'Not enough current information';
     }
     function title(value) { return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, function (x) { return x.toUpperCase(); }); }
+    function safeScopeLabel(value) {
+      var text = String(value || '');
+      if (!/^[a-z]+(?:_[a-z]+){0,4}$/.test(text) || /(?:fixture|token|digest|uuid|safe|test)/.test(text))
+        return 'Accepted work group';
+      return title(text);
+    }
     function date(value) {
       try { return new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); }
       catch (_error) { return 'time unavailable'; }
     }
-    function setOverall(label, state, message) {
+    function setOverall(label, state, message, assessment) {
       var pill = byId('commandCenterCapacityState'); pill.textContent = label; pill.dataset.state = state;
       byId('commandCenterCapacityNotice').textContent = message;
+      byId('commandCenterCapacityAssessmentTitle').textContent = assessment || ({
+        'On track': 'No capacity warning found in the current review',
+        'Review needed': 'Your planning judgment is needed',
+        'Not enough information': 'NorthStar cannot safely assess this yet',
+        'Update needed': 'Current records need to be checked again',
+        'Checking records': 'Checking current records',
+      })[label] || label;
     }
     function laneState(projection, laneHistory) {
-      if (!projection) return { label: 'Unavailable', state: 'unavailable' };
-      if (projection.state.endsWith('_stale')) return { label: 'Stale · recover', state: 'stale' };
+      if (!projection) return { label: 'Not enough information', state: 'unavailable' };
+      if (projection.state.endsWith('_stale')) return { label: 'Update needed', state: 'stale' };
       if (laneHistory.records.some(function (item) { return item.kind === 'origin' && item.state === 'stale'; }))
-        return { label: 'Recovered · current', state: 'current' };
-      return { label: 'Current', state: 'current' };
+        return { label: 'Current after update', state: 'current' };
+      return { label: 'Current records', state: 'current' };
     }
     function renderDimensions(scopes) {
       var list = byId('commandCenterCapacityDimensions'); list.replaceChildren();
       DIMENSIONS.forEach(function (key) {
         var box = node('div'); var applied = scopes.length && scopes.some(function (scope) { return scope.dimensions[key]; });
         box.append(node('dt', '', LABELS[key]), node('dd', '', DIMENSION_COPY[key] +
-          (scopes.length ? (applied ? ' Applied in at least one selected scope.' : ' Not applicable in the selected scopes.') : ' Evidence unavailable.')));
+          (scopes.length ? (applied ? ' Included in this check.' : ' Not needed for the accepted work reviewed.') : ' Current information is unavailable.')));
         list.append(box);
       });
     }
@@ -677,10 +690,10 @@
       scopes.forEach(function (scope) { (groups[scope.alternativeKey] = groups[scope.alternativeKey] || []).push(scope); });
       Object.keys(groups).forEach(function (key) {
         var section = node('section', 'command-center-capacity-alternative');
-        section.append(node('h4', '', title(key)), node('p', '', 'One alternative plan. Keep it separate from every other alternative.'));
+        section.append(node('h4', '', title(key)), node('p', '', 'This scenario stays separate from every other scenario.'));
         groups[key].forEach(function (scope) {
           var row = node('div', 'command-center-capacity-alternative-scope');
-          row.append(node('strong', '', title(scope.scopeKey) + ' · ' + title(scope.role)),
+          row.append(node('strong', '', safeScopeLabel(scope.scopeKey) + ' · ' + title(scope.role)),
             node('span', '', evidenceLabel(scope.evidenceState)));
           section.append(row);
         }); root.append(section);
@@ -693,8 +706,8 @@
         var states = origin && origin.decisionAction === 'approve' ? origin.categories.map(function (row) {
           return row.categories[key].state;
         }) : [];
-        var label = !states.length ? 'Withheld pending human approval' : states.includes('attention') ? 'Attention' :
-          states.includes('insufficient_history') ? 'Insufficient history' : 'Clear under private policy';
+        var label = !states.length ? 'Hidden until you review it' : states.includes('attention') ? 'Review needed' :
+          states.includes('insufficient_history') ? 'More history needed' : 'No warning found in this review';
         var box = node('div'); box.append(node('dt', '', LABELS[key]), node('dd', '', CATEGORY_COPY[key] + ' ' + label + '.'));
         list.append(box);
       });
@@ -716,29 +729,39 @@
       });
     }
     function actionLabel(name) {
-      return ({ capture_origin: 'Save current research origin', recover_origin: 'Append recovery origin',
-        review_prerequisites: 'Complete prerequisite review',
-        wait_for_horizon: 'Waiting for the research horizon', capture_outcome: 'Save observed outcome',
-        capture_evaluation: 'Save evaluation receipt', review_advisory: 'Choose a human review decision',
-        reserve_continuation: 'Save successor research continuation', prepare_outcome: 'Prepare exact outcome evidence',
-        complete: 'Research lifecycle complete' })[name] || 'Unavailable';
+      return ({ capture_origin: 'Save current capacity check', recover_origin: 'Save an updated capacity check',
+        review_prerequisites: 'Review team information first',
+        wait_for_horizon: 'Waiting for the review period to end', capture_outcome: 'Save the reviewed outcome',
+        capture_evaluation: 'Save this evaluation', review_advisory: 'Review capacity signals first',
+        reserve_continuation: 'Save the next review period', prepare_outcome: 'Prepare the reviewed outcome',
+        complete: 'No action needed' })[name] || 'Not available';
     }
     function setupLabel(name) {
-      return ({ workload_epoch: 'Start workload source coverage', workload_methods: 'Approve workload methods',
-        workload_roles: 'Approve workforce role authority', workload_role_scope: 'Approve base capacity role',
-        workload_availability: 'Approve declared availability',
-        workload_remaining_census: 'Approve remaining-work census',
-        workload_outcome_window: 'Finalize outcome window',
-        constrained_epoch: 'Start constraint source coverage',
-        constrained_method: 'Approve constraint method', constrained_scope: 'Approve seven-dimension scope',
-        constrained_work_scopes: 'Approve accepted-work formations',
-        constrained_job_census: 'Approve every accepted work constraint',
-        advisory_method: 'Approve five-advisory method', advisory_policy: 'Approve private advisory policies',
-        advisory_demand: 'Approve demand allocation', advisory_epoch: 'Install advisory coverage epoch',
-        advisory_outcome_demand: 'Approve outcome allocation',
-        advisory_continuation_demand: 'Approve successor allocation',
-        advisory_correction_demand: 'Approve corrected demand lineage',
-        advisory_policy_revision: 'Save policy revision' })[name] || 'Setup unavailable';
+      return ({ workload_epoch: 'Confirm accepted-work period', workload_methods: 'Confirm how accepted work is checked',
+        workload_roles: 'Confirm team roles', workload_role_scope: 'Confirm the primary role',
+        workload_availability: 'Confirm working hours',
+        workload_remaining_census: 'Confirm remaining accepted work',
+        workload_outcome_window: 'Confirm the review period',
+        constrained_epoch: 'Confirm team-and-resource period',
+        constrained_method: 'Confirm how team and resources are checked',
+        constrained_scope: 'Confirm the seven checks',
+        constrained_work_scopes: 'Confirm role coverage for accepted work',
+        constrained_job_census: 'Confirm accepted-work requirements',
+        advisory_method: 'Confirm capacity signals', advisory_policy: 'Confirm planning rules',
+        advisory_demand: 'Confirm accepted-work grouping', advisory_epoch: 'Confirm the signal review period',
+        advisory_outcome_demand: 'Confirm the reviewed outcome',
+        advisory_continuation_demand: 'Confirm the next review period',
+        advisory_correction_demand: 'Confirm corrected records',
+        advisory_policy_revision: 'Save hiring-pattern setting' })[name] || 'Review unavailable';
+    }
+    function setupExplanation(current) {
+      if (!current) return 'NorthStar cannot find a current review to complete.';
+      if (current.state === 'waiting') return 'More accepted NorthStar history is needed before this review can continue.';
+      if (current.state === 'unavailable') return 'Current NorthStar records do not support this review yet.';
+      if (current.state === 'complete') return 'The required team and accepted-work information is current.';
+      if (current.action === 'constrained_work_scopes')
+        return 'Confirm the primary role and the complete role coverage for required vehicles and equipment.';
+      return 'Confirm this current planning input before NorthStar continues the capacity check.';
     }
     function reasonReady(id, maximum) {
       var length = byId(id).value.trim().length; return length >= 10 && length <= maximum;
@@ -782,19 +805,20 @@
         scopeSelections[review.scopeKey] = { targetRole: initialTarget,
           operatorRoles: initialCombination ? initialCombination.operatorRoles.slice() : [] };
         var card = node('section', 'command-center-capacity-scope-review');
-        card.append(node('h4', '', 'Accepted work formation ' + String(index + 1)),
+        card.append(node('h4', '', reviews.length === 1 ? 'Accepted work group' : 'Accepted work group ' + String(index + 1)),
           node('p', 'command-center-capacity-scope-source',
-            'Source-backed ' + title(review.formation) + ' formation \u00b7 ' +
-            (review.reviewState === 'current' ? 'current review' : 'explicit review required')));
+            (review.formation === 'crew' ? 'Crew-based work' : 'Role-based work') + ' \u00b7 ' +
+            (review.reviewState === 'current' ? 'Current review' : 'Your review is required')));
         var dimensions = node('dl', 'command-center-capacity-scope-dimensions');
         DIMENSIONS.forEach(function (name) {
           var row = node('div'); row.append(node('dt', '', LABELS[name]),
-            node('dd', '', review.dimensions[name] === 'applies' ? 'Applies' : 'Not applicable'));
+            node('dd', '', review.dimensions[name] === 'applies' ? 'Included' : 'Not needed'));
           dimensions.append(row);
         });
-        card.append(dimensions);
+        var checked = node('details', 'command-center-capacity-scope-evidence');
+        checked.append(node('summary', '', 'What NorthStar checked'), dimensions);
         var targetLabel = node('label', 'command-center-capacity-role-field');
-        targetLabel.append(node('span', '', 'Target capacity role'));
+        targetLabel.append(node('span', '', 'Primary role this work depends on'));
         var target = node('select'); target.id = 'commandCenterCapacityTargetRole' + String(index);
         if (!initialTarget) {
           var placeholder = node('option', '', 'Choose a target role'); placeholder.value = '';
@@ -808,12 +832,12 @@
         function updateSupport() {
           var selectedTarget = scopeSelections[review.scopeKey].targetRole;
           var roles = review.targetRoleOptions.filter(function (role) { return role !== selectedTarget; });
-          support.textContent = !selectedTarget ? 'Choose the target capacity role before approval.' : roles.length ?
-            'Supporting roles: ' + roles.map(title).join(', ') + '.' :
-            'No separate supporting role applies to this formation.';
+          support.textContent = !selectedTarget ? 'Choose the primary role before saving.' : roles.length ?
+            'Other roles involved: ' + roles.map(title).join(', ') + '.' :
+            'No other role is involved in this work group.';
         }
         var operators = node('fieldset', 'command-center-capacity-operator-roles');
-        operators.append(node('legend', '', 'Feasible vehicle and equipment operator roles'));
+        operators.append(node('legend', '', 'Role coverage for required vehicles and equipment'));
         var operatorChoices = node('div', 'command-center-capacity-operator-combinations');
         operators.append(operatorChoices);
         function renderOperatorCombinations() {
@@ -821,7 +845,7 @@
           var selected = scopeSelections[review.scopeKey];
           var combinations = combinationsFor(review, selected.targetRole);
           if (!selected.targetRole) {
-            operatorChoices.append(node('p', '', 'Choose the target capacity role to see a complete operator combination.'));
+            operatorChoices.append(node('p', '', 'Choose the primary role to see the complete role-coverage options.'));
             return;
           }
           combinations.forEach(function (combination, combinationIndex) {
@@ -847,30 +871,177 @@
           updateSupport(); renderOperatorCombinations(); updateButtons();
         });
         updateSupport(); card.append(support); renderOperatorCombinations(); card.append(operators);
-        card.append(node('p', 'command-center-capacity-review-note',
-          'Only complete role combinations that current sources can assign without reusing a person are available.'));
-        card.append(node('p', 'command-center-capacity-review-note',
-          'The accepted working-hours windows for that exact combination bound the vehicle and equipment calendar.'));
-        card.append(node('p', 'command-center-capacity-review-note',
-          'Review all seven applicability labels and these role classifications before approval. Private identities and amounts remain withheld.'));
+        checked.append(node('p', 'command-center-capacity-review-note',
+          'Each option is a complete role combination current records can support without assigning the same person twice.'),
+        node('p', 'command-center-capacity-review-note',
+          'Accepted working hours for that exact combination set the available vehicle and equipment window.'),
+        node('p', 'command-center-capacity-review-note',
+          'Review all seven checks and the role coverage before saving. Employee names, asset identities, and private amounts remain hidden.'));
+        card.append(checked);
         root.append(card);
       });
+    }
+    function placeReviewReason() {
+      var group = byId('commandCenterCapacityReviewReasonGroup');
+      var advisory = journey && journey.advisory && journey.advisory.selectedOrigin;
+      var useSignalSlot = journey && journey.setup && journey.setup.state !== 'ready' && advisory &&
+        advisory.state === 'capacity_advisory_origin_current';
+      var slot = byId(useSignalSlot ? 'commandCenterCapacitySignalReasonSlot' : 'commandCenterCapacitySetupReasonSlot');
+      if (group && slot && group.parentElement !== slot) slot.append(group);
     }
     function renderSetup() {
       var current = journey && journey.setup; var policy = journey && journey.hiringPolicy;
       var correction = journey && journey.correctionReview;
-      byId('commandCenterCapacitySetupTitle').textContent = current ? current.label : 'Accepted prerequisites and review epochs';
-      byId('commandCenterCapacitySetupExplanation').textContent = current ? current.explanation :
-        'No current safe prerequisite discovery result is available.';
+      byId('commandCenterCapacitySetupTitle').textContent = current && current.state === 'ready'
+        ? setupLabel(current.action) : current && current.state === 'complete' ? 'Team information is current' : 'Review unavailable';
+      byId('commandCenterCapacitySetupExplanation').textContent = setupExplanation(current);
       var select = byId('commandCenterCapacityHiringPeriods');
       if (policy) select.value = String(policy.consecutivePeriods);
       else if (current) select.value = String(current.hiringConsecutivePeriods);
       byId('commandCenterCapacityHiringState').textContent = policy && policy.state === 'current'
-        ? 'Current policy: ' + policy.consecutivePeriods + ' consecutive, gap-free, current evaluated periods.'
-        : 'Hiring policy unavailable until a current source-backed scope and explicit policy review exist.';
+        ? 'Current setting: show a hiring pattern after ' + policy.consecutivePeriods + ' consecutive, gap-free reviews.'
+        : 'The hiring-pattern setting is unavailable until team and accepted-work information is current.';
       byId('commandCenterCapacityCorrectionState').textContent = correction ?
-        correction.label + ': ' + correction.explanation : 'Source correction review unavailable.';
+        (correction.state === 'ready' ? 'Corrected records are ready for your review.' :
+          'Corrected-record review is not available for the current period.') : 'Corrected-record review is unavailable.';
       renderScopeReviews();
+      placeReviewReason();
+    }
+    function approvedCategoryStates() {
+      var origin = journey && journey.advisory && journey.advisory.selectedOrigin;
+      if (!origin || origin.decisionAction !== 'approve' || !Array.isArray(origin.categories)) return [];
+      var states = [];
+      origin.categories.forEach(function (row) {
+        CATEGORIES.forEach(function (name) { states.push(row.categories[name].state); });
+      });
+      return states;
+    }
+    function renderContext() {
+      var scopes = journey && journey.constrained ? journey.constrained.scopes : [];
+      var role = journey && journey.workload && journey.workload.selectedOrigin
+        ? journey.workload.selectedOrigin.capacityRole : scopes.length ? scopes[0].role : null;
+      var labels = [];
+      scopes.forEach(function (scope) {
+        var label = safeScopeLabel(scope.scopeKey);
+        if (!labels.includes(label)) labels.push(label);
+      });
+      var group = labels.length === 1 ? labels[0] : labels.length > 1 &&
+        labels.every(function (label) { return label !== 'Accepted work group'; }) ? labels.join(', ') : 'Accepted work group';
+      byId('commandCenterCapacityContext').textContent = role ? group + ' · ' + title(role) + ' work' : group;
+    }
+    function renderOverallAssessment(ws, cs, as) {
+      var laneStates = [ws, cs, as];
+      var unavailable = laneStates.some(function (item) { return item.state === 'unavailable'; });
+      var stale = laneStates.some(function (item) { return item.state === 'stale'; });
+      var recovered = laneStates.some(function (item) { return item.label === 'Current after update'; });
+      var setupState = journey.setup;
+      if (setupState.state === 'ready') {
+        setOverall('Review needed', 'review',
+          'Confirm current team roles and accepted-work information before NorthStar continues this check.',
+          'Confirm the team information used for this check');
+      } else if (setupState.state === 'waiting' || setupState.state === 'unavailable' || unavailable) {
+        setOverall('Not enough information', 'unavailable',
+          'NorthStar does not have enough current accepted-work and team information to assess capacity safely.');
+      } else if (stale) {
+        setOverall('Update needed', 'stale',
+          'Accepted work or team information changed, so NorthStar cleared the earlier assessment.');
+      } else {
+        var categoryStates = approvedCategoryStates();
+        var advisoryOrigin = journey.advisory.selectedOrigin;
+        var decisionAction = advisoryOrigin && advisoryOrigin.decisionAction;
+        if (!categoryStates.length) {
+          if (decisionAction === 'reject') {
+            setOverall('Review needed', 'review',
+              'A person chose not to use these signals, and NorthStar made no operational or workforce change.',
+              'Planning signals are not in use');
+          } else if (decisionAction === 'withdraw') {
+            setOverall('Review needed', 'review',
+              'A person withdrew the earlier review, so those signals are not in use.',
+              'Planning signals are not in use');
+          } else {
+            setOverall('Review needed', 'review',
+              'Current records are ready; private capacity signals stay hidden until a person reviews them.',
+              'Review the current planning signals');
+          }
+        } else if (categoryStates.includes('attention')) {
+          setOverall('Review needed', 'review',
+            recovered ? 'NorthStar rechecked changed records and found planning signals, without proving one limiting cause.' :
+              'Current records show planning signals for this work group, without proving one limiting cause.',
+            'One or more capacity signals need review');
+        } else {
+          setOverall('On track', recovered ? 'recovered' : 'current',
+            categoryStates.includes('insufficient_history') ?
+              'Current reviewed records show no capacity warning; more history is needed before a hiring pattern can appear.' :
+              'Current reviewed records show no capacity warning for this work group.');
+        }
+      }
+    }
+    function primaryPlan() {
+      if (mode === 'demo') return { label: 'Explore this fictional check', targets: ['commandCenterCapacityChecksDetails'] };
+      if (!journey) return uncertainAttempt
+        ? { label: 'Review interrupted update',
+          targets: ['commandCenterCapacityReviewDetails', 'commandCenterCapacityRecordControls'],
+          focus: 'commandCenterCapacityRetry' }
+        : { label: 'Check current records', intent: 'refresh' };
+      if (journey.setup.state === 'ready') return { label: 'Review team information',
+        targets: ['commandCenterCapacityReviewDetails'], focus: 'commandCenterCapacityReviewReason' };
+      var lanes = ['workload', 'constrained', 'advisory'];
+      var actionable = lanes.find(function (name) {
+        var current = journey[name] && journey[name].currentAction;
+        return current && !['review_prerequisites', 'wait_for_horizon', 'complete', 'review_advisory'].includes(current.name);
+      });
+      if (actionable) return { label: 'Update capacity check',
+        targets: ['commandCenterCapacityReviewDetails', 'commandCenterCapacityRecordControls', actionable === 'advisory' ?
+          'commandCenterCapacitySignalsDetails' : 'commandCenterCapacityChecksDetails'],
+        focus: 'commandCenterCapacityLaneReason' };
+      var origin = journey.advisory.selectedOrigin;
+      if (origin && origin.state === 'capacity_advisory_origin_current' && origin.decisionAction !== 'approve')
+        return { label: origin.decisionAction ? 'Review capacity signals again' : 'Review capacity signals',
+          targets: ['commandCenterCapacitySignalsDetails'],
+          focus: 'commandCenterCapacityReviewReason' };
+      if (approvedCategoryStates().includes('attention')) return { label: 'Review capacity signals',
+        targets: ['commandCenterCapacitySignalsDetails'] };
+      return { label: 'View capacity details', targets: ['commandCenterCapacityChecksDetails'] };
+    }
+    function renderNextReview() {
+      var plan = primaryPlan(); var button = byId('commandCenterCapacityPrimaryAction');
+      button.textContent = plan.label; button.dataset.capacityTargets = (plan.targets || []).join(',');
+      button.dataset.capacityFocus = plan.focus || ''; button.dataset.capacityIntent = plan.intent || '';
+      if (plan.targets && plan.targets.length)
+        button.setAttribute('aria-controls', ['commandCenterCapacityDetails'].concat(plan.targets).join(' '));
+      else button.removeAttribute('aria-controls');
+      button.disabled = busy || stateOverride === 'loading' || (mode !== 'demo' && !identity);
+      if (!journey) {
+        byId('commandCenterCapacityNextTitle').textContent = uncertainAttempt ?
+          'Review the interrupted update' : 'Check current NorthStar records';
+        byId('commandCenterCapacityNextExplanation').textContent = uncertainAttempt ?
+          'NorthStar does not know whether the last update finished. Retrying uses the exact same protected request.' :
+          'A read-only refresh will look for current accepted-work and team information.';
+      } else if (journey.setup.state === 'ready') {
+        byId('commandCenterCapacityNextTitle').textContent = 'Confirm the team information for this work group';
+        byId('commandCenterCapacityNextExplanation').textContent =
+          'Review the primary role, all seven checks, and any required vehicle or equipment role coverage.';
+      } else if (approvedCategoryStates().includes('attention')) {
+        byId('commandCenterCapacityNextTitle').textContent = 'Review the current capacity signals';
+        byId('commandCenterCapacityNextExplanation').textContent =
+          'Use your operating judgment. Scheduling, staffing, overtime, contractors, and hiring remain unchanged.';
+      } else if (plan.label === 'Update capacity check') {
+        byId('commandCenterCapacityNextTitle').textContent = 'Check the changed or newly available records';
+        byId('commandCenterCapacityNextExplanation').textContent =
+          'NorthStar will verify the same accepted-work and team scope again before saving.';
+      } else if (plan.label === 'Review capacity signals again') {
+        byId('commandCenterCapacityNextTitle').textContent = 'Review the private planning signals again';
+        byId('commandCenterCapacityNextExplanation').textContent =
+          'They are not in use after the earlier human decision. Reviewing again still makes no operational or workforce change.';
+      } else if (plan.label === 'Review capacity signals') {
+        byId('commandCenterCapacityNextTitle').textContent = 'Decide whether to use the private planning signals';
+        byId('commandCenterCapacityNextExplanation').textContent =
+          'Your review reveals the private signals only. It does not approve an operational or workforce action.';
+      } else {
+        byId('commandCenterCapacityNextTitle').textContent = 'No operational action is required';
+        byId('commandCenterCapacityNextExplanation').textContent =
+          'You can open the details to see what NorthStar checked and when the records were last reviewed.';
+      }
     }
     function updateButtons() {
       doc.querySelectorAll('[data-capacity-lane]').forEach(function (button) {
@@ -901,18 +1072,19 @@
       byId('commandCenterCapacityRefresh').disabled = mode === 'demo' || busy || !identity;
       byId('commandCenterCapacityRetry').hidden = !uncertainAttempt || mode === 'demo';
       byId('commandCenterCapacityRetry').disabled = busy;
+      renderNextReview();
     }
     function render() {
       byId('commandCenterCapacityPaidControls').hidden = mode === 'demo';
       byId('commandCenterCapacityDemoControls').hidden = mode !== 'demo';
       byId('commandCenterCapacityAsOf').textContent = journey ? date(journey.asOf) : 'Unavailable';
+      renderContext();
       if (!journey) {
-        var labels = ['Workload', 'Constraint', 'Advisory'];
         ['commandCenterCapacityWorkloadState', 'commandCenterCapacityConstraintState', 'commandCenterCapacityAdvisoryState']
-          .forEach(function (id, index) { var item = byId(id); item.textContent = labels[index] + ' unavailable'; item.dataset.state = 'unavailable'; });
-        byId('commandCenterCapacityTargets').replaceChildren(node('li', '', 'No current workload evidence.'));
+          .forEach(function (id) { var item = byId(id); item.textContent = 'Not enough information'; item.dataset.state = 'unavailable'; });
+        byId('commandCenterCapacityTargets').replaceChildren(node('li', '', 'No current accepted-work information.'));
         renderDimensions([]); renderAlternatives([]); renderCategories(null);
-        byId('commandCenterCapacityContinuation').textContent = 'No continuation receipt is selected.';
+        byId('commandCenterCapacityContinuation').textContent = 'No next review period is selected.';
         renderSetup(); renderHistory(); updateButtons(); return;
       }
       renderSetup();
@@ -931,61 +1103,53 @@
       renderCategories(journey.advisory.selectedOrigin);
       var cont = journey.advisory.selectedContinuation;
       byId('commandCenterCapacityContinuation').textContent = cont ?
-        ({ capacity_advisory_continuation_pending: 'Continuation pending: it may activate only at its fixed boundary after every source recheck.',
-          capacity_advisory_continuation_activated: 'Continuation activated from its exact predecessor; the child remains research-only.',
-          capacity_advisory_continuation_missed: 'Continuation missed its fixed deadline. It is unavailable evidence and cannot be moved or revived.',
-          capacity_advisory_continuation_stale: 'Continuation is stale or superseded. Restored bytes do not revive it; recovery requires a new receipt.' })[cont.state] :
-        'No continuation receipt is selected. Pending, activated, missed and stale states remain distinct.';
-      renderHistory(); updateButtons();
+        ({ capacity_advisory_continuation_pending: 'Next review pending: NorthStar will recheck every current source at the fixed review boundary.',
+          capacity_advisory_continuation_activated: 'The next review is active and remains a planning check only.',
+          capacity_advisory_continuation_missed: 'The next review missed its fixed deadline. It cannot be moved or reused.',
+          capacity_advisory_continuation_stale: 'The next review is out of date. NorthStar requires a new current review.' })[cont.state] :
+        'No next review period is selected. Pending, active, missed, and out-of-date states remain distinct.';
+      renderHistory();
       if (!stateOverride) {
-        var laneStates = [ws, cs, as];
-        var unavailable = laneStates.every(function (item) { return item.state === 'unavailable'; });
-        var stale = laneStates.some(function (item) { return item.state === 'stale'; });
-        var recovered = laneStates.some(function (item) { return item.label.startsWith('Recovered'); });
-        if (journey.setup.state === 'ready') setOverall('Prerequisite review ready', 'current',
-          journey.setup.explanation + ' This enabled control is bound to the current safe source token.');
-        else if (journey.setup.state === 'waiting') setOverall('Waiting for accepted history', 'unavailable',
-          journey.setup.explanation);
-        else if (journey.setup.state === 'unavailable') setOverall('Prerequisite unavailable', 'unavailable',
-          journey.setup.explanation);
-        else if (unavailable) setOverall('Unavailable', 'unavailable',
-          'No current safe capacity research receipt is available. An authenticated zero would be shown separately.');
-        else if (stale) setOverall('Stale · refresh required', 'stale',
-          'Accepted source evidence changed. Older receipts remain immutable and no stale current claim is shown.');
-        else setOverall(recovered ? 'Recovered · current' : 'Current research', recovered ? 'recovered' : 'current',
-          recovered ? 'Recovery appended new current receipts. Superseded evidence remains immutable and is not revived.' :
-            'Currentness was checked after the complete accepted source fence. Values, thresholds and private calculations remain withheld.');
+        renderOverallAssessment(ws, cs, as);
       }
+      updateButtons();
     }
     function clearWith(label, state, message) {
       journey = null; stateOverride = state; setOverall(label, state, message); render();
     }
+    function classifyRead(status) {
+      if (status === 403) return ['Not enough information', 'restricted', 'This private capacity check is available only to a current owner or administrator.'];
+      if (status === 404) return ['Not enough information', 'unavailable', 'NorthStar does not have current capacity information for this workspace.'];
+      if (status === 409) return ['Update needed', 'conflict', 'The accepted work or team records changed, so check current records again.'];
+      if (status >= 500) return ['Not enough information', 'failed', 'NorthStar could not check current capacity records, so no earlier assessment is shown as current; try again.'];
+      return ['Not enough information', 'failed', 'NorthStar could not use the current capacity response and will not show an earlier assessment as current.'];
+    }
     function classify(status) {
-      if (status === 403) return ['Restricted', 'restricted', 'This paid research journey is limited to a current owner or administrator session.'];
-      if (status === 404) return ['Unavailable', 'unavailable', 'No matching tenant-private research evidence is available.'];
-      if (status === 409) return ['Conflict', 'conflict', 'The exact source or predecessor changed. Refresh before starting a new action.'];
-      if (status >= 500) return ['Uncertain', 'uncertain', 'The result is uncertain. Retry only the exact endpoint, body and idempotency key shown by this action.'];
-      return ['Failed', 'failed', 'The action was refused without a partial receipt. Review the current state before trying a new action.'];
+      if (status === 403) return ['Not enough information', 'restricted', 'This private capacity check is available only to a current owner or administrator.'];
+      if (status === 404) return ['Not enough information', 'unavailable', 'NorthStar does not have current capacity information for this workspace.'];
+      if (status === 409) return ['Update needed', 'conflict', 'The accepted work or team records changed, so check current records before saving.'];
+      if (status >= 500) return ['Update needed', 'uncertain', 'NorthStar cannot confirm whether the last update finished; retry only the same protected update.'];
+      return ['Not enough information', 'failed', 'NorthStar refused the update and saved no partial result; check current records before trying again.'];
     }
     function load(force) {
       if (mode === 'demo') { journey = validateJourney(demoJourney(demoStage)); stateOverride = null; render(); return Promise.resolve(journey); }
       if (!identity || busy || (!force && loadedIdentity === identity)) return Promise.resolve(journey);
       var expectedIdentity = identity; var expectedRevision = identityRevision; busy = true; stateOverride = 'loading';
-      clearWith('Loading', 'loading', 'Rechecking paid access, source lineage and currentness. No forecast mutation is performed.');
+      clearWith('Checking records', 'loading', 'NorthStar is checking access and current accepted-work records without changing schedules or staffing.');
       return fetcher('/api/v1/forecast/capacity-advice/journey/current', {
         method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
       }).then(function (response) {
         return response.json().catch(function () { return null; }).then(function (payload) {
           if (expectedIdentity !== identity || expectedRevision !== identityRevision) return null;
           if (!response.ok || !payload || payload.success !== true) {
-            var failure = classify(response.status); clearWith(failure[0], failure[1], failure[2]); return null;
+            var failure = classifyRead(response.status); clearWith(failure[0], failure[1], failure[2]); return null;
           }
-          var validated = validateJourney(payload.data); if (!validated) { clearWith('Failed', 'failed', 'The server returned an unsafe or incomplete projection. No current claim is shown.'); return null; }
+          var validated = validateJourney(payload.data); if (!validated) { clearWith('Not enough information', 'failed', 'NorthStar received incomplete capacity information and will not show a current assessment.'); return null; }
           journey = validated; loadedIdentity = identity; stateOverride = null; render(); return journey;
         });
       }).catch(function () {
         if (expectedIdentity === identity && expectedRevision === identityRevision)
-          clearWith('Failed', 'failed', 'Capacity research could not be refreshed. No stale current claim is shown.');
+          clearWith('Not enough information', 'failed', 'NorthStar could not check current capacity records and will not show an earlier assessment as current.');
         return null;
       }).finally(function () { if (expectedIdentity === identity && expectedRevision === identityRevision) { busy = false; updateButtons(); } });
     }
@@ -1006,7 +1170,7 @@
               ? validateDecisionResponse(value, attempt.body, attempt.originId)
               : attempt.kind === 'setup' ? validateSetupResponse(value, attempt.body)
                 : validateActionResponse(value, attempt.body);
-            if (!valid) { uncertainAttempt = null; clearWith('Failed', 'failed', 'The response did not match the exact safe action schema. No current claim is shown.'); return null; }
+            if (!valid) { uncertainAttempt = null; clearWith('Not enough information', 'failed', 'NorthStar could not verify the saved response and will not show a current assessment.'); return null; }
             uncertainAttempt = null; loadedIdentity = null; stateOverride = null; return value;
           });
         }).then(function (value) {
@@ -1017,7 +1181,7 @@
         }).catch(function () {
           if (expectedIdentity === identity && expectedRevision === identityRevision) {
             uncertainAttempt = attempt;
-            clearWith('Uncertain', 'uncertain', 'The connection ended before the result was known. Retry reuses the exact endpoint, body and idempotency key.');
+            clearWith('Update needed', 'uncertain', 'The connection ended before NorthStar knew whether the update finished; retry uses the exact same protected request.');
           }
           return null;
         }).finally(function () { if (expectedIdentity === identity && expectedRevision === identityRevision) { busy = false; updateButtons(); } });
@@ -1077,6 +1241,23 @@
     byId('commandCenterCapacityLaneReason').addEventListener('input', updateButtons);
     byId('commandCenterCapacityReviewReason').addEventListener('input', updateButtons);
     byId('commandCenterCapacityHiringPeriods').addEventListener('change', updateButtons);
+    byId('commandCenterCapacityPrimaryAction').addEventListener('click', function () {
+      var button = byId('commandCenterCapacityPrimaryAction');
+      if (button.dataset.capacityIntent === 'refresh') { loadedIdentity = null; return load(true); }
+      var targets = String(button.dataset.capacityTargets || '').split(',').filter(Boolean);
+      var outer = byId('commandCenterCapacityDetails'); if (targets.length && outer) outer.open = true;
+      targets.forEach(function (id) {
+        var details = byId(id); if (details) details.open = true;
+      });
+      var focusTarget = byId(button.dataset.capacityFocus);
+      if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus();
+      else {
+        var firstTarget = byId(String(button.dataset.capacityTargets || '').split(',')[0]);
+        if (firstTarget && typeof firstTarget.scrollIntoView === 'function')
+          firstTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return null;
+    });
     byId('commandCenterCapacitySetupAction').addEventListener('click', function () {
       var attempt = setupAttempt('setup'); return attempt ? sendAttempt(attempt) : null;
     });
@@ -1129,8 +1310,8 @@
       },
       workspaceUnavailable: function () {
         identity = null; identityRevision += 1; loadedIdentity = null; uncertainAttempt = null;
-        busy = false; stateOverride = 'unavailable'; clearInputs(); clearWith('Workspace unavailable', 'unavailable',
-          'Workspace mode, tenant, session or generation is unavailable. Saved tokens and uncertain retries were cleared.');
+        busy = false; stateOverride = 'unavailable'; clearInputs(); clearWith('Not enough information', 'unavailable',
+          'A current authenticated workspace is required before NorthStar can check team capacity.');
         return null;
       },
       refresh: function () { loadedIdentity = null; return load(true); },

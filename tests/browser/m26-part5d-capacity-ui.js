@@ -69,6 +69,11 @@ function response(status, data) {
       return { context, page };
     }
 
+    async function openDetails(page, ...ids) {
+      await page.locator('#commandCenterCapacityDetails').evaluate(item => { item.open = true; });
+      for (const id of ids) await page.locator('#' + id).evaluate(item => { item.open = true; });
+    }
+
     {
       const { context, page } = await makePage({ width: 1024, theme: 'dark' });
       await page.evaluate(journey => {
@@ -76,12 +81,12 @@ function response(status, data) {
         window.__pendingCapacityLoad = window.__controller.workspaceReady(
           'paid:empty-tenant:revision:digest:session:generation:expiry');
       }, capacity.demoJourney(0));
-      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Loading/);
-      assert.equal(await page.getByRole('button', { name: 'Refresh research', exact: true }).isDisabled(), true);
+      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Checking records/);
+      assert.equal(await page.getByRole('button', { name: 'Check current records', exact: true }).isDisabled(), true);
       await page.evaluate(() => window.__releaseCapacityResponse());
       await page.evaluate(() => window.__pendingCapacityLoad);
-      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Prerequisite review ready/);
-      assert.match(await page.locator('#commandCenterCapacitySetupTitle').innerText(), /Start fictional source coverage/);
+      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Review needed/);
+      assert.match(await page.locator('#commandCenterCapacitySetupTitle').textContent(), /Confirm accepted-work period/);
       for (const button of await page.locator('[data-capacity-lane]').all()) assert.equal(await button.isDisabled(), true);
       assert.equal(await page.evaluate(() => window.__calls.map(item => item.method).join(',')), 'GET');
       await page.locator('#commandCenterCapacityRoot').screenshot({ path: path.join(output, 'paid-empty-prerequisite-ready.png') });
@@ -97,14 +102,13 @@ function response(status, data) {
         window.__responses.push({ status: 200, data: journey });
         return window.__controller.workspaceReady('paid:tenant:revision:digest:session:generation:expiry');
       }, capacity.demoJourney(5));
-      const text = await page.locator('#commandCenterCapacityRoot').innerText();
+      const text = await page.locator('#commandCenterCapacityRoot').textContent();
       for (const copy of ['Accepted work demand', 'Work expected to remain', 'Role capacity available',
         'Crew', 'Skill', 'Working hours', 'Location', 'Travel', 'Vehicle', 'Equipment',
-        'Bottleneck', 'Backlog pressure', 'Overtime pressure', 'Contractor attention', 'Hiring attention',
-        'Authenticated zero', 'must never be added together', 'Continuation activated',
-        '2 to 12 consecutive, gap-free, current evaluated periods',
-        'same alternative, scope, role, method, and policy',
-        'attention means it crossed', 'Private capacity, demand, and gap values stay hidden']) assert.match(text, new RegExp(copy));
+        'Team coverage', 'Work remaining', 'Overtime pattern', 'Contractor review', 'Hiring pattern',
+        'Reviewed: none found', 'Alternative scenarios stay separate', 'The next review is active',
+        'consecutive, gap-free reviews', 'same work group, role, method, and rule',
+        'Team capacity, work demand, and gap amounts remain private']) assert.match(text, new RegExp(copy));
       const historyText = await page.locator('#commandCenterCapacityHistory').textContent();
       assert.match(historyText, /capacity advisory continuation missed/i);
       assert.match(historyText, /33333333-3333-4333-8333-333333333338/);
@@ -117,6 +121,40 @@ function response(status, data) {
       await page.locator('#commandCenterCapacityRoot').screenshot({ path: path.join(output, 'paid-desktop-current.png') });
       result.cases.push({ name: 'paid-desktop-current', requests: ['GET'], reducedMotion: true,
         overflow: false, pass: true });
+      await context.close();
+    }
+
+    {
+      const { context, page } = await makePage({ width: 390, height: 844, theme: 'light', reducedMotion: true });
+      await page.evaluate(journey => {
+        window.__responses.push({ status: 200, data: journey });
+        return window.__controller.workspaceReady('paid:mobile-review:revision:digest:session:generation:expiry');
+      }, capacity.demoJourney(1));
+      assert.equal(await page.locator('#commandCenterCapacityState').innerText(), 'Review needed');
+      assert.equal(await page.locator('#commandCenterCapacityRoot details[open]').count(), 0,
+        'The initial mobile view must keep supporting detail collapsed');
+      assert.equal(await page.locator('.command-center-capacity-disclosures > details').count(), 1,
+        'The default surface must expose one outer details drill-in');
+      assert.equal(await page.locator('#commandCenterCapacityDetails > summary').innerText(), 'Review details');
+      const primary = page.locator('#commandCenterCapacityRoot .btn-primary:not([disabled])');
+      assert.equal(await primary.count(), 1, 'The capacity card must expose one enabled primary action');
+      assert.equal(await primary.innerText(), 'Review capacity signals');
+      assert.equal(await primary.getAttribute('aria-controls'),
+        'commandCenterCapacityDetails commandCenterCapacitySignalsDetails');
+      assert.match(await page.locator('#commandCenterCapacityNotice').innerText(),
+        /private capacity signals stay hidden until a person reviews them/i);
+      assert.match(await page.locator('.command-center-capacity-impact').innerText(),
+        /no employee assignments, schedule changes, overtime approvals, hiring, or contractor contact/i);
+      const topAnswerWithinTwoScreens = await primary.evaluate(element =>
+        element.getBoundingClientRect().bottom <= window.innerHeight * 2);
+      assert.equal(topAnswerWithinTwoScreens, true,
+        'The assessment and next action must appear within the first two mobile screenfuls');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await page.locator('#commandCenterCapacityRoot').screenshot({
+        path: path.join(output, 'paid-mobile-review-needed-collapsed.png'),
+      });
+      result.cases.push({ name: 'paid-mobile-review-needed-collapsed', detailsCollapsed: true,
+        enabledPrimaryActions: 1, topAnswerWithinTwoScreens: true, overflow: false, pass: true });
       await context.close();
     }
 
@@ -144,21 +182,28 @@ function response(status, data) {
         window.__responses.push({ status: 200, data: journey });
         return window.__controller.workspaceReady('paid:scope-review:revision:digest:session:generation:expiry');
       }, scoped);
-      const scopeText = await page.locator('#commandCenterCapacityScopeReviews').innerText();
-      for (const copy of ['Accepted work formation 1', 'Source-backed Crew formation', 'Crew', 'Skill',
-        'Working hours', 'Location', 'Travel', 'Vehicle', 'Equipment', 'Target capacity role',
-        'Choose the target capacity role before approval', 'Feasible vehicle and equipment operator roles',
-        'Only complete role combinations that current sources can assign without reusing a person are available',
-        'accepted working-hours windows for that exact combination bound the vehicle and equipment calendar',
-        'Private identities and amounts remain withheld']) assert.match(scopeText, new RegExp(copy));
-      const setupButton = page.getByRole('button', { name: 'Approve accepted-work formations', exact: true });
+      await page.getByRole('button', { name: 'Review team information', exact: true }).click();
+      assert.equal(await page.locator('#commandCenterCapacityDetails').evaluate(item => item.open), true);
+      assert.equal(await page.locator('#commandCenterCapacityReviewDetails').evaluate(item => item.open), true);
+      const scopeText = await page.locator('#commandCenterCapacityScopeReviews').textContent();
+      for (const copy of ['Accepted work group', 'Crew-based work', 'Crew', 'Skill',
+        'Working hours', 'Location', 'Travel', 'Vehicle', 'Equipment', 'Primary role this work depends on',
+        'Choose the primary role before saving', 'Role coverage for required vehicles and equipment',
+        'complete role combination current records can support without assigning the same person twice',
+        'Accepted working hours for that exact combination set the available vehicle and equipment window',
+        'Employee names, asset identities, and private amounts remain hidden']) assert.match(scopeText, new RegExp(copy));
+      const checkedDisclosure = page.locator('.command-center-capacity-scope-evidence');
+      assert.equal(await checkedDisclosure.count(), 1);
+      assert.equal(await checkedDisclosure.evaluate(item => item.open), false);
+      assert.equal(await checkedDisclosure.locator('summary').innerText(), 'What NorthStar checked');
+      const setupButton = page.getByRole('button', { name: 'Confirm role coverage for accepted work', exact: true });
       assert.equal(await setupButton.isDisabled(), true);
       await page.locator('#commandCenterCapacityReviewReason').fill(
         'Approve this exact nonnumeric seven-dimension and mixed-role classification review.');
       assert.equal(await setupButton.isDisabled(), true);
       const targetRole = page.locator('#commandCenterCapacityTargetRole0');
       await targetRole.focus(); await targetRole.selectOption('dispatcher');
-      assert.match(await page.locator('#commandCenterCapacityScopeReviews').innerText(), /Supporting roles: Technician/);
+      assert.match(await page.locator('#commandCenterCapacityScopeReviews').innerText(), /Other roles involved: Technician/);
       assert.equal(await page.getByRole('radio', { name: 'Dispatcher', exact: true }).count(), 0);
       const technicianOperators = page.getByRole('radio', { name: 'Technician', exact: true });
       const dispatcherTechnicianOperators = page.getByRole('radio', {
@@ -207,11 +252,12 @@ function response(status, data) {
         window.__responses.push({ status: 200, data: journey });
         return window.__controller.workspaceReady('paid:review');
       }, capacity.demoJourney(1));
+      await openDetails(page, 'commandCenterCapacitySignalsDetails');
       await page.locator('#commandCenterCapacityReviewReason').focus();
       await page.keyboard.type('Approve this exact fictional qualitative research receipt.');
-      const approve = page.getByRole('button', { name: 'Approve for review', exact: true });
+      const approve = page.getByRole('button', { name: 'Use these signals', exact: true });
       await approve.focus();
-      assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Approve for review');
+      assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Use these signals');
       await page.evaluate(({ decision, next }) => {
         window.__responses.push({ status: 201, data: decision }, { status: 200, data: next });
       }, { decision: { state: 'capacity_advisory_decision_recorded',
@@ -231,8 +277,8 @@ function response(status, data) {
         reason: 'Approve this exact fictional qualitative research receipt.', confirmed: true,
         confirmationVersion: 'm26-capacity-ui-decision-v1',
       });
-      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /Continuation pending/);
-      assert.match(await page.locator('#commandCenterCapacityCategories').innerText(), /Hiring attention[\s\S]*Insufficient history/i);
+      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /Next review pending/);
+      assert.match(await page.locator('#commandCenterCapacityCategories').innerText(), /Hiring pattern[\s\S]*More history needed/i);
       await page.locator('#commandCenterCapacityRoot').screenshot({ path: path.join(output, 'paid-desktop-insufficient-history.png') });
       result.cases.push({ name: 'paid-keyboard-human-review', requests: calls.map(item => item.method), pass: true });
       await context.close();
@@ -242,13 +288,43 @@ function response(status, data) {
       const { context, page } = await makePage({ width: 1024, theme: 'light' });
       await page.evaluate(journey => {
         window.__responses.push({ status: 200, data: journey });
+        return window.__controller.workspaceReady('paid:uncertain-decision');
+      }, capacity.demoJourney(1));
+      await openDetails(page, 'commandCenterCapacitySignalsDetails');
+      await page.locator('#commandCenterCapacityReviewReason').fill(
+        'Review this exact private capacity signal decision.');
+      await page.evaluate(() => window.__responses.push({ status: 503 }));
+      await page.getByRole('button', { name: 'Use these signals', exact: true }).click();
+      const interrupted = page.getByRole('button', { name: 'Review interrupted update', exact: true });
+      await interrupted.waitFor();
+      assert.equal(await page.locator('#commandCenterCapacityRecordControls').evaluate(item => item.open), false);
+      assert.equal(await interrupted.getAttribute('aria-controls'),
+        'commandCenterCapacityDetails commandCenterCapacityReviewDetails commandCenterCapacityRecordControls');
+      await interrupted.click();
+      assert.equal(await page.locator('#commandCenterCapacityReviewDetails').evaluate(item => item.open), true);
+      assert.equal(await page.locator('#commandCenterCapacityRecordControls').evaluate(item => item.open), true);
+      const retry = page.getByRole('button', { name: 'Retry the same update', exact: true });
+      assert.equal(await retry.isVisible(), true);
+      assert.equal(await retry.evaluate(element => document.activeElement === element), true);
+      assert.deepEqual((await page.evaluate(() => window.__calls)).map(item => item.method), ['GET', 'POST']);
+      result.cases.push({ name: 'paid-uncertain-decision-reveals-exact-retry',
+        nestedDisclosureOpened: true, retryFocused: true, pass: true });
+      await context.close();
+    }
+
+    {
+      const { context, page } = await makePage({ width: 1024, theme: 'light' });
+      await page.evaluate(journey => {
+        window.__responses.push({ status: 200, data: journey });
         return window.__controller.workspaceReady('paid:uncertain');
       }, capacity.demoJourney(3));
+      await openDetails(page, 'commandCenterCapacityReviewDetails', 'commandCenterCapacityRecordControls');
       await page.locator('#commandCenterCapacityLaneReason').fill('Recover this exact accepted workload research position.');
       await page.evaluate(() => window.__responses.push({ status: 503 }));
-      await page.getByRole('button', { name: 'Append recovery origin', exact: true }).first().click();
-      await page.getByRole('button', { name: 'Retry exact uncertain action', exact: true }).waitFor();
-      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Uncertain/);
+      await openDetails(page, 'commandCenterCapacityChecksDetails');
+      await page.getByRole('button', { name: 'Save an updated capacity check', exact: true }).first().click();
+      await page.getByRole('button', { name: 'Retry the same update', exact: true }).waitFor();
+      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Update needed/);
       await page.evaluate(({ mutation, next }) => window.__responses.push(
         { status: 201, data: mutation }, { status: 200, data: next }), {
         mutation: { state: 'capacity_research_action_recorded', action: 'workload_capture_origin',
@@ -257,25 +333,26 @@ function response(status, data) {
           automaticActionTaken: false, replayed: false },
         next: capacity.demoJourney(4),
       });
-      await page.getByRole('button', { name: 'Retry exact uncertain action', exact: true }).click();
+      await page.getByRole('button', { name: 'Retry the same update', exact: true }).click();
       await page.waitForFunction(() => window.__controller.inspect().journey &&
         window.__controller.inspect().journey.advisory.selectedContinuation &&
         window.__controller.inspect().journey.advisory.selectedContinuation.state.endsWith('_missed'));
       const posts = (await page.evaluate(() => window.__calls)).filter(item => item.method === 'POST');
       assert.equal(posts.length, 2);
       assert.deepEqual(posts[1], posts[0], 'Uncertain retry must reuse exact endpoint, body and idempotency key');
-      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Recovered/);
-      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /missed its fixed deadline/);
+      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Review needed/);
+      assert.match(await page.locator('#commandCenterCapacityContinuation').textContent(), /missed its fixed deadline/);
       result.cases.push({ name: 'paid-uncertain-exact-retry-recovery', exactRetry: true, pass: true });
       await context.close();
     }
 
     for (const item of [
-      { name: 'restricted', status: 403, label: /Restricted/ },
-      { name: 'conflict', status: 409, label: /Conflict/ },
-      { name: 'uncertain', status: 503, label: /Uncertain/ },
-      { name: 'known-failure', status: 400, label: /Failed/ },
-      { name: 'unavailable', status: 404, label: /Unavailable/ },
+      { name: 'restricted', status: 403, label: /Not enough information/ },
+      { name: 'conflict', status: 409, label: /Update needed/ },
+      { name: 'uncertain', status: 503, label: /Not enough information/,
+        notice: /could not check current capacity records/i },
+      { name: 'known-failure', status: 400, label: /Not enough information/ },
+      { name: 'unavailable', status: 404, label: /Not enough information/ },
     ]) {
       const { context, page } = await makePage({ width: 900 });
       await page.evaluate(status => {
@@ -283,8 +360,13 @@ function response(status, data) {
         return window.__controller.workspaceReady('paid:state:' + status);
       }, item.status);
       assert.match(await page.locator('#commandCenterCapacityState').innerText(), item.label);
+      if (item.notice) {
+        assert.match(await page.locator('#commandCenterCapacityNotice').innerText(), item.notice);
+        assert.doesNotMatch(await page.locator('#commandCenterCapacityNotice').innerText(),
+          /update finished|protected update/i);
+      }
       assert.equal(await page.evaluate(() => window.__controller.inspect().journey), null);
-      assert.equal(await page.getByRole('button', { name: 'Retry exact uncertain action', exact: true }).isHidden(), true,
+      assert.equal(await page.getByRole('button', { name: 'Retry the same update', exact: true }).isHidden(), true,
         'Read failures and known write failures must not invent a retryable mutation');
       result.cases.push({ name: `paid-${item.name}`, status: item.status, staleClaimCleared: true, pass: true });
       await context.close();
@@ -293,7 +375,7 @@ function response(status, data) {
     {
       const { context, page } = await makePage({ width: 900 });
       await page.evaluate(() => window.__controller.workspaceUnavailable());
-      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Workspace unavailable/);
+      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Not enough information/);
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
       result.cases.push({ name: 'workspace-unavailable', requests: [], pass: true });
       await context.close();
@@ -304,29 +386,30 @@ function response(status, data) {
       await page.evaluate(() => window.__controller.workspaceReady(
         'demo:tenant:revision:digest:session:generation:expiry'));
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
-      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Prerequisite review ready/);
-      assert.match(await page.locator('#commandCenterCapacitySetupTitle').innerText(), /Start fictional source coverage/);
-      assert.match(await page.locator('#commandCenterCapacityTargets').innerText(), /Unavailable/);
+      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Review needed/);
+      assert.match(await page.locator('#commandCenterCapacitySetupTitle').textContent(), /Confirm accepted-work period/);
+      await openDetails(page, 'commandCenterCapacityChecksDetails', 'commandCenterCapacitySignalsDetails');
+      assert.match(await page.locator('#commandCenterCapacityTargets').innerText(), /Not enough current information/);
       const demoButton = name => page.getByRole('button', { name, exact: true });
       await demoButton('Continue fictional journey').click();
-      assert.match(await page.locator('#commandCenterCapacityAdvisoryState').innerText(), /Current/);
+      assert.match(await page.locator('#commandCenterCapacityAdvisoryState').innerText(), /Current records/);
       await demoButton('Continue fictional journey').click();
-      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /Continuation pending/);
-      assert.match(await page.locator('#commandCenterCapacityCategories').innerText(), /Hiring attention[\s\S]*Insufficient history/i);
+      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /Next review pending/);
+      assert.match(await page.locator('#commandCenterCapacityCategories').innerText(), /Hiring pattern[\s\S]*More history needed/i);
       await demoButton('Change fictional source').click();
-      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Stale/);
-      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /stale or superseded/);
+      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Update needed/);
+      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /out of date/);
       await demoButton('Recover with new receipts').click();
-      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Recovered/);
+      assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Review needed/);
       assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /missed its fixed deadline/);
       await demoButton('Continue fictional journey').click();
-      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /Continuation activated/);
+      assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /next review is active/i);
       assert.match(await page.locator('#commandCenterCapacityHistory').textContent(), /capacity advisory continuation missed/i);
       assert.equal(await page.evaluate(() => window.__calls.length), 0, 'Demo lifecycle must make zero paid API calls');
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.locator('#commandCenterCapacityRoot').screenshot({ path: path.join(output, 'demo-mobile-recovered.png') });
       await demoButton('Reset capacity research').click();
-      assert.match(await page.locator('#commandCenterCapacityTargets').innerText(), /Unavailable/);
+      assert.match(await page.locator('#commandCenterCapacityTargets').innerText(), /Not enough current information/);
       await demoButton('Continue fictional journey').click();
       await page.evaluate(() => window.__controller.workspaceReady('demo:tenant:revision:digest:session:generation-2:expiry'));
       assert.equal(await page.evaluate(() => window.__controller.inspect().demoStage), 0,

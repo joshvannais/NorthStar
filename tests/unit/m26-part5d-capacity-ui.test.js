@@ -53,16 +53,27 @@ function application({ value = capacity.demoJourney(5), role = 'owner', database
 class Element {
   constructor(dataset = {}) {
     this.textContent = ''; this.value = ''; this.hidden = false; this.disabled = false;
-    this.children = []; this.listeners = {}; this.dataset = dataset; this.className = '';
+    this.children = []; this.listeners = {}; this.dataset = dataset; this.className = ''; this.open = false;
+    this.attributes = {};
   }
   addEventListener(name, handler) { this.listeners[name] = handler; }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
+  removeAttribute(name) { delete this.attributes[name]; }
+  getAttribute(name) { return this.attributes[name] ?? null; }
   replaceChildren(...items) { this.children = items; }
   append(...items) { this.children.push(...items); }
   click() { return this.listeners.click && this.listeners.click({ preventDefault() {} }); }
+  focus() { this.focused = true; }
 }
 
 function fixture() {
   const ids = ['commandCenterCapacityState', 'commandCenterCapacityAsOf', 'commandCenterCapacityNotice',
+    'commandCenterCapacityAssessmentTitle', 'commandCenterCapacityContext',
+    'commandCenterCapacityNextTitle', 'commandCenterCapacityNextExplanation',
+    'commandCenterCapacityPrimaryAction', 'commandCenterCapacityDetails', 'commandCenterCapacityReviewDetails',
+    'commandCenterCapacityChecksDetails', 'commandCenterCapacitySignalsDetails',
+    'commandCenterCapacityRecordControls', 'commandCenterCapacityReviewReasonGroup',
+    'commandCenterCapacitySetupReasonSlot', 'commandCenterCapacitySignalReasonSlot',
     'commandCenterCapacityPaidControls', 'commandCenterCapacityDemoControls', 'commandCenterCapacityLaneReason',
     'commandCenterCapacityReviewReason', 'commandCenterCapacityHiringPeriods', 'commandCenterCapacitySetupAction',
     'commandCenterCapacityPolicyAction', 'commandCenterCapacityCorrectionAction',
@@ -348,7 +359,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     expect(migration).toContain("'operatorRoleCombinations',feasible_operator_combinations");
     expect(migration).not.toContain('operatorRoleOptions');
     expect(route).toContain("'operatorRoleCombinations'");
-    expect(controller).toContain('Only complete role combinations that current sources can assign without reusing a person are available.');
+    expect(controller).toContain('Each option is a complete role combination current records can support without assigning the same person twice.');
     expect(controller).not.toContain('operatorRoleOptions');
   });
 
@@ -583,6 +594,74 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     expect(JSON.stringify(sent)).not.toMatch(/digest|minutes|count/i);
   });
 
+  test('summary stays truthful for incomplete lanes and prior reject or withdraw decisions', async () => {
+    const incomplete = capacity.demoJourney(2);
+    incomplete.workload.selectedOrigin = null;
+    incomplete.workload.selectedEvaluation = null;
+    incomplete.workload.targets.forEach(item => { item.evidenceState = 'unavailable'; });
+    incomplete.workload.currentAction = { name: 'capture_origin', originId: null, outcomeId: null,
+      continuationId: null, correctionOriginId: null, expectedDecisionId: null,
+      expectedDecisionRevision: null, expectedResultRevision: null };
+    incomplete.advisory.selectedOrigin.categories.forEach(row => {
+      Object.values(row.categories).forEach(category => { category.state = 'clear'; });
+    });
+    expect(capacity.validateJourney(incomplete)).toEqual(incomplete);
+    const incompleteUi = fixture();
+    const incompleteController = capacity.create({ mode: 'paid', document: incompleteUi.document,
+      idempotency: () => KEY, fetcher: async () => response(200, incomplete) });
+    await incompleteController.workspaceReady('incomplete-lane');
+    expect(incompleteUi.values.commandCenterCapacityState.textContent).toBe('Not enough information');
+    expect(incompleteUi.values.commandCenterCapacityAssessmentTitle.textContent)
+      .toBe('NorthStar cannot safely assess this yet');
+    expect(incompleteUi.values.commandCenterCapacityPrimaryAction.getAttribute('aria-controls'))
+      .toBe('commandCenterCapacityDetails commandCenterCapacityReviewDetails commandCenterCapacityRecordControls commandCenterCapacityChecksDetails');
+
+    for (const decisionAction of ['reject', 'withdraw']) {
+      const reviewed = capacity.demoJourney(1); reviewed.advisory.selectedOrigin.decisionAction = decisionAction;
+      expect(capacity.validateJourney(reviewed)).toEqual(reviewed);
+      const ui = fixture(); const controller = capacity.create({ mode: 'paid', document: ui.document,
+        idempotency: () => KEY, fetcher: async () => response(200, reviewed) });
+      await controller.workspaceReady('prior-' + decisionAction);
+      expect(ui.values.commandCenterCapacityAssessmentTitle.textContent).toBe('Planning signals are not in use');
+      expect(ui.values.commandCenterCapacityNotice.textContent).toMatch(
+        decisionAction === 'reject' ? /chose not to use/ : /withdrew the earlier review/);
+      expect(ui.values.commandCenterCapacityPrimaryAction.textContent).toBe('Review capacity signals again');
+      expect(ui.values.commandCenterCapacityPrimaryAction.getAttribute('aria-controls'))
+        .toBe('commandCenterCapacityDetails commandCenterCapacitySignalsDetails');
+    }
+  });
+
+  test('read failures never claim that a write may have finished', async () => {
+    const ui = fixture(); const controller = capacity.create({ mode: 'paid', document: ui.document,
+      idempotency: () => KEY, fetcher: async () => response(503) });
+    await controller.workspaceReady('read-failure');
+    expect(ui.values.commandCenterCapacityState.textContent).toBe('Not enough information');
+    expect(ui.values.commandCenterCapacityNotice.textContent).toMatch(/could not check current capacity records/i);
+    expect(ui.values.commandCenterCapacityNotice.textContent).not.toMatch(/update finished|protected update/i);
+    expect(ui.values.commandCenterCapacityPrimaryAction.getAttribute('aria-controls')).toBeNull();
+  });
+
+  test('an interrupted decision reveals the nested exact-retry control from the primary action', async () => {
+    const ui = fixture(); const calls = []; const controller = capacity.create({ mode: 'paid', document: ui.document,
+      idempotency: () => KEY, fetcher: async (_url, options) => {
+        calls.push(options.method); return options.method === 'GET'
+          ? response(200, capacity.demoJourney(1)) : response(503);
+      } });
+    await controller.workspaceReady('uncertain-decision');
+    ui.values.commandCenterCapacityReviewReason.value = 'Review this exact private capacity signal decision.';
+    ui.values.commandCenterCapacityReviewReason.listeners.input();
+    await ui.decisions[0].click();
+    expect(calls).toEqual(['GET', 'POST']);
+    expect(ui.values.commandCenterCapacityState.dataset.state).toBe('uncertain');
+    expect(ui.values.commandCenterCapacityPrimaryAction.getAttribute('aria-controls'))
+      .toBe('commandCenterCapacityDetails commandCenterCapacityReviewDetails commandCenterCapacityRecordControls');
+    ui.values.commandCenterCapacityPrimaryAction.click();
+    expect(ui.values.commandCenterCapacityDetails.open).toBe(true);
+    expect(ui.values.commandCenterCapacityReviewDetails.open).toBe(true);
+    expect(ui.values.commandCenterCapacityRecordControls.open).toBe(true);
+    expect(ui.values.commandCenterCapacityRetry.focused).toBe(true);
+  });
+
   test('uncertain retry reuses exact endpoint, body and key; identity change discards late completion', async () => {
     const ui = fixture(); const calls = []; let postCount = 0;
     const controller = capacity.create({ mode: 'paid', document: ui.document,
@@ -620,7 +699,7 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     expect(calls).toEqual([]); expect(controller.inspect().demoStage).toBe(0);
     await ui.demo[0].click(); await ui.demo[0].click(); expect(controller.inspect().demoStage).toBe(2);
     await ui.demo[1].click(); expect(controller.inspect().journey.advisory.selectedOrigin.state).toContain('_stale');
-    await ui.demo[2].click(); expect(ui.values.commandCenterCapacityState.textContent).toBe('Recovered · current');
+    await ui.demo[2].click(); expect(ui.values.commandCenterCapacityState.textContent).toBe('Review needed');
     await ui.demo[3].click(); expect(controller.inspect().demoStage).toBe(0);
     await controller.workspaceReady('demo:tenant-two:session-two:generation-two:expiry-two');
     expect(controller.inspect().demoStage).toBe(0); expect(calls).toEqual([]);

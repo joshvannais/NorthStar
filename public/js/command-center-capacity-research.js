@@ -1080,6 +1080,7 @@
     }
     function render() {
       byId('commandCenterCapacityPaidControls').hidden = mode === 'demo';
+      byId('commandCenterCapacityReviewDetails').hidden = mode === 'demo';
       byId('commandCenterCapacityDemoControls').hidden = mode !== 'demo';
       byId('commandCenterCapacityAsOf').textContent = journey ? date(journey.asOf) : 'Unavailable';
       renderContext();

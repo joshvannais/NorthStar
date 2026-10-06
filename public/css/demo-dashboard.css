@@ -505,8 +505,9 @@
 .command-center-capacity-details[open] > summary,
 .command-center-capacity-history[open] > summary { border-bottom: 1px solid var(--theme-border); }
 .command-center-capacity-details-root > .command-center-capacity-details-list {
-  display: grid; gap: 8px; padding: 8px;
+  display: none; gap: 8px; padding: 8px;
 }
+.command-center-capacity-details-root[open] > .command-center-capacity-details-list { display: grid; }
 .command-center-capacity-details-root > .command-center-capacity-details-list > .command-center-capacity-details,
 .command-center-capacity-details-root > .command-center-capacity-details-list > .command-center-capacity-history {
   border-radius: 10px;

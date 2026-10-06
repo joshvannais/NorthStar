@@ -453,7 +453,28 @@ function response(status, data) {
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
       assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Review needed/);
       assert.match(await page.locator('#commandCenterCapacitySetupTitle').textContent(), /Confirm accepted-work period/);
-      await openDetails(page, 'commandCenterCapacityChecksDetails', 'commandCenterCapacitySignalsDetails');
+      assert.equal(await page.locator('#commandCenterCapacityDetails').evaluate(item => item.open), false,
+        'Demo must begin as one collapsed insight');
+      assert.equal(await page.locator('#commandCenterCapacityDemoControls').isVisible(), false,
+        'Fictional lifecycle controls must stay inside the collapsed detail');
+      const visibleActions = await page.locator('#commandCenterCapacityRoot').evaluate(root =>
+        Array.from(root.querySelectorAll('button')).filter(button =>
+          !button.disabled && button.getClientRects().length > 0).map(button => button.textContent.trim()));
+      assert.deepEqual(visibleActions, ['Explore this fictional check'],
+        'Collapsed demo must present exactly one visible enabled action');
+      assert.equal(await page.locator('#commandCenterCapacityReviewDetails').evaluate(item => item.hidden), true,
+        'Paid team review disclosure must be absent in demo mode');
+      assert.equal(await page.locator('#commandCenterCapacityReviewDetails > summary').isVisible(), false,
+        'Demo users must not be able to focus an empty paid review disclosure');
+      await page.getByRole('button', { name: 'Explore this fictional check', exact: true }).click();
+      assert.equal(await page.locator('#commandCenterCapacityDetails').evaluate(item => item.open), true);
+      assert.equal(await page.locator('#commandCenterCapacityChecksDetails').evaluate(item => item.open), true);
+      assert.equal(await page.locator('#commandCenterCapacityChecksDetails > summary').evaluate(item =>
+        item === document.activeElement), true, 'Primary demo action must focus the opened check');
+      assert.equal(await page.locator('#commandCenterCapacityDemoControls').isVisible(), true,
+        'Fictional lifecycle controls may appear only after Review details opens');
+      assert.equal(await page.locator('#commandCenterCapacityReviewDetails').isVisible(), false);
+      await openDetails(page, 'commandCenterCapacitySignalsDetails');
       assert.match(await page.locator('#commandCenterCapacityTargets').innerText(), /Not enough current information/);
       const demoButton = name => page.getByRole('button', { name, exact: true });
       await demoButton('Continue fictional journey').click();
@@ -481,7 +502,8 @@ function response(status, data) {
         'Generation identity change must reset local demo state');
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
       result.cases.push({ name: 'demo-mobile-isolated-lifecycle', paidApiCalls: 0,
-        productionAccess: 0, reset: true, generationInvalidation: true, overflow: false, pass: true });
+        productionAccess: 0, defaultVisibleActions: ['Explore this fictional check'], paidReviewHidden: true,
+        reset: true, generationInvalidation: true, overflow: false, pass: true });
       await context.close();
     }
 

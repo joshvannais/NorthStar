@@ -579,7 +579,8 @@
   flex: 0 0 auto; padding: 6px 10px; border: 1px solid var(--theme-border);
   border-radius: 999px; color: var(--theme-muted); font-size: 12px; font-weight: 700;
 }
-.command-center-revenue-cash-outlook { overflow: hidden; }
+.command-center-revenue-cash-outlook,
+.command-center-cost-risk-outlook { overflow: hidden; }
 .command-center-revenue-cash-state[data-state="current"],
 #commandCenterRevenueCashState[data-state="current"] {
   border-color: rgba(31, 132, 90, .35); color: #157252; background: rgba(31, 132, 90, .08);

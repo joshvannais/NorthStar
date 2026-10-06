@@ -16,17 +16,28 @@ const uuid = () => crypto.randomUUID();
 class Element {
   constructor(dataset = {}) {
     this.textContent = ''; this.value = ''; this.hidden = false; this.disabled = false;
-    this.children = []; this.listeners = {}; this.dataset = dataset; this.className = '';
+    this.children = []; this.listeners = {}; this.dataset = dataset; this.className = ''; this.open = false;
+    this.attributes = {};
   }
   addEventListener(name, handler) { this.listeners[name] = handler; }
+  setAttribute(name, value) { this.attributes[name] = String(value); }
+  removeAttribute(name) { delete this.attributes[name]; }
+  getAttribute(name) { return this.attributes[name] ?? null; }
   replaceChildren(...items) { this.children = items; }
   append(...items) { this.children.push(...items); }
   click() { return this.listeners.click && this.listeners.click({ preventDefault() {} }); }
+  focus() { this.focused = true; }
 }
 
 function controllerFixture() {
   const created = [];
   const ids = ['commandCenterCapacityState', 'commandCenterCapacityAsOf', 'commandCenterCapacityNotice',
+    'commandCenterCapacityAssessmentTitle', 'commandCenterCapacityContext',
+    'commandCenterCapacityNextTitle', 'commandCenterCapacityNextExplanation',
+    'commandCenterCapacityPrimaryAction', 'commandCenterCapacityDetails', 'commandCenterCapacityReviewDetails',
+    'commandCenterCapacityChecksDetails', 'commandCenterCapacitySignalsDetails',
+    'commandCenterCapacityRecordControls', 'commandCenterCapacityReviewReasonGroup',
+    'commandCenterCapacitySetupReasonSlot', 'commandCenterCapacitySignalReasonSlot',
     'commandCenterCapacityPaidControls', 'commandCenterCapacityDemoControls', 'commandCenterCapacityLaneReason',
     'commandCenterCapacityReviewReason', 'commandCenterCapacityHiringPeriods', 'commandCenterCapacitySetupAction',
     'commandCenterCapacityPolicyAction', 'commandCenterCapacityCorrectionAction',
@@ -50,6 +61,15 @@ function controllerFixture() {
     querySelectorAll: selector => selectors[selector] || [],
   } };
 }
+
+test('v3 mounted controller fixture satisfies the current capacity UI contract', () => {
+  const ui = controllerFixture();
+  const controller = capacity.create({ mode: 'paid', document: ui.document,
+    idempotency: () => 'm26-part5d-v3-fixture-contract',
+    fetcher: async () => { throw new Error('Fixture contract check must not request data'); } });
+  expect(controller.inspect().journey).toBeNull();
+  expect(ui.values.commandCenterCapacityPrimaryAction.getAttribute('aria-controls')).toBeNull();
+});
 
 realPostgres('Mission 26 Part 5D correction v7 mounted complete operator-combination positive-work journey', () => {
   let fixture; let app; let logicalNow; let ui; let controller; let controllerReady = false;

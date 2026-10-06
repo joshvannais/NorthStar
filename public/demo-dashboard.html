@@ -325,112 +325,167 @@
           <section class="demo-panel command-center-capacity" id="commandCenterCapacityRoot" aria-labelledby="commandCenterCapacityTitle">
             <div class="command-center-capacity-heading">
               <div>
-                <p class="demo-panel-kicker">Private capacity research</p>
-                <h2 id="commandCenterCapacityTitle">From accepted work to human-reviewed capacity</h2>
+                <p class="demo-panel-kicker">Command Center insight</p>
+                <h2 id="commandCenterCapacityTitle">Team capacity</h2>
+                <p class="command-center-capacity-intro">A planning check for accepted work.</p>
               </div>
-              <span class="command-center-capacity-state" id="commandCenterCapacityState" role="status" aria-live="polite" aria-atomic="true">Waiting for workspace</span>
+              <span class="command-center-capacity-state" id="commandCenterCapacityState" role="status" aria-live="polite" aria-atomic="true">Not enough information</span>
             </div>
-            <p class="command-center-capacity-intro">Follow the accepted workload, constraint and advisory receipts as one research journey. Values remain private and every decision stays with a person.</p>
-            <div class="command-center-capacity-boundaries" aria-label="Capacity research boundaries">
-              <span>As of <strong id="commandCenterCapacityAsOf">Unavailable</strong></span>
-              <span>Source <strong>accepted NorthStar records</strong></span>
-              <span>Calculation <strong>qualitative research only</strong></span>
-              <span>Uncertainty <strong>accuracy and confidence unavailable</strong></span>
-            </div>
-            <p class="command-center-capacity-notice" id="commandCenterCapacityNotice">No paid research endpoint is called until the workspace identity is current.</p>
 
-            <div class="command-center-capacity-controls" id="commandCenterCapacityPaidControls">
-              <section class="command-center-capacity-setup" aria-labelledby="commandCenterCapacitySetupTitle">
+            <div class="command-center-capacity-summary">
+              <div class="command-center-capacity-assessment">
+                <p class="command-center-capacity-label sr-only">Current assessment</p>
+                <h3 class="sr-only" id="commandCenterCapacityAssessmentTitle" aria-hidden="true">Checking current records</h3>
+                <p class="command-center-capacity-notice" id="commandCenterCapacityNotice">NorthStar needs a current workspace before it can check team capacity.</p>
+                <dl class="command-center-capacity-context">
+                  <div><dt>Work group</dt><dd id="commandCenterCapacityContext">Accepted work</dd></div>
+                  <div><dt>Last checked</dt><dd id="commandCenterCapacityAsOf">Unavailable</dd></div>
+                </dl>
+              </div>
+              <div class="command-center-capacity-next">
+                <div class="sr-only" aria-hidden="true">
+                <p class="command-center-capacity-label">Next review</p>
+                <h3 id="commandCenterCapacityNextTitle">Check current team information</h3>
+                <p id="commandCenterCapacityNextExplanation">NorthStar will show one review at a time and verify current records again before saving.</p>
+                </div>
+                <button class="btn btn-primary" id="commandCenterCapacityPrimaryAction" type="button" aria-controls="commandCenterCapacityDetails commandCenterCapacityReviewDetails">Review team capacity</button>
+              </div>
+              <aside class="command-center-capacity-impact" aria-label="What this insight can change">
+                <p><strong>Planning only</strong> — no employee assignments, schedule changes, overtime approvals, hiring, or contractor contact.</p>
+              </aside>
+            </div>
+
+            <div class="command-center-capacity-disclosures">
+              <details class="command-center-capacity-details command-center-capacity-details-root" id="commandCenterCapacityDetails">
+                <summary><span>Review details</span></summary>
+                <div class="command-center-capacity-details-list">
+              <div class="command-center-capacity-controls command-center-capacity-demo-controls" id="commandCenterCapacityDemoControls" hidden>
+                <p>This example uses fictional records in this browser and never calls a paid capacity API.</p>
                 <div>
-                  <p class="demo-panel-kicker">Source-backed setup</p>
-                  <h3 id="commandCenterCapacitySetupTitle">Accepted prerequisites and review epochs</h3>
-                  <p id="commandCenterCapacitySetupExplanation">Refresh to discover the next safe prerequisite from accepted tenant sources.</p>
+                  <button class="btn btn-secondary" type="button" data-capacity-demo-action="advance">Continue fictional journey</button>
+                  <button class="btn btn-secondary" type="button" data-capacity-demo-action="stale">Change fictional source</button>
+                  <button class="btn btn-secondary" type="button" data-capacity-demo-action="recover">Recover with new receipts</button>
+                  <button class="btn btn-secondary" type="button" data-capacity-demo-action="reset">Reset capacity research</button>
                 </div>
-                <div class="command-center-capacity-setup-actions">
-                  <label for="commandCenterCapacityHiringPeriods">Hiring attention run length</label>
-                  <select id="commandCenterCapacityHiringPeriods" aria-describedby="commandCenterCapacityHiringExplanation">
-                    <option value="2">2 periods</option><option value="3">3 periods</option>
-                    <option value="4">4 periods</option><option value="5">5 periods</option>
-                    <option value="6">6 periods</option><option value="7">7 periods</option>
-                    <option value="8">8 periods</option><option value="9">9 periods</option>
-                    <option value="10">10 periods</option><option value="11">11 periods</option>
-                    <option value="12">12 periods</option>
-                  </select>
-                  <button class="btn btn-primary" id="commandCenterCapacitySetupAction" type="button">Setup unavailable</button>
-                  <button class="btn btn-secondary" id="commandCenterCapacityPolicyAction" type="button">Save policy revision</button>
-                  <button class="btn btn-secondary" id="commandCenterCapacityCorrectionAction" type="button">Review source correction</button>
-                </div>
-              </section>
-              <div class="command-center-capacity-scope-reviews" id="commandCenterCapacityScopeReviews" aria-label="Source-backed formation review" aria-live="polite" hidden></div>
-              <p class="command-center-capacity-policy" id="commandCenterCapacityHiringExplanation">Hiring attention uses a human-selected run length from 2 to 12 consecutive, gap-free, current evaluated periods for the same alternative, scope, role, method, and policy. Insufficient history means the run is not complete; clear means the private rule was evaluated without crossing it; attention means it crossed. Private capacity, demand, and gap values stay hidden.</p>
-              <p class="command-center-capacity-policy-state" id="commandCenterCapacityHiringState">Hiring policy unavailable.</p>
-              <p class="command-center-capacity-policy-state" id="commandCenterCapacityCorrectionState">Source correction review unavailable.</p>
-              <div class="command-center-capacity-reasons">
-                <label for="commandCenterCapacityLaneReason"><span>Lane receipt reason</span><small>10–900 characters</small></label>
-                <textarea id="commandCenterCapacityLaneReason" rows="2" maxlength="900" placeholder="Explain why this workload, constraint or continuation receipt should be saved."></textarea>
-                <label for="commandCenterCapacityReviewReason"><span>Setup or human review reason</span><small>10–1000 characters</small></label>
-                <textarea id="commandCenterCapacityReviewReason" rows="2" maxlength="1000" placeholder="Explain why this prerequisite or explicit human review should be saved."></textarea>
               </div>
-              <div>
-                <button class="btn btn-secondary" id="commandCenterCapacityRefresh" type="button">Refresh research</button>
-                <button class="btn btn-secondary" id="commandCenterCapacityRetry" type="button" hidden>Retry exact uncertain action</button>
-              </div>
+
+              <details class="command-center-capacity-details" id="commandCenterCapacityReviewDetails">
+                <summary><span>Review team capacity</span><small>Role coverage, confirmation, and settings</small></summary>
+                <div class="command-center-capacity-controls" id="commandCenterCapacityPaidControls">
+                  <div class="command-center-capacity-scope-reviews" id="commandCenterCapacityScopeReviews" aria-label="Accepted work group review" aria-live="polite" hidden></div>
+                  <section class="command-center-capacity-setup" aria-labelledby="commandCenterCapacitySetupTitle">
+                    <div>
+                      <p class="demo-panel-kicker">Current review</p>
+                      <h3 id="commandCenterCapacitySetupTitle">Review needed</h3>
+                      <p id="commandCenterCapacitySetupExplanation">Check the accepted work group and role coverage before saving.</p>
+                    </div>
+                    <div class="command-center-capacity-setup-actions">
+                      <button class="btn btn-secondary" id="commandCenterCapacitySetupAction" type="button">Review unavailable</button>
+                    </div>
+                  </section>
+                  <div id="commandCenterCapacitySetupReasonSlot">
+                    <div class="command-center-capacity-contextual-reason" id="commandCenterCapacityReviewReasonGroup">
+                    <label for="commandCenterCapacityReviewReason"><span>Why are you confirming or disputing this review?</span><small>10–1000 characters</small></label>
+                    <textarea id="commandCenterCapacityReviewReason" rows="3" maxlength="1000" placeholder="Explain your planning judgment before saving."></textarea>
+                    </div>
+                  </div>
+                  <details class="command-center-capacity-record-controls" id="commandCenterCapacityRecordControls">
+                    <summary>Planning settings and record controls</summary>
+                    <div class="command-center-capacity-record-controls-body">
+                      <label for="commandCenterCapacityHiringPeriods">Show a hiring pattern after</label>
+                      <select id="commandCenterCapacityHiringPeriods" aria-describedby="commandCenterCapacityHiringExplanation">
+                        <option value="2">2 review periods</option><option value="3">3 review periods</option>
+                        <option value="4">4 review periods</option><option value="5">5 review periods</option>
+                        <option value="6">6 review periods</option><option value="7">7 review periods</option>
+                        <option value="8">8 review periods</option><option value="9">9 review periods</option>
+                        <option value="10">10 review periods</option><option value="11">11 review periods</option>
+                        <option value="12">12 review periods</option>
+                      </select>
+                      <div class="command-center-capacity-record-buttons">
+                        <button class="btn btn-secondary" id="commandCenterCapacityPolicyAction" type="button">Save hiring-pattern setting</button>
+                        <button class="btn btn-secondary" id="commandCenterCapacityCorrectionAction" type="button">Review corrected records</button>
+                      </div>
+                      <p class="command-center-capacity-policy" id="commandCenterCapacityHiringExplanation">A hiring pattern appears only after the selected number of consecutive, gap-free reviews of the same work group, role, method, and rule. A clear result means the private rule was checked without showing a warning. Team capacity, work demand, and gap amounts remain private.</p>
+                      <p class="command-center-capacity-policy-state" id="commandCenterCapacityHiringState">Hiring-pattern setting unavailable.</p>
+                      <p class="command-center-capacity-policy-state" id="commandCenterCapacityCorrectionState">Corrected-record review unavailable.</p>
+                      <div class="command-center-capacity-contextual-reason">
+                        <label for="commandCenterCapacityLaneReason"><span>Why are you saving this update?</span><small>10–900 characters</small></label>
+                        <textarea id="commandCenterCapacityLaneReason" rows="3" maxlength="900" placeholder="Explain why this capacity update should be saved."></textarea>
+                      </div>
+                      <div class="command-center-capacity-record-buttons">
+                        <button class="btn btn-secondary" id="commandCenterCapacityRefresh" type="button">Check current records</button>
+                        <button class="btn btn-secondary" id="commandCenterCapacityRetry" type="button" hidden>Retry the same update</button>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </details>
+
+              <details class="command-center-capacity-details" id="commandCenterCapacityChecksDetails">
+                <summary><span>How NorthStar checked capacity</span><small>Accepted work, seven checks, and separate scenarios</small></summary>
+                <div class="command-center-capacity-grid">
+                  <article class="command-center-capacity-step" aria-labelledby="commandCenterCapacityWorkloadTitle">
+                    <div class="command-center-capacity-step-heading">
+                      <h3 id="commandCenterCapacityWorkloadTitle">Accepted work</h3>
+                      <span id="commandCenterCapacityWorkloadState">Not enough information</span>
+                    </div>
+                    <p>NorthStar keeps three private questions separate: accepted work, work expected to remain, and role capacity available.</p>
+                    <ul class="command-center-capacity-targets" id="commandCenterCapacityTargets"></ul>
+                    <button class="btn btn-secondary" type="button" data-capacity-lane="workload">Update accepted-work check</button>
+                  </article>
+
+                  <article class="command-center-capacity-step" aria-labelledby="commandCenterCapacityConstraintTitle">
+                    <div class="command-center-capacity-step-heading">
+                      <h3 id="commandCenterCapacityConstraintTitle">Team and resource checks</h3>
+                      <span id="commandCenterCapacityConstraintState">Not enough information</span>
+                    </div>
+                    <p>NorthStar checks crew structure, skills, working hours, location, travel, vehicles, and equipment. Included checks are not automatically limiting causes.</p>
+                    <dl class="command-center-capacity-dimensions" id="commandCenterCapacityDimensions"></dl>
+                    <div class="command-center-capacity-alternatives" id="commandCenterCapacityAlternatives"></div>
+                    <button class="btn btn-secondary" type="button" data-capacity-lane="constrained">Update team and resource check</button>
+                  </article>
+                </div>
+              </details>
+
+              <details class="command-center-capacity-details" id="commandCenterCapacitySignalsDetails">
+                <summary><span>Planning signals</span><small>Private signals shown only after human approval</small></summary>
+                <article class="command-center-capacity-step command-center-capacity-advisory" aria-labelledby="commandCenterCapacityAdvisoryTitle">
+                  <div class="command-center-capacity-step-heading">
+                    <h3 id="commandCenterCapacityAdvisoryTitle">Capacity signals</h3>
+                    <span id="commandCenterCapacityAdvisoryState">Not enough information</span>
+                  </div>
+                  <p>These signals support a planning review. They do not assign work, change a schedule, approve overtime, contact a contractor, or make a hiring decision.</p>
+                  <dl class="command-center-capacity-categories" id="commandCenterCapacityCategories"></dl>
+                  <div id="commandCenterCapacitySignalReasonSlot"></div>
+                  <div class="command-center-capacity-review" id="commandCenterCapacityReview">
+                    <button class="btn btn-secondary" type="button" data-capacity-decision="approve">Use these signals</button>
+                    <button class="btn btn-secondary" type="button" data-capacity-decision="reject">Do not use these signals</button>
+                    <button class="btn btn-secondary" type="button" data-capacity-decision="withdraw">Withdraw signal review</button>
+                  </div>
+                  <button class="btn btn-secondary" type="button" data-capacity-lane="advisory">Update planning signals</button>
+                  <p class="command-center-capacity-continuation" id="commandCenterCapacityContinuation">No next review period is selected.</p>
+                </article>
+              </details>
+
+              <details class="command-center-capacity-details">
+                <summary><span>Data sources and limits</span><small>Freshness, privacy, and uncertainty</small></summary>
+                <div class="command-center-capacity-boundaries" aria-label="Capacity check boundaries">
+                  <span>Source <strong>Accepted NorthStar records</strong></span>
+                  <span>Result <strong>Private planning insight</strong></span>
+                  <span>Amounts <strong>Withheld</strong></span>
+                  <span>Limits <strong>Accuracy and confidence unavailable</strong></span>
+                </div>
+                <p class="command-center-demand-boundary">This check cannot prove whole-business capacity or identify one limiting cause unless current evidence supports it. Alternative scenarios stay separate and are never summed.</p>
+              </details>
+
+              <details class="command-center-capacity-history">
+                <summary><span>Review history</span><small>Current, outdated, and recovered evidence</small></summary>
+                <p>Older evidence remains visible when it becomes outdated. Recovery adds a new current record and never revives or rewrites the old one.</p>
+                <div id="commandCenterCapacityHistory"></div>
+              </details>
+                </div>
+              </details>
             </div>
-            <div class="command-center-capacity-controls" id="commandCenterCapacityDemoControls" hidden>
-              <p>Practice with deterministic fictional receipts. Demo actions stay in this browser workspace and never call a paid research API.</p>
-              <div>
-                <button class="btn btn-primary" type="button" data-capacity-demo-action="advance">Continue fictional journey</button>
-                <button class="btn btn-secondary" type="button" data-capacity-demo-action="stale">Change fictional source</button>
-                <button class="btn btn-secondary" type="button" data-capacity-demo-action="recover">Recover with new receipts</button>
-                <button class="btn btn-secondary" type="button" data-capacity-demo-action="reset">Reset capacity research</button>
-              </div>
-            </div>
-
-            <div class="command-center-capacity-grid">
-              <article class="command-center-capacity-step" aria-labelledby="commandCenterCapacityWorkloadTitle">
-                <div class="command-center-capacity-step-heading">
-                  <div><span>Step 1</span><h3 id="commandCenterCapacityWorkloadTitle">Accepted workload position</h3></div>
-                  <span id="commandCenterCapacityWorkloadState">Unavailable</span>
-                </div>
-                <p>Three different questions stay separate. An authenticated zero means a reviewed source found none; unavailable means no current evidence exists.</p>
-                <ul class="command-center-capacity-targets" id="commandCenterCapacityTargets"></ul>
-                <button class="btn btn-primary" type="button" data-capacity-lane="workload">Continue workload research</button>
-              </article>
-
-              <article class="command-center-capacity-step" aria-labelledby="commandCenterCapacityConstraintTitle">
-                <div class="command-center-capacity-step-heading">
-                  <div><span>Step 2</span><h3 id="commandCenterCapacityConstraintTitle">Constrained capacity</h3></div>
-                  <span id="commandCenterCapacityConstraintState">Unavailable</span>
-                </div>
-                <p>Each constraint is explained on its own. Alternative plans remain separate and must never be added together.</p>
-                <dl class="command-center-capacity-dimensions" id="commandCenterCapacityDimensions"></dl>
-                <div class="command-center-capacity-alternatives" id="commandCenterCapacityAlternatives"></div>
-                <button class="btn btn-primary" type="button" data-capacity-lane="constrained">Continue constraint research</button>
-              </article>
-
-              <article class="command-center-capacity-step command-center-capacity-advisory" aria-labelledby="commandCenterCapacityAdvisoryTitle">
-                <div class="command-center-capacity-step-heading">
-                  <div><span>Step 3</span><h3 id="commandCenterCapacityAdvisoryTitle">Qualitative advisories</h3></div>
-                  <span id="commandCenterCapacityAdvisoryState">Unavailable</span>
-                </div>
-                <p>Five attention signals appear only after an explicit human approval. A signal is research evidence, never a fact, instruction or workforce decision.</p>
-                <dl class="command-center-capacity-categories" id="commandCenterCapacityCategories"></dl>
-                <div class="command-center-capacity-review" id="commandCenterCapacityReview">
-                  <button class="btn btn-primary" type="button" data-capacity-decision="approve">Approve for review</button>
-                  <button class="btn btn-secondary" type="button" data-capacity-decision="reject">Reject</button>
-                  <button class="btn btn-secondary" type="button" data-capacity-decision="withdraw">Withdraw approval</button>
-                </div>
-                <button class="btn btn-primary" type="button" data-capacity-lane="advisory">Continue advisory research</button>
-                <p class="command-center-capacity-continuation" id="commandCenterCapacityContinuation">No continuation receipt is selected.</p>
-              </article>
-            </div>
-
-            <details class="command-center-capacity-history">
-              <summary>Immutable receipt history and recovery</summary>
-              <p>Older receipts remain visible as stale evidence. Recovery appends a new receipt and never revives or rewrites the old one.</p>
-              <div id="commandCenterCapacityHistory"></div>
-            </details>
-            <p class="command-center-demand-boundary">This workspace creates no schedule, assignment, operational reservation, dispatch, estimate, contractor engagement, job offer, hiring, employment, commercial, legal or provider action. The accepted successor-period receipt remains research evidence only. Alternatives are never summed.</p>
           </section>
 
           <section class="demo-panel command-center-resource-outlook" aria-labelledby="commandCenterResourceTitle">

@@ -616,6 +616,19 @@ describe('Mission 26 Part 5D capacity research journey', () => {
     expect(incompleteUi.values.commandCenterCapacityPrimaryAction.getAttribute('aria-controls'))
       .toBe('commandCenterCapacityDetails commandCenterCapacityReviewDetails commandCenterCapacityRecordControls commandCenterCapacityChecksDetails');
 
+    const conditional = capacity.demoJourney(1);
+    conditional.constrained.scopes.forEach(scope => { scope.dimensions.workingHours = false; });
+    expect(capacity.validateJourney(conditional)).toEqual(conditional);
+    const conditionalUi = fixture();
+    const conditionalController = capacity.create({ mode: 'paid', document: conditionalUi.document,
+      idempotency: () => KEY, fetcher: async () => response(200, conditional) });
+    await conditionalController.workspaceReady('conditional-working-hours');
+    const workingHoursRow = conditionalUi.values.commandCenterCapacityDimensions.children.find(row =>
+      row.children[0].textContent === 'Working hours');
+    expect(workingHoursRow.children[1].textContent)
+      .toBe('Accepted working hours were checked for this work. Not needed for the accepted work reviewed.');
+    expect(workingHoursRow.children[1].textContent).not.toMatch(/were included/i);
+
     for (const decisionAction of ['reject', 'withdraw']) {
       const reviewed = capacity.demoJourney(1); reviewed.advisory.selectedOrigin.decisionAction = decisionAction;
       expect(capacity.validateJourney(reviewed)).toEqual(reviewed);

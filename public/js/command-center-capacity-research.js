@@ -35,7 +35,7 @@
   var DIMENSION_COPY = {
     crew: 'Crew structure was included where the accepted work requires it.',
     skill: 'Role and skill eligibility were included where required.',
-    workingHours: 'Accepted working hours were included in the check.',
+    workingHours: 'Accepted working hours were checked for this work.',
     location: 'The accepted service area was included where required.',
     travel: 'Travel feasibility was included where required.',
     vehicle: 'Vehicle coverage was included where required.',

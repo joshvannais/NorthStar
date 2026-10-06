@@ -466,6 +466,18 @@ function response(status, data) {
         'Paid team review disclosure must be absent in demo mode');
       assert.equal(await page.locator('#commandCenterCapacityReviewDetails > summary').isVisible(), false,
         'Demo users must not be able to focus an empty paid review disclosure');
+      const assertDemoPaidReasonHidden = async stage => {
+        const state = await page.evaluate(() => {
+          const group = document.getElementById('commandCenterCapacityReviewReasonGroup');
+          const reason = document.getElementById('commandCenterCapacityReviewReason');
+          reason.focus();
+          return { hidden: group.hidden, rendered: reason.getClientRects().length > 0,
+            focused: document.activeElement === reason };
+        });
+        assert.deepEqual(state, { hidden: true, rendered: false, focused: false },
+          `Paid review reason must stay hidden and unfocusable during demo stage ${stage}`);
+      };
+      await assertDemoPaidReasonHidden('initial');
       await page.getByRole('button', { name: 'Explore this fictional check', exact: true }).click();
       assert.equal(await page.locator('#commandCenterCapacityDetails').evaluate(item => item.open), true);
       assert.equal(await page.locator('#commandCenterCapacityChecksDetails').evaluate(item => item.open), true);
@@ -478,23 +490,29 @@ function response(status, data) {
       assert.match(await page.locator('#commandCenterCapacityTargets').innerText(), /Not enough current information/);
       const demoButton = name => page.getByRole('button', { name, exact: true });
       await demoButton('Continue fictional journey').click();
+      await assertDemoPaidReasonHidden('current');
       assert.match(await page.locator('#commandCenterCapacityAdvisoryState').innerText(), /Current records/);
       await demoButton('Continue fictional journey').click();
+      await assertDemoPaidReasonHidden('continued');
       assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /Next review pending/);
       assert.match(await page.locator('#commandCenterCapacityCategories').innerText(), /Hiring pattern[\s\S]*More history needed/i);
       await demoButton('Change fictional source').click();
+      await assertDemoPaidReasonHidden('stale');
       assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Update needed/);
       assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /out of date/);
       await demoButton('Recover with new receipts').click();
+      await assertDemoPaidReasonHidden('recovered');
       assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Review needed/);
       assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /missed its fixed deadline/);
       await demoButton('Continue fictional journey').click();
+      await assertDemoPaidReasonHidden('recovery-continued');
       assert.match(await page.locator('#commandCenterCapacityContinuation').innerText(), /next review is active/i);
       assert.match(await page.locator('#commandCenterCapacityHistory').textContent(), /capacity advisory continuation missed/i);
       assert.equal(await page.evaluate(() => window.__calls.length), 0, 'Demo lifecycle must make zero paid API calls');
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.locator('#commandCenterCapacityRoot').screenshot({ path: path.join(output, 'demo-mobile-recovered.png') });
       await demoButton('Reset capacity research').click();
+      await assertDemoPaidReasonHidden('reset');
       assert.match(await page.locator('#commandCenterCapacityTargets').innerText(), /Not enough current information/);
       await demoButton('Continue fictional journey').click();
       await page.evaluate(() => window.__controller.workspaceReady('demo:tenant:revision:digest:session:generation-2:expiry'));

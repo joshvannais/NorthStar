@@ -884,7 +884,8 @@
     function placeReviewReason() {
       var group = byId('commandCenterCapacityReviewReasonGroup');
       var advisory = journey && journey.advisory && journey.advisory.selectedOrigin;
-      var useSignalSlot = journey && journey.setup && journey.setup.state !== 'ready' && advisory &&
+      if (group) group.hidden = mode === 'demo';
+      var useSignalSlot = mode !== 'demo' && journey && journey.setup && journey.setup.state !== 'ready' && advisory &&
         advisory.state === 'capacity_advisory_origin_current';
       var slot = byId(useSignalSlot ? 'commandCenterCapacitySignalReasonSlot' : 'commandCenterCapacitySetupReasonSlot');
       if (group && slot && group.parentElement !== slot) slot.append(group);

@@ -22,6 +22,7 @@
   var demandPosition = null;
   var demandResearch = null;
   var capacityResearch = null;
+  var revenueCashOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -782,17 +783,6 @@
       : 'Current plans do not confirm stock, equipment availability or travel capacity.';
   }
 
-  function renderRangeOutlook() {
-    // A deterministic what-if is not a calibrated range. No evaluated range
-    // run is mounted for either a paid tenant or the fictional demo.
-    byId('commandCenterRangeState').textContent = 'Ranges unavailable';
-    byId('commandCenterRangeExplanation').textContent = mode === 'demo'
-      ? 'This demo uses fictional results. No tested forecast range has been issued for this demo workspace.'
-      : 'NorthStar needs verified past results and tested forecasts before it can show a reliable range.';
-    byId('commandCenterRangeBoundary').textContent =
-      'What-if scenarios show changed assumptions, not the odds that a result will happen.';
-  }
-
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -806,7 +796,9 @@
     renderCoachAndStatus(graphs);
     renderDemandOutlook();
     renderResourceOutlook();
-    renderRangeOutlook();
+    if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
+      revenueCashOutlook.workspaceReady();
+    }
     renderCta();
     byId('commandCenterContent').setAttribute('aria-busy', 'false');
     setStatus('', 'ready');
@@ -861,9 +853,9 @@
       byId('commandCenterResourceState').textContent = 'Workspace unavailable';
       byId('commandCenterResourceExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
       byId('commandCenterResourceBoundary').textContent = 'No resource forecast is shown while workspace data is unavailable.';
-      byId('commandCenterRangeState').textContent = 'Workspace unavailable';
-      byId('commandCenterRangeExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
-      byId('commandCenterRangeBoundary').textContent = 'No forecast range is shown while workspace data is unavailable.';
+      if (revenueCashOutlook && typeof revenueCashOutlook.workspaceUnavailable === 'function') {
+        revenueCashOutlook.workspaceUnavailable();
+      }
       renderSchedulingOverview();
       setStatus(error && error.message ? error.message : 'The Command Center workspace is unavailable.', 'error');
       if (expected) throw new Error('Command Center authoritative refresh failed; the visible scheduling overview is stale and unavailable.');
@@ -912,6 +904,18 @@
     document.querySelectorAll('#commandCenterCapacityRoot button').forEach(function (button) {
       button.disabled = true;
     });
+  }
+  if (global.NorthStarRevenueCashOutlook &&
+      typeof global.NorthStarRevenueCashOutlook.create === 'function') {
+    revenueCashOutlook = global.NorthStarRevenueCashOutlook.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterRevenueCashOutlook')) {
+    byId('commandCenterRevenueCashOutlook').setAttribute('aria-busy', 'false');
+    byId('commandCenterRevenueCashState').textContent = 'Unavailable';
+    byId('commandCenterRevenueCashAnswer').textContent =
+      'This outlook is unavailable. Refresh Command Center to try again.';
   }
   byId('commandCenterRefresh').addEventListener('click', function () { load(); });
   document.querySelectorAll('[data-chart-period]').forEach(function (button) {

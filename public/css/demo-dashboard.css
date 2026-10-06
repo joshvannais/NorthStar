@@ -579,6 +579,39 @@
   flex: 0 0 auto; padding: 6px 10px; border: 1px solid var(--theme-border);
   border-radius: 999px; color: var(--theme-muted); font-size: 12px; font-weight: 700;
 }
+.command-center-revenue-cash-outlook { overflow: hidden; }
+.command-center-revenue-cash-state[data-state="current"],
+#commandCenterRevenueCashState[data-state="current"] {
+  border-color: rgba(31, 132, 90, .35); color: #157252; background: rgba(31, 132, 90, .08);
+}
+.command-center-revenue-cash-answer {
+  max-width: 68ch; color: var(--theme-text); font-size: clamp(16px, 2vw, 19px); font-weight: 750;
+}
+.command-center-revenue-cash-context {
+  margin-top: 8px !important; color: var(--theme-muted); font-size: 12px; overflow-wrap: anywhere;
+}
+.command-center-revenue-cash-action { display: inline-flex; width: fit-content; margin-top: 14px; }
+.command-center-revenue-cash-details {
+  margin-top: 14px; border-top: 1px solid var(--theme-border); color: var(--theme-text);
+}
+.command-center-revenue-cash-details > summary {
+  min-height: 44px; padding: 12px 0; cursor: pointer; font-weight: 750;
+}
+.command-center-revenue-cash-details > summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 45%, transparent); outline-offset: 3px;
+}
+.command-center-revenue-cash-facts {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px;
+}
+.command-center-revenue-cash-facts > div {
+  min-width: 0; padding: 10px; border: 1px solid var(--theme-border); border-radius: 10px;
+  background: var(--theme-surface);
+}
+.command-center-revenue-cash-facts dt { color: var(--theme-muted); font-size: 11px; font-weight: 700; }
+.command-center-revenue-cash-facts dd {
+  margin: 4px 0 0; color: var(--theme-text); font-size: 14px; font-weight: 750; overflow-wrap: anywhere;
+}
+.command-center-revenue-cash-details > p { color: var(--theme-muted); font-size: 12px; }
 .command-center-backlog-title { margin: 0 0 8px; color: var(--theme-text); font-size: 17px; }
 .command-center-backlog-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
 .command-center-backlog-metrics[hidden] { display: none; }
@@ -1050,6 +1083,8 @@ button.command-center-record-link {
   .command-center-capacity-history > summary::after { margin-left: auto; }
   .command-center-capacity-boundaries { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .command-center-demand-state { align-self: flex-start; }
+  .command-center-revenue-cash-action { width: 100%; }
+  .command-center-revenue-cash-facts { grid-template-columns: minmax(0, 1fr); }
   .command-center-backlog-metrics { grid-template-columns: minmax(0, 1fr); }
   .command-center-backlog-receipt-row { align-items: stretch; flex-direction: column; }
   .command-center-research-heading { flex-direction: column; }

@@ -1,6 +1,6 @@
-# Mission 26 Part 6C — external financial evidence compatibility
+# Mission 26 founder Part 3 — revenue and cash evidence compatibility
 
-Part 6C can use existing Mission 25 financial evidence as **source context**,
+The founder Part 3 candidate can use existing Mission 25 financial evidence as **source context**,
 without turning it into NorthStar billing or an issued forecast. The current
 authority in `migrations/116_canonical_external_financial_import_authority.sql`
 stores consented, provider-neutral invoice, payment, collection and accounting
@@ -60,23 +60,42 @@ establishes an approved earned-revenue recognition policy. That remains an
 `revenue.earned_value.v1` can issue. Mission 26 Parts 3B–D and 11 still own
 saved forecasts, later outcomes, calibration, promotion and immutable runs.
 
-## Scoped Part 6C acceptance
+## Consolidated founder Part 3 candidate
 
-Part 6C is scoped-accepted only as this architecture, compatibility and
-refusal decision. It maps the existing Mission 25 observations to their safe
-Mission 26 context uses, preserves explicit unavailable states and refuses to
-issue earned-revenue, collected-cash or native cash forecasts. It adds no new
-financial reader, provider connection, migration 236, route, UI, accounting
-policy, numerical forecast or automated action.
+Migration 236 adds one minimized read authority over already accepted NorthStar
+facts. It chooses and revalidates only the newest Part 6A integrated commercial
+baseline for the authenticated tenant and role. It returns authorized estimate,
+approved price and owner-confirmed booked work as separate measures; only the
+owner-confirmed booked-work measure is classified as committed. A complete
+authenticated zero remains a current zero rather than becoming unavailable.
 
-Native invoice, payment, collection and cash authority remains unavailable
+The same read may project two unweighted open-pipeline facts from only the
+newest valid Part 6B origin: `approved_unbooked` and `preliminary_estimate` raw
+before-tax totals and counts. Migration 236 independently verifies the saved
+evidence, private-output and canonical digests, method closure and every origin
+input before aggregating. It exposes no members, identifiers, digests, weights,
+ranges or private output. Open pipeline is never called committed. Before the
+horizon it is labeled current at read; after the horizon it is labeled a frozen
+capture. Probability remains unavailable because there is no accepted
+calibration authority, and `forecastIssued` remains false.
+
+One private no-store GET serves that exact minimized contract. Command Center
+remains the sole broad summary; the existing range placeholder becomes one
+compact embedded Revenue and cash outlook insight with one primary review
+action and collapsed details. The fictional demo uses a deterministic local
+projection and does not call the paid endpoint. Loading, malformed and denied
+states fail closed, and the page performs no write.
+
+Migrations 116 and 120 do not establish complete source-period coverage,
+recorded-through finality or a zero-capable complete collection source. Native
+invoice, payment, collection and cash authority therefore remains unavailable
 until Mission 27 supplies compatible released evidence. Earned-revenue
 forecasting also remains unavailable until the founder approves an explicit
-recognition authority. Neither limitation is converted into a zero, inferred
-policy or claimed forecast by accepting this boundary.
+recognition authority. Neither limitation is converted into zero, an inferred
+policy or a claimed forecast. Invoice or payment status is never used as cash.
 
-This exact documentation-only acceptance package has one normal release gate:
-one independent whole exact-head audit, one normal merge and the sole automatic
-Railway deployment verification. It has no separate documentation gate, second
-pull request or second deployment. Part 6D is next in founder order and cannot
-widen any authority refused here.
+This consolidated founder Part 3 package is a candidate until its one normal
+release gate completes: one independent whole exact-head audit, one normal
+merge and the sole automatic Railway deployment verification. It has no
+separate documentation gate, second pull request or second deployment. Later
+founder-plan work remains serialized and cannot widen an authority refused here.

@@ -62,7 +62,8 @@
           value.estimateRequests.withdrawn + value.estimateRequests.closed +
           value.estimateRequests.unreviewed !== value.opportunities.count ||
         value.estimateRequests.qualifiedNeedsReview > value.qualification.qualified) return null;
-    var expected = value.estimateRequests.qualifiedNeedsReview > 0 ? 'estimate_review' :
+    var expected = value.estimateRequests.qualifiedNeedsReview > 0 ||
+      value.estimateRequests.unreviewed > 0 ? 'estimate_review' :
       value.qualification.open > 0 || value.opportunities.unreviewedCount > 0 ? 'lead_review' :
         'customer_review';
     return value.recommendedAction.key === expected ? value : null;
@@ -102,7 +103,8 @@
         'Checking current customers and human-reviewed opportunity states.';
       id('commandCenterCustomerOpportunityScope').textContent = 'Checking current scope';
       id('commandCenterCustomerOpportunityCheckedAt').textContent = 'Checking now';
-      ['Customers', 'Returning', 'Reviewed', 'LeadReview', 'EstimateReview', 'Requested']
+      ['Customers', 'Returning', 'Reviewed', 'LeadReview', 'EstimateReview',
+        'EstimateUnreviewed', 'Requested']
         .forEach(function (name) { fact('commandCenterCustomerOpportunity' + name, ''); });
       id('commandCenterCustomerOpportunityDetailsBody').textContent = '';
       id('commandCenterCustomerOpportunityDetails').open = false;
@@ -116,7 +118,8 @@
       id('commandCenterCustomerOpportunityScope').textContent =
         'Current NorthStar-recorded customer and reviewed opportunity records';
       id('commandCenterCustomerOpportunityCheckedAt').textContent = 'Last checked time unavailable';
-      ['Customers', 'Returning', 'Reviewed', 'LeadReview', 'EstimateReview', 'Requested']
+      ['Customers', 'Returning', 'Reviewed', 'LeadReview', 'EstimateReview',
+        'EstimateUnreviewed', 'Requested']
         .forEach(function (name) { fact('commandCenterCustomerOpportunity' + name, 'Not available'); });
       id('commandCenterCustomerOpportunityDetailsBody').textContent =
         'No customer identities, private notes, source identifiers, or unsupported conversion predictions are shown.';
@@ -134,6 +137,11 @@
           safe.estimateRequests.qualifiedNeedsReview + ' qualified ' +
           (safe.estimateRequests.qualifiedNeedsReview === 1 ? 'opportunity needs' : 'opportunities need') +
           ' an estimate review.';
+      } else if (safe.estimateRequests.unreviewed > 0) {
+        id('commandCenterCustomerOpportunityAnswer').textContent =
+          safe.estimateRequests.unreviewed + ' current ' +
+          (safe.estimateRequests.unreviewed === 1 ? 'opportunity has' : 'opportunities have') +
+          ' no estimate-request review.';
       } else if (safe.qualification.open + safe.opportunities.unreviewedCount > 0) {
         var total = safe.qualification.open + safe.opportunities.unreviewedCount;
         id('commandCenterCustomerOpportunityAnswer').textContent = total + ' current ' +
@@ -146,7 +154,8 @@
           'Every current opportunity has a human-reviewed qualification state.';
       }
       id('commandCenterCustomerOpportunityAction').textContent = safe.recommendedAction.label;
-      id('commandCenterCustomerOpportunityAction').setAttribute('href', safe.recommendedAction.href);
+      id('commandCenterCustomerOpportunityAction').setAttribute('href',
+        mode === 'demo' ? '/demo/leads' : safe.recommendedAction.href);
       fact('commandCenterCustomerOpportunityCustomers', String(safe.customers.count));
       fact('commandCenterCustomerOpportunityReturning', String(safe.customers.returningCount));
       fact('commandCenterCustomerOpportunityReviewed', safe.opportunities.reviewedCount + ' of ' +
@@ -155,9 +164,11 @@
         safe.qualification.open + safe.opportunities.unreviewedCount));
       fact('commandCenterCustomerOpportunityEstimateReview', String(
         safe.estimateRequests.qualifiedNeedsReview));
+      fact('commandCenterCustomerOpportunityEstimateUnreviewed', String(
+        safe.estimateRequests.unreviewed));
       fact('commandCenterCustomerOpportunityRequested', String(safe.estimateRequests.requested));
       id('commandCenterCustomerOpportunityDetailsBody').textContent =
-        'These are current NorthStar records only. NorthStar does not predict who will book or contact customers, change prices, schedule work, or change a lead state from this insight.';
+        'Provider, off-platform, and whole-business coverage is incomplete. NorthStar does not predict who will book or contact customers, change prices, schedule work, or change a lead state from this insight.';
     }
     function load() {
       var run = ++generation; loading();

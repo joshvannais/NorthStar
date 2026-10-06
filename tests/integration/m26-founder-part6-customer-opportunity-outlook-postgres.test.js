@@ -58,6 +58,13 @@ realPostgres('Mission 26 founder Part 6 migration 237 to 238 upgrade', () => {
       routine: 'canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid)',
       security: true, public_execute: false, receipt: 1,
     });
+    const definition = (await pool.query(`SELECT pg_get_functiondef(
+      'canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid)'::regprocedure)
+      AS value`)).rows[0].value;
+    expect(definition).toContain('WITH eligible_customers AS');
+    expect(definition).toContain('FROM customer_summary CROSS JOIN returning_summary CROSS JOIN opportunity_summary');
+    expect(definition.match(/INTO customer_count/g)).toHaveLength(1);
+    expect(definition).not.toMatch(/SELECT count\(\*\)::integer INTO customer_count/);
     expect((await pool.query(`SELECT filename,trim(checksum) checksum FROM _migrations
       WHERE filename IN ('236_canonical_forecast_revenue_cash_outlook.sql',
        '237_canonical_forecast_cost_risk_outlook.sql') ORDER BY filename`)).rows).toEqual(before);

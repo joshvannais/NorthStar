@@ -121,7 +121,8 @@
                 <h2 id="commandCenterCustomerOpportunityTitle">What needs a human next step?</h2>
               </div>
               <span class="command-center-demand-state command-center-revenue-cash-state"
-                id="commandCenterCustomerOpportunityState" data-state="loading">Loading</span>
+                id="commandCenterCustomerOpportunityState" data-state="loading"
+                role="status" aria-live="polite">Loading</span>
             </div>
             <p class="command-center-revenue-cash-answer" id="commandCenterCustomerOpportunityAnswer">
               Checking current customers and human-reviewed opportunity states.
@@ -132,9 +133,10 @@
               <span id="commandCenterCustomerOpportunityCheckedAt">Checking now</span>
             </p>
             <a class="btn btn-primary command-center-revenue-cash-action"
-              id="commandCenterCustomerOpportunityAction" href="/dashboard/leads">Review leads</a>
+              id="commandCenterCustomerOpportunityAction" href="/dashboard/leads"
+              data-command-destination="leads">Review leads</a>
             <p class="command-center-demand-boundary">
-              Current records only. No booking prediction or automatic customer, price, schedule, or status action.
+              Current records only; provider, off-platform, and whole-business coverage is incomplete. No booking prediction or automatic customer, price, schedule, or status action.
             </p>
             <details class="command-center-revenue-cash-details"
               id="commandCenterCustomerOpportunityDetails">
@@ -145,6 +147,7 @@
                 <div><dt>Reviewed opportunities</dt><dd id="commandCenterCustomerOpportunityReviewed"></dd></div>
                 <div><dt>Needs lead review</dt><dd id="commandCenterCustomerOpportunityLeadReview"></dd></div>
                 <div><dt>Needs estimate review</dt><dd id="commandCenterCustomerOpportunityEstimateReview"></dd></div>
+                <div><dt>Estimate state unreviewed</dt><dd id="commandCenterCustomerOpportunityEstimateUnreviewed"></dd></div>
                 <div><dt>Estimate requested</dt><dd id="commandCenterCustomerOpportunityRequested"></dd></div>
               </dl>
               <p id="commandCenterCustomerOpportunityDetailsBody"></p>

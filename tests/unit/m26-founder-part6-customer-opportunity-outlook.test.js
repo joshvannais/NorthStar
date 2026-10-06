@@ -55,6 +55,22 @@ describe('Mission 26 founder Part 6 customer and opportunity contract', () => {
     expect(sanitizeOutlook(zero)).toEqual(zero);
   });
 
+  test('keeps missing estimate-request review evidence visible in the next action', () => {
+    const missingRequestReview = outlook({
+      customers: { count: 1, returningCount: 0 },
+      opportunities: { count: 1, reviewedCount: 1, unreviewedCount: 0 },
+      qualification: { open: 0, qualified: 1, unqualified: 0, closed: 0 },
+      estimateRequests: { open: 0, requested: 0, withdrawn: 0, closed: 0,
+        unreviewed: 1, qualifiedNeedsReview: 0 },
+      recommendedAction: { key: 'estimate_review', label: 'Review estimate requests',
+        href: '/dashboard/leads' },
+    });
+    expect(sanitizeOutlook(missingRequestReview)).toEqual(missingRequestReview);
+    expect(sanitizeOutlook({ ...missingRequestReview, recommendedAction: {
+      key: 'customer_review', label: 'Review customers', href: '/dashboard/leads',
+    } })).toBeNull();
+  });
+
   test('serves one private tenant-scoped GET and fails closed on corrupt output', async () => {
     const calls = [];
     let projection = outlook();

@@ -30,16 +30,66 @@ BEGIN
  PERFORM public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,NULL,FALSE);
 
- SELECT count(*)::integer INTO customer_count
- FROM public.canonical_customers customer
- JOIN public.canonical_operations operation
-  ON operation.organization_id=customer.organization_id AND operation.id=customer.operation_id
- WHERE customer.organization_id=org AND operation.state='completed';
- SELECT count(*)::integer INTO opportunity_count
- FROM public.canonical_opportunities opportunity
- JOIN public.canonical_operations operation
-  ON operation.organization_id=opportunity.organization_id AND operation.id=opportunity.operation_id
- WHERE opportunity.organization_id=org AND operation.state='completed';
+ -- Every count below is produced by this one statement, so READ COMMITTED uses
+ -- one statement snapshot even when canonical ingestion commits concurrently.
+ WITH eligible_customers AS (
+  SELECT customer.id
+  FROM public.canonical_customers customer
+  JOIN public.canonical_operations operation
+   ON operation.organization_id=customer.organization_id AND operation.id=customer.operation_id
+  WHERE customer.organization_id=org AND operation.state='completed'
+ ), eligible_opportunities AS (
+  SELECT opportunity.id,opportunity.customer_id
+  FROM public.canonical_opportunities opportunity
+  JOIN public.canonical_operations operation
+   ON operation.organization_id=opportunity.organization_id AND operation.id=opportunity.operation_id
+  WHERE opportunity.organization_id=org AND operation.state='completed'
+ ), customer_work AS (
+  SELECT customer_id,count(*) count FROM eligible_opportunities GROUP BY customer_id
+ ), current_state AS (
+  SELECT eligible.id,lead.qualification_state,request.request_state
+  FROM eligible_opportunities eligible
+  LEFT JOIN LATERAL (SELECT review.qualification_state
+   FROM public.canonical_lead_state_reviews review
+   WHERE review.organization_id=org AND review.opportunity_id=eligible.id
+   ORDER BY review.revision DESC LIMIT 1) lead ON TRUE
+  LEFT JOIN LATERAL (SELECT review.request_state
+   FROM public.canonical_estimate_request_state_reviews review
+   WHERE review.organization_id=org AND review.opportunity_id=eligible.id
+   ORDER BY review.revision DESC LIMIT 1) request ON TRUE
+ ), customer_summary AS (
+  SELECT count(*)::integer customer_count FROM eligible_customers
+ ), returning_summary AS (
+  SELECT count(*) FILTER(WHERE count>1)::integer returning_count FROM customer_work
+ ), opportunity_summary AS (
+  SELECT count(*)::integer opportunity_count,
+   count(*) FILTER(WHERE qualification_state IS NOT NULL)::integer reviewed_count,
+   count(*) FILTER(WHERE qualification_state IS NULL)::integer unreviewed_count,
+   count(*) FILTER(WHERE qualification_state='open')::integer qualification_open,
+   count(*) FILTER(WHERE qualification_state='qualified')::integer qualification_qualified,
+   count(*) FILTER(WHERE qualification_state='unqualified')::integer qualification_unqualified,
+   count(*) FILTER(WHERE qualification_state='closed')::integer qualification_closed,
+   count(*) FILTER(WHERE request_state='open')::integer request_open,
+   count(*) FILTER(WHERE request_state='requested')::integer request_requested,
+   count(*) FILTER(WHERE request_state='withdrawn')::integer request_withdrawn,
+   count(*) FILTER(WHERE request_state='closed')::integer request_closed,
+   count(*) FILTER(WHERE request_state IS NULL)::integer request_unreviewed,
+   count(*) FILTER(WHERE qualification_state='qualified' AND request_state='open')::integer
+    qualified_needs_review
+  FROM current_state
+ ) SELECT customer_summary.customer_count,returning_summary.returning_count,
+   opportunity_summary.opportunity_count,opportunity_summary.reviewed_count,
+   opportunity_summary.unreviewed_count,opportunity_summary.qualification_open,
+   opportunity_summary.qualification_qualified,opportunity_summary.qualification_unqualified,
+   opportunity_summary.qualification_closed,opportunity_summary.request_open,
+   opportunity_summary.request_requested,opportunity_summary.request_withdrawn,
+   opportunity_summary.request_closed,opportunity_summary.request_unreviewed,
+   opportunity_summary.qualified_needs_review
+ INTO customer_count,returning_count,opportunity_count,reviewed_count,unreviewed_count,
+  qualification_open,qualification_qualified,qualification_unqualified,qualification_closed,
+  request_open,request_requested,request_withdrawn,request_closed,request_unreviewed,
+  qualified_needs_review
+ FROM customer_summary CROSS JOIN returning_summary CROSS JOIN opportunity_summary;
  IF customer_count>500 OR opportunity_count>500 THEN
   PERFORM public.canonical_forecast_booking_ordered_access(
    org,actor,role_value,session_value,NULL,FALSE);
@@ -60,52 +110,7 @@ BEGIN
    'probabilityCalibrated',FALSE,'forecastIssued',FALSE,'automaticActionAuthorized',FALSE);
  END IF;
 
- WITH eligible AS (
-  SELECT opportunity.id,opportunity.customer_id
-  FROM public.canonical_opportunities opportunity
-  JOIN public.canonical_operations operation
-   ON operation.organization_id=opportunity.organization_id AND operation.id=opportunity.operation_id
-  WHERE opportunity.organization_id=org AND operation.state='completed'
- ), customer_work AS (
-  SELECT customer_id,count(*) count FROM eligible GROUP BY customer_id
- ) SELECT count(*) FILTER(WHERE count>1)::integer INTO returning_count FROM customer_work;
-
- WITH eligible AS (
-  SELECT opportunity.id
-  FROM public.canonical_opportunities opportunity
-  JOIN public.canonical_operations operation
-   ON operation.organization_id=opportunity.organization_id AND operation.id=opportunity.operation_id
-  WHERE opportunity.organization_id=org AND operation.state='completed'
- ), current_state AS (
-  SELECT eligible.id,lead.qualification_state,request.request_state
-  FROM eligible
-  LEFT JOIN LATERAL (SELECT review.qualification_state
-   FROM public.canonical_lead_state_reviews review
-   WHERE review.organization_id=org AND review.opportunity_id=eligible.id
-   ORDER BY review.revision DESC LIMIT 1) lead ON TRUE
-  LEFT JOIN LATERAL (SELECT review.request_state
-   FROM public.canonical_estimate_request_state_reviews review
-   WHERE review.organization_id=org AND review.opportunity_id=eligible.id
-   ORDER BY review.revision DESC LIMIT 1) request ON TRUE
- ) SELECT
-  count(*) FILTER(WHERE qualification_state IS NOT NULL)::integer,
-  count(*) FILTER(WHERE qualification_state IS NULL)::integer,
-  count(*) FILTER(WHERE qualification_state='open')::integer,
-  count(*) FILTER(WHERE qualification_state='qualified')::integer,
-  count(*) FILTER(WHERE qualification_state='unqualified')::integer,
-  count(*) FILTER(WHERE qualification_state='closed')::integer,
-  count(*) FILTER(WHERE request_state='open')::integer,
-  count(*) FILTER(WHERE request_state='requested')::integer,
-  count(*) FILTER(WHERE request_state='withdrawn')::integer,
-  count(*) FILTER(WHERE request_state='closed')::integer,
-  count(*) FILTER(WHERE request_state IS NULL)::integer,
-  count(*) FILTER(WHERE qualification_state='qualified' AND request_state='open')::integer
- INTO reviewed_count,unreviewed_count,qualification_open,qualification_qualified,
-  qualification_unqualified,qualification_closed,request_open,request_requested,
-  request_withdrawn,request_closed,request_unreviewed,qualified_needs_review
- FROM current_state;
-
- IF qualified_needs_review>0 THEN
+ IF qualified_needs_review>0 OR request_unreviewed>0 THEN
   action_key:='estimate_review';action_label:='Review estimate requests';
  ELSIF qualification_open>0 OR unreviewed_count>0 THEN
   action_key:='lead_review';action_label:='Review open leads';

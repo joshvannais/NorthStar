@@ -76,7 +76,8 @@ function sanitizeOutlook(value) {
         value.estimateRequests.withdrawn + value.estimateRequests.closed +
         value.estimateRequests.unreviewed !== value.opportunities.count ||
       value.estimateRequests.qualifiedNeedsReview > value.qualification.qualified) return null;
-  const expected = value.estimateRequests.qualifiedNeedsReview > 0 ? 'estimate_review' :
+  const expected = value.estimateRequests.qualifiedNeedsReview > 0 ||
+    value.estimateRequests.unreviewed > 0 ? 'estimate_review' :
     value.qualification.open > 0 || value.opportunities.unreviewedCount > 0 ? 'lead_review' :
       'customer_review';
   return value.recommendedAction.key === expected ? value : null;

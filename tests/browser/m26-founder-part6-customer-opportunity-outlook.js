@@ -76,9 +76,16 @@ async function pageFor(browser, configuration) {
         /qualified opportunities need an estimate review/i);
       assert.equal(await page.locator('#commandCenterCustomerOpportunityAction').innerText(),
         'Review estimate requests');
+      assert.equal(await page.locator('#commandCenterCustomerOpportunityAction').getAttribute('href'),
+        configuration.mode === 'demo' ? '/demo/leads' : '/dashboard/leads');
+      assert.equal(await page.locator('#commandCenterCustomerOpportunityState').getAttribute('role'),
+        'status');
+      assert.equal(await page.locator('#commandCenterCustomerOpportunityState').getAttribute('aria-live'),
+        'polite');
       await page.locator('#commandCenterCustomerOpportunityDetails').evaluate(node => { node.open = true; });
       const text = await page.locator('#commandCenterCustomerOpportunityOutlook').innerText();
       assert.match(text, /Current records only/);
+      assert.match(text, /provider, off-platform, and whole-business coverage is incomplete/i);
       assert.match(text, /does not predict who will book/i);
       assert.doesNotMatch(text, /probability|lifetime value|health score/i);
       await page.locator('#commandCenterCustomerOpportunityDetails > summary').focus();
@@ -89,6 +96,30 @@ async function pageFor(browser, configuration) {
         path: path.join(output, configuration.name + '.png') });
       result.cases.push({ name: configuration.name,
         paidRequests: await page.evaluate(() => window.__calls.length), pass: true });
+      if (configuration.mode === 'paid') {
+        const missingRequestReview = await page.evaluate(() => {
+          const value = NorthStarCustomerOpportunityOutlook.demoOutlook();
+          value.fictional = false;
+          value.scope.label = 'Current NorthStar-recorded customer and reviewed opportunity records';
+          value.customers = { count: 1, returningCount: 0 };
+          value.opportunities = { count: 1, reviewedCount: 1, unreviewedCount: 0 };
+          value.qualification = { open: 0, qualified: 1, unqualified: 0, closed: 0 };
+          value.estimateRequests = { open: 0, requested: 0, withdrawn: 0, closed: 0,
+            unreviewed: 1, qualifiedNeedsReview: 0 };
+          value.recommendedAction = { key: 'estimate_review', label: 'Review estimate requests',
+            href: '/dashboard/leads' };
+          return value;
+        });
+        await page.evaluate(value => window.__responses.push({ status: 200,
+          payload: { success: true, data: value } }), missingRequestReview);
+        await page.evaluate(() => window.__outlook.workspaceReady());
+        assert.match(await page.locator('#commandCenterCustomerOpportunityAnswer').innerText(),
+          /1 current opportunity has no estimate-request review/i);
+        assert.equal(await page.locator('#commandCenterCustomerOpportunityEstimateUnreviewed').textContent(),
+          '1');
+        assert.equal(await page.locator('#commandCenterCustomerOpportunityAction').innerText(),
+          'Review estimate requests');
+      }
       await context.close();
     }
     result.pass = true;

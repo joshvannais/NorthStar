@@ -170,8 +170,20 @@ function response(status, data) {
         Number.parseFloat(getComputedStyle(element).transitionDuration || '0') <= 0.001);
       assert.equal(reduced, true, 'Reduced-motion media rule must bound transitions');
       await page.locator('#commandCenterCapacityRoot').screenshot({ path: path.join(output, 'paid-desktop-current.png') });
+      await page.evaluate(() => {
+        window.__capacityScrollCalls = [];
+        Element.prototype.scrollIntoView = function (options) { window.__capacityScrollCalls.push(options); };
+      });
+      await page.getByRole('button', { name: 'Review capacity signals', exact: true }).click();
+      const openedFocus = await page.evaluate(() => ({
+        tagName: document.activeElement.tagName,
+        parentId: document.activeElement.parentElement && document.activeElement.parentElement.id,
+        scrollCalls: window.__capacityScrollCalls.length,
+      }));
+      assert.deepEqual(openedFocus, { tagName: 'SUMMARY', parentId: 'commandCenterCapacitySignalsDetails',
+        scrollCalls: 0 }, 'Target-only review must move focus without scripted smooth scrolling');
       result.cases.push({ name: 'paid-desktop-current', requests: ['GET'], reducedMotion: true,
-        overflow: false, pass: true });
+        targetFocus: 'summary', scriptedSmoothScroll: false, overflow: false, pass: true });
       await context.close();
     }
 
@@ -236,6 +248,8 @@ function response(status, data) {
       await page.getByRole('button', { name: 'Review team information', exact: true }).click();
       assert.equal(await page.locator('#commandCenterCapacityDetails').evaluate(item => item.open), true);
       assert.equal(await page.locator('#commandCenterCapacityReviewDetails').evaluate(item => item.open), true);
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'commandCenterCapacityTargetRole0',
+        'Team-information review must focus the first required role control');
       const scopeText = await page.locator('#commandCenterCapacityScopeReviews').textContent();
       for (const copy of ['Accepted work group', 'Crew-based work', 'Crew', 'Skill',
         'Working hours', 'Location', 'Travel', 'Vehicle', 'Equipment', 'Primary role this work depends on',

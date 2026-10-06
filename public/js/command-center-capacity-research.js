@@ -983,8 +983,12 @@
           targets: ['commandCenterCapacityReviewDetails', 'commandCenterCapacityRecordControls'],
           focus: 'commandCenterCapacityRetry' }
         : { label: 'Check current records', intent: 'refresh' };
-      if (journey.setup.state === 'ready') return { label: 'Review team information',
-        targets: ['commandCenterCapacityReviewDetails'], focus: 'commandCenterCapacityReviewReason' };
+      if (journey.setup.state === 'ready') {
+        var firstRoleReview = journey.setup.action === 'constrained_work_scopes' &&
+          journey.setup.scopeReviews && journey.setup.scopeReviews.length ? 'commandCenterCapacityTargetRole0' : '';
+        return { label: 'Review team information', targets: ['commandCenterCapacityReviewDetails'],
+          focus: firstRoleReview || 'commandCenterCapacityReviewReason' };
+      }
       var lanes = ['workload', 'constrained', 'advisory'];
       var actionable = lanes.find(function (name) {
         var current = journey[name] && journey[name].currentAction;
@@ -1253,8 +1257,8 @@
       if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus();
       else {
         var firstTarget = byId(String(button.dataset.capacityTargets || '').split(',')[0]);
-        if (firstTarget && typeof firstTarget.scrollIntoView === 'function')
-          firstTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var targetSummary = firstTarget && firstTarget.querySelector('summary');
+        if (targetSummary && typeof targetSummary.focus === 'function') targetSummary.focus();
       }
       return null;
     });

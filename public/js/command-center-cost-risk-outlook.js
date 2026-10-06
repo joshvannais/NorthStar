@@ -31,6 +31,18 @@
     return negative ? -amount : amount;
   }
 
+  function ratioTenths(numerator, denominator) {
+    if (denominator <= 0n) return null;
+    var negative = numerator < 0n;
+    var scaled = (negative ? -numerator : numerator) * 1000n;
+    var rounded = scaled / denominator;
+    if ((scaled % denominator) * 2n >= denominator) rounded += 1n;
+    if (negative) rounded = -rounded;
+    var absolute = rounded < 0n ? -rounded : rounded;
+    return (rounded < 0n ? '-' : '') + (absolute / 10n).toString() + '.' +
+      (absolute % 10n).toString();
+  }
+
   function unavailableFacts(value) {
     return value.costBasis.state === 'unavailable' && value.costBasis.coveredCount === null &&
       value.costBasis.amount === null && value.costBasis.reason === 'current_cost_basis_unavailable' &&
@@ -91,9 +103,13 @@
           value.contribution.reason !== null || !MONEY.test(value.contribution.amount || '') ||
           cents(value.contribution.amount) !== cents(value.bookedWork.amountBeforeTax) -
             cents(value.costBasis.amount)) return null;
-      if (value.margin.state === 'current' ? value.margin.reason !== null ||
-          !PERCENT.test(value.margin.percent || '') : value.margin.state !== 'unavailable' ||
-          value.margin.percent !== null || value.margin.reason !== 'no_booked_value') return null;
+      var bookedCents = cents(value.bookedWork.amountBeforeTax);
+      var marginCurrent = value.margin.state === 'current';
+      if (bookedCents > 0n ? !marginCurrent || value.margin.reason !== null ||
+          !PERCENT.test(value.margin.percent || '') || value.margin.percent !==
+            ratioTenths(cents(value.contribution.amount), bookedCents) :
+        marginCurrent || value.margin.state !== 'unavailable' || value.margin.percent !== null ||
+          value.margin.reason !== 'no_booked_value') return null;
     } else if (value.costBasis.state !== 'unavailable' || value.costBasis.amount !== null ||
         value.costBasis.reason !== 'incomplete_current_cost_basis' ||
         value.contribution.state !== 'unavailable' || value.contribution.amount !== null ||
@@ -101,12 +117,14 @@
         value.margin.state !== 'unavailable' || value.margin.percent !== null ||
         value.margin.reason !== 'incomplete_current_cost_basis') return null;
     if (value.concentration.state === 'current') {
+      var bookedValueCents = cents(value.bookedWork.amountBeforeTax);
       if (value.concentration.reason !== null || !UNSIGNED_PERCENT.test(
         value.concentration.largestBookedSharePercent || '') ||
         !UNSIGNED.test(value.concentration.largestBookedAmount || '') ||
-        value.bookedWork.count < 1 ||
-        cents(value.concentration.largestBookedAmount) > cents(value.bookedWork.amountBeforeTax) ||
-        Number(value.concentration.largestBookedSharePercent) > 100) return null;
+        value.bookedWork.count < 1 || bookedValueCents <= 0n ||
+        cents(value.concentration.largestBookedAmount) > bookedValueCents ||
+        value.concentration.largestBookedSharePercent !== ratioTenths(
+          cents(value.concentration.largestBookedAmount), bookedValueCents)) return null;
     } else if (value.concentration.state !== 'none' ||
         value.bookedWork.amountBeforeTax !== '0.00' || value.concentration.reason !== null ||
         value.concentration.largestBookedSharePercent !== '0.0' ||

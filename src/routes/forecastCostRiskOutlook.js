@@ -48,6 +48,17 @@ function cents(value) {
   return negative ? -amount : amount;
 }
 
+function ratioTenths(numerator, denominator) {
+  if (denominator <= 0n) return null;
+  const negative = numerator < 0n;
+  const scaled = (negative ? -numerator : numerator) * 1000n;
+  let rounded = scaled / denominator;
+  if ((scaled % denominator) * 2n >= denominator) rounded += 1n;
+  if (negative) rounded = -rounded;
+  const absolute = rounded < 0n ? -rounded : rounded;
+  return `${rounded < 0n ? '-' : ''}${absolute / 10n}.${absolute % 10n}`;
+}
+
 function sanitizeOutlook(value) {
   const keys = ['version', 'state', 'reason', 'fictional', 'checkedAt', 'currency', 'scope',
     'bookedWork', 'costBasis', 'contribution', 'margin', 'concentration', 'underutilization',
@@ -97,8 +108,11 @@ function sanitizeOutlook(value) {
         cents(value.contribution.amount) !== cents(value.bookedWork.amountBeforeTax) -
           cents(value.costBasis.amount)) return null;
     const marginCurrent = value.margin.state === 'current';
-    if (marginCurrent ? value.margin.reason !== null || !PERCENT.test(value.margin.percent || '') :
-      value.margin.state !== 'unavailable' || value.margin.percent !== null ||
+    const bookedCents = cents(value.bookedWork.amountBeforeTax);
+    if (bookedCents > 0n ? !marginCurrent || value.margin.reason !== null ||
+      !PERCENT.test(value.margin.percent || '') || value.margin.percent !==
+        ratioTenths(cents(value.contribution.amount), bookedCents) :
+      marginCurrent || value.margin.state !== 'unavailable' || value.margin.percent !== null ||
         value.margin.reason !== 'no_booked_value') return null;
   } else if (value.costBasis.state !== 'unavailable' || value.costBasis.amount !== null ||
       value.costBasis.reason !== 'incomplete_current_cost_basis' ||
@@ -107,12 +121,14 @@ function sanitizeOutlook(value) {
       value.margin.state !== 'unavailable' || value.margin.percent !== null ||
       value.margin.reason !== 'incomplete_current_cost_basis') return null;
   if (value.concentration.state === 'current') {
+    const bookedCents = cents(value.bookedWork.amountBeforeTax);
     if (value.concentration.reason !== null ||
         !UNSIGNED_PERCENT.test(value.concentration.largestBookedSharePercent || '') ||
         !UNSIGNED_MONEY.test(value.concentration.largestBookedAmount || '') ||
-        value.bookedWork.count < 1 ||
-        cents(value.concentration.largestBookedAmount) > cents(value.bookedWork.amountBeforeTax) ||
-        Number(value.concentration.largestBookedSharePercent) > 100) return null;
+        value.bookedWork.count < 1 || bookedCents <= 0n ||
+        cents(value.concentration.largestBookedAmount) > bookedCents ||
+        value.concentration.largestBookedSharePercent !== ratioTenths(
+          cents(value.concentration.largestBookedAmount), bookedCents)) return null;
   } else if (value.concentration.state !== 'none' ||
       value.bookedWork.amountBeforeTax !== '0.00' ||
       value.concentration.reason !== null || value.concentration.largestBookedSharePercent !== '0.0' ||

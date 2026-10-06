@@ -101,13 +101,20 @@ async function pageFor(browser, { width, theme, mode }) {
         corrupt.contribution.amount = '6600.01';
         const invalidDate = JSON.parse(JSON.stringify(data));
         invalidDate.checkedAt = '2026-02-31T12:00:00.000Z';
+        const falseMargin = JSON.parse(JSON.stringify(data));
+        falseMargin.margin.percent = '99.9';
+        const falseShare = JSON.parse(JSON.stringify(data));
+        falseShare.concentration.largestBookedSharePercent = '20.0';
         return {
           zeroBooked: NorthStarCostRiskOutlook.validate(zeroBooked) !== null,
           corrupt: NorthStarCostRiskOutlook.validate(corrupt) === null,
           invalidDate: NorthStarCostRiskOutlook.validate(invalidDate) === null,
+          falseMargin: NorthStarCostRiskOutlook.validate(falseMargin) === null,
+          falseShare: NorthStarCostRiskOutlook.validate(falseShare) === null,
         };
       }, demo);
-      assert.deepEqual(validation, { zeroBooked: true, corrupt: true, invalidDate: true });
+      assert.deepEqual(validation, { zeroBooked: true, corrupt: true, invalidDate: true,
+        falseMargin: true, falseShare: true });
       await page.evaluate(data => {
         window.__responses.push({ status: 200, payload: { success: true, data }, hold: true });
         window.__pending = window.__outlook.workspaceReady();

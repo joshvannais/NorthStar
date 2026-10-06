@@ -65,6 +65,12 @@ describe('Mission 26 founder Part 5 cost and operational-risk contract', () => {
     expect(sanitizeOutlook(outlook({ concentration: { state: 'current',
       largestBookedSharePercent: '101.0', largestBookedAmount: '6000.00', reason: null },
     }))).toBeNull();
+    expect(sanitizeOutlook(outlook({
+      margin: { state: 'current', percent: '99.9', reason: null },
+    }))).toBeNull();
+    expect(sanitizeOutlook(outlook({ concentration: { state: 'current',
+      largestBookedSharePercent: '20.0', largestBookedAmount: '6000.00', reason: null },
+    }))).toBeNull();
   });
 
   test('serves one private tenant-scoped GET and fails closed on corrupt output', async () => {

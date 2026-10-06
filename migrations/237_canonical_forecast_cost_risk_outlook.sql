@@ -12,6 +12,7 @@ DECLARE currency_value TEXT;sources JSONB;booked RECORD;
  pricing public.canonical_pricing_plans%ROWTYPE;
  terms public.canonical_commercial_terms%ROWTYPE;
  approval public.canonical_commercial_approvals%ROWTYPE;
+ decision public.canonical_estimate_decisions%ROWTYPE;
  commercial_sources JSONB;commercial_state JSONB;
  booked_count INTEGER:=0;covered_count INTEGER:=0;
  booked_total NUMERIC(20,2):=0;cost_total NUMERIC(20,2):=0;
@@ -45,6 +46,8 @@ BEGIN
  WHERE profile.organization_id=org AND profile.is_active=TRUE
  ORDER BY profile.version_number DESC,profile.id DESC LIMIT 1;
  IF currency_value IS NULL OR currency_value!~'^[A-Z]{3}$' THEN
+  PERFORM public.canonical_forecast_booking_ordered_access(
+   org,actor,role_value,session_value,NULL,FALSE);
   RETURN jsonb_build_object('version','m26-cost-risk-outlook-v1',
    'state','unavailable','reason','commercial_sources_unavailable','fictional',FALSE,
    'checkedAt',public.canonical_forecast_utc_instant(clock_timestamp()),
@@ -69,6 +72,8 @@ BEGIN
   org,actor,role_value,session_value,currency_value);
  IF sources->>'state'<>'current_integrated_commercial_sources' OR
     sources->'sourceCohortsCompleteAtRead' IS DISTINCT FROM 'true'::jsonb THEN
+  PERFORM public.canonical_forecast_booking_ordered_access(
+   org,actor,role_value,session_value,NULL,FALSE);
   RETURN jsonb_build_object('version','m26-cost-risk-outlook-v1',
    'state','unavailable','reason','commercial_sources_unavailable','fictional',FALSE,
    'checkedAt',public.canonical_forecast_utc_instant(clock_timestamp()),
@@ -89,6 +94,29 @@ BEGIN
    'companyProfit',jsonb_build_object('state','unavailable','reason','complete_overhead_authority_unavailable'),
    'forecastIssued',FALSE,'automaticActionAuthorized',FALSE);
  END IF;
+
+ -- Every M24 pricing/commercial mutation takes this estimate row FOR UPDATE.
+ -- Acquire the shared side in UUID order so the exact source rows read below
+ -- cannot advance until this response transaction ends.
+ PERFORM locked_estimate.id
+ FROM public.canonical_estimates locked_estimate
+ WHERE locked_estimate.organization_id=org AND locked_estimate.id IN(
+  SELECT version.estimate_id
+  FROM (
+   SELECT DISTINCT ON (r.appointment_id) r.*
+   FROM public.canonical_forecast_commercial_booking_reviews r
+   WHERE r.organization_id=org
+   ORDER BY r.appointment_id,r.review_order DESC,r.id DESC LIMIT 1001
+  ) review
+  JOIN public.canonical_forecast_booked_work_confirmations confirmation
+   ON confirmation.organization_id=review.organization_id
+    AND confirmation.review_id=review.id
+  JOIN public.canonical_customer_estimate_versions version
+   ON version.organization_id=review.organization_id
+    AND version.id=review.issued_version_id
+  WHERE review.action<>'booking_cancelled')
+ ORDER BY locked_estimate.id
+ FOR SHARE OF locked_estimate;
 
  FOR booked IN
   SELECT review.*,confirmation.id confirmation_id,version.estimate_id,
@@ -125,19 +153,39 @@ BEGIN
   SELECT * INTO approval FROM public.canonical_commercial_approvals a
    WHERE a.organization_id=org AND a.estimate_id=booked.estimate_id
    ORDER BY a.created_at DESC,a.id DESC LIMIT 1;
-  IF pricing.id IS NULL OR terms.id IS NULL OR approval.id IS NULL THEN
+  IF approval.id IS NOT NULL THEN
+   SELECT * INTO decision FROM public.canonical_estimate_decisions d
+    WHERE d.organization_id=org AND d.estimate_id=booked.estimate_id
+      AND d.id=approval.decision_id;
+  ELSE
+   decision:=NULL;
+  END IF;
+  IF pricing.id IS NULL OR terms.id IS NULL OR approval.id IS NULL OR decision.id IS NULL THEN
    cost_complete:=FALSE; CONTINUE;
   END IF;
-  commercial_sources:=public.canonical_commercial_sources(
-   org,actor,role_value,session_value,booked.estimate_id,NULL);
+  -- The protected M24 review helper requires a repeatable-read snapshot, while
+  -- this projection deliberately uses read committed so its final authorization
+  -- check can observe a concurrent revocation. Rebuild only the immutable
+  -- commercial evidence saved with the terms and replace its decision with the
+  -- exact current decision row. The estimate-row share lock above fences every
+  -- one of these M24 sources against a concurrent writer through return.
+  commercial_sources:=terms.evidence||jsonb_build_object(
+   'decision',public.canonical_estimate_decision_projection(decision),
+   'decisionBasis',jsonb_build_object('revision',decision.revision,'digest',decision.digest));
   commercial_state:=public.canonical_commercial_current(
    public.canonical_commercial_projection(terms),commercial_sources,
    public.canonical_commercial_binding_projection(approval));
   IF pricing.action<>'save' OR pricing.id::text IS DISTINCT FROM
        commercial_sources#>>'{pricingPin,id}' OR
+     pricing.revision::text IS DISTINCT FROM commercial_sources#>>'{pricingPin,revision}' OR
+     pricing.digest IS DISTINCT FROM commercial_sources#>>'{pricingPin,digest}' OR
      terms.action<>'save' OR terms.pricing_id IS DISTINCT FROM pricing.id OR
+     terms.authority_pin IS DISTINCT FROM
+       public.canonical_commercial_authority_pin(terms.evidence) OR
      approval.terms_id IS DISTINCT FROM terms.id OR
+     approval.authority_pin IS DISTINCT FROM terms.authority_pin OR
      approval.decision_id IS DISTINCT FROM booked.approved_decision_id OR
+     decision.id IS DISTINCT FROM booked.approved_decision_id OR
      commercial_state->'current' IS DISTINCT FROM 'true'::jsonb OR
      commercial_state->'linkedApproval' IS DISTINCT FROM 'true'::jsonb OR
      pricing.currency IS DISTINCT FROM currency_value OR

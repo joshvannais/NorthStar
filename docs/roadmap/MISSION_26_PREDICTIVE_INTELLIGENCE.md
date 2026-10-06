@@ -6,9 +6,27 @@ Mission 26 is the contractor-facing predictive operating layer. It does not repl
 
 The founder's [implementation-versus-live-validation clarification](../architecture/MISSION_26_IMPLEMENTATION_VS_LIVE_VALIDATION.md) keeps Mission 26 work moving with guarded synthetic evidence while public Retell calling and commercial legal review remain later gates. It does not waive any implementation acceptance check or permit a paid numerical forecast without complete, authorized, evaluated real history. The ephemeral homepage Web Call is not a retained demand-history source.
 
-## Frozen implementation structure — 12 parts and 51 slices
+## Founder-approved delivery structure — 9 parts and 15 slices
 
-The part and slice counts are frozen before Mission 26 implementation begins. A later change requires a documented authority or acceptance reason, the affected gates and an updated total before implementation proceeds.
+The governing Mission 26 plan is the founder-approved **9 parts and 15 slices** plan recorded September 12, 2026. These are fixed planning boundaries rather than equal-effort percentages. Any proposed count or scope change must be explained to the founder before added work begins.
+
+| Founder part | Governing scope | Slices |
+| --- | --- | ---: |
+| 1 | Metric and Forecast Foundation | Unsplit |
+| 2 | Business Health and Performance | 2 |
+| 3 | Revenue and Cash Outlook | 3 |
+| 4 | Demand and Capacity Planning | 2 |
+| 5 | Cost, Margin and Operational Risk | 2 |
+| 6 | Customer and Opportunity Intelligence | 2 |
+| 7 | Forecast Scenarios and Validation | 2 |
+| 8 | Owner Experience and Decision Support | 2 |
+| 9 | Mission Validation | Unsplit |
+
+Founder Part 3 is delivered as one consolidated package: current booked-work/backlog facts, separately labeled approved and preliminary open-pipeline planning facts, and a strict collection/cash compatibility refusal wherever complete period coverage is unavailable. Migration 236 and the private read-only Revenue and cash outlook insight are candidate implementation evidence until their single release gate completes. They do not issue a calibrated probability, earned-revenue forecast, cash forecast, invoice, payment, schedule or automatic action.
+
+## Historical internal engineering decomposition — non-governing
+
+The following 12-part/51-slice decomposition was used internally to organize engineering evidence. It was not founder-approved and is not the governing Mission 26 count. Its released artifacts remain valid technical evidence and map into the founder-approved 9-part/15-slice plan; the numbering below is retained only so historical commits, pull requests, migrations and acceptance records stay traceable.
 
 | Part | Scope | Slices |
 | --- | --- | ---: |
@@ -146,13 +164,29 @@ Part 6A's [integrated commercial baseline](../architecture/MISSION_26_PART6A_INT
 
 The guarded paid owner/admin Part 6A HTTP surface exposes only product-useful provenance; private source orders, stable internal IDs and digests remain in PostgreSQL. It issues no probability, earned revenue, invoice, payment, collection, cash, summary dashboard, KPI or graph, and creates no schedule or commercial action. Natural production history, off-platform and whole-business completeness, empirical accuracy, earned revenue, invoices, payments, collections, cash, CI, private-production/provider/credential evidence, physical Safari/devices and complete accessibility remain unavailable.
 
-Part 6B's [guarded open-pipeline scenario boundary](../architecture/MISSION_26_PART6B_PIPELINE_SCENARIO_BOUNDARY.md) is the sole current implementation candidate. Additive migration 235 replaces claimed-input arithmetic with a paid owner/admin-reviewed, server-selected and immutable open-pipeline scenario origin plus a distinct post-horizon evaluation. It authenticates migration 222 open-risk membership, exact estimate/decision/issued-version lineage, the released Part 6A commercial source closure, human-preview accepted-booking events and event-time commercial review. Private weights, values, members and outcomes remain in PostgreSQL; whole totals round once across both categories; HTTP returns only actionless research metadata. Complete authenticated zero remains distinct from missing, stale, mixed or incomplete evidence. Part 6B has one normal same-package release gate: this exact implementation and documentation must pass a fresh independent exact-head audit, merge normally and complete the sole automatic deployment verification before Part 6B becomes the twenty-first scoped-accepted slice. There is no separate documentation gate, second pull request or second deployment.
+Part 6B's [guarded open-pipeline scenario boundary](../architecture/MISSION_26_PART6B_PIPELINE_SCENARIO_BOUNDARY.md) is independently accepted and released. Additive migration 235 replaces claimed-input arithmetic with a paid owner/admin-reviewed, server-selected and immutable open-pipeline scenario origin plus a distinct post-horizon evaluation. It authenticates migration 222 open-risk membership, exact estimate/decision/issued-version lineage, the released Part 6A commercial source closure, human-preview accepted-booking events and event-time commercial review. Private weights, values, members and outcomes remain in PostgreSQL; whole totals round once across both categories; HTTP returns only actionless research metadata. Complete authenticated zero remains distinct from missing, stale, mixed or incomplete evidence. Exact correction-v1 candidate `a05ac7e689144c85779dcdef1ac461cebfca2c39` passed the independent whole exact-head audit; PR #445 merged as main `e0507bac1d15e9559de7ced2c10c9397df306f5a`. Sole automatic Railway deployment `f765de93-e58a-4e49-8739-b79247f6aab3` succeeded, migration 235 applied, and public health, root and demo returned HTTP 200. The implementation and documentation traveled through one release gate; there was no separate documentation gate, second pull request or second deployment.
 
 Part 6C's [financial evidence compatibility boundary](../architecture/MISSION_26_PART6C_FINANCIAL_EVIDENCE_COMPATIBILITY.md)
-maps the released Mission 25 external observations to their safe Mission 26
-uses. It does not issue earned-revenue or collected-cash forecasts. Native
-financial records await Mission 27, and earned-revenue recognition still needs
-an explicitly approved source authority.
+is now part of the consolidated founder Part 3 candidate. Additive migration
+236 revalidates the newest current Part 6A commercial baseline and exposes only
+minimized authorized-estimate, approved-price and owner-confirmed booked-work
+facts. It separately projects unweighted counts and raw before-tax amounts for
+the newest authenticated Part 6B `approved_unbooked` and
+`preliminary_estimate` members. Those captured planning facts are never called
+committed, weighted, probable or forecast revenue; a post-horizon origin is
+explicitly labeled as a frozen capture. The private no-store GET and compact
+embedded Revenue and cash outlook insight expose no member, weight, range,
+identifier, digest or private-output evidence. Complete authenticated zero is
+distinct from unavailable.
+
+The same candidate preserves the compatibility refusal: migrations 116 and 120
+cannot prove complete period cash coverage, recorded-through finality or a
+zero-capable complete source. Cash timing therefore remains unavailable with
+`financial_period_coverage_unavailable`, and earned revenue remains unavailable
+with `recognition_authority_unavailable`. No invoice, payment, collection,
+accounting policy, calibrated probability, forecast issuance or automated
+action is created. This founder Part 3 package remains a candidate until its one
+normal release gate completes.
 
 Part 6D's [Executive Brief wording correction](../architecture/MISSION_26_PART6D_EXECUTIVE_WORDING_BOUNDARY.md)
 removes revenue and confidence claims that its existing canonical summary
@@ -294,7 +328,7 @@ The [approved-price period coverage anchor](../architecture/MISSION_26_PART6A_PR
 
 The [price-event currentness comparison](../architecture/MISSION_26_PART6A_PRICE_CURRENTNESS.md) distinguished an unchanged historical receipt from one superseded by later Mission 24 decisions under current tenant and account authority. No saved integrated position existed at that precursor stage; migration 234 adds the immutable position and makes source, profile, method, correction and cancellation changes stale at read.
 
-The released integrated Part 6A authority supersedes those precursor gaps without rewriting their historical evidence. Migration 234 uses the current released Mission 24 approved-estimate v2 authority, issued-estimate ledger, Mission 22 human schedule approval, explicit commercial review and booked-work confirmation; preserves corrections, cancellations and currentness; and binds the complete position to the current future approved-price origin. Natural production history, off-platform and whole-business completeness, empirical accuracy, earned revenue, invoices, payments, collections and cash remain unavailable. Part 6B is the sole current single-package candidate; Part 6C and every later slice remain open. Part 12A acceptance also remains open.
+The released integrated Part 6A authority supersedes those precursor gaps without rewriting their historical evidence. Migration 234 uses the current released Mission 24 approved-estimate v2 authority, issued-estimate ledger, Mission 22 human schedule approval, explicit commercial review and booked-work confirmation; preserves corrections, cancellations and currentness; and binds the complete position to the current future approved-price origin. Released Part 6B adds the guarded open-pipeline scenario authority through migration 235 without converting planning assumptions into probability or cash facts. Candidate migration 236 and its compact insight consolidate those safe facts into founder Part 3 while preserving the explicit cash and earned-revenue refusals above. Natural production history, off-platform and whole-business completeness, empirical accuracy, earned revenue, invoices, payments, collections and cash remain unavailable. Later founder-plan work remains serialized until this candidate completes its one release gate.
 
 ## Non-negotiable evidence boundaries
 

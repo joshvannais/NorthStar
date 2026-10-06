@@ -66,6 +66,25 @@ const pipelineEvaluationSaved = { state: 'pipeline_evaluation_saved', id: evalua
 const pipelineEvaluationCurrent = { state: 'pipeline_evaluation_current', id: evaluationId,
   originId, revision: 1, evaluatedAt: '2026-11-03T12:00:00.000000Z',
   metricsWithheld: true, ...flags };
+const revenueOutlook = {
+  version: 'm26-revenue-cash-outlook-v1', state: 'current', reason: null,
+  fictional: false, checkedAt: '2026-10-06T12:00:00.000Z', currency: 'USD',
+  scope: { label: 'Current supported NorthStar commercial records', wholeBusinessCoverageVerified: false },
+  authorizedEstimate: { state: 'current', amountBeforeTax: '18600.00' },
+  approvedPrice: { state: 'current', amountBeforeTax: '12400.00' },
+  bookedWork: { state: 'current', amountBeforeTax: '7200.00', classification: 'committed' },
+  planning: { state: 'current', reason: null, snapshotMode: 'current_at_read',
+    capturedAt: '2026-10-06T12:00:00.000Z', horizonStartsAt: '2026-11-01T00:00:00.000Z',
+    horizonEndsAt: '2026-12-01T00:00:00.000Z',
+    approvedNotBooked: { state: 'current', count: 2, amountBeforeTax: '5200.00', committed: false },
+    preliminaryEstimate: { state: 'current', count: 3, amountBeforeTax: '6200.00', committed: false },
+    weightsWithheld: true, weightsAreScenarioAssumptions: true,
+    probability: { state: 'unavailable', reason: 'calibrated_probability_authority_unavailable' },
+    forecastIssued: false },
+  earnedRevenue: { state: 'unavailable', amount: null, reason: 'recognition_authority_unavailable' },
+  cashTiming: { state: 'unavailable', amount: null, reason: 'financial_period_coverage_unavailable' },
+  forecastIssued: false, automaticActionAuthorized: false,
+};
 
 async function main() {
   const app = require('../../src/server').app;
@@ -102,6 +121,9 @@ async function main() {
         }
         if (url.pathname.startsWith('/api/v1/forecast/')) {
           forecastRequests.push({ path: url.pathname, method: route.request().method() });
+          if (url.pathname === '/api/v1/forecast/revenue-cash-outlook/current') {
+            return json({ success: true, data: revenueOutlook });
+          }
           if (url.pathname === '/api/v1/forecast/demand-to-schedule/prerequisites/current') {
             return json({ success: true, data: prerequisites });
           }
@@ -180,9 +202,10 @@ async function main() {
       await page.locator('#commandCenterResourceState').getByText('Forecast unavailable').waitFor();
       assert.match(await resource.innerText(), mode === 'demo' ? /fictional jobs/i : /verified material, equipment and travel records/i);
       assert.match(await resource.innerText(), /do not confirm stock, equipment availability or travel capacity/i);
-      await page.locator('#commandCenterRangeState').getByText('Ranges unavailable').waitFor();
-      assert.match(await range.innerText(), mode === 'demo' ? /fictional results/i : /verified past results and tested forecasts/i);
-      assert.match(await range.innerText(), /not the odds that a result will happen/i);
+      await page.locator('#commandCenterRevenueCashState').getByText(
+        mode === 'demo' ? 'Fictional example' : 'Current').waitFor();
+      assert.match(await range.innerText(), /owner-confirmed booked work/i);
+      assert.match(await range.innerText(), /Planning only/i);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       const keyboardTarget = mode === 'demo' ? page.locator('#commandCenterResearchDemoAction') :
         page.getByRole('button', { name: 'Load evaluation', exact: true }).last();
@@ -202,11 +225,11 @@ async function main() {
       else await page.locator('#commandCenterRefresh').evaluate(button => button.click());
       await page.locator('#commandCenterDemandState').getByText('Workspace unavailable').waitFor();
       await page.locator('#commandCenterResourceState').getByText('Workspace unavailable').waitFor();
-      await page.locator('#commandCenterRangeState').getByText('Workspace unavailable').waitFor();
+      await page.locator('#commandCenterRevenueCashState').getByText('Unavailable').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
       assert.match(await panel.innerText(), /Refresh the workspace before/i);
       assert.match(await resource.innerText(), /Refresh to retry loading it/);
-      assert.match(await range.innerText(), /Refresh to retry loading it/);
+      assert.match(await range.innerText(), /Refresh Command Center to try again/);
       const failedScreenshot = path.join(output, `${mode}-${viewport.name}-workspace-failed.png`);
       await panel.screenshot({ path: failedScreenshot });
       failedWorkspace = false;
@@ -215,11 +238,12 @@ async function main() {
       await page.locator('#commandCenterDemandState').getByText(
         mode === 'demo' ? 'Fictional research ready' : 'Research only').waitFor();
       await page.locator('#commandCenterResourceState').getByText('Forecast unavailable').waitFor();
-      await page.locator('#commandCenterRangeState').getByText('Ranges unavailable').waitFor();
+      await page.locator('#commandCenterRevenueCashState').getByText(
+        mode === 'demo' ? 'Fictional example' : 'Current').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
       assert.match(await panel.innerText(), mode === 'demo' ? /fictional isolated demo/i : /guarded research receipts/i);
       assert.match(await resource.innerText(), mode === 'demo' ? /fictional jobs/i : /verified material, equipment and travel records/i);
-      assert.match(await range.innerText(), mode === 'demo' ? /fictional results/i : /verified past results and tested forecasts/i);
+      assert.match(await range.innerText(), /owner-confirmed booked work/i);
       assert.equal(errors.length, 0, errors.join('\n'));
       const recoveredScreenshot = path.join(output, `${mode}-${viewport.name}-recovered.png`);
       await panel.screenshot({ path: recoveredScreenshot });

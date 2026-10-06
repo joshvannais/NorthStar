@@ -500,16 +500,45 @@
             <p class="command-center-demand-boundary" id="commandCenterResourceBoundary">Current records do not confirm future stock or equipment availability.</p>
           </section>
 
-          <section class="demo-panel command-center-range-outlook" aria-labelledby="commandCenterRangeTitle">
+          <section class="demo-panel command-center-range-outlook command-center-revenue-cash-outlook"
+            id="commandCenterRevenueCashOutlook" aria-labelledby="commandCenterRevenueCashTitle" aria-busy="true">
             <div class="demo-panel-heading">
               <div>
-                <p class="demo-panel-kicker">Forecast ranges</p>
-                <h2 id="commandCenterRangeTitle">What could change</h2>
+                <p class="demo-panel-kicker">Planning insight</p>
+                <h2 id="commandCenterRevenueCashTitle">Revenue and cash outlook</h2>
               </div>
-              <span class="command-center-demand-state" id="commandCenterRangeState">Waiting for workspace</span>
+              <span class="command-center-demand-state" id="commandCenterRevenueCashState"
+                role="status" aria-live="polite">Loading</span>
             </div>
-            <p id="commandCenterRangeExplanation">Range status will appear after the workspace loads.</p>
-            <p class="command-center-demand-boundary" id="commandCenterRangeBoundary">What-if scenarios are assumptions, not measured odds.</p>
+            <p class="command-center-revenue-cash-answer" id="commandCenterRevenueCashAnswer">
+              Checking the current supported commercial records.
+            </p>
+            <p class="command-center-revenue-cash-context">
+              <span id="commandCenterRevenueCashScope">Current supported NorthStar records</span>
+              <span aria-hidden="true"> · </span>
+              <time id="commandCenterRevenueCashCheckedAt">Waiting for current data</time>
+            </p>
+            <a class="btn btn-primary command-center-revenue-cash-action"
+              id="commandCenterRevenueCashAction" href="/dashboard/leads"
+              data-command-destination="leads">Review estimates and leads</a>
+            <p class="command-center-demand-boundary" id="commandCenterRevenueCashBoundary">
+              Planning only. No revenue forecast or cash timing is shown while evidence is incomplete.
+            </p>
+            <details class="command-center-revenue-cash-details" id="commandCenterRevenueCashDetails">
+              <summary>Review details</summary>
+              <dl class="command-center-revenue-cash-facts" id="commandCenterRevenueCashFacts">
+                <div><dt>Authorized estimate value</dt><dd id="commandCenterRevenueCashAuthorized">Not available</dd></div>
+                <div><dt>Approved price</dt><dd id="commandCenterRevenueCashApproved">Not available</dd></div>
+                <div><dt>Owner-confirmed booked work</dt><dd id="commandCenterRevenueCashBooked">Not available</dd></div>
+                <div><dt>Approved, not booked</dt><dd id="commandCenterRevenueCashApprovedOpen">Not available</dd></div>
+                <div><dt>Preliminary estimates</dt><dd id="commandCenterRevenueCashPreliminary">Not available</dd></div>
+                <div><dt>Earned revenue</dt><dd id="commandCenterRevenueCashEarned">Not available</dd></div>
+                <div><dt>Cash timing</dt><dd id="commandCenterRevenueCashCash">Not available</dd></div>
+              </dl>
+              <p id="commandCenterRevenueCashDetailsBody">
+                Scenario assumptions are planning inputs and are not calibrated probability.
+              </p>
+            </details>
           </section>
           </div>
 
@@ -574,7 +603,8 @@
   <script src="/js/command-center-demand-position.js?v=m26-part4d-demand-ui-20260930"></script>
   <script src="/js/command-center-demand-research.js?v=m26-part4d-target-complete-20261003"></script>
   <script src="/js/command-center-capacity-research.js?v=m26-part5d-target-complete-20261004"></script>
-  <script src="/js/command-center-page.js?v=m26-part5d-target-complete-20261004"></script>
+  <script src="/js/command-center-revenue-cash-outlook.js?v=m26-founder-part3-20261006"></script>
+  <script src="/js/command-center-page.js?v=m26-founder-part3-20261006"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

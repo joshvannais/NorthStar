@@ -86,12 +86,63 @@ function response(status, data) {
       await page.evaluate(() => window.__releaseCapacityResponse());
       await page.evaluate(() => window.__pendingCapacityLoad);
       assert.match(await page.locator('#commandCenterCapacityState').innerText(), /Review needed/);
+      const darkPresentation = await page.evaluate(() => {
+        const parse = value => {
+          const channels = String(value).match(/[\d.]+/g).map(Number);
+          return { r: channels[0], g: channels[1], b: channels[2], a: channels[3] ?? 1 };
+        };
+        const blend = (top, bottom) => ({
+          r: top.r * top.a + bottom.r * (1 - top.a),
+          g: top.g * top.a + bottom.g * (1 - top.a),
+          b: top.b * top.a + bottom.b * (1 - top.a),
+          a: 1,
+        });
+        const luminance = color => {
+          const channels = [color.r, color.g, color.b].map(channel => {
+            const value = channel / 255;
+            return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+          });
+          return .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
+        };
+        const ratio = (left, right) => {
+          const bright = Math.max(luminance(left), luminance(right));
+          const dark = Math.min(luminance(left), luminance(right));
+          return (bright + .05) / (dark + .05);
+        };
+        const pill = document.getElementById('commandCenterCapacityState');
+        const root = document.getElementById('commandCenterCapacityRoot');
+        const surface = parse(getComputedStyle(root).backgroundColor);
+        const contrasts = {};
+        for (const state of ['current', 'review', 'stale', 'failed', 'restricted']) {
+          pill.dataset.state = state;
+          const style = getComputedStyle(pill);
+          contrasts[state] = ratio(parse(style.color), blend(parse(style.backgroundColor), surface));
+        }
+        pill.dataset.state = 'review';
+        const primary = document.getElementById('commandCenterCapacityPrimaryAction');
+        const fontProbe = document.createElement('span');
+        fontProbe.style.fontFamily = 'var(--font-sans)';
+        root.append(fontProbe);
+        const northStarFont = getComputedStyle(fontProbe).fontFamily;
+        fontProbe.remove();
+        return {
+          contrasts,
+          buttonFont: getComputedStyle(primary).fontFamily,
+          northStarFont,
+        };
+      });
+      for (const [state, ratio] of Object.entries(darkPresentation.contrasts)) {
+        assert.ok(ratio >= 4.5, `Dark ${state} status contrast must be at least 4.5:1; received ${ratio}`);
+      }
+      assert.equal(darkPresentation.buttonFont, darkPresentation.northStarFont,
+        'Capacity buttons must use the NorthStar interface typography');
       assert.match(await page.locator('#commandCenterCapacitySetupTitle').textContent(), /Confirm accepted-work period/);
       for (const button of await page.locator('[data-capacity-lane]').all()) assert.equal(await button.isDisabled(), true);
       assert.equal(await page.evaluate(() => window.__calls.map(item => item.method).join(',')), 'GET');
       await page.locator('#commandCenterCapacityRoot').screenshot({ path: path.join(output, 'paid-empty-prerequisite-ready.png') });
       result.cases.push({ name: 'paid-loading-empty-prerequisite', requests: ['GET'],
-        enabledGuaranteedFailure: false, pass: true });
+        enabledGuaranteedFailure: false, darkStatusContrast: darkPresentation.contrasts,
+        buttonTypography: 'NorthStar font token', pass: true });
       await context.close();
     }
 

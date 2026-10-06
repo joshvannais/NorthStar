@@ -540,6 +540,47 @@
               </p>
             </details>
           </section>
+
+          <section class="demo-panel command-center-range-outlook command-center-cost-risk-outlook"
+            id="commandCenterCostRiskOutlook" aria-labelledby="commandCenterCostRiskTitle" aria-busy="true">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Planning insight</p>
+                <h2 id="commandCenterCostRiskTitle">Cost &amp; operational risk</h2>
+              </div>
+              <span class="command-center-demand-state" id="commandCenterCostRiskState"
+                role="status" aria-live="polite">Loading</span>
+            </div>
+            <p class="command-center-revenue-cash-answer" id="commandCenterCostRiskAnswer">
+              Checking booked work and current cost plans.
+            </p>
+            <p class="command-center-revenue-cash-context">
+              <span id="commandCenterCostRiskScope">Current owner-confirmed booked work</span>
+              <span aria-hidden="true"> · </span>
+              <time id="commandCenterCostRiskCheckedAt">Waiting for current data</time>
+            </p>
+            <a class="btn btn-primary command-center-revenue-cash-action"
+              id="commandCenterCostRiskAction" href="/dashboard/polaris"
+              data-command-destination="polaris">Review estimates</a>
+            <p class="command-center-demand-boundary" id="commandCenterCostRiskBoundary">
+              Planning only. Planned job-cost margin is not company profit; team utilization stays in Team capacity.
+            </p>
+            <details class="command-center-revenue-cash-details" id="commandCenterCostRiskDetails">
+              <summary>Review details</summary>
+              <dl class="command-center-revenue-cash-facts" id="commandCenterCostRiskFacts">
+                <div><dt>Owner-confirmed booked work</dt><dd id="commandCenterCostRiskBooked">Not available</dd></div>
+                <div><dt>Current planned job costs</dt><dd id="commandCenterCostRiskCost">Not available</dd></div>
+                <div><dt>After planned job costs</dt><dd id="commandCenterCostRiskContribution">Not available</dd></div>
+                <div><dt>Planned job-cost margin</dt><dd id="commandCenterCostRiskMargin">Not available</dd></div>
+                <div><dt>Largest booked-job share</dt><dd id="commandCenterCostRiskConcentration">Not available</dd></div>
+                <div><dt>Company profit</dt><dd id="commandCenterCostRiskCompanyProfit">Not available</dd></div>
+                <div><dt>Delay or equipment downtime</dt><dd id="commandCenterCostRiskDowntime">Not available</dd></div>
+              </dl>
+              <p id="commandCenterCostRiskDetailsBody">
+                Unsupported delay, failure, and equipment-downtime predictions stay unavailable.
+              </p>
+            </details>
+          </section>
           </div>
 
           <section class="demo-bottom-grid" aria-label="Guidance and workspace context">
@@ -604,7 +645,8 @@
   <script src="/js/command-center-demand-research.js?v=m26-part4d-target-complete-20261003"></script>
   <script src="/js/command-center-capacity-research.js?v=m26-part5d-target-complete-20261004"></script>
   <script src="/js/command-center-revenue-cash-outlook.js?v=m26-founder-part3-20261006"></script>
-  <script src="/js/command-center-page.js?v=m26-founder-part3-20261006"></script>
+  <script src="/js/command-center-cost-risk-outlook.js?v=m26-founder-part5-20261006"></script>
+  <script src="/js/command-center-page.js?v=m26-founder-part5-20261006"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

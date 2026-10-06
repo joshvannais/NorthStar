@@ -23,6 +23,7 @@
   var demandResearch = null;
   var capacityResearch = null;
   var revenueCashOutlook = null;
+  var costRiskOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -799,6 +800,9 @@
     if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
       revenueCashOutlook.workspaceReady();
     }
+    if (costRiskOutlook && typeof costRiskOutlook.workspaceReady === 'function') {
+      costRiskOutlook.workspaceReady();
+    }
     renderCta();
     byId('commandCenterContent').setAttribute('aria-busy', 'false');
     setStatus('', 'ready');
@@ -855,6 +859,9 @@
       byId('commandCenterResourceBoundary').textContent = 'No resource forecast is shown while workspace data is unavailable.';
       if (revenueCashOutlook && typeof revenueCashOutlook.workspaceUnavailable === 'function') {
         revenueCashOutlook.workspaceUnavailable();
+      }
+      if (costRiskOutlook && typeof costRiskOutlook.workspaceUnavailable === 'function') {
+        costRiskOutlook.workspaceUnavailable();
       }
       renderSchedulingOverview();
       setStatus(error && error.message ? error.message : 'The Command Center workspace is unavailable.', 'error');
@@ -916,6 +923,18 @@
     byId('commandCenterRevenueCashState').textContent = 'Unavailable';
     byId('commandCenterRevenueCashAnswer').textContent =
       'This outlook is unavailable. Refresh Command Center to try again.';
+  }
+  if (global.NorthStarCostRiskOutlook &&
+      typeof global.NorthStarCostRiskOutlook.create === 'function') {
+    costRiskOutlook = global.NorthStarCostRiskOutlook.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterCostRiskOutlook')) {
+    byId('commandCenterCostRiskOutlook').setAttribute('aria-busy', 'false');
+    byId('commandCenterCostRiskState').textContent = 'Unavailable';
+    byId('commandCenterCostRiskAnswer').textContent =
+      'This insight is unavailable. Refresh Command Center to try again.';
   }
   byId('commandCenterRefresh').addEventListener('click', function () { load(); });
   document.querySelectorAll('[data-chart-period]').forEach(function (button) {

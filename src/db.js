@@ -3563,6 +3563,35 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           RAISE EXCEPTION 'Required revenue and cash outlook runtime authority is invalid';
         END IF;
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='238_canonical_forecast_customer_opportunity_outlook.sql') OR
+         pg_catalog.to_regprocedure(
+          'public.canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF pg_catalog.to_regprocedure(
+             'public.canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid)') IS NULL OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(
+             'public.canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid)')
+             AND routine.prosecdef
+             AND pg_catalog.pg_get_userbyid(routine.proowner)=current_user
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[]) THEN
+          RAISE EXCEPTION 'Required customer and opportunity outlook authority is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid) TO %I',
+          runtime_role);
+        IF has_function_privilege('public',
+             'public.canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid)',
+             'EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+             'public.canonical_forecast_customer_opportunity_outlook_current(uuid,uuid,text,uuid)',
+             'EXECUTE') THEN
+          RAISE EXCEPTION 'Required customer and opportunity outlook runtime authority is invalid';
+        END IF;
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -6394,6 +6423,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('235_canonical_forecast_pipeline_scenarios.
 // The read-only founder Part 3 projection follows the established Part 6B
 // advisory-lock order while revalidating the newest Part 6A/6B evidence.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('236_canonical_forecast_revenue_cash_outlook.sql');
+// The founder Part 6 read projection briefly fences its two existing human-review writers.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('238_canonical_forecast_customer_opportunity_outlook.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

@@ -580,9 +580,17 @@
   border-radius: 999px; color: var(--theme-muted); font-size: 12px; font-weight: 700;
 }
 .command-center-revenue-cash-outlook,
-.command-center-cost-risk-outlook { overflow: hidden; }
+.command-center-cost-risk-outlook,
+.command-center-customer-opportunity-outlook { overflow: hidden; }
+.command-center-customer-opportunity-outlook { margin-bottom: 20px; }
+.command-center-customer-opportunity-outlook .demo-panel-heading { margin-bottom: 12px; }
+.command-center-customer-opportunity-outlook p { margin: 0; line-height: 1.5; }
+.command-center-customer-opportunity-outlook .command-center-demand-boundary {
+  margin-top: 8px; font-size: 13px;
+}
 .command-center-revenue-cash-state[data-state="current"],
-#commandCenterRevenueCashState[data-state="current"] {
+#commandCenterRevenueCashState[data-state="current"],
+#commandCenterCustomerOpportunityState[data-state="current"] {
   border-color: rgba(31, 132, 90, .35); color: #157252; background: rgba(31, 132, 90, .08);
 }
 .command-center-revenue-cash-answer {

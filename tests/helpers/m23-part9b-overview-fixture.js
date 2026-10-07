@@ -224,7 +224,8 @@ async function createDatabaseFixture(options = {}) {
     for (const [tenant, creator] of [[org, actors.owner], [otherOrg, actors.otherOwner]]) {
       const raw = options.operationalSchedule ? {
         industry: 'plumbing', businessDescription: 'Disposable operational scheduling fixture.',
-        company: { name: 'Synthetic owner operations', email: 'tenant@example.test', phone: '+15550106000', timeZone: 'UTC', currency: 'USD' },
+        company: { name: 'Synthetic owner operations', email: 'tenant@example.test', phone: '+15550106000',
+          timeZone: options.timeZone || 'UTC', currency: 'USD' },
         headquarters: { street: '1 Test Way', city: 'Boston', state: 'MA', country: 'US', latitude: 42.36, longitude: -71.06, additionalOffices: [] },
         hours: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day, { open: '00:00', close: '23:59', lunch: '', emergency: false, afterHours: false, holiday: false }])),
         scheduling: { maxJobsPerDay: 100, workDayLength: 24, appointmentBuffer: 0, travelBuffer: 0 }, crew: { defaultCrewSize: 2, maxCrewSize: 50 },
@@ -234,7 +235,8 @@ async function createDatabaseFixture(options = {}) {
       const row = (await ownerPool.query(
         "INSERT INTO canonical_business_profiles(organization_id,version_number,version_label,raw_profile,normalized_profile,normalized_profile_hash,is_active,created_by) VALUES($1,1,'org-profile-v1',$2,$3,$4,true,$5) RETURNING id",
         [tenant, raw, normalized, normalized.hash, creator.actorUserId])).rows[0];
-      profiles[tenant] = { businessProfileId: row.id, version: 1, hash: normalized.hash, timeZone: 'UTC' };
+      profiles[tenant] = { businessProfileId: row.id, version: 1, hash: normalized.hash,
+        timeZone: options.timeZone || 'UTC' };
     }
     for (const actor of Object.values(actors)) {
       const session = await provisionDurableSession(ownerPool, { organizationId: actor.organizationId,

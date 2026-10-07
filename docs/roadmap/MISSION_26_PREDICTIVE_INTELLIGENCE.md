@@ -204,10 +204,11 @@ open.
 | D | Overhead and financed-asset cash-commitment forecasts from exact owner-recorded schedules and allocation policy; no assumption that every job pays a monthly installment. |
 | E | Operating-cost, forecast profit and margin ranges with monthly KPI cards, graphs, explanations, paid/demo recovery and independent Part 7 acceptance. |
 
-Part 7A's [planned labor-cost prerequisite](../architecture/MISSION_26_PART7A_LABOR_COST_POSITION.md)
-reuses Mission 24 labor-plan arithmetic under bounded claimed evidence. It
-does not authenticate an as-of source, verify capacity, apply Mission 25
-calibration or issue a paid forecast. Final Part 7A acceptance remains open.
+Part 7A's [bounded labor-cost forecast](../architecture/MISSION_26_PART7A_LABOR_COST_POSITION.md)
+builds on the historical diagnostic with a tenant-private 30-day projection
+from current adopted Mission 24 plans, exact owner-saved rates and declared
+capacity. It fails closed on incomplete period, source or learned-outcome
+compatibility evidence. Independent exact-head audit and release remain open.
 
 Part 7B's [planned material-line cost prerequisite](../architecture/MISSION_26_PART7B_MATERIAL_COST_POSITION.md)
 reuses Mission 24 material-plan quantities, waste and source-aware price and

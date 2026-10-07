@@ -45,6 +45,8 @@ const { createForecastLaborCostRouter } = require('./routes/forecastLaborCost');
 const { createForecastMaterialCostRouter } = require('./routes/forecastMaterialCost');
 const { createForecastEquipmentTravelCostRouter } =
   require('./routes/forecastEquipmentTravelCost');
+const { createForecastOverheadCashRouter } = require('./routes/forecastOverheadCash');
+const { createOperatingCostSchedulesRouter } = require('./routes/operatingCostSchedules');
 const { createForecastCustomerOpportunityOutlookRouter } =
   require('./routes/forecastCustomerOpportunityOutlook');
 const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
@@ -334,6 +336,7 @@ app.use('/api/v1/forecast/cost-risk-outlook', createForecastCostRiskOutlookRoute
 app.use('/api/v1/forecast/labor-cost', createForecastLaborCostRouter());
 app.use('/api/v1/forecast/material-cost', createForecastMaterialCostRouter());
 app.use('/api/v1/forecast/equipment-travel-cost', createForecastEquipmentTravelCostRouter());
+app.use('/api/v1/forecast/overhead-cash', createForecastOverheadCashRouter());
 app.use('/api/v1/forecast/customer-opportunity-outlook',
   createForecastCustomerOpportunityOutlookRouter());
 app.use('/api/v1/forecast/reporting-windows',
@@ -349,6 +352,7 @@ app.use('/api/v1/canonical', createCanonicalRouter({
 app.use('/api/v1', createCompatibilityRouter());
 // Specific downstream routers precede the broad dashboard router. This keeps
 // its router-wide authentication from touching paths it does not own.
+app.use('/api/v1/business-profile/operating-cost-schedules', createOperatingCostSchedulesRouter());
 app.use('/api/v1/business-profile', businessProfileRoutes);
 app.use('/api/v1/knowledge-management', createKnowledgeManagementRouter());
 app.use('/api/v1/voice', voiceRoutes);

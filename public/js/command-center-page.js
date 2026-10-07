@@ -27,6 +27,7 @@
   var laborCostForecast = null;
   var materialCostForecast = null;
   var equipmentTravelCostForecast = null;
+  var overheadCashForecast = null;
   var customerOpportunityOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
@@ -816,6 +817,9 @@
     if (equipmentTravelCostForecast && typeof equipmentTravelCostForecast.workspaceReady === 'function') {
       equipmentTravelCostForecast.workspaceReady();
     }
+    if (overheadCashForecast && typeof overheadCashForecast.workspaceReady === 'function') {
+      overheadCashForecast.workspaceReady();
+    }
     if (customerOpportunityOutlook && typeof customerOpportunityOutlook.workspaceReady === 'function') {
       customerOpportunityOutlook.workspaceReady();
     }
@@ -888,6 +892,9 @@
       if (equipmentTravelCostForecast &&
           typeof equipmentTravelCostForecast.workspaceUnavailable === 'function') {
         equipmentTravelCostForecast.workspaceUnavailable();
+      }
+      if (overheadCashForecast && typeof overheadCashForecast.workspaceUnavailable === 'function') {
+        overheadCashForecast.workspaceUnavailable();
       }
       if (customerOpportunityOutlook &&
           typeof customerOpportunityOutlook.workspaceUnavailable === 'function') {
@@ -1004,6 +1011,19 @@
       'The equipment and travel forecast could not load. Refresh Command Center to try again.';
     byId('commandCenterEquipmentTravelForecastStatus').textContent =
       'Next 30-day planned equipment and travel cost: Not available. The equipment and travel forecast could not load. Refresh Command Center to try again.';
+  }
+  if (global.NorthStarOverheadCashForecast &&
+      typeof global.NorthStarOverheadCashForecast.create === 'function') {
+    overheadCashForecast = global.NorthStarOverheadCashForecast.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterOverheadCashForecast')) {
+    byId('commandCenterOverheadCashForecast').textContent = 'Not available';
+    byId('commandCenterOverheadCashForecastContext').textContent =
+      'The overhead and financed-asset cash forecast could not load. Refresh Command Center to try again.';
+    byId('commandCenterOverheadCashForecastStatus').textContent =
+      'Next 30-day overhead and financed-asset cash: Not available. The forecast could not load. Refresh Command Center to try again.';
   }
   if (global.NorthStarCustomerOpportunityOutlook &&
       typeof global.NorthStarCustomerOpportunityOutlook.create === 'function') {

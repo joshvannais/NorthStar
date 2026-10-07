@@ -225,11 +225,15 @@ downtime, provider truth and financing unavailable. Independent whole exact-head
 audit and normal release remain open.
 
 Part 7D's [overhead and financed-asset cash source gate](../architecture/MISSION_26_PART7D_OVERHEAD_CASH_SOURCE_GATE.md)
-distinguishes Mission 24 job allocation from dated company expense and debt
-obligations. No complete owner-recorded obligation schedule exists in the
-released source records inspected; a new source write authority requires
-founder review where existing future authority does not explicitly cover it.
-No numerical cash-commitment forecast or final Part 7D acceptance is claimed.
+now adds the smallest source-owned, append-only complete schedule snapshot and
+a private owner/admin 30-day read. Exact due dates, amounts, currency,
+recurrence end, payment status, source attestation, effective revision and
+allocation reconciliation fail closed. Mission 24 job-cost allocation,
+economic depreciation, dated cash commitment and actual payment remain
+separate. The compact paid/demo row exposes only aggregate overhead and
+financed-asset cash. Independent whole-head audit and normal release remain
+open; no complete operating-cost forecast, calibrated range or payment claim
+is made.
 
 Part 7E's [operating profit integration gate](../architecture/MISSION_26_PART7E_OPERATING_PROFIT_INTEGRATION_GATE.md)
 requires a source-authenticated adopted composition, compatible revenue and

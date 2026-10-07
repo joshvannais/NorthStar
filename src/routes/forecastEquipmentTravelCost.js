@@ -61,9 +61,11 @@ function sanitizeForecast(value) {
       value.allocation.basis !== 'owner_adopted_m24_cost_allocation_v3' ||
       !exact(value.operations, ['state', 'fuelOrEnergyLineCount', 'maintenanceLineCount',
         'futureUtilizationVerified', 'assetReadinessVerified', 'maintenanceScheduleVerified',
-        'downtimeCostVerified', 'providerAuthenticated', 'reason']) ||
+        'downtimeCostVerified', 'ownershipOrFinancingBasisVerified',
+        'providerAuthenticated', 'reason']) ||
       [value.operations.futureUtilizationVerified, value.operations.assetReadinessVerified,
         value.operations.maintenanceScheduleVerified, value.operations.downtimeCostVerified,
+        value.operations.ownershipOrFinancingBasisVerified,
         value.operations.providerAuthenticated].some(flag => flag !== false) ||
       !exact(value.learnedOutcomes, ['state', 'applicableServiceCount', 'applied', 'reason']) ||
       value.learnedOutcomes.applied !== false ||

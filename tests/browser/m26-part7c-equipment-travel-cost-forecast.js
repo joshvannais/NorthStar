@@ -85,7 +85,7 @@ async function pageFor(browser, { width, theme, mode }) {
         /\$3,980 across 3 scheduled jobs/);
       const contextText = await page.locator('#commandCenterEquipmentTravelForecastContext').innerText();
       assert.match(contextText, /\$2,850 planned equipment plus \$1,130 net travel after \$180 of reviewed overlap/);
-      assert.match(contextText, /future utilization, asset readiness, maintenance schedules, downtime, provider truth, probability, and calibrated ranges are not verified/i);
+      assert.match(contextText, /future utilization, asset readiness, maintenance schedules, downtime, ownership or financing basis, provider truth, probability, and calibrated ranges are not verified/i);
       assert.match(await page.locator('#commandCenterEquipmentTravelForecastStatus').textContent(),
         /Next 30-day planned equipment and travel cost: \$3,980 across 3 scheduled jobs/);
       assert.equal(await page.locator('#commandCenterCostRiskOutlook .btn-primary').count(), 1);
@@ -128,7 +128,7 @@ async function pageFor(browser, { width, theme, mode }) {
         '$50 across 1 scheduled job');
       assert.deepEqual(await page.evaluate(() => window.__announcements), [
         'Next 30-day planned equipment and travel cost: Checking adopted equipment, travel, and allocation plans. Waiting for current evidence.',
-        'Next 30-day planned equipment and travel cost: $50 across 1 scheduled job. $45 planned equipment plus $5 net travel after $10 of reviewed overlap. Owner-recorded plan costs only; future utilization, asset readiness, maintenance schedules, downtime, provider truth, probability, and calibrated ranges are not verified.',
+        'Next 30-day planned equipment and travel cost: $50 across 1 scheduled job. $45 planned equipment plus $5 net travel after $10 of reviewed overlap. Owner-recorded plan costs only; future utilization, asset readiness, maintenance schedules, downtime, ownership or financing basis, provider truth, probability, and calibrated ranges are not verified.',
       ]);
       assert.deepEqual(await page.evaluate(() => window.__calls), [
         { url: '/api/v1/forecast/equipment-travel-cost/current', method: 'GET', cache: 'no-store' },
@@ -158,7 +158,7 @@ async function pageFor(browser, { width, theme, mode }) {
         '$50 across 1 scheduled job');
       assert.deepEqual(await page.evaluate(() => window.__announcements.slice(-2)), [
         'Next 30-day planned equipment and travel cost: Checking adopted equipment, travel, and allocation plans. Waiting for current evidence.',
-        'Next 30-day planned equipment and travel cost: $50 across 1 scheduled job. $45 planned equipment plus $5 net travel after $10 of reviewed overlap. Owner-recorded plan costs only; future utilization, asset readiness, maintenance schedules, downtime, provider truth, probability, and calibrated ranges are not verified.',
+        'Next 30-day planned equipment and travel cost: $50 across 1 scheduled job. $45 planned equipment plus $5 net travel after $10 of reviewed overlap. Owner-recorded plan costs only; future utilization, asset readiness, maintenance schedules, downtime, ownership or financing basis, provider truth, probability, and calibrated ranges are not verified.',
       ]);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       assert.deepEqual(errors, []);

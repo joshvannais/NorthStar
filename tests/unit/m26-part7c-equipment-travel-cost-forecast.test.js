@@ -28,7 +28,8 @@ function forecast(overrides = {}) {
     operations: { state: 'plan_cost_only', fuelOrEnergyLineCount: 2,
       maintenanceLineCount: 1, futureUtilizationVerified: false,
       assetReadinessVerified: false, maintenanceScheduleVerified: false,
-      downtimeCostVerified: false, providerAuthenticated: false,
+      downtimeCostVerified: false, ownershipOrFinancingBasisVerified: false,
+      providerAuthenticated: false,
       reason: 'future_operations_evidence_unavailable' },
     learnedOutcomes: { state: 'none_current', applicableServiceCount: 0, applied: false,
       reason: 'no_current_applicable_owner_adopted_multiplier' },
@@ -50,7 +51,8 @@ function unavailable(reason) {
     operations: { state: 'unavailable', fuelOrEnergyLineCount: null,
       maintenanceLineCount: null, futureUtilizationVerified: false,
       assetReadinessVerified: false, maintenanceScheduleVerified: false,
-      downtimeCostVerified: false, providerAuthenticated: false, reason },
+      downtimeCostVerified: false, ownershipOrFinancingBasisVerified: false,
+      providerAuthenticated: false, reason },
     learnedOutcomes: { state: 'unavailable', applicableServiceCount: null,
       applied: false, reason }, forecastIssued: false });
 }
@@ -65,6 +67,8 @@ describe('Mission 26 original Part 7C equipment-and-travel forecast contract', (
     expect(sanitizeForecast(forecast({ downtimeForecastIssued: true }))).toBeNull();
     expect(sanitizeForecast(forecast({ operations: { ...forecast().operations,
       assetReadinessVerified: true } }))).toBeNull();
+    expect(sanitizeForecast(forecast({ operations: { ...forecast().operations,
+      ownershipOrFinancingBasisVerified: true } }))).toBeNull();
     expect(sanitizeForecast(forecast({ allocation: { ...forecast().allocation,
       v3AllocationReviewed: false } }))).toBeNull();
     expect(sanitizeForecast(unavailable('made_up_reason'))).toBeNull();

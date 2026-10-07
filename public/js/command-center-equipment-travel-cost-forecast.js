@@ -50,9 +50,11 @@
         value.allocation.basis !== 'owner_adopted_m24_cost_allocation_v3' ||
         !exact(value.operations, ['state', 'fuelOrEnergyLineCount', 'maintenanceLineCount',
           'futureUtilizationVerified', 'assetReadinessVerified', 'maintenanceScheduleVerified',
-          'downtimeCostVerified', 'providerAuthenticated', 'reason']) ||
+          'downtimeCostVerified', 'ownershipOrFinancingBasisVerified',
+          'providerAuthenticated', 'reason']) ||
         [value.operations.futureUtilizationVerified, value.operations.assetReadinessVerified,
           value.operations.maintenanceScheduleVerified, value.operations.downtimeCostVerified,
+          value.operations.ownershipOrFinancingBasisVerified,
           value.operations.providerAuthenticated].some(function (flag) { return flag !== false; }) ||
         !exact(value.learnedOutcomes, ['state', 'applicableServiceCount', 'applied', 'reason']) ||
         value.learnedOutcomes.applied !== false || value.completeOperatingCostForecastIssued !== false ||
@@ -116,6 +118,7 @@
       operations: { state: 'plan_cost_only', fuelOrEnergyLineCount: 3, maintenanceLineCount: 2,
         futureUtilizationVerified: false, assetReadinessVerified: false,
         maintenanceScheduleVerified: false, downtimeCostVerified: false,
+        ownershipOrFinancingBasisVerified: false,
         providerAuthenticated: false, reason: 'future_operations_evidence_unavailable' },
       learnedOutcomes: { state: 'none_current', applicableServiceCount: 0, applied: false,
         reason: 'no_current_applicable_owner_adopted_multiplier' },
@@ -165,7 +168,7 @@
       var context = money(plan.equipmentCost, safe.currency) + ' planned equipment plus ' +
         money(plan.netTravelCost, safe.currency) + ' net travel after ' +
         money(plan.overlapDeduction, safe.currency) +
-        ' of reviewed overlap. Owner-recorded plan costs only; future utilization, asset readiness, maintenance schedules, downtime, provider truth, probability, and calibrated ranges are not verified.';
+        ' of reviewed overlap. Owner-recorded plan costs only; future utilization, asset readiness, maintenance schedules, downtime, ownership or financing basis, provider truth, probability, and calibrated ranges are not verified.';
       id('commandCenterEquipmentTravelForecast').textContent = result;
       id('commandCenterEquipmentTravelForecastContext').textContent = context;
       announce(result, context);

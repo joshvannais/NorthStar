@@ -27,7 +27,17 @@ page errors and horizontal overflow. The screenshots were reviewed for clear
 wording and responsive layout. Playwright WebKit is not physical Safari, and
 these isolated fixtures are not production or founder visual approval.
 
-This is a targeted Part 6D presentation correction, **not** final Part 6
-acceptance. Monthly source-backed cards, graphs, drilldowns, paid/demo
-recovery, approved/booked financial source integration and the independent
-Part 6 gate remain open. No numerical Mission 26 forecast is issued.
+This was a targeted Part 6D presentation correction and was not, by itself,
+final Part 6 acceptance.
+
+The Part 6D completion candidate now extends the existing embedded Command
+Center insight with one compact **Open pipeline by stage** comparison inside
+the collapsed **Review details** drill-in. It compares the source-backed
+approved-not-booked and preliminary-estimate amounts for the current planning
+window already supplied by the canonical revenue and cash outlook. The chart
+does not add a dashboard, endpoint, migration, probability, earned-revenue
+claim or cash-timing claim. Its accessible label states that the stage totals
+can overlap and are not a probability or revenue forecast. Paid loading and
+unavailable recovery remove the prior values and hide the chart; the fictional
+demo remains isolated from the paid endpoint. Final Part 6 acceptance remains
+subject to the independent whole exact-head audit and release gate.

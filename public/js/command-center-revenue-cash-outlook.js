@@ -143,6 +143,54 @@
       }) : 'Last checked time unavailable';
     }
     function setFact(name, value) { id(name).textContent = value; }
+    function planningWindow(start, end) {
+      var startDate = new Date(start);
+      var endDate = new Date(end);
+      if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())) {
+        return 'Planning window unavailable';
+      }
+      var format = new Intl.DateTimeFormat('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+      });
+      return format.format(startDate) + ' to ' + format.format(endDate) + ' · end exclusive';
+    }
+    function cents(value) {
+      if (!MONEY.test(value || '')) return 0n;
+      var parts = value.split('.');
+      return BigInt(parts[0]) * 100n + BigInt(parts[1]);
+    }
+    function clearChart() {
+      var chart = id('commandCenterRevenueCashChart');
+      chart.hidden = true;
+      chart.setAttribute('aria-label', 'Monthly open pipeline comparison unavailable');
+      id('commandCenterRevenueCashChartWindow').textContent = 'Planning window unavailable';
+      id('commandCenterRevenueCashChartApproved').textContent = 'Not available';
+      id('commandCenterRevenueCashChartPreliminary').textContent = 'Not available';
+      id('commandCenterRevenueCashChartApprovedBar').style.width = '0%';
+      id('commandCenterRevenueCashChartPreliminaryBar').style.width = '0%';
+    }
+    function renderChart(planning, currency) {
+      if (planning.state !== 'current') { clearChart(); return; }
+      var approved = cents(planning.approvedNotBooked.amountBeforeTax);
+      var preliminary = cents(planning.preliminaryEstimate.amountBeforeTax);
+      var maximum = approved > preliminary ? approved : preliminary;
+      function percent(value) {
+        return maximum === 0n ? 0 : Number((value * 10000n) / maximum) / 100;
+      }
+      var approvedLabel = money(planning.approvedNotBooked.amountBeforeTax, currency);
+      var preliminaryLabel = money(planning.preliminaryEstimate.amountBeforeTax, currency);
+      var windowLabel = planningWindow(planning.horizonStartsAt, planning.horizonEndsAt);
+      var chart = id('commandCenterRevenueCashChart');
+      id('commandCenterRevenueCashChartWindow').textContent = windowLabel;
+      id('commandCenterRevenueCashChartApproved').textContent = approvedLabel;
+      id('commandCenterRevenueCashChartPreliminary').textContent = preliminaryLabel;
+      id('commandCenterRevenueCashChartApprovedBar').style.width = percent(approved) + '%';
+      id('commandCenterRevenueCashChartPreliminaryBar').style.width = percent(preliminary) + '%';
+      chart.setAttribute('aria-label', windowLabel + '. Approved, not booked ' + approvedLabel +
+        '. Preliminary estimates ' + preliminaryLabel +
+        '. Stage totals can overlap and are not a probability or revenue forecast.');
+      chart.hidden = false;
+    }
     function unavailable() {
       var root = id('commandCenterRevenueCashOutlook');
       root.setAttribute('aria-busy', 'false');
@@ -160,6 +208,7 @@
         'Planning only. No revenue forecast or cash timing is shown while evidence is incomplete.';
       id('commandCenterRevenueCashDetailsBody').textContent =
         'No private scenario values, source identifiers, or accounting claims are shown.';
+      clearChart();
     }
     function loading() {
       id('commandCenterRevenueCashOutlook').setAttribute('aria-busy', 'true');
@@ -174,6 +223,7 @@
         'commandCenterRevenueCashCash'].forEach(function (name) { setFact(name, ''); });
       id('commandCenterRevenueCashDetailsBody').textContent = '';
       id('commandCenterRevenueCashDetails').open = false;
+      clearChart();
     }
     function render(value) {
       var safe = validateOutlook(value);
@@ -204,6 +254,7 @@
         setFact('commandCenterRevenueCashApprovedOpen', 'Not available');
         setFact('commandCenterRevenueCashPreliminary', 'Not available');
       }
+      renderChart(safe.planning, safe.currency);
       setFact('commandCenterRevenueCashEarned', 'Not available · recognition authority required');
       setFact('commandCenterRevenueCashCash', 'Not available · complete period coverage required');
       id('commandCenterRevenueCashBoundary').textContent =

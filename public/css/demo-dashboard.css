@@ -582,6 +582,7 @@
 .command-center-revenue-cash-outlook,
 .command-center-cost-risk-outlook,
 .command-center-customer-opportunity-outlook { overflow: hidden; }
+.command-center-revenue-cash-outlook { min-width: 0; }
 .command-center-customer-opportunity-outlook { margin-bottom: 20px; }
 .command-center-customer-opportunity-outlook .demo-panel-heading { margin-bottom: 12px; }
 .command-center-customer-opportunity-outlook p { margin: 0; line-height: 1.5; }
@@ -619,6 +620,34 @@
 .command-center-revenue-cash-facts dt { color: var(--theme-muted); font-size: 11px; font-weight: 700; }
 .command-center-revenue-cash-facts dd {
   margin: 4px 0 0; color: var(--theme-text); font-size: 14px; font-weight: 750; overflow-wrap: anywhere;
+}
+.command-center-revenue-cash-chart {
+  display: grid; min-width: 0; max-width: 100%; gap: 12px; margin: 12px 0; padding: 12px;
+  border: 1px solid var(--theme-border); border-radius: 12px; background: var(--theme-surface);
+}
+.command-center-revenue-cash-chart[hidden] { display: none; }
+.command-center-revenue-cash-chart-heading {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.command-center-revenue-cash-chart-heading h3 {
+  margin: 0; color: var(--theme-text); font-size: 14px;
+}
+.command-center-revenue-cash-chart-heading span {
+  min-width: 0; max-width: 100%; color: var(--theme-muted); font-size: 11px;
+  text-align: right; overflow-wrap: anywhere;
+}
+.command-center-revenue-cash-chart-row { display: grid; gap: 6px; }
+.command-center-revenue-cash-chart-row > div:first-child {
+  display: flex; justify-content: space-between; gap: 10px; color: var(--theme-muted); font-size: 12px;
+}
+.command-center-revenue-cash-chart-row strong { color: var(--theme-text); }
+.command-center-revenue-cash-chart-track {
+  height: 8px; overflow: hidden; border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-500) 14%, var(--theme-border));
+}
+.command-center-revenue-cash-chart-track > span {
+  display: block; width: 0; height: 100%; border-radius: inherit;
+  background: var(--brand-500); transition: width .2s ease;
 }
 .command-center-revenue-cash-details > p { color: var(--theme-muted); font-size: 12px; }
 .command-center-backlog-title { margin: 0 0 8px; color: var(--theme-text); font-size: 17px; }
@@ -1094,6 +1123,8 @@ button.command-center-record-link {
   .command-center-demand-state { align-self: flex-start; }
   .command-center-revenue-cash-action { width: 100%; }
   .command-center-revenue-cash-facts { grid-template-columns: minmax(0, 1fr); }
+  .command-center-revenue-cash-chart-heading { align-items: flex-start; flex-direction: column; }
+  .command-center-revenue-cash-chart-heading span { text-align: left; }
   .command-center-backlog-metrics { grid-template-columns: minmax(0, 1fr); }
   .command-center-backlog-receipt-row { align-items: stretch; flex-direction: column; }
   .command-center-research-heading { flex-direction: column; }

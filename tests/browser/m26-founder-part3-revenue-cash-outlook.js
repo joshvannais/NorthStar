@@ -74,9 +74,28 @@ async function pageFor(browser, { width, theme, mode, reducedMotion = false }) {
       assert.match(text, /Earned revenue[\s\S]*Not available/);
       assert.match(text, /Cash timing[\s\S]*Not available/);
       assert.doesNotMatch(text, /confidence|probability forecast|\$0[^0-9]/i);
+      assert.equal(await page.locator('#commandCenterRevenueCashChart').isHidden(), false);
+      assert.match(await page.locator('#commandCenterRevenueCashChartWindow').innerText(),
+        /Nov 1, 2026 to Dec 1, 2026/);
+      assert.match(await page.locator('#commandCenterRevenueCashChart').getAttribute('aria-label'),
+        /Approved, not booked \$5,200[\s\S]*Preliminary estimates \$6,200[\s\S]*not a probability or revenue forecast/);
+      assert.equal(await page.locator('#commandCenterRevenueCashChartPreliminaryBar')
+        .evaluate(node => node.style.width), '100%');
+      assert.equal(await page.locator('#commandCenterRevenueCashChartPreliminaryBar')
+        .evaluate(node => ['transparent', 'rgba(0, 0, 0, 0)']
+          .includes(getComputedStyle(node).backgroundColor)), false);
+      assert.ok(await page.locator('#commandCenterRevenueCashChartPreliminaryBar')
+        .evaluate(node => parseFloat(getComputedStyle(node).transitionDuration) <= 0.00001));
       await page.locator('#commandCenterRevenueCashDetails > summary').focus();
       assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Review details');
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+      const overflow = await page.evaluate(() => Array.from(document.querySelectorAll('body *'))
+        .filter(node => {
+          const bounds = node.getBoundingClientRect();
+          return bounds.left < -1 || bounds.right > innerWidth + 1;
+        })
+        .map(node => ({ id: node.id, className: node.className, tagName: node.tagName,
+          left: node.getBoundingClientRect().left, right: node.getBoundingClientRect().right })));
+      assert.deepEqual(overflow, []);
       assert.deepEqual(errors, []);
       await page.locator('#commandCenterRevenueCashOutlook').screenshot({
         path: path.join(output, 'demo-mobile-dark.png') });
@@ -116,6 +135,8 @@ async function pageFor(browser, { width, theme, mode, reducedMotion = false }) {
           .map(suffix => document.querySelector('#commandCenterRevenueCash' + suffix).textContent),
         detailsBody: document.querySelector('#commandCenterRevenueCashDetailsBody').textContent,
         detailsOpen: document.querySelector('#commandCenterRevenueCashDetails').open,
+        chartHidden: document.querySelector('#commandCenterRevenueCashChart').hidden,
+        chartLabel: document.querySelector('#commandCenterRevenueCashChart').getAttribute('aria-label'),
         text: document.querySelector('#commandCenterRevenueCashOutlook').innerText,
       }));
       assert.equal(loadingState.busy, 'true');
@@ -124,6 +145,8 @@ async function pageFor(browser, { width, theme, mode, reducedMotion = false }) {
       assert.deepEqual(loadingState.facts, ['', '', '', '', '', '', '']);
       assert.equal(loadingState.detailsBody, '');
       assert.equal(loadingState.detailsOpen, false);
+      assert.equal(loadingState.chartHidden, true);
+      assert.doesNotMatch(loadingState.chartLabel, /\$/);
       assert.doesNotMatch(loadingState.text, /\$[0-9]|[0-9]+ open/i,
         'Refresh loading must not retain prior commercial facts');
       await page.evaluate(() => window.__releaseOutlook());
@@ -142,6 +165,7 @@ async function pageFor(browser, { width, theme, mode, reducedMotion = false }) {
       const unavailable = await page.locator('#commandCenterRevenueCashOutlook').innerText();
       assert.match(unavailable, /Unavailable/);
       assert.doesNotMatch(unavailable, /\$0/);
+      assert.equal(await page.locator('#commandCenterRevenueCashChart').isHidden(), true);
       assert.equal(await page.locator('#commandCenterRevenueCashOutlook').getAttribute('aria-busy'), 'false');
       result.cases.push({ name: 'paid-fail-closed', pass: true });
       await context.close();

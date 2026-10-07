@@ -11,9 +11,11 @@ assert.ok(!fs.existsSync(output), 'Browser evidence directory must be new');
 fs.mkdirSync(output, { recursive: true });
 const dashboard = fs.readFileSync(path.resolve('public/demo-dashboard.html'), 'utf8')
   .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-  .replace(/<script\b[^>]*\/>/gi, '');
+  .replace(/<script\b[^>]*\/>/gi, '')
+  .replace(/<link\b(?=[^>]*\brel=["']stylesheet["'])[^>]*>/gi, '');
 const styles = ['style.css', 'demo-dashboard.css'].map(file =>
-  fs.readFileSync(path.resolve('public/css', file), 'utf8')).join('\n');
+  fs.readFileSync(path.resolve('public/css', file), 'utf8')
+    .replace(/^\s*\@import[^;]+;\s*/gm, '')).join('\n');
 
 async function pageFor(browser, scenario) {
   const context = await browser.newContext({ viewport: scenario.viewport,
@@ -26,6 +28,8 @@ async function pageFor(browser, scenario) {
     const style = document.createElement('style'); style.textContent = styles;
     document.head.append(style); document.documentElement.dataset.theme = theme;
   }, { styles, theme: scenario.theme });
+  await page.waitForFunction(() => getComputedStyle(document.body).margin === '0px' &&
+    document.body.getBoundingClientRect().left === 0);
   await page.addScriptTag({ path: path.resolve('public/js/command-center-overhead-cash-forecast.js') });
   await page.evaluate(mode => {
     window.__calls = []; window.__responses = []; window.__announcements = [];
@@ -129,14 +133,26 @@ async function exercise(browser, scenario, result) {
     assert.match(contextText, /Owner-marked satisfied dates are not proof of payment/);
     assert.match(contextText, /Job-cost allocation and economic depreciation stay separate/);
     assert.equal(await page.locator('#commandCenterCostRiskOutlook .btn-primary').count(), 1);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    const layout = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth,
+      offenders: Array.from(document.querySelectorAll('body *')).map(element => {
+        const rect = element.getBoundingClientRect();
+        return { tag: element.tagName, id: element.id, className: String(element.className || ''),
+          left: Math.round(rect.left * 100) / 100, right: Math.round(rect.right * 100) / 100,
+          scrollWidth: element.scrollWidth, clientWidth: element.clientWidth };
+      }).filter(item => item.left < 0 || item.right > document.documentElement.clientWidth),
+    }));
+    assert.equal(layout.scrollWidth, layout.clientWidth,
+      `Horizontal overflow in ${scenario.mode}-${scenario.size}-${scenario.theme}: ${JSON.stringify(layout)}`);
     assert.deepEqual(errors, []);
     const name = [scenario.mode, scenario.size, scenario.theme].join('-');
     await page.screenshot({ path: path.join(output, name + '.png'), fullPage: true });
     result.cases.push({ name, fullPage: true, collapsedPrivateDetailHidden: true,
       statusExposedWhileCollapsed: true, keyboardFocusPreserved: true,
       exactRecovery: scenario.mode === 'paid', oneExistingAction: true,
-      noHorizontalOverflow: true, pass: true });
+      noHorizontalOverflow: true, layout, pass: true });
   } finally { await context.close(); }
 }
 

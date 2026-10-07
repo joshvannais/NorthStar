@@ -1,9 +1,11 @@
 (function (global) {
   'use strict';
-  var MONEY = /^(?:0|[1-9][0-9]{0,14})\.[0-9]{2}$/;
+  var MONEY = /^(?:0|[1-9][0-9]{0,11})\.[0-9]{2}$/;
+  var POSITIVE_MONEY = /^(?:0\.(?:0[1-9]|[1-9][0-9])|[1-9][0-9]{0,11}\.[0-9]{2})$/;
   var REASONS = ['reporting_profile_unavailable', 'owner_recorded_schedule_coverage_unavailable',
     'owner_recorded_schedule_coverage_stale', 'schedule_currency_conflict',
-    'schedule_source_currentness_unavailable'];
+    'schedule_source_currentness_unavailable', 'nonempty_zero_schedule_unavailable',
+    'schedule_amount_capacity_unavailable'];
   function exact(value, keys) {
     return value && typeof value === 'object' && !Array.isArray(value) &&
       Object.keys(value).length === keys.length && keys.every(function (key) {
@@ -63,7 +65,15 @@
         value.allocation.reason === value.reason && Object.keys(value.evidence)
           .every(function (key) { return value.evidence[key] === false; }) ? value : null;
     }
-    return value.reason === null && /^[A-Z]{3}$/.test(value.currency || '') &&
+    var emptySource = value.overhead.scheduleCount === 0 &&
+      value.financedAssetCash.obligationCount === 0;
+    var zeroContract = emptySource ?
+      value.overhead.amount === '0.00' && value.financedAssetCash.amount === '0.00' &&
+        value.overhead.dueCount === 0 && value.financedAssetCash.dueCount === 0 :
+      POSITIVE_MONEY.test(value.overhead.amount || '') &&
+        POSITIVE_MONEY.test(value.financedAssetCash.amount || '') &&
+        value.overhead.dueCount > 0 && value.financedAssetCash.dueCount > 0;
+    return zeroContract && value.reason === null && /^[A-Z]{3}$/.test(value.currency || '') &&
       value.scope.sourceCoverageVerified === true && value.overhead.state === 'current' &&
       MONEY.test(value.overhead.amount || '') && count(value.overhead.dueCount) &&
       count(value.overhead.scheduleCount) && value.overhead.reason === null &&

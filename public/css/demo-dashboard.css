@@ -954,6 +954,19 @@
   background: transparent;
 }
 
+.command-center-blueprint-page {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+}
+
+.command-center-blueprint-page .app-layout,
+.command-center-blueprint-page .command-center-blueprint-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
 .command-center-blueprint-header { position: sticky; top: 0; z-index: 300; width: 100%; }
 .command-center-blueprint-header .demo-dashboard-header-inner,
 .command-center-blueprint-main,

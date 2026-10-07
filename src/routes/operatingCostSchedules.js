@@ -10,7 +10,8 @@ const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const TOKEN = /^[a-z0-9][a-z0-9._-]{1,63}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const MONEY = /^(?:0|[1-9][0-9]{0,11})\.[0-9]{2}$/;
+const MONEY = /^(?:0\.(?:0[1-9]|[1-9][0-9])|[1-9][0-9]{0,11}\.[0-9]{2})$/;
+const MAX_AGGREGATE_CENTS = 99999999999999n;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
 const CATEGORIES = new Set(['rent', 'utilities', 'insurance', 'tax', 'administration',
   'maintenance', 'interest', 'principal', 'debt_service', 'other']);
@@ -30,6 +31,27 @@ function validInstant(value) {
 function validText(value, maximum) {
   return typeof value === 'string' && value.trim().length > 0 &&
     Buffer.byteLength(value, 'utf8') <= maximum * 4;
+}
+
+function amountCents(value) {
+  const [whole, fraction] = value.split('.');
+  return BigInt(whole) * 100n + BigInt(fraction);
+}
+
+function rollingCapacityValid(dues) {
+  for (const kind of ['overhead_expense', 'financed_asset_obligation']) {
+    const entries = dues.filter(due => due.kind === kind).sort((left, right) => left.day - right.day);
+    let start = 0;
+    let total = 0n;
+    for (let end = 0; end < entries.length; end += 1) {
+      total += entries[end].cents;
+      while (entries[end].day - entries[start].day >= 30) {
+        total -= entries[start].cents; start += 1;
+      }
+      if (total > MAX_AGGREGATE_CENTS) return false;
+    }
+  }
+  return true;
 }
 
 function normalizeSnapshot(body) {
@@ -62,6 +84,7 @@ function normalizeSnapshot(body) {
     throw Object.assign(new Error('Operating-cost coverage or policy is invalid.'), { code: '22023' });
   }
   const scheduleKeys = new Set();
+  const scheduledDues = [];
   for (const schedule of body.schedules) {
     if (!exact(schedule, ['scheduleKey', 'kind', 'assetId', 'amount', 'currency', 'dueDates',
       'recurrenceEnd', 'includedCategories', 'sourceAttestation']) ||
@@ -85,6 +108,9 @@ function normalizeSnapshot(body) {
         throw Object.assign(new Error('Operating-cost due date is invalid.'), { code: '22023' });
       }
       dates.add(due.dueOn);
+      if (due.paymentStatus === 'scheduled') scheduledDues.push({ kind: schedule.kind,
+        day: Date.parse(due.dueOn + 'T00:00:00.000Z') / 86400000,
+        cents: amountCents(schedule.amount) });
     }
     const categories = new Set(schedule.includedCategories);
     if (categories.size !== schedule.includedCategories.length ||
@@ -102,6 +128,10 @@ function normalizeSnapshot(body) {
           !DIGEST.test(source.documentDigest || ''))) {
       throw Object.assign(new Error('Operating-cost source attestation is invalid.'), { code: '22023' });
     }
+  }
+  if (!rollingCapacityValid(scheduledDues)) {
+    throw Object.assign(new Error('A 30-day operating-cost total exceeds forecast capacity.'),
+      { code: '22023' });
   }
   const referenceKeys = new Set();
   for (const decision of body.allocationPolicy.decisions) {

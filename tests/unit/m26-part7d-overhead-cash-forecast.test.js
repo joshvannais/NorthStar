@@ -108,6 +108,19 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
       assetId: null }] }))).toThrow(/schedule/i);
     expect(() => normalizeSnapshot(snapshot({ schedules: [{ ...snapshot().schedules[1],
       dueDates: [{ dueOn: '2026-10-20', paymentStatus: 'paid' }] }] }))).toThrow(/due date/i);
+    expect(() => normalizeSnapshot(snapshot({ schedules: [{ ...snapshot().schedules[0],
+      amount: '0.00' }] }))).toThrow(/schedule/i);
+    expect(normalizeSnapshot(snapshot({ schedules: [{ ...snapshot().schedules[0],
+      amount: '0.01' }, snapshot().schedules[1]] })).schedules[0].amount).toBe('0.01');
+    const dates = Array.from({ length: 30 }, (_value, index) => ({
+      dueOn: new Date(Date.UTC(2026, 9, 7 + index)).toISOString().slice(0, 10),
+      paymentStatus: 'scheduled',
+    }));
+    const overCapacity = Array.from({ length: 34 }, (_value, index) => ({
+      ...snapshot().schedules[0], scheduleKey: `capacity-${String(index).padStart(2, '0')}`,
+      amount: '999999999999.99', dueDates: dates,
+    }));
+    expect(() => normalizeSnapshot(snapshot({ schedules: overCapacity }))).toThrow(/capacity/i);
     const revoke = snapshot({ expectedRevision: 2, expectedDigest: 'b'.repeat(64),
       action: 'revoke', currency: null, effectiveOn: null, coverage: null, schedules: [],
       allocationPolicy: null });
@@ -157,6 +170,15 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
   test('serves only strict aggregate projections and rolls back corrupt data', async () => {
     expect(sanitizeForecast(forecast())).toEqual(forecast());
     expect(sanitizeForecast(unavailable())).toEqual(unavailable());
+    expect(sanitizeForecast(unavailable('nonempty_zero_schedule_unavailable'))).not.toBeNull();
+    expect(sanitizeForecast(unavailable('schedule_amount_capacity_unavailable'))).not.toBeNull();
+    expect(sanitizeForecast(forecast({ overhead: { ...forecast().overhead, amount: '0.00' } }))).toBeNull();
+    const empty = forecast({
+      overhead: { ...forecast().overhead, amount: '0.00', dueCount: 0, scheduleCount: 0 },
+      financedAssetCash: { ...forecast().financedAssetCash, amount: '0.00', dueCount: 0,
+        obligationCount: 0, ownerMarkedSatisfiedCount: 0, canceledCount: 0 },
+    });
+    expect(sanitizeForecast(empty)).toEqual(empty);
     expect(sanitizeForecast({ ...forecast(), assetId: ASSET })).toBeNull();
     expect(sanitizeForecast(forecast({ evidence: { ...forecast().evidence,
       actualPaymentVerified: true } }))).toBeNull();
@@ -190,6 +212,8 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
       '../../public/js/command-center-overhead-cash-forecast.js'), 'utf8'), context);
     const api = context.window.NorthStarOverheadCashForecast;
     expect(api.validate(api.demoForecast())).not.toBeNull();
+    expect(api.validate({ ...api.demoForecast(),
+      overhead: { ...api.demoForecast().overhead, amount: '0.00' } })).toBeNull();
     expect(api.demoForecast()).toMatchObject({ fictional: true,
       forecastIssued: true, completeOperatingCostForecastIssued: false,
       calibratedRangeIssued: false, probabilityIssued: false });

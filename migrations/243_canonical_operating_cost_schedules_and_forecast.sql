@@ -133,11 +133,14 @@ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp A
 
 CREATE FUNCTION public.canonical_operating_cost_snapshot_read(org UUID,actor UUID,role_value TEXT,session_value UUID)RETURNS JSONB
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE auth JSONB;v public.canonical_operating_cost_schedule_revisions%ROWTYPE;
+DECLARE auth JSONB;v public.canonical_operating_cost_schedule_revisions%ROWTYPE;cutoff TIMESTAMPTZ;
 BEGIN IF current_setting('transaction_isolation')<>'read committed'THEN RAISE EXCEPTION'Read committed required'USING ERRCODE='25001';END IF;
  auth:=public.canonical_forecast_booking_ordered_access(org,actor,role_value,session_value,NULL,FALSE);IF role_value NOT IN('owner','admin')THEN RAISE EXCEPTION'Source restricted'USING ERRCODE='42501';END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('m26:operating-cost-schedules:'||org::text,0));auth:=public.canonical_forecast_booking_ordered_access(org,actor,role_value,session_value,NULL,FALSE);
- SELECT * INTO v FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org ORDER BY revision DESC LIMIT 1;
+ cutoff:=public.canonical_forecast_workload_capacity_v1_clock();
+ SELECT * INTO v FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org
+  AND(action='revoke'OR(payload->>'effectiveOn')::date<=(cutoff AT TIME ZONE(authority#>>'{profile,timeZone}'))::date)
+  ORDER BY revision DESC LIMIT 1;
  RETURN public.canonical_operating_cost_source_projection(v);END $$;
 
 CREATE FUNCTION public.canonical_operating_cost_snapshot_read_as_of(org UUID,actor UUID,role_value TEXT,session_value UUID,cutoff TIMESTAMPTZ)RETURNS JSONB
@@ -146,7 +149,9 @@ DECLARE auth JSONB;v public.canonical_operating_cost_schedule_revisions%ROWTYPE;
 BEGIN IF current_setting('transaction_isolation')<>'read committed'OR cutoff IS NULL OR cutoff>public.canonical_forecast_workload_capacity_v1_clock()
  THEN RAISE EXCEPTION'Historical cutoff invalid'USING ERRCODE='22023';END IF;
  auth:=public.canonical_forecast_booking_ordered_access(org,actor,role_value,session_value,NULL,FALSE);IF role_value NOT IN('owner','admin')THEN RAISE EXCEPTION'Source restricted'USING ERRCODE='42501';END IF;
- SELECT * INTO v FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org AND created_at<=cutoff ORDER BY created_at DESC,revision DESC LIMIT 1;
+ SELECT * INTO v FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org AND created_at<=cutoff
+  AND(action='revoke'OR(payload->>'effectiveOn')::date<=(cutoff AT TIME ZONE(authority#>>'{profile,timeZone}'))::date)
+  ORDER BY revision DESC LIMIT 1;
  RETURN public.canonical_operating_cost_source_projection(v);END $$;
 
 CREATE FUNCTION public.canonical_operating_cost_snapshot_valid(body JSONB) RETURNS BOOLEAN
@@ -174,7 +179,7 @@ BEGIN
  FOR s IN SELECT value FROM jsonb_array_elements(body->'schedules')LOOP
   IF public.canonical_field_evidence_object_keys_exact(s,ARRAY['scheduleKey','kind','assetId','amount','currency','dueDates','recurrenceEnd','includedCategories','sourceAttestation'])IS NOT TRUE
   OR s->>'scheduleKey'!~'^[a-z0-9][a-z0-9._-]{1,63}$' OR s->>'scheduleKey'=ANY(keys)
-  OR s->>'kind' NOT IN('overhead_expense','financed_asset_obligation') OR s->>'amount'!~'^(0|[1-9][0-9]{0,11})\.[0-9]{2}$'
+  OR s->>'kind' NOT IN('overhead_expense','financed_asset_obligation') OR s->>'amount'!~'^(0\.(0[1-9]|[1-9][0-9])|[1-9][0-9]{0,11}\.[0-9]{2})$'
   OR s->>'currency'IS DISTINCT FROM currency OR jsonb_typeof(s->'dueDates')<>'array' OR jsonb_array_length(s->'dueDates')NOT BETWEEN 1 AND 120
   OR public.canonical_pricing_day(s->'recurrenceEnd')IS NOT TRUE OR jsonb_typeof(s->'includedCategories')<>'array'
   OR jsonb_array_length(s->'includedCategories')NOT BETWEEN 1 AND 12 THEN RETURN FALSE;END IF;
@@ -196,6 +201,15 @@ BEGIN
    OR a->>'attestedAt'!~'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$'
    OR(a->>'kind'='owner_attested' AND a->'documentDigest'<>'null'::jsonb)OR(a->>'kind'='source_document' AND COALESCE(a->>'documentDigest','')!~'^[0-9a-f]{64}$')THEN RETURN FALSE;END IF;
  END LOOP;
+ IF EXISTS(WITH dues AS(
+   SELECT schedule.value->>'kind' kind,(schedule.value->>'amount')::numeric*100 amount_cents,
+    (due.value->>'dueOn')::date due_on
+   FROM jsonb_array_elements(body->'schedules')AS schedule(value)
+   CROSS JOIN LATERAL jsonb_array_elements(schedule.value->'dueDates')AS due(value)
+   WHERE due.value->>'paymentStatus'='scheduled'),
+  anchors AS(SELECT DISTINCT dues.kind,dues.due_on FROM dues)
+  SELECT 1 FROM anchors a JOIN dues d ON d.kind=a.kind AND d.due_on>=a.due_on AND d.due_on<a.due_on+30
+  GROUP BY a.kind,a.due_on HAVING sum(d.amount_cents)>99999999999999)THEN RETURN FALSE;END IF;
  FOR v IN SELECT value FROM jsonb_array_elements(p->'decisions')LOOP
   IF public.canonical_field_evidence_object_keys_exact(v,ARRAY['referenceKey','treatment','scheduleKey','reason'])IS NOT TRUE
   OR length(COALESCE(v->>'referenceKey',''))NOT BETWEEN 1 AND 300 OR v->>'referenceKey'=ANY(refs)
@@ -264,8 +278,12 @@ BEGIN
   PERFORM 1 FROM public.organizations WHERE id=org FOR SHARE;
   LOCK TABLE public.canonical_equipment_cost_plans,public.canonical_pricing_plans IN SHARE MODE;
   PERFORM pg_advisory_xact_lock(hashtextextended('m26:operating-cost-schedules:'||org::text,0));
-  SELECT * INTO source FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org ORDER BY revision DESC LIMIT 1;
- ELSE SELECT * INTO source FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org AND created_at<=cutoff ORDER BY created_at DESC,revision DESC LIMIT 1;END IF;
+  SELECT * INTO source FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org
+   AND(action='revoke'OR(payload->>'effectiveOn')::date<=(cutoff AT TIME ZONE(authority#>>'{profile,timeZone}'))::date)
+   ORDER BY revision DESC LIMIT 1;
+ ELSE SELECT * INTO source FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org AND created_at<=cutoff
+  AND(action='revoke'OR(payload->>'effectiveOn')::date<=(cutoff AT TIME ZONE(authority#>>'{profile,timeZone}'))::date)
+  ORDER BY revision DESC LIMIT 1;END IF;
  IF source.id IS NULL THEN RETURN public.canonical_forecast_overhead_cash_v1_unavailable('owner_recorded_schedule_coverage_unavailable',cutoff,NULL,mode_value,NULL,NULL,NULL);END IF;
  profile_pin:=source.authority->'profile';zone:=profile_pin->>'timeZone';currency:=profile_pin->>'currency';
  IF zone IS NULL OR currency!~'^[A-Z]{3}$'OR NOT EXISTS(SELECT 1 FROM pg_timezone_names WHERE name=zone)THEN
@@ -291,17 +309,22 @@ BEGIN
  IF source.payload->>'currency'IS DISTINCT FROM currency THEN RETURN public.canonical_forecast_overhead_cash_v1_unavailable('schedule_currency_conflict',cutoff,zone,mode_value,source.revision,rtrim(source.canonical_digest),source.created_at);END IF;
  IF source.payload#>>'{coverage,complete}'<>'true'OR(source.payload#>>'{coverage,startsOn}')::date>start_day
  OR(source.payload#>>'{coverage,endsOn}')::date<end_day-1 OR(source.payload#>>'{coverage,recordedThrough}')::timestamptz>source.created_at
- OR((source.payload#>>'{coverage,recordedThrough}')::timestamptz AT TIME ZONE zone)::date<start_day
  OR source.authority#>>'{mission24,version}'<>'operating-cost-mission24-reconciliation-v1'
  OR source.authority#>>'{mission24,digest}'IS NULL THEN RETURN public.canonical_forecast_overhead_cash_v1_unavailable('owner_recorded_schedule_coverage_stale',cutoff,zone,mode_value,source.revision,rtrim(source.canonical_digest),source.created_at);END IF;
  FOR s IN SELECT value FROM jsonb_array_elements(source.payload->'schedules')LOOP
-  amount:=round((s->>'amount')::numeric*100);IF s->>'kind'='overhead_expense'THEN overhead_schedules:=overhead_schedules+1;ELSE obligations:=obligations+1;END IF;
+  IF s->>'amount'!~'^(0\.(0[1-9]|[1-9][0-9])|[1-9][0-9]{0,11}\.[0-9]{2})$'THEN
+   RETURN public.canonical_forecast_overhead_cash_v1_unavailable('nonempty_zero_schedule_unavailable',cutoff,zone,mode_value,source.revision,rtrim(source.canonical_digest),source.created_at);END IF;
+  amount:=(s->>'amount')::numeric*100;IF s->>'kind'='overhead_expense'THEN overhead_schedules:=overhead_schedules+1;ELSE obligations:=obligations+1;END IF;
   FOR d IN SELECT value FROM jsonb_array_elements(s->'dueDates')LOOP due_day:=(d->>'dueOn')::date;
    IF due_day>=start_day AND due_day<end_day THEN
     IF d->>'paymentStatus'='scheduled'THEN IF s->>'kind'='overhead_expense'THEN overhead:=overhead+amount;overhead_due:=overhead_due+1;
      ELSE financed:=financed+amount;financed_due:=financed_due+1;END IF;
     ELSIF s->>'kind'='financed_asset_obligation'AND d->>'paymentStatus'='owner_marked_satisfied'THEN satisfied:=satisfied+1;
     ELSIF s->>'kind'='financed_asset_obligation'AND d->>'paymentStatus'='canceled'THEN canceled:=canceled+1;END IF;END IF;END LOOP;END LOOP;
+ IF overhead>99999999999999 OR financed>99999999999999 THEN
+  RETURN public.canonical_forecast_overhead_cash_v1_unavailable('schedule_amount_capacity_unavailable',cutoff,zone,mode_value,source.revision,rtrim(source.canonical_digest),source.created_at);END IF;
+ IF jsonb_array_length(source.payload->'schedules')>0 AND(overhead=0 OR financed=0)THEN
+  RETURN public.canonical_forecast_overhead_cash_v1_unavailable('nonempty_zero_schedule_unavailable',cutoff,zone,mode_value,source.revision,rtrim(source.canonical_digest),source.created_at);END IF;
  RETURN jsonb_build_object('version','m26-overhead-cash-forecast-v1','state','current','reason',NULL,'fictional',FALSE,
   'checkedAt',public.canonical_forecast_utc_instant(cutoff),'currency',currency,'basis',jsonb_build_object('mode',mode_value,
    'cutoff',public.canonical_forecast_utc_instant(cutoff),'sourceRevision',source.revision,'sourceDigest',rtrim(source.canonical_digest),'sourceRecordedAt',public.canonical_forecast_utc_instant(source.created_at)),

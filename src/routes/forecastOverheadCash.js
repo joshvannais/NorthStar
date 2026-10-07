@@ -6,13 +6,15 @@ const { requireOnboardedInternal } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
 
-const MONEY = /^(?:0|[1-9][0-9]{0,14})\.[0-9]{2}$/;
+const MONEY = /^(?:0|[1-9][0-9]{0,11})\.[0-9]{2}$/;
+const POSITIVE_MONEY = /^(?:0\.(?:0[1-9]|[1-9][0-9])|[1-9][0-9]{0,11}\.[0-9]{2})$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 const REASONS = new Set(['reporting_profile_unavailable',
   'owner_recorded_schedule_coverage_unavailable', 'owner_recorded_schedule_coverage_stale',
-  'schedule_currency_conflict', 'schedule_source_currentness_unavailable']);
+  'schedule_currency_conflict', 'schedule_source_currentness_unavailable',
+  'nonempty_zero_schedule_unavailable', 'schedule_amount_capacity_unavailable']);
 
 function exact(value, keys) {
   return value && typeof value === 'object' && !Array.isArray(value) &&
@@ -88,6 +90,11 @@ function sanitizeForecast(value) {
       !Number.isSafeInteger(value.basis.sourceRevision) || value.basis.sourceRevision < 1 ||
       !DIGEST.test(value.basis.sourceDigest || '') || !instant(value.basis.sourceRecordedAt) ||
       value.forecastIssued !== true) return null;
+  const emptySource = value.overhead.scheduleCount === 0 && value.financedAssetCash.obligationCount === 0;
+  if (emptySource ? (value.overhead.amount !== '0.00' || value.financedAssetCash.amount !== '0.00' ||
+      value.overhead.dueCount !== 0 || value.financedAssetCash.dueCount !== 0) :
+    (!POSITIVE_MONEY.test(value.overhead.amount) || !POSITIVE_MONEY.test(value.financedAssetCash.amount) ||
+      value.overhead.dueCount < 1 || value.financedAssetCash.dueCount < 1)) return null;
   return value;
 }
 

@@ -216,7 +216,10 @@ Part 7D's [overhead and financed-asset cash source gate](../architecture/MISSION
 now adds the smallest source-owned, append-only complete schedule snapshot and
 a private owner/admin 30-day read. Exact due dates, amounts, currency,
 recurrence end, payment status, source attestation, effective revision and
-allocation reconciliation fail closed. Mission 24 job-cost allocation,
+allocation reconciliation fail closed. Future-effective replacements remain
+dormant at earlier tenant-local cutoffs; positive-amount and checked rolling
+30-day aggregate bounds keep every accepted source projectable, while a
+complete attested empty source remains the only issued zero. Mission 24 job-cost allocation,
 economic depreciation, dated cash commitment and actual payment remain
 separate. The compact paid/demo row exposes only aggregate overhead and
 financed-asset cash. Independent whole-head audit and normal release remain

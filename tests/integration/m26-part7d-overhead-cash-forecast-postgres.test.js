@@ -34,6 +34,14 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
     });
   }
 
+  function nonCashDecisions(references = referenceBasis.references) {
+    return references.map(reference => ({ referenceKey: reference.referenceKey,
+      treatment: reference.kind === 'equipment_pool' && reference.method === 'economic_recovery' ?
+        'economic_recovery_not_cash' : reference.kind === 'overhead_allocation' ?
+          'job_overhead_allocation_not_cash' : 'not_same_obligation',
+      scheduleKey: null, reason: 'This exact Mission 24 reference is not the same dated cash obligation.' }));
+  }
+
   function body(overrides = {}) {
     return Object.assign({
       expectedRevision: current ? current.revision : 0,
@@ -167,6 +175,33 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
     expect((await put(fixture.actors.owner, body({ allocationPolicy: {
       expectedMission24Digest: referenceBasis.digest, decisions: [], reason: 'Incomplete policy must fail.' } }))).status).toBe(400);
 
+    const zeroSchedules = body().schedules;
+    zeroSchedules[0].amount = '0.00';
+    const zeroBody = body({ schedules: zeroSchedules,
+      reason: 'A nonempty scheduled due cannot be recorded with a zero amount.' });
+    expect((await put(fixture.actors.owner, zeroBody)).status).toBe(400);
+    expect((await fixture.ownerPool.query(
+      'SELECT canonical_operating_cost_snapshot_valid($1::jsonb) valid', [zeroBody])).rows[0].valid).toBe(false);
+    const capacityDates = Array.from({ length: 30 }, (_value, index) => ({
+      dueOn: day(index), paymentStatus: 'scheduled',
+    }));
+    const capacitySchedules = Array.from({ length: 34 }, (_value, index) => ({
+      scheduleKey: `capacity-${String(index).padStart(2, '0')}`, kind: 'overhead_expense',
+      assetId: null, amount: '999999999999.99', currency: 'USD', dueDates: capacityDates,
+      recurrenceEnd: day(29), includedCategories: ['rent'], sourceAttestation: {
+        kind: 'owner_attested', reference: `Owner-attested capacity source ${index}`,
+        documentDigest: null, attestedAt: cutoff.toISOString(),
+      },
+    }));
+    const capacityBody = body({ schedules: capacitySchedules,
+      allocationPolicy: { expectedMission24Digest: referenceBasis.digest,
+        decisions: nonCashDecisions(), reason: 'No Mission 24 reference is the same obligation.' },
+      reason: 'The 34 by 30 maximum source must fail checked aggregate capacity.' });
+    expect((await put(fixture.actors.owner, capacityBody)).status).toBe(400);
+    expect((await fixture.ownerPool.query(
+      'SELECT canonical_operating_cost_snapshot_valid($1::jsonb) valid', [capacityBody])).rows[0].valid).toBe(false);
+    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ state: 'absent', revision: 0 });
+
     const key = uuid();
     const created = await put(fixture.actors.owner, body(), key);
     expect(created.status).toBe(201); current = created.body.data;
@@ -193,6 +228,38 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
     expect(JSON.stringify(issued.body.data)).not.toContain(assetId);
     expect(JSON.stringify(issued.body.data)).not.toContain(referenceBasis.references[0].planId);
 
+    const futureSchedules = [{ ...body().schedules[0], amount: '1200.00',
+      dueDates: [{ dueOn: '2026-03-09', paymentStatus: 'scheduled' },
+        { dueOn: '2026-04-06', paymentStatus: 'scheduled' }], recurrenceEnd: '2026-05-05' },
+    { ...body().schedules[1], dueDates: [{ dueOn: '2026-04-06', paymentStatus: 'scheduled' }],
+      recurrenceEnd: '2026-05-05' }];
+    const future = await put(fixture.actors.owner, body({ effectiveOn: '2026-04-05',
+      coverage: { startsOn: '2026-03-07', endsOn: '2026-05-05',
+        recordedThrough: cutoff.toISOString(), complete: true }, schedules: futureSchedules,
+      reason: 'Record an exact future-effective source without making it current early.' }));
+    expect(future.status).toBe(201); current = future.body.data;
+    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'current',
+      basis: { sourceRevision: 1 }, overhead: { amount: '2400.00' } });
+    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ state: 'current', revision: 1 });
+    expect((await getAsOf(fixture.actors.owner, cutoff)).body.data)
+      .toMatchObject({ state: 'current', basis: { sourceRevision: 1 } });
+
+    const beforeEffective = new Date('2026-04-04T16:00:00.000Z');
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [beforeEffective]);
+    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ revision: 1 });
+    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
+      basis: { sourceRevision: 1 }, reason: 'owner_recorded_schedule_coverage_stale' });
+    const onEffective = new Date('2026-04-05T16:00:00.000Z');
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [onEffective]);
+    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ revision: 2 });
+    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'current',
+      basis: { sourceRevision: 2 }, horizon: { startsOn: '2026-04-05' },
+      overhead: { amount: '1200.00', dueCount: 1 }, financedAssetCash: { amount: '500.00', dueCount: 1 } });
+    const afterEffective = new Date('2026-04-06T16:00:00.000Z');
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [afterEffective]);
+    expect((await getAsOf(fixture.actors.owner, afterEffective)).body.data)
+      .toMatchObject({ state: 'current', basis: { sourceRevision: 2 }, horizon: { startsOn: '2026-04-06' } });
+
     const correctedAt = new Date(cutoff.getTime() + 3600000);
     await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [correctedAt]);
     const correctedSchedules = body().schedules;
@@ -208,10 +275,11 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
     expect(original.body.data).toMatchObject({ state: 'current', basis: { mode: 'as_of', sourceRevision: 1 },
       overhead: { amount: '2400.00' }, financedAssetCash: { amount: '500.00' },
       evidence: { currentRevision: false, completeAsOf: true } });
-    expect(corrected.body.data).toMatchObject({ state: 'current', basis: { mode: 'as_of', sourceRevision: 2 },
-      overhead: { amount: '1200.00' }, financedAssetCash: { amount: '0.00',
-        ownerMarkedSatisfiedCount: 2, canceledCount: 1 } });
+    expect(corrected.body.data).toMatchObject({ state: 'unavailable',
+      reason: 'nonempty_zero_schedule_unavailable', basis: { mode: 'as_of', sourceRevision: 3 },
+      forecastIssued: false });
     expect((await getSourceAsOf(fixture.actors.owner, cutoff)).body.data).toMatchObject({ revision: 1, digest: originalDigest });
+    expect((await getSourceAsOf(fixture.actors.owner, correctedAt)).body.data).toMatchObject({ revision: 3 });
     expect((await getSourceAsOf(fixture.actors.member, cutoff)).status).toBe(403);
 
     const revokedAt = new Date(cutoff.getTime() + 7200000);
@@ -223,7 +291,8 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
     expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
       reason: 'owner_recorded_schedule_coverage_unavailable' });
     expect((await getAsOf(fixture.actors.owner, correctedAt)).body.data)
-      .toMatchObject({ state: 'current', basis: { sourceRevision: 2 } });
+      .toMatchObject({ state: 'unavailable', reason: 'nonempty_zero_schedule_unavailable',
+        basis: { sourceRevision: 3 } });
   });
 
   test('enforces CSRF, role, tenant, record, and complete-empty boundaries', async () => {

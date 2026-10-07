@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const express = require('express');
 const request = require('supertest');
 const { createForecastMaterialDemandRiskRouter, sanitizeForecast } =
@@ -99,6 +101,27 @@ function unavailable(reason = 'current_adopted_material_composition_unavailable'
 }
 
 describe('Mission 26 original Part 8A material demand and risk contract', () => {
+  test('captures sourceAsOf only after the complete commercial, M24 and M25 fence', () => {
+    const sql = fs.readFileSync(path.resolve(__dirname,
+      '../../migrations/245_canonical_forecast_material_demand_risk_v1.sql'), 'utf8');
+    const fence = sql.indexOf(
+      'PERFORM public.canonical_forecast_material_demand_risk_v1_lock_sources(org);');
+    const captured = sql.indexOf('source_as_of_value:=clock_timestamp();');
+    expect(fence).toBeGreaterThan(-1);
+    expect(captured).toBeGreaterThan(fence);
+    expect(sql).toContain('public.canonical_forecast_commercial_booking_orders');
+    expect(sql).toContain('public.canonical_customer_estimate_delivery_events');
+    expect(sql).toContain('public.canonical_customer_estimate_versions');
+    expect(sql).toContain('public.canonical_forecast_booking_approval_orders');
+    expect(sql).toContain('public.canonical_forecast_commercial_booking_reviews');
+    expect(sql).toContain('public.canonical_forecast_booked_work_confirmations');
+    expect(sql).toContain('public.canonical_estimate_proposal_adoptions');
+    expect(sql).toContain('public.canonical_material_plans');
+    expect(sql).toContain('public.canonical_polaris_snapshots');
+    expect(sql).toContain('public.canonical_job_outcome_planning_value_versions IN SHARE MODE');
+    expect(sql).not.toContain("org::text||':job-outcome-proposal-consent'");
+  });
+
   test('accepts authenticated demand while every unsupported resource risk remains unavailable', () => {
     const issued = current(), withheld = unavailable();
     expect(sanitizeForecast(issued)).toEqual(issued);

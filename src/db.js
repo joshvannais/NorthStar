@@ -3870,19 +3870,30 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            pg_catalog.to_regprocedure(
              'public.canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text)') IS NULL OR
            pg_catalog.to_regprocedure(
+             'public.canonical_forecast_material_demand_risk_v1_lock_sources(uuid)') IS NULL OR
+           pg_catalog.to_regprocedure(
              'public.canonical_forecast_material_quantity_v1(numeric)') IS NULL OR
            EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
             WHERE routine.oid=pg_catalog.to_regprocedure(
              'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)')
              AND (NOT routine.prosecdef OR pg_catalog.pg_get_userbyid(routine.proowner)<>current_user OR
+              NOT routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) OR
+           EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(
+             'public.canonical_forecast_material_demand_risk_v1_lock_sources(uuid)')
+             AND (NOT routine.prosecdef OR pg_catalog.pg_get_userbyid(routine.proowner)<>current_user OR
               NOT routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
           RAISE EXCEPTION 'Required material-demand risk forecast authority is missing';
         END IF;
         REVOKE ALL ON FUNCTION
-          public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)
+          public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid),
+          public.canonical_forecast_material_demand_risk_v1_lock_sources(uuid)
           FROM PUBLIC;
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text) FROM %I',
+          runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_material_demand_risk_v1_lock_sources(uuid) FROM %I',
           runtime_role);
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_forecast_material_quantity_v1(numeric) FROM %I',
@@ -3893,11 +3904,17 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         IF has_function_privilege('public',
              'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)',
              'EXECUTE') OR
+           has_function_privilege('public',
+             'public.canonical_forecast_material_demand_risk_v1_lock_sources(uuid)',
+             'EXECUTE') OR
            NOT has_function_privilege(runtime_role,
              'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)',
              'EXECUTE') OR
            has_function_privilege(runtime_role,
              'public.canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text)',
+             'EXECUTE') OR
+           has_function_privilege(runtime_role,
+             'public.canonical_forecast_material_demand_risk_v1_lock_sources(uuid)',
              'EXECUTE') OR
            has_function_privilege(runtime_role,
              'public.canonical_forecast_material_quantity_v1(numeric)','EXECUTE') THEN
@@ -5502,10 +5519,14 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)') IS NULL OR (
          NOT has_function_privilege('public',
           'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public',
+          'public.canonical_forecast_material_demand_risk_v1_lock_sources(uuid)','EXECUTE')
          AND has_function_privilege($1,
           'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,
           'public.canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text)','EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_material_demand_risk_v1_lock_sources(uuid)','EXECUTE')
          AND NOT has_function_privilege($1,
           'public.canonical_forecast_material_quantity_v1(numeric)','EXECUTE')
        )) AS material_demand_risk_authority_private,

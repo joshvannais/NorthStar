@@ -66,11 +66,50 @@ BEGIN RETURN jsonb_build_object(
  'calibratedRangeIssued',FALSE,'probabilityIssued',FALSE,'automaticActionAuthorized',FALSE);
 END $$;
 
+CREATE FUNCTION public.canonical_forecast_material_demand_risk_v1_lock_sources(org UUID)
+RETURNS VOID LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ -- Preserve the installed Part 5 table order, then drain every additional
+ -- commercial, M24 composition and M25 planning-value writer read below.
+ -- SHARE conflicts with INSERT/UPDATE/DELETE RowExclusive locks, so a later
+ -- READ COMMITTED SPI statement cannot observe a commit outside this fence.
+ PERFORM public.canonical_forecast_workload_capacity_v1_lock_sources(org);
+ LOCK TABLE public.canonical_business_profiles,
+  -- Delivery INSERT owns its table lock before its AFTER trigger writes the
+  -- commercial order; keep that same dependency order to avoid inversion.
+  public.canonical_customer_estimate_delivery_events,
+  public.canonical_forecast_commercial_booking_orders,
+  public.canonical_customer_estimate_versions,
+  public.canonical_forecast_booking_approval_orders,
+  public.canonical_forecast_commercial_booking_reviews,
+  public.canonical_forecast_booked_work_confirmations,
+  public.canonical_estimate_proposal_adoptions,
+  public.canonical_material_plans,
+  public.canonical_polaris_snapshots,
+  public.canonical_job_outcome_planning_value_versions IN SHARE MODE;
+ -- These are the established cross-source locks used by the nested
+ -- currentness readers. Try-locks after the table fence prevent inversion
+ -- with a writer that acquired its tenant lock immediately before DML.
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+    'm26:commercial-booking-order:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Material-demand commercial source is busy' USING ERRCODE='55P03';
+ END IF;
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+    'm26:profile-effective-source:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Material-demand profile source is busy' USING ERRCODE='55P03';
+ END IF;
+ IF NOT pg_try_advisory_xact_lock(hashtextextended(
+    'm26:price-decision-order:'||org::text,0)) THEN
+  RAISE EXCEPTION 'Material-demand price source is busy' USING ERRCODE='55P03';
+ END IF;
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_material_demand_risk_v1_current(
  org UUID,actor UUID,role_value TEXT,session_value UUID)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE authority JSONB;cutoff_value TIMESTAMPTZ;source_as_of_value TIMESTAMPTZ:=statement_timestamp();
+DECLARE authority JSONB;cutoff_value TIMESTAMPTZ;source_as_of_value TIMESTAMPTZ;
  horizon_value TIMESTAMPTZ;zone_value TEXT;position_count INTEGER:=0;
  scheduled_count INTEGER:=0;unscheduled_count INTEGER:=0;outside_count INTEGER:=0;
  source_index INTEGER:=0;line_count INTEGER:=0;active_learning_count INTEGER:=0;
@@ -91,11 +130,11 @@ BEGIN
   org,actor,role_value,session_value,NULL,FALSE);
  cutoff_value:=public.canonical_forecast_workload_capacity_v1_clock();
  horizon_value:=cutoff_value+INTERVAL '2592000 seconds';
- PERFORM public.canonical_forecast_workload_capacity_v1_lock_sources(org);
- IF NOT pg_try_advisory_xact_lock(hashtextextended(
-    'm26:profile-effective-source:'||org::text,0)) THEN
-  RAISE EXCEPTION 'Material-demand forecast is busy' USING ERRCODE='55P03';
- END IF;
+ PERFORM public.canonical_forecast_material_demand_risk_v1_lock_sources(org);
+ -- statement_timestamp() predates any lock wait. Capture the wall clock only
+ -- after the complete writer fence is held so every included revision is no
+ -- later than the advertised source boundary.
+ source_as_of_value:=clock_timestamp();
  authority:=public.canonical_forecast_booking_ordered_access(
   org,actor,role_value,session_value,NULL,FALSE);
  SELECT * INTO profile FROM public.canonical_business_profiles value
@@ -132,9 +171,6 @@ BEGIN
    ON version.organization_id=latest.organization_id AND version.id=latest.issued_version_id
   WHERE latest.action<>'booking_cancelled')
  ORDER BY estimate_value.id FOR SHARE OF estimate_value;
- PERFORM pg_advisory_xact_lock(hashtextextended(
-  org::text||':job-outcome-proposal-consent',0));
-
  FOR candidate IN
   SELECT position_value.appointment_id,assignment.id assignment_id,
    assignment.schedule_state,assignment.scheduled_start,assignment.scheduled_end
@@ -396,6 +432,8 @@ END $$;
 REVOKE ALL ON FUNCTION public.canonical_forecast_material_quantity_v1(NUMERIC) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_material_demand_risk_v1_unavailable(
  TEXT,TIMESTAMPTZ,TIMESTAMPTZ,TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_material_demand_risk_v1_lock_sources(
+ UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_material_demand_risk_v1_current(
  UUID,UUID,TEXT,UUID) FROM PUBLIC;
 DO $$DECLARE runtime_role TEXT:=current_setting('northstar.runtime_role',TRUE);BEGIN

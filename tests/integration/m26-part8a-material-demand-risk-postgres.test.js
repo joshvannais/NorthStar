@@ -12,6 +12,19 @@ const { fixture: commercialFixture, group } = require('../helpers/m24-commercial
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const uuid = () => crypto.randomUUID();
 
+async function waitForBackendLock(pool, backendPid, label) {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
+    const waiting = await pool.query(
+      'SELECT 1 FROM pg_locks WHERE pid=$1 AND NOT granted LIMIT 1', [backendPid]);
+    if (waiting.rowCount === 1) return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  const state = (await pool.query(
+    `SELECT locktype,mode,granted FROM pg_locks
+     WHERE pid=$1 ORDER BY granted,locktype,mode`, [backendPid])).rows;
+  throw new Error(`${label} did not reach the source fence: ${JSON.stringify(state)}`);
+}
+
 realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast', () => {
   let fixture;
   let cutoff;
@@ -311,11 +324,6 @@ realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast'
          'sourceRegistryDigest',$2::text,'sourcePreviewDigest',$3::text,
          'sourceSelectionDigest',$4::text)) digest`,
         [sourceRegistryId, 'a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)])).rows[0].digest;
-      const unsetDigest = (await admin.query(
-        `SELECT canonical_completion_digest(jsonb_build_object(
-         'state','unset','multiplier',NULL,'sourceRegistryId',NULL,
-         'sourceRegistryDigest',NULL,'sourcePreviewDigest',NULL,
-         'sourceSelectionDigest',NULL)) digest`)).rows[0].digest;
       await admin.query("SET session_replication_role='replica'");
       await admin.query(
         `INSERT INTO canonical_job_outcome_planning_value_versions(
@@ -333,6 +341,7 @@ realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast'
           'b'.repeat(64), 'c'.repeat(64), activeDigest,
           fixture.actors.owner.actorUserId, fixture.actors.owner.authSessionId,
           'd'.repeat(64), 'e'.repeat(64), 'f'.repeat(64)]);
+      await admin.query("SET session_replication_role='origin'");
       let response = await request(fixture.app)
         .get('/api/v1/forecast/material-demand-risk/current')
         .set(fixture.actors.owner.session.headers);
@@ -340,21 +349,42 @@ realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast'
       expect(response.body.data).toMatchObject({ state: 'unavailable',
         reason: 'compatible_m25_outcome_unavailable', forecastIssued: false,
         demandForecastIssued: false });
-      await admin.query(
-        `INSERT INTO canonical_job_outcome_planning_value_versions(
-         id,organization_id,service_key,planning_area,metric_key,basis,revision,
-         previous_id,action,value_state,multiplier,source_registry_id,
-         source_registry_digest,source_preview_digest,source_selection_digest,
-         rollback_to_id,rollback_to_digest,effective_digest,actor_user_id,membership_id,
-         auth_session_id,reason,confirmed,confirmation_version,request_key_hash,
-         request_digest,canonical_digest)
-         VALUES($1,$2,$3,'material_planning','planned_quantity','NorthStar material quantity',
-          2,$4,'rollback','unset',NULL,NULL,NULL,NULL,NULL,NULL,NULL,$5,$6,$6,$7,
-          'Unset the incompatible learned material fixture value',TRUE,
-          'm25-job-outcome-planning-adoption-v1',$8,$9,$10)`,
-        [uuid(), fixture.org, serviceKey, activeId, unsetDigest,
-          fixture.actors.owner.actorUserId, fixture.actors.owner.authSessionId,
-          '1'.repeat(64), '2'.repeat(64), '3'.repeat(64)]);
+      const writer = await fixture.ownerPool.connect();
+      const reader = await fixture.ownerPool.connect();
+      try {
+        await writer.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        const actor = fixture.actors.owner;
+        await writer.query(
+          `SELECT canonical_job_outcome_planning_value_rollback(
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) value`,
+          [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+            actor.csrfToken, uuid(), serviceKey, 'material_planning', 'planned_quantity',
+            'NorthStar material quantity', 1, 'f'.repeat(64), null, 'none',
+            'Unset the incompatible learned material fixture value', true,
+            'm25-job-outcome-planning-adoption-v1']);
+        const rollback = (await writer.query(
+          `SELECT id,created_at FROM canonical_job_outcome_planning_value_versions
+           WHERE organization_id=$1 AND service_key=$2 AND planning_area='material_planning'
+            AND metric_key='planned_quantity' AND basis='NorthStar material quantity'
+           ORDER BY revision DESC,id DESC LIMIT 1`, [fixture.org, serviceKey])).rows[0];
+        const readPromise = reader.query(
+          'SELECT canonical_forecast_material_demand_risk_v1_current($1,$2,$3,$4) value',
+          [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId]);
+        await waitForBackendLock(fixture.ownerPool, reader.processID,
+          'Mission 25 rollback/currentness reader');
+        await writer.query('COMMIT');
+        const value = (await readPromise).rows[0].value;
+        expect(value).toMatchObject({ state: 'current',
+          demand: { state: 'current', componentCount: 2 },
+          sourceCoverage: { materialRevisionCount: 1, componentLineCount: 2 },
+          learnedOutcomes: { state: 'none_current', applied: false },
+          demandForecastIssued: true });
+        expect(new Date(value.sourceAsOf).getTime())
+          .toBeGreaterThanOrEqual(new Date(rollback.created_at).getTime());
+      } finally {
+        await writer.query('ROLLBACK').catch(() => {});
+        writer.release(); reader.release();
+      }
       response = await request(fixture.app)
         .get('/api/v1/forecast/material-demand-risk/current')
         .set(fixture.actors.owner.session.headers);
@@ -381,15 +411,18 @@ realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast'
     const privileges = (await fixture.ownerPool.query(
       `SELECT
         has_function_privilege('public','canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)','EXECUTE') public_entry,
+        has_function_privilege('public','canonical_forecast_material_demand_risk_v1_lock_sources(uuid)','EXECUTE') public_lock_helper,
         has_function_privilege($1,'canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)','EXECUTE') runtime_entry,
         has_function_privilege($1,'canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text)','EXECUTE') runtime_helper,
+        has_function_privilege($1,'canonical_forecast_material_demand_risk_v1_lock_sources(uuid)','EXECUTE') runtime_lock_helper,
         has_function_privilege($1,'canonical_forecast_material_quantity_v1(numeric)','EXECUTE') runtime_quantity`,
       [fixture.roles.runtime])).rows[0];
-    expect(privileges).toEqual({ public_entry: false, runtime_entry: true,
-      runtime_helper: false, runtime_quantity: false });
+    expect(privileges).toEqual({ public_entry: false, public_lock_helper: false,
+      runtime_entry: true,
+      runtime_helper: false, runtime_lock_helper: false, runtime_quantity: false });
   });
 
-  test('clears issued demand after a real material-plan withdrawal', async () => {
+  test('fences a real concurrent material-plan withdrawal and clears stale demand', async () => {
     const actor = fixture.actors.owner;
     const route = `/api/v1/canonical/estimates/${estimate}`;
     const review = (await request(fixture.app).get(route + '/review')
@@ -400,16 +433,36 @@ realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast'
       expectedDecisionDigest: review.decisions.writeBasis.digest, inputs: null,
       currency: review.currency, reason: 'Part 8A currentness withdrawal proof',
       confirmed: true, confirmationVersion: review.materialPlans.contract };
-    expect((await request(fixture.app).post(route + '/material-plans')
-      .set(actor.session.headers).set('Idempotency-Key', uuid()).send(body)).status).toBe(201);
-    const response = await request(fixture.app)
-      .get('/api/v1/forecast/material-demand-risk/current').set(actor.session.headers);
-    expect(response.status).toBe(200);
-    expect(response.body.data).toMatchObject({ state: 'unavailable',
-      reason: 'current_adopted_material_composition_unavailable',
-      sources: null, demand: { state: 'unavailable', groups: null },
-      forecastIssued: false, demandForecastIssued: false,
-      reorderForecastIssued: false, stockoutForecastIssued: false,
-      purchasingRiskForecastIssued: false });
+    const writer = await fixture.ownerPool.connect();
+    const reader = await fixture.ownerPool.connect();
+    try {
+      await writer.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      const mutation = (await writer.query(
+        `SELECT canonical_material_plan_mutate(
+         $1,$2,$3,$4,$5,$6,$7,$8::jsonb) value`,
+        [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+          estimate, actor.csrfToken, uuid(), JSON.stringify(body)])).rows[0].value;
+      const withdrawn = (await writer.query(
+        'SELECT created_at FROM canonical_material_plans WHERE organization_id=$1 AND id=$2',
+        [fixture.org, mutation.receipt.id])).rows[0];
+      const readPromise = reader.query(
+        'SELECT canonical_forecast_material_demand_risk_v1_current($1,$2,$3,$4) value',
+        [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId]);
+      await waitForBackendLock(fixture.ownerPool, reader.processID,
+        'Mission 24 material-plan reader');
+      await writer.query('COMMIT');
+      const value = (await readPromise).rows[0].value;
+      expect(value).toMatchObject({ state: 'unavailable',
+        reason: 'current_adopted_material_composition_unavailable',
+        sources: null, demand: { state: 'unavailable', groups: null },
+        forecastIssued: false, demandForecastIssued: false,
+        reorderForecastIssued: false, stockoutForecastIssued: false,
+        purchasingRiskForecastIssued: false });
+      expect(new Date(value.sourceAsOf).getTime())
+        .toBeGreaterThanOrEqual(new Date(withdrawn.created_at).getTime());
+    } finally {
+      await writer.query('ROLLBACK').catch(() => {});
+      writer.release(); reader.release();
+    }
   });
 });

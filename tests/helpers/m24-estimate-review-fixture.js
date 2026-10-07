@@ -30,6 +30,8 @@ async function createEstimateReviewFixture(options = {}) {
         transcript:[{turnId:'scope',speaker:'customer',text:'I need a 100-foot cedar fence.'}],
         facts:incomplete?[]:[{variable:'linearFeet',normalizedValue:100,evidenceText:'100-foot',speaker:'customer',evidenceTurnId:'scope',confidence:1}],
         service:{key:'fence',scope:incomplete?{}:{jobType:'replace',linearFeet:100,height:6,material:'cedar',removalRequired:true,gates:[{type:'walk'}],permitsRequired:true,...(options.recordedLaborHours === undefined ? {} : {laborHours:options.recordedLaborHours}),...(options.recordedDescription === undefined ? {} : {description:options.recordedDescription}),...(options.proposalScope||{})}},
+        ...(index === 0 && options.scheduledAppointment ?
+          { scheduledAppointment: options.scheduledAppointment } : {}),
         businessProfile:profile,businessProfileVersion:profile.version,
       });
       assert.equal(result.status,201,JSON.stringify(result)); f.estimateGraphs.push(result.body);

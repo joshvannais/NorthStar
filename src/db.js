@@ -3621,6 +3621,35 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           RAISE EXCEPTION 'Required labor-cost forecast runtime authority is invalid';
         END IF;
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='241_canonical_forecast_material_cost_v1.sql') OR
+         pg_catalog.to_regprocedure(
+          'public.canonical_forecast_material_cost_v1_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF pg_catalog.to_regprocedure(
+             'public.canonical_forecast_material_cost_v1_current(uuid,uuid,text,uuid)') IS NULL OR
+           NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(
+             'public.canonical_forecast_material_cost_v1_current(uuid,uuid,text,uuid)')
+             AND routine.prosecdef
+             AND pg_catalog.pg_get_userbyid(routine.proowner)=current_user
+             AND routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[]) THEN
+          RAISE EXCEPTION 'Required material-cost forecast authority is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_material_cost_v1_current(uuid,uuid,text,uuid)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_material_cost_v1_current(uuid,uuid,text,uuid) TO %I',
+          runtime_role);
+        IF has_function_privilege('public',
+             'public.canonical_forecast_material_cost_v1_current(uuid,uuid,text,uuid)',
+             'EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+             'public.canonical_forecast_material_cost_v1_current(uuid,uuid,text,uuid)',
+             'EXECUTE') THEN
+          RAISE EXCEPTION 'Required material-cost forecast runtime authority is invalid';
+        END IF;
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);

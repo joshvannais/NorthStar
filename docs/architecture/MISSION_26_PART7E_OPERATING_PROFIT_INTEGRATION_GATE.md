@@ -1,23 +1,95 @@
 # Mission 26 Part 7E — operating cost, profit and margin integration gate
 
-Status: bounded source and acceptance decision. No numerical operating-cost, profit or margin forecast is issued; monthly KPI cards/graphs/drilldowns and final Part 7 acceptance remain open.
+Status: implementation candidate. Migration 244, the private paid read, the
+shared paid/demo Command Center surface and retained acceptance evidence are
+complete in the writer checkout. Part 7 acceptance still requires a fresh
+independent whole exact-head audit and the normal release lane.
 
-## Existing arithmetic and why it is not a monthly forecast
+## One composition, one compatible revenue target
 
-Mission 24's `travelCostComposition.js` already composes material, labor, equipment and net travel **for one estimate**, preserving the reviewed coverage/overlap decision. `pricingCalculation.js` can allocate job overhead and apply owner-reviewed pricing. That existing job-cost composition is the correct arithmetic foundation. It does not prove a complete set of future jobs or calendar-period operating expenses. Mission 26 Part 6A's approved-price/booked-work position and Part 6B's unmounted pipeline scenarios keep preliminary estimates, approved price and booked work distinct from earned revenue and collected cash. The Part 6C boundary leaves recognized revenue authority unresolved, and Mission 27's future invoices/payments do not retroactively establish it.
+The forecast starts from each booked job's newest exact Mission 24
+`estimate-cost-adoption-v3` revision and its matching source-authenticated
+proposal-adoption receipt. The receipt must pin the same material, labor,
+equipment, travel, component manifest, coverage review and pricing plan. The
+approved owner-confirmed booked price before tax supplies the planning revenue
+target. The forecast does not add the independent Part 7A-D aggregates and it
+does not describe approved price as earned revenue, invoiced revenue, collected
+cash or recognized revenue.
 
-Part 7A's labor, Part 7B's material and Part 7C's equipment/travel diagnostics are bounded, **unmounted claimed-input** positions. Their `sourceAuthenticated: false` fields are intentional. Adding their output totals could double-count labor included in travel or equipment bundles and omit delivery, tax, fees or work crossing periods. Part 7D found no owner-authenticated financed-asset obligation schedule in released source authority. None of these gaps may be disguised as zero or covered with a generic overhead percentage.
+Every included job must be current in the Part 7A labor, Part 7B material and
+Part 7C equipment/travel gates and in the complete booked-work cohort. Currency,
+tenant, commercial state and source revision must agree. A missing, newer,
+corrected, cancelled or incompatible plan, price, booking or source fails the
+whole result closed as unavailable. A complete zero remains different from an
+absent source, and margin requires a known positive denominator.
 
-## Smallest compatible rollup
+## Monthly economic cost and dated cash
 
-An eventual Part 7E rollup should begin with one **adopted, source-authenticated Mission 24 v3 composition per eligible job**, not four independent cost totals. A source-owned reader must pin tenant, estimate/revision, approved job and price state, source-visible as-of cutoff, correction and cancellation history, complete pagination, currency, planned work window and component manifest. The reviewed overlap assessment must remain attached. Attributing a long job across months needs a separately approved work/cost timing basis; the whole estimate cannot be placed in a single month just because it starts there. Calendar periods and business time zone must be explicit.
+The exact approved schedule supplies the work interval. Revenue, direct job
+cost and incremental job overhead are attributed by elapsed seconds across
+tenant-local month boundaries, with the final piece retaining any rounding
+remainder. A job crossing a month is therefore split between its months rather
+than placed wholly in its start month. The outer horizon remains exactly
+2,592,000 elapsed seconds; tenant-local dates are used only for expense coverage
+and month labels, including across daylight-saving changes.
 
-The operating-cost forecast must then distinguish direct job cost, incremental job overhead, company fixed/period operating expenses and dated cash obligations. M24's equipment `economic_recovery` and `financing_cash` allocation choices must remain separate from actual loan payments. A cash-commitment forecast must not be inserted into accrual profit by default. Current operating costs, future cost estimates and later actual expense observations need separate identities and correction rules. A revenue forecast must use a compatible target and coverage; approved price and pipeline weights alone are not recognized revenue. Profit is not calculated when either side or the overhead treatment is unavailable. Margin must use an explicit denominator and remain unavailable for zero/unknown revenue; no percentage is invented.
+An append-only owner/admin policy records fixed and variable period expenses,
+complete local-date coverage, source attestations, a current Part 7D schedule
+pin, an explicit overlap reconciliation and two to five named deterministic
+scenarios. Period expenses are recognized by covered local days. Direct job
+cost, incremental job overhead, fixed expense and variable expense form
+economic operating cost. Part 7D overhead and financed-asset due amounts form a
+separate dated-cash total. Economic recovery, financing cash and actual payment
+remain distinct; dated cash is never inserted into accrual profit.
 
-Numerical ranges may initially be **deterministic scenarios** with named changed assumptions and no probability claim. Statistical intervals, calibration and promotion belong to Mission 26 Parts 3/9 after enough trustworthy outcomes. Mission 25 tenant-private actuals can eventually help adjust component assumptions; customer scope changes and external events must not masquerade as prediction error. Every displayed value must link to the same frozen forecast run, its source coverage, calculation version and uncertainty.
+Scenario cost, profit and margin are deterministic consequences of each named
+cost assumption. They carry no calibrated interval or probability claim.
+Mission 25 adjustments are not applied, and the response explicitly preserves
+the still-unavailable external-event and scope-change classifications.
 
-## Release and experience gates
+## Authority, currentness and recovery
 
-The future Part 7E monthly surface should show a value only when the relevant source and policy pass their gates. Otherwise its card, chart point and drilldown must consistently explain what is missing (for example, "Operating profit is unavailable because monthly overhead and earned-revenue evidence are incomplete"), with no zero placeholder, made-up confidence or stale value. Paid and synthetic demo journeys must share the calculation boundary while retaining separate tenants and clearly simulated provider facts. This avoids repeating the earlier Executive Brief revenue-label error.
+`canonical_operating_profit_policy_revisions` is append-only and tenant private.
+Owner/admin mutations require the current Business Profile, current Part 7D
+schedule revision, CSRF, idempotency and serializable source locks. The runtime
+role receives only the guarded policy mutation/read and aggregate forecast
+entry points. Raw policy rows, helper functions, estimate/job identities and
+component facts are withheld from the browser response.
 
-Acceptance must independently test: component quantities and costs rather than just a matched total; M24 coverage and duplicate prevention; one job spanning months; missing or corrected plan/price/expense records at an exact historical cutoff; currency and time-zone changes; zero versus absent amounts; tenant/role access; owner commercial authority; fixed and variable overhead; economic cost versus cash commitment; scenario changes; M25 estimate-to-actual attribution; paid/demo recovery; plain-language rendered cards and drilldowns; and independent exact-head review. Do not mark Part 7 or its A–E slices accepted from the current prerequisites. Proceed to later authorized Mission 26 slices while these source gates remain explicitly open.
+The paid route uses one read-committed server-selected cutoff and returns only a
+strict aggregate. The isolated demo uses the same response validator and
+renderer with fictional data and never calls the paid route. Loading, malformed
+responses, failures and unavailable evidence clear prior KPI values and graph
+marks before rendering the explanation. Recovery rereads and repaints the
+current aggregate.
+
+The existing Command Center cost-and-operational-risk card now contains three
+monthly KPIs, one compact profit-range graph, plain-language explanation and a
+collapsed source-boundary drilldown. It does not add a dashboard or commercial
+action.
+
+## Acceptance boundary
+
+Focused proof covers component quantities and exact duplicate prevention, a
+job spanning months, fixed and variable expenses, economic cost versus dated
+cash, named scenario changes, zero versus absent values, current/corrected/
+cancelled histories, source cutoff and concurrency, currency, time zone and
+DST, tenant/role/commercial authority, CSRF and idempotency, Mission 25
+attribution boundaries, paid/demo isolation and failure recovery. Whole Part 7
+proof reruns the mounted A-E lifecycle and strict Chrome and Playwright WebKit
+paid/demo, mobile/desktop and light/dark journeys.
+
+The frozen writer candidate retained 10 focused and whole-Part-7 suites with
+44 passing unit/integration cases against a disposable PostgreSQL full
+migration chain through migration 244. It also retained 16 strict full-page
+browser journeys: eight Chrome and eight Playwright WebKit combinations across
+paid/demo, mobile/desktop and light/dark. Those journeys cover KPI cards,
+graph, drilldown, loading/failure/unavailable recovery, keyboard focus, ARIA,
+overflow, reduced motion and measured key-text contrast. Static validation
+found 233 unique HTML IDs, no missing ARIA references and no broken local
+links. This is writer evidence for the candidate; it is not the required
+independent audit or release evidence.
+
+CI, private-production/provider/credential evidence, physical Safari/devices,
+complete accessibility and the founder visual verdict remain unavailable and
+must not be inferred from local acceptance evidence.

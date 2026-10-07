@@ -3788,6 +3788,69 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           RAISE EXCEPTION 'Required overhead and cash forecast runtime authority is invalid';
         END IF;
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='244_canonical_forecast_operating_profit_v1.sql') OR
+         pg_catalog.to_regprocedure(
+          'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF pg_catalog.to_regclass('public.canonical_operating_profit_policy_revisions') IS NULL OR
+           pg_catalog.to_regprocedure(
+            'public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb)') IS NULL OR
+           pg_catalog.to_regprocedure(
+            'public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz)') IS NULL OR
+           pg_catalog.to_regprocedure(
+            'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)') IS NULL OR
+           EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid IN(
+             pg_catalog.to_regprocedure('public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb)'),
+             pg_catalog.to_regprocedure('public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz)'),
+             pg_catalog.to_regprocedure('public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)'))
+             AND (NOT routine.prosecdef OR pg_catalog.pg_get_userbyid(routine.proowner)<>current_user OR
+              NOT routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required operating-profit forecast authority is missing';
+        END IF;
+        REVOKE ALL PRIVILEGES ON TABLE public.canonical_operating_profit_policy_revisions FROM PUBLIC;
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_operating_profit_policy_revisions FROM %I',runtime_role);
+        REVOKE ALL ON FUNCTION
+          public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb) FROM PUBLIC;
+        REVOKE ALL ON FUNCTION
+          public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz) FROM PUBLIC;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid) FROM PUBLIC;
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_operating_profit_policy_immutable() FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_operating_profit_policy_valid(jsonb) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_operating_profit_policy_projection(public.canonical_operating_profit_policy_revisions) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_signed_money(numeric) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_margin(numeric,numeric) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_operating_profit_v1_unavailable(text,timestamptz,text) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz) TO %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid) TO %I',runtime_role);
+        IF has_table_privilege(runtime_role,'public.canonical_operating_profit_policy_revisions','SELECT,INSERT,UPDATE,DELETE') OR
+           has_function_privilege('public',
+            'public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE') OR
+           has_function_privilege('public',
+            'public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz)','EXECUTE') OR
+           has_function_privilege('public',
+            'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)','EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+            'public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+            'public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz)','EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+            'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)','EXECUTE') THEN
+          RAISE EXCEPTION 'Required operating-profit forecast runtime authority is invalid';
+        END IF;
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -4718,6 +4781,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname <> 'canonical_material_plans'
            AND relation.relname <> 'canonical_estimate_revisions'
            AND relation.relname <> 'canonical_operating_cost_schedule_revisions'
+           AND relation.relname <> 'canonical_operating_profit_policy_revisions'
            AND relation.relname NOT IN (
              'canonical_schedule_assignments',
              'canonical_schedule_approvals',
@@ -5354,6 +5418,29 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,
            'public.canonical_forecast_overhead_cash_v1_evaluate(uuid,timestamptz,text,boolean)','EXECUTE')
        )) AS overhead_cash_authority_private,
+       (to_regclass('public.canonical_operating_profit_policy_revisions') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_operating_profit_policy_revisions','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_function_privilege('public',
+           'public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
+         AND NOT has_function_privilege('public',
+           'public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege('public',
+           'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,
+           'public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
+         AND has_function_privilege($1,
+           'public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz)','EXECUTE')
+         AND has_function_privilege($1,
+           'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_operating_profit_policy_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_operating_profit_policy_valid(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,
+           'public.canonical_operating_profit_policy_projection(public.canonical_operating_profit_policy_revisions)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_signed_money(numeric)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_margin(numeric,numeric)','EXECUTE')
+         AND NOT has_function_privilege($1,
+           'public.canonical_forecast_operating_profit_v1_unavailable(text,timestamptz,text)','EXECUTE')
+       )) AS operating_profit_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -6456,6 +6543,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        !runtimePrivileges.integrated_commercial_baseline_private ||
        !runtimePrivileges.pipeline_scenario_private ||
       !runtimePrivileges.overhead_cash_authority_private ||
+      !runtimePrivileges.operating_profit_authority_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

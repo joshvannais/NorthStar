@@ -229,10 +229,20 @@ open; no complete operating-cost forecast, calibrated range or payment claim
 is made.
 
 Part 7E's [operating profit integration gate](../architecture/MISSION_26_PART7E_OPERATING_PROFIT_INTEGRATION_GATE.md)
-requires a source-authenticated adopted composition, compatible revenue and
-overhead evidence, exact calendar attribution and preserved overlap before a
-monthly number or chart can issue. The current A–D prerequisites do not meet
-those conditions. Part 7 acceptance and its paid/demo visual journey remain open.
+is now an implementation candidate. Migration 244 composes one exact
+source-authenticated Mission 24 v3 adoption and matching approved booked price
+per eligible job, attributes multi-month work by elapsed time, recognizes
+owner-recorded fixed and variable expenses by tenant-local date, preserves the
+reviewed overlap, and keeps dated overhead/financing cash and actual payment
+outside operating profit. The compact shared paid/demo surface exposes monthly
+operating-cost, deterministic profit/margin ranges, a graph, explanation,
+collapsed drilldown and fail-closed recovery inside the existing Command Center.
+The frozen writer candidate retained 10 suites/44 unit and disposable-
+PostgreSQL full-chain integration cases plus 16 strict full-page Chrome/WebKit
+paid/demo, mobile/desktop and light/dark journeys. Static validation found 233
+unique IDs, no missing ARIA references and no broken local links. Independent
+whole exact-head audit and the normal release remain open before Part 7 is
+accepted.
 
 ## Part 8 — four resource-risk slices
 

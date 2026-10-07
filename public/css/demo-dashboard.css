@@ -692,6 +692,58 @@
 .command-center-forecast-boundary { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--theme-border); }
 .command-center-forecast-boundary > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .command-center-forecast-boundary p { margin-top: 8px; }
+.command-center-operating-profit {
+  min-width: 0; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--theme-border);
+}
+.command-center-operating-profit-heading {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.command-center-operating-profit-heading h3 { margin: 0; color: var(--theme-text); font-size: 16px; }
+.command-center-operating-profit-heading span {
+  flex: 0 0 auto; padding: 5px 9px; border: 1px solid var(--theme-border); border-radius: 999px;
+  color: var(--theme-muted); background: var(--theme-surface); font-size: 11px; font-weight: 750;
+}
+.command-center-operating-profit-heading span[data-state="current"] {
+  border-color: rgba(31, 132, 90, .38); color: #146648; background: rgba(31, 132, 90, .08);
+}
+.command-center-operating-profit-kpis {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 12px;
+}
+.command-center-operating-profit-kpis > div {
+  min-width: 0; padding: 11px; border: 1px solid var(--theme-border); border-radius: 11px;
+  background: var(--theme-surface);
+}
+.command-center-operating-profit-kpis span {
+  display: block; color: var(--theme-muted); font-size: 11px; font-weight: 700;
+}
+.command-center-operating-profit-kpis strong {
+  display: block; margin-top: 5px; color: var(--theme-text); font-size: clamp(14px, 2vw, 18px);
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.command-center-operating-profit-graph {
+  display: block; width: 100%; min-width: 0; height: auto; margin: 8px 0 12px;
+  border: 1px solid var(--theme-border); border-radius: 12px; background: var(--theme-surface);
+}
+.command-center-operating-profit-graph text {
+  fill: var(--theme-muted); font: 700 11px/1 system-ui, sans-serif;
+}
+.command-center-operating-profit-zero { stroke: var(--theme-border); stroke-width: 2; stroke-dasharray: 5 5; }
+.command-center-operating-profit-range { stroke: var(--brand-700); stroke-width: 7; stroke-linecap: round; }
+.command-center-operating-profit-point { fill: var(--theme-surface); stroke: var(--brand-700); stroke-width: 3; }
+.command-center-operating-profit > p { color: var(--theme-muted); font-size: 13px; line-height: 1.55; }
+.command-center-operating-profit details {
+  margin-top: 12px; border-top: 1px solid var(--theme-border); color: var(--theme-text);
+}
+.command-center-operating-profit details > summary {
+  min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 12px; font-weight: 750;
+}
+.command-center-operating-profit details > summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 45%, transparent); outline-offset: 3px;
+}
+.command-center-operating-profit details > p { color: var(--theme-muted); font-size: 12px; line-height: 1.55; }
+[data-theme="dark"] .command-center-operating-profit-heading span[data-state="current"] {
+  color: #a7f3d0; background: rgba(6, 95, 70, .34); border-color: rgba(52, 211, 153, .3);
+}
 
 .demo-positive { color: #047857; font-size: 13px; font-weight: 800; }
 .demo-chart { position: relative; height: 250px; margin-top: 10px; }
@@ -1138,6 +1190,9 @@ button.command-center-record-link {
   .command-center-revenue-cash-facts { grid-template-columns: minmax(0, 1fr); }
   .command-center-revenue-cash-chart-heading { align-items: flex-start; flex-direction: column; }
   .command-center-revenue-cash-chart-heading span { text-align: left; }
+  .command-center-operating-profit-heading { align-items: flex-start; flex-direction: column; }
+  .command-center-operating-profit-kpis { grid-template-columns: minmax(0, 1fr); }
+  .command-center-operating-profit .command-center-revenue-cash-facts { grid-template-columns: minmax(0, 1fr); }
   .command-center-backlog-metrics { grid-template-columns: minmax(0, 1fr); }
   .command-center-backlog-receipt-row { align-items: stretch; flex-direction: column; }
   .command-center-research-heading { flex-direction: column; }

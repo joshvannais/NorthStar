@@ -25,6 +25,7 @@
   var revenueCashOutlook = null;
   var costRiskOutlook = null;
   var laborCostForecast = null;
+  var materialCostForecast = null;
   var customerOpportunityOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
@@ -808,6 +809,9 @@
     if (laborCostForecast && typeof laborCostForecast.workspaceReady === 'function') {
       laborCostForecast.workspaceReady();
     }
+    if (materialCostForecast && typeof materialCostForecast.workspaceReady === 'function') {
+      materialCostForecast.workspaceReady();
+    }
     if (customerOpportunityOutlook && typeof customerOpportunityOutlook.workspaceReady === 'function') {
       customerOpportunityOutlook.workspaceReady();
     }
@@ -873,6 +877,9 @@
       }
       if (laborCostForecast && typeof laborCostForecast.workspaceUnavailable === 'function') {
         laborCostForecast.workspaceUnavailable();
+      }
+      if (materialCostForecast && typeof materialCostForecast.workspaceUnavailable === 'function') {
+        materialCostForecast.workspaceUnavailable();
       }
       if (customerOpportunityOutlook &&
           typeof customerOpportunityOutlook.workspaceUnavailable === 'function') {
@@ -963,6 +970,19 @@
       'The labor forecast could not load. Refresh Command Center to try again.';
     byId('commandCenterLaborForecastStatus').textContent =
       'Next 30-day planned labor cost: Not available. The labor forecast could not load. Refresh Command Center to try again.';
+  }
+  if (global.NorthStarMaterialCostForecast &&
+      typeof global.NorthStarMaterialCostForecast.create === 'function') {
+    materialCostForecast = global.NorthStarMaterialCostForecast.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterMaterialForecast')) {
+    byId('commandCenterMaterialForecast').textContent = 'Not available';
+    byId('commandCenterMaterialForecastContext').textContent =
+      'The material forecast could not load. Refresh Command Center to try again.';
+    byId('commandCenterMaterialForecastStatus').textContent =
+      'Next 30-day planned material cost: Not available. The material forecast could not load. Refresh Command Center to try again.';
   }
   if (global.NorthStarCustomerOpportunityOutlook &&
       typeof global.NorthStarCustomerOpportunityOutlook.create === 'function') {

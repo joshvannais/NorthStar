@@ -65,6 +65,21 @@ async function pageFor(browser, { width, theme, mode }) {
       await page.evaluate(() => window.__forecast.workspaceReady());
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
       assert.equal(await page.locator('#commandCenterCostRiskDetails').getAttribute('open'), null);
+      if (engine === 'chrome') {
+        const session = await context.newCDPSession(page);
+        const documentNode = await session.send('DOM.getDocument');
+        const target = await session.send('DOM.querySelector', {
+          nodeId: documentNode.root.nodeId, selector: '#commandCenterLaborForecastStatus',
+        });
+        const tree = await session.send('Accessibility.getPartialAXTree', {
+          nodeId: target.nodeId, fetchRelatives: false,
+        });
+        const status = tree.nodes.find(node => node.role && node.role.value === 'status');
+        assert.ok(status && status.ignored === false,
+          'Labor status must remain exposed while Review details is collapsed');
+        assert.ok(status.properties.some(property => property.name === 'live' &&
+          property.value.value === 'polite'));
+      }
       await page.locator('#commandCenterCostRiskDetails').evaluate(node => { node.open = true; });
       assert.match(await page.locator('#commandCenterLaborForecast').innerText(),
         /\$4,320 for 96 planned hours/);
@@ -81,7 +96,8 @@ async function pageFor(browser, { width, theme, mode }) {
       await page.locator('#commandCenterCostRiskOutlook').screenshot({
         path: path.join(output, 'demo-mobile-dark.png') });
       result.cases.push({ name: 'demo-mobile-dark', paidRequests: 0,
-        collapsedByDefault: true, oneExistingAction: true, pass: true });
+        collapsedByDefault: true, statusExposedWhileCollapsed: true,
+        oneExistingAction: true, pass: true });
       await context.close();
     }
     {

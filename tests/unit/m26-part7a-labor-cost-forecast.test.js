@@ -132,6 +132,11 @@ describe('Mission 26 original Part 7A labor-cost forecast contract', () => {
       .toBeGreaterThan(html.indexOf('id="commandCenterCostRiskDetails"'));
     expect(html.indexOf('id="commandCenterLaborForecast"'))
       .toBeLessThan(html.indexOf('</details>', html.indexOf('id="commandCenterCostRiskDetails"')));
+    const detailsEnd = html.indexOf('</details>', html.indexOf('id="commandCenterCostRiskDetails"'));
+    const statusIndex = html.indexOf('id="commandCenterLaborForecastStatus"');
+    const sectionEnd = html.indexOf('</section>', html.indexOf('id="commandCenterCostRiskOutlook"'));
+    expect(statusIndex).toBeGreaterThan(detailsEnd);
+    expect(statusIndex).toBeLessThan(sectionEnd);
   });
 
   test('renders supported maximum decimals without binary rounding and announces one atomic state', async () => {

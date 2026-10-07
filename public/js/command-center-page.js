@@ -24,6 +24,7 @@
   var capacityResearch = null;
   var revenueCashOutlook = null;
   var costRiskOutlook = null;
+  var customerOpportunityOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -803,6 +804,9 @@
     if (costRiskOutlook && typeof costRiskOutlook.workspaceReady === 'function') {
       costRiskOutlook.workspaceReady();
     }
+    if (customerOpportunityOutlook && typeof customerOpportunityOutlook.workspaceReady === 'function') {
+      customerOpportunityOutlook.workspaceReady();
+    }
     renderCta();
     byId('commandCenterContent').setAttribute('aria-busy', 'false');
     setStatus('', 'ready');
@@ -862,6 +866,10 @@
       }
       if (costRiskOutlook && typeof costRiskOutlook.workspaceUnavailable === 'function') {
         costRiskOutlook.workspaceUnavailable();
+      }
+      if (customerOpportunityOutlook &&
+          typeof customerOpportunityOutlook.workspaceUnavailable === 'function') {
+        customerOpportunityOutlook.workspaceUnavailable();
       }
       renderSchedulingOverview();
       setStatus(error && error.message ? error.message : 'The Command Center workspace is unavailable.', 'error');
@@ -934,6 +942,18 @@
     byId('commandCenterCostRiskOutlook').setAttribute('aria-busy', 'false');
     byId('commandCenterCostRiskState').textContent = 'Unavailable';
     byId('commandCenterCostRiskAnswer').textContent =
+      'This insight is unavailable. Refresh Command Center to try again.';
+  }
+  if (global.NorthStarCustomerOpportunityOutlook &&
+      typeof global.NorthStarCustomerOpportunityOutlook.create === 'function') {
+    customerOpportunityOutlook = global.NorthStarCustomerOpportunityOutlook.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterCustomerOpportunityOutlook')) {
+    byId('commandCenterCustomerOpportunityOutlook').setAttribute('aria-busy', 'false');
+    byId('commandCenterCustomerOpportunityState').textContent = 'Unavailable';
+    byId('commandCenterCustomerOpportunityAnswer').textContent =
       'This insight is unavailable. Refresh Command Center to try again.';
   }
   byId('commandCenterRefresh').addEventListener('click', function () { load(); });

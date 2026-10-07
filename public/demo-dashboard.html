@@ -14,7 +14,7 @@
   <script src="/js/auth-session.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
-  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m26-part5d-target-complete-20261004">
+  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m26-founder-part6-20261006">
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <link rel="stylesheet" href="/css/polaris-card.css">
   <link rel="stylesheet" href="/css/scheduling-approval.css?v=command-center-clarity-20260915">
@@ -110,6 +110,48 @@
               </table>
             </div>
             <div class="command-center-mobile-leads" id="commandCenterLeadCards" aria-label="Customers and requested work"></div>
+          </section>
+
+          <section class="demo-panel command-center-customer-opportunity-outlook"
+            id="commandCenterCustomerOpportunityOutlook"
+            aria-labelledby="commandCenterCustomerOpportunityTitle" aria-busy="true">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Customer &amp; opportunity insight</p>
+                <h2 id="commandCenterCustomerOpportunityTitle">What needs a human next step?</h2>
+              </div>
+              <span class="command-center-demand-state command-center-revenue-cash-state"
+                id="commandCenterCustomerOpportunityState" data-state="loading"
+                role="status" aria-live="polite">Loading</span>
+            </div>
+            <p class="command-center-revenue-cash-answer" id="commandCenterCustomerOpportunityAnswer">
+              Checking current customers and human-reviewed opportunity states.
+            </p>
+            <p class="command-center-revenue-cash-context">
+              <span id="commandCenterCustomerOpportunityScope">Checking current scope</span>
+              <span aria-hidden="true"> · </span>
+              <span id="commandCenterCustomerOpportunityCheckedAt">Checking now</span>
+            </p>
+            <a class="btn btn-primary command-center-revenue-cash-action"
+              id="commandCenterCustomerOpportunityAction" href="/dashboard/leads"
+              data-command-destination="leads">Review leads</a>
+            <p class="command-center-demand-boundary">
+              Current records only; provider, off-platform, and whole-business coverage is incomplete. No booking prediction or automatic customer, price, schedule, or status action.
+            </p>
+            <details class="command-center-revenue-cash-details"
+              id="commandCenterCustomerOpportunityDetails">
+              <summary>Review details</summary>
+              <dl class="command-center-revenue-cash-facts">
+                <div><dt>Current customers</dt><dd id="commandCenterCustomerOpportunityCustomers"></dd></div>
+                <div><dt>Returning customers</dt><dd id="commandCenterCustomerOpportunityReturning"></dd></div>
+                <div><dt>Reviewed opportunities</dt><dd id="commandCenterCustomerOpportunityReviewed"></dd></div>
+                <div><dt>Needs lead review</dt><dd id="commandCenterCustomerOpportunityLeadReview"></dd></div>
+                <div><dt>Needs estimate review</dt><dd id="commandCenterCustomerOpportunityEstimateReview"></dd></div>
+                <div><dt>Estimate state unreviewed</dt><dd id="commandCenterCustomerOpportunityEstimateUnreviewed"></dd></div>
+                <div><dt>Estimate requested</dt><dd id="commandCenterCustomerOpportunityRequested"></dd></div>
+              </dl>
+              <p id="commandCenterCustomerOpportunityDetailsBody"></p>
+            </details>
           </section>
 
           <section class="m22-authority-overview" id="commandCenterScheduling" aria-labelledby="commandCenterSchedulingTitle" aria-busy="true">
@@ -646,7 +688,8 @@
   <script src="/js/command-center-capacity-research.js?v=m26-part5d-target-complete-20261004"></script>
   <script src="/js/command-center-revenue-cash-outlook.js?v=m26-founder-part3-20261006"></script>
   <script src="/js/command-center-cost-risk-outlook.js?v=m26-founder-part5-20261006"></script>
-  <script src="/js/command-center-page.js?v=m26-founder-part5-20261006"></script>
+  <script src="/js/command-center-customer-opportunity-outlook.js?v=m26-founder-part6-20261006"></script>
+  <script src="/js/command-center-page.js?v=m26-founder-part6-20261006"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

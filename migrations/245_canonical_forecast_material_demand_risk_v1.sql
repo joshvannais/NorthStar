@@ -69,47 +69,53 @@ END $$;
 CREATE FUNCTION public.canonical_forecast_material_demand_risk_v1_lock_sources(org UUID)
 RETURNS VOID LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE cohort_before UUID[];cohort_after UUID[];
 BEGIN
- -- Fence schedule/current-position and immutable commercial sources first.
- -- This is the released source-writer order through the estimate table. Do
- -- not lock a table written after canonical_estimates FOR UPDATE yet.
- LOCK TABLE public.organization_memberships,public.users,
-  public.canonical_business_profiles,
-  public.canonical_schedule_assignments,public.canonical_schedule_approvals,
-  public.canonical_schedule_human_approvals,
-  public.canonical_schedule_assignment_revisions,
-  public.canonical_forecast_schedule_booking_events,
-  public.canonical_forecast_current_backlog_booking_positions,
-  public.canonical_estimates,
+ -- Discover a bounded candidate cohort without retaining a conflicting table
+ -- lock. Delivery, issued-version and all M24 writers acquire the estimate row
+ -- before writing their dependent relation, so those rows must be first.
+ WITH positions AS(
+  SELECT value.appointment_id
+  FROM public.canonical_forecast_current_backlog_booking_positions value
+  WHERE value.organization_id=org AND value.active
+  ORDER BY value.appointment_id LIMIT 501),
+ cohort AS(
+  SELECT DISTINCT version.estimate_id
+  FROM positions
+  JOIN LATERAL(
+   SELECT review.*
+   FROM public.canonical_forecast_commercial_booking_reviews review
+   WHERE review.organization_id=org
+    AND review.appointment_id=positions.appointment_id
+   ORDER BY review.review_order DESC,review.id DESC LIMIT 1) latest ON TRUE
+  JOIN public.canonical_forecast_booked_work_confirmations confirmation
+   ON confirmation.organization_id=latest.organization_id
+    AND confirmation.review_id=latest.id
+  JOIN public.canonical_customer_estimate_versions version
+   ON version.organization_id=latest.organization_id
+    AND version.id=latest.issued_version_id
+  WHERE latest.action<>'booking_cancelled')
+ SELECT COALESCE(array_agg(estimate_id ORDER BY estimate_id),ARRAY[]::UUID[])
+ INTO cohort_before FROM cohort;
+ PERFORM estimate_value.id FROM public.canonical_estimates estimate_value
+ WHERE estimate_value.organization_id=org
+  AND estimate_value.id=ANY(cohort_before)
+ ORDER BY estimate_value.id FOR SHARE OF estimate_value;
+ -- Now drain the released schedule/current-position fence in its established
+ -- order. A writer already holding a relevant estimate row can finish before
+ -- this transaction owns any dependent-table lock that writer still needs.
+ PERFORM public.canonical_forecast_workload_capacity_v1_lock_sources(org);
+ -- Keep dependent commercial tables in their real writer order: delivery
+ -- events precede commercial orders; booking orders precede reviews and
+ -- confirmations. Estimate-version, M24 and M25 writers all follow the row
+ -- fence above.
+ LOCK TABLE public.canonical_business_profiles,
   public.canonical_customer_estimate_delivery_events,
   public.canonical_forecast_commercial_booking_orders,
+  public.canonical_customer_estimate_versions,
   public.canonical_forecast_booking_approval_orders,
   public.canonical_forecast_commercial_booking_reviews,
-  public.canonical_forecast_booked_work_confirmations IN SHARE MODE;
- -- The frozen commercial cohort identifies every estimate that can enter the
- -- run without consulting the issued-version table. All M24 component and
- -- decision writers lock this row before inserting their revision. Acquire
- -- these rows in UUID order before any conflicting dependent-table fence.
- PERFORM estimate_value.id FROM public.canonical_estimates estimate_value
- WHERE estimate_value.organization_id=org AND estimate_value.id IN(
-  SELECT event.estimate_id
-  FROM (SELECT DISTINCT ON(review.appointment_id) review.*
-        FROM public.canonical_forecast_commercial_booking_reviews review
-        WHERE review.organization_id=org
-        ORDER BY review.appointment_id,review.review_order DESC,review.id DESC LIMIT 501) latest
-  JOIN public.canonical_forecast_booked_work_confirmations confirmation
-   ON confirmation.organization_id=latest.organization_id AND confirmation.review_id=latest.id
-  JOIN public.canonical_customer_estimate_delivery_events event
-   ON event.organization_id=latest.organization_id AND event.id=latest.acceptance_id
-    AND event.version_id=latest.issued_version_id AND event.kind='accepted'
-  WHERE latest.action<>'booking_cancelled')
- ORDER BY estimate_value.id FOR SHARE OF estimate_value;
- -- With the relevant estimate rows held, drain writers that follow those row
- -- locks. A material/decision/adoption/version writer that arrived first can
- -- finish before this transaction holds any table it still needs.
- LOCK TABLE public.canonical_customer_estimate_versions,
-  public.canonical_estimate_decisions,
-  public.canonical_estimate_revisions,
+  public.canonical_forecast_booked_work_confirmations,
   public.canonical_estimate_proposal_adoptions,
   public.canonical_material_plans,
   public.canonical_polaris_snapshots,
@@ -128,6 +134,35 @@ BEGIN
  IF NOT pg_try_advisory_xact_lock(hashtextextended(
     'm26:price-decision-order:'||org::text,0)) THEN
   RAISE EXCEPTION 'Material-demand price source is busy' USING ERRCODE='55P03';
+ END IF;
+ -- Cohort discovery was intentionally optimistic. Under the complete writer
+ -- fence, derive it again and reject any newly eligible, removed or remapped
+ -- estimate rather than reading a source row that was not locked above.
+ WITH positions AS(
+  SELECT value.appointment_id
+  FROM public.canonical_forecast_current_backlog_booking_positions value
+  WHERE value.organization_id=org AND value.active
+  ORDER BY value.appointment_id LIMIT 501),
+ cohort AS(
+  SELECT DISTINCT version.estimate_id
+  FROM positions
+  JOIN LATERAL(
+   SELECT review.*
+   FROM public.canonical_forecast_commercial_booking_reviews review
+   WHERE review.organization_id=org
+    AND review.appointment_id=positions.appointment_id
+   ORDER BY review.review_order DESC,review.id DESC LIMIT 1) latest ON TRUE
+  JOIN public.canonical_forecast_booked_work_confirmations confirmation
+   ON confirmation.organization_id=latest.organization_id
+    AND confirmation.review_id=latest.id
+  JOIN public.canonical_customer_estimate_versions version
+   ON version.organization_id=latest.organization_id
+    AND version.id=latest.issued_version_id
+  WHERE latest.action<>'booking_cancelled')
+ SELECT COALESCE(array_agg(estimate_id ORDER BY estimate_id),ARRAY[]::UUID[])
+ INTO cohort_after FROM cohort;
+ IF cohort_after IS DISTINCT FROM cohort_before THEN
+  RAISE EXCEPTION 'Material-demand source cohort changed' USING ERRCODE='40001';
  END IF;
 END $$;
 

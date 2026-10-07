@@ -483,4 +483,66 @@ realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast'
       gate.release(); writer.release(); reader.release();
     }
   });
+
+  test('serializes behind a real delivery revocation without a circular table wait', async () => {
+    const actor = fixture.actors.owner;
+    const link = (await fixture.ownerPool.query(
+      `SELECT id FROM canonical_customer_estimate_delivery_links
+       WHERE organization_id=$1 AND estimate_id=$2
+       ORDER BY created_at DESC,id DESC LIMIT 1`, [fixture.org, estimate])).rows[0];
+    expect(link && link.id).toEqual(expect.any(String));
+    const gate = await fixture.ownerPool.connect();
+    const writer = await fixture.ownerPool.connect();
+    const reader = await fixture.ownerPool.connect();
+    let revokePromise; let readPromise;
+    try {
+      await gate.query('BEGIN');
+      await gate.query(
+        `SELECT 1 FROM canonical_customer_estimate_delivery_links
+         WHERE organization_id=$1 AND estimate_id=$2 AND id=$3 FOR UPDATE`,
+        [fixture.org, estimate, link.id]);
+      await writer.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      revokePromise = writer.query(
+        `SELECT canonical_customer_estimate_delivery_revoke(
+         $1,$2,$3,$4,$5,$6,$7,$8) value`,
+        [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+          estimate, actor.csrfToken, uuid(), link.id]);
+      await waitForBackendLock(fixture.ownerPool, writer.processID,
+        'customer-estimate delivery revoke behind its link row');
+      readPromise = reader.query(
+        'SELECT canonical_forecast_material_demand_risk_v1_current($1,$2,$3,$4) value',
+        [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId]);
+      await waitForBackendLock(fixture.ownerPool, reader.processID,
+        'Part 8A forecast reader behind delivery revoke estimate row');
+      const blockers = (await fixture.ownerPool.query(
+        `SELECT pg_blocking_pids($1) writer_blockers,
+          pg_blocking_pids($2) reader_blockers`,
+        [writer.processID, reader.processID])).rows[0];
+      expect(blockers.writer_blockers).toContain(gate.processID);
+      expect(blockers.writer_blockers).not.toContain(reader.processID);
+      expect(blockers.reader_blockers).toContain(writer.processID);
+      await gate.query('COMMIT');
+      await revokePromise;
+      const revoked = (await writer.query(
+        `SELECT created_at FROM canonical_customer_estimate_delivery_events
+         WHERE organization_id=$1 AND estimate_id=$2 AND link_id=$3 AND kind='revoked'
+         ORDER BY created_at DESC,id DESC LIMIT 1`,
+        [fixture.org, estimate, link.id])).rows[0];
+      await writer.query('COMMIT');
+      const value = (await readPromise).rows[0].value;
+      expect(value).toMatchObject({ state: 'unavailable',
+        reason: 'current_owner_confirmed_booking_unavailable', sources: null,
+        demand: { state: 'unavailable', groups: null }, forecastIssued: false,
+        demandForecastIssued: false, reorderForecastIssued: false,
+        stockoutForecastIssued: false, purchasingRiskForecastIssued: false });
+      expect(new Date(value.sourceAsOf).getTime())
+        .toBeGreaterThanOrEqual(new Date(revoked.created_at).getTime());
+    } finally {
+      await gate.query('ROLLBACK').catch(() => {});
+      if (revokePromise) await revokePromise.catch(() => {});
+      await writer.query('ROLLBACK').catch(() => {});
+      if (readPromise) await readPromise.catch(() => {});
+      gate.release(); writer.release(); reader.release();
+    }
+  });
 });

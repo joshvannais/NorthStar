@@ -109,16 +109,22 @@ describe('Mission 26 original Part 8A material demand and risk contract', () => 
     const captured = sql.indexOf('source_as_of_value:=clock_timestamp();');
     const estimateRows = sql.indexOf(
       'PERFORM estimate_value.id FROM public.canonical_estimates estimate_value');
+    const workloadFence = sql.indexOf(
+      'PERFORM public.canonical_forecast_workload_capacity_v1_lock_sources(org);');
+    const deliveryEvents = sql.indexOf(
+      'public.canonical_customer_estimate_delivery_events,', estimateRows);
     const issuedVersions = sql.indexOf(
-      'LOCK TABLE public.canonical_customer_estimate_versions', estimateRows);
+      'public.canonical_customer_estimate_versions,', estimateRows);
     const materialPlans = sql.indexOf('public.canonical_material_plans,', estimateRows);
     expect(fence).toBeGreaterThan(-1);
     expect(captured).toBeGreaterThan(fence);
     expect(estimateRows).toBeGreaterThan(-1);
+    expect(workloadFence).toBeGreaterThan(estimateRows);
+    expect(deliveryEvents).toBeGreaterThan(estimateRows);
     expect(issuedVersions).toBeGreaterThan(estimateRows);
     expect(materialPlans).toBeGreaterThan(estimateRows);
-    expect(sql).not.toContain(
-      'PERFORM public.canonical_forecast_workload_capacity_v1_lock_sources(org);');
+    expect(sql).toContain('IF cohort_after IS DISTINCT FROM cohort_before THEN');
+    expect(sql).toContain("USING ERRCODE='40001'");
     expect(sql).toContain('public.canonical_forecast_commercial_booking_orders');
     expect(sql).toContain('public.canonical_customer_estimate_delivery_events');
     expect(sql).toContain('public.canonical_customer_estimate_versions');

@@ -433,23 +433,38 @@ realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast'
       expectedDecisionDigest: review.decisions.writeBasis.digest, inputs: null,
       currency: review.currency, reason: 'Part 8A currentness withdrawal proof',
       confirmed: true, confirmationVersion: review.materialPlans.contract };
+    const gate = await fixture.ownerPool.connect();
     const writer = await fixture.ownerPool.connect();
     const reader = await fixture.ownerPool.connect();
+    let mutationPromise; let readPromise;
     try {
+      await gate.query('BEGIN');
+      await gate.query('LOCK TABLE canonical_material_plans IN SHARE MODE');
       await writer.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-      const mutation = (await writer.query(
+      mutationPromise = writer.query(
         `SELECT canonical_material_plan_mutate(
          $1,$2,$3,$4,$5,$6,$7,$8::jsonb) value`,
         [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
-          estimate, actor.csrfToken, uuid(), JSON.stringify(body)])).rows[0].value;
-      const withdrawn = (await writer.query(
-        'SELECT created_at FROM canonical_material_plans WHERE organization_id=$1 AND id=$2',
-        [fixture.org, mutation.receipt.id])).rows[0];
-      const readPromise = reader.query(
+          estimate, actor.csrfToken, uuid(), JSON.stringify(body)]);
+      await waitForBackendLock(fixture.ownerPool, writer.processID,
+        'Mission 24 material writer before INSERT');
+      readPromise = reader.query(
         'SELECT canonical_forecast_material_demand_risk_v1_current($1,$2,$3,$4) value',
         [fixture.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId]);
       await waitForBackendLock(fixture.ownerPool, reader.processID,
-        'Mission 24 material-plan reader');
+        'Mission 24 forecast reader behind estimate row');
+      const blockers = (await fixture.ownerPool.query(
+        `SELECT pg_blocking_pids($1) writer_blockers,
+          pg_blocking_pids($2) reader_blockers`,
+        [writer.processID, reader.processID])).rows[0];
+      expect(blockers.writer_blockers).toContain(gate.processID);
+      expect(blockers.writer_blockers).not.toContain(reader.processID);
+      expect(blockers.reader_blockers).toContain(writer.processID);
+      await gate.query('COMMIT');
+      const mutation = (await mutationPromise).rows[0].value;
+      const withdrawn = (await writer.query(
+        'SELECT created_at FROM canonical_material_plans WHERE organization_id=$1 AND id=$2',
+        [fixture.org, mutation.receipt.id])).rows[0];
       await writer.query('COMMIT');
       const value = (await readPromise).rows[0].value;
       expect(value).toMatchObject({ state: 'unavailable',
@@ -461,8 +476,11 @@ realPostgres('Mission 26 original Part 8A mounted material-demand risk forecast'
       expect(new Date(value.sourceAsOf).getTime())
         .toBeGreaterThanOrEqual(new Date(withdrawn.created_at).getTime());
     } finally {
+      await gate.query('ROLLBACK').catch(() => {});
+      if (mutationPromise) await mutationPromise.catch(() => {});
       await writer.query('ROLLBACK').catch(() => {});
-      writer.release(); reader.release();
+      if (readPromise) await readPromise.catch(() => {});
+      gate.release(); writer.release(); reader.release();
     }
   });
 });

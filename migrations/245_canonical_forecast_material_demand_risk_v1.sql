@@ -70,27 +70,53 @@ CREATE FUNCTION public.canonical_forecast_material_demand_risk_v1_lock_sources(o
 RETURNS VOID LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
- -- Preserve the installed Part 5 table order, then drain every additional
- -- commercial, M24 composition and M25 planning-value writer read below.
- -- SHARE conflicts with INSERT/UPDATE/DELETE RowExclusive locks, so a later
- -- READ COMMITTED SPI statement cannot observe a commit outside this fence.
- PERFORM public.canonical_forecast_workload_capacity_v1_lock_sources(org);
- LOCK TABLE public.canonical_business_profiles,
-  -- Delivery INSERT owns its table lock before its AFTER trigger writes the
-  -- commercial order; keep that same dependency order to avoid inversion.
+ -- Fence schedule/current-position and immutable commercial sources first.
+ -- This is the released source-writer order through the estimate table. Do
+ -- not lock a table written after canonical_estimates FOR UPDATE yet.
+ LOCK TABLE public.organization_memberships,public.users,
+  public.canonical_business_profiles,
+  public.canonical_schedule_assignments,public.canonical_schedule_approvals,
+  public.canonical_schedule_human_approvals,
+  public.canonical_schedule_assignment_revisions,
+  public.canonical_forecast_schedule_booking_events,
+  public.canonical_forecast_current_backlog_booking_positions,
+  public.canonical_estimates,
   public.canonical_customer_estimate_delivery_events,
   public.canonical_forecast_commercial_booking_orders,
-  public.canonical_customer_estimate_versions,
   public.canonical_forecast_booking_approval_orders,
   public.canonical_forecast_commercial_booking_reviews,
-  public.canonical_forecast_booked_work_confirmations,
+  public.canonical_forecast_booked_work_confirmations IN SHARE MODE;
+ -- The frozen commercial cohort identifies every estimate that can enter the
+ -- run without consulting the issued-version table. All M24 component and
+ -- decision writers lock this row before inserting their revision. Acquire
+ -- these rows in UUID order before any conflicting dependent-table fence.
+ PERFORM estimate_value.id FROM public.canonical_estimates estimate_value
+ WHERE estimate_value.organization_id=org AND estimate_value.id IN(
+  SELECT event.estimate_id
+  FROM (SELECT DISTINCT ON(review.appointment_id) review.*
+        FROM public.canonical_forecast_commercial_booking_reviews review
+        WHERE review.organization_id=org
+        ORDER BY review.appointment_id,review.review_order DESC,review.id DESC LIMIT 501) latest
+  JOIN public.canonical_forecast_booked_work_confirmations confirmation
+   ON confirmation.organization_id=latest.organization_id AND confirmation.review_id=latest.id
+  JOIN public.canonical_customer_estimate_delivery_events event
+   ON event.organization_id=latest.organization_id AND event.id=latest.acceptance_id
+    AND event.version_id=latest.issued_version_id AND event.kind='accepted'
+  WHERE latest.action<>'booking_cancelled')
+ ORDER BY estimate_value.id FOR SHARE OF estimate_value;
+ -- With the relevant estimate rows held, drain writers that follow those row
+ -- locks. A material/decision/adoption/version writer that arrived first can
+ -- finish before this transaction holds any table it still needs.
+ LOCK TABLE public.canonical_customer_estimate_versions,
+  public.canonical_estimate_decisions,
+  public.canonical_estimate_revisions,
   public.canonical_estimate_proposal_adoptions,
   public.canonical_material_plans,
   public.canonical_polaris_snapshots,
   public.canonical_job_outcome_planning_value_versions IN SHARE MODE;
- -- These are the established cross-source locks used by the nested
- -- currentness readers. Try-locks after the table fence prevent inversion
- -- with a writer that acquired its tenant lock immediately before DML.
+ -- Nested currentness readers use this established order. Try-lock only after
+ -- row and table drainage, so a writer holding an estimate row can never wait
+ -- behind a lock held by the reader that is waiting for that same row.
  IF NOT pg_try_advisory_xact_lock(hashtextextended(
     'm26:commercial-booking-order:'||org::text,0)) THEN
   RAISE EXCEPTION 'Material-demand commercial source is busy' USING ERRCODE='55P03';
@@ -155,22 +181,6 @@ BEGIN
   RETURN public.canonical_forecast_material_demand_risk_v1_unavailable(
    'complete_source_coverage_unavailable',cutoff_value,source_as_of_value,zone_value);
  END IF;
- -- Material/adoption writers serialize on the estimate row. Hold one ordered
- -- shared lock set so a correction, withdrawal, replacement or revocation can
- -- never create a mixed composition inside this forecast statement.
- PERFORM estimate_value.id FROM public.canonical_estimates estimate_value
- WHERE estimate_value.organization_id=org AND estimate_value.id IN(
-  SELECT version.estimate_id
-  FROM (SELECT DISTINCT ON(review.appointment_id) review.*
-        FROM public.canonical_forecast_commercial_booking_reviews review
-        WHERE review.organization_id=org
-        ORDER BY review.appointment_id,review.review_order DESC,review.id DESC LIMIT 501) latest
-  JOIN public.canonical_forecast_booked_work_confirmations confirmation
-   ON confirmation.organization_id=latest.organization_id AND confirmation.review_id=latest.id
-  JOIN public.canonical_customer_estimate_versions version
-   ON version.organization_id=latest.organization_id AND version.id=latest.issued_version_id
-  WHERE latest.action<>'booking_cancelled')
- ORDER BY estimate_value.id FOR SHARE OF estimate_value;
  FOR candidate IN
   SELECT position_value.appointment_id,assignment.id assignment_id,
    assignment.schedule_state,assignment.scheduled_start,assignment.scheduled_end

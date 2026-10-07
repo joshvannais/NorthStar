@@ -26,6 +26,7 @@
   var costRiskOutlook = null;
   var laborCostForecast = null;
   var materialCostForecast = null;
+  var equipmentTravelCostForecast = null;
   var customerOpportunityOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
@@ -812,6 +813,9 @@
     if (materialCostForecast && typeof materialCostForecast.workspaceReady === 'function') {
       materialCostForecast.workspaceReady();
     }
+    if (equipmentTravelCostForecast && typeof equipmentTravelCostForecast.workspaceReady === 'function') {
+      equipmentTravelCostForecast.workspaceReady();
+    }
     if (customerOpportunityOutlook && typeof customerOpportunityOutlook.workspaceReady === 'function') {
       customerOpportunityOutlook.workspaceReady();
     }
@@ -880,6 +884,10 @@
       }
       if (materialCostForecast && typeof materialCostForecast.workspaceUnavailable === 'function') {
         materialCostForecast.workspaceUnavailable();
+      }
+      if (equipmentTravelCostForecast &&
+          typeof equipmentTravelCostForecast.workspaceUnavailable === 'function') {
+        equipmentTravelCostForecast.workspaceUnavailable();
       }
       if (customerOpportunityOutlook &&
           typeof customerOpportunityOutlook.workspaceUnavailable === 'function') {
@@ -983,6 +991,19 @@
       'The material forecast could not load. Refresh Command Center to try again.';
     byId('commandCenterMaterialForecastStatus').textContent =
       'Next 30-day planned material cost: Not available. The material forecast could not load. Refresh Command Center to try again.';
+  }
+  if (global.NorthStarEquipmentTravelCostForecast &&
+      typeof global.NorthStarEquipmentTravelCostForecast.create === 'function') {
+    equipmentTravelCostForecast = global.NorthStarEquipmentTravelCostForecast.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterEquipmentTravelForecast')) {
+    byId('commandCenterEquipmentTravelForecast').textContent = 'Not available';
+    byId('commandCenterEquipmentTravelForecastContext').textContent =
+      'The equipment and travel forecast could not load. Refresh Command Center to try again.';
+    byId('commandCenterEquipmentTravelForecastStatus').textContent =
+      'Next 30-day planned equipment and travel cost: Not available. The equipment and travel forecast could not load. Refresh Command Center to try again.';
   }
   if (global.NorthStarCustomerOpportunityOutlook &&
       typeof global.NorthStarCustomerOpportunityOutlook.create === 'function') {

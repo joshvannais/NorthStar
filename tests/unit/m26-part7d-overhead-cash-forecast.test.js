@@ -129,6 +129,11 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
       action: null, createdAt: null, snapshot: null })).not.toBeNull();
     expect(sanitizeSource({ state: 'current', revision: 1, digest: 'c'.repeat(64),
       action: 'replace', createdAt: '2026-10-07T12:00:00.000Z', snapshot: storedSnapshot() })).not.toBeNull();
+    const pending = { state: 'pending', revision: 2, digest: 'd'.repeat(64), action: 'replace',
+      createdAt: '2026-10-07T12:00:00.000Z', snapshot: storedSnapshot({
+        ...snapshot(), effectiveOn: '2026-11-01' }) };
+    expect(sanitizeSource(pending)).toBeNull();
+    expect(sanitizeSource(pending, { allowPending: true })).toEqual(pending);
     expect(sanitizeSource({ state: 'current', revision: 1, digest: 'c'.repeat(64),
       action: 'replace', createdAt: '2026-10-07T12:00:00.000Z',
       snapshot: { ...storedSnapshot(), hidden: 'extra' } })).toBeNull();
@@ -140,7 +145,11 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
       calls.push({ sql, parameters });
       return /canonical_operating_cost_snapshot_mutate/.test(sql) ? { rows: [{ value: {
         revision: 1, digest: 'c'.repeat(64), action: 'replace', replayed: false } }] } :
-        /canonical_operating_cost_snapshot_read/.test(sql) ? { rows: [{ value: {
+        /canonical_operating_cost_snapshot_read_latest_recorded/.test(sql) ? { rows: [{ value: {
+          state: 'pending', revision: 2, digest: 'd'.repeat(64), action: 'replace',
+          createdAt: '2026-10-07T12:00:00.000Z', snapshot: storedSnapshot({
+            ...snapshot(), effectiveOn: '2026-11-01' }) } }] } :
+          /canonical_operating_cost_snapshot_read/.test(sql) ? { rows: [{ value: {
           state: 'current', revision: 1, digest: 'c'.repeat(64), action: 'replace',
           createdAt: '2026-10-07T12:00:00.000Z', snapshot: storedSnapshot() } }] } : { rows: [] };
     }), release: jest.fn() };
@@ -164,6 +173,10 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
     expect(read.body.data).toMatchObject({ state: 'current', revision: 1,
       digest: 'c'.repeat(64), action: 'replace' });
     expect(read.body.data.snapshot.schedules[1].assetId).toBe(ASSET);
+    const latest = await request(app).get('/schedules/latest-recorded');
+    expect(latest.status).toBe(200);
+    expect(latest.body.data).toMatchObject({ state: 'pending', revision: 2,
+      digest: 'd'.repeat(64), action: 'replace', snapshot: { effectiveOn: '2026-11-01' } });
     expect((await request(app).put('/schedules/current').send(snapshot())).status).toBe(400);
   });
 
@@ -248,10 +261,25 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
     resolveFetch({ ok: true, json: async () => ({ success: true, data: forecast() }) });
     await pending;
     expect(elements.commandCenterOverheadCashForecast.textContent)
-      .toBe('$1,200 overhead + $500 dated asset cash');
+      .toBe('$1,200.00 overhead + $500.00 dated asset cash');
     expect(elements.commandCenterOverheadCashForecastContext.textContent)
       .toMatch(/Owner-marked satisfied dates are not proof of payment/);
     expect(elements.commandCenterOverheadCashForecastStatus.textContent)
-      .toContain('$1,200 overhead + $500 dated asset cash');
+      .toContain('$1,200.00 overhead + $500.00 dated asset cash');
+
+    const centsElements = Object.fromEntries(['commandCenterOverheadCashForecast',
+      'commandCenterOverheadCashForecastContext', 'commandCenterOverheadCashForecastStatus']
+      .map(id => [id, { textContent: '' }]));
+    const cents = forecast({ overhead: { ...forecast().overhead, amount: '0.01' },
+      financedAssetCash: { ...forecast().financedAssetCash, amount: '0.01' } });
+    const centsClient = context.window.NorthStarOverheadCashForecast.create({
+      mode: 'paid', document: { getElementById: id => centsElements[id] },
+      fetcher: async () => ({ ok: true, json: async () => ({ success: true, data: cents }) }),
+    });
+    await centsClient.workspaceReady();
+    expect(centsElements.commandCenterOverheadCashForecast.textContent)
+      .toBe('$0.01 overhead + $0.01 dated asset cash');
+    expect(centsElements.commandCenterOverheadCashForecastStatus.textContent)
+      .toContain('$0.01 overhead + $0.01 dated asset cash');
   });
 });

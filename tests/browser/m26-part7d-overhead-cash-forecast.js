@@ -91,13 +91,13 @@ async function exercise(browser, scenario, result) {
       await page.evaluate(() => window.__forecast.workspaceReady());
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
       assert.equal(await page.locator('#commandCenterOverheadCashForecast').innerText(),
-        '$3,200 overhead + $1,150 dated asset cash');
+        '$3,200.00 overhead + $1,150.00 dated asset cash');
     } else {
       const paid = await page.evaluate(() => {
         const value = NorthStarOverheadCashForecast.demoForecast(); value.fictional = false;
-        value.overhead = { state: 'current', amount: '1200.00', dueCount: 2,
+        value.overhead = { state: 'current', amount: '0.01', dueCount: 2,
           scheduleCount: 1, reason: null };
-        value.financedAssetCash = { state: 'current', amount: '500.00', dueCount: 1,
+        value.financedAssetCash = { state: 'current', amount: '0.01', dueCount: 1,
           obligationCount: 1, ownerMarkedSatisfiedCount: 1, canceledCount: 1, reason: null };
         return value;
       });
@@ -109,7 +109,7 @@ async function exercise(browser, scenario, result) {
       assert.equal(await page.locator('#commandCenterOverheadCashForecastContext').innerText(), '');
       await page.evaluate(() => window.__releaseForecast()); await page.evaluate(() => window.__pending);
       assert.equal(await page.locator('#commandCenterOverheadCashForecast').innerText(),
-        '$1,200 overhead + $500 dated asset cash');
+        '$0.01 overhead + $0.01 dated asset cash');
       await page.evaluate(() => {
         window.__responses.push({ status: 503, payload: { success: false } });
         return window.__forecast.workspaceReady();
@@ -121,7 +121,7 @@ async function exercise(browser, scenario, result) {
         return window.__forecast.workspaceReady();
       }, paid);
       assert.equal(await page.locator('#commandCenterOverheadCashForecast').innerText(),
-        '$1,200 overhead + $500 dated asset cash');
+        '$0.01 overhead + $0.01 dated asset cash');
       assert.deepEqual(await page.evaluate(() => window.__calls), [
         { url: '/api/v1/forecast/overhead-cash/current', method: 'GET', cache: 'no-store' },
         { url: '/api/v1/forecast/overhead-cash/current', method: 'GET', cache: 'no-store' },
@@ -129,6 +129,13 @@ async function exercise(browser, scenario, result) {
       ]);
     }
     const contextText = await page.locator('#commandCenterOverheadCashForecastContext').innerText();
+    const renderedAmount = await page.locator('#commandCenterOverheadCashForecast').innerText();
+    const announcement = await page.evaluate(() => window.__announcements.at(-1));
+    assert.ok(announcement.includes(renderedAmount));
+    if (scenario.mode === 'paid') {
+      assert.equal(renderedAmount, '$0.01 overhead + $0.01 dated asset cash');
+      assert.ok(announcement.includes('$0.01 overhead + $0.01 dated asset cash'));
+    }
     assert.match(contextText, /complete covered owner-recorded source/);
     assert.match(contextText, /Owner-marked satisfied dates are not proof of payment/);
     assert.match(contextText, /Job-cost allocation and economic depreciation stay separate/);
@@ -152,6 +159,7 @@ async function exercise(browser, scenario, result) {
     result.cases.push({ name, fullPage: true, collapsedPrivateDetailHidden: true,
       statusExposedWhileCollapsed: true, keyboardFocusPreserved: true,
       exactRecovery: scenario.mode === 'paid', oneExistingAction: true,
+      exactCentsPreserved: true, positiveCentCase: scenario.mode === 'paid',
       noHorizontalOverflow: true, layout, pass: true });
   } finally { await context.close(); }
 }

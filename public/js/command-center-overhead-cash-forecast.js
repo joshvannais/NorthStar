@@ -119,8 +119,10 @@
     var document = options.document; var generation = 0;
     function id(name) { return document.getElementById(name); }
     function money(value, currency) {
+      var parts = value.split('.');
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency,
-        minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value));
+        minimumFractionDigits: 2, maximumFractionDigits: 2 }).formatToParts(BigInt(parts[0]))
+        .map(function (part) { return part.type === 'fraction' ? parts[1] : part.value; }).join('');
     }
     function announce(value, context) {
       var message = 'Next 30-day overhead and financed-asset cash: ' + value +

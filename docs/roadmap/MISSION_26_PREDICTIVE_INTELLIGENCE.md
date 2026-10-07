@@ -221,7 +221,9 @@ dormant at earlier tenant-local cutoffs; positive-amount and checked rolling
 30-day aggregate bounds keep every accepted source projectable, while a
 complete attested empty source remains the only issued zero. Mission 24 job-cost allocation,
 economic depreciation, dated cash commitment and actual payment remain
-separate. The compact paid/demo row exposes only aggregate overhead and
+separate. A distinct private latest-recorded read labels future authority as
+pending so it can be corrected or revoked without activating it. The compact
+paid/demo row preserves exact positive cents and exposes only aggregate overhead and
 financed-asset cash. Independent whole-head audit and normal release remain
 open; no complete operating-cost forecast, calibrated range or payment claim
 is made.

@@ -149,14 +149,15 @@ function normalizeSnapshot(body) {
   return Object.freeze(structuredClone(body));
 }
 
-function sanitizeSource(value) {
+function sanitizeSource(value, options = {}) {
   if (!exact(value, ['state', 'revision', 'digest', 'action', 'createdAt', 'snapshot']) ||
-      !['absent', 'current', 'revoked'].includes(value.state)) return null;
+      !['absent', 'current', 'revoked', 'pending'].includes(value.state) ||
+      (value.state === 'pending' && options.allowPending !== true)) return null;
   if (value.state === 'absent') return value.revision === 0 && value.digest === 'none' &&
     value.action === null && value.createdAt === null && value.snapshot === null ? value : null;
   if (!Number.isSafeInteger(value.revision) || value.revision < 1 || value.revision > 10000 ||
       !DIGEST.test(value.digest || '') || !['replace', 'revoke'].includes(value.action) ||
-      value.state !== (value.action === 'replace' ? 'current' : 'revoked') ||
+      (value.action === 'replace' ? !['current', 'pending'].includes(value.state) : value.state !== 'revoked') ||
       !validInstant(value.createdAt) ||
       !value.snapshot || typeof value.snapshot !== 'object' || Array.isArray(value.snapshot)) return null;
   try {
@@ -258,6 +259,28 @@ function createOperatingCostSchedulesRouter(options = {}) {
         parameters)).rows[0]?.value;
       const value = sanitizeReferenceBasis(raw);
       if (!value) throw new Error('Invalid Mission 24 operating-cost references');
+      await client.query('COMMIT');
+      return res.status(200).json({ success: true, data: value });
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      return failure(res, error);
+    } finally { if (client) client.release(); }
+  });
+  router.get('/latest-recorded', readAuth, ownerOnly, readPermission, throttle, async (req, res) => {
+    if (!exact(req.query, [])) return failure(res, { code: '22023' });
+    let client;
+    try {
+      client = await poolProvider().connect();
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      await client.query("SET LOCAL statement_timeout = '15s'");
+      await client.query("SET LOCAL lock_timeout = '2s'");
+      const parameters = [req.tenantContext.organizationId, req.tenantContext.userId,
+        req.userRole, req.authSession.id];
+      const raw = (await client.query(
+        'SELECT public.canonical_operating_cost_snapshot_read_latest_recorded($1,$2,$3,$4) value',
+        parameters)).rows[0]?.value;
+      const value = sanitizeSource(raw, { allowPending: true });
+      if (!value) throw new Error('Invalid latest recorded operating-cost source projection');
       await client.query('COMMIT');
       return res.status(200).json({ success: true, data: value });
     } catch (error) {

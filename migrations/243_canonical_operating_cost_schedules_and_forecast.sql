@@ -143,6 +143,20 @@ BEGIN IF current_setting('transaction_isolation')<>'read committed'THEN RAISE EX
   ORDER BY revision DESC LIMIT 1;
  RETURN public.canonical_operating_cost_source_projection(v);END $$;
 
+CREATE FUNCTION public.canonical_operating_cost_snapshot_read_latest_recorded(org UUID,actor UUID,role_value TEXT,session_value UUID)RETURNS JSONB
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE auth JSONB;v public.canonical_operating_cost_schedule_revisions%ROWTYPE;cutoff TIMESTAMPTZ;state_value TEXT;
+BEGIN IF current_setting('transaction_isolation')<>'read committed'THEN RAISE EXCEPTION'Read committed required'USING ERRCODE='25001';END IF;
+ auth:=public.canonical_forecast_booking_ordered_access(org,actor,role_value,session_value,NULL,FALSE);IF role_value NOT IN('owner','admin')THEN RAISE EXCEPTION'Source restricted'USING ERRCODE='42501';END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('m26:operating-cost-schedules:'||org::text,0));auth:=public.canonical_forecast_booking_ordered_access(org,actor,role_value,session_value,NULL,FALSE);
+ cutoff:=public.canonical_forecast_workload_capacity_v1_clock();
+ SELECT * INTO v FROM public.canonical_operating_cost_schedule_revisions WHERE organization_id=org ORDER BY revision DESC LIMIT 1;
+ IF v.id IS NULL THEN RETURN public.canonical_operating_cost_source_projection(v);END IF;
+ state_value:=CASE WHEN v.action='revoke'THEN'revoked'WHEN(v.payload->>'effectiveOn')::date>
+  (cutoff AT TIME ZONE(v.authority#>>'{profile,timeZone}'))::date THEN'pending'ELSE'current'END;
+ RETURN jsonb_build_object('state',state_value,'revision',v.revision,'digest',rtrim(v.canonical_digest),
+  'action',v.action,'createdAt',public.canonical_forecast_utc_instant(v.created_at),'snapshot',v.payload);END $$;
+
 CREATE FUNCTION public.canonical_operating_cost_snapshot_read_as_of(org UUID,actor UUID,role_value TEXT,session_value UUID,cutoff TIMESTAMPTZ)RETURNS JSONB
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE auth JSONB;v public.canonical_operating_cost_schedule_revisions%ROWTYPE;
@@ -363,6 +377,7 @@ REVOKE ALL ON FUNCTION public.canonical_operating_cost_snapshot_mutate(UUID,UUID
 REVOKE ALL ON FUNCTION public.canonical_operating_cost_reference_basis_read(UUID,UUID,TEXT,UUID)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_operating_cost_source_projection(public.canonical_operating_cost_schedule_revisions)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_operating_cost_snapshot_read(UUID,UUID,TEXT,UUID)FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_operating_cost_snapshot_read_latest_recorded(UUID,UUID,TEXT,UUID)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_operating_cost_snapshot_read_as_of(UUID,UUID,TEXT,UUID,TIMESTAMPTZ)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_overhead_cash_v1_unavailable(TEXT,TIMESTAMPTZ,TEXT,TEXT,BIGINT,TEXT,TIMESTAMPTZ)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_overhead_cash_v1_evaluate(UUID,TIMESTAMPTZ,TEXT,BOOLEAN)FROM PUBLIC;
@@ -372,6 +387,7 @@ DO $$DECLARE runtime_role TEXT:=current_setting('northstar.runtime_role',TRUE);B
  EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I',runtime_role);
  EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid) TO %I',runtime_role);
  EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid) TO %I',runtime_role);
+ EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid) TO %I',runtime_role);
  EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz) TO %I',runtime_role);
  EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid) TO %I',runtime_role);
  EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz) TO %I',runtime_role);

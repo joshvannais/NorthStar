@@ -3689,6 +3689,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            pg_catalog.to_regprocedure(
             'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)') IS NULL OR
            pg_catalog.to_regprocedure(
+            'public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure(
             'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)') IS NULL OR
            pg_catalog.to_regprocedure(
             'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)') IS NULL OR
@@ -3700,6 +3702,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             WHERE routine.oid IN(
              pg_catalog.to_regprocedure('public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)'),
              pg_catalog.to_regprocedure('public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)'),
+             pg_catalog.to_regprocedure('public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid)'),
              pg_catalog.to_regprocedure('public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)'),
              pg_catalog.to_regprocedure('public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)'),
              pg_catalog.to_regprocedure('public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)'),
@@ -3715,6 +3718,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb) FROM PUBLIC;
         REVOKE ALL ON FUNCTION
           public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid) FROM PUBLIC;
+        REVOKE ALL ON FUNCTION
+          public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid) FROM PUBLIC;
         REVOKE ALL ON FUNCTION
           public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz) FROM PUBLIC;
         REVOKE ALL ON FUNCTION
@@ -3742,6 +3747,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid) TO %I',runtime_role);
         EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid) TO %I',runtime_role);
+        EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz) TO %I',runtime_role);
         EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid) TO %I',runtime_role);
@@ -3755,6 +3762,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            has_function_privilege('public',
             'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE') OR
            has_function_privilege('public',
+            'public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid)','EXECUTE') OR
+           has_function_privilege('public',
             'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE') OR
            has_function_privilege('public',
             'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)','EXECUTE') OR
@@ -3766,6 +3775,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             'public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE') OR
            NOT has_function_privilege(runtime_role,
             'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+            'public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid)','EXECUTE') OR
            NOT has_function_privilege(runtime_role,
             'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE') OR
            NOT has_function_privilege(runtime_role,
@@ -5307,6 +5318,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege('public',
            'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE')
          AND NOT has_function_privilege('public',
+           'public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public',
            'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE')
          AND NOT has_function_privilege('public',
            'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)','EXECUTE')
@@ -5318,6 +5331,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            'public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
          AND has_function_privilege($1,
            'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,
+           'public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid)','EXECUTE')
          AND has_function_privilege($1,
            'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE')
          AND has_function_privilege($1,

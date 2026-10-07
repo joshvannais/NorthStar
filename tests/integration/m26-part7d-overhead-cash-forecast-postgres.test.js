@@ -84,6 +84,8 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
     .set(actor.session.headers);
   const getSource = actor => request(fixture.app)
     .get('/api/v1/business-profile/operating-cost-schedules/current').set(actor.session.headers);
+  const getLatestSource = actor => request(fixture.app)
+    .get('/api/v1/business-profile/operating-cost-schedules/latest-recorded').set(actor.session.headers);
   const getSourceAsOf = (actor, value) => request(fixture.app)
     .get('/api/v1/business-profile/operating-cost-schedules/as-of?cutoff=' + encodeURIComponent(value.toISOString()))
     .set(actor.session.headers);
@@ -244,21 +246,75 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
     expect((await getAsOf(fixture.actors.owner, cutoff)).body.data)
       .toMatchObject({ state: 'current', basis: { sourceRevision: 1 } });
 
+    const pendingOwner = await getLatestSource(fixture.actors.owner);
+    expect(pendingOwner.status).toBe(200);
+    expect(pendingOwner.body.data).toMatchObject({ state: 'pending', revision: 2,
+      digest: current.digest, action: 'replace', snapshot: { effectiveOn: '2026-04-05' } });
+    expect((await getLatestSource(fixture.actors.admin)).body.data)
+      .toMatchObject({ state: 'pending', revision: 2, digest: current.digest });
+    expect((await getLatestSource(fixture.actors.member)).status).toBe(403);
+    const otherLatest = await getLatestSource(fixture.actors.otherOwner);
+    expect(otherLatest.status).toBe(200);
+    expect(otherLatest.body.data).toMatchObject({ state: 'absent', revision: 0, digest: 'none' });
+    expect(JSON.stringify(otherLatest.body.data)).not.toContain(current.digest);
+
+    const stalePredecessor = body({ expectedRevision: 1, expectedDigest: originalDigest,
+      effectiveOn: '2026-04-05', coverage: { startsOn: '2026-03-07', endsOn: '2026-05-05',
+        recordedThrough: cutoff.toISOString(), complete: true }, schedules: futureSchedules,
+      reason: 'A stale active revision cannot replace the latest recorded pending authority.' });
+    expect((await put(fixture.actors.owner, stalePredecessor)).status).toBe(409);
+
+    const pendingCorrectionAt = new Date(cutoff.getTime() + 600000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [pendingCorrectionAt]);
+    current = { revision: pendingOwner.body.data.revision, digest: pendingOwner.body.data.digest };
+    const correctedFutureSchedules = structuredClone(futureSchedules);
+    correctedFutureSchedules[0].amount = '1300.00';
+    const correctedPending = await put(fixture.actors.owner, body({ effectiveOn: '2026-04-05',
+      coverage: { startsOn: '2026-03-07', endsOn: '2026-05-05',
+        recordedThrough: cutoff.toISOString(), complete: true }, schedules: correctedFutureSchedules,
+      reason: 'Correct the latest recorded future-effective authority after a private reload.' }));
+    expect(correctedPending.status).toBe(201); current = correctedPending.body.data;
+    const latestCorrection = await getLatestSource(fixture.actors.owner);
+    expect(latestCorrection.body.data).toMatchObject({ state: 'pending', revision: 3,
+      digest: current.digest, snapshot: { effectiveOn: '2026-04-05' } });
+
+    const pendingRevokeAt = new Date(cutoff.getTime() + 1200000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [pendingRevokeAt]);
+    current = { revision: latestCorrection.body.data.revision, digest: latestCorrection.body.data.digest };
+    const pendingRevoked = await put(fixture.actors.owner, body({ action: 'revoke', currency: null,
+      effectiveOn: null, coverage: null, schedules: [], allocationPolicy: null,
+      reason: 'Revoke the corrected latest recorded pending authority after reload.' }));
+    expect(pendingRevoked.status).toBe(201); current = pendingRevoked.body.data;
+    expect((await getLatestSource(fixture.actors.owner)).body.data)
+      .toMatchObject({ state: 'revoked', revision: 4, digest: current.digest });
+    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
+      reason: 'owner_recorded_schedule_coverage_unavailable', basis: { sourceRevision: 4 } });
+
+    const futureRestoreAt = new Date(cutoff.getTime() + 1800000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [futureRestoreAt]);
+    const futureRestore = await put(fixture.actors.owner, body({ effectiveOn: '2026-04-05',
+      coverage: { startsOn: '2026-03-07', endsOn: '2026-05-05',
+        recordedThrough: cutoff.toISOString(), complete: true }, schedules: futureSchedules,
+      reason: 'Record a replacement that remains pending after the explicit revocation.' }));
+    expect(futureRestore.status).toBe(201); current = futureRestore.body.data;
+    expect((await getLatestSource(fixture.actors.owner)).body.data)
+      .toMatchObject({ state: 'pending', revision: 5, digest: current.digest });
+
     const beforeEffective = new Date('2026-04-04T16:00:00.000Z');
     await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [beforeEffective]);
-    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ revision: 1 });
+    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ state: 'revoked', revision: 4 });
     expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
-      basis: { sourceRevision: 1 }, reason: 'owner_recorded_schedule_coverage_stale' });
+      basis: { sourceRevision: 4 }, reason: 'owner_recorded_schedule_coverage_unavailable' });
     const onEffective = new Date('2026-04-05T16:00:00.000Z');
     await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [onEffective]);
-    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ revision: 2 });
+    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ revision: 5 });
     expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'current',
-      basis: { sourceRevision: 2 }, horizon: { startsOn: '2026-04-05' },
+      basis: { sourceRevision: 5 }, horizon: { startsOn: '2026-04-05' },
       overhead: { amount: '1200.00', dueCount: 1 }, financedAssetCash: { amount: '500.00', dueCount: 1 } });
     const afterEffective = new Date('2026-04-06T16:00:00.000Z');
     await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [afterEffective]);
     expect((await getAsOf(fixture.actors.owner, afterEffective)).body.data)
-      .toMatchObject({ state: 'current', basis: { sourceRevision: 2 }, horizon: { startsOn: '2026-04-06' } });
+      .toMatchObject({ state: 'current', basis: { sourceRevision: 5 }, horizon: { startsOn: '2026-04-06' } });
 
     const correctedAt = new Date(cutoff.getTime() + 3600000);
     await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [correctedAt]);
@@ -276,10 +332,10 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
       overhead: { amount: '2400.00' }, financedAssetCash: { amount: '500.00' },
       evidence: { currentRevision: false, completeAsOf: true } });
     expect(corrected.body.data).toMatchObject({ state: 'unavailable',
-      reason: 'nonempty_zero_schedule_unavailable', basis: { mode: 'as_of', sourceRevision: 3 },
+      reason: 'nonempty_zero_schedule_unavailable', basis: { mode: 'as_of', sourceRevision: 6 },
       forecastIssued: false });
     expect((await getSourceAsOf(fixture.actors.owner, cutoff)).body.data).toMatchObject({ revision: 1, digest: originalDigest });
-    expect((await getSourceAsOf(fixture.actors.owner, correctedAt)).body.data).toMatchObject({ revision: 3 });
+    expect((await getSourceAsOf(fixture.actors.owner, correctedAt)).body.data).toMatchObject({ revision: 6 });
     expect((await getSourceAsOf(fixture.actors.member, cutoff)).status).toBe(403);
 
     const revokedAt = new Date(cutoff.getTime() + 7200000);
@@ -292,7 +348,7 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
       reason: 'owner_recorded_schedule_coverage_unavailable' });
     expect((await getAsOf(fixture.actors.owner, correctedAt)).body.data)
       .toMatchObject({ state: 'unavailable', reason: 'nonempty_zero_schedule_unavailable',
-        basis: { sourceRevision: 3 } });
+        basis: { sourceRevision: 6 } });
   });
 
   test('enforces CSRF, role, tenant, record, and complete-empty boundaries', async () => {
@@ -377,6 +433,7 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
       'public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)',
       'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)',
       'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)',
+      'public.canonical_operating_cost_snapshot_read_latest_recorded(uuid,uuid,text,uuid)',
       'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)',
       'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)',
       'public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz)'];

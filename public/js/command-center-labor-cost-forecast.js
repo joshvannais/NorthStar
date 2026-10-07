@@ -115,31 +115,54 @@
     var generation = 0;
     function id(name) { return document.getElementById(name); }
     function money(value, currency) {
+      var parts = value.split('.');
+      var rounded = BigInt(parts[0]) + (BigInt(parts[1]) >= 50n ? 1n : 0n);
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency,
-        minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value));
+        minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(rounded));
+    }
+    function hours(value) {
+      var parts = value.split('.');
+      var scaled = BigInt(parts[0]) * 10n + (BigInt(parts[1]) + 50000n) / 100000n;
+      var whole = scaled / 10n;
+      var tenth = scaled % 10n;
+      return Number(whole).toLocaleString('en-US') + (tenth === 0n ? '' : '.' + tenth);
+    }
+    function announce(value, context) {
+      var message = 'Next 30-day planned labor cost: ' + value +
+        (/[.!?]$/.test(value) ? ' ' : '. ') + context;
+      var status = id('commandCenterLaborForecastStatus');
+      if (status.textContent !== message) status.textContent = message;
     }
     function loading() {
-      id('commandCenterLaborForecast').textContent = 'Checking planned work, rates, and capacity.';
+      var value = 'Checking planned work, rates, and capacity.';
+      var context = 'Waiting for current evidence.';
+      id('commandCenterLaborForecast').textContent = value;
       id('commandCenterLaborForecastContext').textContent = '';
+      announce(value, context);
     }
     function unavailable(value) {
-      id('commandCenterLaborForecast').textContent = 'Not available';
-      id('commandCenterLaborForecastContext').textContent = value &&
+      var result = 'Not available';
+      var context = value &&
         value.reason === 'learned_adjustment_compatibility_unverified' ?
         'A current learned-hours adjustment exists, but this labor plan does not prove whether it already includes that adjustment.' :
         'The exact scheduled-work, rate, period, or declared-capacity evidence is incomplete.';
+      id('commandCenterLaborForecast').textContent = result;
+      id('commandCenterLaborForecastContext').textContent = context;
+      announce(result, context);
     }
     function render(value) {
       var safe = validate(value);
       if (!safe || safe.state !== 'current') { unavailable(safe); return; }
-      var hours = Number(safe.plannedLabor.personHours);
-      id('commandCenterLaborForecast').textContent = money(safe.plannedLabor.cost, safe.currency) +
-        ' for ' + hours.toLocaleString([], { maximumFractionDigits: 1 }) +
-        (hours === 1 ? ' planned hour' : ' planned hours');
-      id('commandCenterLaborForecastContext').textContent = safe.work.scheduledCount +
+      var displayHours = hours(safe.plannedLabor.personHours);
+      var result = money(safe.plannedLabor.cost, safe.currency) + ' for ' + displayHours +
+        (displayHours === '1' ? ' planned hour' : ' planned hours');
+      var context = safe.work.scheduledCount +
         (safe.work.scheduledCount === 1 ? ' scheduled job' : ' scheduled jobs') +
         ' in the next 30 days. Owner-saved rates and declared ' + safe.capacity.declaredRole +
         ' availability only; payroll, attendance, whole-business coverage, probability, and calibrated ranges are not verified.';
+      id('commandCenterLaborForecast').textContent = result;
+      id('commandCenterLaborForecastContext').textContent = context;
+      announce(result, context);
     }
     function load() {
       var run = ++generation;

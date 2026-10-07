@@ -118,6 +118,7 @@ realPostgres('Mission 26 original Part 7A mounted labor-cost forecast', () => {
       quantitySource: evidence, rateSource: evidence }],
     assessment: { date: '2026-10-06', cautions: [], acknowledged: true,
       explanation: 'Owner reviewed the bounded fixture assumptions.' } };
+    context.planInputs = inputs;
     await fixture.ownerPool.query(
       `INSERT INTO canonical_estimate_decisions(id,organization_id,estimate_id,revision,
        previous_id,action,actor_user_id,membership_id,auth_session_id,actor_name,
@@ -284,6 +285,32 @@ realPostgres('Mission 26 original Part 7A mounted labor-cost forecast', () => {
       forecastIssued: true, calibratedRangeIssued: false,
       probabilityIssued: false, automaticActionAuthorized: false,
     });
+  });
+
+  test('uses the canonical UTC calendar for source-applicability dates in every session time zone', async () => {
+    const inputs = JSON.parse(JSON.stringify(context.planInputs));
+    for (const line of inputs.lines) {
+      line.quantitySource.effectiveOn = '2026-10-07';
+      line.quantitySource.endsOn = '2026-10-07';
+      line.rateSource.effectiveOn = '2026-10-07';
+      line.rateSource.endsOn = '2026-10-07';
+    }
+    const results = [];
+    const client = await fixture.ownerPool.connect();
+    try {
+      for (const zone of ['UTC', 'America/New_York', 'Asia/Tokyo']) {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('TimeZone',$1,TRUE)", [zone]);
+        results.push((await client.query(
+          `SELECT canonical_forecast_labor_cost_v1_plan_result(
+           $1::jsonb,'2026-10-07T00:30:00Z'::timestamptz,
+           '2026-10-07T01:30:00Z'::timestamptz) value`, [inputs])).rows[0].value);
+        await client.query('ROLLBACK');
+      }
+    } finally { client.release(); }
+    expect(results).toEqual([results[0], results[0], results[0]]);
+    expect(results[0]).toMatchObject({ state: 'current', personHours: '1.000000',
+      cost: '50.00' });
   });
 
   test('fails closed when an applicable learned multiplier cannot be proven compatible', async () => {

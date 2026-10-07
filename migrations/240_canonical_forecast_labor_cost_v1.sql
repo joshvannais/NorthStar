@@ -39,7 +39,8 @@ SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE line_value JSONB;source_value JSONB;source_name TEXT;
  hours_value NUMERIC;rate_value NUMERIC;burden_value NUMERIC;
  total_hours NUMERIC:=0;total_cost NUMERIC:=0;line_cost NUMERIC;
- last_day DATE:=(end_value-INTERVAL '1 microsecond')::date;
+ start_day DATE:=(start_value AT TIME ZONE 'UTC')::date;
+ last_day DATE:=((end_value-INTERVAL '1 microsecond') AT TIME ZONE 'UTC')::date;
 BEGIN
  PERFORM public.canonical_labor_plan_validate(inputs_value);
  IF end_value<=start_value THEN
@@ -61,7 +62,7 @@ BEGIN
    source_value:=line_value->source_name;
    IF source_value->>'effectiveOn' IS NULL OR source_value->>'endsOn' IS NULL OR
       btrim(COALESCE(source_value->>'geography',''))='' OR
-      (source_value->>'effectiveOn')::date>start_value::date OR
+      (source_value->>'effectiveOn')::date>start_day OR
       (source_value->>'endsOn')::date<last_day THEN
     RETURN jsonb_build_object('state','unavailable','reason','rate_or_work_source_applicability_unavailable');
    END IF;

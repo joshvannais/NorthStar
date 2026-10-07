@@ -127,9 +127,35 @@ describe('Mission 26 original Part 7A labor-cost forecast contract', () => {
     expect(demo.probabilityIssued).toBe(false);
     const html = fs.readFileSync(path.resolve(__dirname, '../../public/demo-dashboard.html'), 'utf8');
     expect(html).toContain('id="commandCenterLaborForecast"');
+    expect(html).toMatch(/id="commandCenterLaborForecastStatus"[\s\S]*?role="status"[\s\S]*?aria-live="polite"[\s\S]*?aria-atomic="true"/);
     expect(html.indexOf('id="commandCenterLaborForecast"'))
       .toBeGreaterThan(html.indexOf('id="commandCenterCostRiskDetails"'));
     expect(html.indexOf('id="commandCenterLaborForecast"'))
       .toBeLessThan(html.indexOf('</details>', html.indexOf('id="commandCenterCostRiskDetails"')));
+  });
+
+  test('renders supported maximum decimals without binary rounding and announces one atomic state', async () => {
+    const context = { window: {}, console, Intl, Date, Number, BigInt, Promise };
+    context.window.window = context.window;
+    vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,
+      '../../public/js/command-center-labor-cost-forecast.js'), 'utf8'), context);
+    const elements = Object.fromEntries(['commandCenterLaborForecast',
+      'commandCenterLaborForecastContext', 'commandCenterLaborForecastStatus']
+      .map(id => [id, { textContent: '' }]));
+    const data = forecast({
+      work: { state: 'current', scheduledCount: 1, unscheduledCount: 0,
+        outsideWindowCount: 0 },
+      plannedLabor: { state: 'current', coveredCount: 1,
+        personHours: '999999999999999.950000', cost: '999999999999999.49', reason: null },
+    });
+    const client = context.window.NorthStarLaborCostForecast.create({
+      mode: 'paid', document: { getElementById: id => elements[id] },
+      fetcher: async () => ({ ok: true, json: async () => ({ success: true, data }) }),
+    });
+    await client.workspaceReady();
+    expect(elements.commandCenterLaborForecast.textContent)
+      .toBe('$999,999,999,999,999 for 1,000,000,000,000,000 planned hours');
+    expect(elements.commandCenterLaborForecastStatus.textContent)
+      .toBe(`Next 30-day planned labor cost: ${elements.commandCenterLaborForecast.textContent}. ${elements.commandCenterLaborForecastContext.textContent}`);
   });
 });

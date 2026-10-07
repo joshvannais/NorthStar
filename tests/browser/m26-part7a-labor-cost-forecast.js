@@ -34,6 +34,12 @@ async function pageFor(browser, { width, theme, mode }) {
   await page.addScriptTag({ path: path.resolve('public/js/command-center-labor-cost-forecast.js') });
   await page.evaluate(modeValue => {
     window.__calls = []; window.__responses = [];
+    window.__announcements = [];
+    new MutationObserver(function () {
+      var message = document.getElementById('commandCenterLaborForecastStatus').textContent;
+      if (window.__announcements.at(-1) !== message) window.__announcements.push(message);
+    }).observe(document.getElementById('commandCenterLaborForecastStatus'),
+      { childList: true, characterData: true, subtree: true });
     window.__forecast = NorthStarLaborCostForecast.create({ document, mode: modeValue,
       fetcher: async (url, options) => {
         window.__calls.push({ url, method: options.method, cache: options.cache });
@@ -65,6 +71,8 @@ async function pageFor(browser, { width, theme, mode }) {
       const contextText = await page.locator('#commandCenterLaborForecastContext').innerText();
       assert.match(contextText, /3 scheduled jobs in the next 30 days/);
       assert.match(contextText, /payroll, attendance, whole-business coverage, probability, and calibrated ranges are not verified/i);
+      assert.match(await page.locator('#commandCenterLaborForecastStatus').textContent(),
+        /Next 30-day planned labor cost: \$4,320 for 96 planned hours/);
       assert.equal(await page.locator('#commandCenterCostRiskOutlook .btn-primary').count(), 1);
       await page.locator('#commandCenterCostRiskDetails > summary').focus();
       assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Review details');
@@ -100,6 +108,10 @@ async function pageFor(browser, { width, theme, mode }) {
       await page.locator('#commandCenterCostRiskDetails').evaluate(node => { node.open = true; });
       assert.equal(await page.locator('#commandCenterLaborForecast').innerText(),
         '$50 for 1 planned hour');
+      assert.deepEqual(await page.evaluate(() => window.__announcements), [
+        'Next 30-day planned labor cost: Checking planned work, rates, and capacity. Waiting for current evidence.',
+        'Next 30-day planned labor cost: $50 for 1 planned hour. 1 scheduled job in the next 30 days. Owner-saved rates and declared technician availability only; payroll, attendance, whole-business coverage, probability, and calibrated ranges are not verified.',
+      ]);
       assert.deepEqual(await page.evaluate(() => window.__calls), [
         { url: '/api/v1/forecast/labor-cost/current', method: 'GET', cache: 'no-store' },
       ]);
@@ -115,10 +127,26 @@ async function pageFor(browser, { width, theme, mode }) {
       assert.doesNotMatch(await page.locator('#commandCenterLaborForecastContext').innerText(), /\$0/);
       await page.evaluate(() => window.__forecast.workspaceUnavailable());
       assert.equal(await page.locator('#commandCenterLaborForecast').innerText(), 'Not available');
+      assert.equal(await page.evaluate(() => window.__announcements.length), 4);
+      assert.deepEqual(await page.evaluate(() => window.__announcements.slice(-2)), [
+        'Next 30-day planned labor cost: Checking planned work, rates, and capacity. Waiting for current evidence.',
+        'Next 30-day planned labor cost: Not available. The exact scheduled-work, rate, period, or declared-capacity evidence is incomplete.',
+      ]);
+      await page.evaluate(data => {
+        window.__responses.push({ status: 200, payload: { success: true, data } });
+        return window.__forecast.workspaceReady();
+      }, paid);
+      assert.equal(await page.locator('#commandCenterLaborForecast').innerText(),
+        '$50 for 1 planned hour');
+      assert.deepEqual(await page.evaluate(() => window.__announcements.slice(-2)), [
+        'Next 30-day planned labor cost: Checking planned work, rates, and capacity. Waiting for current evidence.',
+        'Next 30-day planned labor cost: $50 for 1 planned hour. 1 scheduled job in the next 30 days. Owner-saved rates and declared technician availability only; payroll, attendance, whole-business coverage, probability, and calibrated ranges are not verified.',
+      ]);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       assert.deepEqual(errors, []);
-      result.cases.push({ name: 'paid-desktop-light', paidRequests: 2,
-        loadingClearedPriorFacts: true, failClosed: true, pass: true });
+      result.cases.push({ name: 'paid-desktop-light', paidRequests: 3,
+        loadingClearedPriorFacts: true, failClosed: true, recovered: true,
+        atomicAnnouncements: true, pass: true });
       await context.close();
     }
     result.pass = true;

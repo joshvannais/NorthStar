@@ -961,6 +961,8 @@
     byId('commandCenterLaborForecast').textContent = 'Not available';
     byId('commandCenterLaborForecastContext').textContent =
       'The labor forecast could not load. Refresh Command Center to try again.';
+    byId('commandCenterLaborForecastStatus').textContent =
+      'Next 30-day planned labor cost: Not available. The labor forecast could not load. Refresh Command Center to try again.';
   }
   if (global.NorthStarCustomerOpportunityOutlook &&
       typeof global.NorthStarCustomerOpportunityOutlook.create === 'function') {

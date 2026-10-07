@@ -41,6 +41,7 @@ const { createForecastRevenueCashOutlookRouter } =
   require('./routes/forecastRevenueCashOutlook');
 const { createForecastCostRiskOutlookRouter } =
   require('./routes/forecastCostRiskOutlook');
+const { createForecastLaborCostRouter } = require('./routes/forecastLaborCost');
 const { createForecastCustomerOpportunityOutlookRouter } =
   require('./routes/forecastCustomerOpportunityOutlook');
 const { createProductionOpenAIRuntime } = require('./polaris/openaiRuntime');
@@ -327,6 +328,7 @@ app.use('/api/v1/forecast/capacity-advice', createForecastCapacityAdvisoryRouter
 app.use('/api/v1/forecast/pipeline-scenarios', createForecastPipelineScenariosRouter());
 app.use('/api/v1/forecast/revenue-cash-outlook', createForecastRevenueCashOutlookRouter());
 app.use('/api/v1/forecast/cost-risk-outlook', createForecastCostRiskOutlookRouter());
+app.use('/api/v1/forecast/labor-cost', createForecastLaborCostRouter());
 app.use('/api/v1/forecast/customer-opportunity-outlook',
   createForecastCustomerOpportunityOutlookRouter());
 app.use('/api/v1/forecast/reporting-windows',

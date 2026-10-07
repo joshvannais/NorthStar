@@ -24,6 +24,7 @@
   var capacityResearch = null;
   var revenueCashOutlook = null;
   var costRiskOutlook = null;
+  var laborCostForecast = null;
   var customerOpportunityOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
@@ -804,6 +805,9 @@
     if (costRiskOutlook && typeof costRiskOutlook.workspaceReady === 'function') {
       costRiskOutlook.workspaceReady();
     }
+    if (laborCostForecast && typeof laborCostForecast.workspaceReady === 'function') {
+      laborCostForecast.workspaceReady();
+    }
     if (customerOpportunityOutlook && typeof customerOpportunityOutlook.workspaceReady === 'function') {
       customerOpportunityOutlook.workspaceReady();
     }
@@ -866,6 +870,9 @@
       }
       if (costRiskOutlook && typeof costRiskOutlook.workspaceUnavailable === 'function') {
         costRiskOutlook.workspaceUnavailable();
+      }
+      if (laborCostForecast && typeof laborCostForecast.workspaceUnavailable === 'function') {
+        laborCostForecast.workspaceUnavailable();
       }
       if (customerOpportunityOutlook &&
           typeof customerOpportunityOutlook.workspaceUnavailable === 'function') {
@@ -943,6 +950,17 @@
     byId('commandCenterCostRiskState').textContent = 'Unavailable';
     byId('commandCenterCostRiskAnswer').textContent =
       'This insight is unavailable. Refresh Command Center to try again.';
+  }
+  if (global.NorthStarLaborCostForecast &&
+      typeof global.NorthStarLaborCostForecast.create === 'function') {
+    laborCostForecast = global.NorthStarLaborCostForecast.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterLaborForecast')) {
+    byId('commandCenterLaborForecast').textContent = 'Not available';
+    byId('commandCenterLaborForecastContext').textContent =
+      'The labor forecast could not load. Refresh Command Center to try again.';
   }
   if (global.NorthStarCustomerOpportunityOutlook &&
       typeof global.NorthStarCustomerOpportunityOutlook.create === 'function') {

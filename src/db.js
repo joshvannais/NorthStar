@@ -3861,6 +3861,49 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           RAISE EXCEPTION 'Required operating-profit forecast runtime authority is invalid';
         END IF;
       END IF;
+      IF EXISTS(SELECT 1 FROM public._migrations
+          WHERE filename='245_canonical_forecast_material_demand_risk_v1.sql') OR
+         pg_catalog.to_regprocedure(
+          'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)') IS NOT NULL THEN
+        IF pg_catalog.to_regprocedure(
+             'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure(
+             'public.canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text)') IS NULL OR
+           pg_catalog.to_regprocedure(
+             'public.canonical_forecast_material_quantity_v1(numeric)') IS NULL OR
+           EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
+            WHERE routine.oid=pg_catalog.to_regprocedure(
+             'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)')
+             AND (NOT routine.prosecdef OR pg_catalog.pg_get_userbyid(routine.proowner)<>current_user OR
+              NOT routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
+          RAISE EXCEPTION 'Required material-demand risk forecast authority is missing';
+        END IF;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)
+          FROM PUBLIC;
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text) FROM %I',
+          runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_material_quantity_v1(numeric) FROM %I',
+          runtime_role);
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid) TO %I',
+          runtime_role);
+        IF has_function_privilege('public',
+             'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)',
+             'EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+             'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)',
+             'EXECUTE') OR
+           has_function_privilege(runtime_role,
+             'public.canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text)',
+             'EXECUTE') OR
+           has_function_privilege(runtime_role,
+             'public.canonical_forecast_material_quantity_v1(numeric)','EXECUTE') THEN
+          RAISE EXCEPTION 'Required material-demand risk forecast runtime authority is invalid';
+        END IF;
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_price_event_snapshots') IS NOT NULL THEN
         EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_price_event_snapshots FROM %I', runtime_role);
         EXECUTE pg_catalog.format('REVOKE ALL ON FUNCTION public.canonical_forecast_price_decision_events(uuid,timestamptz) FROM %I', runtime_role);
@@ -5455,6 +5498,17 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,
            'public.canonical_forecast_operating_profit_v1_unavailable(text,timestamptz,text)','EXECUTE')
        )) AS operating_profit_authority_private,
+       (to_regprocedure(
+         'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)') IS NULL OR (
+         NOT has_function_privilege('public',
+          'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,
+          'public.canonical_forecast_material_demand_risk_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_material_demand_risk_v1_unavailable(text,timestamptz,timestamptz,text)','EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_material_quantity_v1(numeric)','EXECUTE')
+       )) AS material_demand_risk_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -6558,6 +6612,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        !runtimePrivileges.pipeline_scenario_private ||
       !runtimePrivileges.overhead_cash_authority_private ||
       !runtimePrivileges.operating_profit_authority_private ||
+      !runtimePrivileges.material_demand_risk_authority_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

@@ -623,10 +623,46 @@
             <a class="btn btn-primary command-center-revenue-cash-action"
               id="commandCenterCostRiskAction" href="/dashboard/polaris"
               data-command-destination="polaris">Review estimates</a>
-            <p class="command-center-demand-boundary" id="commandCenterCostRiskBoundary">
-              Planning only. Planned job-cost margin is not company profit; team utilization stays in Team capacity.
-            </p>
-            <details class="command-center-revenue-cash-details" id="commandCenterCostRiskDetails">
+              <p class="command-center-demand-boundary" id="commandCenterCostRiskBoundary">
+                Planning only. Planned job-cost margin is not company profit; team utilization stays in Team capacity.
+              </p>
+              <div class="command-center-operating-profit" id="commandCenterOperatingProfit"
+                aria-labelledby="commandCenterOperatingProfitTitle" aria-busy="true">
+                <div class="command-center-operating-profit-heading">
+                  <h3 id="commandCenterOperatingProfitTitle">Monthly operating outlook</h3>
+                  <span id="commandCenterOperatingProfitState">Loading</span>
+                </div>
+                <div class="command-center-operating-profit-kpis" aria-label="Operating outlook key figures">
+                  <div><span>Operating cost</span><strong id="commandCenterOperatingCostKpi">Not available</strong></div>
+                  <div><span>Profit range</span><strong id="commandCenterOperatingProfitKpi">Not available</strong></div>
+                  <div><span>Margin range</span><strong id="commandCenterOperatingMarginKpi">Not available</strong></div>
+                </div>
+                <svg class="command-center-operating-profit-graph" id="commandCenterOperatingProfitGraph"
+                  viewBox="0 0 640 180" role="img" aria-labelledby="commandCenterOperatingProfitGraphTitle commandCenterOperatingProfitGraphDescription">
+                  <title id="commandCenterOperatingProfitGraphTitle">Monthly forecast profit range</title>
+                  <desc id="commandCenterOperatingProfitGraphDescription">Waiting for current operating-profit evidence.</desc>
+                  <g id="commandCenterOperatingProfitGraphPlot"></g>
+                </svg>
+                <p id="commandCenterOperatingProfitExplanation">
+                  Checking approved booked prices, adopted cost compositions, expense timing, and overlap review.
+                </p>
+                <details id="commandCenterOperatingProfitDetails">
+                  <summary>How this forecast is built</summary>
+                  <dl class="command-center-revenue-cash-facts">
+                    <div><dt>Approved booked price</dt><dd id="commandCenterOperatingProfitRevenue">Not available</dd></div>
+                    <div><dt>Direct job cost</dt><dd id="commandCenterOperatingProfitDirect">Not available</dd></div>
+                    <div><dt>Incremental job overhead</dt><dd id="commandCenterOperatingProfitJobOverhead">Not available</dd></div>
+                    <div><dt>Fixed and variable period expense</dt><dd id="commandCenterOperatingProfitPeriodExpense">Not available</dd></div>
+                    <div><dt>Dated cash obligations</dt><dd id="commandCenterOperatingProfitCash">Not available</dd></div>
+                  </dl>
+                  <p id="commandCenterOperatingProfitBoundary">
+                    Approved booked price is a planning target. Company overhead cash, financing cash, earned revenue, invoices, collections, and actual payment remain distinct.
+                  </p>
+                </details>
+                <span class="sr-only" id="commandCenterOperatingProfitStatus"
+                  role="status" aria-live="polite" aria-atomic="true"></span>
+              </div>
+              <details class="command-center-revenue-cash-details" id="commandCenterCostRiskDetails">
               <summary>Review details</summary>
               <dl class="command-center-revenue-cash-facts" id="commandCenterCostRiskFacts">
                 <div><dt>Owner-confirmed booked work</dt><dd id="commandCenterCostRiskBooked">Not available</dd></div>
@@ -727,6 +763,7 @@
   <script src="/js/command-center-material-cost-forecast.js?v=m26-part7b-20261007"></script>
   <script src="/js/command-center-equipment-travel-cost-forecast.js?v=m26-part7c-20261007"></script>
   <script src="/js/command-center-overhead-cash-forecast.js?v=m26-part7d-20261007"></script>
+  <script src="/js/command-center-operating-profit-forecast.js?v=m26-part7e-20261007"></script>
   <script src="/js/command-center-customer-opportunity-outlook.js?v=m26-founder-part6-20261006"></script>
   <script src="/js/command-center-page.js?v=m26-founder-part6-20261006"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>

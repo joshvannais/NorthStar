@@ -28,6 +28,7 @@
   var materialCostForecast = null;
   var equipmentTravelCostForecast = null;
   var overheadCashForecast = null;
+  var operatingProfitForecast = null;
   var customerOpportunityOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
@@ -820,6 +821,9 @@
     if (overheadCashForecast && typeof overheadCashForecast.workspaceReady === 'function') {
       overheadCashForecast.workspaceReady();
     }
+    if (operatingProfitForecast && typeof operatingProfitForecast.workspaceReady === 'function') {
+      operatingProfitForecast.workspaceReady();
+    }
     if (customerOpportunityOutlook && typeof customerOpportunityOutlook.workspaceReady === 'function') {
       customerOpportunityOutlook.workspaceReady();
     }
@@ -895,6 +899,9 @@
       }
       if (overheadCashForecast && typeof overheadCashForecast.workspaceUnavailable === 'function') {
         overheadCashForecast.workspaceUnavailable();
+      }
+      if (operatingProfitForecast && typeof operatingProfitForecast.workspaceUnavailable === 'function') {
+        operatingProfitForecast.workspaceUnavailable();
       }
       if (customerOpportunityOutlook &&
           typeof customerOpportunityOutlook.workspaceUnavailable === 'function') {
@@ -1024,6 +1031,20 @@
       'The overhead and financed-asset cash forecast could not load. Refresh Command Center to try again.';
     byId('commandCenterOverheadCashForecastStatus').textContent =
       'Next 30-day overhead and financed-asset cash: Not available. The forecast could not load. Refresh Command Center to try again.';
+  }
+  if (global.NorthStarOperatingProfitForecast &&
+      typeof global.NorthStarOperatingProfitForecast.create === 'function') {
+    operatingProfitForecast = global.NorthStarOperatingProfitForecast.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterOperatingProfit')) {
+    byId('commandCenterOperatingProfit').setAttribute('aria-busy', 'false');
+    byId('commandCenterOperatingProfitState').textContent = 'Unavailable';
+    byId('commandCenterOperatingProfitExplanation').textContent =
+      'The monthly operating outlook could not load. Refresh Command Center to try again.';
+    byId('commandCenterOperatingProfitStatus').textContent =
+      'Monthly operating outlook is unavailable. Refresh Command Center to try again.';
   }
   if (global.NorthStarCustomerOpportunityOutlook &&
       typeof global.NorthStarCustomerOpportunityOutlook.create === 'function') {

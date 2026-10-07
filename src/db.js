@@ -3798,6 +3798,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            pg_catalog.to_regprocedure(
             'public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz)') IS NULL OR
            pg_catalog.to_regprocedure(
+            'public.canonical_forecast_conserved_scenario_allocation(jsonb,integer)') IS NULL OR
+           pg_catalog.to_regprocedure(
             'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)') IS NULL OR
            EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
             WHERE routine.oid IN(
@@ -3827,6 +3829,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'REVOKE ALL ON FUNCTION public.canonical_forecast_signed_money(numeric) FROM %I',runtime_role);
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_forecast_margin(numeric,numeric) FROM %I',runtime_role);
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_conserved_scenario_allocation(jsonb,integer) FROM PUBLIC;
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_conserved_scenario_allocation(jsonb,integer) FROM %I',runtime_role);
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_forecast_operating_profit_v1_unavailable(text,timestamptz,text) FROM %I',runtime_role);
         EXECUTE pg_catalog.format(
@@ -3842,6 +3848,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             'public.canonical_operating_profit_policy_read(uuid,uuid,text,uuid,timestamptz)','EXECUTE') OR
            has_function_privilege('public',
             'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)','EXECUTE') OR
+           has_function_privilege('public',
+            'public.canonical_forecast_conserved_scenario_allocation(jsonb,integer)','EXECUTE') OR
+           has_function_privilege(runtime_role,
+            'public.canonical_forecast_conserved_scenario_allocation(jsonb,integer)','EXECUTE') OR
            NOT has_function_privilege(runtime_role,
             'public.canonical_operating_profit_policy_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE') OR
            NOT has_function_privilege(runtime_role,
@@ -5438,6 +5448,10 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            'public.canonical_operating_profit_policy_projection(public.canonical_operating_profit_policy_revisions)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_signed_money(numeric)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_forecast_margin(numeric,numeric)','EXECUTE')
+         AND NOT has_function_privilege('public',
+           'public.canonical_forecast_conserved_scenario_allocation(jsonb,integer)','EXECUTE')
+         AND NOT has_function_privilege($1,
+           'public.canonical_forecast_conserved_scenario_allocation(jsonb,integer)','EXECUTE')
          AND NOT has_function_privilege($1,
            'public.canonical_forecast_operating_profit_v1_unavailable(text,timestamptz,text)','EXECUTE')
        )) AS operating_profit_authority_private,

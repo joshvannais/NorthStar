@@ -180,6 +180,37 @@ CREATE FUNCTION public.canonical_forecast_margin(v NUMERIC,revenue NUMERIC)RETUR
 LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN IF revenue IS NULL OR revenue<=0 OR v IS NULL THEN RETURN NULL;END IF;RETURN to_char(round(v*10000/revenue)/100,'FM999999990.00');END $$;
 
+CREATE FUNCTION public.canonical_forecast_conserved_scenario_allocation(month_costs JSONB,basis_points INTEGER)RETURNS JSONB
+LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE item RECORD;item_count INTEGER;item_index INTEGER:=0;total_cost NUMERIC:=0;
+ target_cost NUMERIC;cumulative_cost NUMERIC:=0;allocated_cost NUMERIC:=0;
+ cumulative_target NUMERIC;piece_cost NUMERIC;result JSONB:='{}'::jsonb;
+BEGIN
+ IF jsonb_typeof(month_costs)<>'object'OR basis_points NOT BETWEEN 5000 AND 15999 THEN
+  RAISE EXCEPTION'Conserved scenario allocation invalid'USING ERRCODE='22023';END IF;
+ SELECT count(*)::integer INTO item_count FROM jsonb_object_keys(month_costs);
+ IF item_count NOT BETWEEN 1 AND 3 THEN
+  RAISE EXCEPTION'Conserved scenario allocation invalid'USING ERRCODE='22023';END IF;
+ FOR item IN SELECT key,value FROM jsonb_each_text(month_costs)ORDER BY key LOOP
+  IF item.key!~'^[0-9]{4}-(0[1-9]|1[0-2])$'OR item.value!~'^(0|[1-9][0-9]{0,17})(\.0+)?$'THEN
+   RAISE EXCEPTION'Conserved scenario allocation invalid'USING ERRCODE='22023';END IF;
+  total_cost:=total_cost+item.value::numeric;
+ END LOOP;
+ target_cost:=round(total_cost*basis_points/10000);
+ FOR item IN SELECT key,value FROM jsonb_each_text(month_costs)ORDER BY key LOOP
+  item_index:=item_index+1;cumulative_cost:=cumulative_cost+item.value::numeric;
+  cumulative_target:=CASE WHEN item_index=item_count THEN target_cost
+   ELSE round(cumulative_cost*basis_points/10000)END;
+  piece_cost:=cumulative_target-allocated_cost;
+  IF piece_cost<0 OR piece_cost<>trunc(piece_cost)THEN
+  RAISE EXCEPTION'Conserved scenario allocation invalid'USING ERRCODE='22023';END IF;
+  result:=jsonb_set(result,ARRAY[item.key],to_jsonb(piece_cost),TRUE);
+  allocated_cost:=allocated_cost+piece_cost;
+ END LOOP;
+ IF allocated_cost<>target_cost THEN RAISE EXCEPTION'Conserved scenario allocation failed'USING ERRCODE='22023';END IF;
+ RETURN result;
+END $$;
+
 CREATE FUNCTION public.canonical_forecast_operating_profit_v1_unavailable(reason_value TEXT,cutoff TIMESTAMPTZ,zone TEXT)RETURNS JSONB
 LANGUAGE plpgsql IMMUTABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE start_day DATE:=(cutoff AT TIME ZONE COALESCE(zone,'UTC'))::date;BEGIN RETURN jsonb_build_object(
@@ -214,12 +245,14 @@ DECLARE auth JSONB;cutoff TIMESTAMPTZ;horizon TIMESTAMPTZ;profile public.canonic
  job_revenue NUMERIC;job_direct NUMERIC;job_overhead NUMERIC;total_seconds NUMERIC;piece_seconds NUMERIC;
  remaining_revenue NUMERIC;remaining_direct NUMERIC;remaining_overhead NUMERIC;piece_revenue NUMERIC;piece_direct NUMERIC;piece_overhead NUMERIC;
  piece_start TIMESTAMPTZ;piece_end TIMESTAMPTZ;boundary TIMESTAMPTZ;month_key TEXT;month_map JSONB:='{}'::jsonb;month_value JSONB;
- expense JSONB;expense_start DATE;expense_end DATE;overlap_start DATE;overlap_end DATE;month_start DATE;month_end DATE;
- total_days INTEGER;overlap_days INTEGER;expense_cents NUMERIC;piece_expense NUMERIC;
- scenario JSONB;scenario_items JSONB:='[]'::jsonb;months JSONB:='[]'::jsonb;bucket RECORD;
+ expense JSONB;expense_start DATE;expense_end DATE;attribution_start DATE;attribution_end DATE;overlap_start DATE;overlap_end DATE;month_start DATE;month_end DATE;
+ total_days INTEGER;overlap_days INTEGER;expense_cents NUMERIC;attributed_expense_cents NUMERIC;remaining_expense NUMERIC;piece_expense NUMERIC;
+ scenario JSONB;months JSONB:='[]'::jsonb;bucket RECORD;
  month_revenue NUMERIC;month_direct NUMERIC;month_job_overhead NUMERIC;month_fixed NUMERIC;month_variable NUMERIC;month_cost NUMERIC;
  scenario_cost NUMERIC;scenario_profit NUMERIC;scenario_values JSONB;profit_min NUMERIC;profit_max NUMERIC;margin_min NUMERIC;margin_max NUMERIC;
- operating_cost NUMERIC;profit_value NUMERIC;all_scenarios JSONB:='[]'::jsonb;run_payload JSONB;run_digest TEXT;
+ scenario_month_costs JSONB:='{}'::jsonb;scenario_allocations JSONB:='{}'::jsonb;scenario_allocation JSONB;
+ aggregate_profit_min NUMERIC;aggregate_profit_max NUMERIC;aggregate_margin_min NUMERIC;aggregate_margin_max NUMERIC;
+ operating_cost NUMERIC;all_scenarios JSONB:='[]'::jsonb;run_payload JSONB;run_digest TEXT;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed'THEN RAISE EXCEPTION'Read committed required'USING ERRCODE='25001';END IF;
  auth:=public.canonical_forecast_booking_ordered_access(org,actor,role_value,session_value,NULL,FALSE);
@@ -325,27 +358,57 @@ BEGIN
  FOR expense IN SELECT value FROM jsonb_array_elements(policy.payload->'expenses')LOOP
   expense_start:=(expense->>'recognitionStartsOn')::date;expense_end:=(expense->>'recognitionEndsOn')::date;
   expense_cents:=(expense->>'amount')::numeric*100;total_days:=expense_end-expense_start+1;
-  month_start:=date_trunc('month',greatest(expense_start,start_day)::timestamp)::date;
-  WHILE month_start<=least(expense_end,end_day-1)LOOP
+  attribution_start:=greatest(expense_start,start_day);attribution_end:=least(expense_end,end_day-1);
+  IF attribution_end<attribution_start THEN CONTINUE;END IF;
+  attributed_expense_cents:=round(expense_cents*(attribution_end-attribution_start+1)/total_days);
+  remaining_expense:=attributed_expense_cents;
+  month_start:=date_trunc('month',attribution_start::timestamp)::date;
+  WHILE month_start<=attribution_end LOOP
    month_end:=(month_start+INTERVAL'1 month')::date-1;overlap_start:=greatest(expense_start,start_day,month_start);
    overlap_end:=least(expense_end,end_day-1,month_end);IF overlap_end>=overlap_start THEN overlap_days:=overlap_end-overlap_start+1;
-    piece_expense:=round(expense_cents*overlap_days/total_days);month_key:=to_char(month_start,'YYYY-MM');month_value:=COALESCE(month_map->month_key,'{}'::jsonb);
-    month_value:=jsonb_build_object('revenue',COALESCE((month_value->>'revenue')::numeric,0),'direct',COALESCE((month_value->>'direct')::numeric,0),
-     'jobOverhead',COALESCE((month_value->>'jobOverhead')::numeric,0),
-     'fixed',COALESCE((month_value->>'fixed')::numeric,0)+CASE WHEN expense->>'classification'='fixed_period'THEN piece_expense ELSE 0 END,
+     piece_expense:=CASE WHEN overlap_end=attribution_end THEN remaining_expense
+      ELSE round(expense_cents*overlap_days/total_days)END;remaining_expense:=remaining_expense-piece_expense;
+     month_key:=to_char(month_start,'YYYY-MM');month_value:=COALESCE(month_map->month_key,'{}'::jsonb);
+     month_value:=jsonb_build_object('revenue',COALESCE((month_value->>'revenue')::numeric,0),'direct',COALESCE((month_value->>'direct')::numeric,0),
+      'jobOverhead',COALESCE((month_value->>'jobOverhead')::numeric,0),
+      'fixed',COALESCE((month_value->>'fixed')::numeric,0)+CASE WHEN expense->>'classification'='fixed_period'THEN piece_expense ELSE 0 END,
      'variable',COALESCE((month_value->>'variable')::numeric,0)+CASE WHEN expense->>'classification'='variable_period'THEN piece_expense ELSE 0 END);
     month_map:=jsonb_set(month_map,ARRAY[month_key],month_value,TRUE);
     IF expense->>'classification'='fixed_period'THEN fixed_cents:=fixed_cents+piece_expense;ELSE variable_cents:=variable_cents+piece_expense;END IF;
-   END IF;month_start:=(month_start+INTERVAL'1 month')::date;
+    END IF;month_start:=(month_start+INTERVAL'1 month')::date;
+   END LOOP;
+   IF remaining_expense<>0 THEN RAISE EXCEPTION'Expense allocation failed'USING ERRCODE='22023';END IF;
   END LOOP;
- END LOOP;
- FOR bucket IN SELECT key,value FROM jsonb_each(month_map)ORDER BY key LOOP
+  operating_cost:=direct_cents+job_overhead_cents+fixed_cents+variable_cents;
+  IF revenue_cents<=0 THEN RETURN public.canonical_forecast_operating_profit_v1_unavailable('nonzero_revenue_denominator_unavailable',cutoff,zone);END IF;
+  FOR bucket IN SELECT key,value FROM jsonb_each(month_map)ORDER BY key LOOP
+   month_cost:=(bucket.value->>'direct')::numeric+(bucket.value->>'jobOverhead')::numeric+
+    (bucket.value->>'fixed')::numeric+(bucket.value->>'variable')::numeric;
+   scenario_month_costs:=jsonb_set(scenario_month_costs,ARRAY[bucket.key],to_jsonb(month_cost),TRUE);
+  END LOOP;
+  IF operating_cost IS DISTINCT FROM(SELECT sum(value::numeric)FROM jsonb_each_text(scenario_month_costs))THEN
+   RAISE EXCEPTION'Operating-cost allocation failed'USING ERRCODE='22023';END IF;
+  FOR scenario IN SELECT value FROM jsonb_array_elements(policy.payload->'scenarios')ORDER BY(value->>'operatingCostBasisPoints')::integer,value->>'key'LOOP
+   scenario_allocation:=public.canonical_forecast_conserved_scenario_allocation(
+    scenario_month_costs,(scenario->>'operatingCostBasisPoints')::integer);
+   scenario_allocations:=jsonb_set(scenario_allocations,ARRAY[scenario->>'key'],scenario_allocation,TRUE);
+   SELECT sum(value::numeric)INTO scenario_cost FROM jsonb_each_text(scenario_allocation);
+   scenario_profit:=revenue_cents-scenario_cost;
+   all_scenarios:=all_scenarios||jsonb_build_array(jsonb_build_object('key',scenario->>'key','label',scenario->>'label',
+    'operatingCost',public.canonical_pricing_decimal(scenario_cost),'profit',public.canonical_forecast_signed_money(scenario_profit),
+    'margin',public.canonical_forecast_margin(scenario_profit,revenue_cents),'assumption',jsonb_build_object('operatingCostBasisPoints',(scenario->>'operatingCostBasisPoints')::integer,'reason',scenario->>'reason')));
+   aggregate_profit_min:=least(COALESCE(aggregate_profit_min,scenario_profit),scenario_profit);
+   aggregate_profit_max:=greatest(COALESCE(aggregate_profit_max,scenario_profit),scenario_profit);
+   aggregate_margin_min:=least(COALESCE(aggregate_margin_min,scenario_profit*10000/revenue_cents),scenario_profit*10000/revenue_cents);
+   aggregate_margin_max:=greatest(COALESCE(aggregate_margin_max,scenario_profit*10000/revenue_cents),scenario_profit*10000/revenue_cents);
+  END LOOP;
+  FOR bucket IN SELECT key,value FROM jsonb_each(month_map)ORDER BY key LOOP
   month_revenue:=(bucket.value->>'revenue')::numeric;month_direct:=(bucket.value->>'direct')::numeric;
   month_job_overhead:=(bucket.value->>'jobOverhead')::numeric;month_fixed:=(bucket.value->>'fixed')::numeric;month_variable:=(bucket.value->>'variable')::numeric;
   month_cost:=month_direct+month_job_overhead+month_fixed+month_variable;scenario_values:='[]'::jsonb;profit_min:=NULL;profit_max:=NULL;margin_min:=NULL;margin_max:=NULL;
-  IF month_revenue<=0 THEN RETURN public.canonical_forecast_operating_profit_v1_unavailable('nonzero_revenue_denominator_unavailable',cutoff,zone);END IF;
-  FOR scenario IN SELECT value FROM jsonb_array_elements(policy.payload->'scenarios')ORDER BY value->>'operatingCostBasisPoints',value->>'key'LOOP
-   scenario_cost:=round(month_cost*(scenario->>'operatingCostBasisPoints')::numeric/10000);scenario_profit:=month_revenue-scenario_cost;
+   IF month_revenue<=0 THEN RETURN public.canonical_forecast_operating_profit_v1_unavailable('nonzero_revenue_denominator_unavailable',cutoff,zone);END IF;
+   FOR scenario IN SELECT value FROM jsonb_array_elements(policy.payload->'scenarios')ORDER BY(value->>'operatingCostBasisPoints')::integer,value->>'key'LOOP
+    scenario_cost:=(scenario_allocations#>>ARRAY[scenario->>'key',bucket.key])::numeric;scenario_profit:=month_revenue-scenario_cost;
    scenario_values:=scenario_values||jsonb_build_array(jsonb_build_object('key',scenario->>'key','label',scenario->>'label',
     'operatingCost',public.canonical_pricing_decimal(scenario_cost),'profit',public.canonical_forecast_signed_money(scenario_profit),
     'margin',public.canonical_forecast_margin(scenario_profit,month_revenue),'assumption',jsonb_build_object('operatingCostBasisPoints',(scenario->>'operatingCostBasisPoints')::integer,'reason',scenario->>'reason')));
@@ -353,24 +416,13 @@ BEGIN
    margin_min:=least(COALESCE(margin_min,scenario_profit*10000/month_revenue),scenario_profit*10000/month_revenue);
    margin_max:=greatest(COALESCE(margin_max,scenario_profit*10000/month_revenue),scenario_profit*10000/month_revenue);
   END LOOP;
-  months:=months||jsonb_build_array(jsonb_build_object('month',bucket.key,'revenue',public.canonical_pricing_decimal(month_revenue),
+   months:=months||jsonb_build_array(jsonb_build_object('month',bucket.key,'revenue',public.canonical_pricing_decimal(month_revenue),
    'directJobCost',public.canonical_pricing_decimal(month_direct),'incrementalJobOverhead',public.canonical_pricing_decimal(month_job_overhead),
    'fixedPeriodExpense',public.canonical_pricing_decimal(month_fixed),'variablePeriodExpense',public.canonical_pricing_decimal(month_variable),
    'operatingCost',public.canonical_pricing_decimal(month_cost),'profitLow',public.canonical_forecast_signed_money(profit_min),
    'profitHigh',public.canonical_forecast_signed_money(profit_max),'marginLow',to_char(round(margin_min)/100,'FM999999990.00'),
-   'marginHigh',to_char(round(margin_max)/100,'FM999999990.00'),'scenarios',scenario_values));
- END LOOP;
- operating_cost:=direct_cents+job_overhead_cents+fixed_cents+variable_cents;profit_min:=NULL;profit_max:=NULL;margin_min:=NULL;margin_max:=NULL;
- IF revenue_cents<=0 THEN RETURN public.canonical_forecast_operating_profit_v1_unavailable('nonzero_revenue_denominator_unavailable',cutoff,zone);END IF;
- FOR scenario IN SELECT value FROM jsonb_array_elements(policy.payload->'scenarios')ORDER BY value->>'operatingCostBasisPoints',value->>'key'LOOP
-  scenario_cost:=round(operating_cost*(scenario->>'operatingCostBasisPoints')::numeric/10000);profit_value:=revenue_cents-scenario_cost;
-  all_scenarios:=all_scenarios||jsonb_build_array(jsonb_build_object('key',scenario->>'key','label',scenario->>'label',
-   'operatingCost',public.canonical_pricing_decimal(scenario_cost),'profit',public.canonical_forecast_signed_money(profit_value),
-   'margin',public.canonical_forecast_margin(profit_value,revenue_cents),'assumption',jsonb_build_object('operatingCostBasisPoints',(scenario->>'operatingCostBasisPoints')::integer,'reason',scenario->>'reason')));
-  profit_min:=least(COALESCE(profit_min,profit_value),profit_value);profit_max:=greatest(COALESCE(profit_max,profit_value),profit_value);
- margin_min:=least(COALESCE(margin_min,profit_value*10000/revenue_cents),profit_value*10000/revenue_cents);
- margin_max:=greatest(COALESCE(margin_max,profit_value*10000/revenue_cents),profit_value*10000/revenue_cents);
- END LOOP;
+    'marginHigh',to_char(round(margin_max)/100,'FM999999990.00'),'scenarios',scenario_values));
+  END LOOP;
  run_payload:=jsonb_build_object('version','m26-operating-profit-calculation-v1','checkedAt',public.canonical_forecast_utc_instant(cutoff),
   'policyRevision',policy.revision,'policyDigest',rtrim(policy.canonical_digest),'scheduleRevision',schedule_source.revision,
   'scheduleDigest',rtrim(schedule_source.canonical_digest),'months',months,'scenarios',all_scenarios);run_digest:=public.canonical_completion_digest(run_payload);
@@ -382,9 +434,9 @@ BEGIN
    'startsOn',start_day::text,'endsOnExclusive',end_day::text),
   'scope',jsonb_build_object('label','Authenticated owner-confirmed scheduled backlog and recorded company operating expenses',
    'wholeBusinessCoverageVerified',FALSE,'offPlatformCoverageVerified',FALSE),
-  'kpis',jsonb_build_object('operatingCost',public.canonical_pricing_decimal(operating_cost),'profitLow',public.canonical_forecast_signed_money(profit_min),
-   'profitHigh',public.canonical_forecast_signed_money(profit_max),'marginLow',to_char(round(margin_min)/100,'FM999999990.00'),
-   'marginHigh',to_char(round(margin_max)/100,'FM999999990.00')),
+  'kpis',jsonb_build_object('operatingCost',public.canonical_pricing_decimal(operating_cost),'profitLow',public.canonical_forecast_signed_money(aggregate_profit_min),
+   'profitHigh',public.canonical_forecast_signed_money(aggregate_profit_max),'marginLow',to_char(round(aggregate_margin_min)/100,'FM999999990.00'),
+   'marginHigh',to_char(round(aggregate_margin_max)/100,'FM999999990.00')),
   'months',months,'revenue',jsonb_build_object('target','approved_booked_price_before_tax','amount',public.canonical_pricing_decimal(revenue_cents),
    'recognizedRevenueMeasured',FALSE,'earnedRevenueMeasured',FALSE,'invoicedRevenueMeasured',FALSE,'collectedCashMeasured',FALSE),
   'costs',jsonb_build_object('directJobCost',public.canonical_pricing_decimal(direct_cents),'incrementalJobOverhead',public.canonical_pricing_decimal(job_overhead_cents),
@@ -407,6 +459,7 @@ REVOKE ALL ON FUNCTION public.canonical_operating_profit_policy_mutate(UUID,UUID
 REVOKE ALL ON FUNCTION public.canonical_operating_profit_policy_read(UUID,UUID,TEXT,UUID,TIMESTAMPTZ)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_signed_money(NUMERIC)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_margin(NUMERIC,NUMERIC)FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_conserved_scenario_allocation(JSONB,INTEGER)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_operating_profit_v1_unavailable(TEXT,TIMESTAMPTZ,TEXT)FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_operating_profit_v1_current(UUID,UUID,TEXT,UUID)FROM PUBLIC;
 DO $$DECLARE runtime_role TEXT:=current_setting('northstar.runtime_role',TRUE);BEGIN IF runtime_role IS NOT NULL AND runtime_role<>''THEN

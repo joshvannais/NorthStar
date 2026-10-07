@@ -22,6 +22,7 @@ realPostgres('Mission 26 original Part 7E mounted operating-profit forecast', ()
   let liveAsset;
   const actor = name => fixture.actors[name];
   const day = offset => new Date(cutoff.getTime() + offset * 86400000).toISOString().slice(0, 10);
+  const cents = value => BigInt(String(value).replace('.', ''));
 
   async function serializable(sql, parameters) {
     const client = await fixture.ownerPool.connect();
@@ -431,8 +432,16 @@ realPostgres('Mission 26 original Part 7E mounted operating-profit forecast', ()
         classification: 'variable_period', amount: '300.00', recognitionStartsOn: day(0),
         recognitionEndsOn: day(29), source: { kind: 'owner_attested',
           reference: 'Owner-confirmed current utilities budget', documentDigest: null,
+          attestedAt: cutoff.toISOString() } },
+      { expenseKey: 'cross-month-rounding-cent', label: 'Cross-month rounding cent',
+        classification: 'fixed_period', amount: '0.01', recognitionStartsOn: day(1),
+        recognitionEndsOn: day(2), source: { kind: 'owner_attested',
+          reference: 'Authenticated two-day cross-month expense', documentDigest: null,
           attestedAt: cutoff.toISOString() } }],
-      scenarios: [{ key: 'recorded_plan', label: 'Recorded plan',
+      scenarios: [{ key: 'half_cost', label: 'Half-cost check',
+        operatingCostBasisPoints: 5000,
+        reason: 'Applies an explicit named 50 percent cost assumption.' },
+      { key: 'recorded_plan', label: 'Recorded plan',
         operatingCostBasisPoints: 10000, reason: 'Uses the exact recorded economic costs.' },
       { key: 'cost_pressure', label: 'Cost pressure', operatingCostBasisPoints: 11500,
         reason: 'Applies an explicit named 15 percent cost assumption.' }],
@@ -520,10 +529,28 @@ realPostgres('Mission 26 original Part 7E mounted operating-profit forecast', ()
     expect(response.body.data.months.map(value => value.month))
       .toEqual([startMonth(cutoff, 0), startMonth(cutoff, 1)]);
     expect(response.body.data.range.scenarios.map(value => value.key))
-      .toEqual(['recorded_plan', 'cost_pressure']);
+      .toEqual(['half_cost', 'recorded_plan', 'cost_pressure']);
     expect(Number(response.body.data.costs.operatingCost)).toBe(
       Number(response.body.data.costs.directJobCost) +
-      Number(response.body.data.costs.incrementalJobOverhead) + 1500);
+      Number(response.body.data.costs.incrementalJobOverhead) + 1500.01);
+    const monthlyPeriodExpense = response.body.data.months.reduce((total, value) =>
+      total + cents(value.fixedPeriodExpense) + cents(value.variablePeriodExpense), 0n);
+    expect(monthlyPeriodExpense).toBe(150001n);
+    expect(monthlyPeriodExpense).toBe(cents(response.body.data.costs.fixedPeriodExpense) +
+      cents(response.body.data.costs.variablePeriodExpense));
+    for (const scenario of response.body.data.range.scenarios) {
+      const monthlyScenarioCost = response.body.data.months.reduce((total, value) =>
+        total + cents(value.scenarios.find(item => item.key === scenario.key).operatingCost), 0n);
+      const monthlyScenarioProfit = response.body.data.months.reduce((total, value) =>
+        total + cents(value.scenarios.find(item => item.key === scenario.key).profit), 0n);
+      expect(monthlyScenarioCost).toBe(cents(scenario.operatingCost));
+      expect(monthlyScenarioProfit).toBe(cents(scenario.profit));
+    }
+    const aggregateProfits = response.body.data.range.scenarios.map(value => cents(value.profit));
+    expect(cents(response.body.data.kpis.profitLow))
+      .toBe(aggregateProfits.reduce((lowest, value) => value < lowest ? value : lowest));
+    expect(cents(response.body.data.kpis.profitHigh))
+      .toBe(aggregateProfits.reduce((highest, value) => value > highest ? value : highest));
     expect(response.body.data.costs.datedCashObligations).toBe('1650.00');
     expect(Number(response.body.data.revenue.amount)).toBeGreaterThan(0);
     expect(Number(response.body.data.kpis.marginHigh))
@@ -549,6 +576,14 @@ realPostgres('Mission 26 original Part 7E mounted operating-profit forecast', ()
       new Date(results[0].horizon.startsAt).getTime()).toBe(30 * 86400000);
   });
 
+  test('conserves a two-month half-cost scenario before deriving aggregate profit', async () => {
+    const allocation = (await fixture.ownerPool.query(
+      `SELECT canonical_forecast_conserved_scenario_allocation(
+        '{"2026-01":1,"2026-02":1}'::jsonb,5000) value`)).rows[0].value;
+    expect(allocation).toEqual({ '2026-01': 1, '2026-02': 0 });
+    expect(Object.values(allocation).reduce((total, value) => total + Number(value), 0)).toBe(1);
+  });
+
   test('fails closed for a tenant without sources and enforces access roles', async () => {
     const member = await request(fixture.app).get('/api/v1/forecast/operating-profit/current')
       .set(actor('member').session.headers);
@@ -568,11 +603,16 @@ realPostgres('Mission 26 original Part 7E mounted operating-profit forecast', ()
        WHERE organization_id=$1`, [fixture.org])).rejects.toMatchObject({ code: '23514' });
     const privileges = (await fixture.ownerPool.query(
       `SELECT has_function_privilege($1,
-        'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)','EXECUTE') entry,
+         'public.canonical_forecast_operating_profit_v1_current(uuid,uuid,text,uuid)','EXECUTE') entry,
        has_function_privilege($1,
-        'public.canonical_operating_profit_policy_valid(jsonb)','EXECUTE') helper`,
+         'public.canonical_operating_profit_policy_valid(jsonb)','EXECUTE') helper,
+       has_function_privilege($1,
+         'public.canonical_forecast_conserved_scenario_allocation(jsonb,integer)','EXECUTE') allocation_helper,
+       has_function_privilege('public',
+         'public.canonical_forecast_conserved_scenario_allocation(jsonb,integer)','EXECUTE') public_allocation_helper`,
       [fixture.roles.runtime])).rows[0];
-    expect(privileges).toEqual({ entry: true, helper: false });
+    expect(privileges).toEqual({ entry: true, helper: false, allocation_helper: false,
+      public_allocation_helper: false });
   });
 
   function startMonth(value, offset) {

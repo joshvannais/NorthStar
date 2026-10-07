@@ -33,10 +33,7 @@ function snapshot(overrides = {}) {
       recurrenceEnd: '2026-11-05', includedCategories: ['debt_service', 'principal', 'interest'],
       sourceAttestation: { kind: 'source_document', reference: 'Authenticated lender schedule',
         documentDigest: 'a'.repeat(64), attestedAt: '2026-10-07T12:00:00.000Z' } }],
-    allocationPolicy: { status: 'reconciled', basis: 'owner_approved_schedule_policy',
-      mission24EquipmentTreatment: 'separate_job_cost_allocation',
-      mission24OverheadTreatment: 'separate_job_cost_allocation',
-      economicDepreciationTreatment: 'excluded', actualPaymentTreatment: 'not_evidence',
+    allocationPolicy: { expectedMission24Digest: 'f'.repeat(64), decisions: [],
       reason: 'Keep company obligations separate from per-job recovery and depreciation.' },
     reason: 'Replace the complete current obligation schedule.', confirmed: true,
     confirmationVersion: 'operating-cost-schedule-snapshot-v1',
@@ -53,10 +50,13 @@ function forecast(overrides = {}) {
   return Object.assign({
     version: 'm26-overhead-cash-forecast-v1', state: 'current', reason: null,
     fictional: false, checkedAt: '2026-10-07T12:00:00.000Z', currency: 'USD',
-    horizon: { startsAt: '2026-10-07T12:00:00.000Z',
-      endsAt: '2026-11-06T12:00:00.000Z', days: 30 },
-    scope: { label: 'Next 30 days of owner-recorded company obligations',
-      wholeBusinessCoverageVerified: true, offPlatformCoverageVerified: false },
+    basis: { mode: 'current', cutoff: '2026-10-07T12:00:00.000Z', sourceRevision: 1,
+      sourceDigest: 'e'.repeat(64), sourceRecordedAt: '2026-10-07T12:00:00.000Z' },
+    horizon: { kind: 'local_calendar_days', timeZone: 'America/New_York',
+      startsOn: '2026-10-07', endsOnExclusive: '2026-11-06', days: 30 },
+    scope: { label: 'Next 30 local calendar dates in the complete owner-recorded schedule source',
+      sourceCoverageVerified: true, wholeBusinessCoverageVerified: false,
+      offPlatformCoverageVerified: false },
     overhead: { state: 'current', amount: '1200.00', dueCount: 1,
       scheduleCount: 1, reason: null },
     financedAssetCash: { state: 'current', amount: '500.00', dueCount: 1,
@@ -65,10 +65,10 @@ function forecast(overrides = {}) {
       recurrenceEndRecorded: true, sourceAttested: true, currentRevision: true,
       completeAsOf: true, overlapReconciled: true, actualPaymentVerified: false,
       learnedAdjustmentApplied: false },
-    allocation: { state: 'reconciled', basis: 'owner_approved_schedule_policy',
+    allocation: { state: 'reconciled', basis: 'server_reconciled_m24_reference_manifest',
       jobCostAllocationIncluded: false, economicDepreciationIncluded: false,
       actualPaymentClaimed: false,
-      reason: 'dated_cash_commitments_kept_separate_from_job_cost_and_economic_recovery' },
+      reason: 'dated_cash_commitments_kept_separate_from_bound_m24_job_cost_and_economic_recovery' },
     forecastIssued: true, completeOperatingCostForecastIssued: false,
     calibratedRangeIssued: false, probabilityIssued: false, automaticActionAuthorized: false,
   }, overrides);
@@ -76,8 +76,11 @@ function forecast(overrides = {}) {
 
 function unavailable(reason = 'owner_recorded_schedule_coverage_unavailable') {
   return forecast({ state: 'unavailable', reason, currency: null,
-    scope: { label: 'Next 30 days of owner-recorded company obligations',
-      wholeBusinessCoverageVerified: false, offPlatformCoverageVerified: false },
+    basis: { mode: 'current', cutoff: '2026-10-07T12:00:00.000Z', sourceRevision: null,
+      sourceDigest: null, sourceRecordedAt: null },
+    scope: { label: 'Next 30 local calendar dates in the complete owner-recorded schedule source',
+      sourceCoverageVerified: false, wholeBusinessCoverageVerified: false,
+      offPlatformCoverageVerified: false },
     overhead: { state: 'unavailable', amount: null, dueCount: null,
       scheduleCount: null, reason },
     financedAssetCash: { state: 'unavailable', amount: null, dueCount: null,
@@ -86,7 +89,7 @@ function unavailable(reason = 'owner_recorded_schedule_coverage_unavailable') {
       recurrenceEndRecorded: false, sourceAttested: false, currentRevision: false,
       completeAsOf: false, overlapReconciled: false, actualPaymentVerified: false,
       learnedAdjustmentApplied: false },
-    allocation: { state: 'unavailable', basis: 'owner_approved_schedule_policy',
+    allocation: { state: 'unavailable', basis: 'server_reconciled_m24_reference_manifest',
       jobCostAllocationIncluded: false, economicDepreciationIncluded: false,
       actualPaymentClaimed: false, reason }, forecastIssued: false });
 }
@@ -110,11 +113,12 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
       allocationPolicy: null });
     expect(normalizeSnapshot(revoke)).toEqual(revoke);
     expect(sanitizeSource({ state: 'absent', revision: 0, digest: 'none',
-      action: null, snapshot: null })).not.toBeNull();
+      action: null, createdAt: null, snapshot: null })).not.toBeNull();
     expect(sanitizeSource({ state: 'current', revision: 1, digest: 'c'.repeat(64),
-      action: 'replace', snapshot: storedSnapshot() })).not.toBeNull();
+      action: 'replace', createdAt: '2026-10-07T12:00:00.000Z', snapshot: storedSnapshot() })).not.toBeNull();
     expect(sanitizeSource({ state: 'current', revision: 1, digest: 'c'.repeat(64),
-      action: 'replace', snapshot: { ...storedSnapshot(), hidden: 'extra' } })).toBeNull();
+      action: 'replace', createdAt: '2026-10-07T12:00:00.000Z',
+      snapshot: { ...storedSnapshot(), hidden: 'extra' } })).toBeNull();
   });
 
   test('writes through one serializable idempotent owner-only mutation contract', async () => {
@@ -125,7 +129,7 @@ describe('Mission 26 original Part 7D overhead and financed-asset cash forecast'
         revision: 1, digest: 'c'.repeat(64), action: 'replace', replayed: false } }] } :
         /canonical_operating_cost_snapshot_read/.test(sql) ? { rows: [{ value: {
           state: 'current', revision: 1, digest: 'c'.repeat(64), action: 'replace',
-          snapshot: storedSnapshot() } }] } : { rows: [] };
+          createdAt: '2026-10-07T12:00:00.000Z', snapshot: storedSnapshot() } }] } : { rows: [] };
     }), release: jest.fn() };
     const app = express(); app.use(express.json());
     app.use('/schedules', createOperatingCostSchedulesRouter({

@@ -17,18 +17,25 @@
   }
   function count(value) { return Number.isSafeInteger(value) && value >= 0 && value <= 12000; }
   function validate(value) {
-    var keys = ['version', 'state', 'reason', 'fictional', 'checkedAt', 'currency', 'horizon',
+    var keys = ['version', 'state', 'reason', 'fictional', 'checkedAt', 'currency', 'basis', 'horizon',
       'scope', 'overhead', 'financedAssetCash', 'evidence', 'allocation', 'forecastIssued',
       'completeOperatingCostForecastIssued', 'calibratedRangeIssued', 'probabilityIssued',
       'automaticActionAuthorized'];
     if (!exact(value, keys) || value.version !== 'm26-overhead-cash-forecast-v1' ||
         ['current', 'unavailable'].indexOf(value.state) < 0 || typeof value.fictional !== 'boolean' ||
-        !instant(value.checkedAt) || !exact(value.horizon, ['startsAt', 'endsAt', 'days']) ||
-        !instant(value.horizon.startsAt) || !instant(value.horizon.endsAt) || value.horizon.days !== 30 ||
-        Date.parse(value.horizon.endsAt) - Date.parse(value.horizon.startsAt) !== 2592000000 ||
-        !exact(value.scope, ['label', 'wholeBusinessCoverageVerified', 'offPlatformCoverageVerified']) ||
-        value.scope.label !== 'Next 30 days of owner-recorded company obligations' ||
-        value.scope.offPlatformCoverageVerified !== false ||
+        !instant(value.checkedAt) || !exact(value.basis,
+          ['mode', 'cutoff', 'sourceRevision', 'sourceDigest', 'sourceRecordedAt']) ||
+        ['current', 'as_of'].indexOf(value.basis.mode) < 0 || !instant(value.basis.cutoff) ||
+        !exact(value.horizon, ['kind', 'timeZone', 'startsOn', 'endsOnExclusive', 'days']) ||
+        value.horizon.kind !== 'local_calendar_days' || value.horizon.days !== 30 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(value.horizon.startsOn || '') ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(value.horizon.endsOnExclusive || '') ||
+        Date.parse(value.horizon.endsOnExclusive + 'T00:00:00Z') -
+          Date.parse(value.horizon.startsOn + 'T00:00:00Z') !== 30 * 86400000 ||
+        !exact(value.scope, ['label', 'sourceCoverageVerified', 'wholeBusinessCoverageVerified',
+          'offPlatformCoverageVerified']) ||
+        value.scope.label !== 'Next 30 local calendar dates in the complete owner-recorded schedule source' ||
+        value.scope.wholeBusinessCoverageVerified !== false || value.scope.offPlatformCoverageVerified !== false ||
         !exact(value.overhead, ['state', 'amount', 'dueCount', 'scheduleCount', 'reason']) ||
         !exact(value.financedAssetCash, ['state', 'amount', 'dueCount', 'obligationCount',
           'ownerMarkedSatisfiedCount', 'canceledCount', 'reason']) ||
@@ -37,7 +44,7 @@
           'overlapReconciled', 'actualPaymentVerified', 'learnedAdjustmentApplied']) ||
         !exact(value.allocation, ['state', 'basis', 'jobCostAllocationIncluded',
           'economicDepreciationIncluded', 'actualPaymentClaimed', 'reason']) ||
-        value.allocation.basis !== 'owner_approved_schedule_policy' ||
+        value.allocation.basis !== 'server_reconciled_m24_reference_manifest' ||
         value.allocation.jobCostAllocationIncluded !== false ||
         value.allocation.economicDepreciationIncluded !== false ||
         value.allocation.actualPaymentClaimed !== false || value.evidence.actualPaymentVerified !== false ||
@@ -46,7 +53,7 @@
         value.probabilityIssued !== false || value.automaticActionAuthorized !== false) return null;
     if (value.state === 'unavailable') {
       return REASONS.indexOf(value.reason) >= 0 && value.currency === null &&
-        value.scope.wholeBusinessCoverageVerified === false && value.forecastIssued === false &&
+        value.scope.sourceCoverageVerified === false && value.forecastIssued === false &&
         value.overhead.state === 'unavailable' && value.overhead.amount === null &&
         value.overhead.dueCount === null && value.overhead.scheduleCount === null &&
         value.overhead.reason === value.reason && value.financedAssetCash.state === 'unavailable' &&
@@ -57,7 +64,7 @@
           .every(function (key) { return value.evidence[key] === false; }) ? value : null;
     }
     return value.reason === null && /^[A-Z]{3}$/.test(value.currency || '') &&
-      value.scope.wholeBusinessCoverageVerified === true && value.overhead.state === 'current' &&
+      value.scope.sourceCoverageVerified === true && value.overhead.state === 'current' &&
       MONEY.test(value.overhead.amount || '') && count(value.overhead.dueCount) &&
       count(value.overhead.scheduleCount) && value.overhead.reason === null &&
       value.financedAssetCash.state === 'current' && MONEY.test(value.financedAssetCash.amount || '') &&
@@ -65,18 +72,24 @@
         value.financedAssetCash.ownerMarkedSatisfiedCount, value.financedAssetCash.canceledCount]
         .every(count) && value.financedAssetCash.reason === null && value.allocation.state === 'reconciled' &&
       value.allocation.reason ===
-        'dated_cash_commitments_kept_separate_from_job_cost_and_economic_recovery' &&
+        'dated_cash_commitments_kept_separate_from_bound_m24_job_cost_and_economic_recovery' &&
       ['ownerRecordedSchedules', 'exactAmounts', 'exactDueDates', 'recurrenceEndRecorded',
-        'sourceAttested', 'currentRevision', 'completeAsOf', 'overlapReconciled']
-        .every(function (key) { return value.evidence[key] === true; }) && value.forecastIssued === true ? value : null;
+        'sourceAttested', 'completeAsOf', 'overlapReconciled']
+        .every(function (key) { return value.evidence[key] === true; }) &&
+      value.evidence.currentRevision === (value.basis.mode === 'current') && value.forecastIssued === true ? value : null;
   }
   function demoForecast() {
     return {
       version: 'm26-overhead-cash-forecast-v1', state: 'current', reason: null, fictional: true,
       checkedAt: '2026-10-07T12:00:00.000Z', currency: 'USD',
-      horizon: { startsAt: '2026-10-07T12:00:00.000Z', endsAt: '2026-11-06T12:00:00.000Z', days: 30 },
-      scope: { label: 'Next 30 days of owner-recorded company obligations',
-        wholeBusinessCoverageVerified: true, offPlatformCoverageVerified: false },
+      basis: { mode: 'current', cutoff: '2026-10-07T12:00:00.000Z', sourceRevision: 3,
+        sourceDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        sourceRecordedAt: '2026-10-07T12:00:00.000Z' },
+      horizon: { kind: 'local_calendar_days', timeZone: 'America/New_York',
+        startsOn: '2026-10-07', endsOnExclusive: '2026-11-06', days: 30 },
+      scope: { label: 'Next 30 local calendar dates in the complete owner-recorded schedule source',
+        sourceCoverageVerified: true, wholeBusinessCoverageVerified: false,
+        offPlatformCoverageVerified: false },
       overhead: { state: 'current', amount: '3200.00', dueCount: 3, scheduleCount: 3, reason: null },
       financedAssetCash: { state: 'current', amount: '1150.00', dueCount: 1,
         obligationCount: 1, ownerMarkedSatisfiedCount: 1, canceledCount: 0, reason: null },
@@ -84,10 +97,10 @@
         recurrenceEndRecorded: true, sourceAttested: true, currentRevision: true,
         completeAsOf: true, overlapReconciled: true, actualPaymentVerified: false,
         learnedAdjustmentApplied: false },
-      allocation: { state: 'reconciled', basis: 'owner_approved_schedule_policy',
+      allocation: { state: 'reconciled', basis: 'server_reconciled_m24_reference_manifest',
         jobCostAllocationIncluded: false, economicDepreciationIncluded: false,
         actualPaymentClaimed: false,
-        reason: 'dated_cash_commitments_kept_separate_from_job_cost_and_economic_recovery' },
+        reason: 'dated_cash_commitments_kept_separate_from_bound_m24_job_cost_and_economic_recovery' },
       forecastIssued: true, completeOperatingCostForecastIssued: false,
       calibratedRangeIssued: false, probabilityIssued: false, automaticActionAuthorized: false,
     };
@@ -126,7 +139,7 @@
       var result = money(safe.overhead.amount, safe.currency) + ' overhead + ' +
         money(safe.financedAssetCash.amount, safe.currency) + ' dated asset cash';
       var context = (safe.overhead.dueCount + safe.financedAssetCash.dueCount) +
-        ' scheduled due dates from the current complete owner-recorded set. Job-cost allocation and economic depreciation stay separate. Owner-marked satisfied dates are not proof of payment; off-platform coverage, learned adjustments, probability, and calibrated ranges are not claimed.';
+        ' scheduled due dates from the complete covered owner-recorded source. Job-cost allocation and economic depreciation stay separate. Owner-marked satisfied dates are not proof of payment; whole-business and off-platform coverage, learned adjustments, probability, and calibrated ranges are not claimed.';
       id('commandCenterOverheadCashForecast').textContent = result;
       id('commandCenterOverheadCashForecastContext').textContent = context;
       announce(result, context);

@@ -3689,12 +3689,21 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            pg_catalog.to_regprocedure(
             'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)') IS NULL OR
            pg_catalog.to_regprocedure(
+            'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)') IS NULL OR
+           pg_catalog.to_regprocedure(
+            'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure(
             'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)') IS NULL OR
+           pg_catalog.to_regprocedure(
+            'public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz)') IS NULL OR
            EXISTS(SELECT 1 FROM pg_catalog.pg_proc routine
             WHERE routine.oid IN(
              pg_catalog.to_regprocedure('public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)'),
              pg_catalog.to_regprocedure('public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)'),
-             pg_catalog.to_regprocedure('public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)'))
+             pg_catalog.to_regprocedure('public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)'),
+             pg_catalog.to_regprocedure('public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)'),
+             pg_catalog.to_regprocedure('public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)'),
+             pg_catalog.to_regprocedure('public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz)'))
              AND (NOT routine.prosecdef OR pg_catalog.pg_get_userbyid(routine.proowner)<>current_user OR
               NOT routine.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']::text[])) THEN
           RAISE EXCEPTION 'Required overhead and cash forecast authority is missing';
@@ -3707,32 +3716,64 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         REVOKE ALL ON FUNCTION
           public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid) FROM PUBLIC;
         REVOKE ALL ON FUNCTION
+          public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz) FROM PUBLIC;
+        REVOKE ALL ON FUNCTION
+          public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid) FROM PUBLIC;
+        REVOKE ALL ON FUNCTION
           public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid) FROM PUBLIC;
+        REVOKE ALL ON FUNCTION
+          public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz) FROM PUBLIC;
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_operating_cost_schedule_immutable() FROM %I',runtime_role);
         EXECUTE pg_catalog.format(
           'REVOKE ALL ON FUNCTION public.canonical_operating_cost_snapshot_valid(jsonb) FROM %I',runtime_role);
         EXECUTE pg_catalog.format(
-          'REVOKE ALL ON FUNCTION public.canonical_forecast_overhead_cash_v1_unavailable(text,timestamptz,timestamptz) FROM %I',runtime_role);
+          'REVOKE ALL ON FUNCTION public.canonical_operating_cost_mission24_manifest(uuid) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_operating_cost_reconcile(uuid,jsonb,jsonb) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_operating_cost_source_projection(public.canonical_operating_cost_schedule_revisions) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_overhead_cash_v1_unavailable(text,timestamptz,text,text,bigint,text,timestamptz) FROM %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_overhead_cash_v1_evaluate(uuid,timestamptz,text,boolean) FROM %I',runtime_role);
         EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb) TO %I',runtime_role);
         EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid) TO %I',runtime_role);
         EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz) TO %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid) TO %I',runtime_role);
+        EXECUTE pg_catalog.format(
           'GRANT EXECUTE ON FUNCTION public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid) TO %I',runtime_role);
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz) TO %I',runtime_role);
         IF has_table_privilege(runtime_role,'public.canonical_operating_cost_schedule_revisions','SELECT,INSERT,UPDATE,DELETE') OR
            has_function_privilege('public',
             'public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE') OR
            has_function_privilege('public',
             'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE') OR
            has_function_privilege('public',
+            'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE') OR
+           has_function_privilege('public',
+            'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)','EXECUTE') OR
+           has_function_privilege('public',
             'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)','EXECUTE') OR
+           has_function_privilege('public',
+            'public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE') OR
            NOT has_function_privilege(runtime_role,
             'public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE') OR
            NOT has_function_privilege(runtime_role,
             'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE') OR
            NOT has_function_privilege(runtime_role,
-            'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)','EXECUTE') THEN
+            'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+            'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)','EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+            'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)','EXECUTE') OR
+           NOT has_function_privilege(runtime_role,
+            'public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE') THEN
           RAISE EXCEPTION 'Required overhead and cash forecast runtime authority is invalid';
         END IF;
       END IF;
@@ -5266,17 +5307,37 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege('public',
            'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE')
          AND NOT has_function_privilege('public',
+           'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege('public',
+           'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public',
            'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public',
+           'public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE')
          AND has_function_privilege($1,
            'public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE')
          AND has_function_privilege($1,
            'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE')
          AND has_function_privilege($1,
+           'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE')
+         AND has_function_privilege($1,
+           'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,
            'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,
+           'public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_operating_cost_schedule_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_operating_cost_snapshot_valid(jsonb)','EXECUTE')
          AND NOT has_function_privilege($1,
-           'public.canonical_forecast_overhead_cash_v1_unavailable(text,timestamptz,timestamptz)','EXECUTE')
+           'public.canonical_operating_cost_mission24_manifest(uuid)','EXECUTE')
+         AND NOT has_function_privilege($1,
+           'public.canonical_operating_cost_reconcile(uuid,jsonb,jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,
+           'public.canonical_operating_cost_source_projection(public.canonical_operating_cost_schedule_revisions)','EXECUTE')
+         AND NOT has_function_privilege($1,
+           'public.canonical_forecast_overhead_cash_v1_unavailable(text,timestamptz,text,text,bigint,text,timestamptz)','EXECUTE')
+         AND NOT has_function_privilege($1,
+           'public.canonical_forecast_overhead_cash_v1_evaluate(uuid,timestamptz,text,boolean)','EXECUTE')
        )) AS overhead_cash_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,

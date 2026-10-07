@@ -55,14 +55,9 @@ function normalizeSnapshot(body) {
       !validDate(body.coverage.startsOn) || !validDate(body.coverage.endsOn) ||
       body.coverage.endsOn < body.coverage.startsOn || !validInstant(body.coverage.recordedThrough) ||
       body.coverage.complete !== true || !Array.isArray(body.schedules) || body.schedules.length > 100 ||
-      !exact(body.allocationPolicy, ['status', 'basis', 'mission24EquipmentTreatment',
-        'mission24OverheadTreatment', 'economicDepreciationTreatment',
-        'actualPaymentTreatment', 'reason']) || body.allocationPolicy.status !== 'reconciled' ||
-      body.allocationPolicy.basis !== 'owner_approved_schedule_policy' ||
-      body.allocationPolicy.mission24EquipmentTreatment !== 'separate_job_cost_allocation' ||
-      body.allocationPolicy.mission24OverheadTreatment !== 'separate_job_cost_allocation' ||
-      body.allocationPolicy.economicDepreciationTreatment !== 'excluded' ||
-      body.allocationPolicy.actualPaymentTreatment !== 'not_evidence' ||
+      !exact(body.allocationPolicy, ['expectedMission24Digest', 'decisions', 'reason']) ||
+      !DIGEST.test(body.allocationPolicy.expectedMission24Digest || '') ||
+      !Array.isArray(body.allocationPolicy.decisions) || body.allocationPolicy.decisions.length > 500 ||
       !validText(body.allocationPolicy.reason, 1000)) {
     throw Object.assign(new Error('Operating-cost coverage or policy is invalid.'), { code: '22023' });
   }
@@ -108,23 +103,57 @@ function normalizeSnapshot(body) {
       throw Object.assign(new Error('Operating-cost source attestation is invalid.'), { code: '22023' });
     }
   }
+  const referenceKeys = new Set();
+  for (const decision of body.allocationPolicy.decisions) {
+    if (!exact(decision, ['referenceKey', 'treatment', 'scheduleKey', 'reason']) ||
+        typeof decision.referenceKey !== 'string' || decision.referenceKey.length < 1 ||
+        Buffer.byteLength(decision.referenceKey, 'utf8') > 1200 || referenceKeys.has(decision.referenceKey) ||
+        !['economic_recovery_not_cash', 'job_overhead_allocation_not_cash',
+          'separate_cash_commitment', 'not_same_obligation'].includes(decision.treatment) ||
+        !(decision.scheduleKey === null || TOKEN.test(decision.scheduleKey || '')) ||
+        !validText(decision.reason, 500)) {
+      throw Object.assign(new Error('Mission 24 reconciliation decision is invalid.'), { code: '22023' });
+    }
+    referenceKeys.add(decision.referenceKey);
+  }
   return Object.freeze(structuredClone(body));
 }
 
 function sanitizeSource(value) {
-  if (!exact(value, ['state', 'revision', 'digest', 'action', 'snapshot']) ||
+  if (!exact(value, ['state', 'revision', 'digest', 'action', 'createdAt', 'snapshot']) ||
       !['absent', 'current', 'revoked'].includes(value.state)) return null;
   if (value.state === 'absent') return value.revision === 0 && value.digest === 'none' &&
-    value.action === null && value.snapshot === null ? value : null;
+    value.action === null && value.createdAt === null && value.snapshot === null ? value : null;
   if (!Number.isSafeInteger(value.revision) || value.revision < 1 || value.revision > 10000 ||
       !DIGEST.test(value.digest || '') || !['replace', 'revoke'].includes(value.action) ||
       value.state !== (value.action === 'replace' ? 'current' : 'revoked') ||
+      !validInstant(value.createdAt) ||
       !value.snapshot || typeof value.snapshot !== 'object' || Array.isArray(value.snapshot)) return null;
   try {
     normalizeSnapshot({ expectedRevision: value.revision, expectedDigest: value.digest,
       ...value.snapshot, reason: 'Validate the private current source read.', confirmed: true,
       confirmationVersion: 'operating-cost-schedule-snapshot-v1' });
   } catch (_error) { return null; }
+  return value;
+}
+
+function sanitizeReferenceBasis(value) {
+  if (!exact(value, ['version', 'digest', 'references']) ||
+      value.version !== 'mission24-operating-cost-reference-manifest-v1' ||
+      !DIGEST.test(value.digest || '') || !Array.isArray(value.references) ||
+      value.references.length > 500) return null;
+  const keys = new Set();
+  for (const reference of value.references) {
+    if (!exact(reference, ['referenceKey', 'kind', 'planId', 'planRevision', 'planDigest',
+      'estimateId', 'lineId', 'method', 'includedCategories', 'currency', 'overlapResolved']) ||
+      typeof reference.referenceKey !== 'string' || keys.has(reference.referenceKey) ||
+      !['equipment_pool', 'overhead_allocation'].includes(reference.kind) ||
+      !UUID.test(reference.planId || '') || !UUID.test(reference.estimateId || '') ||
+      !Number.isSafeInteger(reference.planRevision) || reference.planRevision < 1 ||
+      !DIGEST.test(reference.planDigest || '') || !Array.isArray(reference.includedCategories) ||
+      !/^[A-Z]{3}$/.test(reference.currency || '') || typeof reference.overlapResolved !== 'boolean') return null;
+    keys.add(reference.referenceKey);
+  }
   return value;
 }
 
@@ -184,6 +213,50 @@ function createOperatingCostSchedulesRouter(options = {}) {
       return failure(res, error);
     } finally { if (client) client.release(); }
   });
+  router.get('/references', readAuth, ownerOnly, readPermission, throttle, async (req, res) => {
+    if (!exact(req.query, [])) return failure(res, { code: '22023' });
+    let client;
+    try {
+      client = await poolProvider().connect();
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      await client.query("SET LOCAL statement_timeout = '15s'");
+      await client.query("SET LOCAL lock_timeout = '2s'");
+      const parameters = [req.tenantContext.organizationId, req.tenantContext.userId,
+        req.userRole, req.authSession.id];
+      const raw = (await client.query(
+        'SELECT public.canonical_operating_cost_reference_basis_read($1,$2,$3,$4) value',
+        parameters)).rows[0]?.value;
+      const value = sanitizeReferenceBasis(raw);
+      if (!value) throw new Error('Invalid Mission 24 operating-cost references');
+      await client.query('COMMIT');
+      return res.status(200).json({ success: true, data: value });
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      return failure(res, error);
+    } finally { if (client) client.release(); }
+  });
+  router.get('/as-of', readAuth, ownerOnly, readPermission, throttle, async (req, res) => {
+    if (!exact(req.query, ['cutoff']) || !validInstant(req.query.cutoff)) return failure(res, { code: '22023' });
+    let client;
+    try {
+      client = await poolProvider().connect();
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      await client.query("SET LOCAL statement_timeout = '15s'");
+      await client.query("SET LOCAL lock_timeout = '2s'");
+      const parameters = [req.tenantContext.organizationId, req.tenantContext.userId,
+        req.userRole, req.authSession.id, req.query.cutoff];
+      const raw = (await client.query(
+        'SELECT public.canonical_operating_cost_snapshot_read_as_of($1,$2,$3,$4,$5::timestamptz) value',
+        parameters)).rows[0]?.value;
+      const value = sanitizeSource(raw);
+      if (!value) throw new Error('Invalid historical operating-cost source projection');
+      await client.query('COMMIT');
+      return res.status(200).json({ success: true, data: value });
+    } catch (error) {
+      if (client) await client.query('ROLLBACK').catch(() => {});
+      return failure(res, error);
+    } finally { if (client) client.release(); }
+  });
   router.put('/current', mutationAuth, ownerOnly, mutationPermission, throttle, async (req, res) => {
     let client;
     try {
@@ -215,4 +288,5 @@ function createOperatingCostSchedulesRouter(options = {}) {
   return router;
 }
 
-module.exports = { createOperatingCostSchedulesRouter, normalizeSnapshot, sanitizeSource };
+module.exports = { createOperatingCostSchedulesRouter, normalizeSnapshot, sanitizeSource,
+  sanitizeReferenceBasis };

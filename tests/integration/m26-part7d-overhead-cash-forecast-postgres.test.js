@@ -3,18 +3,35 @@
 const crypto = require('node:crypto');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { putBusinessProfile } = require('../../src/services/organizationAuthority');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const uuid = () => crypto.randomUUID();
+const hex = value => crypto.createHash('sha256').update(value).digest('hex');
+const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset cash forecast', () => {
   let fixture;
   let cutoff;
   let assetId;
+  let estimateId;
   let current;
+  let referenceBasis;
 
   function day(offset) {
     return new Date(cutoff.getTime() + offset * 86400000).toISOString().slice(0, 10);
+  }
+
+  function decisions(references = referenceBasis.references) {
+    return references.map(reference => {
+      if (reference.kind === 'equipment_pool' && reference.method === 'economic_recovery') {
+        return { referenceKey: reference.referenceKey, treatment: 'economic_recovery_not_cash',
+          scheduleKey: null, reason: 'Economic recovery remains a job-cost allocation, not a dated cash obligation.' };
+      }
+      return { referenceKey: reference.referenceKey, treatment: 'separate_cash_commitment',
+        scheduleKey: reference.kind === 'equipment_pool' ? 'truck-finance-current' : 'office-rent-current',
+        reason: 'Bind the exact Mission 24 reference while keeping this dated cash schedule separate.' };
+    });
   }
 
   function body(overrides = {}) {
@@ -39,172 +56,270 @@ realPostgres('Mission 26 original Part 7D mounted overhead and financed-asset ca
         recurrenceEnd: day(29), includedCategories: ['debt_service', 'principal', 'interest'],
         sourceAttestation: { kind: 'source_document', reference: 'Authenticated fixture lender schedule',
           documentDigest: 'a'.repeat(64), attestedAt: cutoff.toISOString() } }],
-      allocationPolicy: { status: 'reconciled', basis: 'owner_approved_schedule_policy',
-        mission24EquipmentTreatment: 'separate_job_cost_allocation',
-        mission24OverheadTreatment: 'separate_job_cost_allocation',
-        economicDepreciationTreatment: 'excluded', actualPaymentTreatment: 'not_evidence',
-        reason: 'Keep dated company obligations separate from job allocation and depreciation.' },
+      allocationPolicy: { expectedMission24Digest: referenceBasis.digest,
+        decisions: decisions(), reason: 'Reconcile every current saved Mission 24 equipment and overhead reference.' },
       reason: 'Replace the complete current fixture obligation schedule.', confirmed: true,
       confirmationVersion: 'operating-cost-schedule-snapshot-v1',
     }, overrides);
   }
 
-  async function put(actor, payload, key = uuid()) {
-    return request(fixture.app)
-      .put('/api/v1/business-profile/operating-cost-schedules/current')
-      .set(actor.session.headers).set('Idempotency-Key', key).send(payload);
+  async function put(actor, payload, key = uuid(), csrf = null) {
+    const call = request(fixture.app).put('/api/v1/business-profile/operating-cost-schedules/current')
+      .set(actor.session.headers).set('Idempotency-Key', key);
+    if (csrf !== null) call.set('X-CSRF-Token', csrf);
+    return call.send(payload);
   }
+  const get = actor => request(fixture.app).get('/api/v1/forecast/overhead-cash/current')
+    .set(actor.session.headers);
+  const getAsOf = (actor, value) => request(fixture.app)
+    .get('/api/v1/forecast/overhead-cash/as-of?cutoff=' + encodeURIComponent(value.toISOString()))
+    .set(actor.session.headers);
+  const getSource = actor => request(fixture.app)
+    .get('/api/v1/business-profile/operating-cost-schedules/current').set(actor.session.headers);
+  const getSourceAsOf = (actor, value) => request(fixture.app)
+    .get('/api/v1/business-profile/operating-cost-schedules/as-of?cutoff=' + encodeURIComponent(value.toISOString()))
+    .set(actor.session.headers);
+  const getReferences = actor => request(fixture.app)
+    .get('/api/v1/business-profile/operating-cost-schedules/references').set(actor.session.headers);
 
-  async function get(actor) {
-    return request(fixture.app).get('/api/v1/forecast/overhead-cash/current')
-      .set(actor.session.headers);
-  }
-
-  async function getSource(actor) {
-    return request(fixture.app)
-      .get('/api/v1/business-profile/operating-cost-schedules/current')
-      .set(actor.session.headers);
+  async function insertPricingPlan(revision, overlapResolved) {
+    const pricingPlan = uuid();
+    await fixture.ownerPool.query(
+      `INSERT INTO canonical_pricing_plans(id,organization_id,estimate_id,revision,action,
+       actor_user_id,membership_id,auth_session_id,actor_name,source_pins,evidence,inputs,result,evidence_digest,
+       expected_decision_revision,expected_decision_digest,currency,reason,confirmation_version,
+       request_key_hash,request_digest,digest)
+       VALUES($1,$2,$3,$4,'save',$5,$5,$6,'Fixture owner','{}','{}',$7,$8,$9,0,'none','USD',
+       'Fixture exact overhead allocation','estimate-pricing-plan-v1',$10,$11,$12)`,
+      [pricingPlan, fixture.org, estimateId, revision, fixture.actors.owner.actorUserId,
+        fixture.actors.owner.authSessionId,
+        { overhead: { method: 'fixed', coverage: { included: [{ referenceId: 'rent', amount: '100.00' }] } } },
+        { overhead: { overlapResolved } }, hex('pricing-evidence-' + revision), hex('pricing-key-' + revision),
+        hex('pricing-request-' + revision), hex('pricing-plan-' + revision)]);
   }
 
   beforeAll(async () => {
-    fixture = await createDatabaseFixture({ operationalSchedule: true });
+    fixture = await createDatabaseFixture({ operationalSchedule: true, timeZone: 'America/New_York' });
     await fixture.ownerPool.query("SET northstar.m26_part5a_disposable_clock='enabled'");
-    cutoff = new Date((await fixture.ownerPool.query(
-      "SELECT date_trunc('second',clock_timestamp()) value")).rows[0].value);
-    await fixture.ownerPool.query(
-      'SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [cutoff]);
+    cutoff = new Date('2026-03-07T17:30:00.000Z');
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [cutoff]);
     assetId = uuid();
     await fixture.ownerPool.query(
-      `INSERT INTO tenant_assets(id,organization_id,category,name,internal_reference,
-       created_by_user_id,updated_by_user_id)
+      `INSERT INTO tenant_assets(id,organization_id,category,name,internal_reference,created_by_user_id,updated_by_user_id)
        VALUES($1,$2,'vehicle','Synthetic financed truck','PART7D-TRUCK',$3,$3)`,
       [assetId, fixture.org, fixture.actors.owner.actorUserId]);
+
+    const operation = uuid(), graph = uuid(), customer = uuid(), opportunity = uuid();
+    await fixture.ownerPool.query(
+      `INSERT INTO canonical_operations(id,organization_id,graph_id,idempotency_key_hash,payload_fingerprint,
+       state,lease_owner,lease_expires_at,result_status,result_body,completed_at)
+       VALUES($1,$2,$3,$4,$4,'completed',$1,NOW()+INTERVAL '1 hour',200,'{}',NOW())`,
+      [operation, fixture.org, graph, hex('part7d-operation')]);
+    await fixture.ownerPool.query(
+      "INSERT INTO canonical_customers(id,organization_id,operation_id,graph_id,name) VALUES($1,$2,$3,$4,'Part 7D fixture customer')",
+      [customer, fixture.org, operation, graph]);
+    await fixture.ownerPool.query(
+      "INSERT INTO canonical_opportunities(id,organization_id,operation_id,graph_id,customer_id,status,service_type,job_scope) VALUES($1,$2,$3,$4,$5,'qualified','Plumbing','{}')",
+      [opportunity, fixture.org, operation, graph, customer]);
+    estimateId = uuid();
+    await fixture.ownerPool.query(
+      `INSERT INTO canonical_estimates(id,organization_id,operation_id,graph_id,opportunity_id,
+       calculation_version,normalized_input_fingerprint,business_profile_version,business_profile_hash,
+       currency,line_items,calculation_output,snapshot_digest,business_profile_id)
+       VALUES($1,$2,$3,$4,$5,'part7d-fixture',$6,'org-profile-v1',$7,'USD','[]','{}',$8,$9)`,
+      [estimateId, fixture.org, operation, graph, opportunity,
+        hex('estimate-input'), fixture.profiles[fixture.org].hash, hex('estimate-snapshot'),
+        fixture.profiles[fixture.org].businessProfileId]);
+    const equipmentPlan = uuid();
+    await fixture.ownerPool.query(
+      `INSERT INTO canonical_equipment_cost_plans(id,organization_id,estimate_id,revision,action,
+       actor_user_id,membership_id,auth_session_id,actor_name,source_pins,inputs,evidence,
+       expected_decision_revision,expected_decision_digest,currency,reason,confirmation_version,
+       request_key_hash,request_digest,digest)
+       VALUES($1,$2,$3,1,'save',$4,$4,$5,'Fixture owner','{}',$6,'{}',0,'none','USD',
+       'Fixture exact equipment allocation','estimate-equipment-cost-plan-v1',$7,$8,$9)`,
+      [equipmentPlan, fixture.org, estimateId, fixture.actors.owner.actorUserId,
+        fixture.actors.owner.authSessionId, { lines: [
+          { lineId: uuid(), method: 'economic_recovery', allocation: { includedCategories: ['capital_recovery'] } },
+          { lineId: uuid(), method: 'financing_cash', allocation: { includedCategories: ['debt_service'] } }] },
+        hex('equipment-key'), hex('equipment-request'), hex('equipment-plan')]);
+    await insertPricingPlan(1, true);
+    const references = await getReferences(fixture.actors.owner);
+    expect(references.status).toBe(200);
+    referenceBasis = references.body.data;
+    expect(referenceBasis.references).toHaveLength(3);
   }, 180000);
 
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
-  test('issues only exact aggregate scheduled commitments through a correction/revocation lifecycle', async () => {
-    const missing = await get(fixture.actors.owner);
-    expect(missing.status).toBe(200);
-    expect(missing.body.data).toMatchObject({ state: 'unavailable', currency: null,
+  test('binds exact Mission 24 references and preserves correction, payoff, cancellation, and revoke history', async () => {
+    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
       reason: 'owner_recorded_schedule_coverage_unavailable', forecastIssued: false });
-    expect(missing.body.data.overhead.amount).toBeNull();
+    await insertPricingPlan(2, false);
+    referenceBasis = (await getReferences(fixture.actors.owner)).body.data;
+    expect(referenceBasis.references.find(value => value.kind === 'overhead_allocation').overlapResolved).toBe(false);
+    expect((await put(fixture.actors.owner, body())).status).toBe(400);
+    await insertPricingPlan(3, true);
+    referenceBasis = (await getReferences(fixture.actors.owner)).body.data;
+    expect(referenceBasis.references.every(value => value.overlapResolved)).toBe(true);
+    expect((await put(fixture.actors.owner, body({ allocationPolicy: {
+      expectedMission24Digest: 'f'.repeat(64), decisions: decisions(), reason: 'Wrong manifest must fail.' } }))).status).toBe(409);
+    expect((await put(fixture.actors.owner, body({ allocationPolicy: {
+      expectedMission24Digest: referenceBasis.digest, decisions: [], reason: 'Incomplete policy must fail.' } }))).status).toBe(400);
 
     const key = uuid();
     const created = await put(fixture.actors.owner, body(), key);
-    expect(created.status).toBe(201);
-    current = created.body.data;
-    expect(current).toMatchObject({ revision: 1, action: 'replace', replayed: false });
-    const replay = await put(fixture.actors.owner, body({
-      expectedRevision: 0, expectedDigest: 'none' }), key);
-    expect(replay.status).toBe(200);
-    expect(replay.headers['idempotency-replayed']).toBe('true');
-    expect(replay.body.data).toMatchObject({ revision: 1, digest: current.digest,
-      action: 'replace', replayed: true });
-    const source = await getSource(fixture.actors.owner);
-    expect(source.status).toBe(200);
-    expect(source.body.data).toMatchObject({ state: 'current', revision: 1,
-      digest: current.digest, action: 'replace', snapshot: {
-        currency: 'USD', coverage: { complete: true }, allocationPolicy: {
-          status: 'reconciled', basis: 'owner_approved_schedule_policy' } } });
-    expect(source.body.data.snapshot.schedules).toHaveLength(2);
+    expect(created.status).toBe(201); current = created.body.data;
+    const originalDigest = current.digest;
+    const replay = await put(fixture.actors.owner, body({ expectedRevision: 0, expectedDigest: 'none' }), key);
+    expect(replay.status).toBe(200); expect(replay.headers['idempotency-replayed']).toBe('true');
+    const changedReplay = await put(fixture.actors.owner,
+      body({ expectedRevision: 0, expectedDigest: 'none', reason: 'Changed body under the same request key.' }), key);
+    expect(changedReplay.status).toBe(409);
 
     const issued = await get(fixture.actors.admin);
     expect(issued.status).toBe(200);
-    expect(issued.headers['cache-control']).toBe('private, no-store');
-    expect(issued.body.data).toMatchObject({
-      version: 'm26-overhead-cash-forecast-v1', state: 'current', currency: 'USD', fictional: false,
-      horizon: { days: 30 },
-      scope: { wholeBusinessCoverageVerified: true, offPlatformCoverageVerified: false },
-      overhead: { state: 'current', amount: '2400.00', dueCount: 2,
-        scheduleCount: 1, reason: null },
-      financedAssetCash: { state: 'current', amount: '500.00', dueCount: 1,
-        obligationCount: 1, ownerMarkedSatisfiedCount: 1, canceledCount: 1, reason: null },
-      evidence: { actualPaymentVerified: false, learnedAdjustmentApplied: false,
-        overlapReconciled: true, completeAsOf: true },
-      allocation: { state: 'reconciled', jobCostAllocationIncluded: false,
-        economicDepreciationIncluded: false, actualPaymentClaimed: false },
-      forecastIssued: true, completeOperatingCostForecastIssued: false,
-      calibratedRangeIssued: false, probabilityIssued: false, automaticActionAuthorized: false,
-    });
-    const serialized = JSON.stringify(issued.body.data);
-    expect(serialized).not.toContain(assetId);
-    expect(serialized).not.toContain('office-rent-current');
-    expect(serialized).not.toContain('Authenticated fixture lender schedule');
+    expect(issued.body.data).toMatchObject({ state: 'current', currency: 'USD',
+      basis: { mode: 'current', sourceRevision: 1, sourceDigest: originalDigest },
+      horizon: { kind: 'local_calendar_days', timeZone: 'America/New_York',
+        startsOn: '2026-03-07', endsOnExclusive: '2026-04-06', days: 30 },
+      scope: { sourceCoverageVerified: true, wholeBusinessCoverageVerified: false,
+        offPlatformCoverageVerified: false },
+      overhead: { amount: '2400.00', dueCount: 2 },
+      financedAssetCash: { amount: '500.00', dueCount: 1,
+        ownerMarkedSatisfiedCount: 1, canceledCount: 1 },
+      evidence: { currentRevision: true, overlapReconciled: true,
+        actualPaymentVerified: false }, forecastIssued: true });
+    expect(JSON.stringify(issued.body.data)).not.toContain(assetId);
+    expect(JSON.stringify(issued.body.data)).not.toContain(referenceBasis.references[0].planId);
 
-    const stale = await put(fixture.actors.owner, body({ expectedRevision: 0,
-      expectedDigest: 'none', reason: 'A stale writer must not replace the source.' }));
-    expect(stale.status).toBe(409);
-    expect((await get(fixture.actors.member)).status).toBe(403);
-    expect((await getSource(fixture.actors.member)).status).toBe(403);
-    const otherTenant = await get(fixture.actors.otherOwner);
-    expect(otherTenant.status).toBe(200);
-    expect(otherTenant.body.data).toMatchObject({ state: 'unavailable', currency: null,
-      forecastIssued: false });
-    expect((await getSource(fixture.actors.otherOwner)).body.data)
-      .toEqual({ state: 'absent', revision: 0, digest: 'none', action: null, snapshot: null });
+    const correctedAt = new Date(cutoff.getTime() + 3600000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [correctedAt]);
+    const correctedSchedules = body().schedules;
+    correctedSchedules[0].dueDates[0].paymentStatus = 'canceled';
+    correctedSchedules[1].dueDates[0].paymentStatus = 'owner_marked_satisfied';
+    const correction = await put(fixture.actors.owner, body({ schedules: correctedSchedules,
+      coverage: { ...body().coverage, recordedThrough: correctedAt.toISOString() },
+      reason: 'Record an exact cancellation and owner-marked payoff correction.' }));
+    expect(correction.status).toBe(201); current = correction.body.data;
 
-    await fixture.ownerPool.query(
-      `UPDATE tenant_assets SET catalogue_state='archived',archived_by_user_id=$3,
-       archived_at=clock_timestamp(),version=version+1 WHERE organization_id=$1 AND id=$2`,
-      [fixture.org, assetId, fixture.actors.owner.actorUserId]);
-    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
-      reason: 'schedule_source_currentness_unavailable', forecastIssued: false });
-    await fixture.ownerPool.query(
-      `UPDATE tenant_assets SET catalogue_state='active',archived_by_user_id=NULL,
-       archived_at=NULL,version=version+1 WHERE organization_id=$1 AND id=$2`,
-      [fixture.org, assetId]);
+    const original = await getAsOf(fixture.actors.owner, cutoff);
+    const corrected = await getAsOf(fixture.actors.owner, correctedAt);
+    expect(original.body.data).toMatchObject({ state: 'current', basis: { mode: 'as_of', sourceRevision: 1 },
+      overhead: { amount: '2400.00' }, financedAssetCash: { amount: '500.00' },
+      evidence: { currentRevision: false, completeAsOf: true } });
+    expect(corrected.body.data).toMatchObject({ state: 'current', basis: { mode: 'as_of', sourceRevision: 2 },
+      overhead: { amount: '1200.00' }, financedAssetCash: { amount: '0.00',
+        ownerMarkedSatisfiedCount: 2, canceledCount: 1 } });
+    expect((await getSourceAsOf(fixture.actors.owner, cutoff)).body.data).toMatchObject({ revision: 1, digest: originalDigest });
+    expect((await getSourceAsOf(fixture.actors.member, cutoff)).status).toBe(403);
 
-    const staleCoverage = await put(fixture.actors.owner, body({ schedules: [],
-      coverage: { startsOn: day(0), endsOn: day(5),
-        recordedThrough: cutoff.toISOString(), complete: true },
-      reason: 'Record a bounded source that does not cover the forecast horizon.' }));
-    expect(staleCoverage.status).toBe(201); current = staleCoverage.body.data;
-    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
-      reason: 'owner_recorded_schedule_coverage_stale', forecastIssued: false });
-
-    const currencyConflict = await put(fixture.actors.owner, body({ currency: 'CAD', schedules: [],
-      reason: 'Record an exact source currency that conflicts with the Business Profile.' }));
-    expect(currencyConflict.status).toBe(201); current = currencyConflict.body.data;
-    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
-      reason: 'schedule_currency_conflict', forecastIssued: false });
-
-    const empty = await put(fixture.actors.owner, body({ schedules: [],
-      reason: 'Owner confirms a complete current empty schedule set.' }));
-    expect(empty.status).toBe(201); current = empty.body.data;
-    const zero = await get(fixture.actors.owner);
-    expect(zero.body.data).toMatchObject({ state: 'current',
-      overhead: { amount: '0.00', dueCount: 0, scheduleCount: 0 },
-      financedAssetCash: { amount: '0.00', dueCount: 0, obligationCount: 0 },
-      forecastIssued: true });
-
+    const revokedAt = new Date(cutoff.getTime() + 7200000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [revokedAt]);
     const revoked = await put(fixture.actors.owner, body({ action: 'revoke', currency: null,
       effectiveOn: null, coverage: null, schedules: [], allocationPolicy: null,
-      reason: 'Revoke the owner-recorded obligation source.' }));
+      reason: 'Revoke the owner-recorded source after the historical correction.' }));
     expect(revoked.status).toBe(201); current = revoked.body.data;
     expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
-      reason: 'owner_recorded_schedule_coverage_unavailable', forecastIssued: false });
-    expect((await getSource(fixture.actors.owner)).body.data).toMatchObject({ state: 'revoked',
-      revision: current.revision, digest: current.digest, action: 'revoke' });
+      reason: 'owner_recorded_schedule_coverage_unavailable' });
+    expect((await getAsOf(fixture.actors.owner, correctedAt)).body.data)
+      .toMatchObject({ state: 'current', basis: { sourceRevision: 2 } });
   });
 
-  test('keeps the source append-only and exposes only the two guarded runtime entries', async () => {
+  test('enforces CSRF, role, tenant, record, and complete-empty boundaries', async () => {
+    const restoredAt = new Date(cutoff.getTime() + 10800000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [restoredAt]);
+    const restoredBody = body({ coverage: { ...body().coverage, recordedThrough: restoredAt.toISOString() } });
+    expect((await put(fixture.actors.owner, restoredBody, uuid(), 'invalid-csrf-token')).status).toBe(403);
+    expect((await put(fixture.actors.member, restoredBody)).status).toBe(403);
+    const otherReferences = (await getReferences(fixture.actors.otherOwner)).body.data;
+    const crossTenant = body({ expectedRevision: 0, expectedDigest: 'none', allocationPolicy: {
+      expectedMission24Digest: otherReferences.digest, decisions: [], reason: 'Cross-tenant asset must fail.' } });
+    expect((await put(fixture.actors.otherOwner, crossTenant)).status).toBe(400);
+
+    const restored = await put(fixture.actors.owner, restoredBody);
+    expect(restored.status).toBe(201); current = restored.body.data;
+    const emptyAt = new Date(cutoff.getTime() + 14400000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [emptyAt]);
+    const empty = await put(fixture.actors.owner, body({ schedules: [],
+      coverage: { ...body().coverage, recordedThrough: emptyAt.toISOString() },
+      allocationPolicy: { expectedMission24Digest: referenceBasis.digest,
+        decisions: decisions().map(value => ({ ...value,
+          treatment: value.treatment !== 'separate_cash_commitment' ? value.treatment :
+            (value.referenceKey.startsWith('overhead:') ? 'job_overhead_allocation_not_cash' : 'not_same_obligation'),
+          scheduleKey: null })), reason: 'All Mission 24 cash references are different obligations.' },
+      reason: 'Owner attests that the exact covered schedule source is empty.' }));
+    expect(empty.status).toBe(201); current = empty.body.data;
+    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'current',
+      scope: { sourceCoverageVerified: true, wholeBusinessCoverageVerified: false },
+      overhead: { amount: '0.00' }, financedAssetCash: { amount: '0.00' } });
+  });
+
+  test('holds shared source locks through return so asset and profile mutations cannot race current claims', async () => {
+    const sourceAt = new Date(cutoff.getTime() + 18000000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [sourceAt]);
+    const refreshed = await put(fixture.actors.owner, body({
+      coverage: { ...body().coverage, recordedThrough: sourceAt.toISOString() } }));
+    expect(refreshed.status).toBe(201); current = refreshed.body.data;
+
+    const reader = await fixture.runtimePool.connect();
+    const writer = await fixture.ownerPool.connect();
+    await reader.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    const args = [fixture.org, fixture.actors.owner.actorUserId, 'owner', fixture.actors.owner.authSessionId];
+    const pinned = (await reader.query(
+      'SELECT canonical_forecast_overhead_cash_v1_current($1,$2,$3,$4) value', args)).rows[0].value;
+    expect(pinned).toMatchObject({ state: 'current', evidence: { currentRevision: true } });
+    const assetMutation = (async () => {
+      await writer.query('BEGIN');
+      await writer.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE', [fixture.org]);
+      await writer.query('UPDATE tenant_assets SET version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1 AND id=$2', [fixture.org, assetId]);
+      await writer.query('COMMIT');
+    })();
+    expect(await Promise.race([assetMutation.then(() => 'completed'), delay(100).then(() => 'blocked')])).toBe('blocked');
+    await reader.query('COMMIT'); await assetMutation; reader.release(); writer.release();
+    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
+      reason: 'schedule_source_currentness_unavailable', evidence: { currentRevision: false } });
+
+    const assetRefreshAt = new Date(cutoff.getTime() + 21600000);
+    await fixture.ownerPool.query('SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [assetRefreshAt]);
+    const assetRefresh = await put(fixture.actors.owner, body({
+      coverage: { ...body().coverage, recordedThrough: assetRefreshAt.toISOString() } }));
+    expect(assetRefresh.status).toBe(201); current = assetRefresh.body.data;
+    const profileReader = await fixture.runtimePool.connect();
+    await profileReader.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    expect((await profileReader.query(
+      'SELECT canonical_forecast_overhead_cash_v1_current($1,$2,$3,$4) value', args)).rows[0].value.state).toBe('current');
+    const active = (await fixture.ownerPool.query(
+      'SELECT raw_profile,version_label FROM canonical_business_profiles WHERE organization_id=$1 AND is_active', [fixture.org])).rows[0];
+    const profileMutation = putBusinessProfile(fixture.ownerPool, { organizationId: fixture.org,
+      userId: fixture.actors.owner.actorUserId, expectedVersion: active.version_label,
+      profile: { ...active.raw_profile, businessDescription: 'Changed while current forecast read held its pin.' } });
+    expect(await Promise.race([profileMutation.then(() => 'completed'), delay(100).then(() => 'blocked')])).toBe('blocked');
+    await profileReader.query('COMMIT'); await profileMutation; profileReader.release();
+    expect((await get(fixture.actors.owner)).body.data).toMatchObject({ state: 'unavailable',
+      reason: 'schedule_source_currentness_unavailable' });
+  });
+
+  test('keeps history immutable and exposes only guarded runtime entries', async () => {
     await expect(fixture.ownerPool.query(
       "UPDATE canonical_operating_cost_schedule_revisions SET reason='changed' WHERE organization_id=$1",
       [fixture.org])).rejects.toMatchObject({ code: '23514' });
-    const privilege = (await fixture.ownerPool.query(
-      `SELECT has_table_privilege($1,'public.canonical_operating_cost_schedule_revisions','SELECT') can_select,
-       has_table_privilege($1,'public.canonical_operating_cost_schedule_revisions','INSERT') can_insert,
-       has_table_privilege($1,'public.canonical_operating_cost_schedule_revisions','UPDATE') can_update,
-       has_table_privilege($1,'public.canonical_operating_cost_schedule_revisions','DELETE') can_delete,
-       has_function_privilege($1,
-        'public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)','EXECUTE') can_mutate,
-       has_function_privilege($1,
-        'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)','EXECUTE') can_source_read,
-       has_function_privilege($1,
-        'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)','EXECUTE') can_read`,
+    const signatures = [
+      'public.canonical_operating_cost_snapshot_mutate(uuid,uuid,text,uuid,text,text,jsonb)',
+      'public.canonical_operating_cost_reference_basis_read(uuid,uuid,text,uuid)',
+      'public.canonical_operating_cost_snapshot_read(uuid,uuid,text,uuid)',
+      'public.canonical_operating_cost_snapshot_read_as_of(uuid,uuid,text,uuid,timestamptz)',
+      'public.canonical_forecast_overhead_cash_v1_current(uuid,uuid,text,uuid)',
+      'public.canonical_forecast_overhead_cash_v1_as_of(uuid,uuid,text,uuid,timestamptz)'];
+    for (const signature of signatures) {
+      const row = (await fixture.ownerPool.query(
+        'SELECT has_function_privilege($1,$2,\'EXECUTE\') runtime,has_function_privilege(\'public\',$2,\'EXECUTE\') public',
+        [fixture.roles.runtime, signature])).rows[0];
+      expect(row).toEqual({ runtime: true, public: false });
+    }
+    const table = (await fixture.ownerPool.query(
+      "SELECT has_table_privilege($1,'public.canonical_operating_cost_schedule_revisions','SELECT,INSERT,UPDATE,DELETE') allowed",
       [fixture.roles.runtime])).rows[0];
-    expect(privilege).toEqual({ can_select: false, can_insert: false, can_update: false,
-      can_delete: false, can_mutate: true, can_source_read: true, can_read: true });
+    expect(table.allowed).toBe(false);
   });
 });

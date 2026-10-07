@@ -217,10 +217,12 @@ inventory, supplier availability, a complete purchasing cost or a forecast.
 Final Part 7B acceptance remains open.
 
 Part 7C's [equipment and travel cost boundary](../architecture/MISSION_26_PART7C_EQUIPMENT_TRAVEL_BOUNDARY.md)
-preserves Mission 24's v3 composition and overlap decisions in a bounded
-unmounted consistency diagnostic. It does not independently recalculate fuel,
-maintenance, onsite use, transport or complete operating cost. Source
-authentication and final Part 7C acceptance remain open.
+now mounts the smallest additive private 30-day plan-cost forecast over current
+owner-confirmed scheduled work. It consumes Mission 24's exact adopted v3
+composition and overlap deduction, fails closed on stale sources or incompatible
+learned adjustments, and keeps future utilization, readiness, maintenance,
+downtime, provider truth and financing unavailable. Independent whole exact-head
+audit and normal release remain open.
 
 Part 7D's [overhead and financed-asset cash source gate](../architecture/MISSION_26_PART7D_OVERHEAD_CASH_SOURCE_GATE.md)
 distinguishes Mission 24 job allocation from dated company expense and debt

@@ -596,6 +596,82 @@
             <p class="sr-only" id="commandCenterResourceStatus" role="status" aria-live="polite" aria-atomic="true"></p>
           </section>
 
+          <section class="demo-panel command-center-forecast-ranges" id="commandCenterForecastRanges"
+            aria-labelledby="commandCenterForecastRangesTitle" aria-busy="true">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Forecast evidence</p>
+                <h2 id="commandCenterForecastRangesTitle">Forecast ranges</h2>
+              </div>
+              <span class="command-center-demand-state" id="commandCenterForecastState"
+                role="status" aria-live="polite">Waiting for workspace</span>
+            </div>
+            <p id="commandCenterForecastExplanation">Forecast evidence will appear after the workspace loads.</p>
+            <div class="command-center-forecast-cards" aria-label="Current forecast evidence states">
+              <article class="command-center-forecast-card" aria-labelledby="commandCenterForecastBaselineTitle">
+                <div class="command-center-forecast-card-heading">
+                  <h3 id="commandCenterForecastBaselineTitle">Point baseline</h3>
+                  <span id="commandCenterForecastBaselineState">Waiting</span>
+                </div>
+                <strong id="commandCenterForecastBaselineValue">Not available</strong>
+                <p id="commandCenterForecastBaselineContext">Waiting for one exact deterministic origin.</p>
+              </article>
+              <article class="command-center-forecast-card" aria-labelledby="commandCenterForecastRangeTitle">
+                <div class="command-center-forecast-card-heading">
+                  <h3 id="commandCenterForecastRangeTitle">Calibrated range</h3>
+                  <span id="commandCenterForecastRangeState">Waiting</span>
+                </div>
+                <strong id="commandCenterForecastRangeValue">P10 / P50 / P90 withheld</strong>
+                <p id="commandCenterForecastRangeContext">Waiting for current held-out calibration evidence.</p>
+              </article>
+              <article class="command-center-forecast-card" aria-labelledby="commandCenterForecastScenarioTitle">
+                <div class="command-center-forecast-card-heading">
+                  <h3 id="commandCenterForecastScenarioTitle">Named scenarios</h3>
+                  <span id="commandCenterForecastScenarioState">Waiting</span>
+                </div>
+                <strong id="commandCenterForecastScenarioValue">Not available</strong>
+                <p id="commandCenterForecastScenarioContext">Waiting for reviewed adverse, base and favorable assumptions.</p>
+              </article>
+              <article class="command-center-forecast-card" aria-labelledby="commandCenterForecastSensitivityTitle">
+                <div class="command-center-forecast-card-heading">
+                  <h3 id="commandCenterForecastSensitivityTitle">Sensitivity</h3>
+                  <span id="commandCenterForecastSensitivityState">Waiting</span>
+                </div>
+                <strong id="commandCenterForecastSensitivityValue">Not available</strong>
+                <p id="commandCenterForecastSensitivityContext">Waiting for an explicit supported what-if target.</p>
+              </article>
+            </div>
+            <figure class="command-center-forecast-map" id="commandCenterForecastEvidence"
+              role="img" aria-labelledby="commandCenterForecastEvidenceTitle commandCenterForecastEvidenceDescription">
+              <figcaption id="commandCenterForecastEvidenceTitle">Separate forecast evidence states</figcaption>
+              <div id="commandCenterForecastEvidenceMap"></div>
+              <p class="sr-only" id="commandCenterForecastEvidenceDescription">No forecast evidence is shown.</p>
+            </figure>
+            <details class="command-center-forecast-details" id="commandCenterForecastDetails">
+              <summary>Review authenticated boundary</summary>
+              <div id="commandCenterForecastAuthority"><p>No authenticated forecast context is shown.</p></div>
+              <section aria-labelledby="commandCenterForecastBaselineEvidenceTitle">
+                <h3 id="commandCenterForecastBaselineEvidenceTitle">Point baseline evidence</h3>
+                <div class="command-center-forecast-evidence-details" id="commandCenterForecastBaselineDetails"><p>No current authenticated evidence is shown.</p></div>
+              </section>
+              <section aria-labelledby="commandCenterForecastRangeEvidenceTitle">
+                <h3 id="commandCenterForecastRangeEvidenceTitle">Calibrated range evidence</h3>
+                <div class="command-center-forecast-evidence-details" id="commandCenterForecastRangeDetails"><p>No current authenticated evidence is shown.</p></div>
+              </section>
+              <section aria-labelledby="commandCenterForecastScenarioEvidenceTitle">
+                <h3 id="commandCenterForecastScenarioEvidenceTitle">Named scenario evidence</h3>
+                <div class="command-center-forecast-evidence-details" id="commandCenterForecastScenarioDetails"><p>No current authenticated evidence is shown.</p></div>
+              </section>
+              <section aria-labelledby="commandCenterForecastSensitivityEvidenceTitle">
+                <h3 id="commandCenterForecastSensitivityEvidenceTitle">Sensitivity evidence</h3>
+                <div class="command-center-forecast-evidence-details" id="commandCenterForecastSensitivityDetails"><p>No current authenticated evidence is shown.</p></div>
+              </section>
+              <p>Point baselines, calibrated percentiles, named scenarios and sensitivity checks keep separate identities and meanings.</p>
+            </details>
+            <p class="command-center-demand-boundary" id="commandCenterForecastBoundary">No range or probability is inferred from a point baseline or scenario.</p>
+            <p class="sr-only" id="commandCenterForecastStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+          </section>
+
           <section class="demo-panel command-center-range-outlook command-center-revenue-cash-outlook"
             id="commandCenterRevenueCashOutlook" aria-labelledby="commandCenterRevenueCashTitle" aria-busy="true">
             <div class="demo-panel-heading">
@@ -820,7 +896,8 @@
   <script src="/js/command-center-operating-profit-forecast.js?v=m26-part7e-20261007"></script>
   <script src="/js/command-center-customer-opportunity-outlook.js?v=m26-founder-part6-20261006"></script>
   <script src="/js/command-center-resource-risk-outlook.js?v=m26-part8d-20261008"></script>
-  <script src="/js/command-center-page.js?v=m26-part8d-20261008"></script>
+  <script src="/js/command-center-forecast-ranges.js?v=m26-part9e-20261008"></script>
+  <script src="/js/command-center-page.js?v=m26-part9e-20261008"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

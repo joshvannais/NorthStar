@@ -718,6 +718,54 @@
               aria-live="polite" aria-atomic="true"></p>
           </section>
 
+          <section class="demo-panel command-center-monthly-forecast-kpis"
+            id="commandCenterMonthlyForecastKpis"
+            aria-labelledby="commandCenterMonthlyForecastKpisTitle" aria-busy="true">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">One monthly run</p>
+                <h2 id="commandCenterMonthlyForecastKpisTitle">Monthly forecast KPIs</h2>
+              </div>
+              <span class="command-center-demand-state" id="commandCenterMonthlyForecastKpisState"
+                role="status" aria-live="polite">Waiting for workspace</span>
+            </div>
+            <p id="commandCenterMonthlyForecastKpisExplanation">
+              Six monthly measures appear only when every value belongs to one authenticated compatible run.
+            </p>
+            <div class="command-center-monthly-kpi-grid" aria-label="Monthly forecast KPI availability">
+              <article><span>Revenue</span><strong id="commandCenterMonthlyForecastKpiRevenueValue">Not available</strong>
+                <small id="commandCenterMonthlyForecastKpiRevenueState">Waiting</small></article>
+              <article><span>Operating cost</span><strong id="commandCenterMonthlyForecastKpiOperatingCostValue">Not available</strong>
+                <small id="commandCenterMonthlyForecastKpiOperatingCostState">Waiting</small></article>
+              <article><span>Profit</span><strong id="commandCenterMonthlyForecastKpiProfitValue">Not available</strong>
+                <small id="commandCenterMonthlyForecastKpiProfitState">Waiting</small></article>
+              <article><span>Margin</span><strong id="commandCenterMonthlyForecastKpiMarginValue">Not available</strong>
+                <small id="commandCenterMonthlyForecastKpiMarginState">Waiting</small></article>
+              <article><span>Demand</span><strong id="commandCenterMonthlyForecastKpiDemandValue">Not available</strong>
+                <small id="commandCenterMonthlyForecastKpiDemandState">Waiting</small></article>
+              <article><span>Capacity</span><strong id="commandCenterMonthlyForecastKpiCapacityValue">Not available</strong>
+                <small id="commandCenterMonthlyForecastKpiCapacityState">Waiting</small></article>
+            </div>
+            <figure class="command-center-monthly-kpi-graph" role="img"
+              aria-labelledby="commandCenterMonthlyForecastKpiGraphTitle commandCenterMonthlyForecastKpiGraphPlot">
+              <figcaption>
+                <strong id="commandCenterMonthlyForecastKpiGraphTitle">Monthly measure graph</strong>
+                <span id="commandCenterMonthlyForecastKpiGraphMonth">Month unavailable</span>
+              </figcaption>
+              <p id="commandCenterMonthlyForecastKpiGraphPlot">No graph points are available.</p>
+            </figure>
+            <details class="command-center-forecast-details command-center-monthly-kpi-details">
+              <summary>Review same-run authority</summary>
+              <p id="commandCenterMonthlyForecastKpisAuthority">No authenticated run identity is shown.</p>
+              <p>Revenue, cost, demand and role-scoped capacity each keep their own target, unit, scope and source requirements. Derived profit and margin require compatible revenue and cost operands.</p>
+            </details>
+            <p class="command-center-demand-boundary" id="commandCenterMonthlyForecastKpisBoundary">
+              Missing targets stay unavailable. They are never shown as zero or combined from different runs.
+            </p>
+            <p class="sr-only" id="commandCenterMonthlyForecastKpisStatus" role="status"
+              aria-live="polite" aria-atomic="true"></p>
+          </section>
+
           <section class="demo-panel command-center-range-outlook command-center-revenue-cash-outlook"
             id="commandCenterRevenueCashOutlook" aria-labelledby="commandCenterRevenueCashTitle" aria-busy="true">
             <div class="demo-panel-heading">
@@ -944,7 +992,8 @@
   <script src="/js/command-center-resource-risk-outlook.js?v=m26-part8d-20261008"></script>
   <script src="/js/command-center-forecast-ranges.js?v=m26-part9e-20261008"></script>
   <script src="/js/command-center-forecast-timeline.js?v=m26-part10a-20261008"></script>
-  <script src="/js/command-center-page.js?v=m26-part10a-20261008"></script>
+  <script src="/js/command-center-monthly-forecast-kpis.js?v=m26-part10b-20261008"></script>
+  <script src="/js/command-center-page.js?v=m26-part10b-20261008"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

@@ -780,10 +780,51 @@
 .command-center-forecast-timeline-details > p {
   margin: 0 0 8px; color: var(--theme-muted); font-size: 11px; overflow-wrap: anywhere;
 }
+.command-center-monthly-forecast-kpis { grid-column: 1 / -1; overflow: hidden; }
+.command-center-monthly-forecast-kpis > p { color: var(--theme-muted); }
+.command-center-monthly-kpi-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px;
+}
+.command-center-monthly-kpi-grid article {
+  min-width: 0; padding: 13px; border: 1px solid var(--theme-border); border-radius: 12px;
+  background: var(--theme-surface);
+}
+.command-center-monthly-kpi-grid span,
+.command-center-monthly-kpi-grid strong,
+.command-center-monthly-kpi-grid small { display: block; }
+.command-center-monthly-kpi-grid span {
+  color: var(--theme-muted); font-size: 10px; font-weight: 800; letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.command-center-monthly-kpi-grid strong {
+  margin-top: 7px; color: var(--theme-text); font-size: 16px; font-variant-numeric: tabular-nums;
+}
+.command-center-monthly-kpi-grid small {
+  margin-top: 5px; color: var(--theme-muted); font-size: 10px; line-height: 1.35;
+}
+.command-center-monthly-kpi-graph {
+  margin: 12px 0 0; padding: 13px; border: 1px dashed var(--theme-border); border-radius: 12px;
+  background: var(--theme-surface);
+}
+.command-center-monthly-kpi-graph figcaption {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+}
+.command-center-monthly-kpi-graph figcaption strong { color: var(--theme-text); font-size: 12px; }
+.command-center-monthly-kpi-graph figcaption span,
+.command-center-monthly-kpi-graph p { color: var(--theme-muted); font-size: 10px; }
+.command-center-monthly-kpi-graph p { margin: 12px 0 0; }
+.command-center-monthly-kpi-details > p {
+  margin: 0 0 8px; color: var(--theme-muted); font-size: 11px; overflow-wrap: anywhere;
+}
 @media (max-width: 560px) {
   .command-center-forecast-timeline-table { min-width: 500px; }
   .command-center-forecast-timeline-table th,
   .command-center-forecast-timeline-table td { min-width: 108px; padding: 10px; }
+  .command-center-monthly-kpi-grid { grid-template-columns: 1fr; }
+  .command-center-monthly-kpi-graph figcaption { align-items: flex-start; flex-direction: column; gap: 4px; }
+}
+@media (min-width: 561px) and (max-width: 900px) {
+  .command-center-monthly-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .command-center-revenue-cash-outlook,
 .command-center-cost-risk-outlook,

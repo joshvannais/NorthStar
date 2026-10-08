@@ -47,6 +47,8 @@ const { createForecastMaterialDemandRiskRouter } =
   require('./routes/forecastMaterialDemandRisk');
 const { createForecastAssetUtilizationRiskRouter } =
   require('./routes/forecastAssetUtilizationRisk');
+const { createForecastRouteLoadRiskRouter } =
+  require('./routes/forecastRouteLoadRisk');
 const { createForecastEquipmentTravelCostRouter } =
   require('./routes/forecastEquipmentTravelCost');
 const { createForecastOverheadCashRouter } = require('./routes/forecastOverheadCash');
@@ -343,6 +345,7 @@ app.use('/api/v1/forecast/labor-cost', createForecastLaborCostRouter());
 app.use('/api/v1/forecast/material-cost', createForecastMaterialCostRouter());
 app.use('/api/v1/forecast/material-demand-risk', createForecastMaterialDemandRiskRouter());
 app.use('/api/v1/forecast/asset-utilization-risk', createForecastAssetUtilizationRiskRouter());
+app.use('/api/v1/forecast/route-load-risk', createForecastRouteLoadRiskRouter());
 app.use('/api/v1/forecast/equipment-travel-cost', createForecastEquipmentTravelCostRouter());
 app.use('/api/v1/forecast/overhead-cash', createForecastOverheadCashRouter());
 app.use('/api/v1/forecast/operating-profit', createForecastOperatingProfitRouter());

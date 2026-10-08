@@ -131,6 +131,21 @@ async function exercise(browser, scenario, result) {
         /Tenant a0000000.*month.*timeline.*bundle.*accepted run.*export digests unavailable/i);
 
       await page.evaluate(data => {
+        const malformed = JSON.parse(JSON.stringify(data));
+        malformed.anchor.period = null;
+        window.__responses.push({ status: 200,
+          payload: { success: true, data: malformed } });
+        return window.__decisions.workspaceReady(window.__authority);
+      }, value);
+      assert.match(await page.locator('#commandCenterForecastDecisionExplanation').textContent(),
+        /could not load.*refresh/i);
+      assert.match(await page.locator('#commandCenterForecastDecisionAuthority').textContent(),
+        /No accepted run, alert policy, event, advisory, export packet or digest is retained/i);
+      assert.doesNotMatch(
+        await page.locator('#commandCenterForecastDecisionAuthority').textContent(),
+        /cleared because they are not current/i);
+
+      await page.evaluate(data => {
         const stale = JSON.parse(JSON.stringify(data));
         stale.reason = 'deterministic_baseline_not_current';
         stale.anchor.period = null; stale.anchor.sourceSnapshotDigest = null;

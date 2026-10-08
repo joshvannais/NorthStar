@@ -102,14 +102,14 @@
   }
 
   function validPeriod(value) {
-    return value === null || (exact(value, ['localStart','startsAt','endsAt','grain',
+    return exact(value, ['localStart','startsAt','endsAt','grain',
       'timeZone','calendarDigest','partialPeriod']) &&
       /^\d{4}-(?:0[1-9]|1[0-2])-01$/.test(value.localStart || '') &&
       validInstant(value.startsAt) && validInstant(value.endsAt) &&
       value.startsAt < value.endsAt && value.grain === 'business_local_month' &&
       typeof value.timeZone === 'string' && value.timeZone.length > 0 &&
       value.timeZone.length <= 100 && value.calendarDigest === null &&
-      value.partialPeriod === null);
+      value.partialPeriod === null;
   }
 
   function validAlert(value, stale) {
@@ -173,7 +173,7 @@
     var stale = value.reason === 'deterministic_baseline_not_current';
     if (!exact(value.anchor, ['period','targetKeys','runId','runRevision','runOutputDigest',
       'sourceSnapshotDigest','sourceReceiptDigest','timelineDigest','bundleDigest',
-      'drilldownDigest']) || !validPeriod(value.anchor.period) ||
+      'drilldownDigest']) || (!stale && !validPeriod(value.anchor.period)) ||
         !dense(value.anchor.targetKeys, TARGET_KEYS) || value.anchor.runId !== null ||
         value.anchor.runRevision !== null || value.anchor.runOutputDigest !== null ||
         value.anchor.drilldownDigest !== null ||
@@ -274,13 +274,14 @@
         'No minimized point-in-time packet, download link or share link is available.');
       var button = byId('commandCenterForecastExportButton');
       if (button) { button.disabled = true; button.setAttribute('aria-disabled', 'true'); }
-      setText('commandCenterForecastDecisionAuthority', value.anchor.period ?
-        'Tenant ' + authority.tenantId + ' / month ' + value.anchor.period.localStart + ' ' +
+      setText('commandCenterForecastDecisionAuthority',
+        value.reason === 'deterministic_baseline_not_current' ?
+          'Prior source, period and digest identities were cleared because they are not current.' :
+          'Tenant ' + authority.tenantId + ' / month ' + value.anchor.period.localStart + ' ' +
           value.anchor.period.timeZone + ' / timeline ' +
           value.anchor.timelineDigest.slice(0, 12) + '. / bundle ' +
           value.anchor.bundleDigest.slice(0, 12) +
-          '. / accepted run, alert policy, event, advisory and export digests unavailable.' :
-        'Prior source, period and digest identities were cleared because they are not current.');
+          '. / accepted run, alert policy, event, advisory and export digests unavailable.');
       setText('commandCenterForecastDecisionBoundary',
         'Advisory only. Navigation is not approval. Part 10D cannot change staff, equipment, schedules, estimates, prices, billing or messages, and cannot send communications.');
       setText('commandCenterForecastDecisionStatus', authority.fictional ?

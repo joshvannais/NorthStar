@@ -99,6 +99,7 @@ describe('Mission 26 original Part 10D guarded forecast decision support', () =>
     ['download target', value => { value.export.downloadUrl = '/download'; }],
     ['paid evidence in demo', value => { value.export.includedFields.push('paid_evidence'); }],
     ['secret omitted from exclusions', value => { value.export.excludedFields.splice(3, 1); }],
+    ['current response without period', value => { value.anchor.period = null; }],
     ['tampered timeline', value => { value.digests.timeline = '0'.repeat(64); }],
     ['automatic action', value => { value.automaticActionAuthorized = true; }],
     ['outbound communication', value => { value.outboundCommunicationAuthorized = true; }],

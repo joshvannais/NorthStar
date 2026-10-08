@@ -579,6 +579,104 @@
   flex: 0 0 auto; padding: 6px 10px; border: 1px solid var(--theme-border);
   border-radius: 999px; color: var(--theme-muted); font-size: 12px; font-weight: 700;
 }
+.command-center-resource-outlook { overflow: hidden; }
+.command-center-resource-outlook > p { color: var(--theme-muted); }
+.command-center-resource-outlook #commandCenterResourceState[data-state="current"],
+.command-center-resource-card-heading span[data-state="current"] {
+  border-color: rgba(31, 132, 90, .35); color: #157252; background: rgba(31, 132, 90, .08);
+}
+.command-center-resource-outlook #commandCenterResourceState[data-state="partial"] {
+  border-color: rgba(181, 122, 48, .42); color: #8a5a22; background: rgba(181, 122, 48, .08);
+}
+.command-center-resource-cards {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px;
+}
+.command-center-resource-card {
+  min-width: 0; padding: 12px; border: 1px solid var(--theme-border); border-radius: 12px;
+  background: var(--theme-surface);
+}
+.command-center-resource-card-heading {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+}
+.command-center-resource-card-heading h3 {
+  margin: 0; color: var(--theme-text); font-size: 13px; line-height: 1.35;
+}
+.command-center-resource-card-heading span {
+  flex: 0 0 auto; padding: 3px 6px; border: 1px solid var(--theme-border); border-radius: 999px;
+  color: var(--theme-muted); font-size: 9px; font-weight: 750; line-height: 1.2;
+}
+.command-center-resource-card > strong {
+  display: block; margin-top: 10px; color: var(--theme-text); font-size: clamp(15px, 2vw, 19px);
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.command-center-resource-card > p { margin-top: 7px; color: var(--theme-muted); font-size: 11px; }
+.command-center-resource-graph {
+  margin: 14px 0 0; padding: 12px; border: 1px solid var(--theme-border); border-radius: 12px;
+  background: var(--theme-surface);
+}
+.command-center-resource-graph figcaption {
+  margin-bottom: 9px; color: var(--theme-text); font-size: 12px; font-weight: 750;
+}
+.command-center-resource-graph-row {
+  display: grid; grid-template-columns: minmax(92px, .8fr) minmax(90px, 1.5fr) auto;
+  align-items: center; gap: 8px; min-height: 27px; color: var(--theme-muted); font-size: 11px;
+}
+.command-center-resource-graph-row > strong { color: var(--theme-text); font-variant-numeric: tabular-nums; }
+.command-center-resource-graph-track {
+  display: block; height: 7px; overflow: hidden; border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-border) 65%, transparent);
+}
+.command-center-resource-graph-bar {
+  display: block; min-width: 0; height: 100%; border-radius: inherit; background: var(--brand-700);
+}
+.command-center-resource-details {
+  margin-top: 12px; border-top: 1px solid var(--theme-border); color: var(--theme-text);
+}
+.command-center-resource-details > summary {
+  min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 12px; font-weight: 750;
+}
+.command-center-resource-details > summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 45%, transparent); outline-offset: 3px;
+}
+.command-center-resource-details > section {
+  padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--theme-border) 70%, transparent);
+}
+.command-center-resource-details h3 { margin: 0 0 7px; color: var(--theme-text); font-size: 13px; }
+.command-center-resource-details p,
+.command-center-resource-position-list,
+.command-center-resource-lineage { color: var(--theme-muted); font-size: 11px; line-height: 1.5; }
+.command-center-resource-position-list,
+.command-center-resource-lineage { margin: 8px 0 0; padding-left: 18px; overflow-wrap: anywhere; }
+.command-center-resource-lineage li + li,
+.command-center-resource-position-list li + li { margin-top: 6px; }
+.command-center-resource-lineage strong,
+.command-center-resource-lineage span { display: block; }
+.command-center-resource-metadata {
+  min-width: 0; margin-top: 10px; padding: 9px 10px; border: 1px solid var(--theme-border);
+  border-radius: 10px; background: color-mix(in srgb, var(--theme-surface) 82%, transparent);
+}
+.command-center-resource-metadata h4 {
+  margin: 0 0 7px; color: var(--theme-text); font-size: 11px; line-height: 1.4;
+}
+.command-center-resource-metadata dl {
+  display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1.3fr); gap: 4px 10px;
+  margin: 0; color: var(--theme-muted); font-size: 10px; line-height: 1.45;
+}
+.command-center-resource-metadata dt { font-weight: 750; }
+.command-center-resource-metadata dd {
+  min-width: 0; margin: 0; color: var(--theme-text); overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
+}
+@media (max-width: 560px) {
+  .command-center-resource-metadata dl { grid-template-columns: 1fr; gap: 2px; }
+  .command-center-resource-metadata dd { margin-bottom: 5px; }
+}
+[data-theme="dark"] .command-center-resource-outlook #commandCenterResourceState[data-state="current"],
+[data-theme="dark"] .command-center-resource-card-heading span[data-state="current"] {
+  color: #a7f3d0; background: rgba(6, 95, 70, .34); border-color: rgba(52, 211, 153, .3);
+}
+[data-theme="dark"] .command-center-resource-outlook #commandCenterResourceState[data-state="partial"] {
+  color: #f5cf91; background: rgba(120, 76, 20, .32); border-color: rgba(245, 207, 145, .3);
+}
 .command-center-revenue-cash-outlook,
 .command-center-cost-risk-outlook,
 .command-center-customer-opportunity-outlook { overflow: hidden; }
@@ -1186,6 +1284,10 @@ button.command-center-record-link {
   .command-center-capacity-history > summary::after { margin-left: auto; }
   .command-center-capacity-boundaries { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .command-center-demand-state { align-self: flex-start; }
+  .command-center-resource-cards { grid-template-columns: minmax(0, 1fr); }
+  .command-center-resource-graph-row {
+    grid-template-columns: minmax(88px, .9fr) minmax(72px, 1.2fr) auto;
+  }
   .command-center-revenue-cash-action { width: 100%; }
   .command-center-revenue-cash-facts { grid-template-columns: minmax(0, 1fr); }
   .command-center-revenue-cash-chart-heading { align-items: flex-start; flex-direction: column; }

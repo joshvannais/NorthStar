@@ -259,7 +259,7 @@ Part 8B has an [unmounted claimed asset-meter position prerequisite](../architec
 
 Part 8C has an [unmounted declared route-load prerequisite](../architecture/MISSION_26_PART8C_ROUTE_LOAD_POSITION.md). It reuses Mission 24 vehicle-leg counts to summarize caller-declared route distance by unit, while route verification, road-versus-onsite classification, fuel or energy, capacity, source authentication and final Part 8C acceptance remain open.
 
-Part 8D has an [interim paid/demo Resource outlook availability state](../architecture/MISSION_26_PART8D_RESOURCE_AVAILABILITY_UI.md). It explains that no resource forecast has been issued and recovers from workspace errors without presenting fictional or incomplete records as a risk forecast. Source-backed resource-risk UI and independent Part 8 acceptance remain open.
+Part 8D has a [paid/demo Resource outlook implementation candidate](../architecture/MISSION_26_PART8D_RESOURCE_AVAILABILITY_UI.md). It renders only the released, validated Part 8A-C positions, keeps unsupported risks unavailable, exposes the exact authenticated tenant/role, booking, assignment, currentness, pagination, plan, composition, material, asset, meter, trip, movement and resource evidence lineage under progressive disclosure, preserves validated unavailable reasons, and clears stale values through partial failure, withdrawal and recovery. Independent whole Part 8 exact-head acceptance remains open.
 
 ## Part 9 — five uncertainty, scenario and sensitivity slices
 

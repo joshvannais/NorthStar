@@ -4888,6 +4888,22 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           runtime_role
         );
       END IF;
+      IF pg_catalog.to_regprocedure(
+           'public.canonical_forecast_calibrated_range_v1_read(uuid,uuid,text,uuid,uuid)'
+         ) IS NULL OR pg_catalog.to_regprocedure(
+           'public.canonical_forecast_calibrated_range_v1_unavailable(jsonb,text)'
+         ) IS NULL THEN
+        RAISE EXCEPTION 'Part 9B runtime authority functions are missing'
+          USING ERRCODE = '42501';
+      END IF;
+      EXECUTE pg_catalog.format(
+        'REVOKE ALL ON FUNCTION public.canonical_forecast_calibrated_range_v1_unavailable(jsonb,text) FROM %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'GRANT EXECUTE ON FUNCTION public.canonical_forecast_calibrated_range_v1_read(uuid,uuid,text,uuid,uuid) TO %I',
+        runtime_role
+      );
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
         runtime_role
@@ -5759,6 +5775,26 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'public.canonical_forecast_deterministic_baseline_v1_read(uuid,uuid,text,uuid,uuid)',
           'EXECUTE')
        )) AS deterministic_baseline_authority_private,
+       CASE
+        WHEN to_regprocedure(
+          'public.canonical_forecast_calibrated_range_v1_read(uuid,uuid,text,uuid,uuid)'
+         ) IS NULL OR to_regprocedure(
+          'public.canonical_forecast_calibrated_range_v1_unavailable(jsonb,text)'
+         ) IS NULL THEN FALSE
+        ELSE
+         NOT has_function_privilege('public',
+          'public.canonical_forecast_calibrated_range_v1_read(uuid,uuid,text,uuid,uuid)',
+          'EXECUTE')
+         AND NOT has_function_privilege('public',
+          'public.canonical_forecast_calibrated_range_v1_unavailable(jsonb,text)',
+          'EXECUTE')
+         AND has_function_privilege($1,
+          'public.canonical_forecast_calibrated_range_v1_read(uuid,uuid,text,uuid,uuid)',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_calibrated_range_v1_unavailable(jsonb,text)',
+          'EXECUTE')
+       END AS calibrated_range_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -6866,6 +6902,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.asset_utilization_risk_authority_private ||
       !runtimePrivileges.route_load_risk_authority_private ||
       !runtimePrivileges.deterministic_baseline_authority_private ||
+      !runtimePrivileges.calibrated_range_authority_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

@@ -135,6 +135,11 @@ realPostgres('Mission 26 original Part 9A mounted deterministic baseline', () =>
     expect(first.headers['cache-control']).toBe('private, no-store');
     expect(first.body.data).toMatchObject({ state: 'current', originId: origin.id,
       target: { key: 'demand.inbound_leads', sourceScope: 'retell_only_tenant_all' },
+      configuration: { algorithmId: 'retell_three_complete_month_mean',
+        algorithmVersion: 'm26-retell-three-month-mean-v2',
+        definitionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+        implementationDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+        buildIdentity: { kind: 'postgresql_function_definition_sha256' } },
       output: { value: { kind: 'point', amount: '0' } },
       sourceSnapshot: { completeAsOf: true, includedPeriods: 3, missingPeriods: 0,
         hasMore: false, providerCoverageAttestedRetellOnly: true,
@@ -143,6 +148,10 @@ realPostgres('Mission 26 original Part 9A mounted deterministic baseline', () =>
       sourceAuthenticated: true, researchOnly: true, realForecastEligible: false,
       forecastIssued: true, paidNumericServing: false, probabilityIssued: false,
       calibratedRangeIssued: false, automaticActionAuthorized: false });
+    expect(first.body.data.provenance.algorithm).toMatchObject({
+      definitionDigest: first.body.data.configuration.definitionDigest,
+      implementationDigest: first.body.data.configuration.implementationDigest,
+      buildIdentity: first.body.data.configuration.buildIdentity });
     expect(first.body.data.sourceSnapshot.observations.map(item => item.count))
       .toEqual([0, 0, 0]);
     expect(first.body.data.sourceSnapshot.observations.map(item => item.localMonthStart))
@@ -168,9 +177,89 @@ realPostgres('Mission 26 original Part 9A mounted deterministic baseline', () =>
       'SELECT * FROM canonical_forecast_retell_future_origins_v2'))
       .rejects.toMatchObject({ code: '42501' });
     await expect(fixture.runtimePool.query(
+      'SELECT * FROM canonical_forecast_deterministic_baseline_algorithms_v1'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(
+      `SELECT public.canonical_forecast_deterministic_baseline_v1_chronology(
+       statement_timestamp(),statement_timestamp()+INTERVAL '1 day',statement_timestamp())`))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(
       `SELECT public.canonical_forecast_deterministic_baseline_v1_unavailable(
        gen_random_uuid(),'x',statement_timestamp())`))
       .rejects.toMatchObject({ code: '42501' });
+  }, 120000);
+
+  test('pins immutable algorithm definition/build identity and fails closed on either mismatch', async () => {
+    const owner = fixture.actors.owner;
+    const route = `/api/v1/forecast/deterministic-baselines/${origin.id}`;
+    const before = (await request(fixture.app).get(route)
+      .set(owner.session.headers)).body.data;
+    const registry = (await fixture.ownerPool.query(
+      `SELECT definition,definition_digest,implementation_digest
+       FROM canonical_forecast_deterministic_baseline_algorithms_v1`)).rows[0];
+    expect(before.configuration.definitionDigest).toBe(registry.definition_digest);
+    expect(before.configuration.implementationDigest).toBe(registry.implementation_digest);
+
+    const chronology = (await fixture.ownerPool.query(`SELECT
+      canonical_forecast_deterministic_baseline_v1_chronology(
+       '2026-09-01T00:00:00Z','2026-10-01T00:00:00Z',
+       '2026-08-31T23:59:59.999999Z') before_issued,
+      canonical_forecast_deterministic_baseline_v1_chronology(
+       '2026-09-01T00:00:00Z','2026-10-01T00:00:00Z',
+       '2026-09-01T00:00:00Z') at_issued,
+      canonical_forecast_deterministic_baseline_v1_chronology(
+       '2026-09-01T00:00:00Z','2026-10-01T00:00:00Z',
+       '2026-09-30T23:59:59.999999Z') before_horizon,
+      canonical_forecast_deterministic_baseline_v1_chronology(
+       '2026-09-01T00:00:00Z','2026-10-01T00:00:00Z',
+       '2026-10-01T00:00:00Z') at_horizon,
+      canonical_forecast_deterministic_baseline_v1_chronology(
+       '2026-09-01T00:00:00Z','2026-10-01T00:00:00Z',
+       '2026-10-01T00:00:00.000001Z') after_horizon`)).rows[0];
+    expect(chronology).toEqual({ before_issued: false, at_issued: true,
+      before_horizon: true, at_horizon: false, after_horizon: false });
+
+    async function replaceRegistry(definition, implementationDigest) {
+      await fixture.ownerPool.query(
+        'ALTER TABLE canonical_forecast_deterministic_baseline_algorithms_v1 DISABLE TRIGGER USER');
+      try {
+        await fixture.ownerPool.query(
+          `UPDATE canonical_forecast_deterministic_baseline_algorithms_v1
+           SET definition=$1::jsonb,
+             definition_digest=canonical_completion_digest($1::jsonb),
+             implementation_digest=$2`,
+          [JSON.stringify(definition), implementationDigest]);
+      } finally {
+        await fixture.ownerPool.query(
+          'ALTER TABLE canonical_forecast_deterministic_baseline_algorithms_v1 ENABLE TRIGGER USER');
+      }
+    }
+    const changedDefinition = JSON.parse(JSON.stringify(registry.definition));
+    changedDefinition.parameters.minimumPeriods = 4;
+    try {
+      await replaceRegistry(changedDefinition, registry.implementation_digest);
+      const changedDefinitionRead = await request(fixture.app).get(route)
+        .set(owner.session.headers);
+      expect(changedDefinitionRead.status).toBe(200);
+      expect(changedDefinitionRead.body.data).toMatchObject({ state: 'unavailable',
+        reason: 'algorithm_identity_changed_refresh_required', output: null,
+        provenance: null, forecastIssued: false });
+      expect(Object.values(changedDefinitionRead.body.data.digests)
+        .every(value => value === null)).toBe(true);
+      await replaceRegistry(registry.definition, 'b'.repeat(64));
+      const changedImplementationRead = await request(fixture.app).get(route)
+        .set(owner.session.headers);
+      expect(changedImplementationRead.status).toBe(200);
+      expect(changedImplementationRead.body.data).toMatchObject({ state: 'unavailable',
+        reason: 'algorithm_identity_changed_refresh_required', output: null,
+        provenance: null, forecastIssued: false });
+    } finally {
+      await replaceRegistry(registry.definition, registry.implementation_digest);
+    }
+    const recovered = await request(fixture.app).get(route).set(owner.session.headers);
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.data).toMatchObject({ state: 'current', forecastIssued: true });
+    expect(recovered.body.data.digests).toEqual(before.digests);
   }, 120000);
 
   test('a business-time-zone change clears the old baseline and exact restoration recovers it', async () => {

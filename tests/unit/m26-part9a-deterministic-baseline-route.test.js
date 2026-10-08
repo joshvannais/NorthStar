@@ -14,6 +14,8 @@ const PROFILE = '55555555-5555-4555-8555-555555555555';
 const DIGEST = 'a'.repeat(64);
 const ISSUED = '2026-09-01T00:00:00.000000Z';
 const CHECKED = '2026-09-02T00:00:00.000000Z';
+const IMPLEMENTATION_PROCEDURE =
+  'public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)';
 
 function observation(month, count, index) {
   const next = new Date(`${month}T00:00:00.000Z`);
@@ -43,6 +45,9 @@ function current(amount = '0') {
       sourceScope: 'retell_only_tenant_all',
       algorithmId: 'retell_three_complete_month_mean',
       algorithmVersion: 'm26-retell-three-month-mean-v2',
+      definitionDigest: DIGEST, implementationDigest: DIGEST,
+      buildIdentity: { kind: 'postgresql_function_definition_sha256',
+        procedure: IMPLEMENTATION_PROCEDURE },
       method: 'arithmetic_mean_comparable_prior_periods', minimumPeriods: 3,
       horizonGrain: 'business_local_month', unit: 'count', decimalScale: 6,
       rounding: 'half_up', observationOrder: 'local_month_start_ascending' },
@@ -72,6 +77,11 @@ function current(amount = '0') {
       forecastServingEnabled: false },
     evaluation: { state: 'unavailable', evaluatedAt: null, outcomeDigest: null,
       reason: 'finalized_outcome_not_available' },
+    provenance: { algorithm: { key: 'retell_three_complete_month_mean',
+      version: 'm26-retell-three-month-mean-v2', definitionDigest: DIGEST,
+      implementationDigest: DIGEST,
+      buildIdentity: { kind: 'postgresql_function_definition_sha256',
+        procedure: IMPLEMENTATION_PROCEDURE } }, sourceReceiptDigest: DIGEST },
     digests: { configuration: DIGEST, input: DIGEST, output: DIGEST,
       baseline: DIGEST, receipt: DIGEST },
     currentness: { sourceCurrent: true, refreshRequired: false,
@@ -88,6 +98,7 @@ function unavailable(reason = 'source_or_profile_changed_refresh_required') {
     sourceSnapshot: null, output: null,
     evaluation: { state: 'unavailable', evaluatedAt: null, outcomeDigest: null,
       reason: 'finalized_outcome_not_available' },
+    provenance: null,
     digests: { configuration: null, input: null, output: null, baseline: null,
       receipt: null }, currentness: { sourceCurrent: false, refreshRequired: true,
       correctionOrRevocationApplied: true }, sourceAuthenticated: false,
@@ -155,12 +166,34 @@ describe('Mission 26 original Part 9A mounted deterministic baseline', () => {
     const changedConfiguration = current();
     changedConfiguration.configuration.algorithmVersion = 'unapproved-v2';
     cases.push(changedConfiguration);
+    const changedDefinition = current();
+    changedDefinition.configuration.definitionDigest = 'b'.repeat(64);
+    cases.push(changedDefinition);
+    const changedImplementation = current();
+    changedImplementation.provenance.algorithm.implementationDigest = 'b'.repeat(64);
+    cases.push(changedImplementation);
     const missing = current(); missing.sourceSnapshot.missingPeriods = 1; cases.push(missing);
     const probability = current(); probability.probability = 0.8; cases.push(probability);
     const absentAsZero = unavailable(); absentAsZero.output = current().output; cases.push(absentAsZero);
     const paid = current(); paid.paidNumericServing = true; cases.push(paid);
     for (const value of cases) expect(sanitizeBaseline(value)).toBeNull();
     expect(sanitizeBaseline(current('1.666667'))).not.toBeNull();
+  });
+
+  test('enforces issuedAt <= checkedAt < horizon start at microsecond boundaries', () => {
+    const beforeIssued = current();
+    beforeIssued.checkedAt = '2026-08-31T23:59:59.999999Z';
+    expect(sanitizeBaseline(beforeIssued)).toBeNull();
+    const atIssued = current(); atIssued.checkedAt = ISSUED;
+    expect(sanitizeBaseline(atIssued)).not.toBeNull();
+    const beforeHorizon = current();
+    beforeHorizon.checkedAt = '2026-09-30T23:59:59.999999Z';
+    expect(sanitizeBaseline(beforeHorizon)).not.toBeNull();
+    const atHorizon = current(); atHorizon.checkedAt = atHorizon.horizon.startsAt;
+    expect(sanitizeBaseline(atHorizon)).toBeNull();
+    const afterHorizon = current();
+    afterHorizon.checkedAt = '2026-10-01T00:00:00.000001Z';
+    expect(sanitizeBaseline(afterHorizon)).toBeNull();
   });
 
   test('rejects invalid ids before database access, scopes tenant identity and maps role denial', async () => {
@@ -182,6 +215,11 @@ describe('Mission 26 original Part 9A mounted deterministic baseline', () => {
     expect(sql).toContain('saved.private_output');
     expect(sql).toContain("ORDER BY item->>'month'");
     expect(sql).toContain('canonical_forecast_retell_future_evidence_v2');
+    expect(sql).toContain('canonical_forecast_deterministic_baseline_algorithms_v1');
+    expect(sql).toContain('pg_get_functiondef');
+    expect(sql).toContain("'definitionDigest',registry.definition_digest");
+    expect(sql).toContain("'implementationDigest',registry.implementation_digest");
+    expect(sql).toContain('canonical_forecast_deterministic_baseline_v1_chronology');
     expect(sql).toContain("'paginationVersion','bounded_single_page'");
     expect(sql).not.toContain('lead_total::numeric/3');
     expect(sql).not.toMatch(/P10|P50|P90|probability_value|scenario/i);

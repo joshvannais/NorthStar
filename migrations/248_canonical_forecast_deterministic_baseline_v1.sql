@@ -3,6 +3,55 @@
 -- new forecast arithmetic and stores no second run: it verifies and projects
 -- the immutable Part 4A source/config/output receipt.
 
+CREATE TABLE public.canonical_forecast_deterministic_baseline_algorithms_v1 (
+ algorithm_key TEXT PRIMARY KEY CHECK(
+  algorithm_key='retell_three_complete_month_mean'),
+ algorithm_version TEXT NOT NULL UNIQUE CHECK(
+  algorithm_version='m26-retell-three-month-mean-v2'),
+ definition JSONB NOT NULL CHECK(jsonb_typeof(definition)='object'),
+ definition_digest TEXT NOT NULL CHECK(definition_digest~'^[a-f0-9]{64}$' AND
+  definition_digest=public.canonical_completion_digest(definition)),
+ implementation_identity TEXT NOT NULL CHECK(implementation_identity=
+  'public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)'),
+ implementation_digest TEXT NOT NULL CHECK(implementation_digest~'^[a-f0-9]{64}$'),
+ registered_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE TRIGGER canonical_forecast_deterministic_baseline_algorithms_v1_immutable
+ BEFORE UPDATE OR DELETE OR TRUNCATE
+ ON public.canonical_forecast_deterministic_baseline_algorithms_v1
+ FOR EACH STATEMENT EXECUTE FUNCTION
+  public.canonical_forecast_price_flow_origin_immutable();
+
+WITH algorithm AS (SELECT jsonb_build_object(
+ 'key','retell_three_complete_month_mean',
+ 'version','m26-retell-three-month-mean-v2',
+ 'target',jsonb_build_object('key','demand.inbound_leads','definitionVersion','v1'),
+ 'sourceScope','retell_only_tenant_all','kind','deterministic',
+ 'method','arithmetic_mean_comparable_prior_periods',
+ 'parameters',jsonb_build_object('minimumPeriods',3,'decimalScale',6,
+   'rounding','half_up','observationOrder','local_month_start_ascending'),
+ 'horizonGrain','business_local_month','unit','count',
+ 'outputContractVersion','m26-forecast-output-v1',
+ 'probabilityPolicy','unavailable','rangePolicy','unavailable',
+ 'trainingReceiptDigest',NULL) definition)
+INSERT INTO public.canonical_forecast_deterministic_baseline_algorithms_v1(
+ algorithm_key,algorithm_version,definition,definition_digest,
+ implementation_identity,implementation_digest)
+SELECT 'retell_three_complete_month_mean','m26-retell-three-month-mean-v2',
+ definition,public.canonical_completion_digest(definition),
+ 'public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)',
+ encode(sha256(convert_to(pg_get_functiondef(
+  'public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)'::regprocedure),
+  'UTF8')),'hex') FROM algorithm;
+
+CREATE FUNCTION public.canonical_forecast_deterministic_baseline_v1_chronology(
+ issued_at TIMESTAMPTZ,horizon_starts_at TIMESTAMPTZ,checked_at TIMESTAMPTZ)
+RETURNS BOOLEAN LANGUAGE sql IMMUTABLE
+SET search_path=pg_catalog,public,pg_temp AS $$
+ SELECT issued_at IS NOT NULL AND horizon_starts_at IS NOT NULL AND
+  checked_at IS NOT NULL AND issued_at<=checked_at AND checked_at<horizon_starts_at
+$$;
+
 CREATE FUNCTION public.canonical_forecast_deterministic_baseline_v1_unavailable(
  origin_value UUID,reason_value TEXT,checked_at TIMESTAMPTZ)
 RETURNS JSONB LANGUAGE sql IMMUTABLE
@@ -16,6 +65,7 @@ SET search_path=pg_catalog,public,pg_temp AS $$
   'sourceSnapshot',NULL,'output',NULL,
   'evaluation',jsonb_build_object('state','unavailable','evaluatedAt',NULL,
    'outcomeDigest',NULL,'reason','finalized_outcome_not_available'),
+  'provenance',NULL,
   'digests',jsonb_build_object('configuration',NULL,'input',NULL,
    'output',NULL,'baseline',NULL,'receipt',NULL),
   'currentness',jsonb_build_object('sourceCurrent',FALSE,
@@ -31,9 +81,13 @@ CREATE FUNCTION public.canonical_forecast_deterministic_baseline_v1_read(
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE saved public.canonical_forecast_retell_future_origins_v2%ROWTYPE;
+ registry public.canonical_forecast_deterministic_baseline_algorithms_v1%ROWTYPE;
  current_value JSONB;configuration_value JSONB;observations_value JSONB;
+ expected_definition JSONB;
+ algorithm_identity JSONB;build_identity JSONB;
  input_value JSONB;configuration_digest TEXT;input_digest TEXT;
  output_digest TEXT;baseline_digest TEXT;receipt_digest TEXT;
+ installed_implementation_digest TEXT;
  checked_at TIMESTAMPTZ:=statement_timestamp();period_count INTEGER;
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' OR
@@ -57,6 +111,50 @@ BEGIN
  SELECT * INTO saved FROM public.canonical_forecast_retell_future_origins_v2
   WHERE organization_id=org AND id=origin_value;
  IF saved.id IS NULL THEN RETURN NULL;END IF;
+
+ IF NOT public.canonical_forecast_deterministic_baseline_v1_chronology(
+    saved.as_of,saved.horizon_starts_at,checked_at) THEN
+  RETURN public.canonical_forecast_deterministic_baseline_v1_unavailable(
+   saved.id,'baseline_clock_or_horizon_ineligible',checked_at);
+ END IF;
+
+ expected_definition:=jsonb_build_object(
+  'key','retell_three_complete_month_mean',
+  'version','m26-retell-three-month-mean-v2',
+  'target',jsonb_build_object('key','demand.inbound_leads','definitionVersion','v1'),
+  'sourceScope','retell_only_tenant_all','kind','deterministic',
+  'method','arithmetic_mean_comparable_prior_periods',
+  'parameters',jsonb_build_object('minimumPeriods',3,'decimalScale',6,
+    'rounding','half_up','observationOrder','local_month_start_ascending'),
+  'horizonGrain','business_local_month','unit','count',
+  'outputContractVersion','m26-forecast-output-v1',
+  'probabilityPolicy','unavailable','rangePolicy','unavailable',
+  'trainingReceiptDigest',NULL);
+ SELECT * INTO registry
+ FROM public.canonical_forecast_deterministic_baseline_algorithms_v1
+ WHERE algorithm_key='retell_three_complete_month_mean' AND
+  algorithm_version='m26-retell-three-month-mean-v2';
+ installed_implementation_digest:=encode(sha256(convert_to(pg_get_functiondef(
+  'public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)'::regprocedure),
+  'UTF8')),'hex');
+ IF registry.algorithm_key IS NULL OR
+    registry.definition IS DISTINCT FROM expected_definition OR
+    registry.definition_digest IS DISTINCT FROM
+      public.canonical_completion_digest(registry.definition) OR
+    registry.implementation_identity IS DISTINCT FROM
+      'public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)' OR
+    registry.implementation_digest IS DISTINCT FROM installed_implementation_digest THEN
+  RETURN public.canonical_forecast_deterministic_baseline_v1_unavailable(
+   saved.id,'algorithm_identity_changed_refresh_required',checked_at);
+ END IF;
+ build_identity:=jsonb_build_object(
+  'kind','postgresql_function_definition_sha256',
+  'procedure',registry.implementation_identity);
+ algorithm_identity:=jsonb_build_object(
+  'key',registry.algorithm_key,'version',registry.algorithm_version,
+  'definitionDigest',registry.definition_digest,
+  'implementationDigest',registry.implementation_digest,
+  'buildIdentity',build_identity);
 
  -- Revalidate the exact authenticated Part 4A source under the same locks,
  -- permission, profile, certification, correction and revocation boundary.
@@ -144,6 +242,9 @@ BEGIN
   'sourceScope','retell_only_tenant_all',
   'algorithmId','retell_three_complete_month_mean',
   'algorithmVersion','m26-retell-three-month-mean-v2',
+  'definitionDigest',registry.definition_digest,
+  'implementationDigest',registry.implementation_digest,
+  'buildIdentity',build_identity,
   'method','arithmetic_mean_comparable_prior_periods','minimumPeriods',3,
   'horizonGrain','business_local_month','unit','count',
   'decimalScale',6,'rounding','half_up',
@@ -169,7 +270,7 @@ BEGIN
  baseline_digest:=public.canonical_completion_digest(jsonb_build_object(
   'version','m26-deterministic-baseline-v1',
   'configurationDigest',configuration_digest,'inputDigest',input_digest,
-  'outputDigest',output_digest));
+  'outputDigest',output_digest,'algorithmIdentity',algorithm_identity));
 
  RETURN jsonb_build_object(
   'version','m26-deterministic-baseline-v1','state','current','reason',NULL,
@@ -200,6 +301,8 @@ BEGIN
   'output',saved.private_output,
   'evaluation',jsonb_build_object('state','unavailable','evaluatedAt',NULL,
    'outcomeDigest',NULL,'reason','finalized_outcome_not_available'),
+  'provenance',jsonb_build_object('algorithm',algorithm_identity,
+   'sourceReceiptDigest',receipt_digest),
   'digests',jsonb_build_object('configuration',configuration_digest,
    'input',input_digest,'output',output_digest,'baseline',baseline_digest,
    'receipt',receipt_digest),
@@ -211,12 +314,17 @@ BEGIN
   'calibratedRangeIssued',FALSE,'automaticActionAuthorized',FALSE);
 END $$;
 
+REVOKE ALL ON TABLE
+ public.canonical_forecast_deterministic_baseline_algorithms_v1 FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_chronology(
+ TIMESTAMPTZ,TIMESTAMPTZ,TIMESTAMPTZ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_unavailable(
  UUID,TEXT,TIMESTAMPTZ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_read(
  UUID,UUID,TEXT,UUID,UUID) FROM PUBLIC;
 DO $$DECLARE runtime_role TEXT:=current_setting('northstar.runtime_role',TRUE);BEGIN
  IF runtime_role IS NOT NULL AND runtime_role<>'' THEN
+  EXECUTE format('REVOKE ALL ON TABLE public.canonical_forecast_deterministic_baseline_algorithms_v1 FROM %I',runtime_role);
   EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_read(uuid,uuid,text,uuid,uuid) TO %I',runtime_role);
  END IF;
 END $$;

@@ -4868,6 +4868,26 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           );
         END IF;
       END IF;
+      IF pg_catalog.to_regclass(
+        'public.canonical_forecast_deterministic_baseline_algorithms_v1'
+      ) IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_deterministic_baseline_algorithms_v1 FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_chronology(timestamptz,timestamptz,timestamptz) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_unavailable(uuid,text,timestamptz) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_read(uuid,uuid,text,uuid,uuid) TO %I',
+          runtime_role
+        );
+      END IF;
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
         runtime_role

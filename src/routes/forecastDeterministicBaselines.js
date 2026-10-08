@@ -11,9 +11,13 @@ const DIGEST = /^[0-9a-f]{64}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 const MONTH = /^\d{4}-(?:0[1-9]|1[0-2])-01$/;
 const AMOUNT = /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,6})?$/;
+const IMPLEMENTATION_PROCEDURE =
+  'public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)';
 const UNAVAILABLE_REASONS = new Set([
   'source_or_profile_changed_refresh_required',
   'complete_period_lineage_unavailable',
+  'algorithm_identity_changed_refresh_required',
+  'baseline_clock_or_horizon_ineligible',
 ]);
 
 function exact(value, keys) {
@@ -47,6 +51,11 @@ function validDateOrder(left, right) {
   return validInstant(left) && validInstant(right) && Date.parse(left) < Date.parse(right);
 }
 
+function validChronology(issuedAt, checkedAt, horizonStartsAt) {
+  return validInstant(issuedAt) && validInstant(checkedAt) && validInstant(horizonStartsAt) &&
+    issuedAt <= checkedAt && checkedAt < horizonStartsAt;
+}
+
 function validEvaluation(value) {
   return exact(value, ['state','evaluatedAt','outcomeDigest','reason']) &&
     value.state === 'unavailable' && value.evaluatedAt === null &&
@@ -66,17 +75,36 @@ function validCurrentness(value, current) {
 
 function validConfiguration(value) {
   return exact(value, ['version','targetKey','targetVersion','sourceScope','algorithmId',
-    'algorithmVersion','method','minimumPeriods','horizonGrain','unit','decimalScale',
-    'rounding','observationOrder']) &&
+    'algorithmVersion','definitionDigest','implementationDigest','buildIdentity','method',
+    'minimumPeriods','horizonGrain','unit','decimalScale','rounding','observationOrder']) &&
     value.version === 'm26-deterministic-baseline-configuration-v1' &&
     value.targetKey === 'demand.inbound_leads' && value.targetVersion === 'v1' &&
     value.sourceScope === 'retell_only_tenant_all' &&
     value.algorithmId === 'retell_three_complete_month_mean' &&
     value.algorithmVersion === 'm26-retell-three-month-mean-v2' &&
+    DIGEST.test(value.definitionDigest || '') &&
+    DIGEST.test(value.implementationDigest || '') &&
+    exact(value.buildIdentity, ['kind','procedure']) &&
+    value.buildIdentity.kind === 'postgresql_function_definition_sha256' &&
+    value.buildIdentity.procedure === IMPLEMENTATION_PROCEDURE &&
     value.method === 'arithmetic_mean_comparable_prior_periods' &&
     value.minimumPeriods === 3 && value.horizonGrain === 'business_local_month' &&
     value.unit === 'count' && value.decimalScale === 6 && value.rounding === 'half_up' &&
     value.observationOrder === 'local_month_start_ascending';
+}
+
+function validProvenance(value, configuration, sourceReceiptDigest) {
+  if (!exact(value, ['algorithm','sourceReceiptDigest']) ||
+      !exact(value.algorithm, ['key','version','definitionDigest','implementationDigest',
+        'buildIdentity']) ||
+      value.sourceReceiptDigest !== sourceReceiptDigest ||
+      value.algorithm.key !== configuration.algorithmId ||
+      value.algorithm.version !== configuration.algorithmVersion ||
+      value.algorithm.definitionDigest !== configuration.definitionDigest ||
+      value.algorithm.implementationDigest !== configuration.implementationDigest ||
+      !exact(value.algorithm.buildIdentity, ['kind','procedure'])) return false;
+  return value.algorithm.buildIdentity.kind === configuration.buildIdentity.kind &&
+    value.algorithm.buildIdentity.procedure === configuration.buildIdentity.procedure;
 }
 
 function validObservation(value) {
@@ -161,9 +189,10 @@ function validSourceSnapshot(value, issuedAt, horizon) {
 
 function sanitizeBaseline(value) {
   const keys = ['version','state','reason','originId','checkedAt','issuedAt','evaluationAsOf',
-    'target','configuration','horizon','unit','sourceSnapshot','output','evaluation','digests',
-    'currentness','sourceAuthenticated','researchOnly','realForecastEligible','forecastIssued',
-    'paidNumericServing','probabilityIssued','calibratedRangeIssued','automaticActionAuthorized'];
+    'target','configuration','horizon','unit','sourceSnapshot','output','evaluation','provenance',
+    'digests','currentness','sourceAuthenticated','researchOnly','realForecastEligible',
+    'forecastIssued','paidNumericServing','probabilityIssued','calibratedRangeIssued',
+    'automaticActionAuthorized'];
   if (!exact(value, keys) || value.version !== 'm26-deterministic-baseline-v1' ||
       !['current','unavailable'].includes(value.state) || !UUID.test(value.originId || '') ||
       !validInstant(value.checkedAt) || !validEvaluation(value.evaluation) ||
@@ -174,7 +203,7 @@ function sanitizeBaseline(value) {
     if (!UNAVAILABLE_REASONS.has(value.reason) || value.issuedAt !== null ||
         value.evaluationAsOf !== null || value.target !== null || value.configuration !== null ||
         value.horizon !== null || value.unit !== null || value.sourceSnapshot !== null ||
-        value.output !== null || !validDigests(value.digests, false) ||
+        value.output !== null || value.provenance !== null || !validDigests(value.digests, false) ||
         !validCurrentness(value.currentness, false) || value.sourceAuthenticated !== false ||
         value.forecastIssued !== false) return null;
     return value;
@@ -189,11 +218,13 @@ function sanitizeBaseline(value) {
       !validDateOrder(value.horizon.startsAt, value.horizon.endsAt) ||
       value.horizon.grain !== 'business_local_month' ||
       typeof value.horizon.timeZone !== 'string' || value.horizon.timeZone.length < 1 ||
-      value.horizon.timeZone.length > 100 || Date.parse(value.issuedAt) >= Date.parse(value.horizon.startsAt) ||
+      value.horizon.timeZone.length > 100 ||
+      !validChronology(value.issuedAt, value.checkedAt, value.horizon.startsAt) ||
       !exact(value.unit, ['key','currency']) || value.unit.key !== 'count' ||
       value.unit.currency !== null ||
       !validSourceSnapshot(value.sourceSnapshot, value.issuedAt, value.horizon) ||
       !validOutput(value.output) || !validDigests(value.digests, true) ||
+      !validProvenance(value.provenance, value.configuration, value.digests.receipt) ||
       !validCurrentness(value.currentness, true) || value.sourceAuthenticated !== true ||
       value.forecastIssued !== true) return null;
   return value;

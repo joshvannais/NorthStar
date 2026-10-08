@@ -210,10 +210,11 @@ realPostgres('Mission 26 original Part 9B mounted calibrated-range boundary', ()
        'EXECUTE') guarded_reader`)).rows[0];
     expect(privileges).toEqual({ helper: false, guarded_reader: true });
 
-    for (const signature of [
-      'canonical_forecast_calibrated_range_v1_unavailable(jsonb,text)',
-      'canonical_forecast_calibrated_range_v1_read(uuid,uuid,text,uuid,uuid)',
-    ]) {
+    const helper =
+      'canonical_forecast_calibrated_range_v1_unavailable(jsonb,text)';
+    const reader =
+      'canonical_forecast_calibrated_range_v1_read(uuid,uuid,text,uuid,uuid)';
+    for (const signature of [helper, reader]) {
       const client = await fixture.ownerPool.connect();
       try {
         await client.query('BEGIN');
@@ -224,6 +225,45 @@ realPostgres('Mission 26 original Part 9B mounted calibrated-range boundary', ()
         await client.query('ROLLBACK').catch(() => {});
         client.release();
       }
+    }
+
+    const missingCases = [
+      { rename: `ALTER FUNCTION ${reader} RENAME TO
+          canonical_forecast_calibrated_range_v1_read_missing_test`, drift: null },
+      { rename: `ALTER FUNCTION ${helper} RENAME TO
+          canonical_forecast_calibrated_range_v1_unavailable_missing_test`, drift: null },
+      { rename: `ALTER FUNCTION ${reader} RENAME TO
+          canonical_forecast_calibrated_range_v1_read_missing_test`,
+        drift: `GRANT EXECUTE ON FUNCTION ${helper} TO PUBLIC` },
+      { rename: `ALTER FUNCTION ${helper} RENAME TO
+          canonical_forecast_calibrated_range_v1_unavailable_missing_test`,
+        drift: `GRANT EXECUTE ON FUNCTION ${reader} TO PUBLIC` },
+    ];
+    for (const scenario of missingCases) {
+      const client = await fixture.ownerPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(scenario.rename);
+        if (scenario.drift) await client.query(scenario.drift);
+        await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(client, authority))
+          .rejects.toThrow('Part 9B runtime authority functions are missing');
+      } finally {
+        await client.query('ROLLBACK').catch(() => {});
+        client.release();
+      }
+      await expect(reconcile()).resolves.toBeUndefined();
+      await expect(reconcile()).resolves.toBeUndefined();
+      const recovered = (await fixture.runtimePool.query(`SELECT
+        to_regprocedure($1) IS NOT NULL reader_exists,
+        to_regprocedure($2) IS NOT NULL helper_exists,
+        has_function_privilege('public',$1,'EXECUTE') public_reader,
+        has_function_privilege('public',$2,'EXECUTE') public_helper,
+        has_function_privilege(current_user,$1,'EXECUTE') runtime_reader,
+        has_function_privilege(current_user,$2,'EXECUTE') runtime_helper`,
+      [reader, helper])).rows[0];
+      expect(recovered).toEqual({ reader_exists: true, helper_exists: true,
+        public_reader: false, public_helper: false,
+        runtime_reader: true, runtime_helper: false });
     }
   }, 120000);
 

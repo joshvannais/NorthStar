@@ -189,6 +189,60 @@ realPostgres('Mission 26 original Part 9A mounted deterministic baseline', () =>
       .rejects.toMatchObject({ code: '42501' });
   }, 120000);
 
+  test('runtime reconciliation is idempotent and rejects effective PUBLIC Part 9A access', async () => {
+    const authority = { migrationRole: fixture.roles.owner,
+      runtimeRole: fixture.roles.runtime };
+    async function reconcile() {
+      const client = await fixture.ownerPool.connect();
+      try {
+        await client.query('BEGIN');
+        await fixture.db.grantAndVerifyRuntimeAuthorityForTests(client, authority);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally { client.release(); }
+    }
+    await expect(reconcile()).resolves.toBeUndefined();
+    await expect(reconcile()).resolves.toBeUndefined();
+    const privileges = (await fixture.runtimePool.query(`SELECT
+      has_table_privilege(current_user,
+       'canonical_forecast_deterministic_baseline_algorithms_v1','SELECT') registry,
+      has_function_privilege(current_user,
+       'canonical_forecast_deterministic_baseline_v1_chronology(timestamptz,timestamptz,timestamptz)',
+       'EXECUTE') chronology,
+      has_function_privilege(current_user,
+       'canonical_forecast_deterministic_baseline_v1_unavailable(uuid,text,timestamptz)',
+       'EXECUTE') unavailable,
+      has_function_privilege(current_user,
+       'canonical_forecast_deterministic_baseline_v1_read(uuid,uuid,text,uuid,uuid)',
+       'EXECUTE') guarded_reader`)).rows[0];
+    expect(privileges).toEqual({ registry: false, chronology: false,
+      unavailable: false, guarded_reader: true });
+
+    for (const grant of [
+      `GRANT SELECT ON canonical_forecast_deterministic_baseline_algorithms_v1 TO PUBLIC`,
+      `GRANT EXECUTE ON FUNCTION
+       canonical_forecast_deterministic_baseline_v1_chronology(
+        timestamptz,timestamptz,timestamptz) TO PUBLIC`,
+      `GRANT EXECUTE ON FUNCTION
+       canonical_forecast_deterministic_baseline_v1_unavailable(
+        uuid,text,timestamptz) TO PUBLIC`,
+    ]) {
+      const client = await fixture.ownerPool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(grant);
+        await expect(fixture.db.grantAndVerifyRuntimeAuthorityForTests(
+          client, authority)).rejects.toThrow(
+          'Runtime database role privilege verification failed');
+      } finally {
+        await client.query('ROLLBACK').catch(() => {});
+        client.release();
+      }
+    }
+  }, 120000);
+
   test('pins immutable algorithm definition/build identity and fails closed on either mismatch', async () => {
     const owner = fixture.actors.owner;
     const route = `/api/v1/forecast/deterministic-baselines/${origin.id}`;

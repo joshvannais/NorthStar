@@ -157,6 +157,8 @@ describe('Mission 26 original Part 10B monthly KPI boundary', () => {
       .toBe('Fictional guard');
     expect(demoFixture.elements.commandCenterMonthlyForecastKpiRevenueValue.textContent)
       .toBe('Not available');
+    expect(demoFixture.elements.commandCenterMonthlyForecastKpiRevenueState.textContent)
+      .toBe('Target presence unknown; run manifest unavailable');
 
     const paidFixture = documentFixture(); const paidCalls = [];
     paidFixture.elements.commandCenterMonthlyForecastKpiProfitValue.textContent = 'stale private value';
@@ -170,9 +172,17 @@ describe('Mission 26 original Part 10B monthly KPI boundary', () => {
       .toBe('Not available');
     expect(paidFixture.elements.commandCenterMonthlyForecastKpisState.textContent)
       .toBe('KPIs unavailable');
+    for (const suffix of ['Revenue','OperatingCost','Profit','Margin','Demand','Capacity']) {
+      expect(paidFixture.elements[`commandCenterMonthlyForecastKpi${suffix}State`].textContent)
+        .toBe('Target presence unknown; run manifest unavailable');
+    }
     paid.workspaceUnavailable();
     expect(paidFixture.elements.commandCenterMonthlyForecastKpisAuthority.textContent)
       .toBe('No authenticated run identity is retained.');
+    for (const suffix of ['Revenue','OperatingCost','Profit','Margin','Demand','Capacity']) {
+      expect(paidFixture.elements[`commandCenterMonthlyForecastKpi${suffix}State`].textContent)
+        .toBe('Unavailable');
+    }
   });
 
   test('migration is additive, value-free and does not create the Part 11 platform', () => {

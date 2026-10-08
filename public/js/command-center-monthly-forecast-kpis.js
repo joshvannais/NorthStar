@@ -300,7 +300,8 @@
         var suffix = slot.key.replace(/(^|_)(.)/g,
           function (_match, _prefix, character) { return character.toUpperCase(); });
         setText('commandCenterMonthlyForecastKpi' + suffix + 'Value', 'Not available');
-        setText('commandCenterMonthlyForecastKpi' + suffix + 'State', 'Target absent from authenticated run');
+        setText('commandCenterMonthlyForecastKpi' + suffix + 'State',
+          'Target presence unknown; run manifest unavailable');
       });
       setText('commandCenterMonthlyForecastKpiGraphMonth', value.month ?
         value.month.localStart + ' · ' + value.month.timeZone : 'Month unavailable');

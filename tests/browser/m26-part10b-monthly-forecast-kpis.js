@@ -92,6 +92,8 @@ async function exercise(browser, scenario, result) {
       await page.evaluate(() => window.__monthly.workspaceUnavailable());
       assert.equal(await page.locator('#commandCenterMonthlyForecastKpisState').innerText(),
         'Workspace unavailable');
+      assert.equal(await page.locator('#commandCenterMonthlyForecastKpiRevenueState').innerText(),
+        'Unavailable');
       await page.evaluate(() => window.__monthly.workspaceReady(window.__authority));
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
     } else {
@@ -132,6 +134,8 @@ async function exercise(browser, scenario, result) {
         /prior source anchor was cleared/i);
       assert.match(await page.locator('#commandCenterMonthlyForecastKpisExplanation').innerText(),
         /source changed/i);
+      assert.equal(await page.locator('#commandCenterMonthlyForecastKpiRevenueState').innerText(),
+        'Target presence unknown; run manifest unavailable');
 
       await page.evaluate(() => {
         window.__responses.push({ status: 503,
@@ -154,6 +158,9 @@ async function exercise(browser, scenario, result) {
       const value = await page.locator(`#commandCenterMonthlyForecastKpi${suffix}Value`).innerText();
       assert.equal(value, 'Not available');
       assert.doesNotMatch(value, /\b0(?:\.0+)?\b|%|confidence|probability/i);
+      const state = await page.locator(`#commandCenterMonthlyForecastKpi${suffix}State`).innerText();
+      assert.equal(state, 'Target presence unknown; run manifest unavailable');
+      assert.doesNotMatch(state, /absent from authenticated run/i);
     }
     assert.match(await page.locator('#commandCenterMonthlyForecastKpiGraphPlot').innerText(),
       /points are withheld/i);

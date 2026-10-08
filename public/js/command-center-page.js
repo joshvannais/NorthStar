@@ -30,6 +30,7 @@
   var overheadCashForecast = null;
   var operatingProfitForecast = null;
   var customerOpportunityOutlook = null;
+  var resourceRiskOutlook = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -778,18 +779,6 @@
     }
   }
 
-  function renderResourceOutlook() {
-    // Neither an authenticated resource source nor an issued resource forecast
-    // is mounted. Fictional demo records are not a stock or capacity check.
-    byId('commandCenterResourceState').textContent = 'Forecast unavailable';
-    byId('commandCenterResourceExplanation').textContent = mode === 'demo'
-      ? 'This demo uses fictional jobs. No resource forecast has been issued for this demo workspace.'
-      : 'No resource forecast is ready. NorthStar needs verified material, equipment and travel records before it can assess future needs.';
-    byId('commandCenterResourceBoundary').textContent = mode === 'demo'
-      ? 'Fictional plans do not confirm stock, equipment availability or travel capacity.'
-      : 'Current plans do not confirm stock, equipment availability or travel capacity.';
-  }
-
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -802,7 +791,9 @@
     renderLeads(graphs);
     renderCoachAndStatus(graphs);
     renderDemandOutlook();
-    renderResourceOutlook();
+    if (resourceRiskOutlook && typeof resourceRiskOutlook.workspaceReady === 'function') {
+      resourceRiskOutlook.workspaceReady();
+    }
     if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
       revenueCashOutlook.workspaceReady();
     }
@@ -878,9 +869,9 @@
         'Refresh the workspace before using private demand research actions.';
       byId('commandCenterDemandBoundary').textContent =
         'No research receipt or forecast value is shown while workspace data is unavailable.';
-      byId('commandCenterResourceState').textContent = 'Workspace unavailable';
-      byId('commandCenterResourceExplanation').textContent = 'The workspace could not load. Refresh to retry loading it.';
-      byId('commandCenterResourceBoundary').textContent = 'No resource forecast is shown while workspace data is unavailable.';
+      if (resourceRiskOutlook && typeof resourceRiskOutlook.workspaceUnavailable === 'function') {
+        resourceRiskOutlook.workspaceUnavailable();
+      }
       if (revenueCashOutlook && typeof revenueCashOutlook.workspaceUnavailable === 'function') {
         revenueCashOutlook.workspaceUnavailable();
       }
@@ -955,6 +946,23 @@
     document.querySelectorAll('#commandCenterCapacityRoot button').forEach(function (button) {
       button.disabled = true;
     });
+  }
+  if (global.NorthStarResourceRiskOutlook &&
+      typeof global.NorthStarResourceRiskOutlook.create === 'function') {
+    resourceRiskOutlook = global.NorthStarResourceRiskOutlook.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+    });
+  } else if (byId('commandCenterResourceOutlook')) {
+    byId('commandCenterResourceOutlook').setAttribute('aria-busy', 'false');
+    byId('commandCenterResourceState').textContent = 'Unavailable';
+    byId('commandCenterResourceState').dataset.state = 'unavailable';
+    byId('commandCenterResourceExplanation').textContent =
+      'Resource outlook could not load. Refresh Command Center to try again.';
+    byId('commandCenterResourceBoundary').textContent =
+      'No material, asset or route value is shown while the outlook is unavailable.';
+    byId('commandCenterResourceStatus').textContent =
+      'Resource outlook is unavailable. No forecast value is shown.';
   }
   if (global.NorthStarRevenueCashOutlook &&
       typeof global.NorthStarRevenueCashOutlook.create === 'function') {

@@ -530,16 +530,66 @@
             </div>
           </section>
 
-          <section class="demo-panel command-center-resource-outlook" aria-labelledby="commandCenterResourceTitle">
+          <section class="demo-panel command-center-resource-outlook" id="commandCenterResourceOutlook"
+            aria-labelledby="commandCenterResourceTitle" aria-busy="true">
             <div class="demo-panel-heading">
               <div>
                 <p class="demo-panel-kicker">Resource outlook</p>
                 <h2 id="commandCenterResourceTitle">Materials, equipment &amp; travel</h2>
               </div>
-              <span class="command-center-demand-state" id="commandCenterResourceState">Waiting for workspace</span>
+              <span class="command-center-demand-state" id="commandCenterResourceState"
+                role="status" aria-live="polite">Waiting for workspace</span>
             </div>
             <p id="commandCenterResourceExplanation">Resource forecast status will appear after the workspace loads.</p>
+            <div class="command-center-resource-cards" aria-label="Current resource positions">
+              <article class="command-center-resource-card" aria-labelledby="commandCenterResourceMaterialTitle">
+                <div class="command-center-resource-card-heading">
+                  <h3 id="commandCenterResourceMaterialTitle">Materials</h3>
+                  <span id="commandCenterResourceMaterialState">Waiting</span>
+                </div>
+                <strong id="commandCenterResourceMaterialValue">Not available</strong>
+                <p id="commandCenterResourceMaterialContext">Waiting for current material demand.</p>
+              </article>
+              <article class="command-center-resource-card" aria-labelledby="commandCenterResourceAssetTitle">
+                <div class="command-center-resource-card-heading">
+                  <h3 id="commandCenterResourceAssetTitle">Vehicles &amp; equipment</h3>
+                  <span id="commandCenterResourceAssetState">Waiting</span>
+                </div>
+                <strong id="commandCenterResourceAssetValue">Not available</strong>
+                <p id="commandCenterResourceAssetContext">Waiting for current planned utilization.</p>
+              </article>
+              <article class="command-center-resource-card" aria-labelledby="commandCenterResourceRouteTitle">
+                <div class="command-center-resource-card-heading">
+                  <h3 id="commandCenterResourceRouteTitle">Travel &amp; logistics</h3>
+                  <span id="commandCenterResourceRouteState">Waiting</span>
+                </div>
+                <strong id="commandCenterResourceRouteValue">Not available</strong>
+                <p id="commandCenterResourceRouteContext">Waiting for current route load.</p>
+              </article>
+            </div>
+            <figure class="command-center-resource-graph" id="commandCenterResourceGraph"
+              role="img" aria-labelledby="commandCenterResourceGraphTitle commandCenterResourceGraphDescription">
+              <figcaption id="commandCenterResourceGraphTitle">Separate complete-as-of record coverage</figcaption>
+              <div id="commandCenterResourceGraphBars"></div>
+              <p class="sr-only" id="commandCenterResourceGraphDescription">No resource positions are shown.</p>
+            </figure>
+            <details class="command-center-resource-details" id="commandCenterResourceDetails">
+              <summary>Review evidence and limits</summary>
+              <section aria-labelledby="commandCenterResourceMaterialDetailTitle">
+                <h3 id="commandCenterResourceMaterialDetailTitle">Material demand</h3>
+                <div id="commandCenterResourceMaterialDetails"><p>No current issued position is shown.</p></div>
+              </section>
+              <section aria-labelledby="commandCenterResourceAssetDetailTitle">
+                <h3 id="commandCenterResourceAssetDetailTitle">Asset utilization</h3>
+                <div id="commandCenterResourceAssetDetails"><p>No current issued position is shown.</p></div>
+              </section>
+              <section aria-labelledby="commandCenterResourceRouteDetailTitle">
+                <h3 id="commandCenterResourceRouteDetailTitle">Declared route load</h3>
+                <div id="commandCenterResourceRouteDetails"><p>No current issued position is shown.</p></div>
+              </section>
+            </details>
             <p class="command-center-demand-boundary" id="commandCenterResourceBoundary">Current records do not confirm future stock or equipment availability.</p>
+            <p class="sr-only" id="commandCenterResourceStatus" role="status" aria-live="polite" aria-atomic="true"></p>
           </section>
 
           <section class="demo-panel command-center-range-outlook command-center-revenue-cash-outlook"
@@ -765,7 +815,8 @@
   <script src="/js/command-center-overhead-cash-forecast.js?v=m26-part7d-20261007"></script>
   <script src="/js/command-center-operating-profit-forecast.js?v=m26-part7e-20261007"></script>
   <script src="/js/command-center-customer-opportunity-outlook.js?v=m26-founder-part6-20261006"></script>
-  <script src="/js/command-center-page.js?v=m26-founder-part6-20261006"></script>
+  <script src="/js/command-center-resource-risk-outlook.js?v=m26-part8d-20261008"></script>
+  <script src="/js/command-center-page.js?v=m26-part8d-20261008"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

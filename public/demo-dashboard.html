@@ -14,7 +14,7 @@
   <script src="/js/auth-session.js"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/homepage-refresh.css">
-  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m26-founder-part6-20261006">
+  <link rel="stylesheet" href="/css/demo-dashboard.css?v=m26-part10c-20261008">
   <link rel="stylesheet" href="/css/demo-runtime.css">
   <link rel="stylesheet" href="/css/polaris-card.css">
   <link rel="stylesheet" href="/css/scheduling-approval.css?v=command-center-clarity-20260915">
@@ -754,6 +754,83 @@
               </figcaption>
               <p id="commandCenterMonthlyForecastKpiGraphPlot">No graph points are available.</p>
             </figure>
+            <details class="command-center-forecast-details command-center-forecast-drilldowns"
+              id="commandCenterForecastDrilldowns" aria-busy="true">
+              <summary>Review forecast evidence
+                <span id="commandCenterForecastDrilldownsState">Waiting</span>
+              </summary>
+              <p id="commandCenterForecastDrilldownsExplanation">
+                Source coverage, assumptions, uncertainty, currentness, changes and errors appear only from compatible authenticated evidence.
+              </p>
+              <div class="command-center-forecast-drilldown-grid">
+                <article><h3>Revenue</h3><dl>
+                  <dt>Source coverage</dt><dd id="commandCenterForecastDrilldownRevenueCoverage">Not available</dd>
+                  <dt>Assumptions</dt><dd id="commandCenterForecastDrilldownRevenueAssumptions">Not available</dd>
+                  <dt>Confidence</dt><dd id="commandCenterForecastDrilldownRevenueConfidence">Not available</dd>
+                  <dt>Uncertainty</dt><dd id="commandCenterForecastDrilldownRevenueUncertainty">Not available</dd>
+                  <dt>Stale inputs</dt><dd id="commandCenterForecastDrilldownRevenueStale">Unknown</dd>
+                  <dt>Change</dt><dd id="commandCenterForecastDrilldownRevenueChange">Not available</dd>
+                  <dt>Forecast error</dt><dd id="commandCenterForecastDrilldownRevenueError">Not available</dd>
+                  <dt>Why it changed</dt><dd id="commandCenterForecastDrilldownRevenueCause">Unknown</dd>
+                </dl></article>
+                <article><h3>Operating cost</h3><dl>
+                  <dt>Source coverage</dt><dd id="commandCenterForecastDrilldownOperatingCostCoverage">Not available</dd>
+                  <dt>Assumptions</dt><dd id="commandCenterForecastDrilldownOperatingCostAssumptions">Not available</dd>
+                  <dt>Confidence</dt><dd id="commandCenterForecastDrilldownOperatingCostConfidence">Not available</dd>
+                  <dt>Uncertainty</dt><dd id="commandCenterForecastDrilldownOperatingCostUncertainty">Not available</dd>
+                  <dt>Stale inputs</dt><dd id="commandCenterForecastDrilldownOperatingCostStale">Unknown</dd>
+                  <dt>Change</dt><dd id="commandCenterForecastDrilldownOperatingCostChange">Not available</dd>
+                  <dt>Forecast error</dt><dd id="commandCenterForecastDrilldownOperatingCostError">Not available</dd>
+                  <dt>Why it changed</dt><dd id="commandCenterForecastDrilldownOperatingCostCause">Unknown</dd>
+                </dl></article>
+                <article><h3>Profit</h3><dl>
+                  <dt>Source coverage</dt><dd id="commandCenterForecastDrilldownProfitCoverage">Not available</dd>
+                  <dt>Assumptions</dt><dd id="commandCenterForecastDrilldownProfitAssumptions">Not available</dd>
+                  <dt>Confidence</dt><dd id="commandCenterForecastDrilldownProfitConfidence">Not available</dd>
+                  <dt>Uncertainty</dt><dd id="commandCenterForecastDrilldownProfitUncertainty">Not available</dd>
+                  <dt>Stale inputs</dt><dd id="commandCenterForecastDrilldownProfitStale">Unknown</dd>
+                  <dt>Change</dt><dd id="commandCenterForecastDrilldownProfitChange">Not available</dd>
+                  <dt>Forecast error</dt><dd id="commandCenterForecastDrilldownProfitError">Not available</dd>
+                  <dt>Why it changed</dt><dd id="commandCenterForecastDrilldownProfitCause">Unknown</dd>
+                </dl></article>
+                <article><h3>Margin</h3><dl>
+                  <dt>Source coverage</dt><dd id="commandCenterForecastDrilldownMarginCoverage">Not available</dd>
+                  <dt>Assumptions</dt><dd id="commandCenterForecastDrilldownMarginAssumptions">Not available</dd>
+                  <dt>Confidence</dt><dd id="commandCenterForecastDrilldownMarginConfidence">Not available</dd>
+                  <dt>Uncertainty</dt><dd id="commandCenterForecastDrilldownMarginUncertainty">Not available</dd>
+                  <dt>Stale inputs</dt><dd id="commandCenterForecastDrilldownMarginStale">Unknown</dd>
+                  <dt>Change</dt><dd id="commandCenterForecastDrilldownMarginChange">Not available</dd>
+                  <dt>Forecast error</dt><dd id="commandCenterForecastDrilldownMarginError">Not available</dd>
+                  <dt>Why it changed</dt><dd id="commandCenterForecastDrilldownMarginCause">Unknown</dd>
+                </dl></article>
+                <article><h3>Demand</h3><dl>
+                  <dt>Source coverage</dt><dd id="commandCenterForecastDrilldownDemandCoverage">Not available</dd>
+                  <dt>Assumptions</dt><dd id="commandCenterForecastDrilldownDemandAssumptions">Not available</dd>
+                  <dt>Confidence</dt><dd id="commandCenterForecastDrilldownDemandConfidence">Not available</dd>
+                  <dt>Uncertainty</dt><dd id="commandCenterForecastDrilldownDemandUncertainty">Not available</dd>
+                  <dt>Stale inputs</dt><dd id="commandCenterForecastDrilldownDemandStale">Unknown</dd>
+                  <dt>Change</dt><dd id="commandCenterForecastDrilldownDemandChange">Not available</dd>
+                  <dt>Forecast error</dt><dd id="commandCenterForecastDrilldownDemandError">Not available</dd>
+                  <dt>Why it changed</dt><dd id="commandCenterForecastDrilldownDemandCause">Unknown</dd>
+                </dl></article>
+                <article><h3>Capacity</h3><dl>
+                  <dt>Source coverage</dt><dd id="commandCenterForecastDrilldownCapacityCoverage">Not available</dd>
+                  <dt>Assumptions</dt><dd id="commandCenterForecastDrilldownCapacityAssumptions">Not available</dd>
+                  <dt>Confidence</dt><dd id="commandCenterForecastDrilldownCapacityConfidence">Not available</dd>
+                  <dt>Uncertainty</dt><dd id="commandCenterForecastDrilldownCapacityUncertainty">Not available</dd>
+                  <dt>Stale inputs</dt><dd id="commandCenterForecastDrilldownCapacityStale">Unknown</dd>
+                  <dt>Change</dt><dd id="commandCenterForecastDrilldownCapacityChange">Not available</dd>
+                  <dt>Forecast error</dt><dd id="commandCenterForecastDrilldownCapacityError">Not available</dd>
+                  <dt>Why it changed</dt><dd id="commandCenterForecastDrilldownCapacityCause">Unknown</dd>
+                </dl></article>
+              </div>
+              <p id="commandCenterForecastDrilldownsAuthority">No authenticated run, period or drilldown identity is shown.</p>
+              <p class="command-center-demand-boundary" id="commandCenterForecastDrilldownsBoundary">
+                Unavailable detail remains value-free. Zero appears only from complete authenticated evidence.
+              </p>
+              <p class="sr-only" id="commandCenterForecastDrilldownsStatus" role="status"
+                aria-live="polite" aria-atomic="true"></p>
+            </details>
             <details class="command-center-forecast-details command-center-monthly-kpi-details">
               <summary>Review same-run authority</summary>
               <p id="commandCenterMonthlyForecastKpisAuthority">No authenticated run identity is shown.</p>
@@ -993,7 +1070,8 @@
   <script src="/js/command-center-forecast-ranges.js?v=m26-part9e-20261008"></script>
   <script src="/js/command-center-forecast-timeline.js?v=m26-part10a-20261008"></script>
   <script src="/js/command-center-monthly-forecast-kpis.js?v=m26-part10b-20261008"></script>
-  <script src="/js/command-center-page.js?v=m26-part10b-20261008"></script>
+  <script src="/js/command-center-forecast-drilldowns.js?v=m26-part10c-20261008"></script>
+  <script src="/js/command-center-page.js?v=m26-part10c-20261008"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

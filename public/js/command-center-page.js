@@ -34,6 +34,7 @@
   var forecastRanges = null;
   var forecastTimeline = null;
   var monthlyForecastKpis = null;
+  var forecastDrilldowns = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -871,6 +872,24 @@
     }).catch(function () { monthlyForecastKpis.workspaceUnavailable(); });
   }
 
+  function renderForecastDrilldowns() {
+    if (!forecastDrilldowns || typeof forecastDrilldowns.workspaceReady !== 'function') return;
+    var current = resourceRiskAuthority();
+    if (current) {
+      forecastDrilldowns.workspaceReady(current); return;
+    }
+    if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
+      forecastDrilldowns.workspaceUnavailable(); return;
+    }
+    var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
+    global.NorthStarAccountSession.load().then(function () {
+      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      var refreshed = resourceRiskAuthority();
+      if (refreshed) forecastDrilldowns.workspaceReady(refreshed);
+      else forecastDrilldowns.workspaceUnavailable();
+    }).catch(function () { forecastDrilldowns.workspaceUnavailable(); });
+  }
+
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -887,6 +906,7 @@
     renderForecastRanges();
     renderForecastTimeline();
     renderMonthlyForecastKpis();
+    renderForecastDrilldowns();
     if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
       revenueCashOutlook.workspaceReady();
     }
@@ -936,6 +956,9 @@
     if (monthlyForecastKpis && typeof monthlyForecastKpis.workspaceLoading === 'function') {
       monthlyForecastKpis.workspaceLoading();
     }
+    if (forecastDrilldowns && typeof forecastDrilldowns.workspaceLoading === 'function') {
+      forecastDrilldowns.workspaceLoading();
+    }
     setStatus('Loading your workspace…', 'pending');
     var endpoint = '/api/v1/command-center/workspace' + (schedulingCursor ? '?cursor=' + encodeURIComponent(schedulingCursor) : '');
     return global.NorthStarAccountSession.fetch(endpoint, {
@@ -982,6 +1005,9 @@
       }
       if (monthlyForecastKpis && typeof monthlyForecastKpis.workspaceUnavailable === 'function') {
         monthlyForecastKpis.workspaceUnavailable();
+      }
+      if (forecastDrilldowns && typeof forecastDrilldowns.workspaceUnavailable === 'function') {
+        forecastDrilldowns.workspaceUnavailable();
       }
       if (revenueCashOutlook && typeof revenueCashOutlook.workspaceUnavailable === 'function') {
         revenueCashOutlook.workspaceUnavailable();
@@ -1131,6 +1157,24 @@
       'Monthly forecast KPIs could not load. Refresh Command Center to try again.';
     byId('commandCenterMonthlyForecastKpisStatus').textContent =
       'Monthly forecast KPIs are unavailable. No card or graph value is shown.';
+  }
+  if (global.NorthStarForecastDrilldowns &&
+      typeof global.NorthStarForecastDrilldowns.create === 'function') {
+    forecastDrilldowns = global.NorthStarForecastDrilldowns.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+      originProvider: function () {
+        var field = byId('commandCenterResearchRetellId');
+        return field && typeof field.value === 'string' ? field.value.trim() : null;
+      },
+    });
+  } else if (byId('commandCenterForecastDrilldowns')) {
+    byId('commandCenterForecastDrilldowns').setAttribute('aria-busy', 'false');
+    byId('commandCenterForecastDrilldownsState').textContent = 'Unavailable';
+    byId('commandCenterForecastDrilldownsExplanation').textContent =
+      'Forecast detail could not load. Refresh Command Center to try again.';
+    byId('commandCenterForecastDrilldownsStatus').textContent =
+      'Forecast drilldowns are unavailable. No evidence detail is shown.';
   }
   if (global.NorthStarRevenueCashOutlook &&
       typeof global.NorthStarRevenueCashOutlook.create === 'function') {

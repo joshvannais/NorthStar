@@ -31,6 +31,7 @@
   var operatingProfitForecast = null;
   var customerOpportunityOutlook = null;
   var resourceRiskOutlook = null;
+  var forecastRanges = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -814,6 +815,24 @@
     }).catch(function () { resourceRiskOutlook.workspaceUnavailable(); });
   }
 
+  function renderForecastRanges() {
+    if (!forecastRanges || typeof forecastRanges.workspaceReady !== 'function') return;
+    var current = resourceRiskAuthority();
+    if (current) {
+      forecastRanges.workspaceReady(current); return;
+    }
+    if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
+      forecastRanges.workspaceUnavailable(); return;
+    }
+    var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
+    global.NorthStarAccountSession.load().then(function () {
+      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      var refreshed = resourceRiskAuthority();
+      if (refreshed) forecastRanges.workspaceReady(refreshed);
+      else forecastRanges.workspaceUnavailable();
+    }).catch(function () { forecastRanges.workspaceUnavailable(); });
+  }
+
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -827,6 +846,7 @@
     renderCoachAndStatus(graphs);
     renderDemandOutlook();
     renderResourceRiskOutlook();
+    renderForecastRanges();
     if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
       revenueCashOutlook.workspaceReady();
     }
@@ -867,6 +887,9 @@
     byId('commandCenterRefresh').disabled = true;
     byId('commandCenterContent').setAttribute('aria-busy', 'true');
     byId('commandCenterScheduling').setAttribute('aria-busy', 'true');
+    if (forecastRanges && typeof forecastRanges.workspaceLoading === 'function') {
+      forecastRanges.workspaceLoading();
+    }
     setStatus('Loading your workspace…', 'pending');
     var endpoint = '/api/v1/command-center/workspace' + (schedulingCursor ? '?cursor=' + encodeURIComponent(schedulingCursor) : '');
     return global.NorthStarAccountSession.fetch(endpoint, {
@@ -904,6 +927,9 @@
         'No research receipt or forecast value is shown while workspace data is unavailable.';
       if (resourceRiskOutlook && typeof resourceRiskOutlook.workspaceUnavailable === 'function') {
         resourceRiskOutlook.workspaceUnavailable();
+      }
+      if (forecastRanges && typeof forecastRanges.workspaceUnavailable === 'function') {
+        forecastRanges.workspaceUnavailable();
       }
       if (revenueCashOutlook && typeof revenueCashOutlook.workspaceUnavailable === 'function') {
         revenueCashOutlook.workspaceUnavailable();
@@ -996,6 +1022,27 @@
       'No material, asset or route value is shown while the outlook is unavailable.';
     byId('commandCenterResourceStatus').textContent =
       'Resource outlook is unavailable. No forecast value is shown.';
+  }
+  if (global.NorthStarForecastRanges &&
+      typeof global.NorthStarForecastRanges.create === 'function') {
+    forecastRanges = global.NorthStarForecastRanges.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+      originProvider: function () {
+        var field = byId('commandCenterResearchRetellId');
+        return field && typeof field.value === 'string' ? field.value.trim() : null;
+      },
+    });
+  } else if (byId('commandCenterForecastRanges')) {
+    byId('commandCenterForecastRanges').setAttribute('aria-busy', 'false');
+    byId('commandCenterForecastState').textContent = 'Unavailable';
+    byId('commandCenterForecastState').dataset.state = 'unavailable';
+    byId('commandCenterForecastExplanation').textContent =
+      'Forecast evidence could not load. Refresh Command Center to try again.';
+    byId('commandCenterForecastBoundary').textContent =
+      'No baseline, range, scenario or sensitivity value is shown.';
+    byId('commandCenterForecastStatus').textContent =
+      'Forecast evidence is unavailable. No forecast value is shown.';
   }
   if (global.NorthStarRevenueCashOutlook &&
       typeof global.NorthStarRevenueCashOutlook.create === 'function') {

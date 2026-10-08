@@ -843,6 +843,58 @@
               aria-live="polite" aria-atomic="true"></p>
           </section>
 
+          <section class="demo-panel command-center-forecast-decision-support"
+            id="commandCenterForecastDecisionSupport"
+            aria-labelledby="commandCenterForecastDecisionTitle" aria-busy="true">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Owner decision support</p>
+                <h2 id="commandCenterForecastDecisionTitle">Alerts, advice &amp; evidence</h2>
+              </div>
+              <span class="command-center-demand-state" id="commandCenterForecastDecisionState"
+                role="status" aria-live="polite">Waiting for workspace</span>
+            </div>
+            <p id="commandCenterForecastDecisionExplanation">
+              Alerts, advisory next moves and point-in-time evidence appear only from an accepted current run and reviewed policy.
+            </p>
+            <div class="command-center-forecast-decision-grid">
+              <article aria-labelledby="commandCenterForecastAlertTitle">
+                <div><h3 id="commandCenterForecastAlertTitle">Owner alert</h3>
+                  <span id="commandCenterForecastAlertState">Waiting</span></div>
+                <p id="commandCenterForecastAlertBody">Checking current run, policy and source evidence.</p>
+              </article>
+              <article aria-labelledby="commandCenterForecastAdviceTitle">
+                <div><h3 id="commandCenterForecastAdviceTitle">Recommended next move</h3>
+                  <span id="commandCenterForecastAdviceState">Waiting</span></div>
+                <p id="commandCenterForecastAdviceBody">Checking advisory evidence and receiving workflow.</p>
+              </article>
+              <article aria-labelledby="commandCenterForecastExportTitle">
+                <div><h3 id="commandCenterForecastExportTitle">Evidence export</h3>
+                  <span id="commandCenterForecastExportState">Waiting</span></div>
+                <p id="commandCenterForecastExportBody">Checking point-in-time export authority.</p>
+                <button class="btn btn-secondary" id="commandCenterForecastExportButton"
+                  type="button" disabled aria-disabled="true">Export unavailable</button>
+              </article>
+            </div>
+            <details class="command-center-forecast-details command-center-forecast-decision-details"
+              id="commandCenterForecastDecisionDetails">
+              <summary>Review decision boundary</summary>
+              <p id="commandCenterForecastDecisionAuthority">
+                No accepted run, alert policy, event, advisory, export packet or digest is shown.
+              </p>
+              <ul>
+                <li>An alert needs a current accepted run, source-currentness decision and versioned reviewed trigger policy.</li>
+                <li>Advice remains advisory; opening a workflow is never approval or an applied change.</li>
+                <li>An export is a minimized point-in-time packet and never promises ongoing currentness.</li>
+              </ul>
+            </details>
+            <p class="command-center-demand-boundary" id="commandCenterForecastDecisionBoundary">
+              Unavailable is not zero. No probability, recommendation, approval, communication or automatic action is inferred.
+            </p>
+            <p class="sr-only" id="commandCenterForecastDecisionStatus" role="status"
+              aria-live="polite" aria-atomic="true"></p>
+          </section>
+
           <section class="demo-panel command-center-range-outlook command-center-revenue-cash-outlook"
             id="commandCenterRevenueCashOutlook" aria-labelledby="commandCenterRevenueCashTitle" aria-busy="true">
             <div class="demo-panel-heading">
@@ -1071,7 +1123,8 @@
   <script src="/js/command-center-forecast-timeline.js?v=m26-part10a-20261008"></script>
   <script src="/js/command-center-monthly-forecast-kpis.js?v=m26-part10b-20261008"></script>
   <script src="/js/command-center-forecast-drilldowns.js?v=m26-part10c-20261008"></script>
-  <script src="/js/command-center-page.js?v=m26-part10c-20261008"></script>
+  <script src="/js/command-center-forecast-decision-support.js?v=m26-part10d-20261008"></script>
+  <script src="/js/command-center-page.js?v=m26-part10d-20261008"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

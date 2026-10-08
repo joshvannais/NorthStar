@@ -35,6 +35,7 @@
   var forecastTimeline = null;
   var monthlyForecastKpis = null;
   var forecastDrilldowns = null;
+  var forecastDecisionSupport = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -890,6 +891,25 @@
     }).catch(function () { forecastDrilldowns.workspaceUnavailable(); });
   }
 
+  function renderForecastDecisionSupport() {
+    if (!forecastDecisionSupport ||
+        typeof forecastDecisionSupport.workspaceReady !== 'function') return;
+    var current = resourceRiskAuthority();
+    if (current) {
+      forecastDecisionSupport.workspaceReady(current); return;
+    }
+    if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
+      forecastDecisionSupport.workspaceUnavailable(); return;
+    }
+    var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
+    global.NorthStarAccountSession.load().then(function () {
+      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      var refreshed = resourceRiskAuthority();
+      if (refreshed) forecastDecisionSupport.workspaceReady(refreshed);
+      else forecastDecisionSupport.workspaceUnavailable();
+    }).catch(function () { forecastDecisionSupport.workspaceUnavailable(); });
+  }
+
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -907,6 +927,7 @@
     renderForecastTimeline();
     renderMonthlyForecastKpis();
     renderForecastDrilldowns();
+    renderForecastDecisionSupport();
     if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
       revenueCashOutlook.workspaceReady();
     }
@@ -959,6 +980,10 @@
     if (forecastDrilldowns && typeof forecastDrilldowns.workspaceLoading === 'function') {
       forecastDrilldowns.workspaceLoading();
     }
+    if (forecastDecisionSupport &&
+        typeof forecastDecisionSupport.workspaceLoading === 'function') {
+      forecastDecisionSupport.workspaceLoading();
+    }
     setStatus('Loading your workspace…', 'pending');
     var endpoint = '/api/v1/command-center/workspace' + (schedulingCursor ? '?cursor=' + encodeURIComponent(schedulingCursor) : '');
     return global.NorthStarAccountSession.fetch(endpoint, {
@@ -1008,6 +1033,10 @@
       }
       if (forecastDrilldowns && typeof forecastDrilldowns.workspaceUnavailable === 'function') {
         forecastDrilldowns.workspaceUnavailable();
+      }
+      if (forecastDecisionSupport &&
+          typeof forecastDecisionSupport.workspaceUnavailable === 'function') {
+        forecastDecisionSupport.workspaceUnavailable();
       }
       if (revenueCashOutlook && typeof revenueCashOutlook.workspaceUnavailable === 'function') {
         revenueCashOutlook.workspaceUnavailable();
@@ -1175,6 +1204,24 @@
       'Forecast detail could not load. Refresh Command Center to try again.';
     byId('commandCenterForecastDrilldownsStatus').textContent =
       'Forecast drilldowns are unavailable. No evidence detail is shown.';
+  }
+  if (global.NorthStarForecastDecisionSupport &&
+      typeof global.NorthStarForecastDecisionSupport.create === 'function') {
+    forecastDecisionSupport = global.NorthStarForecastDecisionSupport.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+      originProvider: function () {
+        var field = byId('commandCenterResearchRetellId');
+        return field && typeof field.value === 'string' ? field.value.trim() : null;
+      },
+    });
+  } else if (byId('commandCenterForecastDecisionSupport')) {
+    byId('commandCenterForecastDecisionSupport').setAttribute('aria-busy', 'false');
+    byId('commandCenterForecastDecisionState').textContent = 'Unavailable';
+    byId('commandCenterForecastDecisionExplanation').textContent =
+      'Forecast alerts, advice and evidence export could not load. Refresh Command Center to try again.';
+    byId('commandCenterForecastDecisionStatus').textContent =
+      'Forecast decision support is unavailable. No action or evidence packet is available.';
   }
   if (global.NorthStarRevenueCashOutlook &&
       typeof global.NorthStarRevenueCashOutlook.create === 'function') {

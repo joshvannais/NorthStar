@@ -221,6 +221,45 @@ realPostgres('Mission 26 original Part 10B mounted monthly KPI boundary', () => 
         .set(fixture.actors.member.session.headers)).status).toBe(403);
     }, 120000);
 
+  test('Part 10D keeps owner alerts, advice and export unavailable without accepted run policy',
+    async () => {
+      const route = `/api/v1/forecast/decision-support/${origin.id}`;
+      const owner = await request(fixture.app).get(route)
+        .set(fixture.actors.owner.session.headers);
+      const admin = await request(fixture.app).get(route)
+        .set(fixture.actors.admin.session.headers);
+      expect(owner.status).toBe(200); expect(admin.status).toBe(200);
+      expect(owner.headers['cache-control']).toBe('private, no-store');
+      expect(owner.headers['referrer-policy']).toBe('no-referrer');
+      expect(owner.body.data).toMatchObject({ state: 'unavailable',
+        reason: 'same_run_manifest_not_available', organizationId: fixture.org,
+        audience: { scope: 'owner_admin', viewerRole: 'owner' },
+        anchor: { period: { localStart: horizon, grain: 'business_local_month' },
+          runId: null, runRevision: null, runOutputDigest: null },
+        alert: { state: 'unavailable', items: [], direction: null, threshold: null,
+          policy: { id: null, version: null, digest: null, current: false },
+          dedupe: { key: null, runId: null, policyDigest: null, eventDigest: null } },
+        advice: { state: 'unavailable', items: [], advisoryOnly: true,
+          navigationIsApproval: false, receiverRecheckRequired: true,
+          automaticActionAuthorized: false },
+        export: { state: 'unavailable', packet: null, downloadUrl: null,
+          shareUrl: null, pointInTime: true, fictional: false },
+        currentness: { anchorCurrent: true, acceptedRunCurrent: false,
+          alertPolicyCurrent: false, exportAuthorityCurrent: false },
+        alertIssued: false, recommendationIssued: false, exportIssued: false,
+        probabilityOrConfidenceIssued: false, automaticActionAuthorized: false,
+        outboundCommunicationAuthorized: false, reviewedHandoffAuthorized: false });
+      expect(owner.body.data.export.excludedFields).toEqual([
+        'raw_transcripts','customer_contacts','worker_wages','secrets','unrelated_records']);
+      expect(admin.body.data.anchor).toEqual(owner.body.data.anchor);
+      expect(admin.body.data.audience.viewerUserId).not.toBe(
+        owner.body.data.audience.viewerUserId);
+      expect((await request(fixture.app).get(route)
+        .set(fixture.actors.otherOwner.session.headers)).status).toBe(404);
+      expect((await request(fixture.app).get(route)
+        .set(fixture.actors.member.session.headers)).status).toBe(403);
+    }, 120000);
+
   test('revocation clears every anchor identity and corrected evidence gets a new bundle',
     async () => {
       const owner = fixture.actors.owner;
@@ -250,6 +289,21 @@ realPostgres('Mission 26 original Part 10B mounted monthly KPI boundary', () => 
       expect(stale.body.data.graph.month).toBeNull();
       expect(stale.body.data.slots.every(slot => slot.value === null &&
         slot.sourceSnapshotDigest === null)).toBe(true);
+      const staleDecision = await request(fixture.app)
+        .get(`/api/v1/forecast/decision-support/${origin.id}`)
+        .set(owner.session.headers);
+      expect(staleDecision.status).toBe(200);
+      expect(staleDecision.body.data).toMatchObject({
+        reason: 'deterministic_baseline_not_current',
+        anchor: { period: null, sourceSnapshotDigest: null, sourceReceiptDigest: null,
+          timelineDigest: null, bundleDigest: null, runId: null },
+        alert: { reason: 'source_currentness_not_available', items: [] },
+        advice: { items: [], automaticActionAuthorized: false },
+        export: { packet: null, downloadUrl: null, shareUrl: null, stale: true },
+        currentness: { anchorCurrent: false, correctionOrRevocationApplied: true },
+        digests: { decisionSupport: null, alertEvent: null, exportPacket: null,
+          timeline: null, bundle: null },
+        alertIssued: false, recommendationIssued: false, exportIssued: false });
 
       const currentEvidence = await periodEvidence(owner, month);
       const restored = await certify(owner, month, currentEvidence, {

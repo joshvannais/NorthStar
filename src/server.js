@@ -23,6 +23,8 @@ const { createLearningRouter } = require('./routes/learning');
 const { createForecastPriceHistoryRouter } = require('./routes/forecastPriceHistory');
 const { createForecastFeaturesRouter } = require('./routes/forecastFeatures');
 const { createForecastDemandSourcesRouter } = require('./routes/forecastDemandSources');
+const { createForecastDeterministicBaselinesRouter } =
+  require('./routes/forecastDeterministicBaselines');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -332,6 +334,8 @@ app.use('/api/v1/forecast/booking-reviews',
   require('./routes/forecastBookingReviews').createForecastBookingReviewsRouter());
 app.use('/api/v1/forecast/features', createForecastFeaturesRouter());
 app.use('/api/v1/forecast/demand-sources', createForecastDemandSourcesRouter());
+app.use('/api/v1/forecast/deterministic-baselines',
+  createForecastDeterministicBaselinesRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());
 app.use('/api/v1/forecast/current-backlog', createForecastCurrentBacklogRouter());
 app.use('/api/v1/forecast/demand-to-schedule', createForecastDemandToScheduleRouter());

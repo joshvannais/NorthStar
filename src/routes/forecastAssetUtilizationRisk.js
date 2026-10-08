@@ -18,6 +18,7 @@ const UNAVAILABLE_REASONS = new Set([
   'duplicate_current_job_equipment_source',
   'current_adopted_equipment_composition_unavailable',
   'current_adopted_readiness_unavailable', 'exact_asset_identity_unavailable',
+  'current_readiness_evidence_unavailable',
   'compatible_m25_outcome_unavailable',
 ]);
 
@@ -83,16 +84,31 @@ function validHorizon(value, checkedAt, state) {
     new Date(value.endsAt).getTime() - new Date(value.startsAt).getTime() === 2592000000;
 }
 
-function validSource(value, index, budget) {
+function validSource(value, index, budget, horizon) {
   if (!exact(value, ['sourceIndex','job','estimate','composition','equipmentCostPlan',
     'equipmentPlan','readinessPlan']) || value.sourceIndex !== index ||
       !exact(value.job, ['appointmentId','assignmentId','bookingReviewId',
         'bookingConfirmationId','issuedVersionId','plannedWindow']) ||
       ![value.job.appointmentId,value.job.assignmentId,value.job.bookingReviewId,
         value.job.bookingConfirmationId,value.job.issuedVersionId].every(id => UUID.test(id || '')) ||
-      !exact(value.job.plannedWindow, ['startsAt','endsAt']) ||
+      !exact(value.job.plannedWindow, ['startsAt','endsAt','timeZone','assignmentRevision',
+        'assignmentDigest','approvalId','timeZoneAuthority','timeEvidenceDigest']) ||
       !validInstant(value.job.plannedWindow.startsAt) || !validInstant(value.job.plannedWindow.endsAt) ||
       value.job.plannedWindow.startsAt >= value.job.plannedWindow.endsAt ||
+      value.job.plannedWindow.timeZone !== horizon.timeZone ||
+      !Number.isSafeInteger(value.job.plannedWindow.assignmentRevision) ||
+      value.job.plannedWindow.assignmentRevision < 2 ||
+      !DIGEST.test(value.job.plannedWindow.assignmentDigest || '') ||
+      !UUID.test(value.job.plannedWindow.approvalId || '') ||
+      !DIGEST.test(value.job.plannedWindow.timeEvidenceDigest || '') ||
+      !exact(value.job.plannedWindow.timeZoneAuthority,
+        ['profileHash','profileId','profileVersion','timeZone','evaluatedAt']) ||
+      !DIGEST.test(value.job.plannedWindow.timeZoneAuthority.profileHash || '') ||
+      !UUID.test(value.job.plannedWindow.timeZoneAuthority.profileId || '') ||
+      !Number.isSafeInteger(value.job.plannedWindow.timeZoneAuthority.profileVersion) ||
+      value.job.plannedWindow.timeZoneAuthority.profileVersion < 1 ||
+      value.job.plannedWindow.timeZoneAuthority.timeZone !== horizon.timeZone ||
+      !validInstant(value.job.plannedWindow.timeZoneAuthority.evaluatedAt) ||
       !exact(value.estimate, ['id','revisionId','revision','digest']) ||
       !UUID.test(value.estimate.id || '') || !UUID.test(value.estimate.revisionId || '') ||
       !Number.isSafeInteger(value.estimate.revision) || value.estimate.revision < 1 ||
@@ -151,7 +167,8 @@ function validAsset(value, sources, sourceAsOf, horizon) {
   if (planned.state === 'current_claimed_plan_only') {
     if (hours(planned.claimedOperatingHours) !== total || planned.reason !== null) return false;
   } else if (planned.claimedOperatingHours !== null ||
-      planned.reason !== 'non_overlapping_planned_utilization_unavailable') return false;
+      !['non_overlapping_planned_utilization_unavailable',
+        'rental_or_lease_provider_evidence_unavailable'].includes(planned.reason)) return false;
   const meter = value.meter;
   if (!exact(meter, ['state','meterKey','unit','reading','observedAt','eventId','eventRevision',
     'eventDigest','ledgerRevision','ledgerDigest','resetApplied','correctionApplied',
@@ -204,19 +221,10 @@ function validAsset(value, sources, sourceAsOf, horizon) {
     'dueByClaimedPlanEnd','maintenanceScheduleVerified','maintenanceWorkAuthorized','reason']) ||
       !['current_claimed_plan_position','unavailable'].includes(maintenance.state) ||
       maintenance.maintenanceScheduleVerified !== false || maintenance.maintenanceWorkAuthorized !== false) return false;
-  if (maintenance.state === 'current_claimed_plan_position') {
-    if (service.state !== 'current_claimed_plan_position' ||
-        !(maintenance.dueAt === null || validInstant(maintenance.dueAt)) ||
-        typeof maintenance.dueWithinHorizon !== 'boolean' ||
-        maintenance.dueWithinHorizon !== (maintenance.dueAt !== null &&
-          maintenance.dueAt >= horizon.startsAt && maintenance.dueAt < horizon.endsAt) ||
-        typeof maintenance.dueByRecordedMeter !== 'boolean' ||
-        maintenance.dueByRecordedMeter !== service.thresholdReachedNow ||
-        typeof maintenance.dueByClaimedPlanEnd !== 'boolean' || maintenance.reason !== null) return false;
-    if (maintenance.dueByClaimedPlanEnd !== service.thresholdReachedByClaimedPlan) return false;
-  } else if ([maintenance.dueAt,maintenance.dueWithinHorizon,
+  if (maintenance.state !== 'unavailable') return false;
+  if ([maintenance.dueAt,maintenance.dueWithinHorizon,
     maintenance.dueByRecordedMeter,maintenance.dueByClaimedPlanEnd].some(item => item !== null) ||
-    !text(maintenance.reason)) return false;
+    maintenance.reason !== 'maintenance_schedule_unavailable') return false;
   if (!exact(value.serviceTiming, ['state','serviceAt','reason']) ||
       value.serviceTiming.state !== 'unavailable' || value.serviceTiming.serviceAt !== null ||
       value.serviceTiming.reason !== 'operating_hour_timing_unavailable' ||
@@ -243,6 +251,11 @@ function validAsset(value, sources, sourceAsOf, horizon) {
           value.rentalLease.reason !== null :
         value.asset.accessType === 'owned' && value.asset.planAccessBasis === 'owned' ||
           value.rentalLease.reason !== 'rental_or_lease_provider_evidence_unavailable')) return false;
+  if (value.rentalLease.state === 'provider_semantics_unavailable' &&
+      (planned.state !== 'unavailable' ||
+       planned.reason !== 'rental_or_lease_provider_evidence_unavailable' ||
+       service.state !== 'unavailable' ||
+       service.reason !== 'rental_or_lease_provider_evidence_unavailable')) return false;
   return exact(value.downtimeRisk, ['state','risk','probability','reason']) &&
     value.downtimeRisk.state === 'unavailable' && value.downtimeRisk.risk === null &&
     value.downtimeRisk.probability === null &&
@@ -330,7 +343,7 @@ function sanitizeForecast(value) {
         value.evidence.periodAttributionVerified].some(flag => flag !== true) ||
       !DIGEST.test(value.run.sourceDigest || '') || !DIGEST.test(value.run.digest || '')) return null;
   const budget = { nodes: 0 };
-  if (!value.sources.every((source, index) => validSource(source, index, budget)) ||
+  if (!value.sources.every((source, index) => validSource(source, index, budget, value.horizon)) ||
       !value.assets.every(asset => validAsset(asset, value.sources, value.sourceAsOf,
         value.horizon))) return null;
   const ids = new Set(value.assets.map(asset => asset.asset.id.toLowerCase()));
@@ -344,9 +357,14 @@ function sanitizeForecast(value) {
       value.utilization.operatingTimeVerified !== false || value.utilization.checkoutDurationUsed !== false) return null;
   const unavailableUtilization = value.assets.some(asset =>
     asset.plannedUtilization.state === 'unavailable');
+  const providerUnavailable = value.assets.some(asset =>
+    asset.rentalLease.state === 'provider_semantics_unavailable');
   if (unavailableUtilization) {
     if (value.utilization.state !== 'unavailable' || value.utilization.claimedOperatingHours !== null ||
-        value.utilization.reason !== 'non_overlapping_planned_utilization_unavailable' ||
+        !['non_overlapping_planned_utilization_unavailable',
+          'rental_or_lease_provider_evidence_unavailable'].includes(value.utilization.reason) ||
+        (providerUnavailable !==
+          (value.utilization.reason === 'rental_or_lease_provider_evidence_unavailable')) ||
         value.forecastIssued !== false || value.utilizationForecastIssued !== false) return null;
   } else {
     const total = uses.reduce((sum, use) => sum + hours(use.claimedOperatingHours), 0n);
@@ -358,6 +376,8 @@ function sanitizeForecast(value) {
     asset.serviceInterval.state === 'current_claimed_plan_position');
   const allMaintenance = value.assets.length > 0 && value.assets.every(asset =>
     asset.maintenanceDue.state === 'current_claimed_plan_position');
+  if (providerUnavailable && [value.forecastIssued,value.utilizationForecastIssued,
+    value.serviceIntervalForecastIssued,value.maintenanceDueForecastIssued].some(Boolean)) return null;
   return value.serviceIntervalForecastIssued === allService &&
     value.maintenanceDueForecastIssued === allMaintenance &&
     value.evidence.meterHistoryVerified === allService &&

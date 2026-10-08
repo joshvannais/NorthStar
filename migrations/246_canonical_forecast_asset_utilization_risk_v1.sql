@@ -81,7 +81,8 @@ DECLARE authority JSONB;cutoff_value TIMESTAMPTZ;source_as_of_value TIMESTAMPTZ;
  scheduled_count INTEGER:=0;unscheduled_count INTEGER:=0;outside_count INTEGER:=0;
  source_index INTEGER:=0;line_count INTEGER:=0;asset_count INTEGER:=0;
  active_learning_count INTEGER:=0;unavailable_utilization_count INTEGER:=0;
- unavailable_service_count INTEGER:=0;unavailable_maintenance_count INTEGER:=0;
+ unavailable_service_count INTEGER:=0;
+ provider_unavailable_count INTEGER:=0;
  profile public.canonical_business_profiles%ROWTYPE;candidate RECORD;booked RECORD;
  revision_value public.canonical_estimate_revisions%ROWTYPE;
  adoption public.canonical_estimate_proposal_adoptions%ROWTYPE;
@@ -90,9 +91,9 @@ DECLARE authority JSONB;cutoff_value TIMESTAMPTZ;source_as_of_value TIMESTAMPTZ;
  readiness_value public.canonical_equipment_readiness_plans%ROWTYPE;
  asset_value public.tenant_assets%ROWTYPE;pin_value public.canonical_equipment_asset_versions%ROWTYPE;
  ledger_value public.canonical_equipment_ledgers%ROWTYPE;meter_event RECORD;asset_row RECORD;
- plan_line JSONB;cost_line JSONB;readiness_line JSONB;booking_state JSONB;
+ plan_line JSONB;cost_line JSONB;readiness_line JSONB;readiness_evidence_line JSONB;booking_state JSONB;
  service_value TEXT;planned_hours NUMERIC;claimed_hours NUMERIC;projected_reading NUMERIC;
- current_reading NUMERIC;threshold_value NUMERIC;due_at_value TIMESTAMPTZ;
+ current_reading NUMERIC;threshold_value NUMERIC;
  event_count INTEGER;effective_count INTEGER;policy_count INTEGER;use_count INTEGER;
  meter_key_value TEXT;meter_unit_value TEXT;threshold_reference TEXT;
  access_basis_value TEXT;asset_access_type TEXT;source_condition_value TEXT;
@@ -137,12 +138,21 @@ BEGIN
 
  FOR candidate IN
   SELECT position_value.appointment_id,assignment.id assignment_id,
-   assignment.schedule_state,assignment.scheduled_start,assignment.scheduled_end
+   assignment.schedule_state,assignment.scheduled_start,assignment.scheduled_end,
+   assignment.revision assignment_revision,rtrim(assignment.canonical_digest) assignment_digest,
+   assignment.last_human_approval_id approval_id,approval.time_zone_authority,
+   approval.submitted_schedule,rtrim(approval.time_evidence_digest) time_evidence_digest,
+   approval.applied_revision approval_revision,rtrim(approval.applied_digest) approval_digest,
+   approval.approved_scheduled_start,approval.approved_scheduled_end
   FROM public.canonical_forecast_current_backlog_booking_positions position_value
   JOIN public.canonical_schedule_assignments assignment
    ON assignment.organization_id=position_value.organization_id
     AND assignment.id=position_value.assignment_id
     AND assignment.appointment_id=position_value.appointment_id
+  LEFT JOIN public.canonical_schedule_human_approvals approval
+   ON approval.organization_id=assignment.organization_id
+    AND approval.id=assignment.last_human_approval_id
+    AND approval.assignment_id=assignment.id
   WHERE position_value.organization_id=org AND position_value.active
   ORDER BY position_value.appointment_id
  LOOP
@@ -153,6 +163,24 @@ BEGIN
      candidate.scheduled_end<=candidate.scheduled_start OR
      (candidate.scheduled_start<cutoff_value AND candidate.scheduled_end>cutoff_value) OR
      (candidate.scheduled_start<horizon_value AND candidate.scheduled_end>horizon_value) THEN
+   RETURN public.canonical_forecast_asset_utilization_risk_v1_unavailable(
+    'approved_timing_attribution_unavailable',cutoff_value,source_as_of_value,zone_value);
+  END IF;
+  IF candidate.approval_id IS NULL OR candidate.approval_revision<>candidate.assignment_revision OR
+     candidate.approval_digest IS DISTINCT FROM candidate.assignment_digest OR
+     candidate.approved_scheduled_start IS DISTINCT FROM candidate.scheduled_start OR
+     candidate.approved_scheduled_end IS DISTINCT FROM candidate.scheduled_end OR
+     candidate.time_evidence_digest IS NULL OR
+     candidate.time_evidence_digest!~'^[0-9a-f]{64}$' OR
+     candidate.time_zone_authority IS NULL OR
+     (SELECT count(*) FROM jsonb_object_keys(candidate.time_zone_authority))<>5 OR
+     candidate.time_zone_authority->>'profileHash' IS DISTINCT FROM rtrim(profile.normalized_profile_hash) OR
+     candidate.time_zone_authority->>'profileId' IS DISTINCT FROM profile.id::text OR
+     COALESCE((candidate.time_zone_authority->>'profileVersion')::bigint,-1)<>profile.version_number OR
+     candidate.time_zone_authority->>'timeZone' IS DISTINCT FROM zone_value OR
+     candidate.time_zone_authority->>'evaluatedAt' IS NULL OR
+     candidate.time_evidence_digest<>public.canonical_schedule_time_evidence_digest(
+      2::smallint,candidate.submitted_schedule,candidate.time_zone_authority) THEN
    RETURN public.canonical_forecast_asset_utilization_risk_v1_unavailable(
     'approved_timing_attribution_unavailable',cutoff_value,source_as_of_value,zone_value);
   END IF;
@@ -257,9 +285,13 @@ BEGIN
    'job',jsonb_build_object('appointmentId',candidate.appointment_id,
     'assignmentId',candidate.assignment_id,'bookingReviewId',booked.id,
     'bookingConfirmationId',booked.confirmation_id,'issuedVersionId',booked.issued_version_id,
-    'plannedWindow',jsonb_build_object(
+     'plannedWindow',jsonb_build_object(
      'startsAt',public.canonical_forecast_utc_instant(candidate.scheduled_start),
-     'endsAt',public.canonical_forecast_utc_instant(candidate.scheduled_end))),
+     'endsAt',public.canonical_forecast_utc_instant(candidate.scheduled_end),
+     'timeZone',zone_value,'assignmentRevision',candidate.assignment_revision,
+     'assignmentDigest',candidate.assignment_digest,'approvalId',candidate.approval_id,
+     'timeZoneAuthority',candidate.time_zone_authority,
+     'timeEvidenceDigest',candidate.time_evidence_digest)),
    'estimate',jsonb_build_object('id',booked.estimate_id,
     'revisionId',revision_value.id,'revision',revision_value.revision,
     'digest',rtrim(revision_value.digest)),
@@ -281,13 +313,21 @@ BEGIN
    WHERE value->>'lineId'=plan_line->>'lineId';
    SELECT value INTO readiness_line FROM jsonb_array_elements(readiness_value.inputs->'lines') value
    WHERE value->>'lineId'=plan_line->>'lineId';
+   SELECT value INTO readiness_evidence_line
+   FROM jsonb_array_elements(COALESCE(readiness_value.evidence->'lines','[]'::jsonb)) value
+   WHERE value->>'lineId'=plan_line->>'lineId';
    IF plan_line->>'lineId'!~*'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' OR
       plan_line->>'assetId' IS NULL OR cost_line IS NULL OR readiness_line IS NULL OR
+      readiness_evidence_line IS NULL OR readiness_value.evidence->>'digest' IS NULL OR
+      readiness_value.evidence->>'digest'<>public.canonical_completion_digest(readiness_value.evidence-'digest') OR
+      readiness_value.evidence->'equipmentBasis' IS DISTINCT FROM jsonb_build_object(
+       'planId',plan_value.id,'revision',plan_value.revision,'digest',rtrim(plan_value.digest)) OR
       cost_line->>'access' IS DISTINCT FROM plan_line->>'accessBasis' OR
       cost_line->>'plannedHours'!~'^(0|[1-9][0-9]{0,8})(\.[0-9]{1,6})?$' OR
       (cost_line->>'plannedHours')::numeric<=0 OR
       readiness_line->'required' IS DISTINCT FROM 'true'::jsonb OR
       readiness_line->>'start' IS NULL OR readiness_line->>'end' IS NULL OR
+      readiness_line->>'timeZone' IS DISTINCT FROM zone_value OR
       (readiness_line->>'start')::timestamptz<>candidate.scheduled_start OR
       (readiness_line->>'end')::timestamptz<>candidate.scheduled_end OR
       readiness_line#>>'{source,observedAt}' IS NULL OR
@@ -324,6 +364,26 @@ BEGIN
     RETURN public.canonical_forecast_asset_utilization_risk_v1_unavailable(
      'exact_asset_identity_unavailable',cutoff_value,source_as_of_value,zone_value);
    END IF;
+   SELECT * INTO ledger_value FROM public.canonical_equipment_ledgers value
+   WHERE value.organization_id=org AND value.asset_id=asset_value.id;
+   SELECT count(*)::integer,count(*) FILTER(WHERE NOT EXISTS(
+    SELECT 1 FROM public.canonical_equipment_events successor
+    WHERE successor.organization_id=event.organization_id AND successor.supersedes_id=event.id))::integer
+   INTO event_count,effective_count FROM public.canonical_equipment_events event
+   WHERE event.organization_id=org AND event.asset_id=asset_value.id;
+   ledger_complete:=ledger_value.asset_id IS NOT NULL AND event_count=ledger_value.revision AND
+    (ledger_value.state->>'revision')::integer=ledger_value.revision AND
+    (ledger_value.state->>'effectiveFactCount')::integer=effective_count AND
+    rtrim(ledger_value.digest)=public.equipment_digest(ledger_value.state);
+   IF NOT ledger_complete OR readiness_evidence_line->'complete' IS DISTINCT FROM 'true'::jsonb OR
+      readiness_evidence_line->'sourceCurrent' IS DISTINCT FROM 'true'::jsonb OR
+      readiness_evidence_line->>'assetId' IS DISTINCT FROM asset_value.id::text OR
+      COALESCE((readiness_evidence_line->>'ledgerRevision')::integer,-1)<>ledger_value.revision OR
+      rtrim(readiness_evidence_line->>'ledgerDigest') IS DISTINCT FROM rtrim(ledger_value.digest) OR
+      readiness_evidence_line->'state' IS DISTINCT FROM ledger_value.state THEN
+    RETURN public.canonical_forecast_asset_utilization_risk_v1_unavailable(
+     'current_readiness_evidence_unavailable',cutoff_value,source_as_of_value,zone_value);
+   END IF;
    asset_access_type:=COALESCE(pin_value.private_configuration->>'accessType','unknown');
    use_rows:=use_rows||jsonb_build_array(jsonb_build_object(
     'sourceIndex',source_index,'assetId',asset_value.id,'assetVersion',asset_value.version,
@@ -336,8 +396,7 @@ BEGIN
     'meterKey',readiness_line#>>'{maintenance,meterKey}',
     'threshold',readiness_line#>>'{maintenance,threshold}',
     'unit',readiness_line#>>'{maintenance,unit}',
-    'thresholdReference',readiness_line#>>'{maintenance,reference}',
-    'dueAt',readiness_line#>>'{maintenance,dueAt}'));
+    'thresholdReference',readiness_line#>>'{maintenance,reference}'));
    line_count:=line_count+1;
    IF line_count>10000 THEN
     RETURN public.canonical_forecast_asset_utilization_risk_v1_unavailable(
@@ -360,10 +419,8 @@ BEGIN
   FROM jsonb_array_elements(use_rows) value ORDER BY asset_id
  LOOP
   SELECT count(*)::integer,sum((value->>'claimedOperatingHours')::numeric),
-   min(NULLIF(value->>'dueAt','')::timestamptz),
    count(DISTINCT jsonb_build_object('meterKey',value->>'meterKey','threshold',value->>'threshold',
-    'unit',value->>'unit','reference',value->>'thresholdReference',
-    'dueAt',value->>'dueAt'))::integer,
+    'unit',value->>'unit','reference',value->>'thresholdReference'))::integer,
    min(value->>'meterKey'),min(value->>'unit'),min(value->>'thresholdReference'),
    min(value->>'planAccessBasis'),min(value->>'assetAccessType'),
    CASE max(CASE value->>'sourceCondition' WHEN 'out_of_service' THEN 3
@@ -372,7 +429,7 @@ BEGIN
     WHEN 3 THEN 'out_of_service' WHEN 2 THEN 'problem_reported'
     WHEN 1 THEN 'unknown' WHEN 0 THEN 'reported_no_problem' ELSE NULL END,
    count(DISTINCT value->>'planAccessBasis')::integer
-  INTO use_count,claimed_hours,due_at_value,policy_count,meter_key_value,meter_unit_value,
+  INTO use_count,claimed_hours,policy_count,meter_key_value,meter_unit_value,
    threshold_reference,access_basis_value,asset_access_type,source_condition_value,
    access_basis_count
   FROM jsonb_array_elements(use_rows) value
@@ -457,7 +514,8 @@ BEGIN
     WHEN NOT ledger_complete THEN 'complete_meter_history_unavailable'
     ELSE 'compatible_current_hours_meter_unavailable' END) END;
   threshold_value:=NULL;service_current:=FALSE;
-  IF meter_current AND NOT overlap_value THEN
+   IF asset_access_type='owned' AND access_basis_value='owned' AND
+      meter_current AND NOT overlap_value THEN
    SELECT min((value->>'threshold')::numeric) INTO threshold_value
    FROM jsonb_array_elements(use_rows) value
    WHERE (value->>'assetId')::uuid=asset_row.asset_id AND value->>'threshold' IS NOT NULL;
@@ -476,37 +534,38 @@ BEGIN
     'thresholdReachedNow',current_reading>=threshold_value,
     'thresholdReachedByClaimedPlan',projected_reading>=threshold_value,
     'verifiedServiceDate',NULL,'reason',NULL);
-   maintenance_due:=jsonb_build_object('state','current_claimed_plan_position',
-    'dueAt',CASE WHEN due_at_value IS NULL THEN NULL
-     ELSE public.canonical_forecast_utc_instant(due_at_value) END,
-    'dueWithinHorizon',due_at_value IS NOT NULL AND due_at_value>=cutoff_value AND due_at_value<horizon_value,
-    'dueByRecordedMeter',current_reading>=threshold_value,
-    'dueByClaimedPlanEnd',projected_reading>=threshold_value,
-    'maintenanceScheduleVerified',FALSE,'maintenanceWorkAuthorized',FALSE,
-    'reason',NULL);
-  ELSE
+   ELSE
    service_interval:=jsonb_build_object('state','unavailable','meterKey',meter_key_value,
     'unit',meter_unit_value,'threshold',NULL,'thresholdReference',NULL,'currentReading',NULL,
     'projectedReading',NULL,'hoursRemainingAtStart',NULL,'thresholdReachedNow',NULL,
     'thresholdReachedByClaimedPlan',NULL,'verifiedServiceDate',NULL,
-    'reason',CASE WHEN overlap_value THEN 'non_overlapping_planned_utilization_unavailable'
-     WHEN NOT meter_current THEN meter_value->>'reason' ELSE 'maintenance_threshold_policy_unavailable' END);
+     'reason',CASE WHEN asset_access_type<>'owned' OR access_basis_value<>'owned'
+      THEN 'rental_or_lease_provider_evidence_unavailable'
+      WHEN overlap_value THEN 'non_overlapping_planned_utilization_unavailable'
+      WHEN NOT meter_current THEN meter_value->>'reason' ELSE 'maintenance_threshold_policy_unavailable' END);
+   END IF;
    maintenance_due:=jsonb_build_object('state','unavailable','dueAt',NULL,
     'dueWithinHorizon',NULL,'dueByRecordedMeter',NULL,'dueByClaimedPlanEnd',NULL,
     'maintenanceScheduleVerified',FALSE,'maintenanceWorkAuthorized',FALSE,
-    'reason',service_interval->>'reason');
-  END IF;
-  IF overlap_value THEN unavailable_utilization_count:=unavailable_utilization_count+1;
-  ELSE utilization_hours:=utilization_hours+claimed_hours;END IF;
-  IF NOT service_current THEN
-   unavailable_service_count:=unavailable_service_count+1;
-   unavailable_maintenance_count:=unavailable_maintenance_count+1;
-  END IF;
+    'reason','maintenance_schedule_unavailable');
+   IF asset_access_type<>'owned' OR access_basis_value<>'owned' THEN
+    provider_unavailable_count:=provider_unavailable_count+1;
+   END IF;
+   IF overlap_value OR asset_access_type<>'owned' OR access_basis_value<>'owned' THEN
+    unavailable_utilization_count:=unavailable_utilization_count+1;
+   ELSE utilization_hours:=utilization_hours+claimed_hours;END IF;
+   IF NOT service_current THEN
+    unavailable_service_count:=unavailable_service_count+1;
+   END IF;
   assets:=assets||jsonb_build_array(jsonb_build_object(
    'asset',jsonb_build_object('id',asset_value.id,'version',asset_value.version,
     'digest',rtrim(pin_value.asset_digest),'category',asset_value.category,
     'accessType',asset_access_type,'planAccessBasis',access_basis_value),
-   'plannedUtilization',CASE WHEN overlap_value THEN jsonb_build_object('state','unavailable',
+    'plannedUtilization',CASE WHEN asset_access_type<>'owned' OR access_basis_value<>'owned'
+     THEN jsonb_build_object('state','unavailable','claimedOperatingHours',NULL,
+     'useCount',use_count,'uses',uses_value,'operatingTimeVerified',FALSE,
+     'checkoutDurationUsed',FALSE,'reason','rental_or_lease_provider_evidence_unavailable')
+     WHEN overlap_value THEN jsonb_build_object('state','unavailable',
     'claimedOperatingHours',NULL,'useCount',use_count,'uses',uses_value,
     'operatingTimeVerified',FALSE,'checkoutDurationUsed',FALSE,
     'reason','non_overlapping_planned_utilization_unavailable')
@@ -568,13 +627,15 @@ BEGIN
    'readinessRevisionCount',source_index,'plannedUseCount',line_count,
    'assetCount',asset_count,'reason',NULL),
   'sources',sources,'assets',assets,
-  'utilization',CASE WHEN unavailable_utilization_count=0 THEN jsonb_build_object(
+   'utilization',CASE WHEN unavailable_utilization_count=0 THEN jsonb_build_object(
     'state','current_claimed_plan_only','assetCount',asset_count,'useCount',line_count,
     'claimedOperatingHours',public.canonical_forecast_asset_hours_v1(utilization_hours),
     'operatingTimeVerified',FALSE,'checkoutDurationUsed',FALSE,'reason',NULL)
    ELSE jsonb_build_object('state','unavailable','assetCount',asset_count,'useCount',line_count,
     'claimedOperatingHours',NULL,'operatingTimeVerified',FALSE,'checkoutDurationUsed',FALSE,
-    'reason','non_overlapping_planned_utilization_unavailable') END,
+     'reason',CASE WHEN provider_unavailable_count>0
+      THEN 'rental_or_lease_provider_evidence_unavailable'
+      ELSE 'non_overlapping_planned_utilization_unavailable' END) END,
   'learnedOutcomes',jsonb_build_object('state','none_current','applicableValueCount',0,
    'applied',FALSE,'reason','no_compatible_current_owner_adopted_operating_hour_value'),
   'evidence',jsonb_build_object('sourceAuthenticatedUtilization',TRUE,
@@ -588,10 +649,11 @@ BEGIN
    'evaluatedDowntimeRiskVerified',FALSE),
   'run',jsonb_build_object('calculationVersion','m26-asset-utilization-risk-calculation-v1',
    'sourceDigest',source_digest,'digest',run_digest),
-  'forecastIssued',unavailable_utilization_count=0,
-  'utilizationForecastIssued',unavailable_utilization_count=0,
-  'serviceIntervalForecastIssued',asset_count>0 AND unavailable_service_count=0,
-  'maintenanceDueForecastIssued',asset_count>0 AND unavailable_maintenance_count=0,
+   'forecastIssued',unavailable_utilization_count=0 AND provider_unavailable_count=0,
+   'utilizationForecastIssued',unavailable_utilization_count=0 AND provider_unavailable_count=0,
+   'serviceIntervalForecastIssued',asset_count>0 AND unavailable_service_count=0
+    AND provider_unavailable_count=0,
+   'maintenanceDueForecastIssued',FALSE,
   'serviceTimingForecastIssued',FALSE,'downtimeRiskForecastIssued',FALSE,
   'calibratedRangeIssued',FALSE,'probabilityIssued',FALSE,
   'automaticActionAuthorized',FALSE);

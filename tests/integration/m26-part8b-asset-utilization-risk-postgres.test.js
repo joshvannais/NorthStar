@@ -8,6 +8,8 @@ const proposalSource = require('../helpers/m24-proposal-source');
 const commercial = require('../../src/estimating/commercialContract');
 const costComposition = require('../helpers/m24-cost-composition-input');
 const { fixture: commercialFixture, group } = require('../helpers/m24-commercial-input');
+const { putBusinessProfile } = require('../../src/services/organizationAuthority');
+const { canonicalFenceProfile } = require('../helpers/m19-part3-business-profile');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const uuid = () => crypto.randomUUID();
@@ -31,6 +33,49 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
   let estimate;
   let appointment;
   let liveAsset;
+  let jobStart;
+  let jobEnd;
+  let mutateSchedule;
+
+  async function advanceForecastClock() {
+    cutoff = new Date((await fixture.ownerPool.query(
+      "SELECT date_trunc('second',clock_timestamp()+interval '2 seconds') value")).rows[0].value);
+    await fixture.ownerPool.query(
+      'SELECT canonical_forecast_workload_capacity_v1_test_clock_set($1)', [cutoff]);
+  }
+
+  async function saveCurrentReadiness(reason) {
+    const actor = fixture.actors.owner;
+    const route = `/api/v1/canonical/estimates/${estimate}`;
+    const review = (await request(fixture.app).get(route + '/review')
+      .set(actor.session.headers)).body.data;
+    const profile = (await fixture.ownerPool.query(
+      `SELECT raw_profile#>>'{company,timeZone}' time_zone
+       FROM canonical_business_profiles WHERE organization_id=$1 AND is_active`,
+      [fixture.org])).rows[0];
+    const readiness = require('../helpers/m24-readiness-input').body(review);
+    const line = readiness.inputs.lines[0];
+    Object.assign(line, { quantity: 1, start: jobStart.toISOString(),
+      end: jobEnd.toISOString(), timeZone: profile.time_zone,
+      location: 'Recorded fixture yard' });
+    const observedAt = new Date(Math.min(Date.now(), cutoff.getTime() - 1)).toISOString();
+    Object.assign(line.source, { label: 'Owner observed current asset',
+      reference: reason, observedAt,
+      validUntil: new Date(cutoff.getTime() + 35 * 86400000).toISOString(),
+      quantity: 1, start: jobStart.toISOString(), end: jobEnd.toISOString(),
+      condition: 'reported_no_problem', restrictions: '',
+      location: 'Recorded fixture yard', leadTime: 0, leadTimeUnit: 'hours' });
+    line.maintenance = { dueAt: new Date(cutoff.getTime() + 2 * 86400000).toISOString(),
+      meterKey: 'engine-hours', threshold: '101', unit: 'hours',
+      reference: 'Owner-reviewed 101-hour service interval' };
+    const post = (suffix, body) => request(fixture.app).post(route + suffix)
+      .set(actor.session.headers).set('Idempotency-Key', uuid()).send(body);
+    let response = await post('/equipment-readiness-preview', readiness);
+    if (response.status !== 200) throw new Error(JSON.stringify(response.body));
+    readiness.inputs.assessment = { ...response.body.data.assessment, acknowledged: true };
+    response = await post('/equipment-readiness-plans', readiness);
+    if (response.status !== 201) throw new Error(JSON.stringify(response.body));
+  }
 
   async function adoptPublishedProposal(reason) {
     const route = `/api/v1/canonical/estimates/${estimate}`;
@@ -132,15 +177,19 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
         ownerRecordedTaxAcknowledged: true },
     })).status).toBe(201);
 
-    const mutateSchedule = async (action, target, scheduledStart, scheduledEnd, reason) => {
+    mutateSchedule = async (action, target, scheduledStart, scheduledEnd, reason) => {
       const assignment = (await fixture.ownerPool.query(
         `SELECT revision,rtrim(canonical_digest) digest,appointment_status
          FROM canonical_schedule_assignments WHERE organization_id=$1 AND appointment_id=$2`,
         [fixture.org, appointment])).rows[0];
+      const timeZone = (await fixture.ownerPool.query(
+        `SELECT raw_profile#>>'{company,timeZone}' time_zone
+         FROM canonical_business_profiles WHERE organization_id=$1 AND is_active`,
+        [fixture.org])).rows[0].time_zone;
       const preview = await request(fixture.app)
         .post(`/api/v1/canonical/appointments/${appointment}/mutation-previews`)
         .set(actor.session.headers).send({ expectedRevision: Number(assignment.revision),
-          expectedDigest: assignment.digest, expectedTimeZone: 'UTC', action, target,
+          expectedDigest: assignment.digest, expectedTimeZone: timeZone, action, target,
           scheduledStart, scheduledEnd, appointmentStatus: assignment.appointment_status, reason });
       if (preview.status !== 201) throw new Error(JSON.stringify(preview.body));
       const applied = await request(fixture.app)
@@ -158,32 +207,13 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
          WHERE organization_id=$1 AND appointment_id=$2 AND applied_revision=$3`,
         [fixture.org, appointment, Number(current.revision)])).rows[0].id;
     };
-    const jobStart = new Date(cutoff.getTime() + 86400000);
-    const jobEnd = new Date(cutoff.getTime() + 100800000);
+    jobStart = new Date(cutoff.getTime() + 86400000);
+    jobEnd = new Date(cutoff.getTime() + 100800000);
     await mutateSchedule('schedule', { kind: 'unassigned', id: null },
       jobStart.toISOString(), jobEnd.toISOString(),
       'Schedule the exact Part 8B planned utilization window.');
 
-    review = (await get('/review')).body.data;
-    const readiness = require('../helpers/m24-readiness-input').body(review);
-    const line = readiness.inputs.lines[0];
-    Object.assign(line, { quantity: 1, start: jobStart.toISOString(),
-      end: jobEnd.toISOString(), location: 'Recorded fixture yard' });
-    Object.assign(line.source, { label: 'Owner observed current asset',
-      reference: 'Part 8B owner review',
-      observedAt: new Date(cutoff.getTime() - 60000).toISOString(),
-      validUntil: new Date(cutoff.getTime() + 35 * 86400000).toISOString(),
-      quantity: 1, start: jobStart.toISOString(), end: jobEnd.toISOString(),
-      condition: 'reported_no_problem', restrictions: '',
-      location: 'Recorded fixture yard', leadTime: 0, leadTimeUnit: 'hours' });
-    line.maintenance = { dueAt: new Date(cutoff.getTime() + 2 * 86400000).toISOString(),
-      meterKey: 'engine-hours', threshold: '101', unit: 'hours',
-      reference: 'Owner-reviewed 101-hour service interval' };
-    let response = await post('/equipment-readiness-preview', readiness);
-    if (response.status !== 200) throw new Error(JSON.stringify(response.body));
-    readiness.inputs.assessment = { ...response.body.data.assessment, acknowledged: true };
-    response = await post('/equipment-readiness-plans', readiness);
-    if (response.status !== 201) throw new Error(JSON.stringify(response.body));
+    await saveCurrentReadiness('Part 8B owner review');
 
     const issued = await post('/customer-estimate-versions', {
       reason: 'Part 8B issued estimate proof', confirmed: true,
@@ -254,12 +284,19 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
       utilization: { state: 'current_claimed_plan_only', claimedOperatingHours: '2',
         operatingTimeVerified: false, checkoutDurationUsed: false },
       forecastIssued: true, utilizationForecastIssued: true,
-      serviceIntervalForecastIssued: true, maintenanceDueForecastIssued: true,
+      serviceIntervalForecastIssued: true, maintenanceDueForecastIssued: false,
       serviceTimingForecastIssued: false, downtimeRiskForecastIssued: false,
       probabilityIssued: false, automaticActionAuthorized: false,
     });
     expect(owner.body.data.sources[0]).toMatchObject({ sourceIndex: 0,
-      job: { appointmentId: appointment }, estimate: { id: estimate },
+      job: { appointmentId: appointment, plannedWindow: { timeZone: 'UTC',
+        assignmentRevision: expect.any(Number), assignmentDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+        approvalId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        timeZoneAuthority: { profileId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+          profileVersion: expect.any(Number), profileHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+          timeZone: 'UTC', evaluatedAt: expect.stringMatching(/Z$/) },
+        timeEvidenceDigest: expect.stringMatching(/^[0-9a-f]{64}$/) } },
+      estimate: { id: estimate },
       composition: { calculationVersion: 'estimate-cost-adoption-v3' },
       equipmentCostPlan: { calculationVersion: 'estimate-equipment-cost-plan-v1' },
       equipmentPlan: { calculationVersion: 'estimate-equipment-plan-v1' },
@@ -274,9 +311,10 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
         currentReading: '100', projectedReading: '102', hoursRemainingAtStart: '1',
         thresholdReachedNow: false, thresholdReachedByClaimedPlan: true,
         verifiedServiceDate: null },
-      maintenanceDue: { state: 'current_claimed_plan_position', dueWithinHorizon: true,
-        dueByRecordedMeter: false, dueByClaimedPlanEnd: true,
-        maintenanceScheduleVerified: false, maintenanceWorkAuthorized: false },
+      maintenanceDue: { state: 'unavailable', dueAt: null, dueWithinHorizon: null,
+        dueByRecordedMeter: null, dueByClaimedPlanEnd: null,
+        maintenanceScheduleVerified: false, maintenanceWorkAuthorized: false,
+        reason: 'maintenance_schedule_unavailable' },
       serviceTiming: { state: 'unavailable', serviceAt: null },
       rentalLease: { state: 'owned_current', providerAvailabilityVerified: false,
         providerMaintenanceVerified: false },
@@ -286,7 +324,7 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
     expect(owner.body.data.run.digest).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  test('propagates an explicit meter reset and correction without deriving a service date', async () => {
+  test('clears stale positions after a meter reset or correction and recovers only after new readiness', async () => {
     const reset = await liveAsset.record('meter_reset', {
       meterKey: 'engine-hours', reading: '10', unit: 'hours',
       description: 'Explicit owner-reviewed meter reset for Part 8B.',
@@ -295,11 +333,20 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
       .get('/api/v1/forecast/asset-utilization-risk/current')
       .set(fixture.actors.owner.session.headers);
     expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ state: 'unavailable',
+      reason: 'current_readiness_evidence_unavailable', sources: null, assets: null,
+      forecastIssued: false, utilizationForecastIssued: false,
+      serviceIntervalForecastIssued: false, maintenanceDueForecastIssued: false });
+    await advanceForecastClock();
+    await saveCurrentReadiness('Owner re-reviewed the reset meter history.');
+    response = await request(fixture.app)
+      .get('/api/v1/forecast/asset-utilization-risk/current')
+      .set(fixture.actors.owner.session.headers);
+    expect(response.status).toBe(200);
     expect(response.body.data.assets[0]).toMatchObject({
       meter: { reading: '10', resetApplied: true, correctionApplied: false },
       serviceInterval: { currentReading: '10', projectedReading: '12',
-        verifiedServiceDate: null },
-    });
+        verifiedServiceDate: null }, maintenanceDue: { state: 'unavailable' } });
     const correction = liveAsset.body('meter_reset', {
       meterKey: 'engine-hours', reading: '12', unit: 'hours',
       description: 'Correct the exact reset reading for Part 8B.',
@@ -312,11 +359,22 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
       .get('/api/v1/forecast/asset-utilization-risk/current')
       .set(fixture.actors.owner.session.headers);
     expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ state: 'unavailable',
+      reason: 'current_readiness_evidence_unavailable', sources: null, assets: null,
+      forecastIssued: false, utilizationForecastIssued: false,
+      serviceIntervalForecastIssued: false, maintenanceDueForecastIssued: false });
+    await advanceForecastClock();
+    await saveCurrentReadiness('Owner re-reviewed the corrected meter history.');
+    response = await request(fixture.app)
+      .get('/api/v1/forecast/asset-utilization-risk/current')
+      .set(fixture.actors.owner.session.headers);
+    expect(response.status).toBe(200);
     expect(response.body.data.assets[0]).toMatchObject({
       meter: { reading: '12', resetApplied: true, correctionApplied: true,
         historyComplete: true },
       serviceInterval: { currentReading: '12', projectedReading: '14',
         verifiedServiceDate: null },
+      maintenanceDue: { state: 'unavailable', reason: 'maintenance_schedule_unavailable' },
       downtimeRisk: { state: 'unavailable', risk: null, probability: null },
     });
   });
@@ -394,6 +452,58 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
       await admin.query("SET session_replication_role='origin'").catch(() => {});
       await admin.end();
     }
+  });
+
+  test('database and route withhold every issuance flag when provider semantics are unavailable', async () => {
+    const old = liveAsset.asset;
+    const draft = await liveAsset.repo.mutate(liveAsset.actor, null, uuid(), {
+      entryPath: 'business_profile', message: 'Review rented provider responsibility',
+      identifiers: { ...liveAsset.identity, accessType: 'rented' },
+      useContext: 'Provider-neutral Part 8B boundary',
+      target: { assetId: old.id, version: old.version, digest: old.assetDigest },
+    });
+    await liveAsset.repo.mutate(liveAsset.actor, draft.data.id, uuid(), {
+      action: 'confirm', expectedRevision: draft.data.revision,
+      expectedDigest: draft.data.digest, confirmation: 'save_reviewed_asset',
+    });
+    await advanceForecastClock();
+    await saveCurrentReadiness('Owner re-reviewed the current rented asset identity.');
+
+    const client = await fixture.ownerPool.connect();
+    let databaseValue;
+    try {
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      databaseValue = (await client.query(
+        'SELECT canonical_forecast_asset_utilization_risk_v1_current($1,$2,$3,$4) value',
+        [fixture.org, fixture.actors.owner.actorUserId,
+          fixture.actors.owner.actorAccessRole, fixture.actors.owner.authSessionId])).rows[0].value;
+      await client.query('COMMIT');
+    } finally {
+      await client.query('ROLLBACK').catch(() => {}); client.release();
+    }
+    expect(databaseValue).toMatchObject({ state: 'current',
+      utilization: { state: 'unavailable',
+        reason: 'rental_or_lease_provider_evidence_unavailable' },
+      forecastIssued: false, utilizationForecastIssued: false,
+      serviceIntervalForecastIssued: false, maintenanceDueForecastIssued: false });
+    expect(databaseValue.assets[0]).toMatchObject({
+      asset: { accessType: 'rented', planAccessBasis: 'owned' },
+      plannedUtilization: { state: 'unavailable',
+        reason: 'rental_or_lease_provider_evidence_unavailable' },
+      serviceInterval: { state: 'unavailable',
+        reason: 'rental_or_lease_provider_evidence_unavailable' },
+      maintenanceDue: { state: 'unavailable', reason: 'maintenance_schedule_unavailable' },
+      rentalLease: { state: 'provider_semantics_unavailable' },
+    });
+    const routed = await request(fixture.app)
+      .get('/api/v1/forecast/asset-utilization-risk/current')
+      .set(fixture.actors.owner.session.headers);
+    expect(routed.status).toBe(200);
+    expect(routed.body.data).toMatchObject({ state: 'current',
+      forecastIssued: false, utilizationForecastIssued: false,
+      serviceIntervalForecastIssued: false, maintenanceDueForecastIssued: false });
+    expect(routed.body.data.assets[0].rentalLease.state)
+      .toBe('provider_semantics_unavailable');
   });
 
   test('keeps tenant, role, public and helper authority boundaries server-side', async () => {
@@ -483,5 +593,27 @@ realPostgres('Mission 26 original Part 8B mounted asset-utilization risk forecas
       if (readPromise) await readPromise.catch(() => {});
       gate.release(); writer.release(); reader.release();
     }
+  });
+
+  test('invalidates historical planned-window authority after the business time zone changes', async () => {
+    const active = (await fixture.ownerPool.query(
+      `SELECT version_label,raw_profile FROM canonical_business_profiles
+       WHERE organization_id=$1 AND is_active`, [fixture.org])).rows[0];
+    const profile = canonicalFenceProfile();
+    profile.hours = Object.fromEntries(
+      ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
+        .map(day => [day, { open: '00:00', close: '23:59', lunch: '',
+          emergency: false, afterHours: false, holiday: false }]));
+    profile.company.timeZone = 'America/New_York';
+    await putBusinessProfile(fixture.ownerPool, { organizationId: fixture.org,
+      userId: fixture.actors.owner.actorUserId, expectedVersion: active.version_label, profile });
+    const response = await request(fixture.app)
+      .get('/api/v1/forecast/asset-utilization-risk/current')
+      .set(fixture.actors.owner.session.headers);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ state: 'unavailable',
+      reason: 'approved_timing_attribution_unavailable', sources: null, assets: null,
+      forecastIssued: false, utilizationForecastIssued: false,
+      serviceIntervalForecastIssued: false, maintenanceDueForecastIssued: false });
   });
 });

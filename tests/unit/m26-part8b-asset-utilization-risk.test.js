@@ -18,7 +18,11 @@ function current() {
     sourceIndex: 0,
     job: { appointmentId: uuid(), assignmentId: uuid(), bookingReviewId: uuid(),
       bookingConfirmationId: uuid(), issuedVersionId: uuid(),
-      plannedWindow: { startsAt: start, endsAt: end } },
+      plannedWindow: { startsAt: start, endsAt: end, timeZone: 'America/New_York',
+        assignmentRevision: 3, assignmentDigest: digest('7'), approvalId: uuid(),
+        timeZoneAuthority: { profileHash: digest('8'), profileId: uuid(), profileVersion: 2,
+          timeZone: 'America/New_York', evaluatedAt: '2026-10-07T11:59:00.000Z' },
+        timeEvidenceDigest: digest('9') } },
     estimate: { id: uuid(), revisionId: uuid(), revision: 7, digest: digest('a') },
     composition: { id: uuid(), revision: 3, digest: digest('b'),
       calculationVersion: 'estimate-cost-adoption-v3',
@@ -49,10 +53,10 @@ function current() {
       currentReading: '100', projectedReading: '102', hoursRemainingAtStart: '1',
       thresholdReachedNow: false, thresholdReachedByClaimedPlan: true,
       verifiedServiceDate: null, reason: null },
-    maintenanceDue: { state: 'current_claimed_plan_position',
-      dueAt: '2026-10-09T12:00:00.000Z', dueWithinHorizon: true,
-      dueByRecordedMeter: false, dueByClaimedPlanEnd: true,
-      maintenanceScheduleVerified: false, maintenanceWorkAuthorized: false, reason: null },
+    maintenanceDue: { state: 'unavailable', dueAt: null, dueWithinHorizon: null,
+      dueByRecordedMeter: null, dueByClaimedPlanEnd: null,
+      maintenanceScheduleVerified: false, maintenanceWorkAuthorized: false,
+      reason: 'maintenance_schedule_unavailable' },
     serviceTiming: { state: 'unavailable', serviceAt: null,
       reason: 'operating_hour_timing_unavailable' },
     currentReadiness: { state: 'current_as_of_source', recordedDowntime: false,
@@ -91,7 +95,7 @@ function current() {
     run: { calculationVersion: 'm26-asset-utilization-risk-calculation-v1',
       sourceDigest: digest('5'), digest: digest('6') },
     forecastIssued: true, utilizationForecastIssued: true,
-    serviceIntervalForecastIssued: true, maintenanceDueForecastIssued: true,
+    serviceIntervalForecastIssued: true, maintenanceDueForecastIssued: false,
     serviceTimingForecastIssued: false, downtimeRiskForecastIssued: false,
     calibratedRangeIssued: false, probabilityIssued: false,
     automaticActionAuthorized: false,
@@ -135,6 +139,9 @@ describe('Mission 26 original Part 8B asset utilization and risk contract', () =
     expect(sql).toContain("'operatingTimeVerified',FALSE");
     expect(sql).toContain("'checkoutDurationUsed',FALSE");
     expect(sql).toContain("'verifiedServiceDate',NULL");
+    expect(sql).toContain("'maintenanceDueForecastIssued',FALSE");
+    expect(sql).toContain("'current_readiness_evidence_unavailable'");
+    expect(sql).toContain("candidate.time_evidence_digest<>public.canonical_schedule_time_evidence_digest");
     expect(sql).toContain("'automaticActionAuthorized',FALSE");
     expect(sql).toContain("(readiness_line#>>'{source,validUntil}')::timestamptz<candidate.scheduled_end");
     expect(sql).toContain("left_use->>'lineId'<right_use->>'lineId'");
@@ -164,6 +171,33 @@ describe('Mission 26 original Part 8B asset utilization and risk contract', () =
     for (const change of cases) {
       const value = current(); change(value);
       expect(sanitizeForecast(value)).toBeNull();
+    }
+  });
+
+  test('cannot issue any forecast position when provider semantics are unavailable', () => {
+    const value = current();
+    const asset = value.assets[0];
+    asset.asset.accessType = 'rented';
+    asset.plannedUtilization = { ...asset.plannedUtilization, state: 'unavailable',
+      claimedOperatingHours: null, reason: 'rental_or_lease_provider_evidence_unavailable' };
+    asset.serviceInterval = { state: 'unavailable', meterKey: 'engine-hours', unit: 'hours',
+      threshold: null, thresholdReference: null, currentReading: null, projectedReading: null,
+      hoursRemainingAtStart: null, thresholdReachedNow: null,
+      thresholdReachedByClaimedPlan: null, verifiedServiceDate: null,
+      reason: 'rental_or_lease_provider_evidence_unavailable' };
+    asset.rentalLease = { ...asset.rentalLease, state: 'provider_semantics_unavailable',
+      assetAccessType: 'rented', reason: 'rental_or_lease_provider_evidence_unavailable' };
+    value.utilization = { ...value.utilization, state: 'unavailable',
+      claimedOperatingHours: null, reason: 'rental_or_lease_provider_evidence_unavailable' };
+    value.forecastIssued = false; value.utilizationForecastIssued = false;
+    value.serviceIntervalForecastIssued = false;
+    value.evidence.meterHistoryVerified = false;
+    value.evidence.serviceThresholdPolicyVerified = false;
+    expect(sanitizeForecast(value)).toEqual(value);
+    for (const key of ['forecastIssued','utilizationForecastIssued',
+      'serviceIntervalForecastIssued','maintenanceDueForecastIssued']) {
+      const corrupt = structuredClone(value); corrupt[key] = true;
+      expect(sanitizeForecast(corrupt)).toBeNull();
     }
   });
 

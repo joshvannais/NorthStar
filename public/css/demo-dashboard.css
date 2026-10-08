@@ -751,6 +751,40 @@
 [data-theme="dark"] .command-center-forecast-card-heading span[data-state="current"] {
   color: #a7f3d0; background: rgba(6, 95, 70, .34); border-color: rgba(52, 211, 153, .3);
 }
+.command-center-forecast-timeline { grid-column: 1 / -1; overflow: hidden; }
+.command-center-forecast-timeline > p { color: var(--theme-muted); }
+.command-center-forecast-timeline-table-wrap {
+  max-width: 100%; margin-top: 14px; overflow-x: auto; border: 1px solid var(--theme-border);
+  border-radius: 12px; background: var(--theme-surface);
+}
+.command-center-forecast-timeline-table {
+  width: 100%; min-width: 560px; border-collapse: collapse; color: var(--theme-text);
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.command-center-forecast-timeline-table caption {
+  padding: 12px 12px 8px; color: var(--theme-muted); text-align: left; font-size: 11px;
+}
+.command-center-forecast-timeline-table th,
+.command-center-forecast-timeline-table td {
+  min-width: 118px; padding: 11px 12px; border-top: 1px solid var(--theme-border);
+  text-align: left; vertical-align: top;
+}
+.command-center-forecast-timeline-table thead th {
+  color: var(--theme-muted); font-size: 10px; letter-spacing: .03em; text-transform: uppercase;
+}
+.command-center-forecast-timeline-table tbody th span,
+.command-center-forecast-timeline-table tbody th small { display: block; }
+.command-center-forecast-timeline-table tbody th small {
+  margin-top: 3px; color: var(--theme-muted); font-size: 9px; font-weight: 700;
+}
+.command-center-forecast-timeline-details > p {
+  margin: 0 0 8px; color: var(--theme-muted); font-size: 11px; overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .command-center-forecast-timeline-table { min-width: 500px; }
+  .command-center-forecast-timeline-table th,
+  .command-center-forecast-timeline-table td { min-width: 108px; padding: 10px; }
+}
 .command-center-revenue-cash-outlook,
 .command-center-cost-risk-outlook,
 .command-center-customer-opportunity-outlook { overflow: hidden; }

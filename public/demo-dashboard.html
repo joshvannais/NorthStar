@@ -672,6 +672,52 @@
             <p class="sr-only" id="commandCenterForecastStatus" role="status" aria-live="polite" aria-atomic="true"></p>
           </section>
 
+          <section class="demo-panel command-center-forecast-timeline" id="commandCenterForecastTimeline"
+            aria-labelledby="commandCenterForecastTimelineTitle" aria-busy="true">
+            <div class="demo-panel-heading">
+              <div>
+                <p class="demo-panel-kicker">Forecast comparison</p>
+                <h2 id="commandCenterForecastTimelineTitle">Forecast timeline</h2>
+              </div>
+              <span class="command-center-demand-state" id="commandCenterForecastTimelineState"
+                role="status" aria-live="polite">Waiting for workspace</span>
+            </div>
+            <p id="commandCenterForecastTimelineExplanation">
+              Weekly, monthly and quarterly comparisons will appear only from authenticated compatible history.
+            </p>
+            <div class="command-center-forecast-timeline-table-wrap">
+              <table class="command-center-forecast-timeline-table">
+                <caption>Current forecast, prior issued forecast and later-finalized actual by reporting grain</caption>
+                <thead><tr><th scope="col">View</th><th scope="col">Current</th>
+                  <th scope="col">Prior</th><th scope="col">Actual</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row"><span>Weekly</span><small id="commandCenterForecastTimelineWeekState">Waiting</small></th>
+                    <td id="commandCenterForecastTimelineWeekCurrent">Not available</td>
+                    <td id="commandCenterForecastTimelineWeekPrior">Not available</td>
+                    <td id="commandCenterForecastTimelineWeekActual">Not available</td></tr>
+                  <tr><th scope="row"><span>Monthly</span><small id="commandCenterForecastTimelineMonthState">Waiting</small></th>
+                    <td id="commandCenterForecastTimelineMonthCurrent">Not available</td>
+                    <td id="commandCenterForecastTimelineMonthPrior">Not available</td>
+                    <td id="commandCenterForecastTimelineMonthActual">Not available</td></tr>
+                  <tr><th scope="row"><span>Quarterly</span><small id="commandCenterForecastTimelineQuarterState">Waiting</small></th>
+                    <td id="commandCenterForecastTimelineQuarterCurrent">Not available</td>
+                    <td id="commandCenterForecastTimelineQuarterPrior">Not available</td>
+                    <td id="commandCenterForecastTimelineQuarterActual">Not available</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <details class="command-center-forecast-details command-center-forecast-timeline-details">
+              <summary>Review comparison authority</summary>
+              <p id="commandCenterForecastTimelineAuthority">No authenticated timeline identity is shown.</p>
+              <p>Partial periods require an authenticated business calendar. An actual must be a later-finalized outcome for the same target, scope and unit.</p>
+            </details>
+            <p class="command-center-demand-boundary" id="commandCenterForecastTimelineBoundary">
+              Missing history stays unavailable. It is never shown as zero or as a later-created forecast.
+            </p>
+            <p class="sr-only" id="commandCenterForecastTimelineStatus" role="status"
+              aria-live="polite" aria-atomic="true"></p>
+          </section>
+
           <section class="demo-panel command-center-range-outlook command-center-revenue-cash-outlook"
             id="commandCenterRevenueCashOutlook" aria-labelledby="commandCenterRevenueCashTitle" aria-busy="true">
             <div class="demo-panel-heading">
@@ -897,7 +943,8 @@
   <script src="/js/command-center-customer-opportunity-outlook.js?v=m26-founder-part6-20261006"></script>
   <script src="/js/command-center-resource-risk-outlook.js?v=m26-part8d-20261008"></script>
   <script src="/js/command-center-forecast-ranges.js?v=m26-part9e-20261008"></script>
-  <script src="/js/command-center-page.js?v=m26-part9e-20261008"></script>
+  <script src="/js/command-center-forecast-timeline.js?v=m26-part10a-20261008"></script>
+  <script src="/js/command-center-page.js?v=m26-part10a-20261008"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script>NavComponent.init('command-center');</script>
 </body>

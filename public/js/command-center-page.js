@@ -32,6 +32,7 @@
   var customerOpportunityOutlook = null;
   var resourceRiskOutlook = null;
   var forecastRanges = null;
+  var forecastTimeline = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -833,6 +834,24 @@
     }).catch(function () { forecastRanges.workspaceUnavailable(); });
   }
 
+  function renderForecastTimeline() {
+    if (!forecastTimeline || typeof forecastTimeline.workspaceReady !== 'function') return;
+    var current = resourceRiskAuthority();
+    if (current) {
+      forecastTimeline.workspaceReady(current); return;
+    }
+    if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
+      forecastTimeline.workspaceUnavailable(); return;
+    }
+    var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
+    global.NorthStarAccountSession.load().then(function () {
+      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      var refreshed = resourceRiskAuthority();
+      if (refreshed) forecastTimeline.workspaceReady(refreshed);
+      else forecastTimeline.workspaceUnavailable();
+    }).catch(function () { forecastTimeline.workspaceUnavailable(); });
+  }
+
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -847,6 +866,7 @@
     renderDemandOutlook();
     renderResourceRiskOutlook();
     renderForecastRanges();
+    renderForecastTimeline();
     if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
       revenueCashOutlook.workspaceReady();
     }
@@ -890,6 +910,9 @@
     if (forecastRanges && typeof forecastRanges.workspaceLoading === 'function') {
       forecastRanges.workspaceLoading();
     }
+    if (forecastTimeline && typeof forecastTimeline.workspaceLoading === 'function') {
+      forecastTimeline.workspaceLoading();
+    }
     setStatus('Loading your workspace…', 'pending');
     var endpoint = '/api/v1/command-center/workspace' + (schedulingCursor ? '?cursor=' + encodeURIComponent(schedulingCursor) : '');
     return global.NorthStarAccountSession.fetch(endpoint, {
@@ -930,6 +953,9 @@
       }
       if (forecastRanges && typeof forecastRanges.workspaceUnavailable === 'function') {
         forecastRanges.workspaceUnavailable();
+      }
+      if (forecastTimeline && typeof forecastTimeline.workspaceUnavailable === 'function') {
+        forecastTimeline.workspaceUnavailable();
       }
       if (revenueCashOutlook && typeof revenueCashOutlook.workspaceUnavailable === 'function') {
         revenueCashOutlook.workspaceUnavailable();
@@ -1043,6 +1069,24 @@
       'No baseline, range, scenario or sensitivity value is shown.';
     byId('commandCenterForecastStatus').textContent =
       'Forecast evidence is unavailable. No forecast value is shown.';
+  }
+  if (global.NorthStarForecastTimeline &&
+      typeof global.NorthStarForecastTimeline.create === 'function') {
+    forecastTimeline = global.NorthStarForecastTimeline.create({
+      mode: mode, document: document,
+      fetcher: function (url, options) { return global.NorthStarAccountSession.fetch(url, options); },
+      originProvider: function () {
+        var field = byId('commandCenterResearchRetellId');
+        return field && typeof field.value === 'string' ? field.value.trim() : null;
+      },
+    });
+  } else if (byId('commandCenterForecastTimeline')) {
+    byId('commandCenterForecastTimeline').setAttribute('aria-busy', 'false');
+    byId('commandCenterForecastTimelineState').textContent = 'Unavailable';
+    byId('commandCenterForecastTimelineExplanation').textContent =
+      'Forecast timeline could not load. Refresh Command Center to try again.';
+    byId('commandCenterForecastTimelineStatus').textContent =
+      'Forecast timeline is unavailable. No current, prior or actual value is shown.';
   }
   if (global.NorthStarRevenueCashOutlook &&
       typeof global.NorthStarRevenueCashOutlook.create === 'function') {

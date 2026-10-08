@@ -860,11 +860,96 @@
   }
 
   function create(options) {
-    var document = options.document; var generation = 0;
+    var document = options.document; var generation = 0; var authority = null;
     function id(name) { return document.getElementById(name); }
     function element(tag, className, content) {
       var node = document.createElement(tag); if (className) node.className = className;
       if (content !== undefined) node.textContent = String(content); return node;
+    }
+    function shown(value) {
+      if (value === null || value === undefined) return 'Unavailable';
+      if (value === true) return 'Yes';
+      if (value === false) return 'No';
+      if (typeof value === 'object') return JSON.stringify(value);
+      return String(value);
+    }
+    function label(value) {
+      return String(value).replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/[_-]+/g, ' ').replace(/^./, function (letter) { return letter.toUpperCase(); });
+    }
+    function metadata(title, rows) {
+      var section = element('section', 'command-center-resource-metadata');
+      section.appendChild(element('h4', null, title));
+      var list = element('dl');
+      rows.forEach(function (row) {
+        list.append(element('dt', null, row[0]), element('dd', null, shown(row[1])));
+      });
+      section.appendChild(list); return section;
+    }
+    function objectRows(prefix, value) {
+      return Object.keys(value).map(function (key) { return [prefix + ' ' + label(key), value[key]]; });
+    }
+    function validAuthority(value) {
+      return exact(value, ['tenantId', 'role', 'mode', 'fictional']) && text(value.tenantId, 160) &&
+        text(value.role, 64) && value.mode === options.mode &&
+        value.fictional === (options.mode === 'demo');
+    }
+    function authorityRows() {
+      return [['Authenticated tenant', authority.tenantId], ['Authenticated role', authority.role],
+        ['Workspace mode', authority.mode], ['Fictional isolated data', authority.fictional]];
+    }
+    function commonRows(value) {
+      return authorityRows().concat([
+        ['Payload contract', value.version], ['Payload state', value.state],
+        ['Exact unavailable reason', value.reason], ['Checked at', value.checkedAt],
+        ['Source as of', value.sourceAsOf], ['Horizon kind', value.horizon.kind],
+        ['Horizon starts at', value.horizon.startsAt], ['Horizon ends at', value.horizon.endsAt],
+        ['Horizon starts on', value.horizon.startsOn],
+        ['Horizon ends on exclusive', value.horizon.endsOnExclusive],
+        ['Business time zone', value.horizon.timeZone], ['Scope', value.scope.label],
+        ['Whole business coverage verified', value.scope.wholeBusinessCoverageVerified],
+        ['Off platform coverage verified', value.scope.offPlatformCoverageVerified],
+      ]).concat(objectRows('Coverage', value.sourceCoverage),
+        objectRows('Evidence', value.evidence), objectRows('Calculation', value.run),
+        objectRows('Learned outcome', value.learnedOutcomes));
+    }
+    function compositionRows(composition) {
+      var rows = [['Composition id', composition.id], ['Composition revision', composition.revision],
+        ['Composition digest', composition.digest],
+        ['Composition calculation version', composition.calculationVersion]];
+      if (Object.prototype.hasOwnProperty.call(composition, 'manifestDigest')) {
+        rows.push(['Composition manifest digest', composition.manifestDigest],
+          ['Composition coverage digest', composition.coverageDigest]);
+      } else {
+        rows.push(['Composition component manifest fields', Object.keys(composition.componentManifest).length],
+          ['Composition coverage assessment fields', Object.keys(composition.coverageAssessment).length]);
+      }
+      return rows;
+    }
+    function sourceRows(source, planKeys, timeZone) {
+      var windowValue = source.job.plannedWindow;
+      var rows = [['Source index', source.sourceIndex], ['Appointment id', source.job.appointmentId],
+        ['Assignment id', source.job.assignmentId], ['Booking review id', source.job.bookingReviewId],
+        ['Booking confirmation id', source.job.bookingConfirmationId],
+        ['Issued version id', source.job.issuedVersionId], ['Planned window starts at', windowValue.startsAt],
+        ['Planned window ends at', windowValue.endsAt],
+        ['Planned window time zone', windowValue.timeZone || timeZone],
+        ['Estimate id', source.estimate.id], ['Estimate revision id', source.estimate.revisionId],
+        ['Estimate revision', source.estimate.revision], ['Estimate digest', source.estimate.digest]];
+      if (Object.prototype.hasOwnProperty.call(windowValue, 'assignmentRevision')) {
+        rows = rows.concat([['Assignment revision', windowValue.assignmentRevision],
+          ['Assignment digest', windowValue.assignmentDigest], ['Approval id', windowValue.approvalId],
+          ['Time evidence digest', windowValue.timeEvidenceDigest],
+          ['Time zone profile id', windowValue.timeZoneAuthority.profileId],
+          ['Time zone profile version', windowValue.timeZoneAuthority.profileVersion],
+          ['Time zone profile hash', windowValue.timeZoneAuthority.profileHash],
+          ['Time zone evaluated at', windowValue.timeZoneAuthority.evaluatedAt]]);
+      }
+      rows = rows.concat(compositionRows(source.composition));
+      planKeys.forEach(function (planKey) {
+        rows = rows.concat(objectRows(label(planKey), source[planKey]));
+      });
+      return rows;
     }
     function setState(label, state) {
       id('commandCenterResourceState').textContent = label;
@@ -889,6 +974,14 @@
       clearMetric('Route', 'Route load, verified mileage, fuel or energy, and capacity are not available.');
       clearGraph(message || 'No resource positions are shown.');
     }
+    function clearAuthority(message) {
+      var target = id('commandCenterResourceAuthority'); target.replaceChildren();
+      target.appendChild(element('p', null, message));
+    }
+    function renderAuthority() {
+      var target = id('commandCenterResourceAuthority'); target.replaceChildren();
+      target.appendChild(metadata('Current authenticated boundary', authorityRows()));
+    }
     function announce(message) {
       if (id('commandCenterResourceStatus').textContent !== message) {
         id('commandCenterResourceStatus').textContent = message;
@@ -897,31 +990,54 @@
     function loading() {
       id('commandCenterResourceOutlook').setAttribute('aria-busy', 'true');
       setState('Loading', 'loading'); clearAll('Resource positions are loading. Previous values were cleared.');
+      clearAuthority('Authenticated tenant and role context is loading. Previous context was cleared.');
       id('commandCenterResourceExplanation').textContent =
         'Checking current material, asset and travel positions from the released resource forecast contracts.';
       id('commandCenterResourceBoundary').textContent =
         'No shortage, maintenance, downtime, fuel, capacity, probability, recommendation or action is shown while loading.';
       announce('Resource outlook is loading. Previous values were cleared.');
     }
-    function lineageList(value, planKey) {
-      var list = element('ul', 'command-center-resource-lineage');
-      value.sources.forEach(function (source) {
-        var plan = source[planKey];
-        var item = element('li');
-        var title = element('strong', null, 'Appointment ' + source.job.appointmentId);
-        var textValue = element('span', null, 'Estimate revision ' + source.estimate.revision +
-          ' (' + source.estimate.digest + ') · plan revision ' + plan.revision +
-          ' (' + plan.digest + ') · ' + source.job.plannedWindow.startsAt + ' to ' +
-          source.job.plannedWindow.endsAt + (source.job.plannedWindow.timeZone ?
-            ' · ' + source.job.plannedWindow.timeZone : ''));
-        item.append(title, textValue); list.appendChild(item);
-      });
-      return list;
+    function renderUnavailable(name, value, message, rows) {
+      id('commandCenterResource' + name + 'State').textContent = 'Unavailable · ' + value.reason;
+      id('commandCenterResource' + name + 'State').dataset.state = 'unavailable';
+      id('commandCenterResource' + name + 'Value').textContent = 'Not available';
+      id('commandCenterResource' + name + 'Context').textContent =
+        message + ' Exact source reason: ' + value.reason + '.';
+      var target = id('commandCenterResource' + name + 'Details'); target.replaceChildren();
+      target.append(element('p', null, 'This authenticated response did not issue a forecast value.'),
+        metadata(name + ' response evidence', commonRows(value)),
+        metadata(name + ' unavailable boundaries', rows));
+      return null;
+    }
+    function materialBoundaryRows(value) {
+      return objectRows('Demand', value.demand).concat(objectRows('Inventory', value.inventory),
+        objectRows('Future receipts', value.futureReceipts),
+        objectRows('Replenishment', value.replenishment), objectRows('Reorder', value.reorder),
+        objectRows('Stockout risk', value.stockoutRisk),
+        objectRows('Purchasing risk', value.purchasingRisk));
+    }
+    function assetBoundaryRows(value) {
+      return objectRows('Utilization', value.utilization).concat([
+        ['Utilization forecast issued', value.utilizationForecastIssued],
+        ['Service interval forecast issued', value.serviceIntervalForecastIssued],
+        ['Maintenance due forecast issued', value.maintenanceDueForecastIssued],
+        ['Service timing forecast issued', value.serviceTimingForecastIssued],
+        ['Downtime risk forecast issued', value.downtimeRiskForecastIssued],
+      ]);
+    }
+    function routeBoundaryRows(value) {
+      return objectRows('Declared route load', value.declaredRouteLoad)
+        .concat(objectRows('Verified road mileage', value.verifiedRoadMileage),
+          objectRows('Route timing', value.routeTiming), objectRows('Fuel or energy', value.fuelEnergy),
+          objectRows('Logistics capacity risk', value.logisticsCapacityRisk));
     }
     function renderMaterial(value) {
       var safe = validateMaterial(value);
-      if (!safe || safe.fictional !== (options.mode === 'demo') || safe.state !== 'current' ||
-          !safe.demandForecastIssued) { clearMetric('Material',
+      if (!safe || safe.fictional !== (options.mode === 'demo')) { clearMetric('Material',
+        'Authenticated complete-as-of demand is missing. Reorder, stockout, and purchasing risk stay unavailable.'); return null; }
+      if (safe.state === 'unavailable') return renderUnavailable('Material', safe,
+        'Demand, reorder, stockout, and purchasing risk stay unavailable.', materialBoundaryRows(safe));
+      if (!safe.demandForecastIssued) { clearMetric('Material',
         'Authenticated complete-as-of demand is missing. Reorder, stockout, and purchasing risk stay unavailable.'); return null; }
       id('commandCenterResourceMaterialState').textContent = safe.fictional ? 'Fictional position' : 'Current position';
       id('commandCenterResourceMaterialState').dataset.state = 'current';
@@ -937,14 +1053,39 @@
           ' · ' + group.plannedWindow.startsAt + ' to ' + group.plannedWindow.endsAt));
       });
       target.append(element('p', null, 'Exact units stay separate; no inventory amount or shortage is inferred.'),
-        groups, lineageList(safe, 'materialPlan'));
+        groups, metadata('Material response evidence', commonRows(safe)),
+        metadata('Material risk boundaries', materialBoundaryRows(safe)));
+      safe.sources.forEach(function (source) {
+        target.appendChild(metadata('Material source ' + (source.sourceIndex + 1),
+          sourceRows(source, ['materialPlan'], safe.horizon.timeZone)));
+      });
+      safe.demand.groups.forEach(function (group, index) {
+        var rows = [['Material label', group.identity.materialLabel],
+          ['Material specification', group.identity.materialSpecification],
+          ['Procurement location', group.identity.procurementLocation], ['Exact unit', group.unit],
+          ['Planned window starts at', group.plannedWindow.startsAt],
+          ['Planned window ends at', group.plannedWindow.endsAt],
+          ['Base quantity', group.baseQuantity], ['Waste quantity', group.wasteQuantity],
+          ['Planned quantity', group.plannedQuantity]];
+        group.components.forEach(function (component, componentIndex) {
+          rows = rows.concat([['Component ' + (componentIndex + 1) + ' source index', component.sourceIndex],
+            ['Component ' + (componentIndex + 1) + ' line id', component.lineId],
+            ['Component ' + (componentIndex + 1) + ' base quantity', component.baseQuantity],
+            ['Component ' + (componentIndex + 1) + ' waste quantity', component.wasteQuantity],
+            ['Component ' + (componentIndex + 1) + ' planned quantity', component.plannedQuantity]]);
+        });
+        target.appendChild(metadata('Material group ' + (index + 1), rows));
+      });
       return { label: 'Material groups', count: safe.demand.groupCount, horizon: safe.horizon,
         sourceAsOf: safe.sourceAsOf };
     }
     function renderAsset(value) {
       var safe = validateAsset(value);
-      if (!safe || safe.fictional !== (options.mode === 'demo') || safe.state !== 'current' ||
-          !safe.utilizationForecastIssued) { clearMetric('Asset',
+      if (!safe || safe.fictional !== (options.mode === 'demo')) { clearMetric('Asset',
+        'Complete provider-neutral utilization evidence is missing. Service timing, maintenance and downtime risk stay unavailable.'); return null; }
+      if (safe.state === 'unavailable') return renderUnavailable('Asset', safe,
+        'Utilization, service timing, maintenance, and downtime risk stay unavailable.', assetBoundaryRows(safe));
+      if (!safe.utilizationForecastIssued) { clearMetric('Asset',
         'Complete provider-neutral utilization evidence is missing. Service timing, maintenance and downtime risk stay unavailable.'); return null; }
       id('commandCenterResourceAssetState').textContent = safe.fictional ? 'Fictional position' : 'Current position';
       id('commandCenterResourceAssetState').dataset.state = 'current';
@@ -964,14 +1105,50 @@
           item.plannedUtilization.claimedOperatingHours + ' claimed h · ' + interval));
       });
       target.append(element('p', null, 'Checkout duration is excluded; no maintenance work or reassignment is authorized.'),
-        assets, lineageList(safe, 'equipmentPlan'));
+        assets, metadata('Asset response evidence', commonRows(safe)),
+        metadata('Asset forecast boundaries', assetBoundaryRows(safe)));
+      safe.sources.forEach(function (source) {
+        target.appendChild(metadata('Asset source ' + (source.sourceIndex + 1),
+          sourceRows(source, ['equipmentCostPlan', 'equipmentPlan', 'readinessPlan'],
+            safe.horizon.timeZone)));
+      });
+      safe.assets.forEach(function (item, index) {
+        var rows = objectRows('Asset', item.asset).concat([
+          ['Planned utilization state', item.plannedUtilization.state],
+          ['Claimed operating hours', item.plannedUtilization.claimedOperatingHours],
+          ['Claimed operating hours exact unit', 'hours'],
+          ['Planned use count', item.plannedUtilization.useCount],
+          ['Operating time verified', item.plannedUtilization.operatingTimeVerified],
+          ['Checkout duration used', item.plannedUtilization.checkoutDurationUsed],
+          ['Planned utilization reason', item.plannedUtilization.reason],
+        ]);
+        item.plannedUtilization.uses.forEach(function (use, useIndex) {
+          rows = rows.concat([['Use ' + (useIndex + 1) + ' source index', use.sourceIndex],
+            ['Use ' + (useIndex + 1) + ' line id', use.lineId],
+            ['Use ' + (useIndex + 1) + ' window starts at', use.plannedWindow.startsAt],
+            ['Use ' + (useIndex + 1) + ' window ends at', use.plannedWindow.endsAt],
+            ['Use ' + (useIndex + 1) + ' claimed operating hours', use.claimedOperatingHours],
+            ['Use ' + (useIndex + 1) + ' exact unit', 'hours']]);
+        });
+        rows = rows.concat(objectRows('Meter', item.meter),
+          objectRows('Service interval', item.serviceInterval),
+          objectRows('Maintenance due', item.maintenanceDue),
+          objectRows('Service timing', item.serviceTiming),
+          objectRows('Current readiness', item.currentReadiness),
+          objectRows('Rental or lease', item.rentalLease),
+          objectRows('Downtime risk', item.downtimeRisk));
+        target.appendChild(metadata('Asset position ' + (index + 1), rows));
+      });
       return { label: 'Assets', count: safe.utilization.assetCount, horizon: safe.horizon,
         sourceAsOf: safe.sourceAsOf };
     }
     function renderRoute(value) {
       var safe = validateRoute(value);
-      if (!safe || safe.fictional !== (options.mode === 'demo') || safe.state !== 'current' ||
-          !safe.declaredRouteLoadForecastIssued) { clearMetric('Route',
+      if (!safe || safe.fictional !== (options.mode === 'demo')) { clearMetric('Route',
+        'Authenticated complete-as-of route coverage is missing. Mileage, fuel or energy, and capacity stay unavailable.'); return null; }
+      if (safe.state === 'unavailable') return renderUnavailable('Route', safe,
+        'Route load, mileage, fuel or energy, and logistics capacity stay unavailable.', routeBoundaryRows(safe));
+      if (!safe.declaredRouteLoadForecastIssued) { clearMetric('Route',
         'Authenticated complete-as-of route coverage is missing. Mileage, fuel or energy, and capacity stay unavailable.'); return null; }
       id('commandCenterResourceRouteState').textContent = safe.fictional ? 'Fictional position' : 'Current position';
       id('commandCenterResourceRouteState').dataset.state = 'current';
@@ -988,7 +1165,21 @@
       });
       target.append(element('p', null,
         'Road transportation and onsite equipment movement remain unclassified and are never combined.'),
-      routes, lineageList(safe, 'travelPlan'));
+      routes, metadata('Route response evidence', commonRows(safe)),
+      metadata('Route forecast boundaries', routeBoundaryRows(safe)));
+      safe.sources.forEach(function (source) {
+        target.appendChild(metadata('Route source ' + (source.sourceIndex + 1),
+          sourceRows(source, ['travelPlan'], safe.horizon.timeZone)));
+      });
+      safe.routes.forEach(function (item, index) {
+        var rows = [['Source index', item.sourceIndex], ['Trip id', item.tripId]]
+          .concat(objectRows('Route', item.route), objectRows('Movement', item.movement),
+            objectRows('Resource', item.resource), objectRows('Declared distance', item.declaredDistance),
+            objectRows('Verified road mileage', item.verifiedRoadMileage),
+            objectRows('Route timing', item.routeTiming), objectRows('Fuel or energy', item.fuelEnergy),
+            objectRows('Capacity', item.capacity));
+        target.appendChild(metadata('Route line ' + (index + 1), rows));
+      });
       return { label: 'Route lines', count: safe.declaredRouteLoad.routeLineCount,
         horizon: safe.horizon, sourceAsOf: safe.sourceAsOf };
     }
@@ -1020,6 +1211,7 @@
         ' in ' + items[0].horizon.timeZone + '.';
     }
     function renderBundle(bundle) {
+      renderAuthority();
       var items = [renderMaterial(bundle && bundle.material), renderAsset(bundle && bundle.asset),
         renderRoute(bundle && bundle.route)].filter(Boolean);
       renderGraph(items);
@@ -1046,8 +1238,21 @@
         });
       }).catch(function () { return null; });
     }
-    function load() {
+    function load(nextAuthority) {
       var run = ++generation; loading();
+      authority = validAuthority(nextAuthority) ? nextAuthority : null;
+      if (!authority) {
+        id('commandCenterResourceOutlook').setAttribute('aria-busy', 'false');
+        setState('Workspace unavailable', 'unavailable');
+        clearAll('No resource positions are shown without current tenant and role authority.');
+        clearAuthority('Current authenticated tenant and role context is unavailable.');
+        id('commandCenterResourceExplanation').textContent =
+          'Current authenticated tenant and role context is required before resource positions can load.';
+        id('commandCenterResourceBoundary').textContent =
+          'No resource position or risk is shown without current tenant and role authority.';
+        announce('Resource outlook is unavailable. Authenticated tenant and role context is missing.');
+        return Promise.resolve();
+      }
       if (options.mode === 'demo') { renderBundle(demoBundle()); return Promise.resolve(); }
       return Promise.all([
         fetchDomain('/api/v1/forecast/material-demand-risk/current', validateMaterial, run),
@@ -1059,8 +1264,10 @@
       });
     }
     return { workspaceReady: load, workspaceUnavailable: function () {
-      generation += 1; id('commandCenterResourceOutlook').setAttribute('aria-busy', 'false');
+      generation += 1; authority = null;
+      id('commandCenterResourceOutlook').setAttribute('aria-busy', 'false');
       setState('Workspace unavailable', 'unavailable'); clearAll('No resource positions are shown.');
+      clearAuthority('Current authenticated tenant and role context is unavailable.');
       id('commandCenterResourceExplanation').textContent =
         'The workspace could not load. Refresh to retry loading current resource positions.';
       id('commandCenterResourceBoundary').textContent =

@@ -32,6 +32,8 @@ async function pageFor(browser, scenario) {
   await page.addScriptTag({ path: path.resolve('public/js/command-center-resource-risk-outlook.js') });
   await page.evaluate(mode => {
     window.__calls = []; window.__responses = []; window.__announcements = [];
+    window.__authority = { tenantId: mode === 'demo' ? 'tenant-demo-browser' : 'tenant-paid-browser',
+      role: mode === 'demo' ? 'viewer' : 'owner', mode, fictional: mode === 'demo' };
     const status = document.getElementById('commandCenterResourceStatus');
     new MutationObserver(() => {
       if (window.__announcements.at(-1) !== status.textContent) {
@@ -80,14 +82,14 @@ async function exercise(browser, scenario, result) {
     assert.equal(await summary.evaluate(n => document.activeElement === n), true);
     await statusIsExposed(context, page);
     if (scenario.mode === 'demo') {
-      await page.evaluate(() => window.__resource.workspaceReady());
+      await page.evaluate(() => window.__resource.workspaceReady(window.__authority));
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
       assert.equal(await page.locator('#commandCenterResourceState').innerText(), 'Fictional example');
       await page.evaluate(() => window.__resource.workspaceUnavailable());
       assert.equal(await page.locator('#commandCenterResourceState').innerText(), 'Workspace unavailable');
       assert.equal(await page.locator('#commandCenterResourceGraphBars').innerHTML(), '');
       assert.equal(await page.locator('#commandCenterResourceAssetValue').innerText(), 'Not available');
-      await page.evaluate(() => window.__resource.workspaceReady());
+      await page.evaluate(() => window.__resource.workspaceReady(window.__authority));
       assert.equal(await page.locator('#commandCenterResourceState').innerText(), 'Fictional example');
     } else {
       const bundle = await page.evaluate(() => {
@@ -100,28 +102,51 @@ async function exercise(browser, scenario, result) {
           { status: 200, payload: { success: true, data: data.material }, hold: true },
           { status: 200, payload: { success: true, data: data.asset } },
           { status: 200, payload: { success: true, data: data.route } });
-        window.__pending = window.__resource.workspaceReady();
+        document.getElementById('commandCenterResourceAuthority').textContent = 'private stale tenant';
+        window.__pending = window.__resource.workspaceReady(window.__authority);
       }, bundle);
       assert.equal(await page.locator('#commandCenterResourceMaterialValue').innerText(), 'Not available');
       assert.equal(await page.locator('#commandCenterResourceGraphBars').innerHTML(), '');
+      assert.doesNotMatch(await page.locator('#commandCenterResourceAuthority').innerText(), /private stale tenant/);
       await page.evaluate(() => window.__releaseResource()); await page.evaluate(() => window.__pending);
       assert.equal(await page.locator('#commandCenterResourceState').innerText(), 'Current');
       await page.evaluate(data => {
+        const asset = JSON.parse(JSON.stringify(data.asset));
+        const reason = 'current_adopted_equipment_composition_unavailable';
+        asset.state = 'unavailable'; asset.reason = reason; asset.sources = null; asset.assets = null;
+        Object.keys(asset.sourceCoverage).forEach(key => {
+          if (!['state', 'completeAsOf', 'hasMore', 'reason'].includes(key)) asset.sourceCoverage[key] = null;
+        });
+        Object.assign(asset.sourceCoverage, { state: 'unavailable', completeAsOf: false,
+          hasMore: null, reason });
+        Object.keys(asset.evidence).forEach(key => { asset.evidence[key] = false; });
+        asset.learnedOutcomes = { state: 'unavailable', applicableValueCount: null,
+          applied: false, reason };
+        asset.run.sourceDigest = null; asset.run.digest = null;
+        Object.keys(asset).filter(key => /ForecastIssued$/.test(key) || key === 'forecastIssued')
+          .forEach(key => { asset[key] = false; });
+        asset.utilization = { state: 'unavailable', assetCount: null, useCount: null,
+          claimedOperatingHours: null, operatingTimeVerified: false, checkoutDurationUsed: false, reason };
         window.__responses.push(
           { status: 200, payload: { success: true, data: data.material } },
-          { status: 503, payload: { success: false } },
+          { status: 200, payload: { success: true, data: asset } },
           { status: 200, payload: { success: true, data: data.route } });
-        return window.__resource.workspaceReady();
+        return window.__resource.workspaceReady(window.__authority);
       }, bundle);
       assert.equal(await page.locator('#commandCenterResourceState').innerText(), 'Partial');
       assert.equal(await page.locator('#commandCenterResourceAssetValue').innerText(), 'Not available');
       assert.equal(await page.locator('#commandCenterResourceGraphBars > *').count(), 2);
+      assert.match(await page.locator('#commandCenterResourceAssetContext').innerText(),
+        /current_adopted_equipment_composition_unavailable/);
+      assert.match(await page.locator('#commandCenterResourceAssetDetails').innerText(),
+        /Coverage complete As Of\s+No/i);
       await page.evaluate(data => {
+        data.material.sources[0].materialPlan.digest = 'f'.repeat(64);
         window.__responses.push(
           { status: 200, payload: { success: true, data: data.material } },
           { status: 200, payload: { success: true, data: data.asset } },
           { status: 200, payload: { success: true, data: data.route } });
-        return window.__resource.workspaceReady();
+        return window.__resource.workspaceReady(window.__authority);
       }, bundle);
       assert.equal(await page.locator('#commandCenterResourceState').innerText(), 'Current');
       assert.equal(await page.evaluate(() => window.__calls.length), 9);
@@ -134,6 +159,40 @@ async function exercise(browser, scenario, result) {
     assert.match(await page.locator('#commandCenterResourceMaterialDetails').innerText(), /24 ea/);
     assert.match(await page.locator('#commandCenterResourceRouteDetails').innerText(),
       /40 mi declared vehicle-leg distance/);
+    const authorityText = await page.locator('#commandCenterResourceAuthority').innerText();
+    assert.match(authorityText, scenario.mode === 'demo'
+      ? /Authenticated tenant\s+tenant-demo-browser[\s\S]*Authenticated role\s+viewer/
+      : /Authenticated tenant\s+tenant-paid-browser[\s\S]*Authenticated role\s+owner/);
+    const materialText = await page.locator('#commandCenterResourceMaterialDetails').innerText();
+    const assetText = await page.locator('#commandCenterResourceAssetDetails').innerText();
+    const routeText = await page.locator('#commandCenterResourceRouteDetails').innerText();
+    assert.match(materialText, /Checked at\s+2026-10-08T12:00:00.000Z/i);
+    assert.match(materialText, /Source as of\s+2026-10-08T12:00:01.000Z/i);
+    assert.match(materialText, /Coverage complete As Of\s+Yes/i);
+    assert.match(materialText, /Coverage has More\s+No/i);
+    assert.match(materialText, /Coverage component Line Count\s+2/i);
+    assert.match(materialText, /Business time zone\s+America\/New_York/i);
+    assert.match(materialText, /Assignment id\s+10000000-0000-4000-8000-000000000002/i);
+    assert.match(materialText, /Booking confirmation id\s+10000000-0000-4000-8000-000000000004/i);
+    assert.match(materialText, /Composition id\s+10000000-0000-4000-8000-000000000008/i);
+    assert.match(materialText, /Material Plan id\s+10000000-0000-4000-8000-000000000009/i);
+    assert.match(materialText, /Exact unit\s+(ft|ea)/i);
+    assert.match(assetText, /Equipment Plan id\s+10000000-0000-4000-8000-000000000023/i);
+    assert.match(assetText, /Readiness Plan evidence Digest\s+8{64}/i);
+    assert.match(assetText, /Meter event Revision\s+2/i);
+    assert.match(assetText, /Meter reset Applied\s+Yes/i);
+    assert.match(assetText, /Meter correction Applied\s+No/i);
+    assert.match(assetText, /Claimed operating hours exact unit\s+hours/i);
+    assert.match(routeText, /Travel Plan source Digest\s+4{64}/i);
+    assert.match(routeText, /Trip id\s+10000000-0000-4000-8000-000000000037/i);
+    assert.match(routeText, /Route origin Digest\s+6{64}/i);
+    assert.match(routeText, /Movement reason\s+movement_class_unavailable/i);
+    assert.match(routeText, /Resource reason\s+resource_identity_unavailable/i);
+    assert.match(routeText, /Declared distance unit\s+mi/i);
+    if (scenario.mode === 'paid') {
+      assert.match(materialText, new RegExp('Material Plan digest\\s+' + 'f'.repeat(64), 'i'));
+      assert.doesNotMatch(materialText, new RegExp('Material Plan digest\\s+' + 'c'.repeat(64), 'i'));
+    }
     assert.match(await page.locator('#commandCenterResourceBoundary').innerText(),
       /Demand is not inventory.*Planned hours are not actual meter time.*Declared distance is not verified mileage/);
     const inspection = await page.evaluate(() => ({

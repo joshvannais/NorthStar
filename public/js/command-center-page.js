@@ -779,6 +779,41 @@
     }
   }
 
+  function resourceRiskAuthority() {
+    var account = global.NorthStarAccountSession &&
+      typeof global.NorthStarAccountSession.getAccount === 'function'
+      ? global.NorthStarAccountSession.getAccount() : null;
+    if (!workspace || !workspace.tenant || !account || !account.organization ||
+        !account.membership || account.organization.id !== workspace.tenant.id ||
+        account.membership.status !== 'active' || typeof account.membership.role !== 'string') {
+      return null;
+    }
+    return Object.freeze({
+      tenantId: workspace.tenant.id,
+      role: account.membership.role,
+      mode: mode,
+      fictional: workspace.tenant.fictional === true,
+    });
+  }
+
+  function renderResourceRiskOutlook() {
+    if (!resourceRiskOutlook || typeof resourceRiskOutlook.workspaceReady !== 'function') return;
+    var current = resourceRiskAuthority();
+    if (current) {
+      resourceRiskOutlook.workspaceReady(current); return;
+    }
+    if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
+      resourceRiskOutlook.workspaceUnavailable(); return;
+    }
+    var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
+    global.NorthStarAccountSession.load().then(function () {
+      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      var refreshed = resourceRiskAuthority();
+      if (refreshed) resourceRiskOutlook.workspaceReady(refreshed);
+      else resourceRiskOutlook.workspaceUnavailable();
+    }).catch(function () { resourceRiskOutlook.workspaceUnavailable(); });
+  }
+
   function render() {
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
@@ -791,9 +826,7 @@
     renderLeads(graphs);
     renderCoachAndStatus(graphs);
     renderDemandOutlook();
-    if (resourceRiskOutlook && typeof resourceRiskOutlook.workspaceReady === 'function') {
-      resourceRiskOutlook.workspaceReady();
-    }
+    renderResourceRiskOutlook();
     if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
       revenueCashOutlook.workspaceReady();
     }

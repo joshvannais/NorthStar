@@ -20,6 +20,7 @@ const TENANTS = { paid: 'a0000000-0000-4000-8000-000000000010',
   demo: 'd0000000-0000-4000-8000-000000000010' };
 const ORIGIN = '90000000-0000-4000-8000-000000000010';
 const SUFFIXES = ['Revenue','OperatingCost','Profit','Margin','Demand','Capacity'];
+const FIELDS = ['Coverage','Assumptions','Confidence','Uncertainty','Stale','Change','Error','Cause'];
 
 async function pageFor(browser, scenario) {
   const context = await browser.newContext({ viewport: scenario.viewport,
@@ -34,19 +35,21 @@ async function pageFor(browser, scenario) {
   await page.waitForFunction(() => getComputedStyle(document.body).margin === '0px');
   await page.addScriptTag({ path: path.resolve(
     'public/js/command-center-monthly-forecast-kpis.js') });
+  await page.addScriptTag({ path: path.resolve(
+    'public/js/command-center-forecast-drilldowns.js') });
   await page.evaluate(({ mode, tenant, origin }) => {
     window.__calls = []; window.__responses = []; window.__announcements = [];
     window.__authority = { tenantId: tenant, role: mode === 'demo' ? 'viewer' : 'owner',
       mode, fictional: mode === 'demo' };
-    const status = document.getElementById('commandCenterMonthlyForecastKpisStatus');
+    const status = document.getElementById('commandCenterForecastDrilldownsStatus');
     new MutationObserver(() => window.__announcements.push(status.textContent))
       .observe(status, { childList: true, characterData: true, subtree: true });
-    window.__monthly = NorthStarMonthlyForecastKpis.create({ document, mode,
+    window.__details = NorthStarForecastDrilldowns.create({ document, mode,
       originProvider: () => origin, fetcher: async (url, options) => {
         window.__calls.push({ url, method: options.method, cache: options.cache });
         const response = window.__responses.shift();
         if (!response) throw new Error('Unexpected request');
-        if (response.hold) await new Promise(resolve => { window.__releaseMonthly = resolve; });
+        if (response.hold) await new Promise(resolve => { window.__releaseDetails = resolve; });
         return { ok: response.status >= 200 && response.status < 300,
           json: async () => response.payload };
       } });
@@ -55,7 +58,7 @@ async function pageFor(browser, scenario) {
 }
 
 async function statusIsExposed(context, page) {
-  const status = page.locator('#commandCenterMonthlyForecastKpisStatus');
+  const status = page.locator('#commandCenterForecastDrilldownsStatus');
   assert.equal(await status.getAttribute('role'), 'status');
   assert.equal(await status.getAttribute('aria-live'), 'polite');
   assert.equal(await status.getAttribute('aria-atomic'), 'true');
@@ -63,7 +66,7 @@ async function statusIsExposed(context, page) {
     const session = await context.newCDPSession(page);
     const root = await session.send('DOM.getDocument');
     const target = await session.send('DOM.querySelector', {
-      nodeId: root.root.nodeId, selector: '#commandCenterMonthlyForecastKpisStatus',
+      nodeId: root.root.nodeId, selector: '#commandCenterForecastDrilldownsStatus',
     });
     const tree = await session.send('Accessibility.getPartialAXTree', {
       nodeId: target.nodeId, fetchRelatives: false,
@@ -75,108 +78,106 @@ async function statusIsExposed(context, page) {
 async function exercise(browser, scenario, result) {
   const { context, page, errors } = await pageFor(browser, scenario);
   try {
-    const summary = page.locator(
-      '#commandCenterMonthlyForecastKpis > .command-center-monthly-kpi-details > summary');
-    await summary.focus(); assert.equal(await summary.evaluate(node => document.activeElement === node), true);
+    const summary = page.locator('#commandCenterForecastDrilldowns > summary');
+    await summary.focus();
+    assert.equal(await summary.evaluate(node => document.activeElement === node), true);
     await summary.press('Enter');
-    assert.notEqual(await summary.locator('..').getAttribute('open'), null);
+    assert.notEqual(await page.locator('#commandCenterForecastDrilldowns').getAttribute('open'), null);
     assert.equal(await summary.evaluate(node => document.activeElement === node), true);
     await statusIsExposed(context, page);
 
     if (scenario.mode === 'demo') {
-      await page.evaluate(() => window.__monthly.workspaceReady(window.__authority));
+      await page.evaluate(() => window.__details.workspaceReady(window.__authority));
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
-      assert.equal(await page.locator('#commandCenterMonthlyForecastKpisState').innerText(),
+      assert.equal(await page.locator('#commandCenterForecastDrilldownsState').textContent(),
         'Fictional guard');
-      assert.match(await page.locator('#commandCenterMonthlyForecastKpisExplanation').innerText(),
-        /isolated fictional example.*no paid forecast call.*no fabricated KPI value/i);
-      await page.evaluate(() => window.__monthly.workspaceUnavailable());
-      assert.equal(await page.locator('#commandCenterMonthlyForecastKpisState').innerText(),
+      assert.match(await page.locator('#commandCenterForecastDrilldownsExplanation').textContent(),
+        /isolated fictional example.*no paid request.*no invented evidence/i);
+      await page.evaluate(() => window.__details.workspaceUnavailable());
+      assert.equal(await page.locator('#commandCenterForecastDrilldownsState').textContent(),
         'Workspace unavailable');
-      assert.equal(await page.locator('#commandCenterMonthlyForecastKpiRevenueState').innerText(),
-        'Unavailable');
-      await page.evaluate(() => window.__monthly.workspaceReady(window.__authority));
+      assert.equal(await page.locator('#commandCenterForecastDrilldowns').getAttribute('open'), null);
+      await page.evaluate(() => window.__details.workspaceReady(window.__authority));
       assert.equal(await page.evaluate(() => window.__calls.length), 0);
     } else {
-      const value = await page.evaluate(tenant => NorthStarMonthlyForecastKpis.demoBundle(tenant),
-        TENANTS.paid);
+      const value = await page.evaluate(tenant =>
+        NorthStarForecastDrilldowns.demoDrilldowns(tenant), TENANTS.paid);
       await page.evaluate(data => {
         window.__responses.push({ status: 200, payload: { success: true, data }, hold: true });
-        document.getElementById('commandCenterMonthlyForecastKpiProfitValue').textContent =
-          'stale private value';
-        document.getElementById('commandCenterMonthlyForecastKpisAuthority').textContent =
+        document.getElementById('commandCenterForecastDrilldownProfitCause').textContent =
+          'stale private cause';
+        document.getElementById('commandCenterForecastDrilldownsAuthority').textContent =
           'stale private identity';
-        window.__pendingMonthly = window.__monthly.workspaceReady(window.__authority);
+        window.__pendingDetails = window.__details.workspaceReady(window.__authority);
       }, value);
-      assert.equal(await page.locator('#commandCenterMonthlyForecastKpiProfitValue').innerText(),
-        'Not available');
-      assert.doesNotMatch(await page.locator('#commandCenterMonthlyForecastKpisAuthority').innerText(),
+      assert.doesNotMatch(await page.locator('#commandCenterForecastDrilldownProfitCause').textContent(),
+        /stale private cause/);
+      assert.doesNotMatch(await page.locator('#commandCenterForecastDrilldownsAuthority').textContent(),
         /stale private identity/);
-      await page.evaluate(() => window.__releaseMonthly());
-      await page.evaluate(() => window.__pendingMonthly);
+      await page.evaluate(() => window.__releaseDetails());
+      await page.evaluate(() => window.__pendingDetails);
       assert.deepEqual(await page.evaluate(() => window.__calls), [{
-        url: `/api/v1/forecast/monthly-kpis/${ORIGIN}`, method: 'GET', cache: 'no-store',
+        url: `/api/v1/forecast/drilldowns/${ORIGIN}`, method: 'GET', cache: 'no-store',
       }]);
-      assert.match(await page.locator('#commandCenterMonthlyForecastKpisAuthority').innerText(),
-        /Tenant a0000000.*source anchor.*run and manifest identities unavailable/i);
+      assert.match(await page.locator('#commandCenterForecastDrilldownsAuthority').textContent(),
+        /Tenant a0000000.*month.*timeline.*bundle.*run and drilldown receipts unavailable/i);
 
       await page.evaluate(data => {
         const stale = JSON.parse(JSON.stringify(data));
-        stale.reason = 'deterministic_baseline_not_current'; stale.anchor = null;
-        stale.month = null; stale.graph.month = null; stale.digests.bundle = null;
-        stale.anchorSourceAuthenticated = false; stale.currentness.anchorCurrent = false;
-        stale.currentness.correctionOrRevocationApplied = true;
+        stale.reason = stale.bundle.reason = 'deterministic_baseline_not_current';
+        stale.period = stale.bundle.anchor = stale.bundle.month = stale.bundle.graph.month = null;
+        stale.digests.bundle = stale.bundle.digests.bundle = null;
+        stale.digests.timeline = null; stale.bundle.anchorSourceAuthenticated = false;
+        stale.currentness.anchorCurrent = stale.bundle.currentness.anchorCurrent = false;
+        stale.currentness.correctionOrRevocationApplied =
+          stale.bundle.currentness.correctionOrRevocationApplied = true;
         stale.slots.forEach(slot => { slot.reason = stale.reason; });
-        stale.graph.reason = stale.reason;
+        stale.bundle.slots.forEach(slot => { slot.reason = stale.reason; });
+        stale.bundle.graph.reason = stale.reason;
         window.__responses.push({ status: 200, payload: { success: true, data: stale } });
-        return window.__monthly.workspaceReady(window.__authority);
+        return window.__details.workspaceReady(window.__authority);
       }, value);
-      assert.match(await page.locator('#commandCenterMonthlyForecastKpisAuthority').innerText(),
-        /prior source anchor was cleared/i);
-      assert.match(await page.locator('#commandCenterMonthlyForecastKpisExplanation').innerText(),
-        /source changed/i);
-      assert.equal(await page.locator('#commandCenterMonthlyForecastKpiRevenueState').innerText(),
-        'Target presence unknown; run manifest unavailable');
+      assert.match(await page.locator('#commandCenterForecastDrilldownsAuthority').textContent(),
+        /prior source, month and digest identities were cleared/i);
+      assert.match(await page.locator('#commandCenterForecastDrilldownsExplanation').textContent(),
+        /source anchor changed/i);
 
       await page.evaluate(() => {
         window.__responses.push({ status: 503,
           payload: { success: false, error: { message: 'unavailable' } } });
-        return window.__monthly.workspaceReady(window.__authority);
+        return window.__details.workspaceReady(window.__authority);
       });
-      assert.match(await page.locator('#commandCenterMonthlyForecastKpisAuthority').innerText(),
-        /No authenticated run identity is retained/i);
+      assert.match(await page.locator('#commandCenterForecastDrilldownsAuthority').textContent(),
+        /No authenticated run, period or drilldown identity is retained/i);
       await page.evaluate(data => {
         window.__responses.push({ status: 200, payload: { success: true, data } });
-        return window.__monthly.workspaceReady(window.__authority);
+        return window.__details.workspaceReady(window.__authority);
       }, value);
-      assert.equal(await page.locator('#commandCenterMonthlyForecastKpisState').innerText(),
-        'KPIs unavailable');
-      assert.doesNotMatch(await page.locator('#commandCenterMonthlyForecastKpisExplanation').innerText(),
+      assert.equal(await page.locator('#commandCenterForecastDrilldownsState').textContent(),
+        'Details unavailable');
+      assert.doesNotMatch(await page.locator('#commandCenterForecastDrilldownsExplanation').textContent(),
         /fictional/i);
     }
 
-    for (const suffix of SUFFIXES) {
-      const value = await page.locator(`#commandCenterMonthlyForecastKpi${suffix}Value`).innerText();
-      assert.equal(value, 'Not available');
-      assert.doesNotMatch(value, /\b0(?:\.0+)?\b|%|confidence|probability/i);
-      const state = await page.locator(`#commandCenterMonthlyForecastKpi${suffix}State`).innerText();
-      assert.equal(state, 'Target presence unknown; run manifest unavailable');
-      assert.doesNotMatch(state, /absent from authenticated run/i);
+    for (const suffix of SUFFIXES) for (const field of FIELDS) {
+      const text = await page.locator(
+          `#commandCenterForecastDrilldown${suffix}${field}`).textContent();
+      assert.match(text, /^(Not available|Unknown)/);
+      assert.doesNotMatch(text, /\b(?:0|[1-9]\d*)(?:\.\d+)?%\b|P10|P50|P90|probability score/i);
     }
-    assert.match(await page.locator('#commandCenterMonthlyForecastKpiGraphPlot').innerText(),
-      /points are withheld/i);
-    assert.match(await page.locator('#commandCenterMonthlyForecastKpisBoundary').innerText(),
-      /Each target keeps its own definition, unit, scope and applicability.*Profit and margin.*missing/i);
-    assert.equal(await page.locator('.command-center-monthly-kpi-grid article').count(), 6);
-    assert.equal(await page.locator('#commandCenterMonthlyForecastKpis details').count(), 2);
+    assert.match(await page.locator('#commandCenterForecastDrilldownDemandConfidence').textContent(),
+      /no reviewed evaluation.*probability.*calibration.*confidence percentage/i);
+    assert.match(await page.locator('#commandCenterForecastDrilldownDemandCause').textContent(),
+      /no authenticated source, feature, assumption, configuration or algorithm difference/i);
+    assert.equal(await page.locator('.command-center-forecast-drilldown-grid article').count(), 6);
 
     const inspection = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,
-      busy: document.getElementById('commandCenterMonthlyForecastKpis').getAttribute('aria-busy'),
-      columns: getComputedStyle(document.querySelector('.command-center-monthly-kpi-grid'))
+      busy: document.getElementById('commandCenterForecastDrilldowns').getAttribute('aria-busy'),
+      columns: getComputedStyle(document.querySelector('.command-center-forecast-drilldown-grid'))
         .gridTemplateColumns.split(' ').length,
-      motion: Array.from(document.querySelectorAll('#commandCenterMonthlyForecastKpis *')).map(node => {
+      motion: Array.from(document.querySelectorAll('#commandCenterForecastDrilldowns *')).map(node => {
         const style = getComputedStyle(node); return { id: node.id,
           animationDuration: style.animationDuration, transitionDuration: style.transitionDuration };
       }).filter(value => parseFloat(value.animationDuration) > 0.001 ||
@@ -184,16 +185,16 @@ async function exercise(browser, scenario, result) {
     }));
     assert.equal(inspection.scrollWidth, inspection.clientWidth);
     assert.equal(inspection.busy, 'false'); assert.deepEqual(inspection.motion, []);
-    assert.equal(inspection.columns, scenario.size === 'mobile' ? 1 : 3);
+    assert.equal(inspection.columns, scenario.size === 'mobile' ? 1 : 2);
     assert.match(await page.evaluate(() => window.__announcements.at(-1)),
-      /Six monthly KPI cards and graph points remain unavailable/i);
+      /Six forecast drilldowns remain value-free and unavailable/i);
     assert.deepEqual(errors, []);
     const name = [scenario.mode, scenario.size, scenario.theme].join('-');
     await page.screenshot({ path: path.join(output, name + '.png'), fullPage: true });
-    result.cases.push({ name, paidDemoIsolation: true, sameRunValuesWithheld: true,
-      correctionFailureAndRecovery: true, staleValuesCleared: true,
+    result.cases.push({ name, paidDemoIsolation: true, evidenceWithheld: true,
+      correctionFailureAndRecovery: true, staleDetailsCleared: true,
       zeroDistinctFromUnavailable: true, keyboardAndStatusAccessible: true,
-      responsiveCards: true, reducedMotion: true, pass: true });
+      responsiveDrilldowns: true, reducedMotion: true, pass: true });
   } finally { await context.close(); }
 }
 

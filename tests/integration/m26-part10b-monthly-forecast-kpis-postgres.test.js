@@ -189,6 +189,38 @@ realPostgres('Mission 26 original Part 10B mounted monthly KPI boundary', () => 
     expect(privileges).toEqual({ slots: false, helper: false, reader: true });
   });
 
+  test('Part 10C binds value-free detail to the same authenticated month and slot identities',
+    async () => {
+      const route = `/api/v1/forecast/drilldowns/${origin.id}`;
+      const owner = await request(fixture.app).get(route)
+        .set(fixture.actors.owner.session.headers);
+      const admin = await request(fixture.app).get(route)
+        .set(fixture.actors.admin.session.headers);
+      expect(owner.status).toBe(200); expect(admin.status).toBe(200);
+      expect(owner.headers['cache-control']).toBe('private, no-store');
+      expect(owner.body.data).toMatchObject({ state: 'unavailable',
+        reason: 'same_run_manifest_not_available', organizationId: fixture.org,
+        period: { localStart: horizon, grain: 'business_local_month' },
+        sourceCoverageAuthenticated: false, assumptionsAuthenticated: false,
+        evaluationReviewed: false, staleInputAuthorityAvailable: false,
+        numericalDetailIssued: false, paidNumericServing: false,
+        automaticActionAuthorized: false });
+      expect(owner.body.data.slots.map(slot => slot.key)).toEqual([
+        'revenue','operating_cost','profit','margin','demand','capacity']);
+      expect(owner.body.data.slots.every(slot =>
+        slot.identity.runId === null && slot.sourceCoverage.numerator === null &&
+        slot.sourceCoverage.denominator === null && slot.assumptions.items.length === 0 &&
+        slot.confidence.percentage === null && slot.uncertainty.drivers.length === 0 &&
+        slot.change.amount === null && slot.error.amount === null &&
+        slot.cause.state === 'unknown')).toBe(true);
+      expect(admin.body.data.bundle.anchor).toEqual(owner.body.data.bundle.anchor);
+      expect(admin.body.data.digests).toEqual(owner.body.data.digests);
+      expect((await request(fixture.app).get(route)
+        .set(fixture.actors.otherOwner.session.headers)).status).toBe(404);
+      expect((await request(fixture.app).get(route)
+        .set(fixture.actors.member.session.headers)).status).toBe(403);
+    }, 120000);
+
   test('revocation clears every anchor identity and corrected evidence gets a new bundle',
     async () => {
       const owner = fixture.actors.owner;

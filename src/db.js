@@ -4944,6 +4944,34 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         'GRANT EXECUTE ON FUNCTION public.canonical_forecast_named_scenario_v1_current(uuid,uuid,text,uuid) TO %I',
         runtime_role
       );
+      IF pg_catalog.to_regprocedure(
+           'public.canonical_forecast_pipeline_sensitivity_v1_signed_amount(numeric)'
+         ) IS NULL OR pg_catalog.to_regprocedure(
+           'public.canonical_forecast_pipeline_sensitivity_v1_value(jsonb,jsonb,uuid,integer,text)'
+         ) IS NULL OR pg_catalog.to_regprocedure(
+           'public.canonical_forecast_pipeline_sensitivity_v1_unavailable(text,timestamp with time zone)'
+         ) IS NULL OR pg_catalog.to_regprocedure(
+           'public.canonical_forecast_pipeline_sensitivity_v1_read(uuid,uuid,text,uuid,jsonb)'
+         ) IS NULL THEN
+        RAISE EXCEPTION 'Part 9D runtime authority functions are missing'
+          USING ERRCODE = '42501';
+      END IF;
+      EXECUTE pg_catalog.format(
+        'REVOKE ALL ON FUNCTION public.canonical_forecast_pipeline_sensitivity_v1_signed_amount(numeric) FROM %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'REVOKE ALL ON FUNCTION public.canonical_forecast_pipeline_sensitivity_v1_value(jsonb,jsonb,uuid,integer,text) FROM %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'REVOKE ALL ON FUNCTION public.canonical_forecast_pipeline_sensitivity_v1_unavailable(text,timestamptz) FROM %I',
+        runtime_role
+      );
+      EXECUTE pg_catalog.format(
+        'GRANT EXECUTE ON FUNCTION public.canonical_forecast_pipeline_sensitivity_v1_read(uuid,uuid,text,uuid,jsonb) TO %I',
+        runtime_role
+      );
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
         runtime_role
@@ -5884,6 +5912,42 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'public.canonical_forecast_named_scenario_v1_unavailable(text,timestamp with time zone)',
           'EXECUTE')
        END AS named_scenario_authority_private,
+       CASE
+        WHEN to_regprocedure(
+          'public.canonical_forecast_pipeline_sensitivity_v1_signed_amount(numeric)'
+         ) IS NULL OR to_regprocedure(
+          'public.canonical_forecast_pipeline_sensitivity_v1_value(jsonb,jsonb,uuid,integer,text)'
+         ) IS NULL OR to_regprocedure(
+          'public.canonical_forecast_pipeline_sensitivity_v1_unavailable(text,timestamp with time zone)'
+         ) IS NULL OR to_regprocedure(
+          'public.canonical_forecast_pipeline_sensitivity_v1_read(uuid,uuid,text,uuid,jsonb)'
+         ) IS NULL THEN FALSE
+        ELSE
+         NOT has_function_privilege('public',
+          'public.canonical_forecast_pipeline_sensitivity_v1_signed_amount(numeric)',
+          'EXECUTE')
+         AND NOT has_function_privilege('public',
+          'public.canonical_forecast_pipeline_sensitivity_v1_value(jsonb,jsonb,uuid,integer,text)',
+          'EXECUTE')
+         AND NOT has_function_privilege('public',
+          'public.canonical_forecast_pipeline_sensitivity_v1_unavailable(text,timestamp with time zone)',
+          'EXECUTE')
+         AND NOT has_function_privilege('public',
+          'public.canonical_forecast_pipeline_sensitivity_v1_read(uuid,uuid,text,uuid,jsonb)',
+          'EXECUTE')
+         AND has_function_privilege($1,
+          'public.canonical_forecast_pipeline_sensitivity_v1_read(uuid,uuid,text,uuid,jsonb)',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_pipeline_sensitivity_v1_signed_amount(numeric)',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_pipeline_sensitivity_v1_value(jsonb,jsonb,uuid,integer,text)',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_pipeline_sensitivity_v1_unavailable(text,timestamp with time zone)',
+          'EXECUTE')
+       END AS pipeline_sensitivity_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -6993,6 +7057,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.deterministic_baseline_authority_private ||
       !runtimePrivileges.calibrated_range_authority_private ||
       !runtimePrivileges.named_scenario_authority_private ||
+      !runtimePrivileges.pipeline_sensitivity_authority_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

@@ -34,6 +34,7 @@ const { createForecastPipelineSensitivitiesRouter } =
 const { createForecastTimelinesRouter } = require('./routes/forecastTimelines');
 const { createForecastMonthlyKpisRouter } = require('./routes/forecastMonthlyKpis');
 const { createForecastDrilldownsRouter } = require('./routes/forecastDrilldowns');
+const { createForecastDecisionSupportRouter } = require('./routes/forecastDecisionSupport');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -354,6 +355,7 @@ app.use('/api/v1/forecast/pipeline-sensitivities',
 app.use('/api/v1/forecast/timelines', createForecastTimelinesRouter());
 app.use('/api/v1/forecast/monthly-kpis', createForecastMonthlyKpisRouter());
 app.use('/api/v1/forecast/drilldowns', createForecastDrilldownsRouter());
+app.use('/api/v1/forecast/decision-support', createForecastDecisionSupportRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());
 app.use('/api/v1/forecast/current-backlog', createForecastCurrentBacklogRouter());
 app.use('/api/v1/forecast/demand-to-schedule', createForecastDemandToScheduleRouter());

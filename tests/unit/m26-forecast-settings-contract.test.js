@@ -104,3 +104,22 @@ test('owner preference cannot label an interval calibrated or authenticate a sou
   expect(result).not.toHaveProperty('sourceAuthenticated');
   expect(result).not.toHaveProperty('forecastIssued');
 });
+
+test('returns detached immutable settings and enforces defensive collection ceilings', () => {
+  const value = candidate();
+  const normalized = normalize(value);
+  value.settings.targets[0] = 'changed.after.capture';
+  value.settings.horizons[0].periods = 99;
+  expect(normalized.settings.targets).not.toContain('changed.after.capture');
+  expect(normalized.settings.horizons.find(item => item.grain === 'month').periods).toBe(3);
+  expect(Object.isFrozen(normalized)).toBe(true);
+  expect(Object.isFrozen(normalized.settings.targets)).toBe(true);
+
+  const targets = candidate();
+  targets.settings.targets = Array.from({ length: 25 }, (_item, index) => `target.${index}`);
+  expect(() => normalize(targets)).toThrow();
+  const horizons = candidate();
+  horizons.settings.horizons = Array.from({ length: 13 }, (_item, index) =>
+    ({ grain: index === 0 ? 'week' : 'month', periods: 1 }));
+  expect(() => normalize(horizons)).toThrow();
+});

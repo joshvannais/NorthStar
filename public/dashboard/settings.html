@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/css/site-professionalism.css">
   <link rel="stylesheet" href="/css/workspace-form-state.css">
   <link rel="stylesheet" href="/css/knowledge-management.css">
+  <link rel="stylesheet" href="/css/forecast-settings.css?v=m26-part11a-20261008">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -140,6 +141,49 @@
         </div>
         </div>
       </div>
+
+      <section class="settings-section forecast-settings-shell" id="forecast-settings" data-state="loading" aria-labelledby="forecastSettingsHeading">
+        <h2 id="forecastSettingsHeading">Forecast settings</h2>
+        <p class="description">Choose which current forecast target an owner or administrator wants NorthStar to prepare for review. A preference does not make source data eligible or issue a forecast.</p>
+        <p id="forecastSettingsStatus" role="status" aria-live="polite" aria-atomic="true">Loading forecast settings…</p>
+        <p id="forecastSettingsDetail" class="description">Values and receipts stay cleared until current owner authority is verified.</p>
+        <form id="forecastSettingsForm" class="forecast-settings-form" novalidate>
+          <label class="forecast-settings-choice" for="forecastSettingsEnabled">
+            <input id="forecastSettingsEnabled" type="checkbox" disabled>
+            <span><strong>Enable reviewed forecast preferences</strong><br><span class="description">Off is the conservative default. Automatic action is never allowed.</span></span>
+          </label>
+          <fieldset>
+            <legend>Target</legend>
+            <label class="forecast-settings-choice" for="forecastTargetInboundLeads">
+              <input id="forecastTargetInboundLeads" type="checkbox" disabled>
+              <span><strong>Inbound leads</strong><br><span class="description">Count of reviewed distinct leads from the released monthly demand baseline.</span></span>
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Horizon periods</legend>
+            <div class="forecast-settings-grid">
+              <div class="form-group"><label for="forecastHorizonWeek">Weekly</label><input id="forecastHorizonWeek" type="number" min="1" max="100" inputmode="numeric" disabled><p class="description">Unavailable until a weekly algorithm is current.</p></div>
+              <div class="form-group"><label for="forecastHorizonMonth">Monthly</label><input id="forecastHorizonMonth" type="number" min="1" max="100" inputmode="numeric" disabled><p class="description">1–100 periods; this is a defensive limit, not a recommendation.</p></div>
+              <div class="form-group"><label for="forecastHorizonQuarter">Quarterly</label><input id="forecastHorizonQuarter" type="number" min="1" max="100" inputmode="numeric" disabled><p class="description">Unavailable until a quarterly algorithm is current.</p></div>
+            </div>
+          </fieldset>
+          <div class="forecast-settings-grid">
+            <div class="form-group"><label for="forecastScenarioDisplay">Forecast display</label><select id="forecastScenarioDisplay" disabled><option value="withhold">Withhold</option><option value="deterministic_when_eligible">Deterministic when eligible</option><option value="calibrated_when_eligible">Calibrated range when separately eligible</option></select></div>
+            <div class="form-group"><label for="forecastComparisonDisplay">Comparisons</label><select id="forecastComparisonDisplay" disabled><option value="none">None</option><option value="prior">Prior</option><option value="actual">Actual</option><option value="prior_and_actual">Prior and actual</option></select></div>
+            <label class="forecast-settings-choice" for="forecastAlerts"><input id="forecastAlerts" type="checkbox" disabled><span><strong>In-app review alerts</strong><br><span class="description">Review only; no message or action is sent.</span></span></label>
+          </div>
+          <div class="forecast-settings-authority">
+            <p><strong>What this preference cannot prove</strong></p>
+            <p class="description">Source authority, target registration, algorithm promotion, interval calibration, finalized actuals, and forecast issuance remain separate gates.</p>
+            <p class="description">Limits: 24 targets, 12 horizon entries, and 100 periods per horizon. These are defensive ceilings.</p>
+          </div>
+          <p id="forecastSettingsReceipt" class="description forecast-settings-receipt" aria-label="Current forecast settings receipt"></p>
+          <div class="forecast-settings-actions">
+            <button class="btn btn-primary btn-sm" id="saveForecastSettings" type="submit" disabled>Save reviewed settings</button>
+            <button class="btn btn-secondary btn-sm" id="refreshForecastSettings" type="button">Refresh settings</button>
+          </div>
+        </form>
+      </section>
 
       <!-- AI Office Manager -->
       <div class="settings-section" id="ai-settings">
@@ -594,6 +638,7 @@
   <script src="/js/command-center-contract.js?v=demo-nav-11-20260915"></script>
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script src="/js/knowledge-management.js"></script>
+  <script src="/js/forecast-settings.js?v=m26-part11a-20261008"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn', durable: '[data-settings-mutable]' });</script>
   <script>NavComponent.init("settings");</script>

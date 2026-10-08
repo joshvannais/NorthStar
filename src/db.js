@@ -4868,6 +4868,26 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           );
         END IF;
       END IF;
+      IF pg_catalog.to_regclass(
+        'public.canonical_forecast_deterministic_baseline_algorithms_v1'
+      ) IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_deterministic_baseline_algorithms_v1 FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_chronology(timestamptz,timestamptz,timestamptz) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_unavailable(uuid,text,timestamptz) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_deterministic_baseline_v1_read(uuid,uuid,text,uuid,uuid) TO %I',
+          runtime_role
+        );
+      END IF;
       EXECUTE pg_catalog.format(
         'REVOKE ALL PRIVILEGES ON TABLE public._migrations FROM %I',
         runtime_role
@@ -5721,6 +5741,24 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,
           'public.canonical_forecast_route_quantity_v1(numeric)','EXECUTE')
        )) AS route_load_risk_authority_private,
+       (to_regprocedure(
+         'public.canonical_forecast_deterministic_baseline_v1_read(uuid,uuid,text,uuid,uuid)') IS NULL OR (
+         NOT has_table_privilege($1,
+          'public.canonical_forecast_deterministic_baseline_algorithms_v1',
+          'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_deterministic_baseline_v1_chronology(timestamptz,timestamptz,timestamptz)',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_deterministic_baseline_v1_unavailable(uuid,text,timestamptz)',
+          'EXECUTE')
+         AND has_function_privilege($1,
+          'public.canonical_forecast_deterministic_baseline_v1_read(uuid,uuid,text,uuid,uuid)',
+          'EXECUTE')
+         AND NOT has_function_privilege('public',
+          'public.canonical_forecast_deterministic_baseline_v1_read(uuid,uuid,text,uuid,uuid)',
+          'EXECUTE')
+       )) AS deterministic_baseline_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -6827,6 +6865,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.material_demand_risk_authority_private ||
       !runtimePrivileges.asset_utilization_risk_authority_private ||
       !runtimePrivileges.route_load_risk_authority_private ||
+      !runtimePrivileges.deterministic_baseline_authority_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

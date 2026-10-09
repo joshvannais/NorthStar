@@ -1098,6 +1098,24 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             'GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_current_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
           );
         END IF;
+        IF pg_catalog.to_regclass('public.canonical_forecast_handoff_proposals_v1') IS NOT NULL THEN
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_handoff_proposals_v1, public.canonical_forecast_handoff_events_v1 FROM %I',
+            runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL ON FUNCTION public.canonical_forecast_handoff_v1_item(uuid,uuid) FROM %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_forecast_handoff_v1_read(uuid,uuid,text,uuid) TO %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_forecast_handoff_v1_request(uuid,uuid,text,uuid,text,text,text,uuid,text,text,timestamptz) TO %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_forecast_handoff_v1_dismiss(uuid,uuid,text,uuid,text,text,text,uuid,integer,text) TO %I', runtime_role
+          );
+        END IF;
       END IF;
       IF pg_catalog.to_regclass('public.canonical_schedule_mutation_previews') IS NOT NULL THEN
         EXECUTE pg_catalog.format(

@@ -37,6 +37,7 @@ const { createForecastDrilldownsRouter } = require('./routes/forecastDrilldowns'
 const { createForecastDecisionSupportRouter } = require('./routes/forecastDecisionSupport');
 const { createForecastSettingsRouter } = require('./routes/forecastSettings');
 const { createForecastRunsRouter } = require('./routes/forecastRuns');
+const { createForecastHandoffsRouter } = require('./routes/forecastHandoffs');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -360,6 +361,7 @@ app.use('/api/v1/forecast/drilldowns', createForecastDrilldownsRouter());
 app.use('/api/v1/forecast/decision-support', createForecastDecisionSupportRouter());
 app.use('/api/v1/forecast/settings', createForecastSettingsRouter());
 app.use('/api/v1/forecast/runs', createForecastRunsRouter());
+app.use('/api/v1/forecast/handoffs', createForecastHandoffsRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());
 app.use('/api/v1/forecast/current-backlog', createForecastCurrentBacklogRouter());
 app.use('/api/v1/forecast/demand-to-schedule', createForecastDemandToScheduleRouter());

@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/css/knowledge-management.css">
   <link rel="stylesheet" href="/css/forecast-settings.css?v=m26-part11a-20261008">
   <link rel="stylesheet" href="/css/forecast-runs.css?v=m26-part11b-20261009">
+  <link rel="stylesheet" href="/css/forecast-handoffs.css?v=m26-part11d-20261009">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -239,6 +240,40 @@
           <button class="btn btn-secondary btn-sm" id="compareForecastRuns" type="submit" disabled>Compare evidence</button>
           <p id="forecastRunComparison" class="description" role="status" aria-live="polite"></p>
         </form>
+      </section>
+
+      <section class="settings-section forecast-handoffs-shell" id="forecast-handoffs"
+        data-state="loading" aria-labelledby="forecastHandoffsHeading">
+        <div class="forecast-handoffs-heading">
+          <div>
+            <h2 id="forecastHandoffsHeading">Reviewed forecast handoff</h2>
+            <p class="description">Store an owner review request for current forecast advice. A request is review history only; it never changes staffing, equipment, schedules, estimates, prices, billing, or communications.</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="refreshForecastHandoffs" type="button">Refresh reviews</button>
+        </div>
+        <p id="forecastHandoffsStatus" role="status" aria-live="polite" aria-atomic="true">Loading reviewed handoffs.</p>
+        <p id="forecastHandoffsDetail" class="description">Proposal identities, evidence, links, and history stay cleared until current owner authority is verified.</p>
+        <article class="forecast-handoff-candidate" id="forecastHandoffCandidate" hidden
+          aria-labelledby="forecastHandoffCandidateHeading">
+          <div class="forecast-handoff-card-head">
+            <div><p class="forecast-handoff-kicker">Advice for explicit review</p><h3 id="forecastHandoffCandidateHeading">Demand capacity review</h3></div>
+            <button class="btn btn-primary btn-sm" id="requestForecastHandoff" type="button" disabled>Request review</button>
+          </div>
+          <p id="forecastHandoffRecommendation"></p>
+          <dl class="forecast-handoff-facts">
+            <div><dt>Forecast evidence</dt><dd id="forecastHandoffEvidence"></dd></div>
+            <div><dt>Uncertainty</dt><dd id="forecastHandoffUncertainty"></dd></div>
+            <div><dt>Missing information</dt><dd id="forecastHandoffMissing"></dd></div>
+            <div><dt>Expected tradeoff</dt><dd id="forecastHandoffTradeoff"></dd></div>
+          </dl>
+          <p id="forecastHandoffReceiver" class="description"></p>
+        </article>
+        <div class="forecast-handoff-history">
+          <h3>Review history</h3>
+          <p id="forecastHandoffEmpty" class="description">No current reviewed handoff records.</p>
+          <ol id="forecastHandoffHistory" class="forecast-handoff-history-list"
+            aria-label="Reviewed forecast handoff history"></ol>
+        </div>
       </section>
 
       <!-- AI Office Manager -->
@@ -696,6 +731,7 @@
   <script src="/js/knowledge-management.js"></script>
   <script src="/js/forecast-settings.js?v=m26-part11a-20261008"></script>
   <script src="/js/forecast-runs.js?v=m26-part11b-20261009"></script>
+  <script src="/js/forecast-handoffs.js?v=m26-part11d-20261009"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn', durable: '[data-settings-mutable]' });</script>
   <script>NavComponent.init("settings");</script>

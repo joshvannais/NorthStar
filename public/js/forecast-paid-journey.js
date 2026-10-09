@@ -27,6 +27,7 @@
   var resetCancel = document.getElementById('cancelForecastPaidJourneyReset');
   var resetProceed = document.getElementById('confirmForecastPaidJourneyReset');
   var generation = 0; var mutationGeneration = 0; var expiryTimer = null;
+  var restoreFocusAfterDemoReset = false;
   var selected = null; var settings = null; var pending = null; var demoRevision = null;
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -73,7 +74,7 @@
         selectedSettings.settings.targets[0] !== 'revenue.approved_price_flow') return null;
     return { revision: selectedSettings.revision, digest: selectedSettings.digest };
   }
-  function renderHistory(events) {
+  function renderHistory(events, actionsEnabled) {
     if (expiryTimer !== null) { global.clearTimeout(expiryTimer); expiryTimer = null; }
     history.replaceChildren();
     events.forEach(function (event) {
@@ -81,7 +82,7 @@
       var text = document.createElement('span');
       text.textContent = 'Revision ' + event.revision + ' · ' + event.action + ' · ' + new Date(event.recordedAt).toLocaleString();
       item.appendChild(text);
-      if (event === events[events.length - 1] && event.action === 'requested') {
+      if (actionsEnabled && event === events[events.length - 1] && event.action === 'requested') {
         var button = document.createElement('button'); button.type = 'button';
         button.className = 'btn btn-secondary btn-sm'; button.textContent = 'Dismiss review';
         button.addEventListener('click', function () { mutateReview('dismissed', event); }); item.appendChild(button);
@@ -128,21 +129,37 @@
     var run = data.run;
     if (!run || !UUID.test(run.id || '') || run.target?.key !== 'revenue.approved_price_flow' ||
         run.output?.predictionKind !== 'deterministic_point' || run.explanation?.customerSafe !== true ||
-        run.review?.receiverMutationCount !== 0) throw new Error('invalid');
+        run.review?.receiverMutationCount !== 0 ||
+        !['unchanged_candidate','stale'].includes(run.currentness?.state)) throw new Error('invalid');
+    var stale = run.currentness.state === 'stale';
     selected = run; currentCard.hidden = false; origin.disabled = true; reason.disabled = true; issue.disabled = true;
     value.textContent = run.output.value.amount + ' ' + run.output.unit.currency;
     explanation.textContent = run.explanation.summary;
     coverage.textContent = run.explanation.sourceCoverage;
-    currentness.textContent = isDemo ? 'Unchanged fictional candidate · review required' : 'Unchanged candidate · review required';
+    currentness.textContent = stale
+      ? (isDemo ? 'Newer fictional source available · reset for a fresh review' :
+        'Source changed · refresh for a fresh authorized run')
+      : (isDemo ? 'Unchanged fictional candidate · review required' : 'Unchanged candidate · review required');
     receipt.textContent = run.receipt.digest; output.textContent = run.output.digest;
-    rerun.disabled = false; renderHistory(run.review.history);
+    rerun.disabled = stale; renderHistory(run.review.history, !stale);
     var last = run.review.history[run.review.history.length - 1];
-    review.disabled = Boolean(last && last.action === 'requested');
-    reviewStatus.textContent = 'Receiving workflow unavailable: no exact adapter exists. Requesting review changes only immutable Mission 26 history.';
-    show(isDemo ? 'Fictional approved-price journey is current' : 'Paid approved-price journey is current',
+    review.disabled = stale || Boolean(last && last.action === 'requested');
+    reviewStatus.textContent = stale
+      ? (isDemo
+        ? 'This immutable receipt remains pinned to its original fictional source. Reset before issuing or reviewing a fresh journey.'
+        : 'This immutable receipt remains pinned to its original source. Refresh before issuing or reviewing a fresh journey.')
+      : 'Receiving workflow unavailable: no exact adapter exists. Requesting review changes only immutable Mission 26 history.';
+    show(stale ? (isDemo ? 'Fictional approved-price journey needs fresh review' :
+      'Paid approved-price journey needs fresh review') :
+      (isDemo ? 'Fictional approved-price journey is current' : 'Paid approved-price journey is current'),
       isDemo
-        ? 'Every value and identity comes from one persisted fictional receipt. No browser calculation, paid API, provider call, or receiving mutation occurred.'
-        : 'Every displayed value and explanation comes from one immutable saved receipt. No browser calculation or receiving mutation occurred.', 'current');
+        ? (stale
+          ? 'A newer fictional graph is available. The saved receipt still shows its exact original source and no action can use it.'
+          : 'Every value and identity comes from one persisted fictional receipt. No browser calculation, paid API, provider call, or receiving mutation occurred.')
+        : (stale
+          ? 'The saved receipt still shows its exact original source and no action can use it.'
+          : 'Every displayed value and explanation comes from one immutable saved receipt. No browser calculation or receiving mutation occurred.'),
+      stale ? 'stale' : 'current');
   }
   async function load() {
     var token = ++generation; mutationGeneration += 1; clear(); refresh.disabled = true;
@@ -164,7 +181,16 @@
       show(isDemo ? 'Fictional forecast journey unavailable' : 'Paid forecast journey unavailable',
         isDemo ? 'NorthStar could not verify the isolated fictional workspace. No earlier values or identities remain displayed.' :
           'NorthStar could not verify current paid-tenant evidence. No earlier values or identities remain displayed.', 'unavailable');
-    } finally { if (token === generation) refresh.disabled = false; }
+    } finally {
+      if (token === generation) {
+        refresh.disabled = false;
+        if (isDemo && restoreFocusAfterDemoReset) {
+          restoreFocusAfterDemoReset = false;
+          if (reset && !reset.hidden && !reset.disabled) reset.focus();
+          else { heading.tabIndex = -1; heading.focus(); }
+        }
+      }
+    }
   }
   async function issueRun(event) {
     event.preventDefault(); if ((!isDemo && !settings) || (isDemo && !Number.isSafeInteger(demoRevision)) || issue.disabled) return;
@@ -239,10 +265,13 @@
           'X-NorthStar-Demo-Intent': 'reset' }, body: JSON.stringify({ expectedRevision: demoRevision }) });
       if (token !== generation || mutation !== mutationGeneration) return;
       demoRevision = data.integrity.revision;
+      restoreFocusAfterDemoReset = true;
       await global.NorthStarDemoRuntime.loadWorkspace(true);
     } catch (_error) {
       if (token === generation && mutation === mutationGeneration) {
+        restoreFocusAfterDemoReset = false;
         clear(); show('Reset result unconfirmed', 'Refresh before trying again. Fictional values and identities remain cleared.', 'unavailable');
+        reset.focus();
       }
     } finally { resetProceed.disabled = false; }
   }

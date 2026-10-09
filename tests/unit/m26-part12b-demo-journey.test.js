@@ -75,6 +75,40 @@ describe('Mission 26 Part 12B fictional demo journey', () => {
     expect(current.review.availability).toBe('unavailable');
   });
 
+  test('keeps the issued source pinned and projects stale currentness when a newer graph appears', () => {
+    const saved = issue(initial('source-transition-demo'));
+    const issued = journey.journeyEnvelope(saved, 2, createdAt);
+    const changed = JSON.parse(JSON.stringify(saved));
+    const newer = JSON.parse(JSON.stringify(changed.graphs[0]));
+    newer.ids.estimate = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    newer.ids.polarisSnapshot = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    newer.polaris.snapshotDigest = 'd'.repeat(64);
+    newer.estimate.customerPrice += 100;
+    newer.timestamps.createdAt = '2026-10-09T18:10:00.000Z';
+    changed.graphs.unshift(newer);
+
+    const projected = journey.journeyEnvelope(changed, 3,
+      new Date('2026-10-09T18:11:00.000Z'));
+    expect(projected).toMatchObject({ state: 'current',
+      review: { requestReviewAvailable: false }, run: {
+        id: issued.run.id,
+        source: { approvedPriceOriginId: issued.run.source.approvedPriceOriginId,
+          sourceSnapshotDigest: issued.run.source.sourceSnapshotDigest,
+          positionDigest: issued.run.source.positionDigest },
+        receipt: { digest: issued.run.receipt.digest },
+        output: { digest: issued.run.output.digest },
+        currentness: { state: 'stale', revision: 2,
+          adviceDisplayAuthorized: false, reason: 'newer_fictional_source' } } });
+    expect(projected.run.currentness.digest).not.toBe(issued.run.currentness.digest);
+    const rerun = { action: 'rerun', runId: issued.run.id,
+      runDigest: issued.run.receipt.digest,
+      currentnessDigest: projected.run.currentness.digest };
+    expect(journey.rerunProjection(changed, 3, rerun)).toMatchObject({
+      state: 'unavailable', reason: 'source_changed', runId: null });
+    expect(capturedError(() => journey.apply(changed, rerun, keyHash('stale-source'))))
+      .toMatchObject({ status: 409, code: 'DEMO_FORECAST_SOURCE_CHANGED' });
+  });
+
   test('records immutable request, dismissal, and projected expiry without receiver mutation', () => {
     let state = issue(initial());
     let current = journey.journeyEnvelope(state, 2, createdAt);

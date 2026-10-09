@@ -89,7 +89,8 @@ function validHistory(history, organizationId, runId) {
 function validRun(run, organizationId) {
   if (!run || !UUID.test(run.id || '') || !digest(run.receipt?.digest) ||
       !digest(run.output?.digest) || !digest(run.explanation?.digest) ||
-      !digest(run.currentness?.digest) || run.currentness.state !== 'unchanged_candidate' ||
+      !digest(run.currentness?.digest) ||
+      !['unchanged_candidate','stale'].includes(run.currentness.state) ||
       run.currentness.adviceDisplayAuthorized !== false ||
       run.target?.key !== 'revenue.approved_price_flow' ||
       run.target?.definitionVersion !== 'v1' ||
@@ -121,8 +122,8 @@ function verifiedJourney(value, organizationId, allowReplay = false) {
   }
   if (value.state === 'current') {
     const latestReview = value.run?.review?.history[value.run.review.history.length - 1];
-    const requestReviewAvailable = !latestReview ||
-      ['dismissed','expired'].includes(latestReview.action);
+    const requestReviewAvailable = value.run?.currentness?.state === 'unchanged_candidate' &&
+      (!latestReview || ['dismissed','expired'].includes(latestReview.action));
     if (value.reason !== null || !validRun(value.run, organizationId) ||
         value.review?.availability !== 'unavailable' ||
         value.review?.reason !== 'no_exact_receiving_adapter' ||

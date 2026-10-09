@@ -193,6 +193,9 @@ async function main() {
       assert.equal(await page.locator('#forecastPaidOrigin').inputValue(), nextOriginId);
       assert.equal(await page.locator('#forecastPaidJourneyReceipt').textContent(), '');
       assert.equal(await page.locator('#forecastPaidJourneyHistory').innerText(), '');
+      assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id),
+        'resetForecastPaidJourney');
+      assert.equal(await page.locator('#resetForecastPaidJourney').isVisible(), true);
 
       const calls = await page.evaluate(() => window.demoForecastCalls);
       assert.ok(calls.some(value => value.url === '/api/demo/forecast/journey'));

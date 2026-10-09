@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const { DEFAULT_SELECTION } = require('../../src/commandCenter/scenarioSpace');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ORIGIN = 'http://northstar.test';
@@ -118,6 +119,58 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
     const migration = await fixture.ownerPool.query(
       `SELECT 1 FROM _migrations WHERE filename='259_demo_forecast_journey.sql'`);
     expect(migration.rowCount).toBe(1);
+  }, 120000);
+
+  test('keeps the issued source pinned and marks it stale after a newer fictional lead graph', async () => {
+    const before = await protectedCounts(fixture.ownerPool);
+    const first = await request(fixture.app).get(ROOT).set('Host', 'northstar.test');
+    expect(first.status).toBe(200);
+    const savedCookie = cookie(first); const source = first.body.data.sourceCandidate;
+    const issued = await action(fixture.app, savedCookie, crypto.randomUUID(), {
+      action: 'issue', expectedRevision: 1, details: {
+        approvedPriceOriginId: source.approvedPriceOriginId,
+        reason: 'Review the pinned source across a newer fictional lead.' } });
+    expect(issued.status).toBe(201);
+    const original = issued.body.data.run;
+
+    const simulated = await request(fixture.app)
+      .post('/api/demo/command-center/simulations/leads')
+      .set('Host', 'northstar.test').set('Origin', ORIGIN)
+      .set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
+      .set('Idempotency-Key', crypto.randomUUID())
+      .set('X-NorthStar-Demo-Intent', 'simulate-lead')
+      .send({ expectedRevision: 2, scenario: DEFAULT_SELECTION });
+    expect(simulated.status).toBe(201);
+    expect(simulated.body.data.integrity.revision).toBe(3);
+
+    const reread = await request(fixture.app).get(ROOT).set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(reread.status).toBe(200);
+    expect(reread.body.data).toMatchObject({ state: 'current', demoWorkspaceRevision: 3,
+      review: { requestReviewAvailable: false }, run: {
+        id: original.id,
+        source: { approvedPriceOriginId: source.approvedPriceOriginId,
+          positionDigest: original.source.positionDigest,
+          sourceSnapshotDigest: original.source.sourceSnapshotDigest },
+        receipt: { digest: original.receipt.digest },
+        output: { digest: original.output.digest },
+        currentness: { state: 'stale', revision: 2,
+          adviceDisplayAuthorized: false, reason: 'newer_fictional_source' } } });
+    expect(reread.body.data.run.currentness.digest).not.toBe(original.currentness.digest);
+
+    const rejected = await action(fixture.app, savedCookie, crypto.randomUUID(), {
+      action: 'rerun', expectedRevision: 3, details: { runId: original.id,
+        runDigest: original.receipt.digest,
+        currentnessDigest: reread.body.data.run.currentness.digest } });
+    expect(rejected.status).toBe(409);
+    expect(rejected.body.error.code).toBe('demo_forecast_source_changed');
+    const afterFailure = await request(fixture.app).get(ROOT).set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(afterFailure.status).toBe(200);
+    expect(afterFailure.body.data).toMatchObject({ demoWorkspaceRevision: 3, run: {
+      id: original.id, receipt: { digest: original.receipt.digest },
+      currentness: { state: 'stale', digest: reread.body.data.run.currentness.digest } } });
+    expect(await protectedCounts(fixture.ownerPool)).toEqual(before);
   }, 120000);
 
   test('denies cross-origin, wrong intent, stale revisions, conflicting replay and stale run identities', async () => {

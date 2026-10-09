@@ -55,12 +55,17 @@ function nextMonth(value, offset) {
   return new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth() + offset, 1)).toISOString();
 }
 
-function sourceBasis(state) {
-  const graph = Array.isArray(state && state.graphs)
+function sourceGraph(state, approvedPriceOriginId = null) {
+  return Array.isArray(state && state.graphs)
     ? state.graphs.find(candidate => candidate && candidate.source?.type === 'account_free_demo' &&
       candidate.estimate?.fictional === true && Number.isSafeInteger(candidate.estimate.customerPrice) &&
       UUID.test(candidate.ids?.estimate || '') && UUID.test(candidate.ids?.polarisSnapshot || '') &&
-      DIGEST.test(candidate.polaris?.snapshotDigest || '')) : null;
+      DIGEST.test(candidate.polaris?.snapshotDigest || '') &&
+      (approvedPriceOriginId === null || candidate.ids.estimate === approvedPriceOriginId)) : null;
+}
+
+function sourceBasis(state, approvedPriceOriginId = null) {
+  const graph = sourceGraph(state, approvedPriceOriginId);
   if (!graph || !DIGEST.test(state.seed || '') || !Number.isSafeInteger(state.generation) ||
       !state.workspace || !UUID.test(state.workspace.tenant?.id || '')) {
     fail(503, 'DEMO_FORECAST_SOURCE_INVALID', 'The fictional approved-price source is unavailable.');
@@ -123,8 +128,8 @@ function output(source, target, horizon, method) {
   }) });
 }
 
-function createRun(state, reason, issuedAt) {
-  const source = sourceBasis(state); const selectedSettings = settings(state);
+function createRun(state, reason, issuedAt, approvedPriceOriginId = null) {
+  const source = sourceBasis(state, approvedPriceOriginId); const selectedSettings = settings(state);
   const target = stableValue({ key: TARGET_KEY, definitionVersion: TARGET_VERSION, semantic: TARGET_SEMANTIC });
   const horizon = stableValue({ grain: 'month', startsAt: nextMonth(source.cutoffAt, 1), endsAt: nextMonth(source.cutoffAt, 2) });
   const method = algorithm(); const calculated = output(source, target, horizon, method);
@@ -172,7 +177,8 @@ function stateValue(value, sourceState) {
       typeof value.reason !== 'string' || value.reason.length < 10 || value.reason.length > 1000 || !value.run) {
     fail(503, 'DEMO_FORECAST_STATE_INVALID', 'The fictional forecast journey is unavailable.');
   }
-  const expected = createRun(sourceState, value.reason, value.run.receipt?.issuedAt);
+  const expected = createRun(sourceState, value.reason, value.run.receipt?.issuedAt,
+    value.run.source?.approvedPriceOriginId);
   const originalHistory = value.run.review?.history;
   const candidate = stableValue({ ...expected, review: { ...expected.review, history: originalHistory } });
   const envelope = journeyEnvelope({ ...sourceState, forecastJourney: { ...value, run: candidate } }, 1, new Date(), false);
@@ -187,6 +193,31 @@ function latestHistory(run, now) {
     if (index === events.length - 1 && event.recordedAction === 'requested' &&
         Date.parse(event.expiresAt) <= now.getTime()) return { ...event, action: 'expired' };
     return event;
+  });
+}
+
+function projectedCurrentness(state, run) {
+  const latest = sourceBasis(state);
+  if (latest.approvedPriceOriginId === run.source.approvedPriceOriginId &&
+      latest.sourceSnapshotDigest === run.source.sourceSnapshotDigest &&
+      latest.positionDigest === run.source.positionDigest) return run.currentness;
+  const candidates = state.graphs.filter(candidate => sourceGraph({ ...state, graphs: [candidate] }));
+  const pinnedIndex = candidates.findIndex(candidate =>
+    candidate.ids.estimate === run.source.approvedPriceOriginId);
+  if (pinnedIndex < 0) {
+    fail(503, 'DEMO_FORECAST_STATE_INVALID', 'The fictional forecast journey is unavailable.');
+  }
+  const revision = run.currentness.revision + Math.max(1, pinnedIndex);
+  const checkedAt = iso(sourceGraph(state)?.timestamps?.createdAt || state.createdAt);
+  return stableValue({
+    state: 'stale', revision, digest: sha256({
+      contract: 'm26-demo-paid-journey-currentness-v1', runId: run.id,
+      runDigest: run.receipt.digest, revision,
+      sourcePositionDigest: run.source.positionDigest, state: 'stale',
+      reason: 'newer_fictional_source', latestSourcePositionDigest: latest.positionDigest,
+    }),
+    adviceDisplayAuthorized: false, checkedAt, fictional: true,
+    reason: 'newer_fictional_source',
   });
 }
 
@@ -207,13 +238,15 @@ function journeyEnvelope(state, workspaceRevision, now = new Date(), validateSto
     }, state.workspace.tenant.id);
   }
   const saved = validateStored ? stateValue(state.forecastJourney, state) : state.forecastJourney;
-  const run = stableValue({ ...saved.run, review: { ...saved.run.review,
+  const run = stableValue({ ...saved.run, currentness: projectedCurrentness(state, saved.run),
+    review: { ...saved.run.review,
     history: latestHistory(saved.run, now) } });
   const latest = run.review.history[run.review.history.length - 1];
   return verifiedJourney({
     version: PUBLIC_VERSION, state: 'current', reason: null, run,
     review: { availability: 'unavailable', reason: 'no_exact_receiving_adapter',
-      requestReviewAvailable: !latest || ['dismissed','expired'].includes(latest.action) },
+      requestReviewAvailable: run.currentness.state === 'unchanged_candidate' &&
+        (!latest || ['dismissed','expired'].includes(latest.action)) },
     targetKey: TARGET_KEY, syntheticImplementationEvidenceOnly: true,
     liveValidationAvailable: false, automaticActionAuthorized: false,
     fictionalDemo: true, accountFree: true, resettable: true, providerCallCount: 0,
@@ -299,6 +332,10 @@ function apply(state, input, keyHash, now = new Date()) {
       reason: action.reason, run: createRun(state, action.reason, now) } });
   }
   const saved = stateValue(state.forecastJourney, state);
+  const currentness = saved && projectedCurrentness(state, saved.run);
+  if (saved && currentness.state !== 'unchanged_candidate') {
+    fail(409, 'DEMO_FORECAST_SOURCE_CHANGED', 'A newer fictional source requires a fresh review. Reset before continuing.');
+  }
   if (!saved || action.runId !== saved.run.id || action.runDigest !== saved.run.receipt.digest ||
       action.currentnessDigest !== saved.run.currentness.digest) {
     fail(409, 'DEMO_FORECAST_RUN_CHANGED', 'The fictional run changed. Refresh before continuing.');
@@ -312,13 +349,17 @@ function apply(state, input, keyHash, now = new Date()) {
 
 function rerunProjection(state, workspaceRevision, input) {
   const action = normalizeAction(input); const saved = stateValue(state.forecastJourney, state);
-  if (action.action !== 'rerun' || !saved || action.runId !== saved.run.id ||
+  const currentness = saved && projectedCurrentness(state, saved.run);
+  if (action.action !== 'rerun' || !saved || currentness.state !== 'unchanged_candidate' ||
+      action.runId !== saved.run.id ||
       action.runDigest !== saved.run.receipt.digest || action.currentnessDigest !== saved.run.currentness.digest) {
-    return stableValue({ state: 'unavailable', reason: 'run_changed', runId: null,
+    return stableValue({ state: 'unavailable',
+      reason: currentness?.state === 'stale' ? 'source_changed' : 'run_changed', runId: null,
       comparison: null, automaticActionAuthorized: false, fictionalDemo: true,
       providerCallCount: 0, demoWorkspaceRevision: workspaceRevision });
   }
-  const fresh = createRun(state, saved.reason, saved.run.receipt.issuedAt);
+  const fresh = createRun(state, saved.reason, saved.run.receipt.issuedAt,
+    saved.run.source.approvedPriceOriginId);
   return stableValue({ state: fresh.output.digest === saved.run.output.digest ? 'reproduced' : 'result_mismatch',
     runId: saved.run.id, runDigest: saved.run.receipt.digest,
     storedOutputDigest: saved.run.output.digest, freshOutputDigest: fresh.output.digest,

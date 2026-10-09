@@ -341,7 +341,7 @@ SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE current_settings public.canonical_forecast_settings_revisions_v1%ROWTYPE;
  origin public.canonical_forecast_retell_future_origins_v2%ROWTYPE;baseline JSONB;
  registry public.canonical_forecast_deterministic_baseline_algorithms_v1%ROWTYPE;
- calculator public.canonical_forecast_run_calculators_v1%ROWTYPE;calculated_output JSONB;
+ calculator public.canonical_forecast_run_calculators_v1%ROWTYPE;
  installed_calculator_digest TEXT;
  old_run public.canonical_forecast_runs_v1%ROWTYPE;inserted public.canonical_forecast_runs_v1%ROWTYPE;
  membership_value UUID;key_hash TEXT;child_key TEXT;child_key_hash TEXT;
@@ -399,7 +399,6 @@ BEGIN
    calculator_version='m26-run-calculator-v1';
  installed_calculator_digest:=encode(sha256(convert_to(pg_get_functiondef(
   'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure),'UTF8')),'hex');
- calculated_output:=public.canonical_forecast_run_v1_calculate(origin.evidence);
  IF baseline IS NULL OR baseline->>'state'<>'current' OR
     receipt_value->>'version'<>'m26-forecast-run-receipt-v2' OR
     receipt_value->>'id'<>run_value::text OR receipt_value->>'organizationId'<>org::text OR
@@ -419,7 +418,7 @@ BEGIN
     receipt_value#>>'{algorithm,version}'<>registry.algorithm_version OR
     receipt_value#>>'{algorithm,definitionDigest}'<>rtrim(registry.definition_digest) OR
     receipt_value#>>'{algorithm,implementationDigest}'<>rtrim(registry.implementation_digest) OR
-    calculator.calculator_key IS NULL OR calculated_output IS NULL OR
+    calculator.calculator_key IS NULL OR
     rtrim(calculator.implementation_digest)<>installed_calculator_digest OR
     receipt_value#>>'{algorithm,buildDigest}'<>installed_calculator_digest OR
     receipt_value->>'calculationVersion'<>baseline#>>'{output,calculationVersion}' OR
@@ -428,8 +427,9 @@ BEGIN
     receipt_value#>>'{outputs,0,targetKey}'<>'demand.inbound_leads' OR
     receipt_value#>>'{outputs,0,targetVersion}'<>'v1' OR
     receipt_value#>>'{outputs,0,outputDigest}'<>baseline#>>'{digests,output}' OR
-    output_value IS DISTINCT FROM calculated_output OR
-    baseline->'output' IS DISTINCT FROM calculated_output THEN
+    output_value IS DISTINCT FROM origin.private_output OR
+    baseline->'output' IS DISTINCT FROM origin.private_output OR
+    public.canonical_completion_digest(output_value)<>rtrim(origin.output_digest) THEN
   RAISE EXCEPTION 'Forecast run authority changed' USING ERRCODE='40001';END IF;
  IF receipt_value->'supersedes'<>'null'::jsonb THEN
   SELECT * INTO old_run FROM public.canonical_forecast_runs_v1

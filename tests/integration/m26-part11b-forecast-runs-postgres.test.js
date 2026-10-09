@@ -80,9 +80,44 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
   async function restoreCalculator() {
     await fixture.ownerPool.query(calculatorDefinition);
   }
+  async function calculatorCalls() {
+    return (await fixture.ownerPool.query(
+      'SELECT count(*)::int count FROM m26_part11b_calculator_call_probe')).rows[0].count;
+  }
 
   beforeAll(async () => {
     fixture = await createDatabaseFixture();
+    const originalCalculatorDefinition = (await fixture.ownerPool.query(`SELECT pg_get_functiondef(
+      'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure) definition`))
+      .rows[0].definition;
+    const productCalculatorDefinition = originalCalculatorDefinition.replace(
+      /CREATE OR REPLACE FUNCTION public\.canonical_forecast_run_v1_calculate\(evidence_value jsonb\)/,
+      'CREATE FUNCTION public.m26_part11b_test_product_calculate(evidence_value jsonb)');
+    if (productCalculatorDefinition === originalCalculatorDefinition) {
+      throw new Error('Part 11B calculator probe could not preserve the product implementation');
+    }
+    await fixture.ownerPool.query(`CREATE TABLE public.m26_part11b_calculator_call_probe(
+      call_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, called_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp())`);
+    await fixture.ownerPool.query(productCalculatorDefinition);
+    await fixture.ownerPool.query(`REVOKE ALL ON FUNCTION
+      public.m26_part11b_test_product_calculate(jsonb) FROM PUBLIC`);
+    await fixture.ownerPool.query(`CREATE OR REPLACE FUNCTION
+      public.canonical_forecast_run_v1_calculate(evidence_value JSONB)
+      RETURNS JSONB LANGUAGE plpgsql VOLATILE STRICT SECURITY DEFINER
+      SET search_path=pg_catalog,public,pg_temp AS $$
+      BEGIN
+       INSERT INTO public.m26_part11b_calculator_call_probe DEFAULT VALUES;
+       RETURN public.m26_part11b_test_product_calculate(evidence_value);
+      END $$`);
+    await fixture.ownerPool.query(`BEGIN;
+      ALTER TABLE public.canonical_forecast_run_calculators_v1
+       DISABLE TRIGGER canonical_forecast_run_calculators_v1_immutable;
+      UPDATE public.canonical_forecast_run_calculators_v1
+       SET implementation_digest=encode(sha256(convert_to(pg_get_functiondef(
+        'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure),'UTF8')),'hex');
+      ALTER TABLE public.canonical_forecast_run_calculators_v1
+       ENABLE TRIGGER canonical_forecast_run_calculators_v1_immutable;
+      COMMIT;`);
     calculatorDefinition = (await fixture.ownerPool.query(`SELECT pg_get_functiondef(
       'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure) definition`))
       .rows[0].definition;
@@ -144,6 +179,7 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
     expect(empty.headers['cache-control']).toBe('private, no-store');
     expect(empty.body.data).toEqual({ state: 'current', runs: [] });
     firstRequestKey = key();
+    expect(await calculatorCalls()).toBe(0);
     const beforeUnavailable = (await fixture.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_forecast_retell_future_origins_v2) origins,
       (SELECT count(*)::int FROM canonical_forecast_runs_v1) runs,
@@ -160,6 +196,7 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
       (SELECT count(*)::int FROM canonical_forecast_runs_v1) runs,
       (SELECT count(*)::int FROM canonical_forecast_run_outputs_v1) outputs`)).rows[0];
     expect(afterUnavailable).toEqual(beforeUnavailable);
+    expect(await calculatorCalls()).toBe(0);
     const issued = await issue(horizons.horizon_one, firstRequestKey);
     expect(issued.status).toBe(201);
     expect(issued.body.data).toMatchObject({ state: 'current', replayed: false,
@@ -181,11 +218,13 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
         settingsRecorded: true, refreshRequired: false },
       historyPosition: { latest: true, superseded: false } });
     first = issued.body.data;
+    expect(await calculatorCalls()).toBe(1);
     const replay = await issue(horizons.horizon_one, firstRequestKey);
     expect(replay.status).toBe(200);
     expect(replay.headers['idempotency-replayed']).toBe('true');
     expect(replay.body.data).toMatchObject({ replayed: true,
       receipt: { id: first.receipt.id, digest: first.receipt.digest } });
+    expect(await calculatorCalls()).toBe(1);
     const rows = (await fixture.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_forecast_runs_v1) runs,
       (SELECT count(*)::int FROM canonical_forecast_run_outputs_v1) outputs`)).rows[0];

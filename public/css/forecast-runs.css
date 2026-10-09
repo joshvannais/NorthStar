@@ -33,6 +33,7 @@
   .forecast-runs-heading,
   .forecast-run-current-topline,
   .forecast-run-issue { align-items: stretch; flex-direction: column; }
+  .forecast-run-issue .form-group { flex-basis: auto; width: 100%; }
   .forecast-runs-heading .btn,
   .forecast-run-issue .btn,
   .forecast-run-current .btn,

@@ -1116,6 +1116,30 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             'GRANT EXECUTE ON FUNCTION public.canonical_forecast_handoff_v1_dismiss(uuid,uuid,text,uuid,text,text,text,uuid,integer,text) TO %I', runtime_role
           );
         END IF;
+        IF pg_catalog.to_regclass('public.canonical_forecast_paid_journey_runs_v1') IS NOT NULL THEN
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_paid_price_algorithms_v1, public.canonical_forecast_paid_journey_runs_v1, public.canonical_forecast_paid_journey_reviews_v1 FROM %I',
+            runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL ON FUNCTION public.canonical_forecast_paid_price_v1_calculate(jsonb) FROM %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'REVOKE ALL ON FUNCTION public.canonical_forecast_paid_journey_v1_projection(uuid,public.canonical_forecast_paid_journey_runs_v1) FROM %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_forecast_paid_journey_v1_current(uuid,uuid,text,uuid) TO %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_forecast_paid_journey_v1_issue(uuid,uuid,text,uuid,text,text,text,integer,text,uuid,text) TO %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_forecast_paid_journey_v1_rerun(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role
+          );
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION public.canonical_forecast_paid_journey_v1_review(uuid,uuid,text,uuid,text,text,text,uuid,text,text,text,integer,text,timestamp with time zone) TO %I', runtime_role
+          );
+        END IF;
       END IF;
       IF pg_catalog.to_regclass('public.canonical_schedule_mutation_previews') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
@@ -6201,6 +6225,31 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND has_function_privilege($1,'public.canonical_forecast_run_v1_current_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
          END
        END AS forecast_runs_authority_private,
+       CASE
+        WHEN to_regclass('public.canonical_forecast_paid_price_algorithms_v1') IS NULL OR
+          to_regclass('public.canonical_forecast_paid_journey_runs_v1') IS NULL OR
+          to_regclass('public.canonical_forecast_paid_journey_reviews_v1') IS NULL OR
+          to_regprocedure('public.canonical_forecast_paid_price_v1_calculate(jsonb)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_paid_journey_v1_projection(uuid,public.canonical_forecast_paid_journey_runs_v1)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_paid_journey_v1_current(uuid,uuid,text,uuid)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_paid_journey_v1_issue(uuid,uuid,text,uuid,text,text,text,integer,text,uuid,text)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_paid_journey_v1_rerun(uuid,uuid,text,uuid,text,uuid)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_paid_journey_v1_review(uuid,uuid,text,uuid,text,text,text,uuid,text,text,text,integer,text,timestamp with time zone)') IS NULL THEN FALSE
+        ELSE
+         NOT has_table_privilege($1,'public.canonical_forecast_paid_price_algorithms_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_paid_journey_runs_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_paid_journey_reviews_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_paid_price_v1_calculate(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_paid_journey_v1_projection(uuid,public.canonical_forecast_paid_journey_runs_v1)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_paid_journey_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_paid_journey_v1_issue(uuid,uuid,text,uuid,text,text,text,integer,text,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_paid_journey_v1_rerun(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_paid_journey_v1_review(uuid,uuid,text,uuid,text,text,text,uuid,text,text,text,integer,text,timestamp with time zone)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_paid_journey_v1_current(uuid,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_paid_journey_v1_issue(uuid,uuid,text,uuid,text,text,text,integer,text,uuid,text)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_paid_journey_v1_rerun(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_forecast_paid_journey_v1_review(uuid,uuid,text,uuid,text,text,text,uuid,text,text,text,integer,text,timestamp with time zone)','EXECUTE')
+       END AS forecast_paid_journey_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -7315,6 +7364,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.forecast_monthly_kpis_authority_private ||
       !runtimePrivileges.forecast_settings_authority_private ||
       !runtimePrivileges.forecast_runs_authority_private ||
+      !runtimePrivileges.forecast_paid_journey_authority_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

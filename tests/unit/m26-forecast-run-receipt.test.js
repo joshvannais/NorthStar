@@ -13,7 +13,8 @@ function run(index = 0) {
     settings: { revision: 1, digest: 'a'.repeat(64) },
     sourceSnapshotDigest: 'b'.repeat(64), reportingWindowDigest: 'c'.repeat(64),
     featureSetDigest: 'd'.repeat(64), algorithm: { key: 'baseline', version: 'v1',
-      definitionDigest: 'e'.repeat(64), implementationDigest: 'f'.repeat(64) },
+      definitionDigest: 'e'.repeat(64), implementationDigest: 'f'.repeat(64),
+      buildDigest: '0'.repeat(64) },
     calculationVersion: 'calc-v1', outputContractVersion: 'm26-forecast-output-v1',
     outputs: [
       { targetKey: 'revenue.approved_price_flow', targetVersion: 'v1',

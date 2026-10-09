@@ -131,6 +131,56 @@ CREATE TRIGGER canonical_forecast_run_supersessions_v1_immutable
  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_forecast_run_supersessions_v1
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_price_flow_origin_immutable();
 
+-- One pure, digest-addressed calculator is shared by issue and controlled
+-- rerun. The immutable Part 4A origin capture remains the authenticated input
+-- reader; this function is the only Part 11B output calculation path.
+CREATE FUNCTION public.canonical_forecast_run_v1_calculate(evidence_value JSONB)
+RETURNS JSONB LANGUAGE plpgsql IMMUTABLE STRICT
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE lead_total BIGINT;period_count INTEGER;amount_value TEXT;
+BEGIN
+ IF jsonb_typeof(evidence_value)<>'object' OR
+    jsonb_typeof(evidence_value->'periods')<>'array' OR
+    jsonb_array_length(evidence_value->'periods')<>3 THEN RETURN NULL;END IF;
+ SELECT count(*),sum((item->>'leadCount')::bigint) INTO period_count,lead_total
+ FROM jsonb_array_elements(evidence_value->'periods') item
+ WHERE item->>'leadCount'~'^(?:0|[1-9][0-9]{0,14})$';
+ IF period_count<>3 OR lead_total IS NULL THEN RETURN NULL;END IF;
+ amount_value:=trim(trailing '.' FROM trim(trailing '0' FROM
+  to_char(round(lead_total::numeric/3,6),'FM999999999999990.000000')));
+ RETURN jsonb_build_object('contractVersion','m26-forecast-output-v1',
+  'target',jsonb_build_object('key','demand.inbound_leads','definitionVersion','v1'),
+  'unit',jsonb_build_object('key','count','currency',NULL),
+  'value',jsonb_build_object('kind','point','amount',amount_value),
+  'confidence',jsonb_build_object('state','unavailable','backtestDigest',NULL),
+  'uncertainty',jsonb_build_object('state','unquantified',
+   'drivers',jsonb_build_array('retell_only','human_attested_coverage','uncalibrated')),
+  'applicability',jsonb_build_object('serviceKey',NULL,'areaKey',NULL,
+   'limits',jsonb_build_array('retell_only','tenant_all')),
+  'calculationVersion','m26-retell-three-month-mean-v2',
+  'researchOnly',TRUE,'realForecastEligible',FALSE,'paidNumericServing',FALSE,
+  'forecastServingEnabled',FALSE);
+EXCEPTION WHEN data_exception THEN RETURN NULL;
+END $$;
+
+CREATE TABLE public.canonical_forecast_run_calculators_v1 (
+ calculator_key TEXT PRIMARY KEY CHECK(calculator_key='demand.inbound_leads.monthly_mean'),
+ calculator_version TEXT NOT NULL UNIQUE CHECK(calculator_version='m26-run-calculator-v1'),
+ implementation_identity TEXT NOT NULL CHECK(implementation_identity=
+  'public.canonical_forecast_run_v1_calculate(jsonb)'),
+ implementation_digest CHAR(64) NOT NULL CHECK(implementation_digest~'^[0-9a-f]{64}$'),
+ registered_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE TRIGGER canonical_forecast_run_calculators_v1_immutable
+ BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_forecast_run_calculators_v1
+ FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_forecast_price_flow_origin_immutable();
+INSERT INTO public.canonical_forecast_run_calculators_v1(
+ calculator_key,calculator_version,implementation_identity,implementation_digest)
+VALUES('demand.inbound_leads.monthly_mean','m26-run-calculator-v1',
+ 'public.canonical_forecast_run_v1_calculate(jsonb)',
+ encode(sha256(convert_to(pg_get_functiondef(
+  'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure),'UTF8')),'hex'));
+
 CREATE FUNCTION public.canonical_forecast_run_v1_paid_authority(
  org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,mutation BOOLEAN)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -162,7 +212,10 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE authority JSONB;current_settings public.canonical_forecast_settings_revisions_v1%ROWTYPE;
  replay public.canonical_forecast_runs_v1%ROWTYPE;prior public.canonical_forecast_runs_v1%ROWTYPE;
+ origin public.canonical_forecast_retell_future_origins_v2%ROWTYPE;
+ calculator public.canonical_forecast_run_calculators_v1%ROWTYPE;
  origin_result JSONB;baseline JSONB;new_id UUID:=gen_random_uuid();created_value TIMESTAMPTZ;
+ calculated_output JSONB;installed_calculator_digest TEXT;
  key_hash TEXT;child_key TEXT;settings_value JSONB;business_time_zone TEXT;
  first_horizon DATE;horizon_periods INTEGER;prior_projection JSONB;
 BEGIN
@@ -233,7 +286,19 @@ BEGIN
   RETURN jsonb_build_object('state','unavailable','reason','source_or_algorithm_not_current');END IF;
  baseline:=public.canonical_forecast_deterministic_baseline_v1_read(
   org,actor,role_value,session_value,(origin_result->>'id')::uuid);
+ SELECT * INTO origin FROM public.canonical_forecast_retell_future_origins_v2
+  WHERE organization_id=org AND id=(origin_result->>'id')::uuid FOR SHARE NOWAIT;
+ SELECT * INTO calculator FROM public.canonical_forecast_run_calculators_v1
+  WHERE calculator_key='demand.inbound_leads.monthly_mean' AND
+   calculator_version='m26-run-calculator-v1';
+ installed_calculator_digest:=encode(sha256(convert_to(pg_get_functiondef(
+  'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure),'UTF8')),'hex');
+ calculated_output:=public.canonical_forecast_run_v1_calculate(origin.evidence);
  IF baseline IS NULL OR baseline->>'state'<>'current' OR
+    origin.id IS NULL OR calculated_output IS NULL OR
+    calculator.calculator_key IS NULL OR
+    rtrim(calculator.implementation_digest)<>installed_calculator_digest OR
+    baseline->'output' IS DISTINCT FROM calculated_output OR
     baseline->>'sourceAuthenticated'<>'true' OR baseline->>'forecastIssued'<>'true' OR
     baseline#>>'{currentness,sourceCurrent}'<>'true' OR
     baseline#>>'{currentness,refreshRequired}'<>'false' OR
@@ -243,7 +308,8 @@ BEGIN
     baseline#>'{unit,currency}'<>'null'::jsonb OR
     baseline#>>'{horizon,localStart}'<>horizon_month::text OR
     (baseline->>'issuedAt')::timestamptz >= (baseline#>>'{horizon,startsAt}')::timestamptz THEN
-  RETURN jsonb_build_object('state','unavailable','reason','source_or_algorithm_not_current');END IF;
+  RAISE EXCEPTION 'Forecast run post-capture evidence unavailable'
+   USING ERRCODE='P11B1',DETAIL='source_or_algorithm_not_current';END IF;
  created_value:=date_trunc('milliseconds',clock_timestamp());
  RETURN jsonb_build_object('state','prepared','id',new_id,'organizationId',org,
   'asOf',baseline->>'issuedAt','createdAt',to_char(created_value AT TIME ZONE 'UTC',
@@ -252,11 +318,15 @@ BEGIN
     'digest',rtrim(current_settings.canonical_digest)),
   'sourceSnapshotDigest',baseline#>>'{sourceSnapshot,evidenceDigest}',
   'reportingWindow',baseline->'horizon','featureSetDigest',baseline#>>'{digests,input}',
-  'algorithm',baseline#>'{provenance,algorithm}',
+  'algorithm',((baseline#>'{provenance,algorithm}')-'buildIdentity')||jsonb_build_object(
+    'buildIdentity',jsonb_build_object('kind','postgresql_function_definition_sha256',
+      'procedure',calculator.implementation_identity),
+    'buildDigest',rtrim(calculator.implementation_digest)),
   'calculationVersion',baseline#>>'{output,calculationVersion}',
   'outputContractVersion',baseline#>>'{output,contractVersion}',
   'output',jsonb_build_object('targetKey','demand.inbound_leads','targetVersion','v1',
-    'payload',baseline->'output','outputDigest',baseline#>>'{digests,output}'),
+    'payload',calculated_output,'outputDigest',
+      public.canonical_completion_digest(calculated_output)),
   'supersedes',CASE WHEN prior.id IS NULL THEN NULL ELSE jsonb_build_object(
     'runId',prior.id,'runDigest',rtrim(prior.canonical_digest)) END);
 END $$;
@@ -271,6 +341,8 @@ SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE current_settings public.canonical_forecast_settings_revisions_v1%ROWTYPE;
  origin public.canonical_forecast_retell_future_origins_v2%ROWTYPE;baseline JSONB;
  registry public.canonical_forecast_deterministic_baseline_algorithms_v1%ROWTYPE;
+ calculator public.canonical_forecast_run_calculators_v1%ROWTYPE;calculated_output JSONB;
+ installed_calculator_digest TEXT;
  old_run public.canonical_forecast_runs_v1%ROWTYPE;inserted public.canonical_forecast_runs_v1%ROWTYPE;
  membership_value UUID;key_hash TEXT;child_key TEXT;child_key_hash TEXT;
  expected_input JSONB;expected_result JSONB;expected_receipt JSONB;business_time_zone TEXT;
@@ -322,6 +394,12 @@ BEGIN
  SELECT * INTO registry FROM public.canonical_forecast_deterministic_baseline_algorithms_v1
   WHERE algorithm_key='retell_three_complete_month_mean' AND
     algorithm_version='m26-retell-three-month-mean-v2';
+ SELECT * INTO calculator FROM public.canonical_forecast_run_calculators_v1
+  WHERE calculator_key='demand.inbound_leads.monthly_mean' AND
+   calculator_version='m26-run-calculator-v1';
+ installed_calculator_digest:=encode(sha256(convert_to(pg_get_functiondef(
+  'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure),'UTF8')),'hex');
+ calculated_output:=public.canonical_forecast_run_v1_calculate(origin.evidence);
  IF baseline IS NULL OR baseline->>'state'<>'current' OR
     receipt_value->>'version'<>'m26-forecast-run-receipt-v2' OR
     receipt_value->>'id'<>run_value::text OR receipt_value->>'organizationId'<>org::text OR
@@ -341,16 +419,17 @@ BEGIN
     receipt_value#>>'{algorithm,version}'<>registry.algorithm_version OR
     receipt_value#>>'{algorithm,definitionDigest}'<>rtrim(registry.definition_digest) OR
     receipt_value#>>'{algorithm,implementationDigest}'<>rtrim(registry.implementation_digest) OR
-    receipt_value#>>'{algorithm,buildDigest}'<>encode(sha256(convert_to(format(
-     '{"implementationDigest":"%s","kind":"postgresql_function_definition_sha256","procedure":"%s"}',
-     rtrim(registry.implementation_digest),registry.implementation_identity),'UTF8')),'hex') OR
+    calculator.calculator_key IS NULL OR calculated_output IS NULL OR
+    rtrim(calculator.implementation_digest)<>installed_calculator_digest OR
+    receipt_value#>>'{algorithm,buildDigest}'<>installed_calculator_digest OR
     receipt_value->>'calculationVersion'<>baseline#>>'{output,calculationVersion}' OR
     receipt_value->>'outputContractVersion'<>baseline#>>'{output,contractVersion}' OR
     jsonb_array_length(receipt_value->'outputs')<>1 OR
     receipt_value#>>'{outputs,0,targetKey}'<>'demand.inbound_leads' OR
     receipt_value#>>'{outputs,0,targetVersion}'<>'v1' OR
     receipt_value#>>'{outputs,0,outputDigest}'<>baseline#>>'{digests,output}' OR
-    output_value IS DISTINCT FROM baseline->'output' THEN
+    output_value IS DISTINCT FROM calculated_output OR
+    baseline->'output' IS DISTINCT FROM calculated_output THEN
   RAISE EXCEPTION 'Forecast run authority changed' USING ERRCODE='40001';END IF;
  IF receipt_value->'supersedes'<>'null'::jsonb THEN
   SELECT * INTO old_run FROM public.canonical_forecast_runs_v1
@@ -434,6 +513,7 @@ RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE saved public.canonical_forecast_runs_v1%ROWTYPE;baseline JSONB;outputs JSONB;
  registry public.canonical_forecast_deterministic_baseline_algorithms_v1%ROWTYPE;
+ calculator public.canonical_forecast_run_calculators_v1%ROWTYPE;
  current_settings public.canonical_forecast_settings_revisions_v1%ROWTYPE;
 BEGIN
  PERFORM public.canonical_forecast_run_v1_paid_authority(
@@ -452,15 +532,19 @@ BEGIN
   org,actor,role_value,session_value,saved.origin_id);
  SELECT * INTO registry FROM public.canonical_forecast_deterministic_baseline_algorithms_v1
   WHERE algorithm_key=saved.algorithm_key AND algorithm_version=saved.algorithm_version;
+ SELECT * INTO calculator FROM public.canonical_forecast_run_calculators_v1
+  WHERE calculator_key='demand.inbound_leads.monthly_mean' AND
+   calculator_version='m26-run-calculator-v1';
  IF baseline IS NULL OR baseline->>'state'<>'current' OR
     baseline#>>'{sourceSnapshot,evidenceDigest}'<>rtrim(saved.source_snapshot_digest) OR
     baseline#>>'{digests,input}'<>rtrim(saved.feature_set_digest) OR
     baseline#>>'{digests,output}' IS NULL OR registry.algorithm_key IS NULL OR
     rtrim(registry.definition_digest)<>rtrim(saved.algorithm_definition_digest) OR
     rtrim(registry.implementation_digest)<>rtrim(saved.implementation_digest) OR
-    rtrim(saved.build_digest)<>encode(sha256(convert_to(format(
-     '{"implementationDigest":"%s","kind":"postgresql_function_definition_sha256","procedure":"%s"}',
-     rtrim(registry.implementation_digest),registry.implementation_identity),'UTF8')),'hex') THEN
+    calculator.calculator_key IS NULL OR
+    rtrim(saved.build_digest)<>rtrim(calculator.implementation_digest) OR
+    rtrim(calculator.implementation_digest)<>encode(sha256(convert_to(pg_get_functiondef(
+     'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure),'UTF8')),'hex') THEN
   RETURN jsonb_build_object('state','unavailable',
    'reason','source_or_algorithm_not_current','runs',NULL);END IF;
  SELECT jsonb_agg(jsonb_build_object(
@@ -543,8 +627,9 @@ SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE saved public.canonical_forecast_runs_v1%ROWTYPE;
  origin public.canonical_forecast_retell_future_origins_v2%ROWTYPE;baseline JSONB;
  registry public.canonical_forecast_deterministic_baseline_algorithms_v1%ROWTYPE;
+ calculator public.canonical_forecast_run_calculators_v1%ROWTYPE;
  current_settings public.canonical_forecast_settings_revisions_v1%ROWTYPE;
- lead_total BIGINT;period_count INTEGER;amount_value TEXT;fresh_output JSONB;
+ fresh_output JSONB;installed_calculator_digest TEXT;
  fresh_output_digest TEXT;fresh_result_digest TEXT;same_value BOOLEAN;
 BEGIN
  PERFORM public.canonical_forecast_run_v1_paid_authority(
@@ -565,43 +650,31 @@ BEGIN
   WHERE organization_id=org AND id=saved.origin_id FOR SHARE NOWAIT;
  SELECT * INTO registry FROM public.canonical_forecast_deterministic_baseline_algorithms_v1
   WHERE algorithm_key=saved.algorithm_key AND algorithm_version=saved.algorithm_version;
+ SELECT * INTO calculator FROM public.canonical_forecast_run_calculators_v1
+  WHERE calculator_key='demand.inbound_leads.monthly_mean' AND
+   calculator_version='m26-run-calculator-v1';
  IF baseline IS NULL OR baseline->>'state'<>'current' THEN RETURN jsonb_build_object(
   'state','unavailable','reason','source_or_algorithm_not_current',
   'runId',NULL,'comparison',NULL);END IF;
  IF origin.id IS NULL OR jsonb_typeof(origin.evidence->'periods')<>'array' THEN
   RETURN jsonb_build_object('state','unavailable','reason','retained_inputs_unavailable',
    'runId',NULL,'comparison',NULL);END IF;
- IF registry.algorithm_key IS NULL OR
+ installed_calculator_digest:=encode(sha256(convert_to(pg_get_functiondef(
+  'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure),'UTF8')),'hex');
+ IF registry.algorithm_key IS NULL OR calculator.calculator_key IS NULL OR
     rtrim(registry.definition_digest)<>rtrim(saved.algorithm_definition_digest) OR
     rtrim(registry.implementation_digest)<>rtrim(saved.implementation_digest) OR
-    rtrim(saved.build_digest)<>encode(sha256(convert_to(format(
-     '{"implementationDigest":"%s","kind":"postgresql_function_definition_sha256","procedure":"%s"}',
-     rtrim(registry.implementation_digest),registry.implementation_identity),'UTF8')),'hex') OR
+    rtrim(saved.build_digest)<>rtrim(calculator.implementation_digest) OR
+    rtrim(calculator.implementation_digest)<>installed_calculator_digest OR
     encode(sha256(convert_to(pg_get_functiondef(
      'public.canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)'::regprocedure),
      'UTF8')),'hex')<>rtrim(saved.implementation_digest) THEN
   RETURN jsonb_build_object('state','unavailable',
    'reason','exact_executable_version_unavailable','runId',NULL,'comparison',NULL);END IF;
- SELECT count(*),sum((item->>'leadCount')::bigint) INTO period_count,lead_total
- FROM jsonb_array_elements(origin.evidence->'periods') item
- WHERE item->>'leadCount'~'^(?:0|[1-9][0-9]{0,14})$';
- IF period_count<>3 OR lead_total IS NULL THEN RETURN jsonb_build_object(
+ fresh_output:=public.canonical_forecast_run_v1_calculate(origin.evidence);
+ IF fresh_output IS NULL THEN RETURN jsonb_build_object(
   'state','unavailable','reason','retained_inputs_unavailable',
   'runId',NULL,'comparison',NULL);END IF;
- amount_value:=trim(trailing '.' FROM trim(trailing '0' FROM
-  to_char(round(lead_total::numeric/3,6),'FM999999999999990.000000')));
- fresh_output:=jsonb_build_object('contractVersion','m26-forecast-output-v1',
-  'target',jsonb_build_object('key','demand.inbound_leads','definitionVersion','v1'),
-  'unit',jsonb_build_object('key','count','currency',NULL),
-  'value',jsonb_build_object('kind','point','amount',amount_value),
-  'confidence',jsonb_build_object('state','unavailable','backtestDigest',NULL),
-  'uncertainty',jsonb_build_object('state','unquantified',
-   'drivers',jsonb_build_array('retell_only','human_attested_coverage','uncalibrated')),
-  'applicability',jsonb_build_object('serviceKey',NULL,'areaKey',NULL,
-   'limits',jsonb_build_array('retell_only','tenant_all')),
-  'calculationVersion','m26-retell-three-month-mean-v2',
-  'researchOnly',TRUE,'realForecastEligible',FALSE,'paidNumericServing',FALSE,
-  'forecastServingEnabled',FALSE);
  fresh_output_digest:=public.canonical_completion_digest(fresh_output);
  fresh_result_digest:=encode(sha256(convert_to(format(
   '{"outputs":[{"outputDigest":"%s","targetKey":"demand.inbound_leads","targetVersion":"v1"}]}',
@@ -616,6 +689,8 @@ END $$;
 REVOKE ALL ON TABLE public.canonical_forecast_runs_v1 FROM PUBLIC;
 REVOKE ALL ON TABLE public.canonical_forecast_run_outputs_v1 FROM PUBLIC;
 REVOKE ALL ON TABLE public.canonical_forecast_run_supersessions_v1 FROM PUBLIC;
+REVOKE ALL ON TABLE public.canonical_forecast_run_calculators_v1 FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_forecast_run_v1_calculate(JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_run_v1_paid_authority(
  UUID,UUID,TEXT,UUID,TEXT,BOOLEAN) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_forecast_run_v1_prepare(
@@ -635,6 +710,8 @@ DO $$DECLARE runtime_role TEXT:=current_setting('northstar.runtime_role',TRUE);B
   EXECUTE format('REVOKE ALL ON TABLE public.canonical_forecast_runs_v1 FROM %I',runtime_role);
   EXECUTE format('REVOKE ALL ON TABLE public.canonical_forecast_run_outputs_v1 FROM %I',runtime_role);
   EXECUTE format('REVOKE ALL ON TABLE public.canonical_forecast_run_supersessions_v1 FROM %I',runtime_role);
+  EXECUTE format('REVOKE ALL ON TABLE public.canonical_forecast_run_calculators_v1 FROM %I',runtime_role);
+  EXECUTE format('REVOKE ALL ON FUNCTION public.canonical_forecast_run_v1_calculate(jsonb) FROM %I',runtime_role);
   EXECUTE format('REVOKE ALL ON FUNCTION public.canonical_forecast_run_v1_paid_authority(uuid,uuid,text,uuid,text,boolean) FROM %I',runtime_role);
   EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_prepare(uuid,uuid,text,uuid,text,text,text,integer,text,date,uuid,text) TO %I',runtime_role);
   EXECUTE format('GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_commit(uuid,uuid,text,uuid,text,text,integer,text,date,uuid,jsonb,jsonb,text,text,text,text) TO %I',runtime_role);

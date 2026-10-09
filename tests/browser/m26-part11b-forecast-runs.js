@@ -52,6 +52,20 @@ const settings = { state: 'current', settings: { version: 'm26-forecast-settings
   sourceAuthorityProvenByPreference: false, intervalCalibrationProvenByPreference: false,
   actualFinalityProvenByPreference: false, issuanceEligibilityProvenByPreference: false,
   forecastIssued: false, calibratedRangeIssued: false, automaticActionAuthorized: false };
+const demoRuntimeScript = `(function(){
+  var active=location.pathname.indexOf('/demo/')===0;
+  if(!active){window.NorthStarDemoRuntime={active:false};return;}
+  function workspace(action,expired,lifetime){return {
+    session:{id:'demo-run-session',expiresAt:new Date(Date.now()+(expired?-1000:(lifetime||60000))).toISOString()},
+    integrity:{revision:action==='demo_reset'?2:1,digest:'9'.repeat(64),lastAction:action||'demo_loaded'}
+  };}
+  var current=workspace('demo_loaded',false,4000);
+  window.NorthStarDemoRuntime={active:true,loadWorkspace:function(){return Promise.resolve(current);}};
+  window.recoverForecastDemo=function(){current=workspace('demo_recovered',false);
+    dispatchEvent(new CustomEvent('northstar:demo-workspace',{detail:current}));};
+  window.resetForecastDemo=function(){current=workspace('demo_reset',false);
+    dispatchEvent(new CustomEvent('northstar:demo-workspace',{detail:current}));};
+})();`;
 
 async function main() {
   const app = require('../../src/server').app;
@@ -105,8 +119,11 @@ async function main() {
         if (url.pathname === '/js/api.js') return route.fulfill({
           contentType: 'application/javascript', body: 'window.showToast=function(){};',
         });
+        if (url.pathname === '/js/demo-runtime.js') return route.fulfill({
+          contentType: 'application/javascript', body: demoRuntimeScript,
+        });
         if (url.pathname.startsWith('/js/') && !['/js/forecast-settings.js','/js/forecast-runs.js',
-          '/js/demo-runtime.js','/js/theme.js'].includes(url.pathname)) {
+          '/js/theme.js'].includes(url.pathname)) {
           return route.fulfill({ contentType: 'application/javascript', body: '' });
         }
         if (url.pathname.startsWith('/api/')) return route.fulfill({ status: 503, json: {} });
@@ -154,6 +171,9 @@ async function main() {
     const page = await context.newPage(); const requests = [], errors = [];
     page.on('request', request => requests.push(new URL(request.url()).pathname));
     page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/js/demo-runtime.js*', route => route.fulfill({
+      contentType: 'application/javascript', body: demoRuntimeScript,
+    }));
     await page.goto(origin + '/demo/settings');
     await page.locator('#forecastRunsStatus').getByText('Fictional forecast receipts', { exact: true }).waitFor();
     assert.match(await page.locator('#forecast-runs').innerText(), /isolated demo uses synthetic evidence/i);
@@ -161,7 +181,23 @@ async function main() {
     assert.equal(requests.some(value => value.startsWith('/api/v1/forecast/settings')), false);
     await page.locator('#compareForecastRuns').click();
     await page.locator('#forecastRunComparison').getByText(/fictional reporting window/).waitFor();
+    await page.locator('#forecastRunsStatus').getByText('Fictional forecast receipts expired', { exact: true }).waitFor();
+    assert.equal(await page.locator('#forecastRunCurrent').isHidden(), true);
+    assert.equal(await page.locator('#forecastRunHistory').innerText(), '');
+    assert.equal(await page.locator('#forecastRunComparison').innerText(), '');
+    assert.equal(await page.locator('#forecastRunDigest').innerText(), '');
+    assert.equal(await page.locator('#forecastRunOutputDigest').innerText(), '');
+    await page.evaluate(() => window.recoverForecastDemo());
+    await page.locator('#forecastRunsStatus').getByText('Fictional forecast receipts', { exact: true }).waitFor();
+    assert.equal(await page.locator('#forecastRunValue').textContent(), '19');
+    await page.locator('#compareForecastRuns').click();
+    await page.locator('#forecastRunComparison').getByText(/fictional reporting window/).waitFor();
+    await page.evaluate(() => window.resetForecastDemo());
+    assert.equal(await page.locator('#forecastRunComparison').innerText(), '');
+    assert.equal(await page.locator('#forecastRunValue').textContent(), '19');
     assert.deepEqual(errors, []);
+    assert.equal(requests.some(value => value.startsWith('/api/v1/forecast/runs')), false);
+    assert.equal(requests.some(value => value.startsWith('/api/v1/forecast/settings')), false);
     await page.locator('#forecast-runs').screenshot({ path: path.join(output, 'mobile-demo.png') });
     await context.close();
   } finally {

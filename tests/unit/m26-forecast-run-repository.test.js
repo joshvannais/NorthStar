@@ -25,7 +25,7 @@ const prepared = { state: 'prepared', id: '11111111-1111-4111-8111-111111111111'
     endsAt: '2026-12-01T05:00:00.000000Z' }, featureSetDigest: 'c'.repeat(64),
   algorithm: { key: 'retell_three_complete_month_mean',
     version: 'm26-retell-three-month-mean-v2', definitionDigest: 'd'.repeat(64),
-    implementationDigest: 'e'.repeat(64), buildIdentity: {
+    implementationDigest: 'e'.repeat(64), buildDigest: '9'.repeat(64), buildIdentity: {
       kind: 'postgresql_function_definition_sha256',
       procedure: 'canonical_forecast_retell_future_origin_v2_capture(uuid,uuid,text,uuid,text,text,date)' } },
   calculationVersion: 'm26-retell-three-month-mean-v2',
@@ -68,7 +68,7 @@ test('builds the canonical receipt from trusted preparation and commits once ato
     algorithm: { key: prepared.algorithm.key, version: prepared.algorithm.version,
       definitionDigest: prepared.algorithm.definitionDigest,
       implementationDigest: prepared.algorithm.implementationDigest,
-      buildDigest: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      buildDigest: prepared.algorithm.buildDigest },
     outputs: [{ targetKey: 'demand.inbound_leads', targetVersion: 'v1',
       outputDigest: 'f'.repeat(64) }], inputDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
     resultDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
@@ -162,4 +162,21 @@ test('malformed caller and server evidence fail closed without a transaction com
   await expect(repository.capture(malformed, actor, input)).rejects.toMatchObject({
     code: 'FORECAST_RUN_UNAVAILABLE', status: 503 });
   expect(malformed.client.query.mock.calls.some(call => call[0] === 'ROLLBACK')).toBe(true);
+});
+
+test('post-capture unavailable rolls back before returning the named value-free boundary', async () => {
+  const unavailable = pool(async sql => {
+    if (sql.includes('_prepare(')) {
+      const error = new Error('Forecast run post-capture evidence unavailable');
+      error.code = 'P11B1'; error.detail = 'source_or_algorithm_not_current';
+      throw error;
+    }
+    throw new Error('Unexpected query');
+  });
+  await expect(repository.capture(unavailable, actor, input)).resolves.toEqual({
+    state: 'unavailable', reason: 'source_or_algorithm_not_current', runs: null,
+  });
+  const statements = unavailable.client.query.mock.calls.map(call => call[0]);
+  expect(statements).toContain('ROLLBACK');
+  expect(statements).not.toContain('COMMIT');
 });

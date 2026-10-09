@@ -16,7 +16,7 @@ const enabled = { enabled: true, targets: ['demand.inbound_leads'],
   alertDelivery: 'off', actionPolicy: 'review_required' };
 
 realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
-  let fixture, horizon, horizons, snapshots, settings, consent;
+  let fixture, horizon, horizons, snapshots, settings, consent, calculatorDefinition;
   let integrationOwnershipId, agentId, first, second, firstRequestKey;
 
   async function transaction(operation, isolation = 'READ COMMITTED', pool) {
@@ -71,9 +71,21 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
     return request(fixture.app).post(route).set(fixture.actors.owner.session.headers)
       .set('Idempotency-Key', requestKey).send(body(month, supersedes));
   }
+  async function tamperCalculator() {
+    await fixture.ownerPool.query(`CREATE OR REPLACE FUNCTION
+      public.canonical_forecast_run_v1_calculate(evidence_value JSONB)
+      RETURNS JSONB LANGUAGE sql IMMUTABLE STRICT
+      SET search_path=pg_catalog,public,pg_temp AS $$ SELECT NULL::jsonb $$`);
+  }
+  async function restoreCalculator() {
+    await fixture.ownerPool.query(calculatorDefinition);
+  }
 
   beforeAll(async () => {
     fixture = await createDatabaseFixture();
+    calculatorDefinition = (await fixture.ownerPool.query(`SELECT pg_get_functiondef(
+      'public.canonical_forecast_run_v1_calculate(jsonb)'::regprocedure) definition`))
+      .rows[0].definition;
     const owner = fixture.actors.owner, profile = fixture.profiles[fixture.org];
     horizon = (await fixture.ownerPool.query(`SELECT
       date_trunc('month',(statement_timestamp() AT TIME ZONE
@@ -132,6 +144,22 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
     expect(empty.headers['cache-control']).toBe('private, no-store');
     expect(empty.body.data).toEqual({ state: 'current', runs: [] });
     firstRequestKey = key();
+    const beforeUnavailable = (await fixture.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_forecast_retell_future_origins_v2) origins,
+      (SELECT count(*)::int FROM canonical_forecast_runs_v1) runs,
+      (SELECT count(*)::int FROM canonical_forecast_run_outputs_v1) outputs`)).rows[0];
+    try {
+      await tamperCalculator();
+      const unavailable = await issue(horizons.horizon_one, firstRequestKey);
+      expect(unavailable.status).toBe(200);
+      expect(unavailable.body.data).toEqual({ state: 'unavailable',
+        reason: 'source_or_algorithm_not_current', runs: null });
+    } finally { await restoreCalculator(); }
+    const afterUnavailable = (await fixture.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_forecast_retell_future_origins_v2) origins,
+      (SELECT count(*)::int FROM canonical_forecast_runs_v1) runs,
+      (SELECT count(*)::int FROM canonical_forecast_run_outputs_v1) outputs`)).rows[0];
+    expect(afterUnavailable).toEqual(beforeUnavailable);
     const issued = await issue(horizons.horizon_one, firstRequestKey);
     expect(issued.status).toBe(201);
     expect(issued.body.data).toMatchObject({ state: 'current', replayed: false,
@@ -182,6 +210,20 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
       runId: first.receipt.id, sameResults: true, automaticActionAuthorized: false,
       storedResultDigest: first.receipt.resultDigest,
       freshResultDigest: first.receipt.resultDigest });
+    try {
+      await tamperCalculator();
+      const unavailable = await request(fixture.app)
+        .post(`${route}/${first.receipt.id}/controlled-rerun`)
+        .set(fixture.actors.owner.session.headers).set('Idempotency-Key', key()).send({});
+      expect(unavailable.status).toBe(200);
+      expect(unavailable.body.data).toEqual({ state: 'unavailable',
+        reason: 'exact_executable_version_unavailable', runId: null, comparison: null });
+    } finally { await restoreCalculator(); }
+    const recovered = await request(fixture.app)
+      .post(`${route}/${first.receipt.id}/controlled-rerun`)
+      .set(fixture.actors.owner.session.headers).set('Idempotency-Key', key()).send({});
+    expect(recovered.body.data).toMatchObject({ state: 'reproduced',
+      runId: first.receipt.id, sameResults: true });
   }, 120000);
 
   test('conflicts, unsupported horizons, fresh connections and tenant-role-CSRF boundaries fail closed', async () => {
@@ -258,6 +300,11 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
   test('runtime privileges are entry-only and owner mutations hit immutable triggers', async () => {
     await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_runs_v1'))
       .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_run_calculators_v1'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query(
+      `SELECT public.canonical_forecast_run_v1_calculate('{}'::jsonb)`))
+      .rejects.toMatchObject({ code: '42501' });
     await expect(fixture.runtimePool.query(
       `SELECT public.canonical_forecast_run_v1_paid_authority(
        gen_random_uuid(),gen_random_uuid(),'owner',gen_random_uuid(),NULL,FALSE)`))
@@ -273,8 +320,12 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
        'canonical_forecast_run_v1_list(uuid,uuid,text,uuid)','EXECUTE') list_entry,
       has_function_privilege(current_user,
        'canonical_forecast_run_v1_compare(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE') compare_entry,
-      has_table_privilege(current_user,'canonical_forecast_runs_v1','SELECT') table_read`)).rows[0];
-    expect(privileges).toEqual({ list_entry: true, compare_entry: true, table_read: false });
+      has_table_privilege(current_user,'canonical_forecast_runs_v1','SELECT') table_read,
+      has_table_privilege(current_user,'canonical_forecast_run_calculators_v1','SELECT') calculator_read,
+      has_function_privilege(current_user,
+       'canonical_forecast_run_v1_calculate(jsonb)','EXECUTE') calculator_execute`)).rows[0];
+    expect(privileges).toEqual({ list_entry: true, compare_entry: true,
+      table_read: false, calculator_read: false, calculator_execute: false });
   }, 120000);
 
   test('source revocation clears mounted values while immutable receipts remain retained', async () => {

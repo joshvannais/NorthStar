@@ -29,6 +29,7 @@
   var issueAttempt = null;
   var generation = 0;
   var controllers = new Set();
+  var demoExpiryTimer = null;
   var DIGEST = /^[0-9a-f]{64}$/;
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -56,6 +57,10 @@
     generation += 1;
     controllers.forEach(function (controller) { controller.abort(); });
     controllers.clear();
+  }
+  function clearDemoExpiry() {
+    if (demoExpiryTimer !== null) global.clearTimeout(demoExpiryTimer);
+    demoExpiryTimer = null;
   }
   async function request(url, options) {
     if (!global.NorthStarAccountSession ||
@@ -278,8 +283,24 @@
     } catch (_error) { unavailable('retained_inputs_unavailable'); }
     finally { if (root.dataset.state !== 'unavailable') locked(true); }
   }
-  function demo() {
-    cancel(); clear(); refresh.hidden = true; month.disabled = true; issue.hidden = true;
+  function demoExpired() {
+    clearDemoExpiry(); cancel(); clear();
+    refresh.hidden = true; month.disabled = true; issue.hidden = true; rerun.hidden = true;
+    show('Fictional forecast receipts expired',
+      'The fictional session expired. Receipt values, digests, and comparisons were cleared. Start or refresh a demo workspace to recover.',
+      'unavailable');
+  }
+  function scheduleDemoExpiry(expiresAt) {
+    clearDemoExpiry();
+    var remaining = expiresAt - Date.now();
+    if (remaining <= 0) { demoExpired(); return; }
+    demoExpiryTimer = global.setTimeout(function () { scheduleDemoExpiry(expiresAt); },
+      Math.min(remaining, 2147483647));
+  }
+  function demo(workspace) {
+    clearDemoExpiry(); cancel(); clear(); refresh.hidden = true; month.disabled = true; issue.hidden = true;
+    var expiresAt = workspace && workspace.session && Date.parse(workspace.session.expiresAt);
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) { demoExpired(); return; }
     var digest = function (character) { return character.repeat(64); };
     var make = function (id, cutoff, amount, character) {
       return { state: 'current', receipt: { version: 'm26-forecast-run-receipt-v2', id: id,
@@ -306,18 +327,30 @@
     rerun.hidden = true; compareForm.hidden = false; compare.disabled = false; left.disabled = false; right.disabled = false;
     show('Fictional forecast receipts',
       'This isolated demo uses synthetic evidence and makes no paid forecast calls. Receipt comparison is illustrative and authorizes no action.', 'demo');
+    scheduleDemoExpiry(expiresAt);
+  }
+  function initializeDemo() {
+    clearDemoExpiry(); cancel(); clear(); refresh.hidden = true;
+    month.disabled = true; issue.hidden = true; rerun.hidden = true;
+    show('Loading fictional forecast receipts.',
+      'Values and digests stay cleared until the fictional workspace is current.', 'loading');
+    if (!global.NorthStarDemoRuntime ||
+        typeof global.NorthStarDemoRuntime.loadWorkspace !== 'function') {
+      demoExpired(); return;
+    }
+    global.NorthStarDemoRuntime.loadWorkspace(false).then(demo).catch(demoExpired);
   }
 
   issueForm.addEventListener('submit', issueRun);
   compareForm.addEventListener('submit', compareRuns);
   rerun.addEventListener('click', controlledRerun);
   refresh.addEventListener('click', load);
-  global.addEventListener('pagehide', function () { cancel(); clear(); });
+  global.addEventListener('pagehide', function () { clearDemoExpiry(); cancel(); clear(); });
   global.addEventListener('northstar:auth-generation', function () { cancel(); clear(); load(); });
   global.addEventListener('northstar:demo-workspace', function (event) {
     if (global.NorthStarDemoRuntime && global.NorthStarDemoRuntime.active === true &&
-        event && event.detail && event.detail.integrity && event.detail.integrity.lastAction === 'demo_reset') demo();
+        event && event.detail) demo(event.detail);
   });
-  if (global.NorthStarDemoRuntime && global.NorthStarDemoRuntime.active === true) demo();
+  if (global.NorthStarDemoRuntime && global.NorthStarDemoRuntime.active === true) initializeDemo();
   else load();
 })(window);

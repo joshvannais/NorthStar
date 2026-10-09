@@ -228,7 +228,8 @@ function captureInput(input) {
 }
 async function capture(pool, actor, rawInput) {
   identity(actor, true); const input = captureInput(rawInput);
-  return transaction(pool, async client => {
+  try {
+    return await transaction(pool, async client => {
     const requestDigest = sha256(input);
     const prepared = (await client.query(
       `SELECT public.canonical_forecast_run_v1_prepare(
@@ -260,10 +261,11 @@ async function capture(pool, actor, rawInput) {
         prepared.settings.revision !== input.expectedSettingsRevision ||
         prepared.settings.digest !== input.expectedSettingsDigest ||
         !exact(prepared.algorithm,
-          ['key','version','definitionDigest','implementationDigest','buildIdentity']) ||
+          ['key','version','definitionDigest','implementationDigest','buildIdentity','buildDigest']) ||
         !exact(prepared.algorithm.buildIdentity, ['kind','procedure']) ||
         prepared.algorithm.buildIdentity.kind !== 'postgresql_function_definition_sha256' ||
         typeof prepared.algorithm.buildIdentity.procedure !== 'string' ||
+        !DIGEST.test(prepared.algorithm.buildDigest || '') ||
         !exact(prepared.output, ['targetKey','targetVersion','payload','outputDigest']) ||
         !DIGEST.test(prepared.output.outputDigest || '')) {
       throw failure('FORECAST_RUN_UNAVAILABLE', 503,
@@ -272,8 +274,7 @@ async function capture(pool, actor, rawInput) {
     const algorithm = { key: prepared.algorithm.key, version: prepared.algorithm.version,
       definitionDigest: prepared.algorithm.definitionDigest,
       implementationDigest: prepared.algorithm.implementationDigest,
-      buildDigest: sha256({ ...prepared.algorithm.buildIdentity,
-        implementationDigest: prepared.algorithm.implementationDigest }) };
+      buildDigest: prepared.algorithm.buildDigest };
     const receiptInput = { version: VERSION, id: prepared.id,
       organizationId: prepared.organizationId, asOf: prepared.asOf,
       createdAt: prepared.createdAt, settings: prepared.settings,
@@ -302,7 +303,15 @@ async function capture(pool, actor, rawInput) {
         prepared.output.payload, canonical.inputCanonical, canonical.resultCanonical,
         canonical.receiptCanonical, input.supersedes?.reason || null])).rows[0]?.value;
     return freeze({ ...verifiedCurrent(stored, actor.organizationId), replayed: false });
-  });
+    });
+  } catch (error) {
+    if (error && error.code === 'P11B1' &&
+        error.detail === 'source_or_algorithm_not_current') {
+      return verifiedEnvelope({ state: 'unavailable', reason: error.detail,
+        runs: null }, actor.organizationId);
+    }
+    throw error;
+  }
 }
 async function list(pool, actor) {
   identity(actor, false);

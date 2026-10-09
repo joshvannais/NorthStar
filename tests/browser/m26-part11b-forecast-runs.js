@@ -101,6 +101,7 @@ async function main() {
                 if(window.runMode==='failure')return Promise.resolve({status:503,ok:false,json:function(){return Promise.resolve({error:{category:'FORECAST_RUN_UNAVAILABLE'}})}});
                 if(window.runMode==='stale'&&method==='GET')return Promise.resolve({status:200,ok:true,json:function(){return Promise.resolve({success:true,data:{state:'unavailable',reason:'source_or_algorithm_not_current',runs:null}})}});
                 if(window.runMode==='settingsStale'&&method==='GET')return Promise.resolve({status:200,ok:true,json:function(){return Promise.resolve({success:true,data:{state:'unavailable',reason:'settings_not_current',runs:null}})}});
+                if(window.runMode==='sourceUnsupported'&&method==='GET')return Promise.resolve({status:200,ok:true,json:function(){return Promise.resolve({success:true,data:{state:'unavailable',reason:'unsupported_source_currentness',runs:null}})}});
                 if(url.indexOf('/compare/')>=0)return Promise.resolve({status:200,ok:true,json:function(){return Promise.resolve({success:true,data:{state:'input_changed',leftRunId:window.runs[1].receipt.id,rightRunId:window.runs[0].receipt.id,leftRunDigest:window.runs[1].receipt.digest,rightRunDigest:window.runs[0].receipt.digest,sameInputs:false,sameResults:false,digest:'4'.repeat(64)}})}});
                 if(url.indexOf('/controlled-rerun')>=0)return Promise.resolve({status:200,ok:true,json:function(){return Promise.resolve({success:true,data:{state:'reproduced',runId:window.runs[0].receipt.id,runDigest:window.runs[0].receipt.digest,storedResultDigest:window.runs[0].receipt.resultDigest,freshResultDigest:window.runs[0].receipt.resultDigest,sameResults:true,automaticActionAuthorized:false}})}});
                 if(method==='POST'){window.runMode='history';return Promise.resolve({status:201,ok:true,json:function(){return Promise.resolve({success:true,data:window.runs[0]})}});}
@@ -161,6 +162,13 @@ async function main() {
         await page.evaluate(() => { window.runMode = 'history'; });
         await page.locator('#refreshForecastRuns').click();
         await page.locator('#forecastRunsStatus').getByText('Forecast run receipts are current', { exact: true }).waitFor();
+        await page.evaluate(() => { window.runMode = 'sourceUnsupported'; });
+        await page.locator('#refreshForecastRuns').click();
+        await page.locator('#forecastRunsDetail').getByText(
+          /does not yet have an accepted currentness reader.*values.*receipt identities.*withheld/i).waitFor();
+        assert.equal(await page.locator('#forecastRunCurrent').isHidden(), true);
+        assert.equal(await page.locator('#forecastRunHistory').innerText(), '');
+        assert.equal(await page.locator('#forecastRunComparison').innerText(), '');
       }
       assert.deepEqual(errors, []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);

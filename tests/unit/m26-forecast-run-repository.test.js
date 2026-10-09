@@ -180,3 +180,51 @@ test('post-capture unavailable rolls back before returning the named value-free 
   expect(statements).toContain('ROLLBACK');
   expect(statements).not.toContain('COMMIT');
 });
+
+test('mounted currentness accepts only a strict masked unavailable decision', async () => {
+  const database = pool(async sql => {
+    if (sql.includes('_currentness_v1_latest(')) return { rows: [{ value: {
+      version: 'm26-forecast-run-currentness-v1', state: 'unavailable',
+      reason: 'unsupported_source_currentness', reasons: ['source_unknown'],
+      runId: null, runDigest: null, adviceDisplayAuthorized: false,
+      digest: '8'.repeat(64),
+    } }] };
+    throw new Error('Unexpected query');
+  });
+  await expect(repository.currentness(database, {
+    organizationId: actor.organizationId, actorUserId: actor.actorUserId,
+    actorAccessRole: actor.actorAccessRole, authSessionId: actor.authSessionId,
+  })).resolves.toEqual({ version: 'm26-forecast-run-currentness-v1',
+    state: 'unavailable', reason: 'unsupported_source_currentness',
+    reasons: ['source_unknown'], runId: null, runDigest: null,
+    adviceDisplayAuthorized: false, digest: '8'.repeat(64) });
+});
+
+test('post-commit currentness withholding preserves the immutable write but returns no value', async () => {
+  const database = pool(async (sql, params) => {
+    if (sql.includes('_prepare(')) return { rows: [{ value: prepared }] };
+    if (sql.includes('_commit(')) return { rows: [{ value: { state: 'unavailable',
+      reason: 'unsupported_source_currentness', runs: null } }] };
+    throw new Error('Unexpected query');
+  });
+  await expect(repository.capture(database, actor, input)).resolves.toEqual({
+    state: 'unavailable', reason: 'unsupported_source_currentness', runs: null,
+  });
+  expect(database.client.query.mock.calls.map(call => call[0])).toContain('COMMIT');
+});
+
+test('malformed unmasked unavailable currentness fails closed', async () => {
+  const database = pool(async sql => {
+    if (sql.includes('_currentness_v1_latest(')) return { rows: [{ value: {
+      version: 'm26-forecast-run-currentness-v1', state: 'unavailable',
+      reason: 'unsupported_source_currentness', reasons: ['source_unknown'],
+      runId: prepared.id, runDigest: '8'.repeat(64), adviceDisplayAuthorized: false,
+      digest: '9'.repeat(64),
+    } }] };
+    throw new Error('Unexpected query');
+  });
+  await expect(repository.currentness(database, {
+    organizationId: actor.organizationId, actorUserId: actor.actorUserId,
+    actorAccessRole: actor.actorAccessRole, authSessionId: actor.authSessionId,
+  })).rejects.toMatchObject({ code: 'FORECAST_RUN_UNAVAILABLE', status: 503 });
+});

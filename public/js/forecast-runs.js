@@ -174,6 +174,11 @@
       settings_not_enabled: 'Forecast settings are disabled or no longer current.',
       settings_not_current: 'Forecast settings changed. Stored values and receipt details are withheld.',
       source_or_algorithm_not_current: 'Source or algorithm evidence changed. Stored values and receipts are withheld.',
+      dependency_index_unavailable: 'The immutable run dependency index could not be verified. Stored values and receipt identities are withheld.',
+      unsupported_source_currentness: 'This run source does not yet have an accepted currentness reader. Stored values, receipt identities, comparisons and reruns are withheld.',
+      source_currentness_unknown: 'The saved source currentness could not be authenticated. Stored values, receipt identities, comparisons and reruns are withheld.',
+      algorithm_unknown: 'The exact saved algorithm and build can no longer be verified. Stored values and receipt identities are withheld.',
+      run_stale: 'The saved source or algorithm changed. A new snapshot and run are required before values can be shown.',
       retained_inputs_unavailable: 'Required retained inputs are unavailable. Stored values and receipts are withheld.',
       run_not_found: 'The selected run is unavailable.',
     };

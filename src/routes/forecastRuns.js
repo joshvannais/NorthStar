@@ -47,6 +47,15 @@ function createForecastRunsRouter(options = {}) {
     res.set('X-Content-Type-Options', 'nosniff');
     res.vary('Cookie'); next();
   });
+  router.get('/currentness', auth, readPermission, throttle, async (req, res) => {
+    if (Object.keys(req.query).length !== 0) return failure(res, {
+      status: 400, code: 'FORECAST_RUN_REQUEST_INVALID',
+      message: 'Check the forecast currentness request and try again.' });
+    try {
+      return res.json({ success: true,
+        data: await repository.currentness(poolProvider(), actor(req, false)) });
+    } catch (error) { return failure(res, error); }
+  });
   router.get('/', auth, readPermission, throttle, async (req, res) => {
     if (Object.keys(req.query).length !== 0) return failure(res, {
       status: 400, code: 'FORECAST_RUN_REQUEST_INVALID',

@@ -235,7 +235,7 @@ describe('Mission 26 original Part 10D guarded forecast decision support', () =>
     expect(source).toMatch(/canonical_forecast_monthly_kpis_v1_read/);
     expect(source).not.toMatch(/CREATE TABLE|INSERT INTO|UPDATE\s|DELETE FROM|downloadUrl:\s*['"]|shareUrl:\s*['"]/i);
     expect(source).toMatch(/outboundCommunicationAuthorized:\s*false/);
-    expect(page).toMatch(/renderForecastDecisionSupport\(\)/);
+    expect(page).toMatch(/renderForecastDecisionSupport\(forecastGeneration\)/);
     expect(page).toMatch(/forecastDecisionSupport\.workspaceLoading\(\)/);
     expect(page).toMatch(/forecastDecisionSupport\.workspaceUnavailable\(\)/);
     expect(html.indexOf('command-center-forecast-decision-support.js'))

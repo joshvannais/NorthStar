@@ -34,6 +34,7 @@
     receipt.textContent = '';
     controls.forEach(function (control) { control.disabled = true; });
     save.disabled = true;
+    save.textContent = 'Save reviewed settings';
   }
   function setEditable(value) {
     controls.forEach(function (control) { control.disabled = !value; });
@@ -59,7 +60,7 @@
       'sourceAuthorityProvenByPreference','intervalCalibrationProvenByPreference',
       'actualFinalityProvenByPreference','issuanceEligibilityProvenByPreference',
       'forecastIssued','calibratedRangeIssued','automaticActionAuthorized'];
-    if (!data || !['current','unavailable'].includes(data.state) ||
+    if (!data || !['current','unavailable','superseded'].includes(data.state) ||
         gates.some(function (key) { return data[key] !== false; }) ||
         !data.authority || data.authority.automaticActionAuthorized !== false ||
         !data.authority.limits || data.authority.limits.targets !== 24 ||
@@ -67,7 +68,21 @@
         data.authority.limits.periodsPerHorizon !== 100) return false;
     if (data.state === 'unavailable') {
       return data.settings === null &&
-        data.reason === 'selected_target_algorithm_or_source_authority_changed';
+        data.reason === 'selected_target_algorithm_or_source_authority_changed' &&
+        data.recovery && data.recovery.action === 'disable' &&
+        Number.isSafeInteger(data.recovery.expectedRevision) &&
+        data.recovery.expectedRevision >= 1 &&
+        typeof data.recovery.expectedDigest === 'string' &&
+        /^[0-9a-f]{64}$/.test(data.recovery.expectedDigest);
+    }
+    if (data.state === 'superseded') {
+      return data.settings === null && data.replayed === true &&
+        data.historicalReceipt && data.currentReceipt &&
+        Number.isSafeInteger(data.historicalReceipt.revision) &&
+        Number.isSafeInteger(data.currentReceipt.revision) &&
+        data.historicalReceipt.revision < data.currentReceipt.revision &&
+        /^[0-9a-f]{64}$/.test(data.historicalReceipt.digest || '') &&
+        /^[0-9a-f]{64}$/.test(data.currentReceipt.digest || '');
     }
     var value = data.settings;
     return value && Number.isSafeInteger(value.revision) && value.revision >= 0 &&
@@ -79,8 +94,19 @@
     if (!validData(data)) throw new Error('Forecast settings response invalid');
     if (data.state === 'unavailable') {
       clear();
-      show('Forecast settings unavailable',
-        'A selected target, algorithm, or source permission is no longer current. Review is required; prior values and receipts were cleared.',
+      current = { revision: data.recovery.expectedRevision,
+        digest: data.recovery.expectedDigest };
+      save.disabled = false;
+      save.textContent = 'Save disabled reset';
+      show('Forecast settings need a disabled reset',
+        'A selected target, algorithm, or source permission is no longer current. Stale selections and receipts are withheld. An owner or administrator may record a new empty, disabled revision.',
+        'review-required');
+      return;
+    }
+    if (data.state === 'superseded') {
+      clear(); pending = null;
+      show('Earlier save receipt is superseded',
+        'That retry belongs to an earlier revision. Values and receipts remain cleared until current settings are refreshed.',
         'unavailable');
       return;
     }
@@ -103,15 +129,11 @@
     if (pending && (pending.expectedRevision !== current.revision ||
         pending.expectedDigest !== current.digest)) pending = null;
     setEditable(Boolean(targetAuthority));
+    save.textContent = 'Save reviewed settings';
     receipt.textContent = value.revision === 0 ?
       'System default · no owner revision' :
       'Revision ' + value.revision + ' · ' + value.digest;
-    if (!targetAuthority) {
-      setEditable(false);
-      show('Forecast settings review unavailable',
-        'No current target and algorithm authority can accept a preference. Existing values remain read only.',
-        'unavailable');
-    } else if (!settings.enabled && value.revision === 0) {
+    if (!settings.enabled && value.revision === 0) {
       show('Forecast planning is off',
         'This conservative system default selects no targets or horizons. Ranges, comparisons, and alerts are withheld; every action requires review.',
         'current');
@@ -119,6 +141,11 @@
       show('Forecast planning is off by reviewed preference',
         'An owner or administrator saved an empty, disabled revision. It does not issue a forecast or change source authority.',
         'current');
+    } else if (!targetAuthority) {
+      setEditable(false);
+      show('Forecast settings review unavailable',
+        'No current target and algorithm authority can accept a preference. Existing values remain read only.',
+        'unavailable');
     } else {
       show('Forecast preferences recorded',
         'Preferences are ready for review. They do not prove source coverage, algorithm promotion, calibration, actual finality, or issuance eligibility.',
@@ -129,9 +156,6 @@
     if (!enabled.checked) {
       target.checked = false; month.value = '';
       scenario.value = 'withhold'; comparison.value = 'none'; alerts.checked = false;
-    } else {
-      target.checked = true;
-      if (!month.value) month.value = '1';
     }
   }
   function settingsFromForm() {

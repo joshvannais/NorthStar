@@ -174,7 +174,11 @@ BEGIN
  IF public.canonical_forecast_settings_v1_settings_valid(selected.normalized->'settings',org) IS NOT TRUE THEN
   RETURN jsonb_build_object('state','unavailable',
    'reason','selected_target_algorithm_or_source_authority_changed',
-   'settings',NULL,'authority',authority);END IF;
+   'settings',NULL,
+   'recovery',jsonb_build_object('action','disable',
+     'expectedRevision',selected.revision,
+     'expectedDigest',rtrim(selected.canonical_digest)),
+   'authority',authority);END IF;
  RETURN jsonb_build_object('state','current','settings',selected.normalized,
   'authority',authority);
 END $$;
@@ -204,30 +208,53 @@ BEGIN
     normalized_value IS NULL OR jsonb_typeof(normalized_value)<>'object' THEN
   RAISE EXCEPTION 'Forecast settings request invalid' USING ERRCODE='22023';END IF;
  key_hash:=encode(sha256(convert_to(key_value,'UTF8')),'hex');
- -- Serialize a request-key replay before serializing the tenant revision.
- PERFORM pg_advisory_xact_lock(hashtextextended(
-  'm26:forecast-settings-request:'||org::text||':'||actor::text||':'||key_hash,0));
+ -- Fail fast rather than letting a request wait without a bounded recovery path.
+ IF pg_try_advisory_xact_lock(hashtextextended(
+  'm26:forecast-settings-request:'||org::text||':'||actor::text||':'||key_hash,0)) IS NOT TRUE THEN
+  RAISE EXCEPTION 'Forecast settings request is busy' USING ERRCODE='55P03';END IF;
  -- Share the source-consent mutation lane so an enabled revision cannot be
  -- accepted across a concurrent permission revocation.
- PERFORM pg_advisory_xact_lock(hashtextextended(
-  org::text||':forecast-retell-source-consent',0));
+ IF pg_try_advisory_xact_lock(hashtextextended(
+  org::text||':forecast-retell-source-consent',0)) IS NOT TRUE THEN
+  RAISE EXCEPTION 'Forecast settings source authority is busy' USING ERRCODE='55P03';END IF;
+ IF pg_try_advisory_xact_lock(hashtextextended(
+  'm26:forecast-settings:'||org::text,0)) IS NOT TRUE THEN
+  RAISE EXCEPTION 'Forecast settings revision is busy' USING ERRCODE='55P03';END IF;
+ SELECT * INTO current_row FROM public.canonical_forecast_settings_revisions_v1
+  WHERE organization_id=org ORDER BY revision DESC LIMIT 1 FOR UPDATE NOWAIT;
  SELECT * INTO replay FROM public.canonical_forecast_settings_revisions_v1
   WHERE organization_id=org AND actor_user_id=actor AND request_key_digest=key_hash;
  IF replay.id IS NOT NULL THEN
   IF rtrim(replay.request_digest)<>request_hash THEN
    RAISE EXCEPTION 'Forecast settings request key conflict' USING ERRCODE='23505';END IF;
+  IF current_row.id IS NULL OR replay.id<>current_row.id OR
+     rtrim(replay.canonical_digest)<>rtrim(current_row.canonical_digest) THEN
+   RETURN jsonb_build_object('state','superseded','settings',NULL,
+    'historicalReceipt',jsonb_build_object(
+      'revision',replay.revision,'effectiveAt',replay.effective_at,
+      'digest',rtrim(replay.canonical_digest),
+      'supersedesDigest',CASE WHEN replay.supersedes_digest IS NULL THEN NULL
+        ELSE rtrim(replay.supersedes_digest) END),
+    'currentReceipt',jsonb_build_object(
+      'revision',current_row.revision,'effectiveAt',current_row.effective_at,
+      'digest',rtrim(current_row.canonical_digest),
+      'supersedesDigest',CASE WHEN current_row.supersedes_digest IS NULL THEN NULL
+        ELSE rtrim(current_row.supersedes_digest) END),
+    'authority',public.canonical_forecast_settings_v1_authority(),'replayed',TRUE);
+  END IF;
   IF public.canonical_forecast_settings_v1_settings_valid(replay.normalized->'settings',org) IS NOT TRUE THEN
    RETURN jsonb_build_object('state','unavailable',
     'reason','selected_target_algorithm_or_source_authority_changed',
-    'settings',NULL,'authority',public.canonical_forecast_settings_v1_authority(),
+    'settings',NULL,
+    'recovery',jsonb_build_object('action','disable',
+      'expectedRevision',current_row.revision,
+      'expectedDigest',rtrim(current_row.canonical_digest)),
+    'authority',public.canonical_forecast_settings_v1_authority(),
     'replayed',TRUE);
   END IF;
   RETURN jsonb_build_object('state','current','settings',replay.normalized,
    'authority',public.canonical_forecast_settings_v1_authority(),'replayed',TRUE);
  END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended('m26:forecast-settings:'||org::text,0));
- SELECT * INTO current_row FROM public.canonical_forecast_settings_revisions_v1
-  WHERE organization_id=org ORDER BY revision DESC LIMIT 1 FOR UPDATE;
  IF COALESCE(current_row.revision,0)<>expected_revision OR
     (expected_revision>0 AND rtrim(current_row.canonical_digest)<>expected_digest) THEN
   RAISE EXCEPTION 'Forecast settings changed' USING ERRCODE='40001';END IF;

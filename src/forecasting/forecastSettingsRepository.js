@@ -91,21 +91,61 @@ function verifiedAuthority(value) {
   }
   return freeze(JSON.parse(JSON.stringify(value)));
 }
+function verifiedReceipt(value) {
+  if (!exact(value, ['revision','effectiveAt','digest','supersedesDigest']) ||
+      !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+      typeof value.effectiveAt !== 'string' ||
+      !Number.isFinite(Date.parse(value.effectiveAt)) ||
+      typeof value.digest !== 'string' || !DIGEST.test(value.digest) ||
+      (value.revision === 1 ? value.supersedesDigest !== null :
+        typeof value.supersedesDigest !== 'string' || !DIGEST.test(value.supersedesDigest))) {
+    throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
+      'Forecast settings are temporarily unavailable.');
+  }
+  return freeze({ revision: value.revision, effectiveAt: value.effectiveAt,
+    digest: value.digest, supersedesDigest: value.supersedesDigest });
+}
 function verifiedEnvelope(value, organizationId, allowReplay) {
   const keys = value?.state === 'unavailable' ?
-    ['state','reason','settings','authority', ...(allowReplay ? ['replayed'] : [])] :
-    ['state','settings','authority', ...(allowReplay ? ['replayed'] : [])];
-  if (!exact(value, keys) || !['current','unavailable'].includes(value.state) ||
+    ['state','reason','settings','recovery','authority', ...(allowReplay ? ['replayed'] : [])] :
+    value?.state === 'superseded' ?
+      ['state','settings','historicalReceipt','currentReceipt','authority','replayed'] :
+      ['state','settings','authority', ...(allowReplay ? ['replayed'] : [])];
+  if (!exact(value, keys) || !['current','unavailable','superseded'].includes(value.state) ||
+      (value.state === 'superseded' && !allowReplay) ||
       (allowReplay && typeof value.replayed !== 'boolean')) {
     throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
       'Forecast settings are temporarily unavailable.');
   }
   const authority = verifiedAuthority(value.authority);
+  if (value.state === 'superseded') {
+    const historicalReceipt = verifiedReceipt(value.historicalReceipt);
+    const currentReceipt = verifiedReceipt(value.currentReceipt);
+    if (value.settings !== null || value.replayed !== true ||
+        historicalReceipt.revision >= currentReceipt.revision ||
+        historicalReceipt.digest === currentReceipt.digest) {
+      throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
+        'Forecast settings are temporarily unavailable.');
+    }
+    return freeze({ state: 'superseded', settings: null, historicalReceipt,
+      currentReceipt, authority, replayed: true });
+  }
   if (value.state === 'unavailable') {
     if (value.reason !== 'selected_target_algorithm_or_source_authority_changed' ||
-        value.settings !== null) throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
-      'Forecast settings are temporarily unavailable.');
-    return freeze({ state: 'unavailable', reason: value.reason, settings: null, authority,
+        value.settings !== null || !exact(value.recovery,
+          ['action','expectedRevision','expectedDigest']) ||
+        value.recovery.action !== 'disable' ||
+        !Number.isSafeInteger(value.recovery.expectedRevision) ||
+        value.recovery.expectedRevision < 1 ||
+        typeof value.recovery.expectedDigest !== 'string' ||
+        !DIGEST.test(value.recovery.expectedDigest)) {
+      throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
+        'Forecast settings are temporarily unavailable.');
+    }
+    const recovery = freeze({ action: 'disable',
+      expectedRevision: value.recovery.expectedRevision,
+      expectedDigest: value.recovery.expectedDigest });
+    return freeze({ state: 'unavailable', reason: value.reason, settings: null, recovery, authority,
       ...(allowReplay ? { replayed: value.replayed } : {}) });
   }
   const settings = value.settings === null ? defaultForecastSettings(organizationId) :
@@ -118,6 +158,8 @@ async function transaction(pool, work) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    await client.query("SET LOCAL lock_timeout = '2000ms'");
+    await client.query("SET LOCAL statement_timeout = '5000ms'");
     const value = await work(client);
     await client.query('COMMIT'); return value;
   } catch (error) {

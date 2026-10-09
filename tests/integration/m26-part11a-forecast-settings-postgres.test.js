@@ -87,6 +87,21 @@ realPostgres('Mission 26 Part 11A immutable forecast settings', () => {
       expect(second.status).toBe(201);
       expect(second.body.data.settings).toMatchObject({ revision: 2, settings: off,
         source: { supersedesDigest: saved.body.data.settings.digest } });
+      const supersededReplay = await request(fixture.app).post(route)
+        .set(owner.session.headers).set('Idempotency-Key', requestKey).send(body);
+      expect(supersededReplay.status).toBe(200);
+      expect(supersededReplay.headers['idempotency-replayed']).toBe('true');
+      expect(supersededReplay.body.data).toMatchObject({ state: 'superseded',
+        settings: null, replayed: true,
+        historicalReceipt: { revision: 1, digest: saved.body.data.settings.digest,
+          supersedesDigest: null },
+        currentReceipt: { revision: 2, digest: second.body.data.settings.digest,
+          supersedesDigest: saved.body.data.settings.digest } });
+      const stillCurrent = await request(fixture.app).get(route)
+        .set('Cookie', owner.session.headers.Cookie);
+      expect(stillCurrent.body.data).toMatchObject({ state: 'current',
+        settings: { revision: 2, digest: second.body.data.settings.digest,
+          settings: off } });
       const rows = await fixture.ownerPool.query(
         `SELECT revision,actor_access_role,rtrim(canonical_digest) digest,
                 rtrim(supersedes_digest) predecessor
@@ -110,6 +125,45 @@ realPostgres('Mission 26 Part 11A immutable forecast settings', () => {
         [fixture.org])).rejects.toMatchObject({ code: '23514' });
     }, 120000);
 
+  test('held source-authority lock returns bounded retry guidance and the same key recovers',
+    async () => {
+      const owner = fixture.actors.owner;
+      const current = (await request(fixture.app).get(route)
+        .set('Cookie', owner.session.headers.Cookie)).body.data.settings;
+      const requestKey = key();
+      const body = { expectedRevision: current.revision,
+        expectedDigest: current.digest, settings: off };
+      const holder = await fixture.ownerPool.connect();
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
+          [`${fixture.org}:forecast-retell-source-consent`]);
+        const started = Date.now();
+        const busy = await request(fixture.app).post(route)
+          .set(owner.session.headers).set('Idempotency-Key', requestKey).send(body);
+        expect(Date.now() - started).toBeLessThan(8000);
+        expect(busy.status).toBe(503);
+        expect(busy.headers['retry-after']).toBe('2');
+        expect(busy.body.error).toEqual({ category: 'FORECAST_SETTINGS_BUSY',
+          message: 'Forecast settings are busy. Retry shortly.' });
+        await holder.query('ROLLBACK');
+        const recovered = await request(fixture.app).post(route)
+          .set(owner.session.headers).set('Idempotency-Key', requestKey).send(body);
+        expect(recovered.status).toBe(201);
+        expect(recovered.body.data).toMatchObject({ state: 'current', replayed: false,
+          settings: { revision: current.revision + 1, settings: off,
+            source: { supersedesDigest: current.digest } } });
+        const replay = await request(fixture.app).post(route)
+          .set(owner.session.headers).set('Idempotency-Key', requestKey).send(body);
+        expect(replay.status).toBe(200);
+        expect(replay.body.data).toMatchObject({ state: 'current', replayed: true,
+          settings: { revision: current.revision + 1 } });
+      } finally {
+        await holder.query('ROLLBACK').catch(() => {});
+        holder.release();
+      }
+    }, 120000);
+
   test('stale/concurrent revisions, request-key conflict, malformed settings and CSRF fail closed',
     async () => {
       const owner = fixture.actors.owner;
@@ -124,8 +178,11 @@ realPostgres('Mission 26 Part 11A immutable forecast settings', () => {
         request(fixture.app).post(route).set(owner.session.headers)
           .set('Idempotency-Key', key()).send(common),
       ]);
-      expect(concurrent.map(item => item.status).sort()).toEqual([201, 409]);
+      expect(concurrent.map(item => item.status).sort()).toEqual([201, 503]);
       const winner = concurrent.find(item => item.status === 201);
+      const boundedLoser = concurrent.find(item => item.status === 503);
+      expect(boundedLoser.body.error.category).toBe('FORECAST_SETTINGS_BUSY');
+      expect(boundedLoser.headers['retry-after']).toBe('2');
 
       const stale = await request(fixture.app).post(route).set(owner.session.headers)
         .set('Idempotency-Key', key()).send(common);
@@ -213,15 +270,57 @@ realPostgres('Mission 26 Part 11A immutable forecast settings', () => {
       .set('Cookie', owner.session.headers.Cookie);
     expect(unavailable.status).toBe(200);
     expect(unavailable.body.data).toMatchObject({ state: 'unavailable',
-      reason: 'selected_target_algorithm_or_source_authority_changed', settings: null });
+      reason: 'selected_target_algorithm_or_source_authority_changed', settings: null,
+      recovery: { action: 'disable', expectedRevision: enabled.body.data.settings.revision,
+        expectedDigest: enabled.body.data.settings.digest } });
     const staleReplay = await request(fixture.app).post(route).set(owner.session.headers)
       .set('Idempotency-Key', enableKey).send(enableBody);
     expect(staleReplay.status).toBe(200);
     expect(staleReplay.body.data).toMatchObject({ state: 'unavailable', replayed: true,
-      reason: 'selected_target_algorithm_or_source_authority_changed', settings: null });
+      reason: 'selected_target_algorithm_or_source_authority_changed', settings: null,
+      recovery: { action: 'disable', expectedRevision: enabled.body.data.settings.revision,
+        expectedDigest: enabled.body.data.settings.digest } });
+    const resetKey = key();
+    const resetBody = { expectedRevision: unavailable.body.data.recovery.expectedRevision,
+      expectedDigest: unavailable.body.data.recovery.expectedDigest, settings: off };
+    const reset = await request(fixture.app).post(route).set(owner.session.headers)
+      .set('Idempotency-Key', resetKey).send(resetBody);
+    expect(reset.status).toBe(201);
+    expect(reset.body.data).toMatchObject({ state: 'current', replayed: false,
+      settings: { revision: enabled.body.data.settings.revision + 1, settings: off,
+        source: { supersedesDigest: enabled.body.data.settings.digest } } });
+    const resetReplay = await request(fixture.app).post(route).set(owner.session.headers)
+      .set('Idempotency-Key', resetKey).send(resetBody);
+    expect(resetReplay.status).toBe(200);
+    expect(resetReplay.body.data).toMatchObject({ state: 'current', replayed: true,
+      settings: { revision: reset.body.data.settings.revision,
+        digest: reset.body.data.settings.digest, settings: off } });
+    const recovered = await request(fixture.app).get(route)
+      .set('Cookie', owner.session.headers.Cookie);
+    expect(recovered.body.data).toMatchObject({ state: 'current',
+      settings: { revision: reset.body.data.settings.revision,
+        digest: reset.body.data.settings.digest, settings: off } });
+    const historicalReplay = await request(fixture.app).post(route).set(owner.session.headers)
+      .set('Idempotency-Key', enableKey).send(enableBody);
+    expect(historicalReplay.status).toBe(200);
+    expect(historicalReplay.body.data).toMatchObject({ state: 'superseded',
+      settings: null, replayed: true,
+      historicalReceipt: { revision: enabled.body.data.settings.revision,
+        digest: enabled.body.data.settings.digest },
+      currentReceipt: { revision: reset.body.data.settings.revision,
+        digest: reset.body.data.settings.digest } });
     const immutable = await fixture.ownerPool.query(
-      `SELECT rtrim(canonical_digest) digest FROM canonical_forecast_settings_revisions_v1
-        WHERE organization_id=$1 ORDER BY revision DESC LIMIT 1`, [fixture.org]);
-    expect(immutable.rows[0].digest).toBe(enabled.body.data.settings.digest);
+      `SELECT revision,rtrim(canonical_digest) digest,rtrim(supersedes_digest) predecessor
+         FROM canonical_forecast_settings_revisions_v1
+        WHERE organization_id=$1 AND revision >= $2 ORDER BY revision`,
+      [fixture.org, enabled.body.data.settings.revision]);
+    expect(immutable.rows).toEqual([
+      { revision: enabled.body.data.settings.revision,
+        digest: enabled.body.data.settings.digest,
+        predecessor: enabled.body.data.settings.source.supersedesDigest },
+      { revision: reset.body.data.settings.revision,
+        digest: reset.body.data.settings.digest,
+        predecessor: enabled.body.data.settings.digest },
+    ]);
   });
 });

@@ -26,20 +26,22 @@ function projection(result) {
     automaticActionAuthorized: false };
 }
 function replyError(res, error) {
+  const busy = ['55P03','57014'].includes(error?.code);
   const status = error?.status || (error?.code === '42501' ? 403 :
     ['22023','22P02'].includes(error?.code) ? 400 :
-      ['40001','40P01','55P03','23505'].includes(error?.code) ? 409 : 503);
+      busy ? 503 : ['40001','40P01','23505'].includes(error?.code) ? 409 : 503);
   const category = error?.status ? error.code : status === 403 ?
     'FORECAST_SETTINGS_ACCESS_RESTRICTED' : status === 400 ?
-      'FORECAST_SETTINGS_REQUEST_INVALID' : error?.code === '55P03' ?
+      'FORECAST_SETTINGS_REQUEST_INVALID' : busy ?
         'FORECAST_SETTINGS_BUSY' : status === 409 ?
           'FORECAST_SETTINGS_CHANGED' : 'FORECAST_SETTINGS_UNAVAILABLE';
   const message = error?.status ? error.message : status === 403 ?
     'Forecast settings access is restricted.' : status === 400 ?
       'Check the forecast settings request and try again.' :
-      error?.code === '55P03' ? 'Forecast settings are busy. Try again shortly.' :
+      busy ? 'Forecast settings are busy. Retry shortly.' :
         status === 409 ? 'Forecast settings changed. Refresh and review again.' :
           'Forecast settings are temporarily unavailable.';
+  if (busy) res.set('Retry-After', '2');
   return res.status(status).json({ success: false, error: { category, message } });
 }
 

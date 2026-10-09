@@ -63,6 +63,17 @@ test('disabled settings cannot retain hidden targets, horizons or alerts', () =>
   expect(normalize(value).settings.enabled).toBe(false);
 });
 
+test('enabled settings require deliberate target and horizon selections', () => {
+  const noTarget = candidate();
+  noTarget.settings.targets = [];
+  expect(() => normalize(noTarget)).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_SETTINGS_INVALID' }));
+  const noHorizon = candidate();
+  noHorizon.settings.horizons = [];
+  expect(() => normalize(noHorizon)).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_SETTINGS_INVALID' }));
+});
+
 test('rejects duplicate or unbounded horizons, automatic action and hidden keys', () => {
   const duplicate = candidate();
   duplicate.settings.horizons.push({ grain: 'week', periods: 8 });

@@ -28,6 +28,7 @@ const off = { enabled: false, targets: [], horizons: [], scenarioDisplay: 'withh
   comparisonDisplay: 'none', alertDelivery: 'off', actionPolicy: 'review_required' };
 const stale = { state: 'unavailable',
   reason: 'selected_target_algorithm_or_source_authority_changed', settings: null, authority,
+  recovery: { action: 'disable', expectedRevision: 1, expectedDigest: digest },
   targetRegistrationProvenByPreference: false,
   algorithmPromotionProvenByPreference: false,
   sourceAuthorityProvenByPreference: false,
@@ -84,8 +85,14 @@ async function main() {
               if(url==='/api/v1/forecast/settings'){
                 window.forecastSettingCalls.push({url:url,method:(options&&options.method)||'GET'});
                 if(window.forecastSettingsMode==='failure') return Promise.resolve({status:503,ok:false,json:function(){return Promise.resolve({})}});
+                if(options&&options.method==='POST'){
+                  var sent=JSON.parse(options.body);
+                  var responseData=sent.settings.enabled?
+                    ${JSON.stringify(data({ ...off, enabled: true, targets: ['demand.inbound_leads'], horizons: [{ grain: 'month', periods: 2 }], scenarioDisplay: 'deterministic_when_eligible', alertDelivery: 'in_app_review_only' }, 1, 'owner_reviewed'))}:
+                    ${JSON.stringify(data(off, 2, 'owner_reviewed'))};
+                  return Promise.resolve({status:201,ok:true,json:function(){return Promise.resolve({success:true,data:responseData})}});
+                }
                 if(window.forecastSettingsMode==='stale') return Promise.resolve({status:200,ok:true,json:function(){return Promise.resolve({success:true,data:${JSON.stringify(stale)}})}});
-                if(options&&options.method==='POST') return Promise.resolve({status:201,ok:true,json:function(){return Promise.resolve({success:true,data:${JSON.stringify(data({ ...off, enabled: true, targets: ['demand.inbound_leads'], horizons: [{ grain: 'month', periods: 2 }], scenarioDisplay: 'deterministic_when_eligible' }, 1, 'owner_reviewed'))}})}});
                 return Promise.resolve({status:200,ok:true,json:function(){return Promise.resolve({success:true,data:${JSON.stringify(data(off, 0, 'system_default'))}})}});
               }
               return Promise.resolve({status:503,ok:false,json:function(){return Promise.resolve({})}});
@@ -113,8 +120,16 @@ async function main() {
       assert.equal(await page.locator('#forecastHorizonWeek').isDisabled(), true);
       assert.equal(await page.locator('#forecastHorizonQuarter').isDisabled(), true);
       await page.locator('#forecastSettingsEnabled').check();
+      assert.equal(await page.locator('#forecastTargetInboundLeads').isChecked(), false);
+      assert.equal(await page.locator('#forecastHorizonMonth').inputValue(), '');
+      await page.locator('#forecastTargetInboundLeads').check();
       await page.locator('#forecastHorizonMonth').fill('2');
       await page.locator('#forecastScenarioDisplay').selectOption('deterministic_when_eligible');
+      await page.locator('#forecastAlerts').check();
+      const alertBox = await page.locator('#forecastAlerts').boundingBox();
+      const alertLabelBox = await page.locator('label[for="forecastAlerts"] strong').boundingBox();
+      assert.ok(alertBox && alertBox.width < 32);
+      assert.ok(alertLabelBox && alertLabelBox.x >= alertBox.x + alertBox.width);
       await page.locator('#saveForecastSettings').click();
       await page.locator('#forecastSettingsStatus').getByText('Forecast preferences recorded',
         { exact: true }).waitFor();
@@ -135,8 +150,17 @@ async function main() {
         await page.evaluate(() => { window.forecastSettingsMode = 'stale'; });
         await page.locator('#refreshForecastSettings').click();
         await page.locator('#forecastSettingsDetail')
-          .getByText(/source permission is no longer current/i).waitFor();
+          .getByText(/stale selections and receipts are withheld/i).waitFor();
         assert.equal(await page.locator('#forecastSettingsReceipt').textContent(), '');
+        assert.equal(await page.locator('#forecastSettingsEnabled').isChecked(), false);
+        assert.equal(await page.locator('#forecastTargetInboundLeads').isChecked(), false);
+        assert.equal(await page.locator('#forecastHorizonMonth').inputValue(), '');
+        assert.equal(await page.locator('#saveForecastSettings').isEnabled(), true);
+        assert.equal(await page.locator('#saveForecastSettings').textContent(), 'Save disabled reset');
+        await page.locator('#saveForecastSettings').click();
+        await page.locator('#forecastSettingsStatus')
+          .getByText('Forecast planning is off by reviewed preference', { exact: true }).waitFor();
+        assert.match(await page.locator('#forecastSettingsReceipt').textContent(), /^Revision 2/);
         await page.evaluate(() => { window.forecastSettingsMode = 'current'; });
         await page.locator('#refreshForecastSettings').click();
         await page.locator('#forecastSettingsStatus').getByText('Forecast planning is off',

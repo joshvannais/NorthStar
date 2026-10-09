@@ -1,0 +1,33 @@
+.forecast-handoffs-heading,
+.forecast-handoff-card-head,
+.forecast-handoff-actions { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.forecast-handoffs-heading h2,
+.forecast-handoff-candidate h3,
+.forecast-handoff-history h3 { margin-top: 0; }
+.forecast-handoff-candidate,
+.forecast-handoff-history { margin-top: 1rem; padding: .9rem; border: 1px solid var(--neutral-200, #d7dde5); border-radius: .75rem; }
+.forecast-handoff-candidate { background: color-mix(in srgb, var(--neutral-50, #fff) 94%, var(--brand-500, #b98b12) 6%); }
+.forecast-handoff-kicker { margin: 0 0 .2rem; color: var(--neutral-500, #5f6876); font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.forecast-handoff-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: .9rem 0; }
+.forecast-handoff-facts div { min-width: 0; padding: .65rem; background: var(--neutral-50, #fff); border-radius: .55rem; }
+.forecast-handoff-facts dt { color: var(--neutral-500, #5f6876); font-size: .78rem; }
+.forecast-handoff-facts dd { margin: .2rem 0 0; overflow-wrap: anywhere; font-size: .86rem; }
+.forecast-handoff-history-list { display: grid; gap: .65rem; margin: .7rem 0 0; padding: 0; list-style: none; }
+.forecast-handoff-history-list li { padding: .75rem; border: 1px solid var(--neutral-200, #d7dde5); border-radius: .6rem; background: var(--neutral-50, #fff); }
+.forecast-handoff-history-list strong,
+.forecast-handoff-history-list span { display: block; }
+.forecast-handoff-history-list span { margin-top: .2rem; color: var(--neutral-500, #5f6876); font-size: .82rem; overflow-wrap: anywhere; }
+.forecast-handoff-actions { margin-top: .75rem; align-items: center; }
+.forecast-handoffs-shell[data-state="loading"] .forecast-handoff-candidate,
+.forecast-handoffs-shell[data-state="unavailable"] .forecast-handoff-candidate { opacity: .58; }
+@media (max-width: 720px) {
+  .forecast-handoffs-heading,
+  .forecast-handoff-card-head,
+  .forecast-handoff-actions { align-items: stretch; flex-direction: column; }
+  .forecast-handoff-facts { grid-template-columns: 1fr; }
+  .forecast-handoffs-heading .btn,
+  .forecast-handoff-actions .btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .forecast-handoffs-shell * { scroll-behavior: auto !important; transition: none !important; }
+}

@@ -1,0 +1,154 @@
+'use strict';
+
+const crypto = require('node:crypto');
+const request = require('supertest');
+const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+
+const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
+const ORIGIN = 'http://northstar.test';
+const ROOT = '/api/demo/forecast/journey';
+
+function cookie(response) { return response.headers['set-cookie'][0].split(';')[0]; }
+function action(app, savedCookie, key, body, intent = 'forecast-journey') {
+  return request(app).post(`${ROOT}/actions`).set('Host', 'northstar.test')
+    .set('Origin', ORIGIN).set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
+    .set('Idempotency-Key', key).set('X-NorthStar-Demo-Intent', intent).send(body);
+}
+async function protectedCounts(pool) {
+  return (await pool.query(`SELECT
+    (SELECT count(*)::int FROM canonical_forecast_paid_journey_runs_v1) paid_runs,
+    (SELECT count(*)::int FROM canonical_forecast_paid_journey_reviews_v1) paid_reviews,
+    (SELECT count(*)::int FROM canonical_schedule_assignments) schedules,
+    (SELECT count(*)::int FROM canonical_estimate_decisions) estimate_decisions,
+    (SELECT count(*)::int FROM canonical_customer_estimate_versions) customer_estimates`)).rows[0];
+}
+
+realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
+  let fixture;
+  beforeAll(async () => { fixture = await createDatabaseFixture(); }, 120000);
+  afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
+
+  test('persists, replays, restarts and resets one isolated journey without paid or receiver mutation', async () => {
+    const before = await protectedCounts(fixture.ownerPool);
+    const first = await request(fixture.app).get(ROOT).set('Host', 'northstar.test');
+    expect(first.status).toBe(200); const firstCookie = cookie(first);
+    expect(first.body.data).toMatchObject({ state: 'ready', fictionalDemo: true,
+      accountFree: true, resettable: true, providerCallCount: 0, demoWorkspaceRevision: 1,
+      sourceCandidate: { fictional: true } });
+    const originalSource = first.body.data.sourceCandidate;
+    const issueKey = crypto.randomUUID();
+    const issueBody = { action: 'issue', expectedRevision: 1, details: {
+      approvedPriceOriginId: originalSource.approvedPriceOriginId,
+      reason: 'Review the exact fictional approved-price journey.' } };
+    const issued = await action(fixture.app, firstCookie, issueKey, issueBody);
+    expect(issued.status).toBe(201);
+    expect(issued.body).toMatchObject({ success: true, replayed: false, data: {
+      state: 'current', fictionalDemo: true, providerCallCount: 0, demoWorkspaceRevision: 2,
+      run: { source: { approvedPriceOriginId: originalSource.approvedPriceOriginId,
+        positionDigest: originalSource.positionDigest, fictional: true },
+      output: { predictionKind: 'deterministic_point', fictional: true },
+      review: { receiverMutationCount: 0 }, automaticActionAuthorized: false,
+      outboundCommunicationAuthorized: false } } });
+    const run = issued.body.data.run;
+    const replay = await action(fixture.app, firstCookie, issueKey, issueBody);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toMatchObject({ replayed: true, data: { run: { id: run.id,
+      receipt: { digest: run.receipt.digest }, output: { digest: run.output.digest } } } });
+
+    const rerun = await action(fixture.app, firstCookie, crypto.randomUUID(), {
+      action: 'rerun', expectedRevision: 2, details: { runId: run.id,
+        runDigest: run.receipt.digest, currentnessDigest: run.currentness.digest } });
+    expect(rerun.status).toBe(201);
+    expect(rerun.body.data).toMatchObject({ state: 'reproduced', sameResults: true,
+      storedOutputDigest: run.output.digest, freshOutputDigest: run.output.digest,
+      fictionalDemo: true, providerCallCount: 0, demoWorkspaceRevision: 3 });
+
+    const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+    const requested = await action(fixture.app, firstCookie, crypto.randomUUID(), {
+      action: 'requested', expectedRevision: 3, details: { runId: run.id,
+        runDigest: run.receipt.digest, currentnessDigest: run.currentness.digest,
+        expectedRevision: null, expectedDigest: null, expiresAt } });
+    expect(requested.status).toBe(201);
+    const event = requested.body.data.run.review.history[0];
+    expect(event).toMatchObject({ revision: 1, action: 'requested', recordedAction: 'requested',
+      recommendationType: 'review_approved_price_flow', receiving: { availability: 'unavailable' } });
+    expect(requested.body.data.run.review.receiverMutationCount).toBe(0);
+
+    const dismissed = await action(fixture.app, firstCookie, crypto.randomUUID(), {
+      action: 'dismissed', expectedRevision: 4, details: { runId: run.id,
+        runDigest: run.receipt.digest, currentnessDigest: run.currentness.digest,
+        expectedRevision: event.revision, expectedDigest: event.digest, expiresAt } });
+    expect(dismissed.status).toBe(201);
+    expect(dismissed.body.data.run.review.history).toHaveLength(2);
+    expect(dismissed.body.data.run.review.history[1]).toMatchObject({ action: 'dismissed',
+      predecessorDigest: event.digest });
+
+    await fixture.db.close();
+    expect(await fixture.db.initDatabase()).toBe(true);
+    const recovered = await request(fixture.app).get(ROOT).set('Host', 'northstar.test')
+      .set('Cookie', firstCookie);
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.data.run).toMatchObject({ id: run.id,
+      receipt: { digest: run.receipt.digest }, output: { digest: run.output.digest },
+      review: { history: [{ action: 'requested' }, { action: 'dismissed' }] } });
+
+    const reset = await request(fixture.app).post('/api/demo/command-center/reset')
+      .set('Host', 'northstar.test').set('Origin', ORIGIN).set('Sec-Fetch-Site', 'same-origin')
+      .set('Cookie', firstCookie).set('Idempotency-Key', crypto.randomUUID())
+      .set('X-NorthStar-Demo-Intent', 'reset').send({ expectedRevision: 5 });
+    expect(reset.status).toBe(200);
+    const afterReset = await request(fixture.app).get(ROOT).set('Host', 'northstar.test')
+      .set('Cookie', firstCookie);
+    expect(afterReset.body.data).toMatchObject({ state: 'ready', run: null,
+      fictionalDemo: true, providerCallCount: 0 });
+    expect(afterReset.body.data.sourceCandidate.positionId).not.toBe(run.source.positionId);
+
+    const second = await request(fixture.app).get(ROOT).set('Host', 'northstar.test');
+    expect(second.status).toBe(200);
+    expect(cookie(second)).not.toBe(firstCookie);
+    expect(second.body.data.state).toBe('ready'); expect(second.body.data.run).toBeNull();
+    expect(second.body.data.sourceCandidate.positionId)
+      .not.toBe(afterReset.body.data.sourceCandidate.positionId);
+
+    expect(await protectedCounts(fixture.ownerPool)).toEqual(before);
+    const operations = (await fixture.ownerPool.query(
+      `SELECT operation FROM demo_command_center_mutations ORDER BY created_at`)).rows
+      .map(value => value.operation);
+    expect(operations).toEqual(['forecast_journey','forecast_journey','forecast_journey','forecast_journey','reset']);
+    const migration = await fixture.ownerPool.query(
+      `SELECT 1 FROM _migrations WHERE filename='259_demo_forecast_journey.sql'`);
+    expect(migration.rowCount).toBe(1);
+  }, 120000);
+
+  test('denies cross-origin, wrong intent, stale revisions, conflicting replay and stale run identities', async () => {
+    const entry = await request(fixture.app).get(ROOT).set('Host', 'northstar.test');
+    const savedCookie = cookie(entry); const source = entry.body.data.sourceCandidate;
+    const body = { action: 'issue', expectedRevision: 1, details: {
+      approvedPriceOriginId: source.approvedPriceOriginId,
+      reason: 'Review fictional denial boundary evidence.' } };
+    expect((await request(fixture.app).post(`${ROOT}/actions`).set('Host', 'northstar.test')
+      .set('Origin', 'https://attacker.example').set('Sec-Fetch-Site', 'cross-site')
+      .set('Cookie', savedCookie).set('Idempotency-Key', crypto.randomUUID())
+      .set('X-NorthStar-Demo-Intent', 'forecast-journey').send(body)).status).toBe(403);
+    expect((await action(fixture.app, savedCookie, crypto.randomUUID(), body, 'reset')).status).toBe(403);
+    const key = crypto.randomUUID();
+    const concurrent = await Promise.all([
+      action(fixture.app, savedCookie, key, body),
+      action(fixture.app, savedCookie, crypto.randomUUID(), body),
+    ]);
+    expect(concurrent.map(value => value.status).sort()).toEqual([201, 409]);
+    const issued = concurrent.find(value => value.status === 201); const run = issued.body.data.run;
+    const conflict = await action(fixture.app, savedCookie, key, { ...body,
+      details: { ...body.details, reason: 'A different fictional reason must conflict.' } });
+    expect(conflict.status).toBe(409);
+    const staleRevision = await action(fixture.app, savedCookie, crypto.randomUUID(), {
+      action: 'rerun', expectedRevision: 1, details: { runId: run.id,
+        runDigest: run.receipt.digest, currentnessDigest: run.currentness.digest } });
+    expect(staleRevision.status).toBe(409);
+    const staleRun = await action(fixture.app, savedCookie, crypto.randomUUID(), {
+      action: 'rerun', expectedRevision: 2, details: { runId: run.id,
+        runDigest: 'f'.repeat(64), currentnessDigest: run.currentness.digest } });
+    expect(staleRun.status).toBe(409);
+    expect(await protectedCounts(fixture.ownerPool)).toMatchObject({ paid_runs: 0, paid_reviews: 0 });
+  }, 120000);
+});

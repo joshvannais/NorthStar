@@ -238,9 +238,9 @@ async function main() {
     demoPage.on('pageerror', error => errors.push(error.message));
     await demoPage.goto(base + '/demo/settings');
     await demoPage.locator('#forecastPaidJourneyStatus')
-      .getByText('Paid journey unavailable in this fictional workspace', { exact: true }).waitFor();
+      .getByText('Fictional forecast journey unavailable', { exact: true }).waitFor();
     assert.match(await demoPage.locator('#forecast-paid-journey').innerText(),
-      /Part 12B owns the complete fictional demo journey/i);
+      /No earlier values or identities remain displayed/i);
     assert.equal(requests.some(value => value.startsWith('/api/v1/forecast/paid-journey')), false);
     assert.deepEqual(errors, []); await demoContext.close();
   } finally {

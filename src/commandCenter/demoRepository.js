@@ -50,6 +50,7 @@ const { DEFAULT_SELECTION, normalizeSelection } = require('./scenarioSpace');
 const { addRecordedCostExample } = require('./demoEstimateExample');
 const treeBusinessProfiles = require('./demoTreeBusinessProfiles');
 const demoLearningJourney = require('../learning/demoLearningJourney');
+const demoForecastJourney = require('../forecasting/forecastDemoJourney');
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SIMULATION_COOLDOWN_MS = 750;
@@ -111,6 +112,7 @@ function state(value) {
     demoScheduling.validateState(value);
     demoOperations.validateState(value);
     if (value.learningJourney !== undefined) demoLearningJourney.validate(value.learningJourney);
+    if (value.forecastJourney !== undefined) demoForecastJourney.validate(value.forecastJourney, value);
     const graphIds = value.graphs.map(graph => graph.ids.graph);
     if (new Set(graphIds).size !== graphIds.length) {
       throw new Error('The persisted demo state contains duplicate graph authority.');
@@ -293,7 +295,7 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['customer_estimate_issue','proposal_adopt','simulate_lead', 'reset', 'learning_step', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['customer_estimate_issue','proposal_adopt','simulate_lead', 'reset', 'learning_step', 'forecast_journey', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -308,6 +310,7 @@ function mutationInput(input) {
     idempotencyHash: sha256(input.idempotencyKey),
   };
   if (input.operation === 'learning_step') normalized.learningAction = demoLearningJourney.normalizeAction(input.learningAction);
+  if (input.operation === 'forecast_journey') normalized.forecastAction = demoForecastJourney.normalizeAction(input.forecastAction);
   if (input.operation === 'work_action') {
     if (!/^[0-9a-f-]{36}$/.test(input.appointmentId || '') || !input.operations ||
       Object.keys(input.operations).some(k => !['family','body'].includes(k)) ||
@@ -364,6 +367,7 @@ function mutationInput(input) {
     ...(normalized.operation.startsWith('schedule_')?{appointmentId:normalized.appointmentId,scheduleBody:normalized.scheduleBody}:{}),
     ...(normalized.operation==='work_action'?{appointmentId:normalized.appointmentId,operations:normalized.operations}:{}),
     ...(normalized.operation==='learning_step'?{learningAction:normalized.learningAction}:{}),
+    ...(normalized.operation==='forecast_journey'?{forecastAction:normalized.forecastAction}:{}),
   });
   return normalized;
 }
@@ -731,7 +735,7 @@ class DemoCommandCenterRepository {
       if (!lockedRow) fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
       assertRowAuthority(lockedRow, token);
       const sourceOperation=input.operation==='material_plan'&&['estimate-material-plan-v3','estimate-material-plan-v4'].includes(input.plan?.confirmationVersion)||input.operation==='estimate_adopt'&&['estimate-material-adoption-v3','estimate-material-adoption-v4','estimate-cost-adoption-v1'].includes(input.adoption?.confirmationVersion);
-      if(sourceOperation || aggregate || operations || commercialOperation || ['labor_plan','equipment_plan','equipment_cost','pricing_policy'].includes(input.operation)||input.operation==='estimate_adopt'&&['estimate-cost-adoption-v2','estimate-cost-adoption-v3'].includes(input.adoption.confirmationVersion))now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
+      if(sourceOperation || aggregate || operations || commercialOperation || input.operation==='forecast_journey' || ['labor_plan','equipment_plan','equipment_cost','pricing_policy'].includes(input.operation)||input.operation==='estimate_adopt'&&['estimate-cost-adoption-v2','estimate-cost-adoption-v3'].includes(input.adoption.confirmationVersion))now=date((await client.query('SELECT clock_timestamp() now')).rows[0].now);else if(scheduling)now=date(this.clock());
       if (date(lockedRow.expires_at).getTime() <= now.getTime()) {
         fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start a new isolated preview.');
       }
@@ -812,7 +816,9 @@ class DemoCommandCenterRepository {
       let operationsResponse;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if(input.operation==='learning_step'){
+      if(input.operation==='forecast_journey'){
+        nextState=demoForecastJourney.apply(current.state,input.forecastAction,input.idempotencyHash,now);
+      } else if(input.operation==='learning_step'){
         nextState=demoLearningJourney.apply(current.state,input);
       } else if(aggregate){
         const workspace=buildDemoWorkspace({tenantId:current.tenantId,sessionId:current.sessionId,state:current.state,revision:current.revision,simulationCount:current.simulationCount,persisted:true,expiresAt:current.expiresAt});

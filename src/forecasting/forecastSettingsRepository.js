@@ -62,7 +62,7 @@ function verifiedAuthority(value) {
   if (!exact(value, ['version','targets','limits','preferenceProves',
     'automaticActionAuthorized']) ||
       value.version !== 'm26-forecast-settings-authority-v1' ||
-      !Array.isArray(value.targets) || value.targets.length > 1 ||
+      !Array.isArray(value.targets) || value.targets.length > 2 ||
       !exact(value.limits, ['targets','horizons','periodsPerHorizon']) ||
       value.limits.targets !== 24 || value.limits.horizons !== 12 ||
       value.limits.periodsPerHorizon !== 100 ||
@@ -72,15 +72,9 @@ function verifiedAuthority(value) {
     throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
       'Forecast settings authority is temporarily unavailable.');
   }
-  if (value.targets.length === 1) {
-    const target = value.targets[0];
+  value.targets.forEach(target => {
     if (!exact(target, ['key','label','definitionVersion','unit','sourceScope','algorithmKey',
       'algorithmVersion','algorithmDefinitionDigest','implementationDigest','supportedGrains']) ||
-        target.key !== 'demand.inbound_leads' || target.label !== 'Inbound leads' ||
-        target.definitionVersion !== 'v1' || target.unit !== 'count' ||
-        target.sourceScope !== 'retell_only_tenant_all' ||
-        target.algorithmKey !== 'retell_three_complete_month_mean' ||
-        target.algorithmVersion !== 'm26-retell-three-month-mean-v2' ||
         !DIGEST.test(target.algorithmDefinitionDigest || '') ||
         !DIGEST.test(target.implementationDigest || '') ||
         !Array.isArray(target.supportedGrains) || target.supportedGrains.length !== 1 ||
@@ -88,6 +82,22 @@ function verifiedAuthority(value) {
       throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
         'Forecast settings authority is temporarily unavailable.');
     }
+    const demand = target.key === 'demand.inbound_leads' && target.label === 'Inbound leads' &&
+      target.definitionVersion === 'v1' && target.unit === 'count' &&
+      target.sourceScope === 'retell_only_tenant_all' &&
+      target.algorithmKey === 'retell_three_complete_month_mean' &&
+      target.algorithmVersion === 'm26-retell-three-month-mean-v2';
+    const price = target.key === 'revenue.approved_price_flow' &&
+      target.label === 'Approved price flow' && target.definitionVersion === 'v1' &&
+      target.unit === 'money' && target.sourceScope === 'northstar_m24_approved_price_decisions' &&
+      target.algorithmKey === 'approved_price_carry_forward' &&
+      target.algorithmVersion === 'm26-paid-approved-price-flow-v1';
+    if (!demand && !price) throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
+      'Forecast settings authority is temporarily unavailable.');
+  });
+  if (new Set(value.targets.map(target => target.key)).size !== value.targets.length) {
+    throw failure('FORECAST_SETTINGS_UNAVAILABLE', 503,
+      'Forecast settings authority is temporarily unavailable.');
   }
   return freeze(JSON.parse(JSON.stringify(value)));
 }

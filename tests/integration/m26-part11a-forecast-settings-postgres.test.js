@@ -62,7 +62,9 @@ realPostgres('Mission 26 Part 11A immutable forecast settings', () => {
         issuanceEligibilityProvenByPreference: false,
         automaticActionAuthorized: false,
         authority: { limits: { targets: 24, horizons: 12, periodsPerHorizon: 100 } } });
-      expect(initial.body.data.authority.targets).toHaveLength(1);
+      expect(initial.body.data.authority.targets.map(target => target.key)).toEqual([
+        'demand.inbound_leads', 'revenue.approved_price_flow',
+      ]);
 
       const requestKey = key();
       const body = { expectedRevision: 0, expectedDigest: null, settings: on };

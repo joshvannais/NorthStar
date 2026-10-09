@@ -8,6 +8,7 @@
   var form = document.getElementById('forecastSettingsForm');
   var enabled = document.getElementById('forecastSettingsEnabled');
   var target = document.getElementById('forecastTargetInboundLeads');
+  var priceTarget = document.getElementById('forecastTargetApprovedPrice');
   var week = document.getElementById('forecastHorizonWeek');
   var month = document.getElementById('forecastHorizonMonth');
   var quarter = document.getElementById('forecastHorizonQuarter');
@@ -17,7 +18,7 @@
   var save = document.getElementById('saveForecastSettings');
   var refresh = document.getElementById('refreshForecastSettings');
   var receipt = document.getElementById('forecastSettingsReceipt');
-  var controls = [enabled, target, month, scenario, comparison, alerts];
+  var controls = [enabled, target, priceTarget, month, scenario, comparison, alerts];
   var current = null;
   var pending = null;
 
@@ -28,7 +29,7 @@
   }
   function clear() {
     current = null;
-    enabled.checked = false; target.checked = false;
+    enabled.checked = false; target.checked = false; priceTarget.checked = false;
     week.value = ''; month.value = ''; quarter.value = '';
     scenario.value = 'withhold'; comparison.value = 'none'; alerts.checked = false;
     receipt.textContent = '';
@@ -116,8 +117,13 @@
       return item.key === 'demand.inbound_leads' &&
         Array.isArray(item.supportedGrains) && item.supportedGrains.includes('month');
     });
+    var priceAuthority = data.authority.targets.find(function (item) {
+      return item.key === 'revenue.approved_price_flow' &&
+        Array.isArray(item.supportedGrains) && item.supportedGrains.includes('month');
+    });
     enabled.checked = settings.enabled;
     target.checked = settings.targets.includes('demand.inbound_leads');
+    priceTarget.checked = settings.targets.includes('revenue.approved_price_flow');
     week.value = settings.horizons.find(function (item) { return item.grain === 'week'; })?.periods || '';
     month.value = settings.horizons.find(function (item) { return item.grain === 'month'; })?.periods || '';
     quarter.value = settings.horizons.find(function (item) { return item.grain === 'quarter'; })?.periods || '';
@@ -128,7 +134,9 @@
       digest: value.revision === 0 ? null : value.digest };
     if (pending && (pending.expectedRevision !== current.revision ||
         pending.expectedDigest !== current.digest)) pending = null;
-    setEditable(Boolean(targetAuthority));
+    setEditable(Boolean(targetAuthority || priceAuthority));
+    target.disabled = !targetAuthority;
+    priceTarget.disabled = !priceAuthority;
     save.textContent = 'Save reviewed settings';
     receipt.textContent = value.revision === 0 ?
       'System default · no owner revision' :
@@ -141,7 +149,7 @@
       show('Forecast planning is off by reviewed preference',
         'An owner or administrator saved an empty, disabled revision. It does not issue a forecast or change source authority.',
         'current');
-    } else if (!targetAuthority) {
+    } else if (!targetAuthority && !priceAuthority) {
       setEditable(false);
       show('Forecast settings review unavailable',
         'No current target and algorithm authority can accept a preference. Existing values remain read only.',
@@ -154,17 +162,19 @@
   }
   function applyEnabledState() {
     if (!enabled.checked) {
-      target.checked = false; month.value = '';
+      target.checked = false; priceTarget.checked = false; month.value = '';
       scenario.value = 'withhold'; comparison.value = 'none'; alerts.checked = false;
     }
   }
   function settingsFromForm() {
     if (!enabled.checked) return disabledSettings();
     var periods = Number(month.value);
-    if (!target.checked || !Number.isInteger(periods) || periods < 1 || periods > 100) {
-      throw new Error('Choose Inbound leads and enter 1 to 100 monthly periods.');
+    var selected = [target.checked ? 'demand.inbound_leads' : null,
+      priceTarget.checked ? 'revenue.approved_price_flow' : null].filter(Boolean);
+    if (selected.length !== 1 || !Number.isInteger(periods) || periods < 1 || periods > 100) {
+      throw new Error('Choose one current target and enter 1 to 100 monthly periods.');
     }
-    return { enabled: true, targets: ['demand.inbound_leads'],
+    return { enabled: true, targets: selected,
       horizons: [{ grain: 'month', periods: periods }],
       scenarioDisplay: scenario.value, comparisonDisplay: comparison.value,
       alertDelivery: alerts.checked ? 'in_app_review_only' : 'off',
@@ -267,6 +277,8 @@
     return;
   }
   enabled.addEventListener('change', applyEnabledState);
+  target.addEventListener('change', function () { if (target.checked) priceTarget.checked = false; });
+  priceTarget.addEventListener('change', function () { if (priceTarget.checked) target.checked = false; });
   form.addEventListener('submit', saveSettings);
   refresh.addEventListener('click', load);
   load();

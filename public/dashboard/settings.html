@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="/css/workspace-form-state.css">
   <link rel="stylesheet" href="/css/knowledge-management.css">
   <link rel="stylesheet" href="/css/forecast-settings.css?v=m26-part11a-20261008">
-  <link rel="stylesheet" href="/css/forecast-runs.css?v=m26-part11b-20261009">
+  <link rel="stylesheet" href="/css/forecast-runs.css?v=m26-part12a-20261009">
   <link rel="stylesheet" href="/css/forecast-handoffs.css?v=m26-part11d-20261009">
 </head>
 <body>
@@ -160,6 +160,10 @@
               <input id="forecastTargetInboundLeads" type="checkbox" disabled>
               <span><strong>Inbound leads</strong><br><span class="description">Count of reviewed distinct leads from the released monthly demand baseline.</span></span>
             </label>
+            <label class="forecast-settings-choice" for="forecastTargetApprovedPrice">
+              <input id="forecastTargetApprovedPrice" type="checkbox" disabled>
+              <span><strong>Approved price flow</strong><br><span class="description">Future human-approved commercial price decisions from the exact NorthStar-supported source position. This is not earned revenue, invoices, payments, collections, or cash.</span></span>
+            </label>
           </fieldset>
           <fieldset>
             <legend>Horizon periods</legend>
@@ -185,6 +189,42 @@
             <button class="btn btn-secondary btn-sm" id="refreshForecastSettings" type="button">Refresh settings</button>
           </div>
         </form>
+      </section>
+
+      <section class="settings-section forecast-paid-journey-shell" id="forecast-paid-journey"
+        data-state="loading" aria-labelledby="forecastPaidJourneyHeading">
+        <div class="forecast-runs-heading">
+          <div><h2 id="forecastPaidJourneyHeading">Paid approved-price forecast journey</h2>
+            <p class="description">Carry one authorized source position through a deterministic saved receipt, currentness check, plain-language explanation, and review-only handoff history.</p></div>
+          <button class="btn btn-secondary btn-sm" id="refreshForecastPaidJourney" type="button">Refresh journey</button>
+        </div>
+        <p id="forecastPaidJourneyStatus" role="status" aria-live="polite" aria-atomic="true">Loading paid forecast journey.</p>
+        <p id="forecastPaidJourneyDetail" class="description">Values and identities stay cleared until every paid-tenant gate is current.</p>
+        <form id="forecastPaidJourneyIssueForm" class="forecast-run-issue" novalidate>
+          <div class="form-group"><label for="forecastPaidOrigin">Approved-price source origin</label>
+            <input id="forecastPaidOrigin" type="text" autocomplete="off" disabled aria-describedby="forecastPaidOriginHelp">
+            <p id="forecastPaidOriginHelp" class="description">Use the exact pre-horizon origin receipt created by the approved-price source workflow.</p></div>
+          <div class="form-group"><label for="forecastPaidReason">Review reason</label>
+            <input id="forecastPaidReason" type="text" minlength="10" maxlength="1000" disabled></div>
+          <button class="btn btn-primary btn-sm" id="issueForecastPaidJourney" type="submit" disabled>Issue reviewed receipt</button>
+        </form>
+        <article id="forecastPaidJourneyCurrent" class="forecast-run-current" hidden>
+          <div class="forecast-run-current-topline"><div><p class="forecast-run-eyebrow">Current source-backed receipt</p><h3>Approved price flow</h3></div><strong id="forecastPaidJourneyValue" class="forecast-run-value"></strong></div>
+          <p id="forecastPaidJourneyExplanation"></p>
+          <dl class="forecast-run-facts">
+            <div><dt>Source coverage</dt><dd id="forecastPaidJourneyCoverage"></dd></div>
+            <div><dt>Currentness</dt><dd id="forecastPaidJourneyCurrentness"></dd></div>
+            <div><dt>Run receipt</dt><dd id="forecastPaidJourneyReceipt"></dd></div>
+            <div><dt>Output receipt</dt><dd id="forecastPaidJourneyOutput"></dd></div>
+          </dl>
+          <p class="description">Deterministic point forecast. Calibrated confidence, empirical accuracy, natural history, whole-business coverage, and live-provider validation remain unavailable.</p>
+          <div class="forecast-settings-actions">
+            <button class="btn btn-secondary btn-sm" id="rerunForecastPaidJourney" type="button" disabled>Check exact reproduction</button>
+            <button class="btn btn-primary btn-sm" id="reviewForecastPaidJourney" type="button" disabled>Request review</button>
+          </div>
+          <p id="forecastPaidJourneyReview" class="description" aria-live="polite"></p>
+          <ol id="forecastPaidJourneyHistory" class="forecast-handoff-history-list" aria-label="Paid approved-price review history"></ol>
+        </article>
       </section>
 
       <section class="settings-section forecast-runs-shell" id="forecast-runs"
@@ -732,6 +772,7 @@
   <script src="/js/forecast-settings.js?v=m26-part11a-20261008"></script>
   <script src="/js/forecast-runs.js?v=m26-part11b-20261009"></script>
   <script src="/js/forecast-handoffs.js?v=m26-part11d-20261009"></script>
+  <script src="/js/forecast-paid-journey.js?v=m26-part12a-20261009"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn', durable: '[data-settings-mutable]' });</script>
   <script>NavComponent.init("settings");</script>

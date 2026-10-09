@@ -1,0 +1,23 @@
+.forecast-settings-shell[data-state="loading"] .forecast-settings-form,
+.forecast-settings-shell[data-state="unavailable"] .forecast-settings-form {
+  opacity: .58;
+}
+.forecast-settings-form { display: grid; gap: 1rem; margin-top: 1rem; }
+.forecast-settings-choice { display: flex; gap: .75rem; align-items: flex-start; }
+.forecast-settings-choice input[type="checkbox"] { flex: 0 0 auto; width: auto; margin-top: .25rem; }
+.forecast-settings-choice span { min-width: 0; }
+.forecast-settings-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.forecast-settings-grid .form-group { margin: 0; }
+.forecast-settings-grid > .forecast-settings-choice { align-self: start; min-width: 0; }
+.forecast-settings-grid input[type="number"], .forecast-settings-grid select { width: 100%; }
+.forecast-settings-authority { padding: .8rem; border: 1px solid var(--border-color, #d7dde5); border-radius: .7rem; }
+.forecast-settings-authority p { margin: .25rem 0; }
+.forecast-settings-actions { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; }
+.forecast-settings-receipt { overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .forecast-settings-grid { grid-template-columns: 1fr; }
+  .forecast-settings-actions .btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .forecast-settings-shell * { scroll-behavior: auto !important; transition: none !important; }
+}

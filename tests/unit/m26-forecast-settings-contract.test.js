@@ -63,6 +63,17 @@ test('disabled settings cannot retain hidden targets, horizons or alerts', () =>
   expect(normalize(value).settings.enabled).toBe(false);
 });
 
+test('enabled settings require deliberate target and horizon selections', () => {
+  const noTarget = candidate();
+  noTarget.settings.targets = [];
+  expect(() => normalize(noTarget)).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_SETTINGS_INVALID' }));
+  const noHorizon = candidate();
+  noHorizon.settings.horizons = [];
+  expect(() => normalize(noHorizon)).toThrow(expect.objectContaining({
+    code: 'M26_FORECAST_SETTINGS_INVALID' }));
+});
+
 test('rejects duplicate or unbounded horizons, automatic action and hidden keys', () => {
   const duplicate = candidate();
   duplicate.settings.horizons.push({ grain: 'week', periods: 8 });
@@ -103,4 +114,23 @@ test('owner preference cannot label an interval calibrated or authenticate a sou
   expect(result.settings.scenarioDisplay).toBe('calibrated_when_eligible');
   expect(result).not.toHaveProperty('sourceAuthenticated');
   expect(result).not.toHaveProperty('forecastIssued');
+});
+
+test('returns detached immutable settings and enforces defensive collection ceilings', () => {
+  const value = candidate();
+  const normalized = normalize(value);
+  value.settings.targets[0] = 'changed.after.capture';
+  value.settings.horizons[0].periods = 99;
+  expect(normalized.settings.targets).not.toContain('changed.after.capture');
+  expect(normalized.settings.horizons.find(item => item.grain === 'month').periods).toBe(3);
+  expect(Object.isFrozen(normalized)).toBe(true);
+  expect(Object.isFrozen(normalized.settings.targets)).toBe(true);
+
+  const targets = candidate();
+  targets.settings.targets = Array.from({ length: 25 }, (_item, index) => `target.${index}`);
+  expect(() => normalize(targets)).toThrow();
+  const horizons = candidate();
+  horizons.settings.horizons = Array.from({ length: 13 }, (_item, index) =>
+    ({ grain: index === 0 ? 'week' : 'month', periods: 1 }));
+  expect(() => normalize(horizons)).toThrow();
 });

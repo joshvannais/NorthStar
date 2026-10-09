@@ -1010,6 +1010,36 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I',
         runtime_role
       );
+      IF pg_catalog.to_regclass('public.canonical_forecast_settings_revisions_v1') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_settings_revisions_v1 FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_settings_v1_immutable() FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_settings_v1_authority() FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_settings_v1_source_current(uuid) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_settings_v1_settings_valid(jsonb,uuid) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_settings_v1_read(uuid,uuid,text,uuid) TO %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_settings_v1_capture(uuid,uuid,text,uuid,text,text,text,integer,text,text,jsonb) TO %I',
+          runtime_role
+        );
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_schedule_mutation_previews') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
           'REVOKE INSERT, DELETE ON TABLE public.canonical_schedule_assignments FROM %I', runtime_role
@@ -6028,6 +6058,33 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,
           'public.canonical_forecast_monthly_kpis_v1_unavailable(uuid,jsonb,text)','EXECUTE')
        END AS forecast_monthly_kpis_authority_private,
+       CASE
+        WHEN to_regclass('public.canonical_forecast_settings_revisions_v1') IS NULL OR
+          to_regprocedure('public.canonical_forecast_settings_v1_read(uuid,uuid,text,uuid)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_settings_v1_capture(uuid,uuid,text,uuid,text,text,text,integer,text,text,jsonb)') IS NULL THEN FALSE
+        ELSE
+         NOT has_table_privilege($1,
+          'public.canonical_forecast_settings_revisions_v1',
+          'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND has_function_privilege($1,
+          'public.canonical_forecast_settings_v1_read(uuid,uuid,text,uuid)',
+          'EXECUTE')
+         AND has_function_privilege($1,
+          'public.canonical_forecast_settings_v1_capture(uuid,uuid,text,uuid,text,text,text,integer,text,text,jsonb)',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_settings_v1_immutable()',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_settings_v1_authority()',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_settings_v1_source_current(uuid)',
+          'EXECUTE')
+         AND NOT has_function_privilege($1,
+          'public.canonical_forecast_settings_v1_settings_valid(jsonb,uuid)',
+          'EXECUTE')
+       END AS forecast_settings_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -7140,6 +7197,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.pipeline_sensitivity_authority_private ||
       !runtimePrivileges.forecast_timeline_authority_private ||
       !runtimePrivileges.forecast_monthly_kpis_authority_private ||
+      !runtimePrivileges.forecast_settings_authority_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

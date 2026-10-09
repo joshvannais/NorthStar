@@ -11,11 +11,23 @@ test('one private no-store currentness read gates every Part 10 forecast surface
   expect(source).toMatch(/cache: 'no-store'/);
   for (const controller of ['forecastRanges','forecastTimeline','monthlyForecastKpis',
     'forecastDrilldowns','forecastDecisionSupport']) {
-    expect(source).toContain(`activateForecastSurface(${controller}, current)`);
-    expect(source).toContain(`activateForecastSurface(${controller}, refreshed)`);
+    expect(source).toContain(`activateForecastSurface(${controller}, current, generation)`);
+    expect(source).toContain(`activateForecastSurface(${controller}, refreshed, generation)`);
   }
   expect(source).toMatch(/decision && decision\.state === 'unchanged_candidate'/);
   expect(source).toMatch(/else \{\s*controller\.workspaceUnavailable\(\)/);
+});
+
+test('obsolete forecast currentness success and failure callbacks cannot change a newer render', () => {
+  expect(source).toMatch(/var forecastRenderGeneration = 0/);
+  expect(source).toMatch(/forecastRenderGeneration \+= 1/);
+  expect(source).toMatch(/generation === forecastRenderGeneration/);
+  expect(source).toMatch(/if \(!forecastRenderIsCurrent\(generation, tenantId\)\) return/);
+  expect(source).toMatch(/if \(forecastRenderIsCurrent\(generation, tenantId\)\) controller\.workspaceUnavailable\(\)/);
+  for (const render of ['renderForecastRanges','renderForecastTimeline','renderMonthlyForecastKpis',
+    'renderForecastDrilldowns','renderForecastDecisionSupport']) {
+    expect(source).toContain(`${render}(forecastGeneration)`);
+  }
 });
 
 test('fictional demo bypasses paid currentness and preserves isolated product behavior', () => {

@@ -37,6 +37,7 @@
   var forecastDrilldowns = null;
   var forecastDecisionSupport = null;
   var forecastCurrentnessPromise = null;
+  var forecastRenderGeneration = 0;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -834,18 +835,25 @@
     return forecastCurrentnessPromise;
   }
 
-  function activateForecastSurface(controller, authority) {
+  function forecastRenderIsCurrent(generation, tenantId) {
+    return generation === forecastRenderGeneration && workspace && workspace.tenant &&
+      workspace.tenant.id === tenantId;
+  }
+
+  function activateForecastSurface(controller, authority, generation) {
     if (!controller || typeof controller.workspaceReady !== 'function') return;
     if (mode === 'demo') { controller.workspaceReady(authority); return; }
     var tenantId = workspace && workspace.tenant && workspace.tenant.id;
     forecastCurrentness().then(function (decision) {
-      if (!workspace || !workspace.tenant || workspace.tenant.id !== tenantId) return;
+      if (!forecastRenderIsCurrent(generation, tenantId)) return;
       if (decision && decision.state === 'unchanged_candidate') {
         controller.workspaceReady(authority);
       } else {
         controller.workspaceUnavailable();
       }
-    }).catch(function () { controller.workspaceUnavailable(); });
+    }).catch(function () {
+      if (forecastRenderIsCurrent(generation, tenantId)) controller.workspaceUnavailable();
+    });
   }
 
   function renderResourceRiskOutlook() {
@@ -866,99 +874,111 @@
     }).catch(function () { resourceRiskOutlook.workspaceUnavailable(); });
   }
 
-  function renderForecastRanges() {
+  function renderForecastRanges(generation) {
     if (!forecastRanges || typeof forecastRanges.workspaceReady !== 'function') return;
     var current = resourceRiskAuthority();
     if (current) {
-      activateForecastSurface(forecastRanges, current); return;
+      activateForecastSurface(forecastRanges, current, generation); return;
     }
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
       forecastRanges.workspaceUnavailable(); return;
     }
     var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
     global.NorthStarAccountSession.load().then(function () {
-      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      if (!forecastRenderIsCurrent(generation, expectedTenantId)) return;
       var refreshed = resourceRiskAuthority();
-      if (refreshed) activateForecastSurface(forecastRanges, refreshed);
+      if (refreshed) activateForecastSurface(forecastRanges, refreshed, generation);
       else forecastRanges.workspaceUnavailable();
-    }).catch(function () { forecastRanges.workspaceUnavailable(); });
+    }).catch(function () {
+      if (forecastRenderIsCurrent(generation, expectedTenantId)) forecastRanges.workspaceUnavailable();
+    });
   }
 
-  function renderForecastTimeline() {
+  function renderForecastTimeline(generation) {
     if (!forecastTimeline || typeof forecastTimeline.workspaceReady !== 'function') return;
     var current = resourceRiskAuthority();
     if (current) {
-      activateForecastSurface(forecastTimeline, current); return;
+      activateForecastSurface(forecastTimeline, current, generation); return;
     }
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
       forecastTimeline.workspaceUnavailable(); return;
     }
     var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
     global.NorthStarAccountSession.load().then(function () {
-      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      if (!forecastRenderIsCurrent(generation, expectedTenantId)) return;
       var refreshed = resourceRiskAuthority();
-      if (refreshed) activateForecastSurface(forecastTimeline, refreshed);
+      if (refreshed) activateForecastSurface(forecastTimeline, refreshed, generation);
       else forecastTimeline.workspaceUnavailable();
-    }).catch(function () { forecastTimeline.workspaceUnavailable(); });
+    }).catch(function () {
+      if (forecastRenderIsCurrent(generation, expectedTenantId)) forecastTimeline.workspaceUnavailable();
+    });
   }
 
-  function renderMonthlyForecastKpis() {
+  function renderMonthlyForecastKpis(generation) {
     if (!monthlyForecastKpis || typeof monthlyForecastKpis.workspaceReady !== 'function') return;
     var current = resourceRiskAuthority();
     if (current) {
-      activateForecastSurface(monthlyForecastKpis, current); return;
+      activateForecastSurface(monthlyForecastKpis, current, generation); return;
     }
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
       monthlyForecastKpis.workspaceUnavailable(); return;
     }
     var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
     global.NorthStarAccountSession.load().then(function () {
-      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      if (!forecastRenderIsCurrent(generation, expectedTenantId)) return;
       var refreshed = resourceRiskAuthority();
-      if (refreshed) activateForecastSurface(monthlyForecastKpis, refreshed);
+      if (refreshed) activateForecastSurface(monthlyForecastKpis, refreshed, generation);
       else monthlyForecastKpis.workspaceUnavailable();
-    }).catch(function () { monthlyForecastKpis.workspaceUnavailable(); });
+    }).catch(function () {
+      if (forecastRenderIsCurrent(generation, expectedTenantId)) monthlyForecastKpis.workspaceUnavailable();
+    });
   }
 
-  function renderForecastDrilldowns() {
+  function renderForecastDrilldowns(generation) {
     if (!forecastDrilldowns || typeof forecastDrilldowns.workspaceReady !== 'function') return;
     var current = resourceRiskAuthority();
     if (current) {
-      activateForecastSurface(forecastDrilldowns, current); return;
+      activateForecastSurface(forecastDrilldowns, current, generation); return;
     }
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
       forecastDrilldowns.workspaceUnavailable(); return;
     }
     var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
     global.NorthStarAccountSession.load().then(function () {
-      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      if (!forecastRenderIsCurrent(generation, expectedTenantId)) return;
       var refreshed = resourceRiskAuthority();
-      if (refreshed) activateForecastSurface(forecastDrilldowns, refreshed);
+      if (refreshed) activateForecastSurface(forecastDrilldowns, refreshed, generation);
       else forecastDrilldowns.workspaceUnavailable();
-    }).catch(function () { forecastDrilldowns.workspaceUnavailable(); });
+    }).catch(function () {
+      if (forecastRenderIsCurrent(generation, expectedTenantId)) forecastDrilldowns.workspaceUnavailable();
+    });
   }
 
-  function renderForecastDecisionSupport() {
+  function renderForecastDecisionSupport(generation) {
     if (!forecastDecisionSupport ||
         typeof forecastDecisionSupport.workspaceReady !== 'function') return;
     var current = resourceRiskAuthority();
     if (current) {
-      activateForecastSurface(forecastDecisionSupport, current); return;
+      activateForecastSurface(forecastDecisionSupport, current, generation); return;
     }
     if (!global.NorthStarAccountSession || typeof global.NorthStarAccountSession.load !== 'function') {
       forecastDecisionSupport.workspaceUnavailable(); return;
     }
     var expectedTenantId = workspace && workspace.tenant && workspace.tenant.id;
     global.NorthStarAccountSession.load().then(function () {
-      if (!workspace || !workspace.tenant || workspace.tenant.id !== expectedTenantId) return;
+      if (!forecastRenderIsCurrent(generation, expectedTenantId)) return;
       var refreshed = resourceRiskAuthority();
-      if (refreshed) activateForecastSurface(forecastDecisionSupport, refreshed);
+      if (refreshed) activateForecastSurface(forecastDecisionSupport, refreshed, generation);
       else forecastDecisionSupport.workspaceUnavailable();
-    }).catch(function () { forecastDecisionSupport.workspaceUnavailable(); });
+    }).catch(function () {
+      if (forecastRenderIsCurrent(generation, expectedTenantId)) forecastDecisionSupport.workspaceUnavailable();
+    });
   }
 
   function render() {
     forecastCurrentnessPromise = null;
+    forecastRenderGeneration += 1;
+    var forecastGeneration = forecastRenderGeneration;
     var graphs = latestGraphs();
     byId('commandCenterUpdated').textContent = 'Updated ' + (formatDate(new Date()) || 'time unavailable');
     renderPriorities(graphs);
@@ -971,11 +991,11 @@
     renderCoachAndStatus(graphs);
     renderDemandOutlook();
     renderResourceRiskOutlook();
-    renderForecastRanges();
-    renderForecastTimeline();
-    renderMonthlyForecastKpis();
-    renderForecastDrilldowns();
-    renderForecastDecisionSupport();
+    renderForecastRanges(forecastGeneration);
+    renderForecastTimeline(forecastGeneration);
+    renderMonthlyForecastKpis(forecastGeneration);
+    renderForecastDrilldowns(forecastGeneration);
+    renderForecastDecisionSupport(forecastGeneration);
     if (revenueCashOutlook && typeof revenueCashOutlook.workspaceReady === 'function') {
       revenueCashOutlook.workspaceReady();
     }
@@ -1012,6 +1032,8 @@
       setStatus('Command Center could not load. Refresh and try again.', 'error');
       return Promise.resolve(null);
     }
+    forecastRenderGeneration += 1;
+    forecastCurrentnessPromise = null;
     loading = true;
     byId('commandCenterRefresh').disabled = true;
     byId('commandCenterContent').setAttribute('aria-busy', 'true');

@@ -172,12 +172,20 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
 
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
-  test('empty history, atomic issue, authenticated zero and exact idempotent replay are distinct', async () => {
+  test('atomic issue remains immutable while unsupported source currentness masks every later read', async () => {
     const owner = fixture.actors.owner;
     const empty = await request(fixture.app).get(route).set(owner.session.headers);
     expect(empty.status).toBe(200);
     expect(empty.headers['cache-control']).toBe('private, no-store');
     expect(empty.body.data).toEqual({ state: 'current', runs: [] });
+    const noRunCurrentness = await request(fixture.app).get(`${route}/currentness`)
+      .set(owner.session.headers);
+    expect(noRunCurrentness.body.data).toEqual({
+      version: 'm26-forecast-run-currentness-v1', state: 'unavailable',
+      reason: 'run_not_found', reasons: ['run_not_found'], runId: null,
+      runDigest: null, adviceDisplayAuthorized: false,
+      digest: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
     firstRequestKey = key();
     expect(await calculatorCalls()).toBe(0);
     const beforeUnavailable = (await fixture.ownerPool.query(`SELECT
@@ -219,19 +227,47 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
       historyPosition: { latest: true, superseded: false } });
     first = issued.body.data;
     expect(await calculatorCalls()).toBe(1);
+    const currentness = await request(fixture.app).get(`${route}/currentness`)
+      .set(owner.session.headers);
+    expect(currentness.status).toBe(200);
+    expect(currentness.headers['cache-control']).toBe('private, no-store');
+    expect(currentness.body.data).toEqual({
+      version: 'm26-forecast-run-currentness-v1', state: 'unavailable',
+      reason: 'unsupported_source_currentness', reasons: ['source_unknown'],
+      runId: null, runDigest: null, adviceDisplayAuthorized: false,
+      digest: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
     const replay = await issue(horizons.horizon_one, firstRequestKey);
     expect(replay.status).toBe(200);
-    expect(replay.headers['idempotency-replayed']).toBe('true');
-    expect(replay.body.data).toMatchObject({ replayed: true,
-      receipt: { id: first.receipt.id, digest: first.receipt.digest } });
+    expect(replay.headers['idempotency-replayed']).toBeUndefined();
+    expect(replay.body.data).toEqual({ state: 'unavailable',
+      reason: 'unsupported_source_currentness', runs: null });
     expect(await calculatorCalls()).toBe(1);
+    const concurrent = await Promise.all(Array.from({ length: 4 }, () =>
+      request(fixture.app).get(`${route}/currentness`).set(owner.session.headers)));
+    expect(concurrent.every(response => response.status === 200 &&
+      response.body.data.reason === 'unsupported_source_currentness')).toBe(true);
     const rows = (await fixture.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_forecast_runs_v1) runs,
-      (SELECT count(*)::int FROM canonical_forecast_run_outputs_v1) outputs`)).rows[0];
-    expect(rows).toEqual({ runs: 1, outputs: 1 });
+      (SELECT count(*)::int FROM canonical_forecast_run_outputs_v1) outputs,
+      (SELECT count(*)::int FROM canonical_forecast_run_dependencies_v1) dependencies,
+      (SELECT count(*)::int FROM canonical_forecast_run_currentness_events_v1) events`)).rows[0];
+    expect(rows).toEqual({ runs: 1, outputs: 1, dependencies: 1, events: 1 });
+    const event = (await fixture.ownerPool.query(`SELECT sequence,state,reason,reasons,
+      source_kind,source_status,algorithm_status,current_source_digest,
+      current_algorithm_identity,currentness_digest,canonical_digest
+      FROM canonical_forecast_run_currentness_events_v1 WHERE run_id=$1`,
+    [first.receipt.id])).rows[0];
+    expect(event).toMatchObject({ sequence: 1, state: 'unavailable',
+      reason: 'unsupported_source_currentness', reasons: ['source_unknown'],
+      source_kind: 'retell_future_origin_v2', source_status: 'unsupported',
+      algorithm_status: 'current', current_source_digest: null,
+      current_algorithm_identity: expect.any(Object),
+      currentness_digest: currentness.body.data.digest });
+    expect(event.canonical_digest).toMatch(/^[0-9a-f]{64}$/);
   }, 120000);
 
-  test('second stored run is input_changed and controlled rerun uses retained exact evidence', async () => {
+  test('comparison and controlled rerun withhold retained values behind the same currentness gate', async () => {
     const issued = await issue(horizons.horizon_one);
     expect(issued.status).toBe(201);
     second = issued.body.data;
@@ -239,16 +275,14 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
       .get(`${route}/compare/${first.receipt.id}/${second.receipt.id}`)
       .set(fixture.actors.owner.session.headers);
     expect(compared.status).toBe(200);
-    expect(compared.body.data).toMatchObject({ state: 'input_changed',
-      sameInputs: false, leftRunId: first.receipt.id, rightRunId: second.receipt.id });
+    expect(compared.body.data).toEqual({ state: 'unavailable',
+      reason: 'unsupported_source_currentness', comparison: null });
     const rerun = await request(fixture.app)
       .post(`${route}/${first.receipt.id}/controlled-rerun`)
       .set(fixture.actors.owner.session.headers).set('Idempotency-Key', key()).send({});
     expect(rerun.status).toBe(200);
-    expect(rerun.body.data).toMatchObject({ state: 'reproduced',
-      runId: first.receipt.id, sameResults: true, automaticActionAuthorized: false,
-      storedResultDigest: first.receipt.resultDigest,
-      freshResultDigest: first.receipt.resultDigest });
+    expect(rerun.body.data).toEqual({ state: 'unavailable',
+      reason: 'unsupported_source_currentness', runId: null, comparison: null });
     try {
       await tamperCalculator();
       const unavailable = await request(fixture.app)
@@ -256,13 +290,28 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
         .set(fixture.actors.owner.session.headers).set('Idempotency-Key', key()).send({});
       expect(unavailable.status).toBe(200);
       expect(unavailable.body.data).toEqual({ state: 'unavailable',
-        reason: 'exact_executable_version_unavailable', runId: null, comparison: null });
+        reason: 'unsupported_source_currentness', runId: null, comparison: null });
     } finally { await restoreCalculator(); }
     const recovered = await request(fixture.app)
       .post(`${route}/${first.receipt.id}/controlled-rerun`)
       .set(fixture.actors.owner.session.headers).set('Idempotency-Key', key()).send({});
-    expect(recovered.body.data).toMatchObject({ state: 'reproduced',
-      runId: first.receipt.id, sameResults: true });
+    expect(recovered.body.data).toEqual({ state: 'unavailable',
+      reason: 'unsupported_source_currentness', runId: null, comparison: null });
+    const lifecycle = (await fixture.ownerPool.query(`SELECT sequence,reason,reasons,
+      source_status,algorithm_status,current_algorithm_identity
+      FROM canonical_forecast_run_currentness_events_v1 WHERE run_id=$1
+      ORDER BY sequence`, [first.receipt.id])).rows;
+    expect(lifecycle).toEqual([
+      { sequence: 1, reason: 'unsupported_source_currentness',
+        reasons: ['source_unknown'], source_status: 'unsupported',
+        algorithm_status: 'current', current_algorithm_identity: expect.any(Object) },
+      { sequence: 2, reason: 'unsupported_source_currentness',
+        reasons: ['source_unknown','algorithm_unknown'], source_status: 'unsupported',
+        algorithm_status: 'unknown', current_algorithm_identity: null },
+      { sequence: 3, reason: 'unsupported_source_currentness',
+        reasons: ['source_unknown'], source_status: 'unsupported',
+        algorithm_status: 'current', current_algorithm_identity: expect.any(Object) },
+    ]);
   }, 120000);
 
   test('conflicts, unsupported horizons, fresh connections and tenant-role-CSRF boundaries fail closed', async () => {
@@ -296,8 +345,8 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
       const reloaded = await repository.list(freshPool, {
         organizationId: owner.organizationId, actorUserId: owner.actorUserId,
         actorAccessRole: owner.actorAccessRole, authSessionId: owner.authSessionId });
-      expect(reloaded).toMatchObject({ state: 'current', runs: expect.any(Array) });
-      expect(reloaded.runs).toHaveLength(2);
+      expect(reloaded).toEqual({ state: 'unavailable',
+        reason: 'unsupported_source_currentness', runs: null });
     } finally { await freshPool.end(); }
     expect((await fixture.ownerPool.query(
       'SELECT count(*)::int count FROM canonical_forecast_runs_v1')).rows[0].count).toBe(2);
@@ -325,21 +374,44 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
     historyPosition: { latest: true, superseded: false } });
     const replayFirst = await issue(horizons.horizon_one, firstRequestKey);
     expect(replayFirst.status).toBe(200);
-    expect(replayFirst.body.data).toMatchObject({ replayed: true,
-      receipt: { id: first.receipt.id },
-      historyPosition: { latest: false, superseded: true } });
+    expect(replayFirst.body.data).toEqual({ state: 'unavailable',
+      reason: 'unsupported_source_currentness', runs: null });
     const listed = await request(fixture.app).get(route).set(owner.session.headers);
-    expect(listed.body.data.runs).toHaveLength(3);
-    const old = listed.body.data.runs.find(value => value.receipt.id === first.receipt.id);
+    expect(listed.body.data).toEqual({ state: 'unavailable',
+      reason: 'unsupported_source_currentness', runs: null });
+    const old = (await fixture.ownerPool.query(
+      `SELECT public.canonical_forecast_run_v1_read($1,$2,$3,$4,$5) value`,
+      [fixture.org, owner.actorUserId, owner.actorAccessRole,
+        owner.authSessionId, first.receipt.id])).rows[0].value;
     expect(old.historyPosition).toEqual({ latest: false, superseded: true });
     expect((await fixture.ownerPool.query(
       'SELECT count(*)::int count FROM canonical_forecast_run_supersessions_v1')).rows[0].count).toBe(1);
+
+    const currentnessLock = await fixture.ownerPool.connect();
+    try {
+      await currentnessLock.query('BEGIN');
+      await currentnessLock.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,256))`,
+        [`${fixture.org}:${recovered.body.data.receipt.id}`]);
+      const busy = await request(fixture.app).get(`${route}/currentness`)
+        .set(owner.session.headers);
+      expect(busy.status).toBe(503);
+      expect(busy.headers['retry-after']).toBe('2');
+      expect(busy.body.error.category).toBe('FORECAST_RUN_BUSY');
+    } finally { await currentnessLock.query('ROLLBACK'); currentnessLock.release(); }
+    const currentnessRecovered = await request(fixture.app).get(`${route}/currentness`)
+      .set(owner.session.headers);
+    expect(currentnessRecovered.body.data).toMatchObject({ state: 'unavailable',
+      reason: 'unsupported_source_currentness', runId: null, runDigest: null });
   }, 120000);
 
   test('runtime privileges are entry-only and owner mutations hit immutable triggers', async () => {
     await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_runs_v1'))
       .rejects.toMatchObject({ code: '42501' });
     await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_run_calculators_v1'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_run_dependencies_v1'))
+      .rejects.toMatchObject({ code: '42501' });
+    await expect(fixture.runtimePool.query('SELECT * FROM canonical_forecast_run_currentness_events_v1'))
       .rejects.toMatchObject({ code: '42501' });
     await expect(fixture.runtimePool.query(
       `SELECT public.canonical_forecast_run_v1_calculate('{}'::jsonb)`))
@@ -359,12 +431,24 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
        'canonical_forecast_run_v1_list(uuid,uuid,text,uuid)','EXECUTE') list_entry,
       has_function_privilege(current_user,
        'canonical_forecast_run_v1_compare(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE') compare_entry,
+      has_function_privilege(current_user,
+       'canonical_forecast_run_currentness_v1_latest(uuid,uuid,text,uuid)','EXECUTE') currentness_entry,
+      has_function_privilege(current_user,
+       'canonical_forecast_run_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE') raw_read,
+      has_function_privilege(current_user,
+       'canonical_forecast_run_v1_compare_11b_raw(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE') raw_compare,
+      has_function_privilege(current_user,
+       'canonical_forecast_run_v1_controlled_rerun_11b_raw(uuid,uuid,text,uuid,text,uuid)','EXECUTE') raw_rerun,
       has_table_privilege(current_user,'canonical_forecast_runs_v1','SELECT') table_read,
       has_table_privilege(current_user,'canonical_forecast_run_calculators_v1','SELECT') calculator_read,
+      has_table_privilege(current_user,'canonical_forecast_run_dependencies_v1','SELECT') dependency_read,
+      has_table_privilege(current_user,'canonical_forecast_run_currentness_events_v1','SELECT') event_read,
       has_function_privilege(current_user,
        'canonical_forecast_run_v1_calculate(jsonb)','EXECUTE') calculator_execute`)).rows[0];
     expect(privileges).toEqual({ list_entry: true, compare_entry: true,
-      table_read: false, calculator_read: false, calculator_execute: false });
+      currentness_entry: true, raw_read: false, raw_compare: false, raw_rerun: false,
+      table_read: false, calculator_read: false, dependency_read: false,
+      event_read: false, calculator_execute: false });
   }, 120000);
 
   test('source revocation clears mounted values while immutable receipts remain retained', async () => {
@@ -373,14 +457,14 @@ realPostgres('Mission 26 Part 11B immutable forecast run receipts', () => {
       .set(fixture.actors.owner.session.headers);
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual({ state: 'unavailable',
-      reason: 'source_or_algorithm_not_current', runs: null });
+      reason: 'unsupported_source_currentness', runs: null });
     expect((await fixture.ownerPool.query(
       'SELECT count(*)::int count FROM canonical_forecast_runs_v1')).rows[0].count).toBe(3);
     const rerun = await request(fixture.app)
       .post(`${route}/${first.receipt.id}/controlled-rerun`)
       .set(fixture.actors.owner.session.headers).set('Idempotency-Key', key()).send({});
     expect(rerun.body.data).toEqual({ state: 'unavailable',
-      reason: 'source_or_algorithm_not_current', runId: null, comparison: null });
+      reason: 'unsupported_source_currentness', runId: null, comparison: null });
   }, 120000);
 
   test('a later reviewed settings revision stales every earlier receipt without rewriting history', async () => {

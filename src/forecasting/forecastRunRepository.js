@@ -8,6 +8,9 @@ const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const MONTH = /^\d{4}-(?:0[1-9]|1[0-2])-01$/;
 const ROLES = new Set(['owner', 'admin']);
+const CURRENTNESS_REASONS = new Set(['run_not_found','settings_not_current',
+  'dependency_index_unavailable','unsupported_source_currentness',
+  'source_currentness_unknown','algorithm_unknown','run_stale']);
 
 function failure(code, status, message) {
   const error = new Error(message); error.code = code; error.status = status;
@@ -132,7 +135,9 @@ function verifiedEnvelope(value, organizationId) {
   if (value?.state === 'unavailable') {
     if (!exact(value, ['state','reason','runs']) || ![
       'settings_not_enabled','source_or_algorithm_not_current','retained_inputs_unavailable',
-      'settings_not_current','run_not_found',
+      'settings_not_current','run_not_found','dependency_index_unavailable',
+      'unsupported_source_currentness','source_currentness_unknown',
+      'algorithm_unknown','run_stale',
     ].includes(value.reason) || value.runs !== null) {
       throw failure('FORECAST_RUN_UNAVAILABLE', 503,
         'Forecast run evidence is temporarily unavailable.');
@@ -151,7 +156,9 @@ function verifiedComparison(value) {
   if (value?.state === 'unavailable') {
     if (!exact(value, ['state','reason','comparison']) || ![
       'source_or_algorithm_not_current','run_not_found','retained_inputs_unavailable',
-      'settings_not_current',
+      'settings_not_current','dependency_index_unavailable',
+      'unsupported_source_currentness','source_currentness_unknown',
+      'algorithm_unknown','run_stale',
     ].includes(value.reason) || value.comparison !== null) {
       throw failure('FORECAST_RUN_UNAVAILABLE', 503,
         'Forecast comparison is temporarily unavailable.');
@@ -178,6 +185,8 @@ function verifiedRerun(value) {
     if (!exact(value, ['state','reason','runId','comparison']) || ![
       'source_or_algorithm_not_current','retained_inputs_unavailable','run_not_found',
       'settings_not_current','exact_executable_version_unavailable',
+      'dependency_index_unavailable','unsupported_source_currentness','algorithm_unknown',
+      'source_currentness_unknown','run_stale',
     ].includes(value.reason) || value.runId !== null || value.comparison !== null) {
       throw failure('FORECAST_RUN_UNAVAILABLE', 503,
         'Controlled rerun is temporarily unavailable.');
@@ -196,6 +205,25 @@ function verifiedRerun(value) {
       'Controlled rerun is temporarily unavailable.');
   }
   return freeze({ ...value });
+}
+function verifiedCurrentness(value) {
+  if (!exact(value, ['version','state','reason','reasons','runId','runDigest',
+    'adviceDisplayAuthorized','digest']) ||
+      value.version !== 'm26-forecast-run-currentness-v1' ||
+      !['unchanged_candidate','stale','unavailable'].includes(value.state) ||
+      typeof value.reason !== 'string' || !/^[a-z][a-z0-9_]{0,79}$/.test(value.reason) ||
+      !dense(value.reasons, 4) || value.reasons.length < 1 ||
+      value.reasons.some(reason => typeof reason !== 'string' ||
+        !/^[a-z][a-z0-9_]{0,79}$/.test(reason)) ||
+      value.adviceDisplayAuthorized !== false || !DIGEST.test(value.digest || '') ||
+      (value.state === 'unavailable' ?
+        (value.runId !== null || value.runDigest !== null ||
+          !CURRENTNESS_REASONS.has(value.reason)) :
+        (!UUID.test(value.runId || '') || !DIGEST.test(value.runDigest || '')))) {
+    throw failure('FORECAST_RUN_UNAVAILABLE', 503,
+      'Forecast run currentness is temporarily unavailable.');
+  }
+  return freeze(JSON.parse(JSON.stringify(value)));
 }
 async function transaction(pool, work) {
   const client = await pool.connect();
@@ -243,7 +271,7 @@ async function capture(pool, actor, rawInput) {
       runs: null }, actor.organizationId);
     if (prepared?.state === 'replay') {
       const replay = (await client.query(
-        'SELECT public.canonical_forecast_run_v1_read($1,$2,$3,$4,$5) value',
+        'SELECT public.canonical_forecast_run_v1_current_read($1,$2,$3,$4,$5) value',
         [actor.organizationId, actor.actorUserId, actor.actorAccessRole,
           actor.authSessionId, prepared.runId])).rows[0]?.value;
       if (replay?.state === 'unavailable') {
@@ -302,6 +330,9 @@ async function capture(pool, actor, rawInput) {
         input.localHorizonStart, prepared.id, canonical.normalized,
         prepared.output.payload, canonical.inputCanonical, canonical.resultCanonical,
         canonical.receiptCanonical, input.supersedes?.reason || null])).rows[0]?.value;
+    if (stored?.state === 'unavailable') {
+      return verifiedEnvelope(stored, actor.organizationId);
+    }
     return freeze({ ...verifiedCurrent(stored, actor.organizationId), replayed: false });
     });
   } catch (error) {
@@ -312,6 +343,13 @@ async function capture(pool, actor, rawInput) {
     }
     throw error;
   }
+}
+async function currentness(pool, actor) {
+  identity(actor, false);
+  return transaction(pool, async client => verifiedCurrentness((await client.query(
+    'SELECT public.canonical_forecast_run_currentness_v1_latest($1,$2,$3,$4) value',
+    [actor.organizationId, actor.actorUserId, actor.actorAccessRole,
+      actor.authSessionId])).rows[0]?.value));
 }
 async function list(pool, actor) {
   identity(actor, false);
@@ -342,4 +380,4 @@ async function controlledRerun(pool, actor, runId) {
       actor.authSessionId, actor.csrfToken, runId])).rows[0]?.value));
 }
 
-module.exports = { capture, list, compare, controlledRerun };
+module.exports = { capture, list, compare, controlledRerun, currentness };

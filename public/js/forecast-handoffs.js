@@ -38,6 +38,10 @@
     generation += 1; controllers.forEach(function (controller) { controller.abort(); });
     controllers.clear();
   }
+  function paidGeneration(token) {
+    return token === generation &&
+      (!global.NorthStarDemoRuntime || global.NorthStarDemoRuntime.active !== true);
+  }
   function clearExpiry() {
     if (expiryTimer !== null) global.clearTimeout(expiryTimer);
     expiryTimer = null;
@@ -200,16 +204,21 @@
     if (!pending || JSON.stringify(pending.body) !== JSON.stringify(body)) {
       pending = { key: global.crypto.randomUUID(), body: body };
     }
+    var operation = pending;
+    cancel(); var token = generation;
     clearExpiry(); clear();
     show('Recording review request.', 'No receiving workflow or operational record is being changed.', 'loading');
     try {
       var result = await request('/api/v1/forecast/handoffs', { method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': pending.key },
-        body: JSON.stringify(pending.body) });
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': operation.key },
+        body: JSON.stringify(operation.body) });
+      if (!paidGeneration(token)) return;
       if (result.state === 'unavailable') { pending = null; unavailable(result.reason); return; }
       if (!result.proposal) throw new Error('Reviewed handoff result invalid');
-      pending = null; await load();
+      if (pending === operation) pending = null;
+      await load();
     } catch (error) {
+      if (!paidGeneration(token)) return;
       clearExpiry(); clear();
       show(error.status === 409 ? 'Review request changed' : 'Review request unconfirmed',
         error.status === 409 ? 'The run or currentness changed. Refresh before requesting review again.' :
@@ -219,6 +228,7 @@
   async function dismissReview(proposal, button) {
     button.disabled = true;
     var key = global.crypto.randomUUID();
+    cancel(); var token = generation;
     try {
       clearExpiry(); clear();
       show('Recording review dismissal.',
@@ -227,13 +237,17 @@
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
         body: JSON.stringify({ expectedRevision: proposal.revision, expectedDigest: proposal.digest }),
       });
+      if (!paidGeneration(token)) return;
       if (result.state === 'unavailable') { unavailable(result.reason); return; }
       await load();
     } catch (error) {
+      if (!paidGeneration(token)) return;
       clearExpiry(); clear();
       show(error.status === 409 ? 'Review record changed' : 'Dismissal unconfirmed',
         'Refresh to check immutable review history. No receiving action was taken.', 'unavailable');
-    } finally { button.disabled = false; }
+    } finally {
+      if (paidGeneration(token) && button.isConnected) button.disabled = false;
+    }
   }
   function demoProposal(workspace, state) {
     var digest = function (character) { return character.repeat(64); };

@@ -100,14 +100,24 @@ async function main() {
         if (url.pathname === '/js/auth-session.js') return route.fulfill({
           contentType: 'application/javascript', body: `
             window.showToast=function(){};window.handoffCalls=[];window.handoffMode='current';
+            window.handoffDeferred=[];
             window.handoffCandidate=${JSON.stringify(candidate)};
             window.handoffProposal=${JSON.stringify(proposal())};
             window.handoffDismissed=${JSON.stringify(proposal('dismissed'))};
+            window.resolveHandoffMutation=function(success){
+              var item=window.handoffDeferred.shift();if(!item)throw new Error('No deferred handoff');
+              var dismiss=item.url.indexOf('/dismiss')>=0;
+              item.resolve(success?{status:dismiss?200:201,ok:true,json:function(){return Promise.resolve({success:true,
+                data:{state:dismiss?'dismissed':'created',proposal:dismiss?window.handoffDismissed:window.handoffProposal}});}}:
+                {status:503,ok:false,json:function(){return Promise.resolve({error:{category:'FORECAST_HANDOFF_UNAVAILABLE'}});}});
+            };
             window.NorthStarAccountSession={
               load:function(){return Promise.resolve({role:'owner',email:'owner@example.test'});},
               json:function(){return Promise.resolve({preferences:{},version:'v1'});},
               fetch:function(url,options){var method=(options&&options.method)||'GET';
                 window.handoffCalls.push({url:url,method:method,body:options&&options.body});
+                if(method==='POST'&&window.handoffMode==='delayed')return new Promise(function(resolve){
+                  window.handoffDeferred.push({url:url,resolve:resolve});});
                 if(window.handoffMode==='failure')return Promise.resolve({status:503,ok:false,
                   json:function(){return Promise.resolve({error:{category:'FORECAST_HANDOFF_UNAVAILABLE'}})}});
                 if(method==='POST'&&url.indexOf('/dismiss')>=0){window.handoffMode='dismissed';
@@ -210,6 +220,109 @@ async function main() {
         await page.locator('#refreshForecastHandoffs').click();
         await page.locator('#forecastHandoffsStatus')
           .getByText('Reviewed handoff ready for an explicit review request', { exact: true }).waitFor();
+
+        await page.evaluate(() => { window.handoffMode = 'delayed'; });
+        await page.locator('#requestForecastHandoff').click();
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Recording review request.', { exact: true }).waitFor();
+        await page.evaluate(() => {
+          window.NorthStarDemoRuntime = { active: true, loadWorkspace: function () {
+            return Promise.resolve({ session: { id: 'race-demo-success',
+              expiresAt: new Date(Date.now() + 60000).toISOString() },
+            integrity: { revision: 1, digest: '9'.repeat(64), lastAction: 'race_demo' } });
+          } };
+          dispatchEvent(new CustomEvent('northstar:auth-generation'));
+        });
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Fictional reviewed handoff', { exact: true }).waitFor();
+        await page.evaluate(() => window.resolveHandoffMutation(true));
+        await page.waitForTimeout(50);
+        assert.equal(await page.locator('#forecastHandoffsStatus').textContent(),
+          'Fictional reviewed handoff');
+        assert.equal(await page.locator('#forecastHandoffEvidence').textContent(),
+          '19 inbound leads · point forecast · count');
+        assert.equal(await page.locator('#forecastHandoffHistory').innerText(), '');
+
+        await page.evaluate(() => {
+          window.NorthStarDemoRuntime.active = false; window.handoffMode = 'current';
+          window.handoffCandidate.recommendation.evidence.amount = '7';
+          dispatchEvent(new CustomEvent('northstar:auth-generation'));
+        });
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Reviewed handoff ready for an explicit review request', { exact: true }).waitFor();
+        assert.equal(await page.locator('#forecastHandoffEvidence').textContent(),
+          '7 inbound leads · point forecast · count');
+        await page.evaluate(() => { window.handoffMode = 'delayed'; });
+        await page.locator('#requestForecastHandoff').click();
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Recording review request.', { exact: true }).waitFor();
+        await page.evaluate(() => {
+          window.handoffMode = 'current';
+          window.handoffCandidate.recommendation.evidence.amount = '8';
+          dispatchEvent(new CustomEvent('northstar:auth-generation'));
+        });
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Reviewed handoff ready for an explicit review request', { exact: true }).waitFor();
+        await page.evaluate(() => window.resolveHandoffMutation(false));
+        await page.waitForTimeout(50);
+        assert.equal(await page.locator('#forecastHandoffsStatus').textContent(),
+          'Reviewed handoff ready for an explicit review request');
+        assert.equal(await page.locator('#forecastHandoffEvidence').textContent(),
+          '8 inbound leads · point forecast · count');
+
+        await page.evaluate(() => {
+          window.handoffProposal.expiresAt = new Date(Date.now() + 60000).toISOString();
+          window.handoffMode = 'history';
+        });
+        await page.locator('#refreshForecastHandoffs').click();
+        await page.locator('#forecastHandoffHistory')
+          .getByText('Review requested', { exact: true }).waitFor();
+        await page.evaluate(() => { window.handoffMode = 'delayed'; });
+        await page.locator('#forecastHandoffHistory button').click();
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Recording review dismissal.', { exact: true }).waitFor();
+        await page.evaluate(() => {
+          window.NorthStarDemoRuntime = { active: true, loadWorkspace: function () {
+            return Promise.resolve({ session: { id: 'race-demo-dismiss',
+              expiresAt: new Date(Date.now() + 60000).toISOString() },
+            integrity: { revision: 2, digest: '8'.repeat(64), lastAction: 'race_demo' } });
+          } };
+          dispatchEvent(new CustomEvent('northstar:auth-generation'));
+        });
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Fictional reviewed handoff', { exact: true }).waitFor();
+        await page.evaluate(() => window.resolveHandoffMutation(true));
+        await page.waitForTimeout(50);
+        assert.equal(await page.locator('#forecastHandoffsStatus').textContent(),
+          'Fictional reviewed handoff');
+        assert.equal(await page.locator('#forecastHandoffEvidence').textContent(),
+          '19 inbound leads · point forecast · count');
+
+        await page.evaluate(() => {
+          window.NorthStarDemoRuntime.active = false; window.handoffMode = 'history';
+          window.handoffCandidate.recommendation.evidence.amount = '10';
+          dispatchEvent(new CustomEvent('northstar:auth-generation'));
+        });
+        await page.locator('#forecastHandoffHistory')
+          .getByText('Review requested', { exact: true }).waitFor();
+        await page.evaluate(() => { window.handoffMode = 'delayed'; });
+        await page.locator('#forecastHandoffHistory button').click();
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Recording review dismissal.', { exact: true }).waitFor();
+        await page.evaluate(() => {
+          window.handoffMode = 'current';
+          window.handoffCandidate.recommendation.evidence.amount = '11';
+          dispatchEvent(new CustomEvent('northstar:auth-generation'));
+        });
+        await page.locator('#forecastHandoffsStatus')
+          .getByText('Reviewed handoff ready for an explicit review request', { exact: true }).waitFor();
+        await page.evaluate(() => window.resolveHandoffMutation(false));
+        await page.waitForTimeout(50);
+        assert.equal(await page.locator('#forecastHandoffsStatus').textContent(),
+          'Reviewed handoff ready for an explicit review request');
+        assert.equal(await page.locator('#forecastHandoffEvidence').textContent(),
+          '11 inbound leads · point forecast · count');
+        assert.equal(await page.locator('#forecastHandoffHistory').innerText(), '');
       }
       assert.deepEqual(errors, []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);

@@ -78,7 +78,8 @@ test('strict current envelope preserves authenticated zero and returns detached 
   expect(Object.isFrozen(result)).toBe(true);
   expect(Object.isFrozen(result.candidate)).toBe(true);
   expect(database.client.query.mock.calls.map(call => call[0])).toEqual([
-    'BEGIN ISOLATION LEVEL READ COMMITTED', "SET LOCAL lock_timeout = '2000ms'",
+    'BEGIN ISOLATION LEVEL READ COMMITTED', "SET LOCAL TIME ZONE 'UTC'",
+    "SET LOCAL lock_timeout = '2000ms'",
     "SET LOCAL statement_timeout = '8000ms'",
     'SELECT public.canonical_forecast_handoff_v1_read($1,$2,$3,$4) value', 'COMMIT']);
 });

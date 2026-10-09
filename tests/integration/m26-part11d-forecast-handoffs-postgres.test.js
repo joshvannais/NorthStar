@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { Client } = require('pg');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 
@@ -143,6 +144,18 @@ realPostgres('Mission 26 Part 11D immutable reviewed forecast handoffs', () => {
 
   test('compatible currentness creates immutable zero-valued advice with no receiver mutation', async () => {
     const owner = fixture.actors.owner;
+    const runtimeRole = `"${fixture.roles.runtime.replace(/"/g, '""')}"`;
+    const admin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });
+    await admin.connect();
+    try {
+      await admin.query(
+        `ALTER ROLE ${runtimeRole} SET TIME ZONE 'America/New_York'`);
+    } finally { await admin.end(); }
+    await fixture.db.close();
+    expect(await fixture.db.initDatabase()).toBe(true);
+    expect((await fixture.db.getPool().query(
+      "SELECT current_setting('TimeZone') timezone")).rows[0].timezone)
+      .toBe('America/New_York');
     const event = (await fixture.ownerPool.query(`SELECT rtrim(currentness_digest) digest
       FROM canonical_forecast_run_currentness_events_v1 WHERE run_id=$1
       ORDER BY sequence DESC LIMIT 1`, [issued.receipt.id])).rows[0];
@@ -203,6 +216,9 @@ realPostgres('Mission 26 Part 11D immutable reviewed forecast handoffs', () => {
       receiverRecheckRequired: true, automaticActionAuthorized: false,
       outboundCommunicationAuthorized: false } });
     proposal = created.body.data.proposal;
+    expect(proposal.createdAt).toMatch(/\+00:00$/);
+    expect(proposal.expiresAt).toMatch(/\+00:00$/);
+    expect(Date.parse(proposal.expiresAt)).toBe(Date.parse(reviewExpiresAt));
     await fixture.db.close();
     expect(await fixture.db.initDatabase()).toBe(true);
     const afterRestart = await request(fixture.app).get(route)
@@ -289,6 +305,7 @@ realPostgres('Mission 26 Part 11D immutable reviewed forecast handoffs', () => {
     expect(dismissed.body.data).toMatchObject({ state: 'dismissed', proposal: {
       id: proposal.id, state: 'dismissed', revision: 2,
       history: [{ action: 'requested' }, { action: 'dismissed' }] } });
+    expect(dismissed.body.data.proposal.history[1].recordedAt).toMatch(/\+00:00$/);
     const replay = await request(fixture.app)
       .post(`${route}/${proposal.id}/dismiss`).set(owner.session.headers)
       .set('Idempotency-Key', firstDismissKey)

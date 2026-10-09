@@ -197,6 +197,7 @@ async function transaction(pool, work) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    await client.query("SET LOCAL TIME ZONE 'UTC'");
     await client.query("SET LOCAL lock_timeout = '2000ms'");
     await client.query("SET LOCAL statement_timeout = '8000ms'");
     const result = await work(client); await client.query('COMMIT'); return result;

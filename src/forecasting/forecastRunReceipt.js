@@ -2,11 +2,11 @@
 
 const { sha256 } = require('../services/businessProfileAdapter');
 
-const VERSION = 'm26-forecast-run-receipt-v1';
+const VERSION = 'm26-forecast-run-receipt-v2';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
 const TOKEN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
-const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.(?:\d{3}|\d{6})Z$/;
 
 function invalid() {
   const error = new Error('Forecast run receipt details are invalid.');
@@ -45,8 +45,10 @@ function arrayValues(value, max) {
   return result;
 }
 function instant(value) {
-  return typeof value === 'string' && INSTANT.test(value) &&
-    Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+  if (typeof value !== 'string' || !INSTANT.test(value)) return false;
+  const comparable = value.length === 27 ? `${value.slice(0, 23)}Z` : value;
+  return Number.isFinite(Date.parse(comparable)) &&
+    new Date(comparable).toISOString() === comparable;
 }
 function token(value) { return typeof value === 'string' && value.length <= 80 && TOKEN.test(value); }
 function digest(value) { return typeof value === 'string' && DIGEST.test(value); }
@@ -66,7 +68,7 @@ function normalizeForecastRunReceipt(input) {
     'supersedes', 'supersessionReason']);
   const settings = root && record(root.settings, ['revision', 'digest']);
   const algorithm = root && record(root.algorithm,
-    ['key', 'version', 'definitionDigest', 'implementationDigest']);
+    ['key', 'version', 'definitionDigest', 'implementationDigest', 'buildDigest']);
   const rawOutputs = root && arrayValues(root.outputs, 24);
   const supersedes = root && root.supersedes !== null ?
     record(root.supersedes, ['runId', 'runDigest']) : null;
@@ -77,7 +79,8 @@ function normalizeForecastRunReceipt(input) {
     !digest(root.sourceSnapshotDigest) || !digest(root.reportingWindowDigest) ||
     !digest(root.featureSetDigest) || !algorithm || !token(algorithm.key) ||
     !token(algorithm.version) || !digest(algorithm.definitionDigest) ||
-    !digest(algorithm.implementationDigest) || !token(root.calculationVersion) ||
+    !digest(algorithm.implementationDigest) || !digest(algorithm.buildDigest) ||
+    !token(root.calculationVersion) ||
     !token(root.outputContractVersion) || !rawOutputs ||
     !(root.supersedes === null || supersedes) ||
     (supersedes && (!uuid(supersedes.runId) || !digest(supersedes.runDigest) ||

@@ -51,18 +51,19 @@ function projectForecastRunCurrentness(input) {
   if (!['current', 'changed'].includes(source.status) && source.currentDigest !== null) invalid();
 
   const activeAlgorithm = algorithm.current === null ? null : record(algorithm.current,
-    ['key', 'version', 'definitionDigest', 'implementationDigest']);
+    ['key', 'version', 'definitionDigest', 'implementationDigest', 'buildDigest']);
   if (['current', 'replaced'].includes(algorithm.status)) {
     if (!activeAlgorithm || typeof activeAlgorithm.key !== 'string' ||
         activeAlgorithm.key.length > 80 || !TOKEN.test(activeAlgorithm.key) ||
         typeof activeAlgorithm.version !== 'string' ||
         activeAlgorithm.version.length > 80 || !TOKEN.test(activeAlgorithm.version) ||
         !digest(activeAlgorithm.definitionDigest) ||
-        !digest(activeAlgorithm.implementationDigest)) invalid();
+        !digest(activeAlgorithm.implementationDigest) ||
+        !digest(activeAlgorithm.buildDigest)) invalid();
     const sameIdentity = activeAlgorithm.key === run.algorithm.key &&
       activeAlgorithm.version === run.algorithm.version;
     const sameDefinition = sameIdentity &&
-      ['definitionDigest', 'implementationDigest']
+      ['definitionDigest', 'implementationDigest', 'buildDigest']
         .every(key => activeAlgorithm[key] === run.algorithm[key]);
     if (algorithm.status === 'current' ? !sameDefinition : sameIdentity) invalid();
   } else if (algorithm.current !== null) invalid();

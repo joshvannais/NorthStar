@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="/css/workspace-form-state.css">
   <link rel="stylesheet" href="/css/knowledge-management.css">
   <link rel="stylesheet" href="/css/forecast-settings.css?v=m26-part11a-20261008">
+  <link rel="stylesheet" href="/css/forecast-runs.css?v=m26-part11b-20261009">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -182,6 +183,61 @@
             <button class="btn btn-primary btn-sm" id="saveForecastSettings" type="submit" disabled>Save reviewed settings</button>
             <button class="btn btn-secondary btn-sm" id="refreshForecastSettings" type="button">Refresh settings</button>
           </div>
+        </form>
+      </section>
+
+      <section class="settings-section forecast-runs-shell" id="forecast-runs"
+        data-state="loading" aria-labelledby="forecastRunsHeading">
+        <div class="forecast-runs-heading">
+          <div>
+            <h2 id="forecastRunsHeading">Forecast run receipts</h2>
+            <p class="description">Issue one reviewed forecast from the current saved settings and inspect its immutable source, algorithm, and output identity. A receipt records evidence; it does not authorize an action.</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="refreshForecastRuns" type="button">Refresh receipts</button>
+        </div>
+        <p id="forecastRunsStatus" role="status" aria-live="polite" aria-atomic="true">Loading forecast receipts.</p>
+        <p id="forecastRunsDetail" class="description">Values and digests stay cleared until current paid-workspace authority is verified.</p>
+        <form id="forecastRunIssueForm" class="forecast-run-issue" novalidate>
+          <div class="form-group">
+            <label for="forecastRunMonth">Forecast month</label>
+            <input id="forecastRunMonth" type="month" autocomplete="off" disabled
+              aria-describedby="forecastRunMonthHelp">
+            <p class="description" id="forecastRunMonthHelp">Choose a future monthly horizon. NorthStar uses the current reviewed settings and authenticated complete source evidence.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" id="issueForecastRun" type="submit" disabled>Issue reviewed forecast</button>
+        </form>
+        <article class="forecast-run-current" id="forecastRunCurrent" hidden
+          aria-labelledby="forecastRunCurrentHeading">
+          <div class="forecast-run-current-topline">
+            <div>
+              <p class="forecast-run-eyebrow">Current selected receipt</p>
+              <h3 id="forecastRunCurrentHeading">Inbound leads</h3>
+            </div>
+            <strong id="forecastRunValue" class="forecast-run-value"></strong>
+          </div>
+          <dl class="forecast-run-facts">
+            <div><dt>Forecast cutoff</dt><dd id="forecastRunCutoff"></dd></div>
+            <div><dt>Settings revision</dt><dd id="forecastRunSettings"></dd></div>
+            <div><dt>Run receipt</dt><dd id="forecastRunDigest"></dd></div>
+            <div><dt>Output receipt</dt><dd id="forecastRunOutputDigest"></dd></div>
+          </dl>
+          <p class="description">Point forecast · count. This stored result is distinct from calibrated ranges and named scenarios.</p>
+          <button class="btn btn-secondary btn-sm" id="rerunForecastRun" type="button" disabled>Check exact reproduction</button>
+          <p id="forecastRerunResult" class="description" aria-live="polite"></p>
+        </article>
+        <div class="forecast-run-history-block">
+          <h3>Stored history</h3>
+          <p id="forecastRunEmpty" class="description">No authenticated run receipts are stored yet.</p>
+          <ol id="forecastRunHistory" class="forecast-run-history" aria-label="Stored forecast run receipts"></ol>
+        </div>
+        <form id="forecastRunCompareForm" class="forecast-run-compare" novalidate hidden>
+          <h3>Compare stored receipts</h3>
+          <div class="forecast-run-compare-grid">
+            <div class="form-group"><label for="forecastRunLeft">Earlier receipt</label><select id="forecastRunLeft" disabled></select></div>
+            <div class="form-group"><label for="forecastRunRight">Later receipt</label><select id="forecastRunRight" disabled></select></div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="compareForecastRuns" type="submit" disabled>Compare evidence</button>
+          <p id="forecastRunComparison" class="description" role="status" aria-live="polite"></p>
         </form>
       </section>
 
@@ -639,6 +695,7 @@
   <script src="/js/nav-component.js?v=demo-nav-11-20260915"></script>
   <script src="/js/knowledge-management.js"></script>
   <script src="/js/forecast-settings.js?v=m26-part11a-20261008"></script>
+  <script src="/js/forecast-runs.js?v=m26-part11b-20261009"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn', durable: '[data-settings-mutable]' });</script>
   <script>NavComponent.init("settings");</script>

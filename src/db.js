@@ -1040,6 +1040,37 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           runtime_role
         );
       END IF;
+      IF pg_catalog.to_regclass('public.canonical_forecast_runs_v1') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_runs_v1, public.canonical_forecast_run_outputs_v1, public.canonical_forecast_run_supersessions_v1, public.canonical_forecast_run_calculators_v1 FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_run_v1_calculate(jsonb) FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION public.canonical_forecast_run_v1_paid_authority(uuid,uuid,text,uuid,text,boolean) FROM %I',
+          runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_prepare(uuid,uuid,text,uuid,text,text,text,integer,text,date,uuid,text) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_commit(uuid,uuid,text,uuid,text,text,integer,text,date,uuid,jsonb,jsonb,text,text,text,text) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_read(uuid,uuid,text,uuid,uuid) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_list(uuid,uuid,text,uuid) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_compare(uuid,uuid,text,uuid,uuid,uuid) TO %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'GRANT EXECUTE ON FUNCTION public.canonical_forecast_run_v1_controlled_rerun(uuid,uuid,text,uuid,text,uuid) TO %I', runtime_role
+        );
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_schedule_mutation_previews') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
           'REVOKE INSERT, DELETE ON TABLE public.canonical_schedule_assignments FROM %I', runtime_role
@@ -6085,6 +6116,32 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'public.canonical_forecast_settings_v1_settings_valid(jsonb,uuid)',
           'EXECUTE')
        END AS forecast_settings_authority_private,
+       CASE
+        WHEN to_regclass('public.canonical_forecast_runs_v1') IS NULL OR
+          to_regclass('public.canonical_forecast_run_outputs_v1') IS NULL OR
+          to_regclass('public.canonical_forecast_run_supersessions_v1') IS NULL OR
+          to_regclass('public.canonical_forecast_run_calculators_v1') IS NULL OR
+          to_regprocedure('public.canonical_forecast_run_v1_calculate(jsonb)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_run_v1_prepare(uuid,uuid,text,uuid,text,text,text,integer,text,date,uuid,text)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_run_v1_commit(uuid,uuid,text,uuid,text,text,integer,text,date,uuid,jsonb,jsonb,text,text,text,text)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_run_v1_read(uuid,uuid,text,uuid,uuid)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_run_v1_list(uuid,uuid,text,uuid)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_run_v1_compare(uuid,uuid,text,uuid,uuid,uuid)') IS NULL OR
+          to_regprocedure('public.canonical_forecast_run_v1_controlled_rerun(uuid,uuid,text,uuid,text,uuid)') IS NULL THEN FALSE
+        ELSE
+         NOT has_table_privilege($1,'public.canonical_forecast_runs_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_run_outputs_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_run_supersessions_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_forecast_run_calculators_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_run_v1_calculate(jsonb)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_forecast_run_v1_paid_authority(uuid,uuid,text,uuid,text,boolean)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_run_v1_prepare(uuid,uuid,text,uuid,text,text,text,integer,text,date,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_run_v1_commit(uuid,uuid,text,uuid,text,text,integer,text,date,uuid,jsonb,jsonb,text,text,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_run_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_run_v1_list(uuid,uuid,text,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_run_v1_compare(uuid,uuid,text,uuid,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_forecast_run_v1_controlled_rerun(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+       END AS forecast_runs_authority_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -7198,6 +7255,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.forecast_timeline_authority_private ||
       !runtimePrivileges.forecast_monthly_kpis_authority_private ||
       !runtimePrivileges.forecast_settings_authority_private ||
+      !runtimePrivileges.forecast_runs_authority_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

@@ -255,9 +255,9 @@ async function main() {
       const renderedAudit = await auditRenderedPage(page, {
         mainSelector: '#commandCenterMain', layout: viewport,
       });
-      await exerciseSkipLink(page, { mainSelector: '#commandCenterMain' });
       const recoveredScreenshot = path.join(output, `${mode}-${viewport.name}-recovered.png`);
       await page.screenshot({ path: recoveredScreenshot, fullPage: true });
+      await exerciseSkipLink(page, { mainSelector: '#commandCenterMain' });
       results.push({ mode, viewport: viewport.name, success: true, readyScreenshot,
         fullReadyScreenshot, resourceReadyScreenshot, rangeReadyScreenshot,
         failedScreenshot, recoveredScreenshot, renderedAudit, outsideRequests,

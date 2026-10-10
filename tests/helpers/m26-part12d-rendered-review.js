@@ -73,7 +73,31 @@ async function auditRenderedPage(page, { mainSelector, layout }) {
 
 async function exerciseSkipLink(page, { skipSelector = '.skip-link', mainSelector }) {
   const skip = page.locator(skipSelector).first();
-  await skip.focus();
+  async function reloadToNeutralDocumentFocus(forcedColors) {
+    await page.emulateMedia({ forcedColors, reducedMotion: 'reduce' });
+    await page.reload({ waitUntil: 'load' });
+    await page.evaluate(() => {
+      const previousTabIndex = document.body.getAttribute('tabindex');
+      document.body.setAttribute('tabindex', '-1');
+      document.body.focus({ preventScroll: true });
+      if (previousTabIndex === null) document.body.removeAttribute('tabindex');
+      else document.body.setAttribute('tabindex', previousTabIndex);
+    });
+    assert.equal(await page.evaluate(() => document.activeElement === document.body), true,
+      'skip-link proof must begin from neutral document body focus');
+    assert.equal(await skip.evaluate(element => element === document.activeElement), false);
+  }
+  async function tabToSkip(forcedColors) {
+    await reloadToNeutralDocumentFocus(forcedColors);
+    await page.keyboard.press('Tab');
+    const focus = await page.evaluate(() => ({ tag: document.activeElement?.tagName || null,
+      id: document.activeElement?.id || null,
+      className: typeof document.activeElement?.className === 'string' ? document.activeElement.className : null,
+      text: document.activeElement?.textContent?.trim().slice(0, 80) || null }));
+    assert.equal(await skip.evaluate(element => element === document.activeElement), true,
+      `skip link must be the first genuine keyboard Tab target; focused ${JSON.stringify(focus)}`);
+  }
+  await tabToSkip('none');
   assert.equal(await skip.evaluate(element => element === document.activeElement), true);
   const focusStyle = await skip.evaluate(element => {
     const style = getComputedStyle(element);
@@ -82,6 +106,10 @@ async function exerciseSkipLink(page, { skipSelector = '.skip-link', mainSelecto
   assert.notEqual(focusStyle.top, '-100%');
   await page.keyboard.press('Enter');
   await page.waitForFunction(selector => document.activeElement === document.querySelector(selector), mainSelector);
+  await tabToSkip('active');
+  assert.equal(await page.evaluate(() => matchMedia('(forced-colors: active)').matches), true);
+  assert.notEqual(await skip.evaluate(element => getComputedStyle(element).top), '-100%');
+  await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'reduce' });
 }
 
 module.exports = { MISSION_26_FIVE_LAYOUTS, auditRenderedPage, exerciseSkipLink };

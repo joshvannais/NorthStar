@@ -45,6 +45,13 @@ async function main() {
             getPipeline: () => Promise.resolve([]),
           };`,
         });
+        if (url.pathname === '/js/auth-session.js') return route.fulfill({
+          contentType: 'application/javascript', body: `window.NorthStarAccountSession={
+            load:function(){return Promise.resolve({mode:'paid',
+              navigation:[{id:'command-center',href:'/dashboard'}]});}};`,
+        });
+        if (url.pathname === '/js/command-center-contract.js' ||
+            url.pathname === '/js/nav-component.js') return route.continue();
         if (url.pathname === '/js/theme.js') return route.continue();
         if (url.pathname.startsWith('/js/')) return route.fulfill({
           contentType: 'application/javascript', body: '',
@@ -87,11 +94,11 @@ async function main() {
       assert.deepEqual(outsideRequests, []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
       await auditRenderedPage(page, { mainSelector: '#mainContent', layout: viewport });
-      await exerciseSkipLink(page, { mainSelector: '#mainContent' });
       await page.locator('#ebRevenue').screenshot({ path: path.join(output,
         `${scenario.name}-${viewport.name}-revenue-status.png`) });
       await page.screenshot({ path: path.join(output,
         `${scenario.name}-${viewport.name}-full.png`), fullPage: true });
+      await exerciseSkipLink(page, { mainSelector: '#mainContent' });
       await context.close();
     }
   } finally {

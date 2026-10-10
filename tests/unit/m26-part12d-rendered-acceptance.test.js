@@ -23,8 +23,37 @@ test.each([
 ])('%s exposes a keyboard-focusable skip target', (_name, file, selector) => {
   const source = read(file);
   const id = selector.slice(1);
-  expect(source).toMatch(new RegExp(`class="skip-link"[^>]+href="#${id}"`));
+  expect(source).toMatch(new RegExp(`class="skip-link"[^>]+href="#${id}"[^>]+tabindex="0"`));
   expect(source).toMatch(new RegExp(`<main[^>]+id="${id}"[^>]+tabindex="-1"`));
+});
+
+test('browser proof reaches skip navigation through Tab in normal and forced colors', () => {
+  const source = read('tests/helpers/m26-part12d-rendered-review.js');
+  expect(source).toMatch(/page\.keyboard\.press\('Tab'\)/);
+  expect(source).not.toMatch(/skip\.focus\(\)/);
+  expect(source).toMatch(/document\.body\.focus\(\{ preventScroll: true \}\)/);
+  expect(source).toMatch(/neutral document body focus/);
+  expect(source).toMatch(/skip link must be the first genuine keyboard Tab target/);
+  expect(source).toMatch(/tabToSkip\('active'\)/);
+  expect(source).toMatch(/matchMedia\('\(forced-colors: active\)'\)\.matches/);
+});
+
+test('shared navigation preserves the skip link as the first generated-control Tab target', () => {
+  const source = read('public/js/nav-component.js');
+  expect(source).toMatch(/var skipLink = document\.querySelector\('\.skip-link'\)/);
+  expect(source).toMatch(/skipLink\.insertAdjacentHTML\('afterend', buildMobileNav\(items, mode\)\)/);
+  expect(source).not.toMatch(/document\.body\.insertAdjacentHTML\('afterbegin', buildMobileNav\(items, mode\)\);\s*if \(!installSidebar/);
+});
+
+test.each([
+  'tests/browser/m26-part12a-paid-journey.js',
+  'tests/browser/m26-part12b-demo-journey.js',
+])('%s binds required branches to a retained layout and records execution', file => {
+  const source = read(file);
+  expect(source).not.toContain("viewport.name === 'desktop-light'");
+  expect(source).toContain("viewport.name === 'phone-standard-light'");
+  expect(source).toMatch(/exercisedRequiredBranches\.push\(/);
+  expect(source).toMatch(/assert\.deepEqual\(exercisedRequiredBranches/);
 });
 
 test('Executive Brief exposes semantic regions and clears stale values on failure', () => {

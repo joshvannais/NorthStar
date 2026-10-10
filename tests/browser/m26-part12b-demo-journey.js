@@ -20,14 +20,16 @@ function run() {
   return { id: runId, settings: { revision: 1, digest: D('1') },
     source: { positionId: '55555555-5555-4555-8555-555555555555',
       positionDigest: D('2'), sourceSnapshotDigest: D('3'), reportingWindowDigest: D('4'),
-      featureSetDigest: D('5'), approvedPriceOriginId: originId, fictional: true },
+      featureSetDigest: D('5'), approvedPriceOriginId: originId,
+      approvalDecisionId: '66666666-6666-4666-8666-666666666666',
+      approvalDecisionDigest: D('6'), amountMinorUnits: 28148, fictional: true },
     target: { key: 'revenue.approved_price_flow', definitionVersion: 'v1',
       semantic: 'future_human_approved_commercial_price_decisions' },
     horizon: { grain: 'month', startsAt: '2026-11-01T00:00:00.000Z',
       endsAt: '2026-12-01T00:00:00.000Z' },
     algorithm: { key: 'approved_price_carry_forward', version: 'm26-paid-approved-price-flow-v1',
       definitionDigest: D('6'), implementationDigest: D('7'), configurationDigest: D('8') },
-    output: { predictionKind: 'deterministic_point', value: { amount: '2850.00' },
+    output: { predictionKind: 'deterministic_point', value: { amount: '281.48' },
       unit: { key: 'money', currency: 'USD' }, uncertainty: { state: 'unquantified',
         calibratedIntervalAvailable: false }, fictional: true, digest: D('9') },
     explanation: { summary: 'This fictional example carries one exact approved price into the next review window.',
@@ -51,10 +53,13 @@ function envelope(state = 'ready', revision = 1, selectedOrigin = originId) {
     fictionalDemo: true, accountFree: true, resettable: true, providerCallCount: 0,
     demoWorkspaceRevision: revision,
     sourceCandidate: state === 'ready' ? { approvedPriceOriginId: selectedOrigin,
+      approvalDecisionId: '66666666-6666-4666-8666-666666666666',
+      approvalDecisionDigest: D('6'),
       positionId: '77777777-7777-4777-8777-777777777777', positionDigest: D('d'),
       sourceSnapshotDigest: D('e'), capturedAt: '2026-10-09T17:00:00.000Z',
-      cutoffAt: '2026-10-09T17:00:00.000Z', amount: '2850.00', currency: 'USD',
-      label: 'Tree pruning · fictional approved-price example', fictional: true } : null };
+      cutoffAt: '2026-10-09T17:00:00.000Z', amount: '281.48', amountMinorUnits: 28148,
+      currency: 'USD', label: 'Tree pruning · fictional human-approved commercial decision',
+      fictional: true } : null };
 }
 
 const demoRuntime = `(function(){
@@ -65,7 +70,8 @@ const demoRuntime = `(function(){
   window.NorthStarDemoRuntime={active:true,fetch:function(url,options){
     options=options||{};var method=options.method||'GET';
     window.demoForecastCalls.push({url:url,method:method,body:options.body,headers:options.headers});
-    if(window.demoForecastMode==='failure')return reply(503,{});
+    if(window.demoForecastMode==='unapproved')return reply(503,{success:false,
+      error:{code:'demo_forecast_source_unavailable'}});
     if(url==='/api/demo/forecast/journey'&&method==='GET')return reply(200,{success:true,data:current});
     if(url==='/api/demo/command-center/reset'){
       window.demoResetCount+=1;current=${JSON.stringify(envelope('ready', 1, nextOriginId))};
@@ -135,17 +141,20 @@ async function main() {
         .getByText('Fictional journey ready for review', { exact: true }).waitFor();
       assert.equal(await page.locator('#forecastPaidJourneyHeading').textContent(),
         'Fictional approved-price forecast journey');
+      assert.match(await page.locator('#forecastPaidJourneyDetail').textContent(),
+        /fictional human-approved commercial decision/i);
       assert.equal(await page.locator('#forecastPaidOrigin').inputValue(), originId);
       assert.equal(await page.locator('#forecastPaidOrigin').isEditable(), false);
       assert.equal(await page.locator('#resetForecastPaidJourney').isVisible(), true);
       await page.locator('#issueForecastPaidJourney').focus(); await page.keyboard.press('Enter');
       await page.locator('#forecastPaidJourneyStatus')
         .getByText('Fictional approved-price journey is current', { exact: true }).waitFor();
-      assert.equal(await page.locator('#forecastPaidJourneyValue').textContent(), '2850.00 USD');
+      assert.equal(await page.locator('#forecastPaidJourneyValue').textContent(), '281.48 USD');
       assert.equal(await page.locator('#forecastPaidJourneyReceipt').textContent(), D('b'));
       assert.equal(await page.locator('#forecastPaidJourneyOutput').textContent(), D('9'));
       const panel = await page.locator('#forecast-paid-journey').innerText();
       assert.match(panel, /synthetic, account-free NorthStar demo estimate/i);
+      assert.doesNotMatch(panel, /6800\.00 USD/);
       assert.match(panel, /No browser calculation, paid API, provider call, or receiving mutation occurred/i);
       assert.doesNotMatch(panel, /customer@example|\+1\d{10}|earned revenue|collected cash/i);
       assert.equal(await page.locator('#rerunForecastPaidJourney').isEnabled(), true);
@@ -168,7 +177,7 @@ async function main() {
       await page.locator('#forecastPaidJourneyHistory').getByText(/Revision 2 · dismissed/).waitFor();
 
       if (viewport.name === 'desktop-light') {
-        await page.evaluate(() => { window.demoForecastMode = 'failure'; });
+        await page.evaluate(() => { window.demoForecastMode = 'unapproved'; });
         await page.locator('#refreshForecastPaidJourney').focus(); await page.keyboard.press('Enter');
         await page.locator('#forecastPaidJourneyStatus')
           .getByText('Fictional forecast journey unavailable', { exact: true }).waitFor();

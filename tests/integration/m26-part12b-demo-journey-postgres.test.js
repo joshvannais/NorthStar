@@ -4,12 +4,21 @@ const crypto = require('node:crypto');
 const request = require('supertest');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const { DEFAULT_SELECTION } = require('../../src/commandCenter/scenarioSpace');
+const { sha256 } = require('../../src/services/businessProfileAdapter');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ORIGIN = 'http://northstar.test';
 const ROOT = '/api/demo/forecast/journey';
 
 function cookie(response) { return response.headers['set-cookie'][0].split(';')[0]; }
+function tokenHash(savedCookie) {
+  const token = decodeURIComponent(savedCookie.slice(savedCookie.indexOf('=') + 1));
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+async function persistedState(pool, savedCookie) {
+  return (await pool.query('SELECT state FROM demo_command_center_sessions WHERE token_hash=$1',
+    [tokenHash(savedCookie)])).rows[0]?.state;
+}
 function action(app, savedCookie, key, body, intent = 'forecast-journey') {
   return request(app).post(`${ROOT}/actions`).set('Host', 'northstar.test')
     .set('Origin', ORIGIN).set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
@@ -37,6 +46,10 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
       accountFree: true, resettable: true, providerCallCount: 0, demoWorkspaceRevision: 1,
       sourceCandidate: { fictional: true } });
     const originalSource = first.body.data.sourceCandidate;
+    expect(originalSource).toMatchObject({ amountMinorUnits:
+      Number(originalSource.amount.replace('.', '')) });
+    expect(originalSource.approvalDecisionId).toMatch(/^[a-f0-9-]{36}$/);
+    expect(originalSource.approvalDecisionDigest).toMatch(/^[a-f0-9]{64}$/);
     const issueKey = crypto.randomUUID();
     const issueBody = { action: 'issue', expectedRevision: 1, details: {
       approvedPriceOriginId: originalSource.approvedPriceOriginId,
@@ -46,6 +59,9 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
     expect(issued.body).toMatchObject({ success: true, replayed: false, data: {
       state: 'current', fictionalDemo: true, providerCallCount: 0, demoWorkspaceRevision: 2,
       run: { source: { approvedPriceOriginId: originalSource.approvedPriceOriginId,
+        approvalDecisionId: originalSource.approvalDecisionId,
+        approvalDecisionDigest: originalSource.approvalDecisionDigest,
+        amountMinorUnits: originalSource.amountMinorUnits,
         positionDigest: originalSource.positionDigest, fictional: true },
       output: { predictionKind: 'deterministic_point', fictional: true },
       review: { receiverMutationCount: 0 }, automaticActionAuthorized: false,
@@ -139,7 +155,7 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
       .set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
       .set('Idempotency-Key', crypto.randomUUID())
       .set('X-NorthStar-Demo-Intent', 'simulate-lead')
-      .send({ expectedRevision: 2, scenario: DEFAULT_SELECTION });
+      .send({ expectedRevision: 2, scenario: { ...DEFAULT_SELECTION, service: 'concrete' } });
     expect(simulated.status).toBe(201);
     expect(simulated.body.data.integrity.revision).toBe(3);
 
@@ -185,7 +201,7 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
       .set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
       .set('Idempotency-Key', crypto.randomUUID())
       .set('X-NorthStar-Demo-Intent', 'simulate-lead')
-      .send({ expectedRevision: 1, scenario: DEFAULT_SELECTION });
+      .send({ expectedRevision: 1, scenario: { ...DEFAULT_SELECTION, service: 'concrete' } });
     expect(simulated.status).toBe(201);
     expect(simulated.body.data.integrity.revision).toBe(2);
 
@@ -198,6 +214,21 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
     const selectedGraph = simulated.body.data.graphs.find(graph =>
       graph.ids.estimate === candidate.approvedPriceOriginId);
     expect(selectedGraph).toBeDefined();
+    expect(candidate.amount).toBe(Number(selectedGraph.estimate.customerPrice).toFixed(2));
+    expect(candidate.amount).toMatch(/^\d+\.\d{2}$/);
+    expect(candidate.amountMinorUnits).toBe(Number(candidate.amount.replace('.', '')));
+    expect(candidate.amount.endsWith('.00')).toBe(false);
+    const persisted = await persistedState(fixture.ownerPool, savedCookie);
+    const persistedGraph = persisted.graphs.find(graph =>
+      graph.ids.estimate === candidate.approvedPriceOriginId);
+    expect(persistedGraph.estimate.approvedPriceDecision).toMatchObject({
+      contract: 'northstar_fictional_approved_price_decision_v1',
+      id: candidate.approvalDecisionId,
+      digest: candidate.approvalDecisionDigest,
+      decision: 'approved', state: 'accepted', fictional: true,
+      amount: candidate.amount, amountMinorUnits: candidate.amountMinorUnits,
+      reviewer: { type: 'fictional_human', accessRole: 'owner' },
+    });
     expect(candidate.capturedAt).toBe(selectedGraph.timestamps.createdAt);
     expect(candidate.cutoffAt).toBe(selectedGraph.timestamps.snapshotCreatedAt);
     expect(Date.parse(selectedGraph.timestamps.createdAt))
@@ -214,6 +245,9 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
     const run = issued.body.data.run;
     expect(run).toMatchObject({ source: {
       approvedPriceOriginId: candidate.approvedPriceOriginId,
+      approvalDecisionId: candidate.approvalDecisionId,
+      approvalDecisionDigest: candidate.approvalDecisionDigest,
+      amountMinorUnits: candidate.amountMinorUnits,
       sourceSnapshotDigest: candidate.sourceSnapshotDigest,
       positionDigest: candidate.positionDigest,
       capturedAt: candidate.capturedAt,
@@ -231,6 +265,9 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
         id: run.id,
         source: {
           approvedPriceOriginId: candidate.approvedPriceOriginId,
+          approvalDecisionId: candidate.approvalDecisionId,
+          approvalDecisionDigest: candidate.approvalDecisionDigest,
+          amountMinorUnits: candidate.amountMinorUnits,
           sourceSnapshotDigest: candidate.sourceSnapshotDigest,
           positionDigest: candidate.positionDigest,
           reportingWindowDigest: run.source.reportingWindowDigest,
@@ -241,6 +278,51 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
         currentness: { state: 'unchanged_candidate', revision: 1,
           digest: run.currentness.digest } } });
     expect(await protectedCounts(fixture.ownerPool)).toEqual(before);
+  }, 120000);
+
+  test('returns named value-free unavailability when the newest persisted graph is unapproved or lacks approval', async () => {
+    const first = await request(fixture.app).get(ROOT).set('Host', 'northstar.test');
+    expect(first.status).toBe(200);
+    const savedCookie = cookie(first);
+    const simulated = await request(fixture.app)
+      .post('/api/demo/command-center/simulations/leads')
+      .set('Host', 'northstar.test').set('Origin', ORIGIN)
+      .set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
+      .set('Idempotency-Key', crypto.randomUUID())
+      .set('X-NorthStar-Demo-Intent', 'simulate-lead')
+      .send({ expectedRevision: 1, scenario: DEFAULT_SELECTION });
+    expect(simulated.status).toBe(201);
+
+    const state = await persistedState(fixture.ownerPool, savedCookie);
+    expect(state.graphs[0].estimate.approvedPriceDecision.decision).toBe('approved');
+    expect(state.graphs[1].estimate.approvedPriceDecision.decision).toBe('approved');
+    state.graphs[0].estimate.approvedPriceDecision.decision = 'rejected';
+    state.graphs[0].lead.status = 'hot';
+    delete state.graphs[0].projectionDigest;
+    state.graphs[0].projectionDigest = sha256(state.graphs[0]);
+    await fixture.ownerPool.query(
+      'UPDATE demo_command_center_sessions SET state=$2 WHERE token_hash=$1',
+      [tokenHash(savedCookie), state]);
+
+    const denied = await request(fixture.app).get(ROOT).set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(denied.status).toBe(503);
+    expect(denied.body).toMatchObject({ success: false,
+      error: { code: 'demo_forecast_source_unavailable' } });
+    expect(JSON.stringify(denied.body)).not.toMatch(/6800\.00|9600\.00|amountMinorUnits/);
+
+    delete state.graphs[0].estimate.approvedPriceDecision;
+    delete state.graphs[0].projectionDigest;
+    state.graphs[0].projectionDigest = sha256(state.graphs[0]);
+    await fixture.ownerPool.query(
+      'UPDATE demo_command_center_sessions SET state=$2 WHERE token_hash=$1',
+      [tokenHash(savedCookie), state]);
+    const missing = await request(fixture.app).get(ROOT).set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(missing.status).toBe(503);
+    expect(missing.body).toMatchObject({ success: false,
+      error: { code: 'demo_forecast_source_unavailable' } });
+    expect(JSON.stringify(missing.body)).not.toMatch(/6800\.00|9600\.00|amountMinorUnits/);
   }, 120000);
 
   test('denies cross-origin, wrong intent, stale revisions, conflicting replay and stale run identities', async () => {

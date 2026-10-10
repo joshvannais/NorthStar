@@ -3,6 +3,7 @@
 const { v5: uuidv5 } = require('uuid');
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
 const { verifiedJourney } = require('./forecastPaidJourneyRepository');
+const { exactMoney, verifyApprovedPriceDecision } = require('../commandCenter/demoApprovedPriceDecision');
 
 const STATE_VERSION = 'm26-demo-paid-journey-state-v1';
 const PUBLIC_VERSION = 'm26-paid-journey-v1';
@@ -38,14 +39,6 @@ function iso(value) {
   return parsed.toISOString();
 }
 
-function money(value) {
-  const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < 0 || number > 999999999999999) {
-    fail(503, 'DEMO_FORECAST_SOURCE_INVALID', 'The fictional approved-price source is unavailable.');
-  }
-  return number.toFixed(2);
-}
-
 function identity(state, label) {
   return uuidv5(`${STATE_VERSION}:${state.seed}:${state.generation}:${label}`, NAMESPACE);
 }
@@ -55,36 +48,72 @@ function nextMonth(value, offset) {
   return new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth() + offset, 1)).toISOString();
 }
 
+function unavailableSource() {
+  fail(503, 'DEMO_FORECAST_SOURCE_UNAVAILABLE',
+    'An explicit fictional human-approved commercial price decision is unavailable.');
+}
+
+function orderedGraphs(state) {
+  if (!Array.isArray(state && state.graphs) || state.graphs.length === 0) unavailableSource();
+  const timed = state.graphs.map((graph, index) => {
+    const createdAt = Date.parse(graph && graph.timestamps && graph.timestamps.createdAt);
+    if (!Number.isFinite(createdAt)) unavailableSource();
+    return { graph, index, createdAt };
+  });
+  return timed.sort((left, right) => right.createdAt - left.createdAt || left.index - right.index)
+    .map(value => value.graph);
+}
+
 function sourceGraph(state, approvedPriceOriginId = null) {
-  return Array.isArray(state && state.graphs)
-    ? state.graphs.find(candidate => candidate && candidate.source?.type === 'account_free_demo' &&
-      candidate.estimate?.fictional === true && Number.isSafeInteger(candidate.estimate.customerPrice) &&
-      UUID.test(candidate.ids?.estimate || '') && UUID.test(candidate.ids?.polarisSnapshot || '') &&
-      DIGEST.test(candidate.polaris?.snapshotDigest || '') &&
-      (approvedPriceOriginId === null || candidate.ids.estimate === approvedPriceOriginId)) : null;
+  const graphs = orderedGraphs(state);
+  const graph = approvedPriceOriginId === null
+    ? graphs[0]
+    : graphs.find(candidate => candidate && candidate.ids?.estimate === approvedPriceOriginId);
+  const estimateMoney = exactMoney(graph && graph.estimate && graph.estimate.customerPrice);
+  const snapshotMoney = exactMoney(graph && graph.polaris && graph.polaris.snapshot &&
+    graph.polaris.snapshot.customerFacingPrice);
+  if (!graph || graph.source?.type !== 'account_free_demo' || graph.estimate?.fictional !== true ||
+      !UUID.test(graph.ids?.graph || '') || !UUID.test(graph.ids?.estimate || '') ||
+      !UUID.test(graph.ids?.polarisSnapshot || '') || !DIGEST.test(graph.polaris?.snapshotDigest || '') ||
+      graph.estimate.currency !== 'USD' || !estimateMoney || !snapshotMoney ||
+      estimateMoney.minorUnits !== snapshotMoney.minorUnits ||
+      !verifyApprovedPriceDecision(graph.estimate.approvedPriceDecision, {
+        tenantId: state.workspace?.tenant?.id,
+        graphId: graph.ids.graph,
+        estimateId: graph.ids.estimate,
+        sourceSnapshotId: graph.ids.polarisSnapshot,
+        sourceSnapshotDigest: graph.polaris.snapshotDigest,
+        amount: graph.estimate.customerPrice,
+        currency: graph.estimate.currency,
+        approvedAt: graph.timestamps?.createdAt,
+      })) unavailableSource();
+  return graph;
 }
 
 function sourceBasis(state, approvedPriceOriginId = null) {
+  if (!state || !DIGEST.test(state.seed || '') || !Number.isSafeInteger(state.generation) ||
+      !state.workspace || !UUID.test(state.workspace.tenant?.id || '')) unavailableSource();
   const graph = sourceGraph(state, approvedPriceOriginId);
-  if (!graph || !DIGEST.test(state.seed || '') || !Number.isSafeInteger(state.generation) ||
-      !state.workspace || !UUID.test(state.workspace.tenant?.id || '')) {
-    fail(503, 'DEMO_FORECAST_SOURCE_INVALID', 'The fictional approved-price source is unavailable.');
-  }
+  const amount = exactMoney(graph.estimate.customerPrice);
+  const decision = graph.estimate.approvedPriceDecision;
   const capturedAt = iso(graph.timestamps?.createdAt);
   const cutoffAt = iso(graph.timestamps?.snapshotCreatedAt);
   if (Date.parse(capturedAt) > Date.parse(cutoffAt)) {
-    fail(503, 'DEMO_FORECAST_SOURCE_INVALID', 'The fictional approved-price source is unavailable.');
+    unavailableSource();
   }
   const value = {
     approvedPriceOriginId: graph.ids.estimate,
+    approvalDecisionId: decision.id,
+    approvalDecisionDigest: decision.digest,
     positionId: identity(state, 'position'),
     sourceSnapshotId: graph.ids.polarisSnapshot,
     sourceSnapshotDigest: graph.polaris.snapshotDigest,
-    amount: money(graph.estimate.customerPrice),
+    amount: amount.amount,
+    amountMinorUnits: amount.minorUnits,
     currency: graph.estimate.currency,
     capturedAt,
     cutoffAt,
-    sourceLabel: `${graph.lead.serviceLabel} · fictional approved-price example`,
+    sourceLabel: `${graph.lead.serviceLabel} · fictional human-approved commercial decision`,
   };
   return stableValue({
     ...value,
@@ -92,7 +121,8 @@ function sourceBasis(state, approvedPriceOriginId = null) {
     reportingWindowDigest: sha256({ contract: 'm26-demo-approved-price-window-v1',
       cutoffAt, sourceSnapshotDigest: graph.polaris.snapshotDigest }),
     featureSetDigest: sha256({ contract: 'm26-demo-approved-price-feature-v1',
-      approvedPriceOriginId: graph.ids.estimate, amount: value.amount, currency: value.currency }),
+      approvedPriceOriginId: graph.ids.estimate, approvalDecisionDigest: decision.digest,
+      amount: value.amount, amountMinorUnits: value.amountMinorUnits, currency: value.currency }),
   });
 }
 
@@ -153,7 +183,10 @@ function createRun(state, reason, issuedAt, approvedPriceOriginId = null) {
     source: { positionId: source.positionId, positionDigest: source.positionDigest,
       sourceSnapshotDigest: source.sourceSnapshotDigest,
       reportingWindowDigest: source.reportingWindowDigest, featureSetDigest: source.featureSetDigest,
-      approvedPriceOriginId: source.approvedPriceOriginId, capturedAt: source.capturedAt,
+      approvedPriceOriginId: source.approvedPriceOriginId,
+      approvalDecisionId: source.approvalDecisionId,
+      approvalDecisionDigest: source.approvalDecisionDigest,
+      amountMinorUnits: source.amountMinorUnits, capturedAt: source.capturedAt,
       cutoffAt: source.cutoffAt, fictional: true },
     target, horizon, algorithm: method, output: calculated, explanation,
     receipt: { organizationId: state.workspace.tenant.id, digest: null,
@@ -205,14 +238,14 @@ function projectedCurrentness(state, run) {
   if (latest.approvedPriceOriginId === run.source.approvedPriceOriginId &&
       latest.sourceSnapshotDigest === run.source.sourceSnapshotDigest &&
       latest.positionDigest === run.source.positionDigest) return run.currentness;
-  const candidates = state.graphs.filter(candidate => sourceGraph({ ...state, graphs: [candidate] }));
+  const candidates = orderedGraphs(state);
   const pinnedIndex = candidates.findIndex(candidate =>
     candidate.ids.estimate === run.source.approvedPriceOriginId);
   if (pinnedIndex < 0) {
     fail(503, 'DEMO_FORECAST_STATE_INVALID', 'The fictional forecast journey is unavailable.');
   }
   const revision = run.currentness.revision + Math.max(1, pinnedIndex);
-  const checkedAt = iso(sourceGraph(state)?.timestamps?.createdAt || state.createdAt);
+  const checkedAt = latest.capturedAt;
   return stableValue({
     state: 'stale', revision, digest: sha256({
       contract: 'm26-demo-paid-journey-currentness-v1', runId: run.id,
@@ -235,9 +268,12 @@ function journeyEnvelope(state, workspaceRevision, now = new Date(), validateSto
       fictionalDemo: true, accountFree: true, resettable: true, providerCallCount: 0,
       demoWorkspaceRevision: workspaceRevision,
       sourceCandidate: { approvedPriceOriginId: source.approvedPriceOriginId,
+        approvalDecisionId: source.approvalDecisionId,
+        approvalDecisionDigest: source.approvalDecisionDigest,
         positionId: source.positionId, positionDigest: source.positionDigest,
         sourceSnapshotDigest: source.sourceSnapshotDigest, capturedAt: source.capturedAt,
-        cutoffAt: source.cutoffAt, amount: source.amount, currency: source.currency,
+        cutoffAt: source.cutoffAt, amount: source.amount,
+        amountMinorUnits: source.amountMinorUnits, currency: source.currency,
         label: source.sourceLabel, fictional: true },
     }, state.workspace.tenant.id);
   }

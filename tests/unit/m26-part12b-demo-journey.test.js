@@ -2,6 +2,8 @@
 
 const crypto = require('node:crypto');
 const { createInitialDemoState } = require('../../src/commandCenter/workspace');
+const { createApprovedPriceDecision } = require('../../src/commandCenter/demoApprovedPriceDecision');
+const { sha256 } = require('../../src/services/businessProfileAdapter');
 const journey = require('../../src/forecasting/forecastDemoJourney');
 
 const tenant = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -12,12 +14,31 @@ function initial(seed = 'part12b-demo-seed', generation = 1) {
   return createInitialDemoState(tenant, createdAt, { seed, generation });
 }
 
+function authorizeGraph(state, graph, amount = graph.estimate.customerPrice) {
+  graph.estimate.customerPrice = amount;
+  graph.polaris.snapshot.customerFacingPrice = amount;
+  graph.polaris.snapshotDigest = sha256(graph.polaris.snapshot);
+  graph.estimate.approvedPriceDecision = createApprovedPriceDecision({
+    tenantId: state.workspace.tenant.id,
+    graphId: graph.ids.graph,
+    estimateId: graph.ids.estimate,
+    sourceSnapshotId: graph.ids.polarisSnapshot,
+    sourceSnapshotDigest: graph.polaris.snapshotDigest,
+    amount,
+    currency: graph.estimate.currency,
+    approvedAt: graph.timestamps.createdAt,
+  });
+  delete graph.projectionDigest;
+  graph.projectionDigest = sha256(graph);
+  return graph;
+}
+
 function issue(state, amount) {
   const source = journey.sourceBasis(state);
   if (amount !== undefined) {
     state = JSON.parse(JSON.stringify(state));
     const graph = state.graphs.find(value => value.ids.estimate === source.approvedPriceOriginId);
-    graph.estimate.customerPrice = amount;
+    authorizeGraph(state, graph, amount);
   }
   const selected = journey.sourceBasis(state);
   return journey.apply(state, { action: 'issue', approvedPriceOriginId: selected.approvedPriceOriginId,
@@ -41,9 +62,22 @@ describe('Mission 26 Part 12B fictional demo journey', () => {
       resettable: true, providerCallCount: 0, liveValidationAvailable: false,
       automaticActionAuthorized: false, demoWorkspaceRevision: 1,
       sourceCandidate: { fictional: true, currency: 'USD' } });
-    expect(first.sourceCandidate.amount).toMatch(/^\d+\.00$/);
+    expect(first.sourceCandidate.amount).toMatch(/^\d+\.\d{2}$/);
+    expect(first.sourceCandidate.amountMinorUnits).toBe(
+      Number(first.sourceCandidate.amount.replace('.', '')));
+    expect(first.sourceCandidate.approvalDecisionId).toMatch(/^[a-f0-9-]{36}$/);
+    expect(first.sourceCandidate.approvalDecisionDigest).toMatch(/^[a-f0-9]{64}$/);
     const graph = initial().graphs.find(value =>
       value.ids.estimate === first.sourceCandidate.approvedPriceOriginId);
+    expect(graph.estimate.approvedPriceDecision).toMatchObject({
+      contract: 'northstar_fictional_approved_price_decision_v1',
+      id: first.sourceCandidate.approvalDecisionId,
+      digest: first.sourceCandidate.approvalDecisionDigest,
+      decision: 'approved', state: 'accepted', fictional: true,
+      amount: first.sourceCandidate.amount,
+      amountMinorUnits: first.sourceCandidate.amountMinorUnits,
+      reviewer: { type: 'fictional_human', accessRole: 'owner' },
+    });
     expect(first.sourceCandidate.capturedAt).toBe(graph.timestamps.createdAt);
     expect(first.sourceCandidate.cutoffAt).toBe(graph.timestamps.snapshotCreatedAt);
     expect(Date.parse(first.sourceCandidate.capturedAt))
@@ -56,7 +90,7 @@ describe('Mission 26 Part 12B fictional demo journey', () => {
     const missing = initial('missing-source-time');
     delete missing.graphs[0].timestamps.createdAt;
     expect(capturedError(() => journey.sourceBasis(missing)))
-      .toMatchObject({ status: 503, code: 'DEMO_FORECAST_STATE_INVALID' });
+      .toMatchObject({ status: 503, code: 'DEMO_FORECAST_SOURCE_UNAVAILABLE' });
 
     const malformed = initial('malformed-source-time');
     malformed.graphs[0].timestamps.snapshotCreatedAt = 'not-a-timestamp';
@@ -66,8 +100,39 @@ describe('Mission 26 Part 12B fictional demo journey', () => {
     const reversed = initial('reversed-source-time');
     reversed.graphs[0].timestamps.createdAt = '2026-10-09T18:01:00.000Z';
     reversed.graphs[0].timestamps.snapshotCreatedAt = '2026-10-09T18:00:00.000Z';
+    authorizeGraph(reversed, reversed.graphs[0]);
     expect(capturedError(() => journey.sourceBasis(reversed)))
-      .toMatchObject({ status: 503, code: 'DEMO_FORECAST_SOURCE_INVALID' });
+      .toMatchObject({ status: 503, code: 'DEMO_FORECAST_SOURCE_UNAVAILABLE' });
+  });
+
+  test('requires explicit approval and exact cents from the genuinely newest source without fallback', () => {
+    const decimal = initial('decimal-approved-source');
+    const newest = decimal.graphs[0];
+    authorizeGraph(decimal, newest, 281.48);
+    const selected = journey.sourceBasis(decimal);
+    expect(selected).toMatchObject({ approvedPriceOriginId: newest.ids.estimate,
+      amount: '281.48', amountMinorUnits: 28148,
+      approvalDecisionId: newest.estimate.approvedPriceDecision.id,
+      approvalDecisionDigest: newest.estimate.approvedPriceDecision.digest });
+
+    const unapproved = initial('unapproved-newest-source');
+    expect(unapproved.graphs[1].estimate.approvedPriceDecision.decision).toBe('approved');
+    delete unapproved.graphs[0].estimate.approvedPriceDecision;
+    unapproved.graphs[0].lead.status = 'hot';
+    expect(capturedError(() => journey.sourceBasis(unapproved))).toMatchObject({ status: 503,
+      code: 'DEMO_FORECAST_SOURCE_UNAVAILABLE' });
+
+    const rejected = initial('rejected-newest-source');
+    rejected.graphs[0].estimate.approvedPriceDecision.decision = 'rejected';
+    rejected.graphs[0].lead.status = 'hot';
+    expect(capturedError(() => journey.sourceBasis(rejected))).toMatchObject({ status: 503,
+      code: 'DEMO_FORECAST_SOURCE_UNAVAILABLE' });
+
+    const invalid = initial('invalid-cent-source');
+    invalid.graphs[0].estimate.customerPrice = 10971.421;
+    invalid.graphs[0].polaris.snapshot.customerFacingPrice = 10971.421;
+    expect(capturedError(() => journey.sourceBasis(invalid))).toMatchObject({ status: 503,
+      code: 'DEMO_FORECAST_SOURCE_UNAVAILABLE' });
   });
 
   test('issues and reproduces the exact server-calculated immutable receipt', () => {
@@ -106,10 +171,11 @@ describe('Mission 26 Part 12B fictional demo journey', () => {
     const newer = JSON.parse(JSON.stringify(changed.graphs[0]));
     newer.ids.estimate = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
     newer.ids.polarisSnapshot = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
-    newer.polaris.snapshotDigest = 'd'.repeat(64);
-    newer.estimate.customerPrice += 100;
+    newer.estimate.id = newer.ids.estimate;
+    newer.polaris.id = newer.ids.polarisSnapshot;
     newer.timestamps.createdAt = '2026-10-09T18:10:00.000Z';
     newer.timestamps.snapshotCreatedAt = '2026-10-09T18:10:00.000Z';
+    authorizeGraph(changed, newer, 10971.42);
     changed.graphs.unshift(newer);
 
     const projected = journey.journeyEnvelope(changed, 3,
@@ -124,6 +190,8 @@ describe('Mission 26 Part 12B fictional demo journey', () => {
         output: { digest: issued.run.output.digest },
         currentness: { state: 'stale', revision: 2,
           adviceDisplayAuthorized: false, reason: 'newer_fictional_source' } } });
+    expect(journey.sourceBasis(changed)).toMatchObject({ approvedPriceOriginId: newer.ids.estimate,
+      amount: '10971.42', amountMinorUnits: 1097142 });
     expect(projected.run.currentness.digest).not.toBe(issued.run.currentness.digest);
     const rerun = { action: 'rerun', runId: issued.run.id,
       runDigest: issued.run.receipt.digest,

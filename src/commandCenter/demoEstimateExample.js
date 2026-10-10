@@ -5,6 +5,7 @@ const {sha256,stableValue}=require('../services/businessProfileAdapter');
 const {v5:uuidv5}=require('uuid');
 const {packs,questionsFor}=require('./industryIntelligence');
 const treeProfiles=require('./demoTreeBusinessProfiles');
+const {createApprovedPriceDecision,verifyApprovedPriceDecision}=require('./demoApprovedPriceDecision');
 
 function round(value){return Math.round(Number(value)*100)/100;}
 function concreteExample(graph,baseScope) {
@@ -102,6 +103,12 @@ function treeExample(graph,baseScope) {
 // New/reset and simulated demo jobs share an explicitly fictional cost example.
 // Store the shared calculator's output once; existing saved demo graphs stay unchanged.
 function addRecordedCostExample(tenantId, graph) {
+  const hadAuthorizedDecision=verifyApprovedPriceDecision(graph.estimate&&graph.estimate.approvedPriceDecision,{
+    tenantId,graphId:graph.ids&&graph.ids.graph,estimateId:graph.ids&&graph.ids.estimate,
+    sourceSnapshotId:graph.ids&&graph.ids.polarisSnapshot,
+    sourceSnapshotDigest:graph.polaris&&graph.polaris.snapshotDigest,
+    amount:graph.estimate&&graph.estimate.customerPrice,currency:graph.estimate&&graph.estimate.currency,
+    approvedAt:graph.timestamps&&graph.timestamps.createdAt});
   const key=graph.lead.serviceType;
   const pack=packs[key];
   const tree=key==='tree'?treeExample(graph,graph.polaris.snapshot.service.scope):null;
@@ -127,8 +134,14 @@ function addRecordedCostExample(tenantId, graph) {
     businessProfileAuthority:{id:uuidv5('fictional-cost-example-profile',graph.ids.graph),versionLabel:profile.version,profileHash:sha256(profile)},
     travel:tree?tree.travel:concrete?concrete.travel:pack?null:{distanceMiles:10,minutes:20,source:'fictional_demo_example'},callDurationSeconds:null};
   const snapshot=calculateCanonicalPolaris(input);
+  const estimate={...graph.estimate,customerPrice:snapshot.customerFacingPrice,lineItems:snapshot.pricingLineItems};
+  if(hadAuthorizedDecision)estimate.approvedPriceDecision=createApprovedPriceDecision({
+    tenantId,graphId:graph.ids.graph,estimateId:graph.ids.estimate,
+    sourceSnapshotId:graph.ids.polarisSnapshot,sourceSnapshotDigest:sha256(snapshot),
+    amount:snapshot.customerFacingPrice,currency:estimate.currency,
+    approvedAt:graph.timestamps.createdAt});
   const result={...graph,
-    estimate:{...graph.estimate,customerPrice:snapshot.customerFacingPrice,lineItems:snapshot.pricingLineItems},
+    estimate,
     polaris:{...graph.polaris,calculationVersion:CALCULATION_VERSION,snapshot,snapshotDigest:sha256(snapshot),
       syntheticCalculation:{contract:'NorthStarFictionalCostExample/v1',input,details:tree&&tree.details||concrete&&concrete.details||null,note:tree?'Fictional tree estimate calculated from the simulated transcript scope and simulated tree-business profile. Onsite verification remains required.':concrete?'Fictional concrete estimate calculated from recorded area and finish plus explicit simulated business-profile assumptions for depth, waste, crew, materials, equipment and mobilization.':'Illustrative cost inputs for practicing estimate review. These are not researched prices or a real job forecast.'}}};
   delete result.projectionDigest; result.projectionDigest=sha256(result);

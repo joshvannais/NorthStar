@@ -194,9 +194,12 @@
       <section class="settings-section forecast-paid-journey-shell" id="forecast-paid-journey"
         data-state="loading" aria-labelledby="forecastPaidJourneyHeading">
         <div class="forecast-runs-heading">
-          <div><h2 id="forecastPaidJourneyHeading">Paid approved-price forecast journey</h2>
-            <p class="description">Carry one authorized source position through a deterministic saved receipt, currentness check, plain-language explanation, and review-only handoff history.</p></div>
-          <button class="btn btn-secondary btn-sm" id="refreshForecastPaidJourney" type="button">Refresh journey</button>
+          <div><h2 id="forecastPaidJourneyHeading">Approved-price forecast journey</h2>
+            <p class="description">Carry one authorized or isolated fictional source position through a deterministic saved receipt, currentness check, plain-language explanation, and review-only handoff history.</p></div>
+          <div class="forecast-settings-actions">
+            <button class="btn btn-secondary btn-sm" id="refreshForecastPaidJourney" type="button">Refresh journey</button>
+            <button class="btn btn-secondary btn-sm" id="resetForecastPaidJourney" type="button" hidden>Reset fictional journey</button>
+          </div>
         </div>
         <p id="forecastPaidJourneyStatus" role="status" aria-live="polite" aria-atomic="true">Loading paid forecast journey.</p>
         <p id="forecastPaidJourneyDetail" class="description">Values and identities stay cleared until every paid-tenant gate is current.</p>
@@ -208,6 +211,12 @@
             <input id="forecastPaidReason" type="text" minlength="10" maxlength="1000" disabled></div>
           <button class="btn btn-primary btn-sm" id="issueForecastPaidJourney" type="submit" disabled>Issue reviewed receipt</button>
         </form>
+        <div id="forecastPaidJourneyResetConfirm" class="northstar-demo-reset-confirm" role="group"
+          aria-label="Confirm fictional forecast journey reset" hidden>
+          <p>Start over with a new fictional demo workspace? This clears this demo session's practice journey and its review history.</p>
+          <button class="btn btn-secondary btn-sm" id="cancelForecastPaidJourneyReset" type="button">Cancel</button>
+          <button class="btn btn-secondary btn-sm" id="confirmForecastPaidJourneyReset" type="button">Reset and start over</button>
+        </div>
         <article id="forecastPaidJourneyCurrent" class="forecast-run-current" hidden>
           <div class="forecast-run-current-topline"><div><p class="forecast-run-eyebrow">Current source-backed receipt</p><h3>Approved price flow</h3></div><strong id="forecastPaidJourneyValue" class="forecast-run-value"></strong></div>
           <p id="forecastPaidJourneyExplanation"></p>
@@ -223,7 +232,7 @@
             <button class="btn btn-primary btn-sm" id="reviewForecastPaidJourney" type="button" disabled>Request review</button>
           </div>
           <p id="forecastPaidJourneyReview" class="description" aria-live="polite"></p>
-          <ol id="forecastPaidJourneyHistory" class="forecast-handoff-history-list" aria-label="Paid approved-price review history"></ol>
+          <ol id="forecastPaidJourneyHistory" class="forecast-handoff-history-list" aria-label="Approved-price review history"></ol>
         </article>
       </section>
 
@@ -772,7 +781,7 @@
   <script src="/js/forecast-settings.js?v=m26-part11a-20261008"></script>
   <script src="/js/forecast-runs.js?v=m26-part11b-20261009"></script>
   <script src="/js/forecast-handoffs.js?v=m26-part11d-20261009"></script>
-  <script src="/js/forecast-paid-journey.js?v=m26-part12a-20261009"></script>
+  <script src="/js/forecast-paid-journey.js?v=m26-part12b-20261009"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn', durable: '[data-settings-mutable]' });</script>
   <script>NavComponent.init("settings");</script>

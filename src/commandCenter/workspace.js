@@ -5,6 +5,7 @@ const { v5: uuidv5 } = require('uuid');
 const contract = require('../../public/js/command-center-contract');
 const { sha256, stableValue } = require('../services/businessProfileAdapter');
 const { addRecordedCostExample } = require('./demoEstimateExample');
+const { createApprovedPriceDecision } = require('./demoApprovedPriceDecision');
 const { projectIntegrationCatalogue } = require('../integrations/catalogue');
 const { defaultPreferenceDocument, PROVIDERS: MAP_PROVIDERS } = require('../mapPreferences/contract');
 const pipeline = require('../routes/simulation/pipeline');
@@ -518,6 +519,18 @@ function buildDemoGraph(input) {
       snapshotCreatedAt: createdAt,
     },
   };
+  if (input.approvedCommercialDecision === true) {
+    graph.estimate.approvedPriceDecision = createApprovedPriceDecision({
+      tenantId: input.tenantId,
+      graphId: ids.graph,
+      estimateId: ids.estimate,
+      sourceSnapshotId: ids.polarisSnapshot,
+      sourceSnapshotDigest: snapshotDigest,
+      amount: graph.estimate.customerPrice,
+      currency: graph.estimate.currency,
+      approvedAt: createdAt,
+    });
+  }
   // New records share the fictional canonical cost path; saved graphs are read unchanged.
   return addRecordedCostExample(input.tenantId, graph);
 }
@@ -570,6 +583,7 @@ function initialGraphs(seededWorkspace, createdAt) {
         'The customer location is inside the configured fictional service radius.',
       ],
       businessProfile: seededWorkspace.businessProfile,
+      approvedCommercialDecision: true,
     });
     return withSeededDemoConversation(graph);
   });
@@ -778,6 +792,7 @@ function buildSimulatedGraph(input) {
     outcome: profile.outcome.label,
     schedulingConstraint: profile.scheduling.label,
     businessProfile: demoBusinessProfile(selection, seededWorkspace),
+    approvedCommercialDecision: true,
     scenario: {
       contract: 'northstar_demo_scenario_selection_v1',
       signature: profile.signature,

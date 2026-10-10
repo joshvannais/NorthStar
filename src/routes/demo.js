@@ -40,6 +40,7 @@ const {
 } = require('./canonicalPolaris');
 const scenarios = require('./simulation/scenario-catalog');
 const demoLearningJourney = require('../learning/demoLearningJourney');
+const demoForecastJourney = require('../forecasting/forecastDemoJourney');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -312,6 +313,42 @@ router.get('/command-center', async function (req, res) {
   } catch (error) {
     return commandCenterFailure(req, res, error);
   }
+});
+
+router.get('/forecast/journey', async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    const now = (await commandCenterRepository.pool()
+      .query('SELECT clock_timestamp() now')).rows[0].now;
+    return res.json({ success: true,
+      data: demoForecastJourney.journeyEnvelope(record.state, record.revision, new Date(now)) });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.post('/forecast/journey/actions', express.json({ limit: '8kb' }), async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  if (!mutationBoundary(req, res, 'forecast-journey')) return undefined;
+  if (!exactBody(req.body, ['action', 'details', 'expectedRevision']) ||
+      !req.body.details || typeof req.body.details !== 'object' || Array.isArray(req.body.details)) {
+    return res.status(400).json({ success: false,
+      error: { code: 'demo_forecast_request_invalid', message: 'Check the fictional forecast step and try again.' } });
+  }
+  try {
+    const token = commandCenterToken(req, res);
+    const forecastAction = { ...req.body.details, action: req.body.action };
+    const result = await commandCenterRepository.mutate(token, {
+      operation: 'forecast_journey', expectedRevision: req.body.expectedRevision,
+      forecastAction, idempotencyKey: req.get('Idempotency-Key'),
+    }, { sourceHash: durableSourceHash(req) });
+    const data = req.body.action === 'rerun'
+      ? demoForecastJourney.rerunProjection(result.record.state, result.record.revision, forecastAction)
+      : demoForecastJourney.journeyEnvelope(result.record.state, result.record.revision,
+        new Date((await commandCenterRepository.pool()
+          .query('SELECT clock_timestamp() now')).rows[0].now));
+    return res.status(result.replayed ? 200 : 201).json({ success: true,
+      replayed: result.replayed, data });
+  } catch (error) { return commandCenterFailure(req, res, error); }
 });
 
 function learningJourneyResponse(record) {

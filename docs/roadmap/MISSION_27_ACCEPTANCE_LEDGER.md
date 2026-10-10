@@ -11,7 +11,7 @@ The 64 original rows and their order are unchanged. The additive Polaris quoted-
 | Gate | Closes with original slice(s) | Required evidence | Initial status |
 | --- | --- | --- | --- |
 | Q1 authority and inventory | 1A–1B | Exact Mission 24/22/23/25/27/32 ownership map; complete call/photo/estimate/calculator/proposal/signature/handoff inventory; duplicate and legacy paths quarantined | Released through 1B |
-| Q2 threat and launch contract | 1C–1D | Capability matrix and launch choices for sources, files, extraction/provider mode, retention, options, signatures, team actions, handoffs, learning, mobile layouts, and adapter version | 1C candidate pending audit/release; 1D planned |
+| Q2 threat and launch contract | 1C–1D | Capability matrix and launch choices for sources, files, extraction/provider mode, retention, options, signatures, team actions, handoffs, learning, mobile layouts, and adapter version | 1C released; 1D candidate pending audit/release |
 | Q3 tenant-private identity | 2A–2B | Exact tenant/customer/prospect/location/source/actor identities, minimized snapshots, corrections, no silent customer creation, paid/demo separation | Planned |
 | Q4 shared editable model | 3A | One canonical estimate/revision/option/line/input/provenance contract and versioned Mission 24/Mission 32 adapter; source/build/config/currentness retained; no parallel estimate | Planned |
 | Q5 capacity and risk | 3B | Current source-owned advisory reads, missing/conflicting evidence, zero Mission 22 booking/assignment/reservation/dispatch mutation and zero Mission 23 work mutation | Planned |
@@ -29,8 +29,8 @@ An additive gate cannot close from a mockup, static page, seeded value, direct d
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1A | Mission authority, exclusions, dependency map, terminology, exact-money rules, sequence | Complete (documentation only) | N/A — no mounted behavior | Accepted; no P0–P3 | `7a16a4fbd833d4695d0dc79289d5e074551d3eea` | PR #478; main `2c2dfd5e25d4c9ee991ee60b2871ae66f948e4ae`; deployment `f0ac5be6-69b2-4fb7-a9eb-662f91b4785e`; migration 259; health/root/demo 200 | N/A | N/A | Released |
 | 1B | Exact inventory, quarantine, and misleading-finance-surface suppression | Complete | Focused containment plus Chrome/WebKit desktop/mobile light/dark paid-copy and keyboard checks | Accepted; no P0–P3 | `afa98228b97cc1ad2b9f9aea76c7859f9a432765` | PR #479; main `f3fb7f60dae916c19189b815ed6563965a2a8f2d`; deployment `8f16cf9c-003f-40f8-963a-ac92c1653b3c`; migration 259; PostgreSQL startup and health/root/demo 200 | N/A | Suspended/unavailable | Released |
-| 1C | Threat model and action-capability/recent-auth/dual-control matrix | Candidate (documentation and static ratification only; zero grants/actions) | Focused static authority/threat/capability/sequence checks; independent evidence pending | No | — | No | N/A | N/A | Candidate |
-| 1D | Frozen launch matrix including method-specific offline/check-clearance rules, unsupported states, ledger, and release rules | No | No | No | — | No | N/A | N/A | Planned |
+| 1C | Threat model and action-capability/recent-auth/dual-control matrix | Complete (documentation and static ratification only; zero grants/actions) | Focused static authority/threat/capability/sequence checks | Accepted; no P0–P3 | `54a31eb4f31a0118d8153aefc7a04bd356dd7f70` | PR #480; main `204b40793b72c412a47632af54c323437fe8a40e`; deployment `444c7436-80ab-4a90-9aee-e0f7bcee58ee`; migration 259; PostgreSQL startup and health/root/demo 200 | N/A | N/A | Released |
+| 1D | Frozen launch matrix including method-specific offline/check-clearance rules, unsupported states, ledger, and release rules | Candidate (versioned policy, architecture record and static ratification only; zero grants/actions) | Focused policy/schema/limits/authority/sequence ratification; independent evidence pending | No | — | No | N/A | Suspended/unavailable | Candidate |
 | 2A | Tenant-private billing identity and immutable document snapshots | No | No | No | — | No | No | No | Planned |
 | 2B | Reviewed billing contacts, addresses, references, and correction lineage | No | No | No | — | No | No | No | Planned |
 | 2C | Currency, exact money, numbering, reservation, issue, void, and recovery | No | No | No | — | No | No | No | Planned |
@@ -106,10 +106,10 @@ An additive gate cannot close from a mockup, static page, seeded value, direct d
 
 | Gate | Required evidence | Current state |
 | --- | --- | --- |
-| Authority | Exact Mission 20/22/23/24/25/26/28 boundaries; no legacy, demo, or subscription-billing substitution | Slices 1A–1B released; Slice 1C threat/capability candidate pending independent audit/release |
-| Launch matrix | Merchant/funds model, provider/mode/methods, geography/currency/tax, accounting, retention, refund/dispute, offline/deposit scope and exclusions frozen in 1D | Planned |
-| Tenant and role isolation | Tenant-composite relationships, action capabilities, current session/recent-auth checks, minimized runtime grants, direct-table denial | Slice 1C contract candidate; runtime grants/enforcement remain unavailable for later slices |
-| Human control | Explicit reviewed issue, send, void, refund, write-off, reconcile/export, and collection actions; no completion-triggered invoice | Slice 1C control matrix candidate; Slice 1D launch policy and later runtime remain pending |
+| Authority | Exact Mission 20/22/23/24/25/26/28 boundaries; no legacy, demo, or subscription-billing substitution | Slices 1A–1C released; Slice 1D preserves the same boundaries in its candidate policy |
+| Launch matrix | Merchant/funds model, provider/mode/methods, geography/currency/tax, accounting, retention, refund/dispute, offline/deposit scope and exclusions frozen in 1D | Candidate policy and static ratification pending independent audit/release; runtime remains unavailable |
+| Tenant and role isolation | Tenant-composite relationships, action capabilities, current session/recent-auth checks, minimized runtime grants, direct-table denial | Slice 1C contract released; Slice 1D freezes grant templates/assurance windows only; runtime grants/enforcement remain unavailable for later slices |
+| Human control | Explicit reviewed issue, send, void, refund, write-off, reconcile/export, and collection actions; no completion-triggered invoice | Slice 1C control matrix released; Slice 1D candidate freezes numeric single/dual-control bounds; runtime remains pending |
 | Money integrity | Exact currency arithmetic, bounded amounts, complete reconciliation, no missing-as-zero, silent FX, or price-authority bypass | Planned |
 | Immutability and replay | Append-only issued documents/events, exact idempotency, uncertain-result recovery, no duplicate invoice/charge/refund | Planned |
 | Provider authenticity | Account/mode/tenant/capability checks, signatures, uniqueness, out-of-order handling, minimized secrets | Planned |

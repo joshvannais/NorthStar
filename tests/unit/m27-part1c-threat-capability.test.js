@@ -17,24 +17,25 @@ function files(directory, suffix = '.js') {
 }
 
 describe('Mission 27 Slice 1C threat and action-capability contract', () => {
-  test('reconciles released Slice 1B and preserves the frozen 64-slice sequence', () => {
+  test('reconciles released Slice 1C and preserves the frozen 64-slice sequence', () => {
     const roadmap = read('docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md');
     const ledger = read('docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md');
     const oneA = read('docs/architecture/MISSION_27_PART1A_AUTHORITY_CONTRACT.md');
     const oneB = read('docs/architecture/MISSION_27_PART1B_SOURCE_INVENTORY.md');
 
-    for (const text of [roadmap, ledger, oneB]) {
-      expect(text).toContain('afa98228b97cc1ad2b9f9aea76c7859f9a432765');
-      expect(text).toContain('f3fb7f60dae916c19189b815ed6563965a2a8f2d');
-      expect(text).toContain('8f16cf9c-003f-40f8-963a-ac92c1653b3c');
+    for (const text of [roadmap, ledger, contract()]) {
+      expect(text).toContain('54a31eb4f31a0118d8153aefc7a04bd356dd7f70');
+      expect(text).toContain('204b40793b72c412a47632af54c323437fe8a40e');
+      expect(text).toContain('444c7436-80ab-4a90-9aee-e0f7bcee58ee');
     }
+    expect(oneB).toContain('afa98228b97cc1ad2b9f9aea76c7859f9a432765');
     expect(ledger).toContain('| Q1 authority and inventory | 1A–1B |');
     expect(ledger).toContain('| Released through 1B |');
     expect(ledger).toContain('| Q2 threat and launch contract | 1C–1D |');
-    expect(ledger).toContain('1C candidate pending audit/release; 1D planned');
-    expect(ledger).toContain('| 1C | Threat model and action-capability/recent-auth/dual-control matrix | Candidate');
+    expect(ledger).toContain('1C released; 1D candidate pending audit/release');
+    expect(ledger).toContain('| 1C | Threat model and action-capability/recent-auth/dual-control matrix | Complete');
     expect(oneA).toContain('The original sequence remains fourteen parts and sixty-four slices');
-    expect(oneA).toContain('Slice 1C now owns the threat and capability matrix');
+    expect(oneA).toContain('Slices 1A–1C are released. Slice 1D owns the launch matrix');
   });
 
   test('covers every original and additive Slice 1C threat family', () => {
@@ -147,7 +148,7 @@ describe('Mission 27 Slice 1C threat and action-capability contract', () => {
     expect(text).toContain('Mission 32 receives no commercial, work, billing or action capability');
   });
 
-  test('grants no runtime authority and reserves launch choices for Slice 1D', () => {
+  test('grants no runtime authority and links launch choices to Slice 1D', () => {
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql'))
       .sort();
@@ -166,7 +167,7 @@ describe('Mission 27 Slice 1C threat and action-capability contract', () => {
 
     const text = contract();
     expect(text).toContain('grants no runtime capability');
-    expect(text).toContain('Slice 1D still owns launch choices');
+    expect(text).toContain('Slice 1D owns launch choices');
     expect(text).toContain('numeric amount thresholds');
     expect(text).toContain('adds no migration 260');
     expect(text).toContain('no runtime module, permission, capability grant, route, API, schema, database privilege');

@@ -193,6 +193,13 @@ describe('Mission 20 Phase 7 Lane 5 bounded and redacted observability', () => {
         originalUrl: '/API/DEMO/COMMAND-CENTER/RESET/',
         status: 403,
       },
+      {
+        path: '/api/demo/forecast/journey/actions',
+        originalUrl: '/api/demo/forecast/journey/actions?source=private',
+        route: { path: '/forecast/journey/actions' },
+        baseUrl: '/api/demo',
+        status: 201,
+      },
     ];
 
     for (const item of cases) {

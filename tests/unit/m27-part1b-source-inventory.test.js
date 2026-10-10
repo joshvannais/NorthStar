@@ -87,6 +87,46 @@ describe('Mission 27 Slice 1B source inventory quarantine', () => {
       .toBe('requires_provider_approval');
   });
 
+  test('separates Retell actions and source-disabled Jobber from accepted evidence', () => {
+    const api = read('src/routes/api.js');
+    const jobberRouter = read('src/routes/jobberIntegration.js');
+    const jobber = read('src/integrations/jobber.js');
+    const inventory = read('docs/architecture/MISSION_27_PART1B_SOURCE_INVENTORY.md');
+
+    for (const route of [
+      "router.post('/retell/create-call'",
+      "router.post('/retell/verify'",
+      "router.post('/retell/send-sms'",
+    ]) expect(api).toContain(route);
+    expect(api).toContain("requirePermission('calls', 'create')");
+    expect(api).toContain("requirePermission('integrations', 'read')");
+    expect(inventory).toContain('| Retell external-action routes |');
+    expect(inventory).toContain('They are actions, not accepted call evidence');
+    expect(inventory).toContain('Slice 1B invokes none and makes zero Retell/provider calls.');
+
+    expect(api).toContain("router.use('/integrations/jobber', createJobberIntegrationRouter());");
+    expect(api).not.toMatch(/createJobberIntegrationRouter\(\s*\{[\s\S]*connectionCapability/);
+    expect(jobberRouter).toContain('const connectionCapability = suppliedCapability &&');
+    expect(jobberRouter).toContain("return failure(_req, res, 503, UNAVAILABLE_RESPONSE.code, UNAVAILABLE_RESPONSE.error)");
+    expect(jobberRouter).toMatch(/router\.get\(\s*'\/auth',[\s\S]*requireJobberCapability/);
+    expect(jobberRouter).toMatch(/router\.get\(\s*'\/callback',[\s\S]*requireJobberCapability/);
+    expect(jobberRouter).toMatch(/router\.post\(\s*'\/disconnect',[\s\S]*requireJobberCapability/);
+    for (const legacyPath of [
+      'async function getTokens', 'async function saveTokens', 'function refreshToken',
+      'async function getValidAccessToken', 'async function createClient',
+      'async function createJob', 'async function pushLead', 'async function disconnect',
+    ]) expect(jobber).toContain(legacyPath);
+    const runtimeOutsideJobber = files('src')
+      .filter(relative => relative !== path.join('src', 'integrations', 'jobber.js'))
+      .filter(relative => relative !== path.join('src', 'routes', 'jobberIntegration.js'))
+      .map(read)
+      .join('\n');
+    expect(runtimeOutsideJobber).not.toMatch(/\.pushLead\s*\(/);
+    expect(inventory).toContain('| Mounted Jobber connection boundary |');
+    expect(inventory).toContain('| Unmounted legacy Jobber token refresh and lead exporter |');
+    expect(inventory).toContain('Slice 1B makes zero Jobber/provider calls.');
+  });
+
   test('mounted paid copy distinguishes estimates from customer-financial truth', () => {
     const profile = read('public/dashboard/business-profile.html');
     const polaris = read('public/dashboard/polaris.html');
@@ -114,7 +154,10 @@ describe('Mission 27 Slice 1B source inventory quarantine', () => {
       'Legacy analytics and estimated-revenue engines',
       'External financial imports and outcomes',
       'Canonical call/provider identity',
+      'Retell external-action routes',
       'Transcript and transcript-derived facts',
+      'Mounted Jobber connection boundary',
+      'Unmounted legacy Jobber token refresh and lead exporter',
       'Field images and file evidence',
       'Canonical estimate identity and human decisions',
       'Material, labor, equipment, travel, cost composition, pricing policy and pricing plan',

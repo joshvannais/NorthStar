@@ -83,6 +83,10 @@ async function main() {
           width, theme, profileCopy: true, promptKeyboardActivation: true,
           submitted: state.messageCalls === 1,
         });
+        assert.deepEqual(
+          state.api.filter(entry => /\/retell\/|\/integrations\/jobber(?:\/|$)/.test(entry.path)),
+          []
+        );
         ledger.externalRequests.push(...state.external);
         await context.close();
       }

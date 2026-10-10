@@ -1,6 +1,6 @@
 # Mission 27 Part 1A — authority and vocabulary contract
 
-Status: Slice 1A released. The authority contract was accepted at head `7a16a4fbd833d4695d0dc79289d5e074551d3eea`, merged through PR #478 as exact main `2c2dfd5e25d4c9ee991ee60b2871ae66f948e4ae`, and released by automatic Railway deployment `f0ac5be6-69b2-4fb7-a9eb-662f91b4785e` with migrations through 259 and startup, `/api/health`, `/`, and `/demo/` HTTP 200. It added no route, schema, migration, provider call, customer-financial record, permission, UI, or product behavior. Slice 1B is the current inventory and quarantine gate.
+Status: Slice 1A released. The authority contract was accepted at head `7a16a4fbd833d4695d0dc79289d5e074551d3eea`, merged through PR #478 as exact main `2c2dfd5e25d4c9ee991ee60b2871ae66f948e4ae`, and released by automatic Railway deployment `f0ac5be6-69b2-4fb7-a9eb-662f91b4785e` with migrations through 259 and startup, `/api/health`, `/`, and `/demo/` HTTP 200. It added no route, schema, migration, provider call, customer-financial record, permission, UI, or product behavior. Slice 1B is also released; Slice 1C is the current threat and action-capability gate.
 
 ## Controlling authority
 
@@ -77,13 +77,13 @@ The current code names several invoice/payment/revenue-like surfaces that remain
 - `src/routes/publicApi.js` labels estimated call-record pipeline amounts as revenue in a legacy public analytics route. It cannot satisfy Mission 27 authority.
 - Mission 26 `revenue.approved_price_flow.v1` remains advisory forecast evidence over Mission 24-approved price decisions. It is neither earned revenue nor an invoice/payment source.
 
-This list ratified known exclusions needed for Slice 1A. The [Slice 1B source inventory and quarantine contract](MISSION_27_PART1B_SOURCE_INVENTORY.md) is the current candidate that exhaustively classifies the repository surfaces and records the required paid-copy suppression. It remains unaccepted until its independent whole-head audit and release lane finish.
+This list ratified known exclusions needed for Slice 1A. The released [Slice 1B source inventory and quarantine contract](MISSION_27_PART1B_SOURCE_INVENTORY.md) exhaustively classifies the repository surfaces and records the required paid-copy suppression. The [Slice 1C threat and action-capability contract](MISSION_27_PART1C_THREAT_AND_CAPABILITY_MATRIX.md) is the current candidate and grants no runtime authority.
 
 ## Frozen implementation sequence
 
 The original sequence remains fourteen parts and sixty-four slices: Part 1 (4), Part 2 (4), Part 3 (4), Part 4 (5), Part 5 (5), Part 6 (4), Part 7 (4), Part 8 (5), Part 9 (6), Part 10 (4), Part 11 (4), Part 12 (4), Part 13 (4), and Part 14 (7). The additive quoted-job gates remain overlays on the named original slices and create no new slice, parallel release lane, or permission to reorder financial work.
 
-Slice 1B follows the released Slice 1A. Slice 1C then owns the threat and capability matrix, and Slice 1D owns the launch matrix and executable unsupported-state contract. No Slice 1A statement enables a provider, financial action, customer communication, scheduling action, estimate approval, learning application, or Mission 32 calculation.
+Slices 1A–1B are released. Slice 1C now owns the threat and capability matrix, and Slice 1D owns the launch matrix and executable unsupported-state contract. No Slice 1A statement enables a provider, financial action, customer communication, scheduling action, estimate approval, learning application, or Mission 32 calculation.
 
 Every slice continues through exactly one writer, the same independent whole-head auditor, one normal PR/merge after no P0–P3 finding, one automatic Railway deployment, and exact migration/startup/`/api/health`/root/demo verification. Documentation-only work still requires that release lane; it does not require invented database or browser evidence.
 

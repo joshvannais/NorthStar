@@ -36,6 +36,7 @@ test('browser proof reaches skip navigation through Tab in normal and forced col
   expect(source).toMatch(/skip link must be the first genuine keyboard Tab target/);
   expect(source).toMatch(/tabToSkip\('active'\)/);
   expect(source).toMatch(/matchMedia\('\(forced-colors: active\)'\)\.matches/);
+  expect(source).toMatch(/tabToSkip\('active'\)[\s\S]*page\.keyboard\.press\('Enter'\)[\s\S]*page\.waitForFunction\(selector => document\.activeElement === document\.querySelector\(selector\), mainSelector\)[\s\S]*page\.emulateMedia\(\{ forcedColors: 'none'/);
 });
 
 test('shared navigation preserves the skip link as the first generated-control Tab target', () => {

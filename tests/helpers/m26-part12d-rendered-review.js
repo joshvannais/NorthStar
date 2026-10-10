@@ -109,6 +109,8 @@ async function exerciseSkipLink(page, { skipSelector = '.skip-link', mainSelecto
   await tabToSkip('active');
   assert.equal(await page.evaluate(() => matchMedia('(forced-colors: active)').matches), true);
   assert.notEqual(await skip.evaluate(element => getComputedStyle(element).top), '-100%');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(selector => document.activeElement === document.querySelector(selector), mainSelector);
   await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'reduce' });
 }
 

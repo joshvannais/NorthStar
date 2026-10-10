@@ -1,6 +1,6 @@
 # Mission 27 Part 1A — authority and vocabulary contract
 
-Status: documentation-only Slice 1A implementation candidate for independent exact-head audit. The controlling Mission 27 plan was released through plan head `9d83ff2f9ca276e0b38c2f80c322ea715c02aa6b`, PR #477, exact main `637b7db4a9e1b2b82520824a2f94b3f0b139b191`, and automatic Railway deployment `93b56103-9e7c-45b5-8df9-24055f6c0c2c`. This candidate adds no route, schema, migration, provider call, customer-financial record, permission, UI, or product behavior. Slice 1B remains the next required inventory and quarantine gate.
+Status: Slice 1A released. The authority contract was accepted at head `7a16a4fbd833d4695d0dc79289d5e074551d3eea`, merged through PR #478 as exact main `2c2dfd5e25d4c9ee991ee60b2871ae66f948e4ae`, and released by automatic Railway deployment `f0ac5be6-69b2-4fb7-a9eb-662f91b4785e` with migrations through 259 and startup, `/api/health`, `/`, and `/demo/` HTTP 200. It added no route, schema, migration, provider call, customer-financial record, permission, UI, or product behavior. Slice 1B is the current inventory and quarantine gate.
 
 ## Controlling authority
 
@@ -67,7 +67,7 @@ Extraction converts authorized source evidence into reviewable candidate facts. 
 
 ## Current source position and quarantine
 
-At the deployed Slice 1A base, the repository has no Mission 27 runtime module, customer-financial migration, or accepted customer-financial authority. Migrations end at `259_demo_forecast_journey.sql`; this documentation-only candidate does not add migration 260.
+At the deployed Slice 1A base, the repository has no Mission 27 runtime module, customer-financial migration, or accepted customer-financial authority. Migrations end at `259_demo_forecast_journey.sql`; Slice 1A added no migration 260.
 
 The current code names several invoice/payment/revenue-like surfaces that remain quarantined exactly as the frozen roadmap requires:
 
@@ -77,18 +77,18 @@ The current code names several invoice/payment/revenue-like surfaces that remain
 - `src/routes/publicApi.js` labels estimated call-record pipeline amounts as revenue in a legacy public analytics route. It cannot satisfy Mission 27 authority.
 - Mission 26 `revenue.approved_price_flow.v1` remains advisory forecast evidence over Mission 24-approved price decisions. It is neither earned revenue nor an invoice/payment source.
 
-This list ratifies known exclusions needed for Slice 1A. Slice 1B still must inventory every current call/photo/estimate/calculator/proposal/signature/handoff and invoice/payment-like route, table, event, KPI, simulation, provider integration, link, permission, legacy path, and demo surface. Nothing here pre-accepts that inventory or suppresses a product surface.
+This list ratified known exclusions needed for Slice 1A. The [Slice 1B source inventory and quarantine contract](MISSION_27_PART1B_SOURCE_INVENTORY.md) is the current candidate that exhaustively classifies the repository surfaces and records the required paid-copy suppression. It remains unaccepted until its independent whole-head audit and release lane finish.
 
 ## Frozen implementation sequence
 
 The original sequence remains fourteen parts and sixty-four slices: Part 1 (4), Part 2 (4), Part 3 (4), Part 4 (5), Part 5 (5), Part 6 (4), Part 7 (4), Part 8 (5), Part 9 (6), Part 10 (4), Part 11 (4), Part 12 (4), Part 13 (4), and Part 14 (7). The additive quoted-job gates remain overlays on the named original slices and create no new slice, parallel release lane, or permission to reorder financial work.
 
-Slice 1B follows Slice 1A. Slice 1C then owns the threat and capability matrix, and Slice 1D owns the launch matrix and executable unsupported-state contract. No Slice 1A statement enables a provider, financial action, customer communication, scheduling action, estimate approval, learning application, or Mission 32 calculation.
+Slice 1B follows the released Slice 1A. Slice 1C then owns the threat and capability matrix, and Slice 1D owns the launch matrix and executable unsupported-state contract. No Slice 1A statement enables a provider, financial action, customer communication, scheduling action, estimate approval, learning application, or Mission 32 calculation.
 
 Every slice continues through exactly one writer, the same independent whole-head auditor, one normal PR/merge after no P0–P3 finding, one automatic Railway deployment, and exact migration/startup/`/api/health`/root/demo verification. Documentation-only work still requires that release lane; it does not require invented database or browser evidence.
 
 ## Slice 1A acceptance boundary
 
-This candidate is complete for writer review when the authority map, exclusions, vocabulary, money/currency rules, and exact sequence above agree with the controlling roadmap; all links resolve; the roadmap and ledger identify the candidate honestly; the diff contains no runtime, schema, migration, provider, or UI change; and the repository still ends at migration 259. Independent exact-head audit, normal merge, automatic deployment, and health verification remain required before Slice 1A is sealed.
+Slice 1A is sealed by its accepted exact head, normal merge, automatic deployment, and health verification recorded above. Its authority map, exclusions, vocabulary, money/currency rules, and exact sequence remain controlling for later slices.
 
 Unavailable evidence remains explicit: live provider or private-production behavior; natural customer and financial history; empirical accuracy or calibration; a real accounting or receiving adapter; hosted CI; production load, latency, and SLA; physical Safari and physical devices; manual assistive-technology review; disaster-restore execution; legal, tax, accounting, provider, and security opinions; controlled live money; and the founder's final visual approval, which remains suspended.

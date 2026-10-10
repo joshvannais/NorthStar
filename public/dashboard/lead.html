@@ -392,6 +392,17 @@
       function renderCustomerIntelligence(container, ci) {
         if (!container || !ci) return;
 
+        function legacyAmount(value) {
+          return typeof value === 'number' && Number.isFinite(value)
+            ? '$' + value.toLocaleString()
+            : 'Unavailable';
+        }
+        function legacyMeasure(value, suffix) {
+          return typeof value === 'number' && Number.isFinite(value)
+            ? value.toLocaleString() + suffix
+            : 'Unavailable';
+        }
+
         // Score colors
         var oppClass = ci.opportunityLevel === 'Exceptional' ? 'ci-score-exceptional' :
           ci.opportunityLevel === 'High' ? 'ci-score-high' :
@@ -494,14 +505,14 @@
 
           // Snapshot Grid
           '<div class="lead-detail-grid">' +
-            '<div class="lead-detail-card"><h3>Original revenue estimate</h3><div class="value" style="color:var(--brand-600);">$' + (ci.snapshot.estimatedRevenue || 0).toLocaleString() + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Profit</h3><div class="value" style="color:var(--success);">$' + (ci.snapshot.estimatedProfit || 0).toLocaleString() + ' (' + (ci.snapshot.profitMargin || '0%') + ')</div></div>' +
-            '<div class="lead-detail-card"><h3>Labor Cost</h3><div class="value">$' + (ci.snapshot.estimatedLabor || 0).toLocaleString() + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Crew Needed</h3><div class="value">' + (ci.snapshot.recommendedCrew || '\u2014') + ' technicians</div></div>' +
-            '<div class="lead-detail-card"><h3>Production Hours</h3><div class="value">' + (ci.snapshot.estimatedProductionHours || '\u2014') + ' hrs</div></div>' +
-            '<div class="lead-detail-card"><h3>Travel</h3><div class="value">' + (ci.snapshot.travelMinutes || '\u2014') + ' min ($' + (ci.snapshot.travelCost || 0).toFixed(2) + ')</div></div>' +
-            '<div class="lead-detail-card"><h3>Confidence</h3><div class="value">' + (ci.snapshot.confidenceScore || '\u2014') + '%</div><div class="value-secondary">' + (ci.snapshot.confidenceLabel || '') + '</div></div>' +
-            '<div class="lead-detail-card"><h3>Profit per Hour</h3><div class="value" style="color:var(--brand-600);">$' + (ci.snapshot.profitPerLaborHour || 0).toFixed(2) + '/hr</div></div>' +
+            '<div class="lead-detail-card"><h3>Original estimate value</h3><div class="value" style="color:var(--brand-600);">' + legacyAmount(ci.snapshot.estimatedRevenue) + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Original estimated profit</h3><div class="value" style="color:var(--success);">' + legacyAmount(ci.snapshot.estimatedProfit) + ' (' + (ci.snapshot.profitMargin || 'Unavailable') + ')</div></div>' +
+            '<div class="lead-detail-card"><h3>Original estimated labor cost</h3><div class="value">' + legacyAmount(ci.snapshot.estimatedLabor) + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Crew needed</h3><div class="value">' + legacyMeasure(ci.snapshot.recommendedCrew, ' technicians') + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Production hours</h3><div class="value">' + legacyMeasure(ci.snapshot.estimatedProductionHours, ' hrs') + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Travel</h3><div class="value">' + legacyMeasure(ci.snapshot.travelMinutes, ' min') + ' (' + legacyAmount(ci.snapshot.travelCost) + ')</div></div>' +
+            '<div class="lead-detail-card"><h3>Confidence</h3><div class="value">' + legacyMeasure(ci.snapshot.confidenceScore, '%') + '</div><div class="value-secondary">' + (ci.snapshot.confidenceLabel || '') + '</div></div>' +
+            '<div class="lead-detail-card"><h3>Estimated profit per hour</h3><div class="value" style="color:var(--brand-600);">' + (typeof ci.snapshot.profitPerLaborHour === 'number' && Number.isFinite(ci.snapshot.profitPerLaborHour) ? '$' + ci.snapshot.profitPerLaborHour.toFixed(2) + '/hr' : 'Unavailable') + '</div></div>' +
           '</div>' +
 
           // Next Best Action

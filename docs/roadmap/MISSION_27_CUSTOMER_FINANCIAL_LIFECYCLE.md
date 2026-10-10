@@ -1,6 +1,6 @@
 # Mission 27 — Customer financial lifecycle
 
-Status: frozen plan candidate only. No Mission 27 product implementation starts until this plan passes its independent whole-head audit, normal merge, sole automatic deployment, and exact health verification.
+Status: frozen plan released. The plan was accepted at head `9d83ff2f9ca276e0b38c2f80c322ea715c02aa6b`, merged through PR #477 as exact main `637b7db4a9e1b2b82520824a2f94b3f0b139b191`, and released by automatic Railway deployment `93b56103-9e7c-45b5-8df9-24055f6c0c2c` with migrations through 259 and startup, `/api/health`, `/`, and `/demo/` HTTP 200. Original Slice 1A is now a documentation-only implementation candidate; independent exact-head audit and its normal release lane remain pending.
 
 Plan provenance: the complete original 14-part, 64-slice financial lifecycle and ledger were recovered from preserved exact plan head `cac1cd3ffa3d9b771285b7a5ba9b468958c26ff6`. All original slice identities and order remain; the only original-row change strengthens the final audit bar from P0–P2 to P0–P3. The quoted-job requirements are additive gates.
 
@@ -121,6 +121,8 @@ The primary phone path minimizes steps from authorized call or photo evidence to
 | B | Inventory and quarantine every current invoice/payment-like route, table, event, KPI, simulation, provider integration, customer link, and account-billing surface; classify each as authoritative, upstream evidence, demo-only, legacy, or unavailable and suppress misleading paid UI before later slices consume financial facts. |
 | C | Define the threat model and capability matrix for tenant crossing, amount tampering, replay, duplicate charge, confused-deputy actions, customer-link theft, webhook forgery, settlement mismatch, refund abuse, provider compromise, deletion, recovery, recent authentication/MFA, self-approval, dual control, amount limits, and immutable action reasons. |
 | D | Freeze the first-supported-launch matrix, acceptance ledger, unsupported-state contract, performance bounds, migration rules, audit independence, and release sequence before Part 2. The matrix names merchant/funds model, provider and mode, methods, countries, currencies, tax jurisdictions, accounting adapter, offline payments, method-specific cash/check evidence and balance rules, check-clearance authority, refunds/disputes, retention, deposit/progress scope, rollout flags, legal/provider/accounting reviews, and every typed exclusion. Unless separately authorized and reviewed, NorthStar does not take custody or control of contractor customer funds. |
+
+The [Slice 1A authority and vocabulary contract](../architecture/MISSION_27_PART1A_AUTHORITY_CONTRACT.md) ratifies the original ownership, exclusions, dependency map, shared editable-record terminology, exact-money/currency rules, and unchanged fourteen-part/sixty-four-slice sequence. It is an unreleased candidate until independent exact-head audit, normal merge, automatic deployment, and health verification succeed. It adds no runtime behavior and does not begin Slice 1B.
 
 Acceptance requires an exact source inventory with no unexplained invoice/payment surface, a reviewed authority matrix, and executable contract tests proving that legacy/demo/account-subscription data cannot satisfy Mission 27 authority.
 

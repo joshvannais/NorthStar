@@ -183,6 +183,15 @@
     }
   }
 
+  function installMobileNav(items, mode) {
+    var skipLink = document.querySelector('.skip-link');
+    if (skipLink) {
+      skipLink.insertAdjacentHTML('afterend', buildMobileNav(items, mode));
+      return;
+    }
+    document.body.insertAdjacentHTML('afterbegin', buildMobileNav(items, mode));
+  }
+
   function installSidebar(items, mode) {
     var sidebars = document.querySelectorAll('.sidebar');
     var existingSidebar = sidebars.length ? sidebars[0] : null;
@@ -284,7 +293,9 @@
         }
 
         removeGeneratedMobileNav();
-        document.body.insertAdjacentHTML('afterbegin', buildMobileNav(items, mode));
+        // Keep the skip link before every generated navigation control so a
+        // neutral document's first genuine keyboard Tab can bypass navigation.
+        installMobileNav(items, mode);
         if (!installSidebar(items, mode)) {
           root.setAttribute('data-northstar-navigation', 'denied');
           window.location.replace(mode === 'demo' ? '/demo' : '/dashboard');

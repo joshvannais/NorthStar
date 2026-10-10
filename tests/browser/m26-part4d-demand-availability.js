@@ -7,6 +7,8 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { navigationFixture } = require('../helpers/navigation-fixture');
+const { MISSION_26_FIVE_LAYOUTS, auditRenderedPage, exerciseSkipLink } =
+  require('../helpers/m26-part12d-rendered-review');
 const builder = require('../../src/commandCenter/workspace');
 
 const output = process.argv.find(value => value.startsWith('--output='))?.slice(9);
@@ -95,19 +97,19 @@ async function main() {
   const browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
   const results = [];
   try {
-    for (const mode of ['paid', 'demo']) for (const viewport of [
-      { name: 'desktop', width: 1280, height: 800 }, { name: 'mobile', width: 390, height: 844 },
-    ]) {
-      const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
+    for (const mode of ['paid', 'demo']) for (const viewport of MISSION_26_FIVE_LAYOUTS) {
+      const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height },
+        colorScheme: viewport.colorScheme, reducedMotion: 'reduce' });
       await context.addInitScript(() => localStorage.setItem('northstar-quick-start-seen', 'true'));
       const page = await context.newPage();
       const errors = [];
+      const outsideRequests = [];
       const forecastRequests = [];
       page.on('pageerror', error => errors.push(error.message));
       let failedWorkspace = false;
       await page.route('**/*', route => {
         const url = new URL(route.request().url());
-        if (url.origin !== origin) return route.abort();
+        if (url.origin !== origin) { outsideRequests.push(url.href); return route.abort(); }
         const json = (data, status = 200) => route.fulfill({ status, json: data });
         if (url.pathname === '/api/auth/me') return json(account);
         if (url.pathname === '/api/account/subscription') return json({ subscription: account.account.subscription });
@@ -153,7 +155,7 @@ async function main() {
       }
       const panel = page.locator('.command-center-demand-outlook');
       const resource = page.locator('.command-center-resource-outlook');
-      const range = page.locator('.command-center-range-outlook');
+      const range = page.locator('#commandCenterRevenueCashOutlook');
       const text = await panel.innerText();
       assert.match(text, mode === 'demo' ? /fictional isolated demo/i : /guarded research receipts/i);
       assert.match(text, /do(?:es)? not issue a production forecast/i);
@@ -199,9 +201,12 @@ async function main() {
         assert.equal(await page.locator('#commandCenterResearchPipelineId').inputValue(), '');
         assert.equal(forecastRequests.length, 0);
       }
-      await page.locator('#commandCenterResourceState').getByText('Forecast unavailable').waitFor();
-      assert.match(await resource.innerText(), mode === 'demo' ? /fictional jobs/i : /verified material, equipment and travel records/i);
-      assert.match(await resource.innerText(), /do not confirm stock, equipment availability or travel capacity/i);
+      await page.locator('#commandCenterResourceState').getByText(
+        mode === 'demo' ? 'Fictional example' : 'Unavailable', { exact: true }).waitFor()
+        .catch(async error => { throw new Error(`${error.message}\nResource: ${await resource.innerText()}\nPage errors: ${JSON.stringify(errors)}\nMode/layout: ${mode}/${viewport.name}`); });
+      assert.match(await resource.innerText(), mode === 'demo' ? /fictional position/i : /authenticated complete-as-of/i);
+      assert.match(await resource.innerText(), /Demand is not inventory/i);
+      assert.match(await resource.innerText(), /No shortage, reorder, service date, downtime, fuel, capacity, probability, recommendation or automatic action is inferred/i);
       await page.locator('#commandCenterRevenueCashState').getByText(
         mode === 'demo' ? 'Fictional example' : 'Current').waitFor();
       assert.match(await range.innerText(), /owner-confirmed booked work/i);
@@ -228,7 +233,7 @@ async function main() {
       await page.locator('#commandCenterRevenueCashState').getByText('Unavailable').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
       assert.match(await panel.innerText(), /Refresh the workspace before/i);
-      assert.match(await resource.innerText(), /Refresh to retry loading it/);
+      assert.match(await resource.innerText(), /Refresh to retry loading current resource positions/);
       assert.match(await range.innerText(), /Refresh Command Center to try again/);
       const failedScreenshot = path.join(output, `${mode}-${viewport.name}-workspace-failed.png`);
       await panel.screenshot({ path: failedScreenshot });
@@ -237,26 +242,33 @@ async function main() {
       else await page.locator('#commandCenterRefresh').evaluate(button => button.click());
       await page.locator('#commandCenterDemandState').getByText(
         mode === 'demo' ? 'Fictional research ready' : 'Research only').waitFor();
-      await page.locator('#commandCenterResourceState').getByText('Forecast unavailable').waitFor();
+      await page.locator('#commandCenterResourceState').getByText(
+        mode === 'demo' ? 'Fictional example' : 'Unavailable', { exact: true }).waitFor();
       await page.locator('#commandCenterRevenueCashState').getByText(
         mode === 'demo' ? 'Fictional example' : 'Current').waitFor();
       if (await page.locator('#northstarQuickStartDialog[open]').count()) await page.keyboard.press('Escape');
       assert.match(await panel.innerText(), mode === 'demo' ? /fictional isolated demo/i : /guarded research receipts/i);
-      assert.match(await resource.innerText(), mode === 'demo' ? /fictional jobs/i : /verified material, equipment and travel records/i);
+      assert.match(await resource.innerText(), mode === 'demo' ? /fictional position/i : /authenticated complete-as-of/i);
       assert.match(await range.innerText(), /owner-confirmed booked work/i);
       assert.equal(errors.length, 0, errors.join('\n'));
+      assert.deepEqual(outsideRequests, []);
+      const renderedAudit = await auditRenderedPage(page, {
+        mainSelector: '#commandCenterMain', layout: viewport,
+      });
       const recoveredScreenshot = path.join(output, `${mode}-${viewport.name}-recovered.png`);
-      await panel.screenshot({ path: recoveredScreenshot });
+      await page.screenshot({ path: recoveredScreenshot, fullPage: true });
+      await exerciseSkipLink(page, { mainSelector: '#commandCenterMain' });
       results.push({ mode, viewport: viewport.name, success: true, readyScreenshot,
         fullReadyScreenshot, resourceReadyScreenshot, rangeReadyScreenshot,
-        failedScreenshot, recoveredScreenshot,
+        failedScreenshot, recoveredScreenshot, renderedAudit, outsideRequests,
         forecastRequests: forecastRequests.slice() });
       await context.close();
     }
     const sourceFiles = ['public/demo-dashboard.html',
       'public/js/command-center-demand-research.js',
       'public/js/command-center-demand-position.js',
-      'public/js/command-center-page.js', 'public/css/demo-dashboard.css'];
+      'public/js/command-center-page.js', 'public/css/demo-dashboard.css',
+      'tests/helpers/m26-part12d-rendered-review.js'];
     const sha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
     const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim();

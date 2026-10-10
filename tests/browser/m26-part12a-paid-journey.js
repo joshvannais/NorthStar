@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { MISSION_26_FIVE_LAYOUTS, auditRenderedPage, exerciseSkipLink } =
+  require('../helpers/m26-part12d-rendered-review');
 
 process.env.NODE_ENV = 'test';
 process.env.AUTH_ACCESS_SECRET = 'm26-part12a-paid-journey-browser-20261009';
@@ -63,13 +65,9 @@ async function main() {
   const runtime = resolveBrowserRuntime(process.argv.includes('--webkit') ? 'webkit' : 'chrome');
   const browser = await runtime.browserType.launch({ headless: true,
     executablePath: runtime.executablePath });
+  const exercisedRequiredBranches = [];
   try {
-    for (const viewport of [
-      { name: 'desktop-light', width: 1280, height: 900, colorScheme: 'light' },
-      { name: 'mobile-light', width: 390, height: 844, colorScheme: 'light' },
-      { name: 'desktop-dark', width: 1280, height: 900, colorScheme: 'dark' },
-      { name: 'mobile-dark', width: 390, height: 844, colorScheme: 'dark' },
-    ]) {
+    for (const viewport of MISSION_26_FIVE_LAYOUTS) {
       const context = await browser.newContext({ viewport: { width: viewport.width,
         height: viewport.height }, colorScheme: viewport.colorScheme, reducedMotion: 'reduce' });
       const page = await context.newPage(); const errors = [];
@@ -88,7 +86,9 @@ async function main() {
             if(!item)throw new Error('No deferred paid mutation');item.resolve(success?
               {status:200,ok:true,json:function(){return Promise.resolve({success:true,data:{state:'requested',journey:window.paidJourneyEnvelope}})}}:
               {status:503,ok:false,json:function(){return Promise.resolve({})}});};
-          window.NorthStarAccountSession={fetch:function(url,options){var method=options&&options.method||'GET';
+          window.NorthStarAccountSession={load:function(){return Promise.resolve({mode:'paid',
+            navigation:[{id:'settings',href:'/dashboard/settings'}]});},
+          fetch:function(url,options){var method=options&&options.method||'GET';
             window.paidJourneyCalls.push({url:url,method:method,body:options&&options.body});
             if(url==='/api/v1/forecast/settings')return Promise.resolve({status:200,ok:true,
               json:function(){return Promise.resolve({success:true,data:window.paidJourneySettings})}});
@@ -121,14 +121,13 @@ async function main() {
         });
         if (url.pathname === '/js/demo-runtime.js') return route.fulfill({
           contentType: 'application/javascript', body: demoRuntime });
-        if (url.pathname === '/js/nav-component.js') return route.fulfill({
-          contentType: 'application/javascript', body: 'window.NavComponent={init:function(){}};' });
         if (url.pathname === '/js/workspace-form-state.js') return route.fulfill({
           contentType: 'application/javascript', body: 'window.NorthStarFormState={create:function(){return {}}};' });
         if (url.pathname === '/js/api.js') return route.fulfill({
           contentType: 'application/javascript', body: 'window.showToast=function(){};' });
         if (url.pathname.startsWith('/js/') &&
-            !['/js/forecast-paid-journey.js','/js/demo-runtime.js','/js/theme.js'].includes(url.pathname)) {
+            !['/js/forecast-paid-journey.js','/js/demo-runtime.js','/js/theme.js',
+              '/js/command-center-contract.js','/js/nav-component.js'].includes(url.pathname)) {
           return route.fulfill({ contentType: 'application/javascript', body: '' });
         }
         if (url.pathname.startsWith('/api/')) return route.fulfill({ status: 503, json: {} });
@@ -151,18 +150,23 @@ async function main() {
       assert.doesNotMatch(panel, /earned revenue|collected cash|[0-9]+% confidence/i);
       await page.locator('#rerunForecastPaidJourney').click();
       await page.locator('#forecastPaidJourneyReview')
-        .getByText(/Reproduced from retained authorized inputs/i).waitFor();
+        .getByText(/Reproduced from retained authorized inputs/i).waitFor().catch(async error => {
+          throw new Error(`${error.message}\nReview: ${await page.locator('#forecastPaidJourneyReview').innerText()}` +
+            `\nCalls: ${JSON.stringify(await page.evaluate(() => window.paidJourneyCalls))}` +
+            `\nPage errors: ${JSON.stringify(errors)}`);
+        });
       await page.locator('#reviewForecastPaidJourney').focus(); await page.keyboard.press('Enter');
       await page.locator('#forecastPaidJourneyHistory').getByText(/Revision 1 · requested/).waitFor();
       await page.locator('#forecastPaidJourneyHistory button').focus(); await page.keyboard.press('Enter');
       await page.locator('#forecastPaidJourneyHistory').getByText(/Revision 2 · dismissed/).waitFor();
 
-      if (viewport.name === 'desktop-light') {
+      if (viewport.name === 'phone-standard-light') {
         await page.evaluate(() => { window.paidJourneyExpireFast = true; });
         await page.locator('#reviewForecastPaidJourney').click();
         await page.locator('#forecastPaidJourneyHistory').getByText(/Revision 1 · expired/)
           .waitFor({ timeout: 3000 });
         assert.equal(await page.locator('#reviewForecastPaidJourney').isEnabled(), true);
+        exercisedRequiredBranches.push('expiry');
         await page.evaluate(() => { window.paidJourneyExpireFast = false; });
         await page.evaluate(() => { window.paidJourneyMode = 'unavailable'; });
         await page.locator('#refreshForecastPaidJourney').click();
@@ -171,6 +175,7 @@ async function main() {
         assert.equal(await page.locator('#forecastPaidJourneyOutput').textContent(), '');
         assert.equal(await page.locator('#forecastPaidJourneyHistory').innerText(), '');
         assert.equal(await page.locator('#forecastPaidJourneyCurrent').isHidden(), true);
+        exercisedRequiredBranches.push('unavailable-stale-clearing');
         await page.evaluate(() => { window.paidJourneyMode = 'failure'; });
         await page.locator('#refreshForecastPaidJourney').click();
         await page.locator('#forecastPaidJourneyStatus')
@@ -180,6 +185,7 @@ async function main() {
         await page.locator('#refreshForecastPaidJourney').click();
         await page.locator('#forecastPaidJourneyStatus')
           .getByText('Paid approved-price journey is current', { exact: true }).waitFor();
+        exercisedRequiredBranches.push('failure-recovery');
 
         await page.evaluate(() => { window.paidJourneyMode = 'delayed'; });
         await page.locator('#reviewForecastPaidJourney').click();
@@ -192,6 +198,7 @@ async function main() {
         await page.waitForTimeout(50);
         assert.match(await page.locator('#forecastPaidJourneyStatus').textContent(), /source_revoked/);
         assert.equal(await page.locator('#forecastPaidJourneyReceipt').textContent(), '');
+        exercisedRequiredBranches.push('delayed-success-generation-guard');
 
         await page.evaluate(() => {
           window.paidJourneyMode = 'current';
@@ -212,6 +219,7 @@ async function main() {
         assert.equal(await page.locator('#forecastPaidJourneyStatus').textContent(),
           'Paid approved-price journey is current');
         assert.equal(await page.locator('#forecastPaidJourneyReceipt').textContent(), D('b'));
+        exercisedRequiredBranches.push('delayed-failure-generation-guard');
       }
       assert.deepEqual(errors, []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
@@ -227,10 +235,18 @@ async function main() {
         gaps.forEach(gap => assert.ok(gap >= 0 && gap <= 20,
           `mobile paid journey form gap ${gap} must remain compact`));
       }
+      await auditRenderedPage(page, { mainSelector: '#mainContent', layout: viewport });
       await page.locator('#forecast-paid-journey').screenshot({ path: path.join(output,
         `${viewport.name}-paid.png`) });
+      await page.screenshot({ path: path.join(output, `${viewport.name}-paid-full.png`), fullPage: true });
+      await exerciseSkipLink(page, { mainSelector: '#mainContent' });
       await context.close();
     }
+
+    assert.deepEqual(exercisedRequiredBranches, [
+      'expiry', 'unavailable-stale-clearing', 'failure-recovery',
+      'delayed-success-generation-guard', 'delayed-failure-generation-guard',
+    ]);
 
     const demoContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const demoPage = await demoContext.newPage(); const requests = [], errors = [];
@@ -243,6 +259,8 @@ async function main() {
       /No earlier values or identities remain displayed/i);
     assert.equal(requests.some(value => value.startsWith('/api/v1/forecast/paid-journey')), false);
     assert.deepEqual(errors, []); await demoContext.close();
+    console.log(JSON.stringify({ layouts: MISSION_26_FIVE_LAYOUTS.length,
+      requiredLayout: 'phone-standard-light', exercisedRequiredBranches }));
   } finally {
     await browser.close(); await new Promise(resolve => server.close(resolve));
   }

@@ -67,6 +67,11 @@ const DEFAULT_HOUSEKEEPING_INTERVAL_MS = 60 * 1000;
 const DEFAULT_HOUSEKEEPING_MAX_BATCHES = 10;
 const TOKEN = /^[A-Za-z0-9_-]{43}\.[0-9]{10}$/;
 
+async function boundTransaction(client) {
+  await client.query("SET LOCAL lock_timeout='2000ms'");
+  await client.query("SET LOCAL statement_timeout='5000ms'");
+}
+
 class DemoCommandCenterError extends Error {
   constructor(status, code, message) {
     super(message);
@@ -468,6 +473,7 @@ class DemoCommandCenterRepository {
     try {
       await client.query('BEGIN');
       open = true;
+      await boundTransaction(client);
       const result = await client.query(
         `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
                 last_simulated_at, expires_at
@@ -577,6 +583,7 @@ class DemoCommandCenterRepository {
     try {
       await client.query('BEGIN');
       open = true;
+      await boundTransaction(client);
       const result = await this.deleteExpiredBatch(client, date(this.clock()), batchSize);
       await client.query('COMMIT');
       open = false;
@@ -647,7 +654,7 @@ class DemoCommandCenterRepository {
     const client = await this.pool().connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      await client.query("SET LOCAL statement_timeout='5s'");
+      await boundTransaction(client);
       const result=await client.query('SELECT id,tenant_id,token_hash,state,revision,simulation_count,mutation_count,last_simulated_at,expires_at,clock_timestamp() now FROM demo_command_center_sessions WHERE token_hash=$1',[token.tokenHash]);
       const row=result.rows[0];
       if(row)assertRowAuthority(row,token);
@@ -700,6 +707,7 @@ class DemoCommandCenterRepository {
     try {
       await client.query(input.operation==='proposal_adopt'?'BEGIN ISOLATION LEVEL SERIALIZABLE':'BEGIN');
       open = true;
+      await boundTransaction(client);
       let now = date(this.clock());
       let locked = await client.query(
         `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,

@@ -1,6 +1,6 @@
 # Mission 26 Part 12B — fictional demo-journey readiness
 
-Status: acceptance **OPEN** at released main `65c832d0b54ea2778df0627c59ef15e4fb91cfc5`. Part 12A is released and sealed through migration 258. The migration-259 work described here is the Part 12B implementation candidate; its independent whole exact-head audit, normal merge, automatic deployment, migration verification and health checks remain pending.
+Status: **RELEASED AND SEALED** through independently accepted exact head `a028e2f6bc366aab9ffa3d2921a15887f9ba7176`, PR #473, deployed main `f2f315cf58c12c37d129fcb8b032ebb2725e17e0`, Railway deployment `d29e2347-1a07-4eac-b381-4182da6f355c`, migration 259 and health/root/demo HTTP 200. Parts 12A and 12B are sealed; Parts 12C–F retain their original frozen scopes and order.
 
 Part 12B mounts the complete Part 12A journey shape inside the existing account-free demo: fictional approved-price evidence → fictional as-of capture → exact eligible target and deterministic method → immutable session-private run → currentness and plain-language explanation → review-only history. It uses the shared production `m26-paid-journey-v1` verifier and the exact `revenue.approved_price_flow.v1` semantic while keeping every source, identity, value, receipt and review visibly fictional.
 

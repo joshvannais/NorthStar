@@ -39,6 +39,7 @@ function isSignedWebhookPost(req) {
 const PUBLIC_DEMO_COMMAND_CENTER_MUTATIONS = new Set([
   '/api/demo/command-center/simulations/leads',
   '/api/demo/command-center/reset',
+  '/api/demo/forecast/journey/actions',
 ]);
 
 const PUBLIC_EPHEMERAL_HOMEPAGE_MUTATIONS = Object.freeze([

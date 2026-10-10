@@ -1,0 +1,510 @@
+{
+  "contractVersion": "mission27.launch.v1",
+  "policyState": "frozen_provider_disabled",
+  "currency": {
+    "code": "USD",
+    "minorUnitExponent": 2,
+    "rounding": "half_away_from_zero_at_owning_boundary",
+    "foreignExchangeSupported": false
+  },
+  "sources": {
+    "phone": {
+      "class": "retell.inbound.completed.v1",
+      "supported": true,
+      "currentRuntimeAvailable": false,
+      "requires": [
+        "same_tenant_inbound_call",
+        "authenticated_final_completed_lifecycle",
+        "source_occurrence_time",
+        "current_caller_consent",
+        "current_retention_authority",
+        "immutable_final_transcript_digest",
+        "current_integration_identity",
+        "human_review"
+      ],
+      "maximumDurationSeconds": 14400,
+      "maximumTranscriptBytes": 524288,
+      "excluded": [
+        "outbound_call",
+        "live_or_incomplete_call",
+        "demo_or_sample_call",
+        "provider_id_without_authenticated_lifecycle",
+        "audio_or_transcript_without_current_consent",
+        "caller_supplied_tenant_or_authority"
+      ]
+    },
+    "photo": {
+      "class": "northstar.quoted_job_photo.v1",
+      "supported": true,
+      "currentRuntimeAvailable": false,
+      "contentTypes": ["image/jpeg", "image/png", "image/webp"],
+      "maximumFiles": 10,
+      "maximumBytesPerFile": 10485760,
+      "maximumBytesPerIntake": 52428800,
+      "maximumPixelsPerFile": 24000000,
+      "maximumDimensionPixels": 8192,
+      "rawRetentionDays": 30,
+      "requires": [
+        "same_tenant_intake",
+        "exact_customer_or_prospect_and_location_context",
+        "explicit_upload_consent",
+        "server_verified_magic_and_digest",
+        "malware_and_polyglot_scan",
+        "metadata_stripped_before_extraction",
+        "human_review"
+      ],
+      "excluded": [
+        "heic",
+        "pdf",
+        "video",
+        "audio",
+        "animated_or_multiframe_image",
+        "active_or_embedded_content",
+        "signature_media",
+        "field_execution_evidence_relabelled_as_quote_intake"
+      ]
+    }
+  },
+  "extraction": {
+    "adapter": "openai.responses.structured.v1",
+    "mode": "server_side_schema_constrained_store_false",
+    "currentRuntimeAvailable": false,
+    "maximumWallClockSeconds": 30,
+    "maximumCandidatesPerIntake": 200,
+    "providerToolsEnabled": false,
+    "browserInferenceEnabled": false,
+    "automaticFactAcceptance": false,
+    "automaticCommercialAction": false,
+    "requiresExactPins": ["provider", "model", "build", "config", "schema", "source_digest"],
+    "blockedUntil": [
+      "provider_and_privacy_review",
+      "approved_server_credentials",
+      "retention_and_consent_proof",
+      "mounted_tenant_private_adapter",
+      "independent_acceptance"
+    ]
+  },
+  "estimatePolicy": {
+    "maximumActiveOptions": 3,
+    "maximumLinesPerOption": 100,
+    "maximumLinesPerEstimate": 300,
+    "maximumAssumptionsPerOption": 50,
+    "maximumDescriptionCharacters": 2000,
+    "maximumAssumptionCharacters": 500,
+    "maximumProposalValidityDays": 30,
+    "independentOptionTotals": true,
+    "machineDraftCanApprovePrice": false
+  },
+  "signaturePolicy": {
+    "method": "typed_name_explicit_consent_v1",
+    "maximumRecipientsPerProposal": 1,
+    "maximumPublicSessionHours": 168,
+    "requires": [
+      "exact_current_mission24_proposal_digest",
+      "reviewed_recipient",
+      "typed_signer_name",
+      "versioned_consent_text",
+      "affirmative_accept_and_sign_action",
+      "server_acceptance_time",
+      "current_scoped_session"
+    ],
+    "drawnOrBiometricSignatureSupported": false,
+    "automaticDeliverySupported": false,
+    "legalSufficiencyClaimed": false
+  },
+  "team": {
+    "roleAloneAuthorizes": false,
+    "ownerBootstrapTemplate": "m27.owner.v1",
+    "adminBootstrapTemplate": "m27.admin.v1",
+    "ownerDefaultCapabilities": [
+      "customer_financial.source.review",
+      "customer_financial.estimate.edit_draft",
+      "customer_financial.estimate.edit_options",
+      "customer_financial.estimate.request_signature",
+      "customer_financial.estimate.review_signature",
+      "customer_financial.estimate.request_work_handoff",
+      "customer_financial.billing_identity.review",
+      "customer_financial.billable_work.review",
+      "customer_financial.invoice.edit_draft",
+      "customer_financial.invoice.approve",
+      "customer_financial.invoice.issue",
+      "customer_financial.invoice.send",
+      "customer_financial.invoice.correct",
+      "customer_financial.invoice.void",
+      "customer_financial.provider.connect",
+      "customer_financial.payment.initiate",
+      "customer_financial.payment.record_offline",
+      "customer_financial.payment.reconcile",
+      "customer_financial.refund.issue",
+      "customer_financial.write_off.record",
+      "customer_financial.collection.action",
+      "customer_financial.accounting.export",
+      "customer_financial.accounting.reconcile",
+      "customer_financial.record.delete",
+      "customer_financial.record.recover"
+    ],
+    "adminDefaultCapabilities": [
+      "customer_financial.source.review",
+      "customer_financial.estimate.edit_draft",
+      "customer_financial.estimate.edit_options",
+      "customer_financial.estimate.request_signature",
+      "customer_financial.estimate.review_signature",
+      "customer_financial.estimate.request_work_handoff",
+      "customer_financial.billing_identity.review",
+      "customer_financial.billable_work.review",
+      "customer_financial.invoice.edit_draft",
+      "customer_financial.invoice.approve",
+      "customer_financial.invoice.issue",
+      "customer_financial.invoice.send",
+      "customer_financial.invoice.correct",
+      "customer_financial.invoice.void",
+      "customer_financial.payment.initiate",
+      "customer_financial.payment.record_offline",
+      "customer_financial.payment.reconcile",
+      "customer_financial.refund.issue",
+      "customer_financial.write_off.record",
+      "customer_financial.collection.action",
+      "customer_financial.accounting.export",
+      "customer_financial.accounting.reconcile"
+    ],
+    "memberDefaultCapabilities": [],
+    "memberGrantableCapabilities": [
+      "customer_financial.source.review",
+      "customer_financial.estimate.edit_draft",
+      "customer_financial.estimate.edit_options"
+    ],
+    "ownerOnlyCapabilities": [
+      "customer_financial.provider.connect",
+      "customer_financial.record.delete",
+      "customer_financial.record.recover"
+    ],
+    "customerSessionCapabilities": [
+      "customer_financial.estimate.review_signature",
+      "customer_financial.payment.initiate"
+    ],
+    "recentAuthSeconds": 600,
+    "mfaFreshnessSeconds": 600,
+    "independentApprovalSeconds": 600
+  },
+  "mobile": {
+    "requiredLayouts": [
+      {"name": "narrow_phone_dark", "width": 360, "height": 800, "theme": "dark"},
+      {"name": "standard_phone_light", "width": 390, "height": 844, "theme": "light"},
+      {"name": "portrait_tablet_dark", "width": 768, "height": 1024, "theme": "dark"},
+      {"name": "landscape_tablet_light", "width": 1024, "height": 768, "theme": "light"},
+      {"name": "desktop_dark", "width": 1440, "height": 900, "theme": "dark"}
+    ],
+    "browserEngines": ["chrome", "playwright_webkit"],
+    "requiredModes": ["keyboard", "touch", "reduced_motion", "forced_colors"],
+    "physicalSafariEvidenceRequiredForClaim": true
+  },
+  "handoff": {
+    "adapter": "mission23.work_intake.review.v1",
+    "supportedAsReviewedRequest": true,
+    "currentReceivingAdapterAvailable": false,
+    "requires": [
+      "exact_current_mission24_acceptance",
+      "estimate_revision_option_and_proposal_digests",
+      "customer_and_location_identity",
+      "current_requester_capability",
+      "reason_and_fresh_confirmation",
+      "destination_acknowledgement"
+    ],
+    "createsAppointment": false,
+    "createsAssignment": false,
+    "createsDispatch": false,
+    "createsExecution": false,
+    "createsInvoice": false
+  },
+  "learning": {
+    "adapter": "mission25.tenant_edit_observation.v1",
+    "currentAdapterAvailable": false,
+    "allowedInputs": [
+      "accepted_human_edit_delta",
+      "accepted_option_identity",
+      "mission24_acceptance_outcome",
+      "mission23_source_owned_work_outcome",
+      "mission23_source_owned_actual_cost_and_duration"
+    ],
+    "excludedInputs": [
+      "raw_photo",
+      "raw_transcript",
+      "signature_content",
+      "contact_content",
+      "payment_instrument",
+      "unreviewed_draft",
+      "other_tenant_content"
+    ],
+    "automaticApplication": false
+  },
+  "capacityRisk": {
+    "mode": "read_only_advice",
+    "currentCombinedAdapterAvailable": false,
+    "allowedSources": [
+      "mission20_current_business_profile_workforce_asset_policy",
+      "mission22_current_schedule_assignment_and_capacity",
+      "mission23_current_execution_and_field_actuals",
+      "mission24_current_estimate_and_commercial_revision",
+      "mission25_current_same_tenant_accepted_observation",
+      "mission26_current_compatible_advisory_run"
+    ],
+    "mayBookOrMutate": false,
+    "missingSourceIsValueFree": true
+  },
+  "mission32": {
+    "adapter": "polaris.estimate_studio.adapter.v1",
+    "minimumCompatibleVersion": 1,
+    "maximumCompatibleVersion": 1,
+    "sharedIdentities": ["estimate", "revision", "option", "line", "input", "assumption", "provenance"],
+    "mayAppendSpecializedCalculationEvidence": true,
+    "mayCreateParallelEstimate": false,
+    "mayDuplicateAcceptedMath": false,
+    "mayApproveCommercialRevision": false,
+    "mayScheduleOrDispatch": false
+  },
+  "financial": {
+    "merchantOfRecord": "contractor_business",
+    "northstarCustodyOrControl": false,
+    "provider": "stripe_connect",
+    "providerAccountShape": "tenant_bound_contractor_account",
+    "onboarding": "provider_hosted",
+    "checkout": "provider_hosted_direct_charge",
+    "fundsDestination": "contractor_connected_account",
+    "supportedMode": "test",
+    "liveModeDefaultEnabled": false,
+    "supportedCountry": "US",
+    "supportedSubdivisionScope": "50_states_and_district_of_columbia",
+    "supportedCurrency": "USD",
+    "supportedOnlineMethods": ["card"],
+    "partialProviderPayments": false,
+    "multiInvoiceProviderPayments": false,
+    "savedPaymentMethods": false,
+    "automaticCollection": false,
+    "numbering": {
+      "invoice": "INV-{tenant_monotonic_10_digit_sequence}",
+      "credit": "CR-{tenant_monotonic_10_digit_sequence}",
+      "receipt": "RCT-{tenant_monotonic_10_digit_sequence}",
+      "reuseAllowed": false,
+      "gapsAllowed": true,
+      "yearResetAllowed": false
+    },
+    "tax": {
+      "providerCalculationEnabled": false,
+      "supportedOnlyFromExactMission24Decision": true,
+      "requiredPins": ["jurisdiction", "basis", "rate", "amount", "currency", "rounding_version", "decision_digest"],
+      "filingOrNexusAuthority": false
+    },
+    "accounting": {
+      "adapter": "quickbooks_online.accounting_export.v1",
+      "supportedMode": "sandbox",
+      "currentRuntimeAvailable": false,
+      "mayInventChartOfAccounts": false,
+      "mayDecideRecognitionOrTax": false,
+      "maySupplyCheckClearance": false
+    },
+    "offline": {
+      "cashReceiptEnabled": true,
+      "checkReceiptEnabled": true,
+      "checkClearedTransitionEnabled": false,
+      "checkClearanceAuthority": "unavailable_until_authenticated_bank_source",
+      "cashEffect": "accepted_offline_receipt_reduces_collectible_balance_without_provider_settlement_claim",
+      "checkEffect": "pending_tender_only_face_and_settled_balances_unchanged_collection_action_blocked",
+      "returnedCheckEffect": "pending_tender_reversed_full_balance_collectible",
+      "correctionEffect": "append_only_replacement_or_reversal_never_in_place"
+    },
+    "deposit": {
+      "enabled": true,
+      "requiresExactMission24Schedule": true,
+      "maximumBasisPoints": 5000,
+      "maximumMinorUnits": "2500000",
+      "separateInvoiceRequired": true
+    },
+    "progressBilling": false,
+    "milestoneBilling": false,
+    "retainage": false,
+    "tips": false,
+    "surcharges": false,
+    "financing": false,
+    "recurringBilling": false,
+    "refund": {
+      "cardToOriginalChargeOnly": true,
+      "partialAndFullSupported": true,
+      "maximumMinorUnitsPerAction": "10000000",
+      "cumulativeMaximumIsRefundableRemainder": true,
+      "offlineCashReturnClaimsSupported": false,
+      "checkRefundBeforeClearanceSupported": false
+    },
+    "dispute": {
+      "authenticatedProviderEvidenceOnly": true,
+      "automaticConcessionOrEvidenceSubmission": false,
+      "blocksDestructiveCleanup": true
+    },
+    "writeOff": {
+      "maximumMinorUnitsPerAction": "1000000",
+      "mayChangeTaxOrRevenueRecognition": false
+    }
+  },
+  "billableWork": {
+    "finalBalance": {
+      "supported": true,
+      "requires": [
+        "exact_current_mission24_accepted_option_and_commercial_revision",
+        "exact_current_mission23_completion_evidence",
+        "explicit_capability_authorized_human_review"
+      ]
+    },
+    "preWorkDeposit": {
+      "supported": true,
+      "requires": [
+        "exact_current_mission24_accepted_deposit_schedule",
+        "explicit_capability_authorized_human_review"
+      ],
+      "completionEvidenceRequired": false
+    },
+    "milestoneOrProgress": {
+      "supported": false,
+      "missingAuthority": "separately_accepted_mission23_work_package_source"
+    },
+    "earnedRevenue": {
+      "currentAuthorityAvailable": false,
+      "invoicePaymentOrCompletionCanDecide": false,
+      "state": "earned_revenue_policy_unavailable"
+    }
+  },
+  "amountPolicy": {
+    "invoiceMaximumMinorUnits": "10000000",
+    "cardCheckoutMinimumMinorUnits": "50",
+    "cardCheckoutMaximumMinorUnits": "10000000",
+    "offlineCashMaximumMinorUnits": "1000000",
+    "offlineCheckMaximumMinorUnits": "1000000",
+    "correctionMaximumAbsoluteDeltaMinorUnits": "2500000",
+    "singleControlMaximums": {
+      "proposal_signature_work_handoff_invoice_approval_issue_send": "1000000",
+      "offline_cash_or_check_receipt": "100000",
+      "refund": "100000",
+      "write_off": "50000",
+      "commercial_correction_delta": "100000"
+    },
+    "aboveSingleControlRequiresTwoDifferentCurrentHumans": true,
+    "liveProviderConnectionAlwaysRequiresTwoHumans": true,
+    "recordDeletionAlwaysRequiresTwoHumans": true
+  },
+  "retention": {
+    "rawQuotedJobMediaDays": 30,
+    "rawProviderEventDays": 30,
+    "publicSessionTombstoneDays": 30,
+    "financialRecordCalendarYears": 7,
+    "immutableIdempotencyAndAuditCalendarYears": 7,
+    "legalTaxAccountingProviderSecurityReviewComplete": false,
+    "holdsSuspendEligibleDeletion": true,
+    "rawTranscriptCopiedIntoMission27": false
+  },
+  "professionalReviews": {
+    "legal": {"accepted": false, "requiredBefore": ["external_signature_launch", "live_payment_launch", "retention_launch"]},
+    "provider": {"accepted": false, "requiredBefore": ["provider_sandbox_acceptance", "live_payment_launch"]},
+    "tax": {"accepted": false, "requiredBefore": ["tax_bearing_invoice_launch"]},
+    "accounting": {"accepted": false, "requiredBefore": ["accounting_adapter_launch", "earned_revenue_policy"]},
+    "security": {"accepted": false, "requiredBefore": ["provider_sandbox_acceptance", "live_payment_launch"]}
+  },
+  "performance": {
+    "maximumJsonRequestBytes": 65536,
+    "maximumProviderEventBytes": 262144,
+    "maximumPageSize": 100,
+    "maximumAccountingExportRecords": 1000,
+    "maximumAccountingExportMinorUnits": "100000000",
+    "singleControlAccountingExportRecords": 100,
+    "singleControlAccountingExportMinorUnits": "10000000",
+    "maximumSynchronousMutationSeconds": 5,
+    "maximumProviderSessionMinutes": 30,
+    "webhookClockToleranceSeconds": 300,
+    "concurrentWriterPerAggregate": 1
+  },
+  "rollout": {
+    "serverOwnedTenantFlagDefault": "off",
+    "stages": [
+      "disabled",
+      "local_synthetic",
+      "provider_sandbox",
+      "production_deployed_provider_disabled",
+      "separately_authorized_live_canary",
+      "live"
+    ],
+    "missionCompletionRequiresProviderSandbox": true,
+    "missionCompletionRequiresLiveMoneyCanary": false,
+    "missionCompletionRequiresFounderVisualVerdict": true,
+    "currentStage": "disabled"
+  },
+  "release": {
+    "oneWriter": true,
+    "sameIndependentWholeHeadAuditor": true,
+    "maximumAcceptedFindingSeverity": "none_p0_through_p3",
+    "oneNormalPullRequest": true,
+    "oneAutomaticRailwayDeployment": true,
+    "requiredHttp200Paths": ["/api/health", "/", "/demo/"],
+    "currentLatestMigration": 259,
+    "nextSchemaMigration": 260,
+    "part2BlockedUntilSlice1DReleased": true
+  },
+  "unavailableCodes": [
+    "unsupported_source_class",
+    "source_authority_unavailable",
+    "source_currentness_unavailable",
+    "source_consent_unavailable",
+    "source_retention_unavailable",
+    "file_limit_exceeded",
+    "file_type_unsupported",
+    "file_content_rejected",
+    "file_privacy_review_required",
+    "extraction_provider_unavailable",
+    "extraction_failed",
+    "human_review_required",
+    "proposal_limit_exceeded",
+    "signature_policy_unavailable",
+    "recipient_review_required",
+    "recent_auth_required",
+    "mfa_required",
+    "capability_required",
+    "dual_control_unavailable",
+    "amount_limit_exceeded",
+    "currency_unsupported",
+    "geography_unsupported",
+    "tax_authority_unavailable",
+    "payment_provider_unavailable",
+    "payment_method_unsupported",
+    "live_payments_disabled",
+    "partial_payments_unsupported",
+    "multi_invoice_payments_unsupported",
+    "accounting_adapter_unavailable",
+    "check_clearance_authority_unavailable",
+    "settlement_unavailable",
+    "refund_unavailable",
+    "dispute_action_unsupported",
+    "progress_billing_unsupported",
+    "milestone_authority_unavailable",
+    "retainage_unsupported",
+    "tip_unsupported",
+    "surcharge_unsupported",
+    "financing_unsupported",
+    "recurring_billing_unsupported",
+    "saved_payment_method_unsupported",
+    "automatic_collection_unsupported",
+    "work_handoff_receiver_unavailable",
+    "learning_permission_unavailable",
+    "capacity_source_unavailable",
+    "mission32_adapter_unavailable",
+    "legal_review_unavailable",
+    "provider_review_unavailable",
+    "accounting_review_unavailable",
+    "security_review_unavailable",
+    "earned_revenue_policy_unavailable",
+    "founder_visual_approval_unavailable"
+  ],
+  "unavailableResponse": {
+    "available": false,
+    "value": null,
+    "requiredFields": ["code", "category", "missingEvidence", "refreshRequired"],
+    "forbidAmountOrResultDigest": true,
+    "olderSourceFallback": false,
+    "demoFallback": false
+  }
+}

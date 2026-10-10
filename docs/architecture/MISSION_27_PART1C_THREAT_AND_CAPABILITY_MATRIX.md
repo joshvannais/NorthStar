@@ -1,6 +1,6 @@
 # Mission 27 Part 1C — threat and action-capability contract
 
-Status: Slice 1C implementation candidate for independent whole-head audit. Slice 1B was accepted at corrected head `afa98228b97cc1ad2b9f9aea76c7859f9a432765`, merged through PR #479 as exact main `f3fb7f60dae916c19189b815ed6563965a2a8f2d`, and released by automatic Railway deployment `8f16cf9c-003f-40f8-963a-ac92c1653b3c` with migrations through 259 and PostgreSQL startup, `/api/health`, `/`, and `/demo/` HTTP 200. This candidate defines controls only. It grants no runtime capability and adds no route, schema, migration, provider call, customer link, financial record, or external action.
+Status: Slice 1C released. This contract was accepted at head `54a31eb4f31a0118d8153aefc7a04bd356dd7f70`, merged through PR #480 as exact main `204b40793b72c412a47632af54c323437fe8a40e`, and released by automatic Railway deployment `444c7436-80ab-4a90-9aee-e0f7bcee58ee` with migrations through 259 and PostgreSQL startup, `/api/health`, `/`, and `/demo/` HTTP 200. It defines controls only, grants no runtime capability, and added no route, schema, migration, provider call, customer link, financial record, or external action. Slice 1D is the current first-supported-launch contract candidate.
 
 ## Authority and boundary
 
@@ -8,7 +8,7 @@ This contract implements original Slice 1C and the threat/capability half of add
 
 The current `src/auth/permissions.js` matrix is visibility and coarse product access. The historical `billing` resource, access role, `operational_role`, browser claim, request body, URL, provider object, imported record, demo state, or direct table access grants **zero** Mission 27 action capability. `src/auth/middleware.js` proves a current tenant session, membership, subscription state and CSRF boundary; it does not prove recent authentication, MFA, an independent approver, an amount policy, or a Mission 27 capability. Until later slices add and independently accept those authorities, every capability named below is unavailable and every consequential action must fail closed before an effect.
 
-Slice 1D still owns launch choices: supported source and file classes, limits and retention; extraction/provider mode; team capability assignment; option/signature/recipient policy; mobile support; accepted-to-work handoff support; learning and capacity/risk inputs; Mission 32 adapter version; merchant/funds model; provider/mode/methods; geography, currency, tax and accounting support; offline money; numeric amount thresholds; and typed unsupported states. This slice neither selects nor implies any of them.
+Slice 1D owns launch choices: supported source and file classes, limits and retention; extraction/provider mode; team capability assignment; option/signature/recipient policy; mobile support; accepted-to-work handoff support; learning and capacity/risk inputs; Mission 32 adapter version; merchant/funds model; provider/mode/methods; geography, currency, tax and accounting support; offline money; numeric amount thresholds; and typed unsupported states. The [Slice 1D launch contract](MISSION_27_PART1D_LAUNCH_CONTRACT.md) is now the candidate that selects them; this released Slice 1C did not.
 
 ## Server-side authorization contract
 
@@ -110,6 +110,6 @@ Learning and capacity/risk guidance receive no mutation capability here. Mission
 
 Slice 1C adds this architecture contract, current-roadmap reconciliation and executable static ratification. It adds no migration 260 and no runtime module, permission, capability grant, route, API, schema, database privilege, provider/customer call, financial action, customer link, UI or external configuration change. The current application therefore remains unable to perform any Mission 27 action in the matrix.
 
-Slice 1D still owns every launch decision and numeric limit listed above. Parts 2–14 still own implementation, PostgreSQL enforcement, mounted paid/demo journeys, provider/customer boundaries, browser behavior and release evidence. No documentation statement is evidence that those later controls exist.
+The [Slice 1D launch contract](MISSION_27_PART1D_LAUNCH_CONTRACT.md) now owns every launch decision and numeric limit listed above. Parts 2–14 still own implementation, PostgreSQL enforcement, mounted paid/demo journeys, provider/customer boundaries, browser behavior and release evidence. No documentation statement is evidence that those later controls exist.
 
 Directly unavailable evidence remains live provider or private-production behavior; natural customer/financial history; empirical accuracy or calibration; a real accounting or receiving adapter; hosted CI; production load, latency and SLA; physical Safari and physical devices; manual assistive-technology review; disaster-restore execution; legal, tax, accounting, provider and security opinions; controlled live money; and the founder's suspended visual approval.

@@ -173,6 +173,76 @@ realPostgres('Mission 26 Part 12B mounted fictional demo journey', () => {
     expect(await protectedCounts(fixture.ownerPool)).toEqual(before);
   }, 120000);
 
+  test('uses the selected simulated graph chronology when simulation precedes issuance', async () => {
+    const before = await protectedCounts(fixture.ownerPool);
+    const first = await request(fixture.app).get(ROOT).set('Host', 'northstar.test');
+    expect(first.status).toBe(200);
+    const savedCookie = cookie(first);
+
+    const simulated = await request(fixture.app)
+      .post('/api/demo/command-center/simulations/leads')
+      .set('Host', 'northstar.test').set('Origin', ORIGIN)
+      .set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
+      .set('Idempotency-Key', crypto.randomUUID())
+      .set('X-NorthStar-Demo-Intent', 'simulate-lead')
+      .send({ expectedRevision: 1, scenario: DEFAULT_SELECTION });
+    expect(simulated.status).toBe(201);
+    expect(simulated.body.data.integrity.revision).toBe(2);
+
+    const reread = await request(fixture.app).get(ROOT).set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(reread.status).toBe(200);
+    expect(reread.body.data).toMatchObject({ state: 'ready', demoWorkspaceRevision: 2,
+      sourceCandidate: { fictional: true } });
+    const candidate = reread.body.data.sourceCandidate;
+    const selectedGraph = simulated.body.data.graphs.find(graph =>
+      graph.ids.estimate === candidate.approvedPriceOriginId);
+    expect(selectedGraph).toBeDefined();
+    expect(candidate.capturedAt).toBe(selectedGraph.timestamps.createdAt);
+    expect(candidate.cutoffAt).toBe(selectedGraph.timestamps.snapshotCreatedAt);
+    expect(Date.parse(selectedGraph.timestamps.createdAt))
+      .toBeLessThanOrEqual(Date.parse(candidate.capturedAt));
+    expect(Date.parse(selectedGraph.timestamps.snapshotCreatedAt))
+      .toBeLessThanOrEqual(Date.parse(candidate.cutoffAt));
+    expect(Date.parse(candidate.capturedAt)).toBeLessThanOrEqual(Date.parse(candidate.cutoffAt));
+
+    const issued = await action(fixture.app, savedCookie, crypto.randomUUID(), {
+      action: 'issue', expectedRevision: 2, details: {
+        approvedPriceOriginId: candidate.approvedPriceOriginId,
+        reason: 'Review the exact simulated fictional source chronology.' } });
+    expect(issued.status).toBe(201);
+    const run = issued.body.data.run;
+    expect(run).toMatchObject({ source: {
+      approvedPriceOriginId: candidate.approvedPriceOriginId,
+      sourceSnapshotDigest: candidate.sourceSnapshotDigest,
+      positionDigest: candidate.positionDigest,
+      capturedAt: candidate.capturedAt,
+      cutoffAt: candidate.cutoffAt,
+    }, currentness: { state: 'unchanged_candidate', revision: 1 } });
+    expect(run.source.reportingWindowDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(run.receipt.digest).toMatch(/^[a-f0-9]{64}$/);
+    expect(run.currentness.digest).toMatch(/^[a-f0-9]{64}$/);
+
+    const recovered = await request(fixture.app).get(ROOT).set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.data).toMatchObject({ state: 'current', demoWorkspaceRevision: 3,
+      sourceCandidate: null, run: {
+        id: run.id,
+        source: {
+          approvedPriceOriginId: candidate.approvedPriceOriginId,
+          sourceSnapshotDigest: candidate.sourceSnapshotDigest,
+          positionDigest: candidate.positionDigest,
+          reportingWindowDigest: run.source.reportingWindowDigest,
+          capturedAt: candidate.capturedAt,
+          cutoffAt: candidate.cutoffAt,
+        },
+        receipt: { digest: run.receipt.digest },
+        currentness: { state: 'unchanged_candidate', revision: 1,
+          digest: run.currentness.digest } } });
+    expect(await protectedCounts(fixture.ownerPool)).toEqual(before);
+  }, 120000);
+
   test('denies cross-origin, wrong intent, stale revisions, conflicting replay and stale run identities', async () => {
     const entry = await request(fixture.app).get(ROOT).set('Host', 'northstar.test');
     const savedCookie = cookie(entry); const source = entry.body.data.sourceCandidate;

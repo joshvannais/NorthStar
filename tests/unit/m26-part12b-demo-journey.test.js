@@ -42,8 +42,32 @@ describe('Mission 26 Part 12B fictional demo journey', () => {
       automaticActionAuthorized: false, demoWorkspaceRevision: 1,
       sourceCandidate: { fictional: true, currency: 'USD' } });
     expect(first.sourceCandidate.amount).toMatch(/^\d+\.00$/);
+    const graph = initial().graphs.find(value =>
+      value.ids.estimate === first.sourceCandidate.approvedPriceOriginId);
+    expect(first.sourceCandidate.capturedAt).toBe(graph.timestamps.createdAt);
+    expect(first.sourceCandidate.cutoffAt).toBe(graph.timestamps.snapshotCreatedAt);
+    expect(Date.parse(first.sourceCandidate.capturedAt))
+      .toBeLessThanOrEqual(Date.parse(first.sourceCandidate.cutoffAt));
     expect(first.sourceCandidate.positionDigest).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(first)).not.toMatch(/transcript|phone|email|customerName|providerPayload/i);
+  });
+
+  test('fails closed when selected fictional source chronology is missing, malformed, or reversed', () => {
+    const missing = initial('missing-source-time');
+    delete missing.graphs[0].timestamps.createdAt;
+    expect(capturedError(() => journey.sourceBasis(missing)))
+      .toMatchObject({ status: 503, code: 'DEMO_FORECAST_STATE_INVALID' });
+
+    const malformed = initial('malformed-source-time');
+    malformed.graphs[0].timestamps.snapshotCreatedAt = 'not-a-timestamp';
+    expect(capturedError(() => journey.sourceBasis(malformed)))
+      .toMatchObject({ status: 503, code: 'DEMO_FORECAST_STATE_INVALID' });
+
+    const reversed = initial('reversed-source-time');
+    reversed.graphs[0].timestamps.createdAt = '2026-10-09T18:01:00.000Z';
+    reversed.graphs[0].timestamps.snapshotCreatedAt = '2026-10-09T18:00:00.000Z';
+    expect(capturedError(() => journey.sourceBasis(reversed)))
+      .toMatchObject({ status: 503, code: 'DEMO_FORECAST_SOURCE_INVALID' });
   });
 
   test('issues and reproduces the exact server-calculated immutable receipt', () => {
@@ -85,6 +109,7 @@ describe('Mission 26 Part 12B fictional demo journey', () => {
     newer.polaris.snapshotDigest = 'd'.repeat(64);
     newer.estimate.customerPrice += 100;
     newer.timestamps.createdAt = '2026-10-09T18:10:00.000Z';
+    newer.timestamps.snapshotCreatedAt = '2026-10-09T18:10:00.000Z';
     changed.graphs.unshift(newer);
 
     const projected = journey.journeyEnvelope(changed, 3,

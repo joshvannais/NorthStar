@@ -70,7 +70,11 @@ function sourceBasis(state, approvedPriceOriginId = null) {
       !state.workspace || !UUID.test(state.workspace.tenant?.id || '')) {
     fail(503, 'DEMO_FORECAST_SOURCE_INVALID', 'The fictional approved-price source is unavailable.');
   }
-  const capturedAt = iso(state.createdAt);
+  const capturedAt = iso(graph.timestamps?.createdAt);
+  const cutoffAt = iso(graph.timestamps?.snapshotCreatedAt);
+  if (Date.parse(capturedAt) > Date.parse(cutoffAt)) {
+    fail(503, 'DEMO_FORECAST_SOURCE_INVALID', 'The fictional approved-price source is unavailable.');
+  }
   const value = {
     approvedPriceOriginId: graph.ids.estimate,
     positionId: identity(state, 'position'),
@@ -79,14 +83,14 @@ function sourceBasis(state, approvedPriceOriginId = null) {
     amount: money(graph.estimate.customerPrice),
     currency: graph.estimate.currency,
     capturedAt,
-    cutoffAt: capturedAt,
+    cutoffAt,
     sourceLabel: `${graph.lead.serviceLabel} · fictional approved-price example`,
   };
   return stableValue({
     ...value,
     positionDigest: sha256({ contract: 'm26-demo-approved-price-position-v1', ...value }),
     reportingWindowDigest: sha256({ contract: 'm26-demo-approved-price-window-v1',
-      cutoffAt: capturedAt, sourceSnapshotDigest: graph.polaris.snapshotDigest }),
+      cutoffAt, sourceSnapshotDigest: graph.polaris.snapshotDigest }),
     featureSetDigest: sha256({ contract: 'm26-demo-approved-price-feature-v1',
       approvedPriceOriginId: graph.ids.estimate, amount: value.amount, currency: value.currency }),
   });

@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { MISSION_26_FIVE_LAYOUTS, auditRenderedPage, exerciseSkipLink } =
+  require('../helpers/m26-part12d-rendered-review');
 
 process.env.NODE_ENV = 'test';
 process.env.AUTH_ACCESS_SECRET = 'm26-part12a-paid-journey-browser-20261009';
@@ -64,12 +66,7 @@ async function main() {
   const browser = await runtime.browserType.launch({ headless: true,
     executablePath: runtime.executablePath });
   try {
-    for (const viewport of [
-      { name: 'desktop-light', width: 1280, height: 900, colorScheme: 'light' },
-      { name: 'mobile-light', width: 390, height: 844, colorScheme: 'light' },
-      { name: 'desktop-dark', width: 1280, height: 900, colorScheme: 'dark' },
-      { name: 'mobile-dark', width: 390, height: 844, colorScheme: 'dark' },
-    ]) {
+    for (const viewport of MISSION_26_FIVE_LAYOUTS) {
       const context = await browser.newContext({ viewport: { width: viewport.width,
         height: viewport.height }, colorScheme: viewport.colorScheme, reducedMotion: 'reduce' });
       const page = await context.newPage(); const errors = [];
@@ -227,8 +224,11 @@ async function main() {
         gaps.forEach(gap => assert.ok(gap >= 0 && gap <= 20,
           `mobile paid journey form gap ${gap} must remain compact`));
       }
+      await auditRenderedPage(page, { mainSelector: '#mainContent', layout: viewport });
+      await exerciseSkipLink(page, { mainSelector: '#mainContent' });
       await page.locator('#forecast-paid-journey').screenshot({ path: path.join(output,
         `${viewport.name}-paid.png`) });
+      await page.screenshot({ path: path.join(output, `${viewport.name}-paid-full.png`), fullPage: true });
       await context.close();
     }
 

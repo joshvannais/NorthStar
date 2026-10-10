@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const { MISSION_26_FIVE_LAYOUTS, auditRenderedPage, exerciseSkipLink } =
+  require('../helpers/m26-part12d-rendered-review');
 
 process.env.NODE_ENV = 'test';
 process.env.AUTH_ACCESS_SECRET = 'm26-part12b-demo-journey-browser-20261009';
@@ -104,12 +106,7 @@ async function main() {
   const runtime = resolveBrowserRuntime(process.argv.includes('--webkit') ? 'webkit' : 'chrome');
   const browser = await runtime.browserType.launch({ headless: true, executablePath: runtime.executablePath });
   try {
-    for (const viewport of [
-      { name: 'desktop-light', width: 1280, height: 900, colorScheme: 'light' },
-      { name: 'mobile-light', width: 390, height: 844, colorScheme: 'light' },
-      { name: 'desktop-dark', width: 1280, height: 900, colorScheme: 'dark' },
-      { name: 'mobile-dark', width: 390, height: 844, colorScheme: 'dark' },
-    ]) {
+    for (const viewport of MISSION_26_FIVE_LAYOUTS) {
       const context = await browser.newContext({ viewport: { width: viewport.width,
         height: viewport.height }, colorScheme: viewport.colorScheme, reducedMotion: 'reduce' });
       const page = await context.newPage(); const errors = []; const network = [];
@@ -213,8 +210,11 @@ async function main() {
       assert.equal(network.some(value => !value.startsWith(base)), false);
       assert.deepEqual(errors, []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+      await auditRenderedPage(page, { mainSelector: '#mainContent', layout: viewport });
+      await exerciseSkipLink(page, { mainSelector: '#mainContent' });
       await page.locator('#forecast-paid-journey').screenshot({ path: path.join(output,
         `${viewport.name}-fictional.png`) });
+      await page.screenshot({ path: path.join(output, `${viewport.name}-fictional-full.png`), fullPage: true });
       await context.close();
     }
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

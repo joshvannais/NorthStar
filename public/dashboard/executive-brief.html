@@ -82,6 +82,20 @@
       animation: eb-pulse 2s infinite;
     }
 
+    .eb-header .eb-subtitle .eb-live[data-state="loading"] {
+      color: var(--eb-warning);
+    }
+    .eb-header .eb-subtitle .eb-live[data-state="loading"]::before {
+      background: var(--eb-warning);
+    }
+    .eb-header .eb-subtitle .eb-live[data-state="unavailable"] {
+      color: var(--eb-danger);
+    }
+    .eb-header .eb-subtitle .eb-live[data-state="unavailable"]::before {
+      background: var(--eb-danger);
+      animation: none;
+    }
+
     @keyframes eb-pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.4; }
@@ -441,68 +455,96 @@
         grid-template-columns: repeat(2, 1fr);
       }
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      .eb-header .eb-subtitle .eb-live::before,
+      .eb-loading::after {
+        animation: none;
+      }
+      .eb-card,
+      .eb-action-card {
+        transition: none;
+      }
+      .eb-action-card:hover {
+        transform: none;
+      }
+    }
+
+    @media (forced-colors: active) {
+      .eb-card,
+      .eb-priority-card,
+      .eb-action-card,
+      .eb-insight-text {
+        border: 1px solid CanvasText;
+      }
+      .eb-action-card:focus-visible {
+        outline: 3px solid Highlight;
+        outline-offset: 3px;
+      }
+    }
   </style>
   <script src="/js/auth-session.js"></script>
   <script src="/js/trial-status.js"></script>
   <link rel="stylesheet" href="/css/site-professionalism.css">
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Skip to Executive Brief</a>
   <div class="app-layout">
     <aside class="sidebar" aria-label="Primary navigation"></aside>
-    <main class="main-content" id="mainContent">
-      <div class="eb-workspace" id="executiveBrief">
+    <main class="main-content" id="mainContent" tabindex="-1">
+      <div class="eb-workspace" id="executiveBrief" aria-busy="true">
         <div class="eb-header">
           <h1>Executive Brief</h1>
           <div class="eb-subtitle">
             <span>POLARIS Intelligence Summary</span>
-            <span class="eb-live">Live</span>
+            <span class="eb-live" id="ebAvailability" data-state="loading">Updating</span>
             <span id="ebTimestamp">updating...</span>
           </div>
         </div>
-        <div class="eb-loading" id="ebLoading">Loading Executive Brief</div>
-        <div class="eb-grid" id="ebContent" style="display:none">
+        <div class="eb-loading" id="ebLoading" role="status" aria-live="polite" aria-atomic="true">Loading Executive Brief</div>
+        <div class="eb-grid" id="ebContent" hidden>
 
           <!-- 1. Executive Summary -->
-          <div class="eb-card eb-card-full">
-            <div class="eb-card-title">Executive Summary</div>
+          <section class="eb-card eb-card-full" aria-labelledby="ebSummaryTitle">
+            <h2 class="eb-card-title" id="ebSummaryTitle">Executive Summary</h2>
             <div class="eb-summary-text" id="ebSummary">Loading...</div>
-          </div>
+          </section>
 
           <!-- 2. Highest Priority -->
-          <div class="eb-card eb-card-full">
-            <div class="eb-card-title">Highest Priority</div>
+          <section class="eb-card eb-card-full" aria-labelledby="ebPriorityTitle">
+            <h2 class="eb-card-title" id="ebPriorityTitle">Highest Priority</h2>
             <div id="ebPriority">Loading...</div>
-          </div>
+          </section>
 
           <!-- 3. Estimate and revenue status -->
-          <div class="eb-card">
-            <div class="eb-card-title">Estimate &amp; Revenue Status</div>
+          <section class="eb-card" aria-labelledby="ebRevenueTitle">
+            <h2 class="eb-card-title" id="ebRevenueTitle">Estimate &amp; Revenue Status</h2>
             <div class="eb-stat-grid" id="ebRevenue">Loading...</div>
-          </div>
+          </section>
 
           <!-- 4. Operational Snapshot -->
-          <div class="eb-card">
-            <div class="eb-card-title">Operational Snapshot</div>
+          <section class="eb-card" aria-labelledby="ebOperationalTitle">
+            <h2 class="eb-card-title" id="ebOperationalTitle">Operational Snapshot</h2>
             <div id="ebOperational">Loading...</div>
-          </div>
+          </section>
 
           <!-- 5. Customer Highlights -->
-          <div class="eb-card eb-card-full">
-            <div class="eb-card-title">Customer Highlights</div>
+          <section class="eb-card eb-card-full" aria-labelledby="ebCustomersTitle">
+            <h2 class="eb-card-title" id="ebCustomersTitle">Customer Highlights</h2>
             <div id="ebCustomers">Loading...</div>
-          </div>
+          </section>
 
           <!-- 6. POLARIS™ Insight -->
-          <div class="eb-card eb-card-full">
-            <div class="eb-card-title">POLARIS Insight</div>
+          <section class="eb-card eb-card-full" aria-labelledby="ebInsightTitle">
+            <h2 class="eb-card-title" id="ebInsightTitle">POLARIS Insight</h2>
             <div id="ebInsight">Loading...</div>
-          </div>
+          </section>
 
           <!-- 7. Recommended Next Action -->
-          <div class="eb-card eb-card-full">
-            <div class="eb-card-title">Recommended Next Action</div>
+          <section class="eb-card eb-card-full" aria-labelledby="ebNextActionTitle">
+            <h2 class="eb-card-title" id="ebNextActionTitle">Recommended Next Action</h2>
             <div id="ebNextAction">Loading...</div>
-          </div>
+          </section>
 
         </div>
       </div>
@@ -515,6 +557,40 @@
       var eb = document.getElementById('executiveBrief');
       var loading = document.getElementById('ebLoading');
       var content = document.getElementById('ebContent');
+      var availability = document.getElementById('ebAvailability');
+
+      function beginLoading() {
+        eb.setAttribute('aria-busy', 'true');
+        loading.className = 'eb-loading';
+        availability.dataset.state = 'loading';
+        availability.textContent = 'Updating';
+        loading.hidden = false;
+        loading.textContent = 'Loading Executive Brief';
+        content.hidden = true;
+      }
+
+      function finishLoading() {
+        loading.hidden = true;
+        content.hidden = false;
+        eb.setAttribute('aria-busy', 'false');
+      }
+
+      function showUnavailable() {
+        finishLoading();
+        document.getElementById('ebTimestamp').textContent = 'Update unavailable';
+        availability.dataset.state = 'unavailable';
+        availability.textContent = 'Unavailable';
+        document.getElementById('ebSummary').textContent = 'Executive Brief is temporarily unavailable. No business values are shown.';
+        document.getElementById('ebPriority').innerHTML = '<div class="eb-empty">Priority guidance is unavailable.</div>';
+        document.getElementById('ebRevenue').innerHTML = '<div class="eb-empty">Estimate and revenue status is unavailable.</div>';
+        document.getElementById('ebOperational').innerHTML = '<div class="eb-empty">Operational status is unavailable.</div>';
+        document.getElementById('ebCustomers').innerHTML = '<div class="eb-empty">Customer highlights are unavailable.</div>';
+        document.getElementById('ebInsight').innerHTML = '<div class="eb-empty">Polaris insight is unavailable.</div>';
+        document.getElementById('ebNextAction').innerHTML = '<div class="eb-empty">Recommended actions are unavailable. Refresh this page to try again.</div>';
+        loading.className = 'eb-error';
+        loading.hidden = false;
+        loading.textContent = 'Executive Brief could not be updated.';
+      }
 
       function fmtCurrency(val) {
         if (val === null || val === undefined || val === 0) return '$0';
@@ -535,6 +611,7 @@
       }
 
       function render() {
+                  beginLoading();
                   PolarisApi.getExecutiveSummary()
                     .then(function(exec) {
                       // Fetch additional data in parallel (canonical Polaris APIs)
@@ -551,8 +628,9 @@
             var customers = results[2] || [];
             var pipeline = results[3] || [];
 
-            loading.style.display = 'none';
-            content.style.display = '';
+            finishLoading();
+            availability.dataset.state = 'current';
+            availability.textContent = 'Live';
 
             // Timestamp
             document.getElementById('ebTimestamp').textContent = new Date().toLocaleString();
@@ -729,11 +807,8 @@
                 '</a>';
             }
           })
-          .catch(function(err) {
-            loading.style.display = 'none';
-            content.style.display = '';
-            document.getElementById('ebSummary').textContent = 'Unable to load Executive Brief. The Polaris™ system may be initializing.';
-            document.getElementById('ebPriority').innerHTML = '<div class="eb-error">' + err.message + '</div>';
+          .catch(function() {
+            showUnavailable();
           });
       }
 

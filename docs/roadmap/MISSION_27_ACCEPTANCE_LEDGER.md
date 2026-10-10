@@ -10,7 +10,7 @@ The 64 original rows and their order are unchanged. The additive Polaris quoted-
 
 | Gate | Closes with original slice(s) | Required evidence | Initial status |
 | --- | --- | --- | --- |
-| Q1 authority and inventory | 1A–1B | Exact Mission 24/22/23/25/27/32 ownership map; complete call/photo/estimate/calculator/proposal/signature/handoff inventory; duplicate and legacy paths quarantined | 1A candidate; 1B planned |
+| Q1 authority and inventory | 1A–1B | Exact Mission 24/22/23/25/27/32 ownership map; complete call/photo/estimate/calculator/proposal/signature/handoff inventory; duplicate and legacy paths quarantined | 1A released; 1B candidate pending audit/release |
 | Q2 threat and launch contract | 1C–1D | Capability matrix and launch choices for sources, files, extraction/provider mode, retention, options, signatures, team actions, handoffs, learning, mobile layouts, and adapter version | Planned |
 | Q3 tenant-private identity | 2A–2B | Exact tenant/customer/prospect/location/source/actor identities, minimized snapshots, corrections, no silent customer creation, paid/demo separation | Planned |
 | Q4 shared editable model | 3A | One canonical estimate/revision/option/line/input/provenance contract and versioned Mission 24/Mission 32 adapter; source/build/config/currentness retained; no parallel estimate | Planned |
@@ -27,8 +27,8 @@ An additive gate cannot close from a mockup, static page, seeded value, direct d
 
 | Slice | Acceptance scope | Local implementation | Focused mounted evidence | Independent audit | Immutable head | Production deployment | Live/provider evidence | Founder visual verdict | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1A | Mission authority, exclusions, dependency map, terminology, exact-money rules, sequence | Candidate (documentation only) | N/A — no mounted behavior | No | — | No | N/A | N/A | Candidate |
-| 1B | Exact inventory, quarantine, and misleading-finance-surface suppression | No | No | No | — | No | N/A | No | Planned |
+| 1A | Mission authority, exclusions, dependency map, terminology, exact-money rules, sequence | Complete (documentation only) | N/A — no mounted behavior | Accepted; no P0–P3 | `7a16a4fbd833d4695d0dc79289d5e074551d3eea` | PR #478; main `2c2dfd5e25d4c9ee991ee60b2871ae66f948e4ae`; deployment `f0ac5be6-69b2-4fb7-a9eb-662f91b4785e`; migration 259; health/root/demo 200 | N/A | N/A | Released |
+| 1B | Exact inventory, quarantine, and misleading-finance-surface suppression | Candidate | Focused containment plus Chrome/WebKit desktop/mobile light/dark paid-copy and keyboard checks pass locally; independent evidence pending | No | — | No | N/A | Suspended/unavailable | Candidate |
 | 1C | Threat model and action-capability/recent-auth/dual-control matrix | No | No | No | — | No | N/A | N/A | Planned |
 | 1D | Frozen launch matrix including method-specific offline/check-clearance rules, unsupported states, ledger, and release rules | No | No | No | — | No | N/A | N/A | Planned |
 | 2A | Tenant-private billing identity and immutable document snapshots | No | No | No | — | No | No | No | Planned |
@@ -106,7 +106,7 @@ An additive gate cannot close from a mockup, static page, seeded value, direct d
 
 | Gate | Required evidence | Current state |
 | --- | --- | --- |
-| Authority | Exact Mission 20/22/23/24/25/26/28 boundaries; no legacy, demo, or subscription-billing substitution | Slice 1A candidate; independent audit/release pending, and Slice 1B inventory remains planned |
+| Authority | Exact Mission 20/22/23/24/25/26/28 boundaries; no legacy, demo, or subscription-billing substitution | Slice 1A released; Slice 1B inventory candidate pending independent audit/release |
 | Launch matrix | Merchant/funds model, provider/mode/methods, geography/currency/tax, accounting, retention, refund/dispute, offline/deposit scope and exclusions frozen in 1D | Planned |
 | Tenant and role isolation | Tenant-composite relationships, action capabilities, current session/recent-auth checks, minimized runtime grants, direct-table denial | Planned |
 | Human control | Explicit reviewed issue, send, void, refund, write-off, reconcile/export, and collection actions; no completion-triggered invoice | Planned |

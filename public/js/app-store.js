@@ -13,7 +13,6 @@ window.AppStore = (function () {
     estimates: [],
     appointments: [],
     jobs: [],
-    invoices: [],
     transcripts: [],
     polarisInsights: [],
     polarisHistory: [],

@@ -357,14 +357,15 @@ realPostgres('Mission 27 Part 3B current completed-work context', () => {
   }
 
   async function waitForAdvisoryWaiters(minimum) {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const waiting = (await f.ownerPool.query(`SELECT count(*)::int AS count
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const waiting = (await f.ownerPool.query(`SELECT lock.mode,lock.pid,lock.waitstart
         FROM pg_catalog.pg_locks lock
         WHERE lock.locktype='advisory' AND NOT lock.granted
           AND lock.database=(SELECT oid FROM pg_catalog.pg_database
-            WHERE datname=current_database())`)).rows[0].count;
-      if (waiting >= minimum) return;
-      await new Promise(resolve => setTimeout(resolve, 20));
+            WHERE datname=current_database())
+        ORDER BY lock.waitstart,lock.pid`)).rows;
+      if (waiting.length >= minimum) return waiting;
+      await new Promise(resolve => setTimeout(resolve, 5));
     }
     throw new Error(`Expected ${minimum} queued billable-work advisory locks`);
   }
@@ -440,54 +441,82 @@ realPostgres('Mission 27 Part 3B current completed-work context', () => {
       let signalSnapshot; let releaseSnapshot;
       const snapshotRead = new Promise(resolve => { signalSnapshot = resolve; });
       const snapshotRelease = new Promise(resolve => { releaseSnapshot = resolve; });
-      const heldRead = workContextRepository.read(f.runtimePool, actor, estimate, {
-        readHandoff: async (...args) => {
-          const result = await workContextRepository.readHandoffWithinFence(...args);
-          signalSnapshot(); await snapshotRelease;
-          return result;
-        },
-      });
-      await Promise.race([snapshotRead, heldRead.then(result => {
-        throw new Error(`Fenced read completed before its currentness witness: ${JSON.stringify(result)}`);
-      })]);
-      let settled = false;
-      const writer = mountedWriter(kind).finally(() => { settled = true; });
-      if (kind === 'fieldEvidence') await waitForAdvisoryWaiters(1);
-      else await new Promise(resolve => setTimeout(resolve, 150));
-      expect(settled).toBe(false);
-      releaseSnapshot();
-      expect((await heldRead).state).toBe('available');
-      await writer;
-      await expectValueFreeCurrentness();
-      await recoverCurrentHandoff();
+      let heldRead; let writer;
+      try {
+        heldRead = workContextRepository.read(f.runtimePool, actor, estimate, {
+          readHandoff: async (...args) => {
+            const result = await workContextRepository.readHandoffWithinFence(...args);
+            signalSnapshot(); await snapshotRelease;
+            return result;
+          },
+        });
+        await Promise.race([snapshotRead, heldRead.then(result => {
+          throw new Error(`Fenced read completed before its currentness witness: ${JSON.stringify(result)}`);
+        })]);
+        let settled = false;
+        writer = mountedWriter(kind).finally(() => { settled = true; });
+        if (kind === 'fieldEvidence') await waitForAdvisoryWaiters(1);
+        else await new Promise(resolve => setTimeout(resolve, 100));
+        expect(settled).toBe(false);
+        releaseSnapshot();
+        expect((await heldRead).state).toBe('available');
+        await writer;
+        await expectValueFreeCurrentness();
+        await recoverCurrentHandoff();
+      } finally {
+        releaseSnapshot();
+        await Promise.allSettled([writer, heldRead].filter(Boolean));
+      }
     }, 120000,
   );
 
   test.each(['fieldEvidence','labor','materials'])(
-    'actual authorized %s writer queued first makes a concurrent read value-free',
+    'actual authorized %s writer queued before the final snapshot makes the held read value-free',
     async kind => {
       const blocker = await f.ownerPool.connect(); let transaction = false;
+      let releaseFinalFence; let writer; let heldRead;
+      const finalFenceRelease = new Promise(resolve => { releaseFinalFence = resolve; });
       try {
         await blocker.query('BEGIN'); transaction = true;
-        await blocker.query('SELECT pg_advisory_xact_lock(230007,hashtext($1))',
+        // Hold a shared work lock while the Part 3B reader gathers its initial
+        // evidence. The real writer then queues exclusively. Only after that
+        // do we allow the reader to request its final shared fence, proving the
+        // exact writer-first PostgreSQL queue ordering from the audit repro.
+        await blocker.query('SELECT pg_advisory_xact_lock_shared(230007,hashtext($1))',
           [`${f.org}:${context.execution.id}`]);
+        let signalInitialEvidence;
+        const initialEvidence = new Promise(resolve => { signalInitialEvidence = resolve; });
         let writerSettled = false; let readSettled = false;
-        const writer = mountedWriter(kind).finally(() => { writerSettled = true; });
+        heldRead = workContextRepository.read(f.runtimePool, actor, estimate, {
+          withWorkFence: async (...args) => {
+            signalInitialEvidence();
+            await finalFenceRelease;
+            return workContextRepository.withinWorkFence(...args);
+          },
+        }).finally(() => { readSettled = true; });
+        await Promise.race([initialEvidence, heldRead.then(result => {
+          throw new Error(`Read completed before final fence: ${JSON.stringify(result)}`);
+        })]);
+        writer = mountedWriter(kind).finally(() => { writerSettled = true; });
         await waitForAdvisoryWaiters(1);
-        const concurrentRead = request(f.app).get(route).set(actor.session.headers)
-          .then(response => { readSettled = true; return response; });
-        await new Promise(resolve => setTimeout(resolve, 150));
+        releaseFinalFence();
+        const queued = await waitForAdvisoryWaiters(2);
+        expect(queued.slice(0, 2).map(lock => lock.mode))
+          .toEqual(['ExclusiveLock','ShareLock']);
         expect(writerSettled).toBe(false); expect(readSettled).toBe(false);
         await blocker.query('COMMIT'); transaction = false;
         await writer;
-        const response = await concurrentRead;
-        expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ state: 'unavailable', value: null,
+        const result = await heldRead;
+        expect(result).toMatchObject({ state: 'unavailable', value: null,
           financialActionAuthorized: false });
+        expect(JSON.stringify(result)).not.toMatch(
+          /commercialBasis|operationalRiskGuidance|amount|customerId|executionId|sourceDigest/);
         await recoverCurrentHandoff();
       } finally {
+        releaseFinalFence();
         if (transaction) await blocker.query('ROLLBACK').catch(() => {});
         blocker.release();
+        await Promise.allSettled([writer, heldRead].filter(Boolean));
       }
     }, 120000,
   );
@@ -514,11 +543,11 @@ realPostgres('Mission 27 Part 3B current completed-work context', () => {
     expect(await f.db.initDatabase()).toBe(true);
     const restarted = await request(f.app).get(route).set(actor.session.headers);
     expect(restarted.status).toBe(200); expect(restarted.body.data.state).toBe('available');
-    const waits = (await f.ownerPool.query(`SELECT count(*)::int AS count
-      FROM pg_catalog.pg_locks lock WHERE lock.locktype='advisory' AND NOT lock.granted
+    const locks = (await f.ownerPool.query(`SELECT count(*)::int AS count
+      FROM pg_catalog.pg_locks lock WHERE lock.locktype='advisory'
         AND lock.database=(SELECT oid FROM pg_catalog.pg_database
-          WHERE datname=current_database())`)).rows[0].count;
-    expect(waits).toBe(0);
+          WHERE datname=current_database()) AND lock.classid IN (230004,230007)`)).rows[0].count;
+    expect(locks).toBe(0);
   }, 120000);
 
   test('reopening invalidates final-balance context and returns no prior value', async () => {

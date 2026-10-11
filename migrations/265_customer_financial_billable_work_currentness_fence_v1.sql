@@ -1,46 +1,9 @@
 -- Mission 27 Part 3B correction: database-owned currentness serialization for
 -- the exact Mission 23 rows joined into billable-work context.  The reader
--- takes the tenant row lock and this per-work lock shared.  Every actual source
--- mutation takes the same work identity exclusively before its source row can
--- change.  No source meaning, write authority, grant, or financial action is
--- added by this migration.
-
-CREATE FUNCTION public.canonical_customer_financial_billable_work_reader_fence_v1(
- p_organization_id UUID,
- p_execution_id UUID
-)
-RETURNS BOOLEAN LANGUAGE plpgsql VOLATILE SECURITY DEFINER
-SET search_path=pg_catalog,public,pg_temp AS $$
-BEGIN
- IF p_organization_id IS NULL OR p_execution_id IS NULL THEN
-  RAISE EXCEPTION 'Billable-work reader identity unavailable'
-   USING ERRCODE='42501',
-    CONSTRAINT='canonical_customer_financial_billable_work_reader_identity';
- END IF;
- -- Take the released material authority lock first, then lock tenant and
- -- execution rows before the shared work fence. Actual
- -- labor/material writers lock the execution row before their source trigger;
- -- matching that order prevents a reader/writer deadlock while keeping every
- -- other source writer serialized by the advisory fence below.
- PERFORM pg_advisory_xact_lock_shared(230004,4);
- PERFORM 1 FROM public.organizations
-  WHERE id=p_organization_id FOR SHARE;
- IF NOT FOUND THEN
-  RAISE EXCEPTION 'Billable-work tenant unavailable'
-   USING ERRCODE='42501',
-    CONSTRAINT='canonical_customer_financial_billable_work_tenant_unavailable';
- END IF;
- PERFORM 1 FROM public.canonical_field_executions
-  WHERE organization_id=p_organization_id AND id=p_execution_id FOR SHARE;
- IF NOT FOUND THEN
-  RAISE EXCEPTION 'Billable-work execution unavailable'
-   USING ERRCODE='42501',
-    CONSTRAINT='canonical_customer_financial_billable_work_execution_unavailable';
- END IF;
- PERFORM pg_advisory_xact_lock_shared(
-  230007,hashtext(p_organization_id::text||':'||p_execution_id::text));
- RETURN TRUE;
-END $$;
+-- takes the matching advisory fences shared before beginning its validating
+-- repeatable-read snapshot. Every actual source mutation takes the same work
+-- identity exclusively before its source row can change. No source meaning,
+-- write authority, grant, or financial action is added by this migration.
 
 CREATE FUNCTION public.canonical_customer_financial_billable_work_execution_fence_v1()
 RETURNS TRIGGER LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -68,9 +31,10 @@ BEGIN
    USING ERRCODE='23514',
     CONSTRAINT='canonical_customer_financial_billable_work_source_identity';
  END IF;
- -- Tenant first, work second is the shared lock order with Part 3B and the
- -- released Mission 24/schedule tenant fences.  A shared tenant row lock does
- -- not serialize unrelated jobs in one tenant.
+ -- Source writers validate the tenant row before taking the per-work fence.
+ -- The Part 3B reader does not take this row lock; it takes its released
+ -- advisory authority fence and then this per-work fence before BEGIN. This
+ -- avoids a row/advisory cycle and does not serialize unrelated jobs by row.
  PERFORM 1 FROM public.organizations WHERE id=org FOR SHARE;
  IF NOT FOUND THEN
   RAISE EXCEPTION 'Billable-work tenant unavailable'
@@ -147,6 +111,4 @@ CREATE TRIGGER canonical_billable_work_fence_handoff_v1
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_billable_work_source_fence_v1()
  FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_billable_work_execution_fence_v1()
- FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.canonical_customer_financial_billable_work_reader_fence_v1(UUID,UUID)
  FROM PUBLIC;

@@ -13,24 +13,27 @@ function unavailableFromFailure(error, evidence) {
 }
 async function withinWorkFence(pool, organizationId, executionId, action) {
   if (!pool || typeof pool.connect !== 'function') throw new Error('Work fence unavailable');
-  const client = await pool.connect(); let transaction = false; let discard = false;
+  const client = await pool.connect(); let authorityLock = false; let workLock = false;
+  let transaction = false; let discard = false;
+  const identity = `${organizationId}:${executionId}`;
   try {
+    await client.query("SET statement_timeout='10s'");
+    await client.query("SET lock_timeout='2s'");
+    await client.query("SET idle_in_transaction_session_timeout='15s'");
+    // Acquire both released Mission 23 fences before BEGIN. PostgreSQL queues a
+    // shared work lock behind an already-waiting exclusive writer, so the
+    // repeatable-read snapshot below is always created after that writer's
+    // commit. No source row lock is needed: migration 265 prevents every joined
+    // source mutation from committing while this shared work lock is held.
+    await client.query('SELECT pg_advisory_lock_shared(230004,4)');
+    authorityLock = true;
+    await client.query('SELECT pg_advisory_lock_shared(230007,hashtext($1))', [identity]);
+    workLock = true;
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ'); transaction = true;
     await client.query("SET LOCAL statement_timeout='10s'");
     await client.query("SET LOCAL lock_timeout='2s'");
     await client.query("SET LOCAL idle_in_transaction_session_timeout='15s'");
     await client.query('SET LOCAL search_path=pg_catalog,public,pg_temp');
-    // The database-owned helper takes tenant, execution and advisory locks in
-    // the one safe global order used with actual Mission 23 writers. Keeping
-    // direct table authority out of the runtime role also prevents this fence
-    // from becoming a second source reader.
-    const fence = await client.query(
-      'SELECT public.canonical_customer_financial_billable_work_reader_fence_v1($1,$2) locked',
-      [organizationId, executionId],
-    );
-    if (fence.rows[0]?.locked !== true) throw Object.assign(new Error('Work fence unavailable'), {
-      code: '42501', status: 403,
-    });
     const result = await action(client);
     await client.query('COMMIT'); transaction = false;
     return result;
@@ -38,6 +41,12 @@ async function withinWorkFence(pool, organizationId, executionId, action) {
     if (transaction) await client.query('ROLLBACK').catch(() => { discard = true; });
     throw error;
   } finally {
+    if (workLock) await client.query(
+      'SELECT pg_advisory_unlock_shared(230007,hashtext($1))', [identity],
+    ).catch(() => { discard = true; });
+    if (authorityLock) await client.query(
+      'SELECT pg_advisory_unlock_shared(230004,4)',
+    ).catch(() => { discard = true; });
     await client.query('RESET ALL').catch(() => { discard = true; });
     client.release(discard);
   }

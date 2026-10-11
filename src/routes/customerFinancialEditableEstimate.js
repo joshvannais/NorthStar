@@ -5,6 +5,7 @@ const db = require('../db');
 const { requireOnboardedInternal, requireRole } = require('../auth/middleware');
 const { rateLimit } = require('../middleware/rateLimit');
 const repository = require('../customerFinancial/editableEstimateBasisRepository');
+const workContextRepository = require('../customerFinancial/billableWorkContextRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -30,6 +31,8 @@ function failure(res, error) {
 }
 function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const router = express.Router(); const poolProvider = options.poolProvider || (() => db.getPool());
+  const basisRead = options.basisRead || repository.read;
+  const workContextRead = options.workContextRead || workContextRepository.read;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const throttle = options.throttle || rateLimit('internal-api', req =>
@@ -42,7 +45,15 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
       code: 'CUSTOMER_FINANCIAL_EDITABLE_ESTIMATE_INVALID',
       message: 'Select one exact current estimate.' });
     try { return res.json({ success: true,
-      data: await repository.read(poolProvider(), source(req), req.params.estimateId) });
+      data: await basisRead(poolProvider(), source(req), req.params.estimateId) });
+    } catch (error) { return failure(res,error); }
+  });
+  router.get('/:estimateId/work-context', auth, role, throttle, async (req,res) => {
+    if (Object.keys(req.query).length) return failure(res, { status: 400,
+      code: 'CUSTOMER_FINANCIAL_EDITABLE_ESTIMATE_INVALID',
+      message: 'Select one exact current estimate.' });
+    try { return res.json({ success: true,
+      data: await workContextRead(poolProvider(), source(req), req.params.estimateId) });
     } catch (error) { return failure(res,error); }
   });
   return router;

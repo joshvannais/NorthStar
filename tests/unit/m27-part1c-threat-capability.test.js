@@ -157,7 +157,7 @@ describe('Mission 27 Slice 1C threat and action-capability contract', () => {
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql'))
       .sort();
-    expect(migrationNames.at(-1)).toBe('264_customer_financial_editable_estimate_basis_v1.sql');
+    expect(migrationNames.at(-1)).toBe('265_customer_financial_billable_work_currentness_fence_v1.sql');
     expect(migrationNames.filter(name => /^260_/.test(name))).toEqual([
       '260_customer_financial_billing_identity_v1.sql',
     ]);

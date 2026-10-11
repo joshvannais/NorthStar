@@ -33,10 +33,10 @@ async function customer(fixture, tenant, suffix, overrides = {}) {
   return customerId;
 }
 
-async function authorize(fixture, source, customerId, options = {}) {
+async function insertGrant(client, source, customerId, options = {}) {
   const grantId = options.grantId || crypto.randomUUID();
   const revision = options.revision || 1;
-  await fixture.ownerPool.query(
+  await client.query(
     `INSERT INTO canonical_customer_financial_billing_capability_grants_v1(
       organization_id,id,revision,actor_user_id,membership_id,customer_id,capability,
       business_purpose,policy_version,template_version,active,valid_from,expires_at,issued_at)
@@ -45,12 +45,27 @@ async function authorize(fixture, source, customerId, options = {}) {
     [source.organizationId, grantId, revision, source.actorUserId, customerId,
       repository.CAPABILITY, repository.BUSINESS_PURPOSE, repository.POLICY_VERSION,
       source.actorAccessRole === 'owner' ? 'm27.owner.v1' : 'm27.admin.v1',
-      options.active === undefined ? true : options.active]);
+       options.active === undefined ? true : options.active]);
+  return { grantId, revision };
+}
+async function authorize(fixture, source, customerId, options = {}) {
+  const { grantId, revision } = await insertGrant(fixture.ownerPool, source, customerId, options);
   return { organizationId: source.organizationId, actorUserId: source.actorUserId,
     actorAccessRole: source.actorAccessRole, authSessionId: source.authSessionId,
     capabilityGrantId: grantId, capabilityGrantRevision: revision,
     businessPurpose: repository.BUSINESS_PURPOSE, policyVersion: repository.POLICY_VERSION,
     csrfToken: source.csrfToken };
+}
+async function waitingOnAdvisory(fixture, pid) {
+  const deadline = Date.now() + 5000;
+  do {
+    const waiting = (await fixture.ownerPool.query(
+      "SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND locktype='advisory' AND NOT granted) waiting",
+      [pid])).rows[0].waiting;
+    if (waiting) return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  } while (Date.now() < deadline);
+  throw new Error(`Backend ${pid} did not wait on the logical capability grant lock`);
 }
 function mutationActor(source, idempotencyKey = crypto.randomUUID()) {
   return { ...source, idempotencyKey };
@@ -281,6 +296,58 @@ realPostgres('Mission 27 Part 2A billing identity PostgreSQL authority', () => {
       [fixture.org, customerId])).rows[0].count).toBe(0);
   }, 120000);
 
+  test('rolls back Part 2A identity effects when capability supersession wins', async () => {
+    const customerId = await customer(fixture, fixture.org, 'capability-race');
+    const owner = await authorize(fixture, fixture.actors.owner, customerId);
+    const candidate = await repository.candidate(fixture.runtimePool, readActor(owner), { customerId });
+    const input = { customerId, expectedSourceDigest: candidate.sourceDigest,
+      expectedSourceUpdatedAt: candidate.sourceUpdatedAt,
+      reason: 'Capability supersession must win before the durable identity effect.' };
+    const lockKey = `${fixture.org}:billing-capability-grant:${owner.capabilityGrantId}`;
+    const blocker = await fixture.ownerPool.connect();
+    const issuer = await fixture.ownerPool.connect();
+    const effectClient = await fixture.runtimePool.connect();
+    let issuance;
+    let effect;
+    let effectStarted = false;
+    try {
+      const issuerPid = (await issuer.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      const effectPid = (await effectClient.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [lockKey]);
+      issuance = (async () => {
+        await issuer.query('BEGIN');
+        try {
+          await insertGrant(issuer, fixture.actors.owner, customerId,
+            { grantId: owner.capabilityGrantId, revision: 2 });
+          await issuer.query('COMMIT');
+        } catch (error) {
+          await issuer.query('ROLLBACK').catch(() => {}); throw error;
+        }
+      })();
+      await waitingOnAdvisory(fixture, issuerPid);
+      effectStarted = true;
+      effect = repository.establish({ connect: async () => effectClient }, mutationActor(owner), input);
+      await waitingOnAdvisory(fixture, effectPid);
+      await blocker.query('COMMIT');
+      await issuance;
+      await expect(effect).rejects.toMatchObject({ code: expect.stringMatching(/^(40001|42501)$/) });
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {}); blocker.release();
+      await issuer.query('ROLLBACK').catch(() => {}); issuer.release();
+      if (!effectStarted) effectClient.release();
+      if (issuance) await issuance.catch(() => {});
+      if (effect) await effect.catch(() => {});
+    }
+    for (const table of ['canonical_customer_financial_billing_parties_v1',
+      'canonical_customer_financial_billing_identity_snapshots_v1',
+      'canonical_customer_financial_billing_identity_requests_v1']) {
+      expect((await fixture.ownerPool.query(
+        `SELECT count(*)::int count FROM ${table} WHERE organization_id=$1 AND customer_id=$2`,
+        [fixture.org, customerId])).rows[0].count).toBe(0);
+    }
+  }, 120000);
+
   test('preserves concurrency, privacy, immutability and restart authority', async () => {
     const customerId = await customer(fixture, fixture.org, 'concurrent');
     const owner = await authorize(fixture, fixture.actors.owner, customerId);
@@ -302,6 +369,7 @@ realPostgres('Mission 27 Part 2A billing identity PostgreSQL authority', () => {
       [fixture.org, customerId])).rows[0].count).toBe(1);
 
     for (const table of ['canonical_customer_financial_billing_capability_grants_v1',
+      'canonical_customer_financial_billing_capability_heads_v1',
       'canonical_customer_financial_billing_parties_v1',
       'canonical_customer_financial_billing_identity_snapshots_v1',
       'canonical_customer_financial_billing_identity_requests_v1']) {

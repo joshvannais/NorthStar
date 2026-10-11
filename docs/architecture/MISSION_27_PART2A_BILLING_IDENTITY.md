@@ -1,6 +1,6 @@
 # Mission 27 Part 2A — canonical billing-party identity
 
-Status: implementation candidate. Independent whole-head audit, merge, deployment, migration 260, and production health evidence are pending.
+Status: released. Accepted corrected head `729a7dc8d2ca2d72500df51ebc2de88977183373` was merged through PR #482 as exact main `cc1bd643d51fc61883b643e194e3b8c9948c5189` and released by automatic Railway deployment `3bcf9e6c-b8ce-4b5e-a067-381784d24837`; migration 260 applied and `/api/health`, `/`, and `/demo/` returned HTTP 200. Live-money validation was not run and remains deferred until the first real paying customer.
 
 ## Authority
 

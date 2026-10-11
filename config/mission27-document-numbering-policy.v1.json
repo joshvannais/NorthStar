@@ -1,0 +1,35 @@
+{
+  "policyVersion": "mission27.document_numbering.v1",
+  "policyKind": "subordinate_action_policy",
+  "predecessor": {
+    "contractVersion": "mission27.launch.v1",
+    "canonicalDigest": "d24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a",
+    "compatibilityMode": "exact_predecessor_required_no_reinterpretation"
+  },
+  "scope": {
+    "targetClass": "tenant_document_numbering_policy",
+    "businessPurpose": "customer_financial.document_numbering"
+  },
+  "template": {
+    "version": "m27.document_numbering.owner.v1",
+    "eligibleAccessRoles": ["owner"],
+    "capabilities": ["customer_financial.document_numbering.review"]
+  },
+  "actionControl": {
+    "capability": "customer_financial.document_numbering.review",
+    "mode": "single_control",
+    "assurance": "current_session",
+    "requires": [
+      "exact_frozen_tenant_global_numbering_contract",
+      "current_owner_capability",
+      "fresh_confirmation",
+      "reason"
+    ]
+  },
+  "compatibility": {
+    "predecessorCapabilitiesRemainAuthoritative": true,
+    "predecessorRecordsRetainPolicyVersion": true,
+    "crossVersionSubstitutionAllowed": false,
+    "downgradeAllowed": false
+  }
+}

@@ -129,6 +129,69 @@ realPostgres('Mission 27 Part 2B reviewed billing identity PostgreSQL authority'
     )).rows.map(row => row.filename)).toEqual(['261_customer_financial_billing_identity_review_v1.sql']);
   }, 120000);
 
+  test('never reauthorizes a superseded human-only correction during replay concurrency', async () => {
+    const customerId = await customer(fixture, fixture.org, 'superseded-replay');
+    const owner = await authorize(fixture, fixture.actors.owner, customerId);
+    await establish(fixture, owner, customerId);
+    const firstCandidate = await reviewRepository.candidate(
+      fixture.runtimePool, readActor(owner), { customerId });
+    const firstKey = crypto.randomUUID();
+    const firstInput = reviewInput(firstCandidate,
+      reviewPayload({ purchaseOrderReference: 'PO-100' }));
+    const first = await reviewRepository.accept(
+      fixture.runtimePool, mutationActor(owner, firstKey), firstInput);
+    const correctionCandidate = await reviewRepository.candidate(
+      fixture.runtimePool, readActor(owner), { customerId });
+    expect(correctionCandidate).toMatchObject({ state: 'correction_required', sequence: 1,
+      sourceDigest: first.body.sourceDigest, sourceUpdatedAt: first.body.sourceUpdatedAt });
+    const correctionKey = crypto.randomUUID();
+    const correctionInput = reviewInput(correctionCandidate,
+      reviewPayload({ purchaseOrderReference: 'PO-200' }),
+      'Correct only the human-reviewed purchase order reference.');
+
+    const blocker = await fixture.ownerPool.connect();
+    let replayAttempt;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
+        `${fixture.org}:billing-review-request:${owner.actorUserId}:${owner.authSessionId}:${hash(firstKey)}`,
+      ]);
+      let replaySettled = false;
+      replayAttempt = reviewRepository.accept(
+        fixture.runtimePool, mutationActor(owner, firstKey), firstInput);
+      replayAttempt.then(() => { replaySettled = true; }, () => { replaySettled = true; });
+      await new Promise(resolve => setTimeout(resolve, 250));
+      expect(replaySettled).toBe(false);
+
+      const correction = await reviewRepository.accept(
+        fixture.runtimePool, mutationActor(owner, correctionKey), correctionInput);
+      expect(correction).toMatchObject({ status: 201,
+        body: { sequence: 2, value: { references: { purchaseOrder: { value: 'PO-200' } } } } });
+      await blocker.query('COMMIT');
+
+      const obsoleteReplay = await replayAttempt;
+      expect(obsoleteReplay).toMatchObject({ status: 409, replayed: true,
+        body: { state: 'unavailable', current: false,
+          reason: 'billing_identity_review_superseded', value: null,
+          sourceDigest: null, sourceUpdatedAt: null, reviewDigest: null,
+          documentUseAuthorized: false } });
+      expect(JSON.stringify(obsoleteReplay)).not.toContain('PO-100');
+      const current = await reviewRepository.read(
+        fixture.runtimePool, readActor(owner), { customerId });
+      expect(current).toMatchObject({ state: 'reviewed_current', sequence: 2,
+        value: { references: { purchaseOrder: { value: 'PO-200' } } } });
+      const currentReplay = await reviewRepository.accept(
+        fixture.runtimePool, mutationActor(owner, correctionKey), correctionInput);
+      expect(currentReplay).toMatchObject({ status: 200, replayed: true,
+        body: { state: 'reviewed_current', sequence: 2,
+          value: { references: { purchaseOrder: { value: 'PO-200' } } } } });
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      blocker.release();
+      if (replayAttempt) await replayAttempt.catch(() => {});
+    }
+  }, 120000);
+
   test('makes changed source value-free and appends one exact correction lineage', async () => {
     const customerId = await customer(fixture, fixture.org, 'correction');
     const admin = await authorize(fixture, fixture.actors.admin, customerId);

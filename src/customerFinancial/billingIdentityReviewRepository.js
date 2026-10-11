@@ -17,7 +17,8 @@ const POLICY_VERSION = 'mission27.launch.v1';
 const UNAVAILABLE = new Set(['billing_customer_identity_unavailable','billing_identity_not_established',
   'billing_identity_history_unavailable','billing_identity_review_required',
   'billing_identity_review_source_changed','billing_customer_source_changed',
-  'billing_identity_review_conflict','billing_identity_review_limit_reached']);
+  'billing_identity_review_conflict','billing_identity_review_limit_reached',
+  'billing_identity_review_superseded']);
 
 function failure(code, status, message) {
   const error = new Error(message); error.code = code; error.status = status; return error;
@@ -288,7 +289,10 @@ async function accept(pool, actorValue, inputValue) {
   actor(actorValue, true); const input = normalizeReview(inputValue);
   const client = await pool.connect();
   try {
-    await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+    // The database function serializes the request key and billing party itself. READ COMMITTED
+    // is deliberate: a waiter must take a new command snapshot after those locks are acquired so
+    // a human correction that won the lock cannot be replayed through an older transaction view.
+    await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
     const result = await client.query(
       'SELECT public.canonical_customer_financial_billing_review_v1_accept($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20) value',
       [actorValue.organizationId,actorValue.actorUserId,actorValue.actorAccessRole,

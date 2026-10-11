@@ -89,6 +89,8 @@ describe('Mission 27 Part 2B billing identity review contract', () => {
     const leaking = { ...unavailable, value: reviewSnapshot() };
     expect(() => repository.verified(leaking, actor.organizationId))
       .toThrow('Billing identity review evidence is unavailable.');
+    const superseded = { ...unavailable, reason: 'billing_identity_review_superseded' };
+    expect(repository.verified(superseded, actor.organizationId)).toEqual(superseded);
   });
 
   test('ratifies append-only lineage and excludes later-slice authority', () => {
@@ -97,6 +99,12 @@ describe('Mission 27 Part 2B billing identity review contract', () => {
     expect(sql).toContain("'canonical_prospect_source_unavailable'");
     expect(sql).toContain("'documentUseAuthorized',TRUE");
     expect(sql).toContain('previous_review_id');
+    expect(sql).toContain("'billing_identity_review_superseded'");
+    expect(sql).toContain("org::text||':billing-review-party:'||request_record.billing_party_id::text");
+    expect(sql).toMatch(/latest_record\.id<>request_record\.review_id[\s\S]*latest_record\.sequence<>review_record\.sequence[\s\S]*latest_record\.reviewed_snapshot_digest/);
+    expect(sql).toContain("current_setting('transaction_isolation')<>'read committed'");
+    expect(read('src/customerFinancial/billingIdentityReviewRepository.js'))
+      .toContain('BEGIN ISOLATION LEVEL READ COMMITTED');
     expect(sql).toContain('FOR SHARE');
     expect(sql).not.toMatch(/INSERT INTO public\.canonical_customers|UPDATE public\.canonical_customers|DELETE FROM public\.canonical_customers/);
     expect(sql).not.toMatch(/INSERT INTO public\.canonical_(?:estimates|appointments|invoice|payment)/i);

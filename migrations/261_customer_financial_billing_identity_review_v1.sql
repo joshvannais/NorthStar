@@ -413,6 +413,7 @@ DECLARE authority JSONB;customer_record public.canonical_customers%ROWTYPE;
  origin_record public.canonical_customer_financial_billing_identity_snapshots_v1%ROWTYPE;
  previous_record public.canonical_customer_financial_billing_identity_reviews_v1%ROWTYPE;
  review_record public.canonical_customer_financial_billing_identity_reviews_v1%ROWTYPE;
+ latest_record public.canonical_customer_financial_billing_identity_reviews_v1%ROWTYPE;
  request_record public.canonical_customer_financial_billing_review_requests_v1%ROWTYPE;
  key_digest_value TEXT;request_digest_value TEXT;source_digest_value TEXT;
  snapshot_value JSONB;saved_response_value JSONB;response_value JSONB;
@@ -420,8 +421,8 @@ DECLARE authority JSONB;customer_record public.canonical_customers%ROWTYPE;
  contact_id_value UUID;service_address_id_value UUID;billing_address_id_value UUID;
  sequence_value INTEGER;
 BEGIN
- IF current_setting('transaction_isolation')<>'serializable' THEN
-  RAISE EXCEPTION 'Serializable transaction required for billing identity review'
+ IF current_setting('transaction_isolation')<>'read committed' THEN
+  RAISE EXCEPTION 'Read committed transaction required for current billing identity review'
    USING ERRCODE='25001';END IF;
  authority:=public.canonical_customer_financial_billing_identity_v1_access(
   org,actor,role_value,session_value,csrf,TRUE,capability_grant_id_value,
@@ -460,13 +461,27 @@ BEGIN
   IF rtrim(request_record.request_digest)<>request_digest_value THEN
    RAISE EXCEPTION 'Billing identity review idempotency conflict'
     USING ERRCODE='23505',CONSTRAINT='canonical_customer_financial_billing_review_idempotency_conflict';END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+   org::text||':billing-review-party:'||request_record.billing_party_id::text,0));
   SELECT * INTO review_record FROM public.canonical_customer_financial_billing_identity_reviews_v1 review
-   WHERE review.organization_id=org AND review.id=request_record.review_id;
+   WHERE review.organization_id=org AND review.id=request_record.review_id FOR SHARE;
   IF review_record.id IS NULL THEN RAISE EXCEPTION 'Billing identity review replay history unavailable'
    USING ERRCODE='55000';END IF;
   saved_response_value:=public.canonical_customer_financial_billing_review_v1_saved_projection(review_record);
   IF rtrim(request_record.response_digest)<>public.canonical_completion_digest(saved_response_value) THEN
    RAISE EXCEPTION 'Billing identity review replay digest invalid' USING ERRCODE='55000';END IF;
+  SELECT * INTO latest_record FROM public.canonical_customer_financial_billing_identity_reviews_v1 review
+   WHERE review.organization_id=org AND review.billing_party_id=request_record.billing_party_id
+   ORDER BY review.sequence DESC LIMIT 1 FOR SHARE;
+  IF latest_record.id IS NULL THEN RAISE EXCEPTION 'Billing identity review replay history unavailable'
+   USING ERRCODE='55000';END IF;
+  IF latest_record.id<>request_record.review_id OR latest_record.sequence<>review_record.sequence OR
+     rtrim(latest_record.reviewed_snapshot_digest)<>rtrim(review_record.reviewed_snapshot_digest) THEN
+   RETURN jsonb_build_object('status',409,'body',
+    public.canonical_customer_financial_billing_review_v1_unavailable(
+     'billing_identity_review_superseded',request_record.customer_id,
+     request_record.billing_party_id,latest_record.id,FALSE),'replayed',TRUE);
+  END IF;
   SELECT * INTO customer_record FROM public.canonical_customers customer
    WHERE customer.organization_id=org AND customer.id=request_record.customer_id FOR SHARE;
   IF customer_record.id IS NULL THEN RETURN jsonb_build_object('status',409,'body',

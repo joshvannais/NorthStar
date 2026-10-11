@@ -4,12 +4,18 @@ const ENTRIES = new Set([
   'canonical_customer_financial_billing_identity_v1_candidate',
   'canonical_customer_financial_billing_identity_v1_read',
   'canonical_customer_financial_billing_identity_v1_establish',
+  'canonical_customer_financial_billing_review_v1_candidate',
+  'canonical_customer_financial_billing_review_v1_read',
+  'canonical_customer_financial_billing_review_v1_history',
+  'canonical_customer_financial_billing_review_v1_accept',
 ]);
 const TABLES = new Set([
   'canonical_customer_financial_billing_capability_grants_v1',
   'canonical_customer_financial_billing_parties_v1',
   'canonical_customer_financial_billing_identity_snapshots_v1',
   'canonical_customer_financial_billing_identity_requests_v1',
+  'canonical_customer_financial_billing_identity_reviews_v1',
+  'canonical_customer_financial_billing_review_requests_v1',
 ]);
 const quote = value => '"' + value.replace(/"/g, '""') + '"';
 
@@ -31,7 +37,8 @@ async function grantAndVerify(client, runtimeRole) {
   const functions = (await client.query(
     `SELECT oid,proname,oid::regprocedure::text identity FROM pg_proc
       WHERE pronamespace='public'::regnamespace
-        AND proname LIKE 'canonical_customer_financial_billing_identity_v1_%'`
+        AND (proname LIKE 'canonical_customer_financial_billing_identity_v1_%'
+          OR proname LIKE 'canonical_customer_financial_billing_review_v1_%')`
   )).rows;
   for (const entry of functions) {
     await client.query('REVOKE ALL ON FUNCTION ' + entry.identity + ' FROM PUBLIC, ' + role);

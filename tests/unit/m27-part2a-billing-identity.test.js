@@ -100,7 +100,7 @@ describe('Mission 27 Part 2A billing identity contract', () => {
     expect(sql).not.toMatch(/INSERT INTO public\.(?!canonical_customer_financial_billing_)/);
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql')).sort();
-    expect(migrationNames.at(-1)).toBe('260_customer_financial_billing_identity_v1.sql');
+    expect(migrationNames).toContain('260_customer_financial_billing_identity_v1.sql');
     expect(migrationNames.filter(name => /^260_/.test(name))).toHaveLength(1);
     expect(fs.existsSync(path.join(ROOT, 'src', 'customerFinancial', 'billingIdentityRepository.js'))).toBe(true);
     expect(read('src/customerFinancial/databaseAuthority.js')).toContain(

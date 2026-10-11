@@ -6,6 +6,7 @@ const ENTRIES = new Set([
   'canonical_customer_financial_billing_identity_v1_establish',
 ]);
 const TABLES = new Set([
+  'canonical_customer_financial_billing_capability_grants_v1',
   'canonical_customer_financial_billing_parties_v1',
   'canonical_customer_financial_billing_identity_snapshots_v1',
   'canonical_customer_financial_billing_identity_requests_v1',

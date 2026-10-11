@@ -5,6 +5,9 @@ const DIGEST = /^[0-9a-f]{64}$/;
 const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 const ROLES = new Set(['owner', 'admin']);
+const CAPABILITY = 'customer_financial.billing_identity.review';
+const BUSINESS_PURPOSE = 'customer_financial.billing_identity';
+const POLICY_VERSION = 'mission27.launch.v1';
 const UNAVAILABLE = new Set([
   'billing_customer_identity_unavailable',
   'billing_customer_source_shape_unavailable',
@@ -37,10 +40,14 @@ function nullableText(value, maximum) {
   return value === null || (typeof value === 'string' && value.length > 0 && value.length <= maximum);
 }
 function actor(value, mutation) {
-  const keys = mutation ? ['organizationId','actorUserId','actorAccessRole','authSessionId',
-    'csrfToken','idempotencyKey'] : ['organizationId','actorUserId','actorAccessRole','authSessionId'];
+  const authorityKeys = ['organizationId','actorUserId','actorAccessRole','authSessionId',
+    'capabilityGrantId','capabilityGrantRevision','businessPurpose','policyVersion'];
+  const keys = mutation ? [...authorityKeys,'csrfToken','idempotencyKey'] : authorityKeys;
   if (!exact(value, keys) || !uuid(value.organizationId) || !uuid(value.actorUserId) ||
       !uuid(value.authSessionId) || !ROLES.has(value.actorAccessRole) ||
+      !uuid(value.capabilityGrantId) || !Number.isSafeInteger(value.capabilityGrantRevision) ||
+      value.capabilityGrantRevision < 1 || value.businessPurpose !== BUSINESS_PURPOSE ||
+      value.policyVersion !== POLICY_VERSION ||
       (mutation && (typeof value.csrfToken !== 'string' || value.csrfToken.length < 32 ||
         value.csrfToken.length > 512 || !KEY.test(value.idempotencyKey || '')))) {
     throw failure('CUSTOMER_FINANCIAL_BILLING_IDENTITY_RESTRICTED', 403,
@@ -84,9 +91,14 @@ function snapshot(value, organizationId, customerId, billingPartyId) {
       !sourceField(value.contact.phone, 100) || !unavailableField(value.tax) ||
       !unavailableField(value.exemption) || !unavailableField(value.delivery)) return false;
   const sourceActor = value.actor;
-  return exact(sourceActor, ['userId','accessRole','membershipId','authSessionId']) &&
+  return exact(sourceActor, ['userId','accessRole','membershipId','authSessionId','capability',
+    'capabilityGrantId','capabilityGrantRevision','businessPurpose','policyVersion']) &&
     uuid(sourceActor.userId) && ROLES.has(sourceActor.accessRole) &&
-    uuid(sourceActor.membershipId) && uuid(sourceActor.authSessionId);
+    uuid(sourceActor.membershipId) && uuid(sourceActor.authSessionId) &&
+    sourceActor.capability === CAPABILITY && uuid(sourceActor.capabilityGrantId) &&
+    Number.isSafeInteger(sourceActor.capabilityGrantRevision) &&
+    sourceActor.capabilityGrantRevision >= 1 && sourceActor.businessPurpose === BUSINESS_PURPOSE &&
+    sourceActor.policyVersion === POLICY_VERSION;
 }
 function verified(value, organizationId) {
   const keys = ['version','state','available','current','reason','customerId','billingPartyId',
@@ -147,17 +159,19 @@ function normalizeEstablishment(value) {
 async function candidate(pool, actorValue, selectionValue) {
   actor(actorValue, false); const selection = normalizeSelection(selectionValue);
   const result = await pool.query(
-    'SELECT public.canonical_customer_financial_billing_identity_v1_candidate($1,$2,$3,$4,$5) value',
+    'SELECT public.canonical_customer_financial_billing_identity_v1_candidate($1,$2,$3,$4,$5,$6,$7,$8,$9) value',
     [actorValue.organizationId,actorValue.actorUserId,actorValue.actorAccessRole,
-      actorValue.authSessionId,selection.customerId]);
+      actorValue.authSessionId,actorValue.capabilityGrantId,actorValue.capabilityGrantRevision,
+      actorValue.businessPurpose,actorValue.policyVersion,selection.customerId]);
   return verified(result.rows[0]?.value, actorValue.organizationId);
 }
 async function read(pool, actorValue, selectionValue) {
   actor(actorValue, false); const selection = normalizeSelection(selectionValue);
   const result = await pool.query(
-    'SELECT public.canonical_customer_financial_billing_identity_v1_read($1,$2,$3,$4,$5) value',
+    'SELECT public.canonical_customer_financial_billing_identity_v1_read($1,$2,$3,$4,$5,$6,$7,$8,$9) value',
     [actorValue.organizationId,actorValue.actorUserId,actorValue.actorAccessRole,
-      actorValue.authSessionId,selection.customerId]);
+      actorValue.authSessionId,actorValue.capabilityGrantId,actorValue.capabilityGrantRevision,
+      actorValue.businessPurpose,actorValue.policyVersion,selection.customerId]);
   return verified(result.rows[0]?.value, actorValue.organizationId);
 }
 async function establish(pool, actorValue, inputValue) {
@@ -166,13 +180,15 @@ async function establish(pool, actorValue, inputValue) {
   try {
     await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
     const result = await client.query(
-      'SELECT public.canonical_customer_financial_billing_identity_v1_establish($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) value',
+      'SELECT public.canonical_customer_financial_billing_identity_v1_establish($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) value',
       [actorValue.organizationId,actorValue.actorUserId,actorValue.actorAccessRole,
-        actorValue.authSessionId,actorValue.csrfToken,actorValue.idempotencyKey,
-        input.customerId,input.expectedSourceDigest,input.expectedSourceUpdatedAt,input.reason]);
+        actorValue.authSessionId,actorValue.capabilityGrantId,actorValue.capabilityGrantRevision,
+        actorValue.businessPurpose,actorValue.policyVersion,actorValue.csrfToken,
+        actorValue.idempotencyKey,input.customerId,input.expectedSourceDigest,
+        input.expectedSourceUpdatedAt,input.reason]);
     const response = result.rows[0]?.value;
     if (!exact(response, ['status','body','replayed']) || ![200,201,409].includes(response.status) ||
-        typeof response.replayed !== 'boolean' || (response.replayed && response.status !== 200)) {
+        typeof response.replayed !== 'boolean' || (response.replayed && ![200,409].includes(response.status))) {
       throw failure('CUSTOMER_FINANCIAL_BILLING_IDENTITY_UNAVAILABLE', 503,
         'Billing identity evidence is unavailable.');
     }
@@ -189,4 +205,5 @@ async function establish(pool, actorValue, inputValue) {
   } finally { client.release(); }
 }
 
-module.exports = { candidate, read, establish, normalizeSelection, normalizeEstablishment, verified };
+module.exports = { candidate, read, establish, normalizeSelection, normalizeEstablishment, verified,
+  CAPABILITY, BUSINESS_PURPOSE, POLICY_VERSION };

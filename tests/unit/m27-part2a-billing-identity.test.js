@@ -11,7 +11,9 @@ const id = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
 const instant = '2026-10-10T12:00:00.000000Z';
 const actor = Object.freeze({ organizationId: id(1), actorUserId: id(2),
-  actorAccessRole: 'owner', authSessionId: id(3) });
+  actorAccessRole: 'owner', authSessionId: id(3), capabilityGrantId: id(9),
+  capabilityGrantRevision: 1, businessPurpose: repository.BUSINESS_PURPOSE,
+  policyVersion: repository.POLICY_VERSION });
 
 function snapshot(partyId = null) {
   return { version: 'm27-billing-identity-origin-v1', organizationId: actor.organizationId,
@@ -28,7 +30,11 @@ function snapshot(partyId = null) {
     exemption: { state: 'unavailable', value: null, reason: 'owner_review_required' },
     delivery: { state: 'unavailable', value: null, reason: 'owner_review_required' },
     actor: { userId: actor.actorUserId, accessRole: 'owner', membershipId: id(2),
-      authSessionId: actor.authSessionId }, capturedAt: instant, reviewState: 'unreviewed',
+      authSessionId: actor.authSessionId, capability: repository.CAPABILITY,
+      capabilityGrantId: actor.capabilityGrantId,
+      capabilityGrantRevision: actor.capabilityGrantRevision,
+      businessPurpose: actor.businessPurpose, policyVersion: actor.policyVersion },
+    capturedAt: instant, reviewState: 'unreviewed',
     documentUseAuthorized: false, automaticCustomerCreationAuthorized: false };
 }
 function projection(state, partyId = null) {
@@ -84,6 +90,10 @@ describe('Mission 27 Part 2A billing identity contract', () => {
     expect(sql).toContain("'documentUseAuthorized',FALSE");
     expect(sql).toContain("'automaticCustomerCreationAuthorized',FALSE");
     expect(sql).toContain('billing_identity_source_changed_requires_review');
+    expect(sql).toContain('canonical_customer_financial_billing_capability_grants_v1');
+    expect(sql).toContain("'capability','customer_financial.billing_identity.review'");
+    expect(sql).toContain('FOR SHARE OF subscription,onboarding');
+    expect(sql).toContain('response_status INTEGER NOT NULL CHECK(response_status IN(200,201))');
     expect(sql).not.toMatch(/\bresponse_body\b/i);
     expect(sql).not.toMatch(/INSERT INTO public\.canonical_customers|UPDATE public\.canonical_customers|DELETE FROM public\.canonical_customers/);
     expect(sql).not.toMatch(/canonical_(?:customer_)?(?:invoice|payment|schedule|estimate)/i);

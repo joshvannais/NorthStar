@@ -10,9 +10,48 @@ const { createCustomerFinancialBillingIdentityRouter } =
   require('../../src/routes/customerFinancialBillingIdentity');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
+const DEMO_ORIGIN = 'http://northstar.test';
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const address = line1 => ({ line1, line2: null, city: 'Boston', region: 'MA',
   postalCode: '02108', countryCode: 'US' });
+
+function cookie(response) { return response.headers['set-cookie'][0].split(';')[0]; }
+function tokenHash(savedCookie) {
+  const token = decodeURIComponent(savedCookie.slice(savedCookie.indexOf('=') + 1));
+  return hash(token);
+}
+function demoAction(app, savedCookie, customerId, action, details, expectedRevision) {
+  return request(app).post(`/api/demo/customer-financial/billing-identities/${customerId}/actions`)
+    .set('Host', 'northstar.test').set('Origin', DEMO_ORIGIN)
+    .set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
+    .set('Idempotency-Key', crypto.randomUUID())
+    .set('X-NorthStar-Demo-Intent', 'billing-identity-review')
+    .send({ action, details, expectedRevision });
+}
+function demoReviewDetails(current, purchaseOrderReference) {
+  const candidate = current.review.value;
+  return { billingPartyId: current.review.billingPartyId,
+    originSnapshotId: current.identity.snapshotId,
+    expectedSourceDigest: current.review.sourceDigest,
+    expectedSourceUpdatedAt: current.review.sourceUpdatedAt,
+    expectedPreviousReviewId: current.review.reviewId,
+    expectedPreviousReviewDigest: current.review.reviewDigest,
+    expectedPreviousSequence: current.review.sequence,
+    payload: { contact: { name: candidate.name, email: candidate.email, phone: candidate.phone },
+      serviceAddress: candidate.serviceAddress,
+      billingAddress: { ...candidate.serviceAddress, line1: '27 Fictional Billing Way' },
+      purchaseOrderReference, customerReference: 'DEMO-CUSTOMER-27' },
+    reason: 'Confirm this exact fictional billing identity for review-only evidence.' };
+}
+async function demoProtectedCounts(pool) {
+  return (await pool.query(`SELECT
+    (SELECT count(*)::int FROM canonical_customers) customers,
+    (SELECT count(*)::int FROM canonical_customer_financial_billing_parties_v1) billing_parties,
+    (SELECT count(*)::int FROM canonical_customer_financial_billing_identity_snapshots_v1) billing_snapshots,
+    (SELECT count(*)::int FROM canonical_customer_financial_billing_identity_reviews_v1) billing_reviews,
+    (SELECT count(*)::int FROM canonical_schedule_assignments) schedules,
+    (SELECT count(*)::int FROM canonical_estimate_decisions) estimate_decisions`)).rows[0];
+}
 
 async function customer(fixture, tenant, suffix) {
   const operationId = crypto.randomUUID(); const graphId = crypto.randomUUID();
@@ -170,6 +209,108 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
     review: { state: 'correction_required', current: true, sequence: 1,
       documentUseAuthorized: false }, history: { total: 1 } });
     expect(JSON.stringify(changed.identity)).not.toContain('Corrected private billing source');
+  }, 120000);
+
+  test('persists the real mounted fictional demo lifecycle, restart and reset while denying unknown operations', async () => {
+    const protectedBefore = await demoProtectedCounts(fixture.ownerPool);
+    const workspace = await request(fixture.app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test');
+    expect(workspace.status).toBe(200);
+    const savedCookie = cookie(workspace);
+    const customerId = workspace.body.data.graphs[0].ids.customer;
+    const root = `/api/demo/customer-financial/billing-identities/${customerId}`;
+
+    const initial = await request(fixture.app).get(root).set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(initial.status).toBe(200);
+    expect(initial.body.data).toMatchObject({ mode: 'isolated_fictional_demo',
+      fictional: true, accountFree: true, resettable: true, demoWorkspaceRevision: 1,
+      identity: { state: 'candidate_unreviewed', documentUseAuthorized: false },
+      invoiceMutationCount: 0, paymentMutationCount: 0, providerCallCount: 0,
+      customerCreationCount: 0 });
+
+    const established = await demoAction(fixture.app, savedCookie, customerId, 'establish', {
+      expectedSourceDigest: initial.body.data.identity.sourceDigest,
+      expectedSourceUpdatedAt: initial.body.data.identity.sourceUpdatedAt,
+      reason: 'Begin this exact fictional billing identity review.' }, 1);
+    expect(established.status).toBe(201);
+    expect(established.body.data).toMatchObject({ demoWorkspaceRevision: 2,
+      identity: { state: 'established_unreviewed' },
+      review: { state: 'review_required', sequence: 0, documentUseAuthorized: false } });
+
+    const firstReview = await demoAction(fixture.app, savedCookie, customerId, 'review',
+      demoReviewDetails(established.body.data, 'PO-FICTIONAL-ONE'), 2);
+    expect(firstReview.status).toBe(201);
+    expect(firstReview.body.data).toMatchObject({ demoWorkspaceRevision: 3,
+      review: { state: 'reviewed_current', sequence: 1, documentUseAuthorized: true,
+        value: { payload: { purchaseOrderReference: 'PO-FICTIONAL-ONE' } } },
+      history: { total: 1 } });
+
+    await fixture.db.close();
+    expect(await fixture.db.initDatabase()).toBe(true);
+    const restarted = await request(fixture.app).get(root).set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(restarted.status).toBe(200);
+    expect(restarted.body.data).toMatchObject({ demoWorkspaceRevision: 3,
+      review: { state: 'reviewed_current', sequence: 1,
+        value: { payload: { purchaseOrderReference: 'PO-FICTIONAL-ONE' } } } });
+
+    const corrected = await demoAction(fixture.app, savedCookie, customerId, 'correct_source', {
+      expectedSourceDigest: restarted.body.data.identity.sourceDigest,
+      reason: 'Simulate one explicit fictional customer source correction.' }, 3);
+    expect(corrected.status).toBe(201);
+    expect(corrected.body.data).toMatchObject({ demoWorkspaceRevision: 4,
+      identity: { state: 'unavailable', reason: 'billing_identity_source_changed_requires_review',
+        documentUseAuthorized: false, value: null },
+      review: { state: 'correction_required', sequence: 1, documentUseAuthorized: false } });
+
+    const secondReview = await demoAction(fixture.app, savedCookie, customerId, 'review',
+      demoReviewDetails(corrected.body.data, 'PO-FICTIONAL-TWO'), 4);
+    expect(secondReview.status).toBe(201);
+    expect(secondReview.body.data).toMatchObject({ demoWorkspaceRevision: 5,
+      review: { state: 'reviewed_current', sequence: 2, documentUseAuthorized: true,
+        value: { payload: { purchaseOrderReference: 'PO-FICTIONAL-TWO' } } },
+      history: { total: 2, revisions: [{ sequence: 1 }, { sequence: 2 }] } });
+
+    const invalid = await demoAction(fixture.app, savedCookie, customerId, 'unknown_operation', {}, 5);
+    expect(invalid.status).toBe(400);
+    const session = (await fixture.ownerPool.query(
+      'SELECT id FROM demo_command_center_sessions WHERE token_hash=$1',
+      [tokenHash(savedCookie)])).rows[0];
+    await expect(fixture.ownerPool.query(
+      `INSERT INTO demo_command_center_mutations(
+        session_id,idempotency_hash,operation,request_digest,response_revision,response_digest)
+       VALUES($1,$2,'unknown_action',$3,6,$4)`,
+      [session.id, 'a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)]))
+      .rejects.toMatchObject({ code: '23514', constraint: 'demo_command_center_mutations_operation_check' });
+
+    const reset = await request(fixture.app).post('/api/demo/command-center/reset')
+      .set('Host', 'northstar.test').set('Origin', DEMO_ORIGIN)
+      .set('Sec-Fetch-Site', 'same-origin').set('Cookie', savedCookie)
+      .set('Idempotency-Key', crypto.randomUUID()).set('X-NorthStar-Demo-Intent', 'reset')
+      .send({ expectedRevision: 5 });
+    expect(reset.status).toBe(200);
+    const resetWorkspace = await request(fixture.app).get('/api/demo/command-center')
+      .set('Host', 'northstar.test').set('Cookie', savedCookie);
+    expect(resetWorkspace.status).toBe(200);
+    const resetCustomerId = resetWorkspace.body.data.graphs[0].ids.customer;
+    expect(resetCustomerId).not.toBe(customerId);
+    const afterReset = await request(fixture.app)
+      .get(`/api/demo/customer-financial/billing-identities/${resetCustomerId}`)
+      .set('Host', 'northstar.test')
+      .set('Cookie', savedCookie);
+    expect(afterReset.status).toBe(200);
+    expect(afterReset.body.data).toMatchObject({ demoWorkspaceRevision: 6,
+      identity: { state: 'candidate_unreviewed' }, review: null, history: { total: 0 } });
+
+    const operations = (await fixture.ownerPool.query(
+      `SELECT mutation.operation FROM demo_command_center_mutations mutation
+       JOIN demo_command_center_sessions session ON session.id=mutation.session_id
+       WHERE session.token_hash=$1 ORDER BY mutation.created_at`, [tokenHash(savedCookie)]
+    )).rows.map(row => row.operation);
+    expect(operations).toEqual(['billing_identity','billing_identity','billing_identity',
+      'billing_identity','reset']);
+    expect(await demoProtectedCounts(fixture.ownerPool)).toEqual(protectedBefore);
   }, 120000);
 
   test('installs only the scoped resolver and keeps runtime away from private tables', async () => {

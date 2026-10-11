@@ -1,6 +1,22 @@
 -- Mission 27 Part 2D: server-resolved authority for the mounted paid
 -- billing-identity journey. The browser never selects a capability grant.
 
+-- Admit only the Part 2D fictional billing-identity operation to the existing
+-- isolated demo mutation ledger. Unknown operations remain denied by the
+-- closed operation set.
+ALTER TABLE public.demo_command_center_mutations
+  DROP CONSTRAINT demo_command_center_mutations_operation_check;
+
+ALTER TABLE public.demo_command_center_mutations
+  ADD CONSTRAINT demo_command_center_mutations_operation_check
+  CHECK (operation IN (
+    'customer_estimate_issue','proposal_adopt','simulate_lead','reset','learning_step',
+    'forecast_journey','billing_identity','estimate_review','material_plan','estimate_adopt',
+    'schedule_preview','schedule_approve','work_action','labor_plan','equipment_plan',
+    'equipment_cost','equipment_ready','travel_plan','pricing_plan','pricing_policy',
+    'commercial_terms','commercial_ok','tax_profile'
+  ));
+
 CREATE FUNCTION public.canonical_customer_financial_billing_journey_v1_authority(
  org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,write_value BOOLEAN,
  customer_id_value UUID)

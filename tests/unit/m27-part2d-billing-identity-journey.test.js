@@ -146,7 +146,7 @@ describe('Mission 27 Part 2D mounted billing identity journeys', () => {
     expect(rendered).toContain("liveMoneyEvidence: 'not-run-deferred-first-paying-customer'");
   });
 
-  test('keeps migration 263 additive and runtime access function-only', () => {
+  test('keeps migration 263 additive, admits only the bounded demo operation, and keeps runtime access function-only', () => {
     const sql = read('migrations/263_customer_financial_billing_journey_v1.sql');
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql')).sort();
     expect(names.at(-1)).toBe('263_customer_financial_billing_journey_v1.sql');
@@ -154,7 +154,9 @@ describe('Mission 27 Part 2D mounted billing identity journeys', () => {
     expect(sql).toContain('SECURITY DEFINER');
     expect(sql).toContain('REVOKE ALL ON FUNCTION');
     expect(sql).toContain('GRANT EXECUTE ON FUNCTION');
-    expect(sql).not.toMatch(/CREATE TABLE|ALTER TABLE|GRANT (?:SELECT|INSERT|UPDATE|DELETE)/i);
+    expect(sql).toContain("'forecast_journey','billing_identity','estimate_review'");
+    expect(sql.match(/ALTER TABLE public\.demo_command_center_mutations/g)).toHaveLength(2);
+    expect(sql).not.toMatch(/CREATE TABLE|GRANT (?:SELECT|INSERT|UPDATE|DELETE)/i);
     expect(sql).not.toMatch(/INSERT INTO public\.canonical_(?:invoices|payments|estimates|appointments)/i);
   });
 });

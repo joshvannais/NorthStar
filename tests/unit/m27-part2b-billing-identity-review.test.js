@@ -103,6 +103,12 @@ describe('Mission 27 Part 2B billing identity review contract', () => {
     expect(sql).toContain("org::text||':billing-review-party:'||request_record.billing_party_id::text");
     expect(sql).toMatch(/latest_record\.id<>request_record\.review_id[\s\S]*latest_record\.sequence<>review_record\.sequence[\s\S]*latest_record\.reviewed_snapshot_digest/);
     expect(sql).toContain("current_setting('transaction_isolation')<>'read committed'");
+    expect(sql).toContain('canonical_customer_financial_billing_capability_heads_v1');
+    expect(sql).toContain("':billing-capability-grant:'");
+    expect(sql).toMatch(/CREATE TRIGGER canonical_customer_financial_billing_capability_grants_v1_lock[\s\S]*BEFORE INSERT/);
+    expect(sql).toMatch(/CREATE FUNCTION public\.canonical_customer_financial_billing_identity_v1_effect_grant_fence\(\)[\s\S]*pg_advisory_xact_lock[\s\S]*FOR SHARE OF head_value/);
+    expect(sql.match(/BEFORE INSERT ON public\.canonical_customer_financial_billing_(?:parties|identity_requests|identity_reviews|review_requests)_v1/g)).toHaveLength(4);
+    expect(sql).toMatch(/head_record\.latest_revision<>capability_grant_revision_value[\s\S]*canonical_customer_financial_billing_identity_capability_unavailable/);
     expect(read('src/customerFinancial/billingIdentityReviewRepository.js'))
       .toContain('BEGIN ISOLATION LEVEL READ COMMITTED');
     expect(sql).toContain('FOR SHARE');

@@ -3,6 +3,148 @@
 -- correction lineage for the Part 2A billing party. This migration creates no
 -- customer, prospect, estimate, invoice, payment, provider or receiver record.
 
+-- A mutable, private head row is the serialization fence for one logical
+-- capability grant. Trusted grant issuance takes the logical advisory lock
+-- before inserting a revision and advances the head before commit. Part 2A
+-- and Part 2B effects take that same lock in database triggers immediately
+-- before durable party, request or review inserts. The effect-scope locks are
+-- therefore acquired first, and grant issuance never acquires them. This
+-- acyclic order makes either the grant revision or effect the unambiguous
+-- winner and prevents obsolete immutable residue after supersession.
+CREATE TABLE public.canonical_customer_financial_billing_capability_heads_v1 (
+ organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,
+ capability_grant_id UUID NOT NULL,
+ latest_revision BIGINT NOT NULL CHECK(latest_revision BETWEEN 1 AND 9007199254740991),
+ advanced_at TIMESTAMPTZ NOT NULL,
+ PRIMARY KEY(organization_id,capability_grant_id),
+ FOREIGN KEY(organization_id,capability_grant_id,latest_revision)
+  REFERENCES public.canonical_customer_financial_billing_capability_grants_v1(
+   organization_id,id,revision) ON DELETE RESTRICT
+);
+
+INSERT INTO public.canonical_customer_financial_billing_capability_heads_v1(
+ organization_id,capability_grant_id,latest_revision,advanced_at)
+SELECT organization_id,id,max(revision),max(issued_at)
+FROM public.canonical_customer_financial_billing_capability_grants_v1
+GROUP BY organization_id,id;
+
+CREATE FUNCTION public.canonical_customer_financial_billing_identity_v1_grant_lock()
+RETURNS TRIGGER LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  NEW.organization_id::text||':billing-capability-grant:'||NEW.id::text,0));
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.canonical_customer_financial_billing_identity_v1_grant_head()
+RETURNS TRIGGER LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ INSERT INTO public.canonical_customer_financial_billing_capability_heads_v1(
+  organization_id,capability_grant_id,latest_revision,advanced_at)
+ VALUES(NEW.organization_id,NEW.id,NEW.revision,clock_timestamp())
+ ON CONFLICT(organization_id,capability_grant_id) DO UPDATE
+ SET latest_revision=EXCLUDED.latest_revision,advanced_at=EXCLUDED.advanced_at
+ WHERE EXCLUDED.latest_revision>
+  public.canonical_customer_financial_billing_capability_heads_v1.latest_revision;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.canonical_customer_financial_billing_identity_v1_effect_grant_fence()
+RETURNS TRIGGER LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE head_record public.canonical_customer_financial_billing_capability_heads_v1%ROWTYPE;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  NEW.organization_id::text||':billing-capability-grant:'||NEW.capability_grant_id::text,0));
+ SELECT head_value.* INTO head_record
+ FROM public.canonical_customer_financial_billing_capability_heads_v1 head_value
+ WHERE head_value.organization_id=NEW.organization_id
+  AND head_value.capability_grant_id=NEW.capability_grant_id
+ FOR SHARE OF head_value;
+ IF head_record.capability_grant_id IS NULL OR
+    head_record.latest_revision<>NEW.capability_grant_revision THEN
+  RAISE EXCEPTION 'Current billing identity capability unavailable'
+   USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_billing_identity_capability_unavailable';
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE TRIGGER canonical_customer_financial_billing_capability_grants_v1_lock
+ BEFORE INSERT ON public.canonical_customer_financial_billing_capability_grants_v1
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_customer_financial_billing_identity_v1_grant_lock();
+CREATE TRIGGER canonical_customer_financial_billing_capability_grants_v1_head
+ AFTER INSERT ON public.canonical_customer_financial_billing_capability_grants_v1
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_customer_financial_billing_identity_v1_grant_head();
+CREATE TRIGGER canonical_customer_financial_billing_parties_v1_grant_fence
+ BEFORE INSERT ON public.canonical_customer_financial_billing_parties_v1
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_customer_financial_billing_identity_v1_effect_grant_fence();
+CREATE TRIGGER canonical_customer_financial_billing_identity_requests_v1_grant_fence
+ BEFORE INSERT ON public.canonical_customer_financial_billing_identity_requests_v1
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_customer_financial_billing_identity_v1_effect_grant_fence();
+
+CREATE OR REPLACE FUNCTION public.canonical_customer_financial_billing_identity_v1_access(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,csrf TEXT,write_value BOOLEAN,
+ capability_grant_id_value UUID,capability_grant_revision_value BIGINT,
+ business_purpose_value TEXT,policy_version_value TEXT,customer_id_value UUID)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE authority JSONB;
+ head_record public.canonical_customer_financial_billing_capability_heads_v1%ROWTYPE;
+ grant_record public.canonical_customer_financial_billing_capability_grants_v1%ROWTYPE;
+BEGIN
+ IF role_value IS NULL OR role_value NOT IN('owner','admin') OR
+    capability_grant_id_value IS NULL OR capability_grant_revision_value IS NULL OR
+    capability_grant_revision_value NOT BETWEEN 1 AND 9007199254740991 OR
+    business_purpose_value<>'customer_financial.billing_identity' OR
+    policy_version_value<>'mission27.launch.v1' OR customer_id_value IS NULL THEN
+  RAISE EXCEPTION 'Billing identity access restricted'
+   USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_billing_identity_unauthorized';
+ END IF;
+ authority:=public.canonical_field_execution_actor_authority(
+  org,actor,role_value,session_value,csrf,write_value);
+ IF NOT public.canonical_customer_financial_billing_identity_v1_entitlement(org,FALSE) THEN
+  RAISE EXCEPTION 'Current billing identity access unavailable'
+   USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_billing_identity_unauthorized';
+ END IF;
+ SELECT head_value.* INTO head_record
+ FROM public.canonical_customer_financial_billing_capability_heads_v1 head_value
+ WHERE head_value.organization_id=org
+  AND head_value.capability_grant_id=capability_grant_id_value;
+ IF head_record.capability_grant_id IS NULL OR
+    head_record.latest_revision<>capability_grant_revision_value THEN
+  RAISE EXCEPTION 'Current billing identity capability unavailable'
+   USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_billing_identity_capability_unavailable';
+ END IF;
+ SELECT grant_value.* INTO grant_record
+ FROM public.canonical_customer_financial_billing_capability_grants_v1 grant_value
+ WHERE grant_value.organization_id=org AND grant_value.id=capability_grant_id_value
+  AND grant_value.revision=capability_grant_revision_value
+  AND grant_value.actor_user_id=actor
+  AND grant_value.membership_id=(authority->>'membershipId')::uuid
+  AND grant_value.customer_id=customer_id_value
+  AND grant_value.capability='customer_financial.billing_identity.review'
+  AND grant_value.business_purpose=business_purpose_value
+  AND grant_value.policy_version=policy_version_value
+  AND grant_value.template_version=CASE role_value WHEN 'owner' THEN 'm27.owner.v1' ELSE 'm27.admin.v1' END
+  AND grant_value.active=TRUE AND grant_value.issued_at<=clock_timestamp()
+  AND grant_value.valid_from<=clock_timestamp() AND grant_value.expires_at>clock_timestamp()
+  AND NOT EXISTS(SELECT 1
+   FROM public.canonical_customer_financial_billing_capability_grants_v1 newer
+   WHERE newer.organization_id=grant_value.organization_id AND newer.id=grant_value.id
+    AND newer.revision>grant_value.revision)
+ FOR SHARE OF grant_value;
+ IF grant_record.id IS NULL THEN
+  RAISE EXCEPTION 'Current billing identity capability unavailable'
+   USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_billing_identity_capability_unavailable';
+ END IF;
+ RETURN authority||jsonb_build_object(
+  'capability','customer_financial.billing_identity.review',
+  'capabilityGrantId',grant_record.id,'capabilityGrantRevision',grant_record.revision,
+  'businessPurpose',grant_record.business_purpose,'policyVersion',grant_record.policy_version);
+END $$;
+
 CREATE FUNCTION public.canonical_customer_financial_billing_review_v1_address_valid(value JSONB)
 RETURNS BOOLEAN LANGUAGE plpgsql IMMUTABLE
 SET search_path=pg_catalog,public,pg_temp AS $$
@@ -159,6 +301,12 @@ CREATE TRIGGER canonical_customer_financial_billing_identity_reviews_v1_immutabl
 CREATE TRIGGER canonical_customer_financial_billing_review_requests_v1_immutable
  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_customer_financial_billing_review_requests_v1
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_customer_financial_billing_identity_v1_immutable();
+CREATE TRIGGER canonical_customer_financial_billing_identity_reviews_v1_grant_fence
+ BEFORE INSERT ON public.canonical_customer_financial_billing_identity_reviews_v1
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_customer_financial_billing_identity_v1_effect_grant_fence();
+CREATE TRIGGER canonical_customer_financial_billing_review_requests_v1_grant_fence
+ BEFORE INSERT ON public.canonical_customer_financial_billing_review_requests_v1
+ FOR EACH ROW EXECUTE FUNCTION public.canonical_customer_financial_billing_identity_v1_effect_grant_fence();
 
 CREATE FUNCTION public.canonical_customer_financial_billing_review_v1_field(
  value JSONB,source_value JSONB,source_digest_value TEXT,source_updated_at_value TIMESTAMPTZ,
@@ -576,8 +724,13 @@ BEGIN
  RETURN jsonb_build_object('status',201,'body',response_value,'replayed',FALSE);
 END $$;
 
+REVOKE ALL ON TABLE public.canonical_customer_financial_billing_capability_heads_v1 FROM PUBLIC;
 REVOKE ALL ON TABLE public.canonical_customer_financial_billing_identity_reviews_v1 FROM PUBLIC;
 REVOKE ALL ON TABLE public.canonical_customer_financial_billing_review_requests_v1 FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_customer_financial_billing_identity_v1_grant_lock() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_customer_financial_billing_identity_v1_grant_head() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_customer_financial_billing_identity_v1_effect_grant_fence() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_customer_financial_billing_identity_v1_access(UUID,UUID,TEXT,UUID,TEXT,BOOLEAN,UUID,BIGINT,TEXT,TEXT,UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_billing_review_v1_address_valid(JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_billing_review_v1_payload_valid(JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_billing_review_v1_field(JSONB,JSONB,TEXT,TIMESTAMPTZ,UUID,UUID) FROM PUBLIC;

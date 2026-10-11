@@ -6254,6 +6254,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
        END AS forecast_paid_journey_authority_private,
         (to_regclass('public.canonical_customer_financial_billing_parties_v1') IS NULL OR (
           NOT has_table_privilege($1,'public.canonical_customer_financial_billing_capability_grants_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_capability_heads_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
           AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_parties_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
           AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_identity_snapshots_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_identity_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -6272,6 +6273,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_source(public.canonical_customers,uuid,uuid,text,uuid,uuid,uuid,bigint,text,text,timestamp with time zone)','EXECUTE')
           AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_entitlement(uuid,boolean)','EXECUTE')
           AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_access(uuid,uuid,text,uuid,text,boolean,uuid,bigint,text,text,uuid)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_grant_lock()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_grant_head()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_effect_grant_fence()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_unavailable(text,uuid,uuid,uuid,boolean)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_projection(public.canonical_customers,public.canonical_customer_financial_billing_parties_v1,public.canonical_customer_financial_billing_identity_snapshots_v1)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_saved_projection(public.canonical_customer_financial_billing_parties_v1,public.canonical_customer_financial_billing_identity_snapshots_v1)','EXECUTE')

@@ -31,9 +31,9 @@ async function customer(fixture, tenant, suffix, overrides = {}) {
       JSON.stringify(overrides.address ?? address()), '2026-10-10T12:00:00.000Z']);
   return customerId;
 }
-async function authorize(fixture, source, customerId, options = {}) {
+async function insertGrant(client, source, customerId, options = {}) {
   const grantId = options.grantId || crypto.randomUUID(); const revision = options.revision || 1;
-  await fixture.ownerPool.query(
+  await client.query(
     `INSERT INTO canonical_customer_financial_billing_capability_grants_v1(
       organization_id,id,revision,actor_user_id,membership_id,customer_id,capability,
       business_purpose,policy_version,template_version,active,valid_from,expires_at,issued_at)
@@ -43,12 +43,35 @@ async function authorize(fixture, source, customerId, options = {}) {
       identityRepository.CAPABILITY, identityRepository.BUSINESS_PURPOSE,
       identityRepository.POLICY_VERSION,
       source.actorAccessRole === 'owner' ? 'm27.owner.v1' : 'm27.admin.v1',
-      options.active === undefined ? true : options.active]);
+       options.active === undefined ? true : options.active]);
+  return { grantId, revision };
+}
+async function authorize(fixture, source, customerId, options = {}) {
+  const { grantId, revision } = await insertGrant(fixture.ownerPool, source, customerId, options);
   return { organizationId: source.organizationId, actorUserId: source.actorUserId,
     actorAccessRole: source.actorAccessRole, authSessionId: source.authSessionId,
     capabilityGrantId: grantId, capabilityGrantRevision: revision,
     businessPurpose: identityRepository.BUSINESS_PURPOSE,
     policyVersion: identityRepository.POLICY_VERSION, csrfToken: source.csrfToken };
+}
+async function waitingOnAdvisory(fixture, pid) {
+  const deadline = Date.now() + 5000;
+  do {
+    const waiting = (await fixture.ownerPool.query(
+      "SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND locktype='advisory' AND NOT granted) waiting",
+      [pid])).rows[0].waiting;
+    if (waiting) return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  } while (Date.now() < deadline);
+  throw new Error(`Backend ${pid} did not wait on the logical capability grant lock`);
+}
+async function bounded(promise, label) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} exceeded the deadlock bound`)), 10000);
+    })]);
+  } finally { clearTimeout(timer); }
 }
 const mutationActor = (source, idempotencyKey = crypto.randomUUID()) => ({ ...source, idempotencyKey });
 function readActor(source) {
@@ -314,6 +337,159 @@ realPostgres('Mission 27 Part 2B reviewed billing identity PostgreSQL authority'
       [fixture.org, customerId])).rows[0].count).toBe(0);
   }, 120000);
 
+  test('serializes capability supersession in both winner orders with rollback and restart recovery', async () => {
+    const supersessionCustomerId = await customer(fixture, fixture.org, 'grant-supersession-wins');
+    const supersessionOwner = await authorize(fixture, fixture.actors.owner, supersessionCustomerId);
+    await establish(fixture, supersessionOwner, supersessionCustomerId);
+    const supersessionCandidate = await reviewRepository.candidate(
+      fixture.runtimePool, readActor(supersessionOwner), { customerId: supersessionCustomerId });
+    const supersessionInput = reviewInput(supersessionCandidate,
+      reviewPayload({ purchaseOrderReference: 'PO-GRANT-RACE' }));
+    const lockKey = `${fixture.org}:billing-capability-grant:${supersessionOwner.capabilityGrantId}`;
+    const blocker = await fixture.ownerPool.connect();
+    const issuer = await fixture.ownerPool.connect();
+    const supersededEffectClient = await fixture.runtimePool.connect();
+    let supersession;
+    let rejectedEffect;
+    let effectStarted = false;
+    try {
+      const issuerPid = (await issuer.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      const effectPid = (await supersededEffectClient.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [lockKey]);
+      supersession = (async () => {
+        await issuer.query('BEGIN');
+        try {
+          await insertGrant(issuer, fixture.actors.owner, supersessionCustomerId, {
+            grantId: supersessionOwner.capabilityGrantId, revision: 2,
+          });
+          await issuer.query('COMMIT');
+        } catch (error) {
+          await issuer.query('ROLLBACK').catch(() => {}); throw error;
+        }
+      })();
+      await waitingOnAdvisory(fixture, issuerPid);
+      effectStarted = true;
+      rejectedEffect = reviewRepository.accept({ connect: async () => supersededEffectClient },
+        mutationActor(supersessionOwner), supersessionInput);
+      await waitingOnAdvisory(fixture, effectPid);
+      await blocker.query('COMMIT');
+      await bounded(supersession, 'grant supersession');
+      await expect(bounded(rejectedEffect, 'superseded review')).rejects.toMatchObject({ code: '42501' });
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {}); blocker.release();
+      await issuer.query('ROLLBACK').catch(() => {}); issuer.release();
+      if (!effectStarted) supersededEffectClient.release();
+      if (supersession) await supersession.catch(() => {});
+      if (rejectedEffect) await rejectedEffect.catch(() => {});
+    }
+    expect((await fixture.ownerPool.query(
+      `SELECT latest_revision FROM canonical_customer_financial_billing_capability_heads_v1
+       WHERE organization_id=$1 AND capability_grant_id=$2`,
+      [fixture.org, supersessionOwner.capabilityGrantId])).rows[0].latest_revision).toBe('2');
+    expect((await fixture.ownerPool.query(
+      `SELECT count(*)::int count FROM canonical_customer_financial_billing_identity_reviews_v1
+       WHERE organization_id=$1 AND customer_id=$2`,
+      [fixture.org, supersessionCustomerId])).rows[0].count).toBe(0);
+    expect((await fixture.ownerPool.query(
+      `SELECT count(*)::int count FROM canonical_customer_financial_billing_review_requests_v1
+       WHERE organization_id=$1 AND customer_id=$2`,
+      [fixture.org, supersessionCustomerId])).rows[0].count).toBe(0);
+
+    const effectCustomerId = await customer(fixture, fixture.org, 'grant-effect-wins');
+    const effectOwner = await authorize(fixture, fixture.actors.owner, effectCustomerId);
+    await establish(fixture, effectOwner, effectCustomerId);
+    const effectCandidate = await reviewRepository.candidate(
+      fixture.runtimePool, readActor(effectOwner), { customerId: effectCustomerId });
+    const effectInput = reviewInput(effectCandidate,
+      reviewPayload({ purchaseOrderReference: 'PO-EFFECT-WINS' }));
+    const effectLockKey = `${fixture.org}:billing-capability-grant:${effectOwner.capabilityGrantId}`;
+    const effectBlocker = await fixture.ownerPool.connect();
+    const effectClient = await fixture.runtimePool.connect();
+    const delayedIssuer = await fixture.ownerPool.connect();
+    let authorizedEffect;
+    let delayedSupersession;
+    try {
+      const effectPid = (await effectClient.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      const issuerPid = (await delayedIssuer.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      await effectBlocker.query('BEGIN');
+      await effectBlocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [effectLockKey]);
+      authorizedEffect = reviewRepository.accept({ connect: async () => effectClient },
+        mutationActor(effectOwner), effectInput);
+      await waitingOnAdvisory(fixture, effectPid);
+      delayedSupersession = (async () => {
+        await delayedIssuer.query('BEGIN');
+        try {
+          await insertGrant(delayedIssuer, fixture.actors.owner, effectCustomerId, {
+            grantId: effectOwner.capabilityGrantId, revision: 2,
+          });
+          await delayedIssuer.query('COMMIT');
+        } catch (error) {
+          await delayedIssuer.query('ROLLBACK').catch(() => {}); throw error;
+        }
+      })();
+      await waitingOnAdvisory(fixture, issuerPid);
+      await effectBlocker.query('COMMIT');
+      expect(await bounded(authorizedEffect, 'authorized review')).toMatchObject({
+        status: 201, body: { state: 'reviewed_current', sequence: 1,
+          value: { references: { purchaseOrder: { value: 'PO-EFFECT-WINS' } } } },
+      });
+      await bounded(delayedSupersession, 'delayed grant supersession');
+    } finally {
+      await effectBlocker.query('ROLLBACK').catch(() => {}); effectBlocker.release();
+      await delayedIssuer.query('ROLLBACK').catch(() => {}); delayedIssuer.release();
+      if (authorizedEffect) await authorizedEffect.catch(() => {});
+      if (delayedSupersession) await delayedSupersession.catch(() => {});
+    }
+    const effectOwnerRevision2 = { ...effectOwner, capabilityGrantRevision: 2 };
+    expect(await reviewRepository.read(fixture.runtimePool, readActor(effectOwnerRevision2),
+      { customerId: effectCustomerId })).toMatchObject({
+      state: 'reviewed_current', sequence: 1,
+      value: { references: { purchaseOrder: { value: 'PO-EFFECT-WINS' } } },
+    });
+
+    const rollbackCustomerId = await customer(fixture, fixture.org, 'grant-rollback');
+    const rollbackOwner = await authorize(fixture, fixture.actors.owner, rollbackCustomerId);
+    await establish(fixture, rollbackOwner, rollbackCustomerId);
+    const rollbackCandidate = await reviewRepository.candidate(
+      fixture.runtimePool, readActor(rollbackOwner), { customerId: rollbackCustomerId });
+    const rollbackInput = reviewInput(rollbackCandidate,
+      reviewPayload({ purchaseOrderReference: 'PO-ROLLBACK' }));
+    const rolledBackIssuer = await fixture.ownerPool.connect();
+    const rollbackEffectClient = await fixture.runtimePool.connect();
+    let rollbackEffect;
+    try {
+      const effectPid = (await rollbackEffectClient.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      await rolledBackIssuer.query('BEGIN');
+      await insertGrant(rolledBackIssuer, fixture.actors.owner, rollbackCustomerId, {
+        grantId: rollbackOwner.capabilityGrantId, revision: 2,
+      });
+      rollbackEffect = reviewRepository.accept({ connect: async () => rollbackEffectClient },
+        mutationActor(rollbackOwner), rollbackInput);
+      await waitingOnAdvisory(fixture, effectPid);
+      await rolledBackIssuer.query('ROLLBACK');
+      expect(await bounded(rollbackEffect, 'review after rolled-back supersession')).toMatchObject({
+        status: 201, body: { state: 'reviewed_current', sequence: 1,
+          value: { references: { purchaseOrder: { value: 'PO-ROLLBACK' } } } },
+      });
+    } finally {
+      await rolledBackIssuer.query('ROLLBACK').catch(() => {}); rolledBackIssuer.release();
+      if (rollbackEffect) await rollbackEffect.catch(() => {});
+    }
+    expect((await fixture.ownerPool.query(
+      `SELECT latest_revision FROM canonical_customer_financial_billing_capability_heads_v1
+       WHERE organization_id=$1 AND capability_grant_id=$2`,
+      [fixture.org, rollbackOwner.capabilityGrantId])).rows[0].latest_revision).toBe('1');
+    expect((await fixture.ownerPool.query(
+      `SELECT count(*)::int count FROM canonical_customer_financial_billing_capability_grants_v1
+       WHERE organization_id=$1 AND id=$2 AND revision=2`,
+      [fixture.org, rollbackOwner.capabilityGrantId])).rows[0].count).toBe(0);
+    await fixture.db.close(); expect(await fixture.db.initDatabase()).toBe(true);
+    expect(fixture.db.readiness()).toEqual({ ready: true, failure: null });
+    expect(await reviewRepository.read(fixture.runtimePool, readActor(rollbackOwner),
+      { customerId: rollbackCustomerId })).toMatchObject({ state: 'reviewed_current', sequence: 1 });
+  }, 120000);
+
   test('preserves concurrency, immutability, runtime privacy and restart authority', async () => {
     const customerId = await customer(fixture, fixture.org, 'concurrency');
     const owner = await authorize(fixture, fixture.actors.owner, customerId);
@@ -329,7 +505,8 @@ realPostgres('Mission 27 Part 2B reviewed billing identity PostgreSQL authority'
     expect((await fixture.ownerPool.query(
       'SELECT count(*)::int count FROM canonical_customer_financial_billing_identity_reviews_v1 WHERE organization_id=$1 AND customer_id=$2',
       [fixture.org, customerId])).rows[0].count).toBe(1);
-    for (const table of ['canonical_customer_financial_billing_identity_reviews_v1',
+    for (const table of ['canonical_customer_financial_billing_capability_heads_v1',
+      'canonical_customer_financial_billing_identity_reviews_v1',
       'canonical_customer_financial_billing_review_requests_v1']) {
       for (const privilege of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE']) {
         expect((await fixture.ownerPool.query('SELECT has_table_privilege($1,$2,$3) allowed',

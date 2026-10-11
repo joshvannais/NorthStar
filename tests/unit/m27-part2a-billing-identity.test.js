@@ -91,6 +91,9 @@ describe('Mission 27 Part 2A billing identity contract', () => {
     expect(sql).toContain("'automaticCustomerCreationAuthorized',FALSE");
     expect(sql).toContain('billing_identity_source_changed_requires_review');
     expect(sql).toContain('canonical_customer_financial_billing_capability_grants_v1');
+    const correction = read('migrations/261_customer_financial_billing_identity_review_v1.sql');
+    expect(correction).toMatch(/canonical_customer_financial_billing_parties_v1_grant_fence[\s\S]*BEFORE INSERT ON public\.canonical_customer_financial_billing_parties_v1/);
+    expect(correction).toMatch(/canonical_customer_financial_billing_identity_requests_v1_grant_fence[\s\S]*BEFORE INSERT ON public\.canonical_customer_financial_billing_identity_requests_v1/);
     expect(sql).toContain("'capability','customer_financial.billing_identity.review'");
     expect(sql).toContain('FOR SHARE OF subscription,onboarding');
     expect(sql).toContain('response_status INTEGER NOT NULL CHECK(response_status IN(200,201))');

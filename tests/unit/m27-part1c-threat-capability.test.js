@@ -153,17 +153,18 @@ describe('Mission 27 Slice 1C threat and action-capability contract', () => {
     expect(text).toContain('Mission 32 receives no commercial, work, billing or action capability');
   });
 
-  test('preserves the historical Slice 1C no-grant contract while Part 2A stays unmounted', () => {
+  test('preserves the historical Slice 1C no-grant contract while Part 2D mounts its scoped journey', () => {
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql'))
       .sort();
-    expect(migrationNames.at(-1)).toBe('262_customer_financial_exact_money_numbering_v1.sql');
+    expect(migrationNames.at(-1)).toBe('263_customer_financial_billing_journey_v1.sql');
     expect(migrationNames.filter(name => /^260_/.test(name))).toEqual([
       '260_customer_financial_billing_identity_v1.sql',
     ]);
 
     const server = read('src/server.js');
-    expect(server).not.toMatch(/customerFinancial|billingIdentity/i);
+    expect(server).toContain("/api/v1/customer-financial/billing-identities");
+    expect(server).not.toMatch(/MISSION_27_PART1C_THREAT_AND_CAPABILITY_MATRIX/);
     const runtime = files('src').map(read).join('\n');
     expect(runtime).not.toMatch(/MISSION_27_PART1C_THREAT_AND_CAPABILITY_MATRIX/);
 

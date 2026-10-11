@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="/css/forecast-settings.css?v=m26-part11a-20261008">
   <link rel="stylesheet" href="/css/forecast-runs.css?v=m26-part12a-20261009">
   <link rel="stylesheet" href="/css/forecast-handoffs.css?v=m26-part11d-20261009">
+  <link rel="stylesheet" href="/css/customer-financial-billing-identity.css?v=m27-part2d-20261011">
 </head>
 <body>
   <a class="skip-link" href="#mainContent" tabindex="0">Skip to main content</a>
@@ -143,6 +144,63 @@
         </div>
         </div>
       </div>
+
+      <section class="settings-section billing-identity-journey" id="billing-identity-journey"
+        data-state="loading" aria-labelledby="billingIdentityHeading">
+        <div class="forecast-runs-heading">
+          <div><h2 id="billingIdentityHeading">Billing identity review</h2>
+            <p class="description">Review one current customer’s billing contact, service and billing addresses, and references before a later invoice can use them.</p></div>
+          <button class="btn btn-secondary btn-sm" id="refreshBillingIdentity" type="button">Refresh review</button>
+        </div>
+        <p id="billingIdentityMode" class="billing-identity-label"></p>
+        <p id="billingIdentityStatus" role="status" aria-live="polite" aria-atomic="true">Loading billing identity review…</p>
+        <p id="billingIdentityDetail" class="description">Private values stay cleared until current tenant, role, subscription, purpose, customer, and capability authority are verified.</p>
+        <div class="billing-identity-summary" id="billingIdentitySummary" hidden>
+          <p><strong id="billingIdentityCustomer"></strong></p>
+          <p class="description" id="billingIdentityCurrentness"></p>
+        </div>
+        <button class="btn btn-primary btn-sm" id="establishBillingIdentity" type="button" disabled>Start billing review</button>
+        <form id="billingIdentityReviewForm" class="billing-identity-form" novalidate hidden>
+          <div class="billing-identity-grid">
+            <div class="form-group"><label for="billingIdentityContactName">Billing contact name</label><input id="billingIdentityContactName" maxlength="255" autocomplete="name" required></div>
+            <div class="form-group"><label for="billingIdentityEmail">Email</label><input id="billingIdentityEmail" type="email" maxlength="255" autocomplete="email"></div>
+            <div class="form-group"><label for="billingIdentityPhone">Phone</label><input id="billingIdentityPhone" type="tel" maxlength="16" autocomplete="tel"></div>
+          </div>
+          <fieldset><legend>Service address</legend><div class="billing-identity-grid" data-address="service">
+            <div class="form-group billing-identity-wide"><label for="billingServiceLine1">Address</label><input id="billingServiceLine1" maxlength="255" autocomplete="street-address" required></div>
+            <div class="form-group"><label for="billingServiceCity">City</label><input id="billingServiceCity" maxlength="100" autocomplete="address-level2" required></div>
+            <div class="form-group"><label for="billingServiceRegion">State</label><input id="billingServiceRegion" maxlength="2" autocomplete="address-level1" required></div>
+            <div class="form-group"><label for="billingServicePostal">ZIP code</label><input id="billingServicePostal" maxlength="10" autocomplete="postal-code" required></div>
+          </div></fieldset>
+          <fieldset><legend>Billing address</legend><div class="billing-identity-grid" data-address="billing">
+            <div class="form-group billing-identity-wide"><label for="billingAddressLine1">Address</label><input id="billingAddressLine1" maxlength="255" autocomplete="street-address" required></div>
+            <div class="form-group"><label for="billingAddressCity">City</label><input id="billingAddressCity" maxlength="100" autocomplete="address-level2" required></div>
+            <div class="form-group"><label for="billingAddressRegion">State</label><input id="billingAddressRegion" maxlength="2" autocomplete="address-level1" required></div>
+            <div class="form-group"><label for="billingAddressPostal">ZIP code</label><input id="billingAddressPostal" maxlength="10" autocomplete="postal-code" required></div>
+          </div></fieldset>
+          <div class="billing-identity-grid">
+            <div class="form-group"><label for="billingPurchaseOrder">Purchase order reference</label><input id="billingPurchaseOrder" maxlength="100"></div>
+            <div class="form-group"><label for="billingCustomerReference">Customer reference</label><input id="billingCustomerReference" maxlength="100"></div>
+            <div class="form-group billing-identity-wide"><label for="billingIdentityReason">Review reason</label><input id="billingIdentityReason" minlength="12" maxlength="500" required></div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="saveBillingIdentityReview" type="submit">Save reviewed billing identity</button>
+        </form>
+        <article id="billingIdentityCurrent" class="billing-identity-current" hidden>
+          <h3>Current reviewed billing identity</h3>
+          <dl class="forecast-run-facts">
+            <div><dt>Contact</dt><dd id="billingIdentityReviewedContact"></dd></div>
+            <div><dt>Billing address</dt><dd id="billingIdentityReviewedAddress"></dd></div>
+            <div><dt>Purchase order</dt><dd id="billingIdentityReviewedPurchaseOrder"></dd></div>
+            <div><dt>Review receipt</dt><dd id="billingIdentityReviewedReceipt"></dd></div>
+          </dl>
+          <p class="description">This review authorizes only the current billing identity snapshot. It creates no invoice, payment, customer, message, provider action, schedule, or work mutation.</p>
+        </article>
+        <ol id="billingIdentityHistory" class="billing-identity-history" aria-label="Billing identity correction history"></ol>
+        <div class="forecast-settings-actions" id="billingIdentityDemoActions" hidden>
+          <button class="btn btn-secondary btn-sm" id="correctBillingIdentitySource" type="button" disabled>Simulate fictional source correction</button>
+          <button class="btn btn-secondary btn-sm" id="resetBillingIdentityDemo" type="button">Reset fictional workspace</button>
+        </div>
+      </section>
 
       <section class="settings-section forecast-settings-shell" id="forecast-settings" data-state="loading" aria-labelledby="forecastSettingsHeading">
         <h2 id="forecastSettingsHeading">Forecast settings</h2>
@@ -782,6 +840,7 @@
   <script src="/js/forecast-runs.js?v=m26-part11b-20261009"></script>
   <script src="/js/forecast-handoffs.js?v=m26-part11d-20261009"></script>
   <script src="/js/forecast-paid-journey.js?v=m26-part12b-20261009"></script>
+  <script src="/js/customer-financial-billing-identity.js?v=m27-part2d-20261011"></script>
   <script src="/js/workspace-form-state.js"></script>
   <script>settingsFormState = NorthStarFormState.create({ root: '#mainContent', save: '#saveSettingsBtn', role: '#settingsRoleBadge', reload: '#reloadSettingsBtn', durable: '[data-settings-mutable]' });</script>
   <script>NavComponent.init("settings");</script>

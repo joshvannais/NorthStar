@@ -9,6 +9,7 @@ const { fixture: pricingFixture } = require('../helpers/m24-pricing-input');
 const { issueEditableEstimateGrant } =
   require('../../src/customerFinancial/estimateCapabilityGrantIssuer');
 const operations = require('../../src/operations/repository');
+const operationContracts = require('../../src/operations/contract');
 const workContextRepository = require('../../src/customerFinancial/billableWorkContextRepository');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -16,7 +17,7 @@ const priceRoot = '/api/v1/forecast/price-history';
 
 realPostgres('Mission 27 Part 3B current completed-work context', () => {
   let f; let actor; let estimate; let appointment; let firstReviewId; let context;
-  let approvedCompletion; let route;
+  let approvedCompletion; let laborInterval; let materialMovement; let businessProfile; let route;
 
   beforeAll(async () => {
     for (const key of ['OPENAI_API_KEY','POLARIS_OPENAI_ENABLED','RETELL_API_KEY',
@@ -30,6 +31,12 @@ realPostgres('Mission 27 Part 3B current completed-work context', () => {
       operationalSchedule: true, proposalScope: { locationId: 'headquarters' } });
     actor = f.actors.owner; estimate = f.estimateGraphs[0].ids.estimate;
     appointment = f.estimateGraphs[0].ids.appointment;
+    const profileRow = (await f.ownerPool.query(`SELECT id,version_number,
+      rtrim(normalized_profile_hash) profile_hash,raw_profile#>>'{company,timeZone}' time_zone
+      FROM canonical_business_profiles WHERE organization_id=$1 AND is_active`, [f.org])).rows[0];
+    businessProfile = { businessProfileId: profileRow.id,
+      version: Number(profileRow.version_number), hash: profileRow.profile_hash,
+      timeZone: profileRow.time_zone };
     route = `/api/v1/customer-financial/editable-estimates/${estimate}/work-context`;
     await prepareWorkforceAuthority();
     firstReviewId = await createCurrentCommercialLineage();
@@ -117,6 +124,11 @@ realPostgres('Mission 27 Part 3B current completed-work context', () => {
       .set(actor.session.headers).send({ key: 'fence', name: 'Fence installation',
         description: 'Synthetic accepted fence scheduling skill.', serviceId: 'fence' });
     expect(skill.status).toBe(201);
+    const ownerProfile = await request(f.app)
+      .put(`/api/workforce/profiles/${f.actors.owner.actorUserId}`)
+      .set(actor.session.headers).send({ operationalRole: 'owner',
+        homeLocationId: 'headquarters', skillIds: [skill.body.data.id] });
+    expect(ownerProfile.status).toBe(200);
     const profile = await request(f.app)
       .put(`/api/workforce/profiles/${f.actors.member.actorUserId}`)
       .set(actor.session.headers).send({ operationalRole: 'technician',
@@ -189,6 +201,61 @@ realPostgres('Mission 27 Part 3B current completed-work context', () => {
       requestCorrelationId: 'm27-p3b-start' })).body.data;
     const value = { actor, assignment: { ...assignment, revision: Number(assignment.revision) },
       execution };
+    const member = f.actors.member; const profile = businessProfile;
+    const base = `/api/v1/field-executions/${execution.id}`;
+    const sourcePins = { expectedExecutionRevision: execution.revision,
+      expectedExecutionDigest: execution.digest,
+      expectedAssignmentRevision: Number(assignment.revision),
+      expectedAssignmentDigest: assignment.digest,
+      performerProfileId: member.actorUserId };
+    const labor = await request(f.app).post(`${base}/labor-actions`)
+      .set(member.session.headers).set('X-CSRF-Token', member.csrfToken)
+      .set('Idempotency-Key', crypto.randomUUID()).send({ ...sourcePins,
+        action: 'record_manual', category: 'production',
+        categoryContractVersion: operationContracts.LABOR_CATEGORY_CONTRACT_VERSION,
+        categoryContractDigest: operationContracts.LABOR_CATEGORY_CONTRACT_DIGEST,
+        businessProfileId: profile.businessProfileId,
+        businessProfileVersion: profile.version, businessProfileHash: profile.hash,
+        timeZone: profile.timeZone,
+        observedStart: new Date(Date.now() - 3600000).toISOString(),
+        observedEnd: new Date(Date.now() - 1800000).toISOString(),
+        reason: 'Synthetic Part 3B source labor' });
+    expect(labor.status).toBe(200); laborInterval = labor.body.data;
+    const laborReview = await request(f.app).post(`${base}/labor-actions`)
+      .set(actor.session.headers).set('X-CSRF-Token', actor.csrfToken)
+      .set('Idempotency-Key', crypto.randomUUID()).send({ ...sourcePins,
+        action: 'review', categoryContractVersion: operationContracts.LABOR_CATEGORY_CONTRACT_VERSION,
+        categoryContractDigest: operationContracts.LABOR_CATEGORY_CONTRACT_DIGEST,
+        businessProfileId: profile.businessProfileId,
+        businessProfileVersion: profile.version, businessProfileHash: profile.hash,
+        timeZone: profile.timeZone, intervalId: laborInterval.id,
+        expectedIntervalRevision: laborInterval.revision,
+        expectedIntervalDigest: laborInterval.digest, reviewOutcome: 'accepted',
+        reason: 'Owner accepts synthetic Part 3B source labor' });
+    expect(laborReview.status).toBe(200); laborInterval = laborReview.body.data;
+    const material = await operations.mutateMaterialInventory(f.ownerPool, {
+      ...actor, organizationId: f.org, executionId: execution.id, csrfToken: actor.csrfToken,
+      idempotencyKey: crypto.randomUUID(), requestCorrelationId: `m27-p3b-material-${crypto.randomUUID()}`,
+      ...sourcePins,
+        action: 'record', movementKind: 'adjustment', itemKey: 'fence-board',
+        description: 'Synthetic Part 3B source material', quantity: '2', unitCode: 'ea',
+        unitContractVersion: operationContracts.MATERIAL_UNIT_CONTRACT_VERSION,
+        unitContractDigest: operationContracts.MATERIAL_UNIT_CONTRACT_DIGEST,
+        locationKey: 'van-01',
+        adjustmentDirection: 'increase', reason: 'Synthetic Part 3B source material' });
+    expect(material.status).toBe(200); materialMovement = material.body.data.material;
+    const materialReview = await operations.mutateMaterialInventory(f.ownerPool, {
+      ...actor, organizationId: f.org, executionId: execution.id, csrfToken: actor.csrfToken,
+      idempotencyKey: crypto.randomUUID(),
+      requestCorrelationId: `m27-p3b-material-review-${crypto.randomUUID()}`, ...sourcePins,
+      action: 'review', performerProfileId: member.actorUserId,
+      unitContractVersion: operationContracts.MATERIAL_UNIT_CONTRACT_VERSION,
+      unitContractDigest: operationContracts.MATERIAL_UNIT_CONTRACT_DIGEST,
+      movementId: materialMovement.id, expectedMovementRevision: materialMovement.revision,
+      expectedMovementDigest: materialMovement.digest, reviewOutcome: 'accepted',
+      reason: 'Owner accepts synthetic Part 3B source material' });
+    expect(materialReview.status).toBe(200);
+    materialMovement = materialReview.body.data.material;
     const proposed = await f.completion(value);
     const proposal = proposed.body.completionRecord;
     const approved = await f.completion(value, 'approve_completion', { proposal: {
@@ -210,6 +277,96 @@ realPostgres('Mission 27 Part 3B current completed-work context', () => {
         consentVersion: 'm23-internal-reference-consent-v1', consentConfirmed: true,
         sourceDigest: source.body.data.sourceDigest, targetId: null });
     expect(prepared.status).toBe(201);
+  }
+
+  function sourcePins() {
+    return { expectedExecutionRevision: context.execution.revision,
+      expectedExecutionDigest: context.execution.digest,
+      expectedAssignmentRevision: Number(context.assignment.revision),
+      expectedAssignmentDigest: context.assignment.digest,
+      performerProfileId: f.actors.member.actorUserId };
+  }
+
+  function mountedWriter(kind) {
+    const member = f.actors.member; const base = `/api/v1/field-executions/${context.execution.id}`;
+    let path; let body;
+    if (kind === 'fieldEvidence') {
+      path = `${base}/field-evidence-actions`; body = { ...sourcePins(), action: 'record_note',
+        note: `Concurrent source note ${crypto.randomUUID()}.`, caption: null,
+        reason: 'Actual authorized Part 3B field writer' };
+    } else if (kind === 'labor') {
+      const profile = businessProfile; path = `${base}/labor-actions`;
+      body = { ...sourcePins(), action: 'correct', category: 'production',
+        categoryContractVersion: operationContracts.LABOR_CATEGORY_CONTRACT_VERSION,
+        categoryContractDigest: operationContracts.LABOR_CATEGORY_CONTRACT_DIGEST,
+        businessProfileId: profile.businessProfileId,
+        businessProfileVersion: profile.version, businessProfileHash: profile.hash,
+        timeZone: profile.timeZone,
+        observedStart: new Date(Date.now() - 3900000).toISOString(),
+        observedEnd: new Date(Date.now() - 1800000).toISOString(),
+        intervalId: laborInterval.id, expectedIntervalRevision: laborInterval.revision,
+        expectedIntervalDigest: laborInterval.digest,
+        reason: 'Actual authorized Part 3B labor correction' };
+    } else {
+      path = `${base}/material-actions`; body = { ...sourcePins(), action: 'correct',
+        movementKind: 'adjustment', itemKey: 'fence-board',
+        description: 'Corrected synthetic Part 3B source material', quantity: '3', unitCode: 'ea',
+        unitContractVersion: operationContracts.MATERIAL_UNIT_CONTRACT_VERSION,
+        unitContractDigest: operationContracts.MATERIAL_UNIT_CONTRACT_DIGEST,
+        locationKey: 'van-01',
+        adjustmentDirection: 'increase', movementId: materialMovement.id,
+        expectedMovementRevision: materialMovement.revision,
+        expectedMovementDigest: materialMovement.digest,
+        reason: 'Actual authorized Part 3B material correction' };
+    }
+    if (kind === 'materials') {
+      return operations.mutateMaterialInventory(f.ownerPool, { ...actor,
+        organizationId: f.org, executionId: context.execution.id, csrfToken: actor.csrfToken,
+        idempotencyKey: crypto.randomUUID(),
+        requestCorrelationId: `m27-p3b-material-${crypto.randomUUID()}`, ...body }).then(response => {
+        expect(response.status).toBe(200); materialMovement = response.body.data.material;
+        return response;
+      });
+    }
+    const requestActor = member;
+    return request(f.app).post(path).set(requestActor.session.headers)
+      .set('X-CSRF-Token', requestActor.csrfToken)
+      .set('Idempotency-Key', crypto.randomUUID()).send(body).then(response => {
+        expect(response.status).toBe(kind === 'fieldEvidence' ? 201 : 200);
+        if (kind === 'labor') laborInterval = response.body.data;
+        if (kind === 'materials') materialMovement = response.body.data.material;
+        return response;
+      });
+  }
+
+  async function expectValueFreeCurrentness() {
+    const stale = await request(f.app).get(route).set(actor.session.headers);
+    expect(stale.status).toBe(200);
+    expect(stale.body.data).toMatchObject({ state: 'unavailable', value: null,
+      financialActionAuthorized: false });
+    expect(['source_currentness_unavailable', 'source_authority_unavailable'])
+      .toContain(stale.body.data.reason);
+    expect(JSON.stringify(stale.body.data)).not.toMatch(
+      /commercialBasis|operationalRiskGuidance|amount|customerId|executionId|sourceDigest/);
+  }
+
+  async function recoverCurrentHandoff() {
+    await prepareMission27Handoff();
+    const recovered = await request(f.app).get(route).set(actor.session.headers);
+    expect(recovered.status).toBe(200); expect(recovered.body.data.state).toBe('available');
+  }
+
+  async function waitForAdvisoryWaiters(minimum) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const waiting = (await f.ownerPool.query(`SELECT count(*)::int AS count
+        FROM pg_catalog.pg_locks lock
+        WHERE lock.locktype='advisory' AND NOT lock.granted
+          AND lock.database=(SELECT oid FROM pg_catalog.pg_database
+            WHERE datname=current_database())`)).rows[0].count;
+      if (waiting >= minimum) return;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error(`Expected ${minimum} queued billable-work advisory locks`);
   }
 
   test('mounted read joins exact current commercial, completion and inert handoff evidence without mutation', async () => {
@@ -265,43 +422,104 @@ realPostgres('Mission 27 Part 3B current completed-work context', () => {
       .set(actor.session.headers)).status).toBe(400);
   });
 
-  test('released logical-work fence serializes both read-first and mutation-first winner orders', async () => {
-    const identity = `${f.org}:${context.execution.id}`;
-    let signalRead; let releaseRead;
-    const readStarted = new Promise(resolve => { signalRead = resolve; });
-    const readRelease = new Promise(resolve => { releaseRead = resolve; });
-    const heldRead = workContextRepository.withinWorkFence(f.ownerPool, identity, async () => {
-      signalRead(); await readRelease; return 'read-first';
-    });
-    await readStarted;
-    const writer = await f.ownerPool.connect();
-    let writerLocked = false;
-    try {
-      const blockedWriter = await writer.query(
-        'SELECT pg_try_advisory_lock(230007,hashtext($1)) acquired', [identity]);
-      expect(blockedWriter.rows[0].acquired).toBe(false);
-      releaseRead(); expect(await heldRead).toBe('read-first');
-      expect((await writer.query(
-        'SELECT pg_try_advisory_lock(230007,hashtext($1)) acquired', [identity]))
-        .rows[0].acquired).toBe(true);
-      writerLocked = true;
+  test('runtime currentness witness uses the fenced transaction without direct table authority', async () => {
+    const value = await workContextRepository.withinWorkFence(
+      f.runtimePool, f.org, context.execution.id,
+      client => workContextRepository.readHandoffWithinFence(client, {
+        ...actor, organizationId: f.org, executionId: context.execution.id,
+      }));
+    expect(value).toMatchObject({ version: 'm23-downstream-handoffs-v1',
+      executionId: context.execution.id, sourceAvailable: true });
+    await expect(f.runtimePool.query('SELECT * FROM canonical_field_evidence_records LIMIT 1'))
+      .rejects.toMatchObject({ code: '42501' });
+  });
 
-      let signalEntered;
-      const entered = new Promise(resolve => { signalEntered = resolve; });
-      const waitingRead = workContextRepository.withinWorkFence(f.ownerPool, identity, async () => {
-        signalEntered(); return 'writer-first';
+  test.each(['fieldEvidence','labor','materials'])(
+    'database fence serializes the actual authorized %s writer and recovers after refresh',
+    async kind => {
+      let signalSnapshot; let releaseSnapshot;
+      const snapshotRead = new Promise(resolve => { signalSnapshot = resolve; });
+      const snapshotRelease = new Promise(resolve => { releaseSnapshot = resolve; });
+      const heldRead = workContextRepository.read(f.runtimePool, actor, estimate, {
+        readHandoff: async (...args) => {
+          const result = await workContextRepository.readHandoffWithinFence(...args);
+          signalSnapshot(); await snapshotRelease;
+          return result;
+        },
       });
-      expect(await Promise.race([entered.then(() => true),
-        new Promise(resolve => setTimeout(() => resolve(false), 75))])).toBe(false);
-      await writer.query('SELECT pg_advisory_unlock(230007,hashtext($1))', [identity]);
-      writerLocked = false;
-      expect(await waitingRead).toBe('writer-first');
-    } finally {
-      if (writerLocked) await writer.query(
-        'SELECT pg_advisory_unlock(230007,hashtext($1))', [identity]).catch(() => {});
-      writer.release();
-    }
-  }, 30000);
+      await Promise.race([snapshotRead, heldRead.then(result => {
+        throw new Error(`Fenced read completed before its currentness witness: ${JSON.stringify(result)}`);
+      })]);
+      let settled = false;
+      const writer = mountedWriter(kind).finally(() => { settled = true; });
+      if (kind === 'fieldEvidence') await waitForAdvisoryWaiters(1);
+      else await new Promise(resolve => setTimeout(resolve, 150));
+      expect(settled).toBe(false);
+      releaseSnapshot();
+      expect((await heldRead).state).toBe('available');
+      await writer;
+      await expectValueFreeCurrentness();
+      await recoverCurrentHandoff();
+    }, 120000,
+  );
+
+  test.each(['fieldEvidence','labor','materials'])(
+    'actual authorized %s writer queued first makes a concurrent read value-free',
+    async kind => {
+      const blocker = await f.ownerPool.connect(); let transaction = false;
+      try {
+        await blocker.query('BEGIN'); transaction = true;
+        await blocker.query('SELECT pg_advisory_xact_lock(230007,hashtext($1))',
+          [`${f.org}:${context.execution.id}`]);
+        let writerSettled = false; let readSettled = false;
+        const writer = mountedWriter(kind).finally(() => { writerSettled = true; });
+        await waitForAdvisoryWaiters(1);
+        const concurrentRead = request(f.app).get(route).set(actor.session.headers)
+          .then(response => { readSettled = true; return response; });
+        await new Promise(resolve => setTimeout(resolve, 150));
+        expect(writerSettled).toBe(false); expect(readSettled).toBe(false);
+        await blocker.query('COMMIT'); transaction = false;
+        await writer;
+        const response = await concurrentRead;
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ state: 'unavailable', value: null,
+          financialActionAuthorized: false });
+        await recoverCurrentHandoff();
+      } finally {
+        if (transaction) await blocker.query('ROLLBACK').catch(() => {});
+        blocker.release();
+      }
+    }, 120000,
+  );
+
+  test('reader rollback releases the database fence without residue and restart stays current', async () => {
+    const before = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_field_evidence_records WHERE execution_id=$1) evidence,
+      (SELECT count(*)::int FROM canonical_labor_intervals WHERE execution_id=$1) labor,
+      (SELECT count(*)::int FROM canonical_material_movements WHERE execution_id=$1) materials`,
+    [context.execution.id])).rows[0];
+    await expect(workContextRepository.withinWorkFence(
+      f.runtimePool, f.org, context.execution.id, async () => {
+        throw new Error('Synthetic Part 3B read rollback');
+      })).rejects.toThrow('Synthetic Part 3B read rollback');
+    const after = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_field_evidence_records WHERE execution_id=$1) evidence,
+      (SELECT count(*)::int FROM canonical_labor_intervals WHERE execution_id=$1) labor,
+      (SELECT count(*)::int FROM canonical_material_movements WHERE execution_id=$1) materials`,
+    [context.execution.id])).rows[0];
+    expect(after).toEqual(before);
+    await mountedWriter('fieldEvidence');
+    await expectValueFreeCurrentness();
+    await recoverCurrentHandoff();
+    expect(await f.db.initDatabase()).toBe(true);
+    const restarted = await request(f.app).get(route).set(actor.session.headers);
+    expect(restarted.status).toBe(200); expect(restarted.body.data.state).toBe('available');
+    const waits = (await f.ownerPool.query(`SELECT count(*)::int AS count
+      FROM pg_catalog.pg_locks lock WHERE lock.locktype='advisory' AND NOT lock.granted
+        AND lock.database=(SELECT oid FROM pg_catalog.pg_database
+          WHERE datname=current_database())`)).rows[0].count;
+    expect(waits).toBe(0);
+  }, 120000);
 
   test('reopening invalidates final-balance context and returns no prior value', async () => {
     const reopened = await f.completion(context, 'reopen_execution', { completion: {

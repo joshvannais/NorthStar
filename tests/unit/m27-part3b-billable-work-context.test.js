@@ -110,8 +110,9 @@ test.each([
 });
 
 test('repository uses only accepted reads and rechecks the commercial and execution association', async () => {
-  const f = fixtures(); const pool = {};
-  const withWorkFence = jest.fn(async (_pool, _identity, action) => action());
+  const f = fixtures(); const pool = {}; const fenceClient = { query: jest.fn() };
+  const withWorkFence = jest.fn(async (_pool, _organizationId, _executionId, action) =>
+    action(fenceClient));
   const dependencies = { readBasis: jest.fn().mockResolvedValue(f.basis),
     readExecutionLink: jest.fn().mockResolvedValue(f.link),
     readOperationalIntelligence: jest.fn().mockResolvedValue(f.intelligence),
@@ -125,19 +126,20 @@ test('repository uses only accepted reads and rechecks the commercial and execut
   expect(dependencies.readOperationalIntelligence).toHaveBeenCalledTimes(1);
   expect(dependencies.readHandoff).toHaveBeenCalledTimes(1);
   expect(dependencies.readHandoff.mock.calls[0]).toHaveLength(2);
-  expect(dependencies.readHandoff).toHaveBeenCalledWith(pool,
+  expect(dependencies.readHandoff).toHaveBeenCalledWith(fenceClient,
     expect.objectContaining({ executionId: f.link.executionId }));
   expect(withWorkFence).toHaveBeenCalledWith(pool,
-    `${source.organizationId}:${f.link.executionId}`, expect.any(Function));
+    source.organizationId, f.link.executionId, expect.any(Function));
 });
 
 test('repository rejects cross-snapshot joins and preserves access denials', async () => {
   const f = fixtures(); const changed = { ...f.basis, digest: hash('q') };
+  const fenceClient = { query: jest.fn() };
   const dependencies = { readBasis: jest.fn().mockResolvedValueOnce(f.basis).mockResolvedValueOnce(changed),
     readExecutionLink: jest.fn().mockResolvedValue(f.link),
     readOperationalIntelligence: jest.fn().mockResolvedValue(f.intelligence),
     readHandoff: jest.fn().mockResolvedValue(f.handoff),
-    withWorkFence: async (_pool, _identity, action) => action() };
+    withWorkFence: async (_pool, _organizationId, _executionId, action) => action(fenceClient) };
   const result = await repository.read({}, {}, f.basis.estimate.id, dependencies);
   expect(result).toMatchObject({ state: 'unavailable', value: null,
     reason: 'source_currentness_unavailable' });
@@ -145,19 +147,45 @@ test('repository rejects cross-snapshot joins and preserves access denials', asy
   await expect(repository.read({}, {}, f.basis.estimate.id, { ...dependencies,
     readBasis: jest.fn().mockResolvedValue(f.basis),
     readExecutionLink: jest.fn().mockRejectedValue(denied),
-    withWorkFence: async (_pool, _identity, action) => action() })).rejects.toBe(denied);
+    withWorkFence: async (_pool, _organizationId, _executionId, action) =>
+      action(fenceClient) })).rejects.toBe(denied);
 });
 
-test('work fence holds and releases the released Mission 23 logical source lock', async () => {
+test('work fence holds tenant then transaction-scoped Mission 23 source locks', async () => {
   const queries = []; let released;
   const client = { query: jest.fn(async (sql, values) => {
-    queries.push([sql, values]); return { rows: [{ pg_advisory_lock_shared: true }] };
+    queries.push([sql, values]);
+    if (sql.includes('canonical_customer_financial_billable_work_reader_fence_v1')) {
+      return { rows: [{ locked: true }] };
+    }
+    return { rows: [] };
   }), release: jest.fn(value => { released = value; }) };
   const value = await repository.withinWorkFence({ connect: async () => client },
-    `${id(40)}:${id(7)}`, async () => 'coherent');
+    id(40), id(7), async () => 'coherent');
   expect(value).toBe('coherent');
-  expect(queries.some(([sql]) => sql.includes('pg_advisory_lock_shared(230007'))).toBe(true);
-  expect(queries.some(([sql]) => sql.includes('pg_advisory_unlock_shared(230007'))).toBe(true);
+  const workIndex = queries.findIndex(([sql]) =>
+    sql.includes('canonical_customer_financial_billable_work_reader_fence_v1'));
+  expect(workIndex).toBeGreaterThan(-1);
+  expect(queries[workIndex][1]).toEqual([id(40), id(7)]);
+  expect(queries.some(([sql]) => sql === 'COMMIT')).toBe(true);
+  expect(queries.some(([sql]) => sql.includes('pg_advisory_unlock'))).toBe(false);
+  expect(released).toBe(false);
+});
+
+test('work fence rolls back and discards a connection only when cleanup fails', async () => {
+  const queries = []; let released;
+  const client = { query: jest.fn(async sql => {
+    queries.push(sql);
+    if (sql.includes('canonical_customer_financial_billable_work_reader_fence_v1')) {
+      return { rows: [{ locked: true }] };
+    }
+    return { rows: [] };
+  }), release: jest.fn(value => { released = value; }) };
+  await expect(repository.withinWorkFence({ connect: async () => client },
+    id(40), id(7), async () => { throw new Error('joined read failed'); }))
+    .rejects.toThrow('joined read failed');
+  expect(queries).toContain('ROLLBACK');
+  expect(queries).not.toContain('COMMIT');
   expect(released).toBe(false);
 });
 
@@ -182,7 +210,7 @@ test('mounted route is private, query-bounded and exposes only the server-owned 
   expect((await request(app).get(route + '?limit=1')).status).toBe(400);
 });
 
-test('ratifies the Part 3B read-only boundary, unavailable capacity and migration ceiling', () => {
+test('ratifies the Part 3B read-only boundary, unavailable capacity and migration fence', () => {
   const root = path.resolve(__dirname, '../..');
   const architecture = fs.readFileSync(path.join(root,
     'docs/architecture/MISSION_27_PART3B_WORK_CONTEXT.md'), 'utf8');
@@ -191,17 +219,37 @@ test('ratifies the Part 3B read-only boundary, unavailable capacity and migratio
     'src/routes/customerFinancialEditableEstimate.js'), 'utf8');
   const repositorySource = fs.readFileSync(path.join(root,
     'src/customerFinancial/billableWorkContextRepository.js'), 'utf8');
+  const fence = fs.readFileSync(path.join(root,
+    'migrations/265_customer_financial_billable_work_currentness_fence_v1.sql'), 'utf8');
   expect(architecture).toMatch(/Status: implementation candidate/);
   expect(architecture).toMatch(/Part 3C/);
   expect(architecture).toMatch(/capacity_source_unavailable/);
-  expect(architecture).toMatch(/no migration 265/i);
+  expect(architecture).toMatch(/migration 265/i);
   expect(architecture).toMatch(/Live-money validation remains deferred/);
   expect(Math.max(...migrations.map(name => Number((name.match(/^(\d+)_/) || [])[1] || 0))))
-    .toBe(264);
+    .toBe(265);
   expect(routeSource).toContain("router.get('/:estimateId/work-context'");
   expect(routeSource).not.toContain("router.post('/:estimateId/work-context'");
   expect(repositorySource).toContain('readOperationalIntelligence');
   expect(repositorySource).toContain('readHandoff');
   expect(repositorySource).toContain('const verifiedBasis = await readBasis');
   expect(repositorySource).not.toMatch(/\b(?:insert|update|delete|dispatch|providerCall)\b/i);
+  for (const table of ['canonical_field_executions','canonical_completion_records',
+    'canonical_labor_intervals','canonical_material_movements','canonical_progress_records',
+    'canonical_field_evidence_records','canonical_equipment_events','canonical_handoff_receipts']) {
+    expect(fence).toContain(`ON public.${table}`);
+  }
+  expect(fence).toContain('pg_advisory_xact_lock(230007');
+  expect(fence).toContain('pg_advisory_xact_lock_shared');
+  expect(fence).toContain('FROM public.organizations WHERE id=org FOR SHARE');
+  expect(fence).toMatch(/canonical_customer_financial_billable_work_reader_fence_v1[\s\S]+pg_advisory_xact_lock_shared\(230004,4\)[\s\S]+FROM public\.canonical_field_executions[\s\S]+FOR SHARE[\s\S]+pg_advisory_xact_lock_shared/);
+  expect(fence).toContain('canonical_customer_financial_billable_work_execution_fence_v1');
+  expect(fence).toContain('canonical_customer_financial_billable_work_source_identity_immutable');
+  expect(fence).toMatch(/canonical_billable_work_fence_execution_v1[\s\S]+EXECUTE FUNCTION public\.canonical_customer_financial_billable_work_execution_fence_v1\(\)/);
+  expect(fence.match(/REVOKE ALL ON FUNCTION public\.canonical_customer_financial_billable_work_[a-z0-9_]+\(\)/g))
+    .toHaveLength(2);
+  expect(fence).toMatch(/REVOKE ALL ON FUNCTION public\.canonical_customer_financial_billable_work_reader_fence_v1\(UUID,UUID\)/);
+  const authority = fs.readFileSync(path.join(root,
+    'src/customerFinancial/databaseAuthority.js'), 'utf8');
+  expect(authority).toContain("'canonical_customer_financial_billable_work_reader_fence_v1'");
 });

@@ -23,16 +23,21 @@ describe('Mission 27 Slice 1C threat and action-capability contract', () => {
     const oneA = read('docs/architecture/MISSION_27_PART1A_AUTHORITY_CONTRACT.md');
     const oneB = read('docs/architecture/MISSION_27_PART1B_SOURCE_INVENTORY.md');
 
-    for (const text of [roadmap, ledger, contract()]) {
+    for (const text of [contract()]) {
       expect(text).toContain('54a31eb4f31a0118d8153aefc7a04bd356dd7f70');
       expect(text).toContain('204b40793b72c412a47632af54c323437fe8a40e');
       expect(text).toContain('444c7436-80ab-4a90-9aee-e0f7bcee58ee');
+    }
+    for (const text of [roadmap, ledger]) {
+      expect(text).toContain('29a745f79a914924a7d72d542dfb10c46a8af590');
+      expect(text).toContain('a85107b68a880dee603270145e9dbb77362afa9d');
+      expect(text).toContain('e5add6e7-8222-4e8e-a2b4-0f9fa47661f0');
     }
     expect(oneB).toContain('afa98228b97cc1ad2b9f9aea76c7859f9a432765');
     expect(ledger).toContain('| Q1 authority and inventory | 1A–1B |');
     expect(ledger).toContain('| Released through 1B |');
     expect(ledger).toContain('| Q2 threat and launch contract | 1C–1D |');
-    expect(ledger).toContain('1C released; 1D candidate pending audit/release');
+    expect(ledger).toContain('| Released through 1D |');
     expect(ledger).toContain('| 1C | Threat model and action-capability/recent-auth/dual-control matrix | Complete');
     expect(oneA).toContain('The original sequence remains fourteen parts and sixty-four slices');
     expect(oneA).toContain('Slices 1A–1C are released. Slice 1D owns the launch matrix');
@@ -148,15 +153,18 @@ describe('Mission 27 Slice 1C threat and action-capability contract', () => {
     expect(text).toContain('Mission 32 receives no commercial, work, billing or action capability');
   });
 
-  test('grants no runtime authority and links launch choices to Slice 1D', () => {
+  test('preserves the historical Slice 1C no-grant contract while Part 2A stays unmounted', () => {
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql'))
       .sort();
-    expect(migrationNames.at(-1)).toBe('259_demo_forecast_journey.sql');
-    expect(migrationNames.some(name => /^260_/.test(name))).toBe(false);
+    expect(migrationNames.at(-1)).toBe('260_customer_financial_billing_identity_v1.sql');
+    expect(migrationNames.filter(name => /^260_/.test(name))).toEqual([
+      '260_customer_financial_billing_identity_v1.sql',
+    ]);
 
+    const server = read('src/server.js');
+    expect(server).not.toMatch(/customerFinancial|billingIdentity/i);
     const runtime = files('src').map(read).join('\n');
-    expect(runtime).not.toContain('customer_financial.');
     expect(runtime).not.toMatch(/MISSION_27_PART1C_THREAT_AND_CAPABILITY_MATRIX/);
 
     const permissions = read('src/auth/permissions.js');

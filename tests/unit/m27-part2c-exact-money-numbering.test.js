@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const money = require('../../src/customerFinancial/exactMoney');
 const numbering = require('../../src/customerFinancial/numberingPolicyRepository');
+const grantIssuer = require('../../src/customerFinancial/launchCapabilityGrantIssuer');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const read = value => fs.readFileSync(path.join(ROOT, value), 'utf8');
@@ -47,9 +48,41 @@ describe('Mission 27 Part 2C exact money and numbering contract', () => {
     expect(sql).not.toMatch(/INSERT INTO public\.canonical_(?:invoices|payments|estimates|appointments)/i);
     expect(numbering.CAPABILITY).toBe('customer_financial.document_numbering.review');
     expect(numbering.BUSINESS_PURPOSE).toBe('customer_financial.document_numbering');
+    expect(sql).toContain("action_mode TEXT NOT NULL CHECK(action_mode='single_control')");
+    expect(sql).toContain("assurance TEXT NOT NULL CHECK(assurance='current_session')");
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql')).sort();
     expect(names.at(-1)).toBe('262_customer_financial_exact_money_numbering_v1.sql');
     expect(names.filter(name => /^262_/.test(name))).toHaveLength(1);
+  });
+
+  test('requires conforming owner-template capability issuance and machine classification', () => {
+    expect(grantIssuer.classifyNumberingReviewPolicy()).toEqual({
+      capability: 'customer_financial.document_numbering.review',
+      targetClass: 'tenant_document_numbering_policy',
+      businessPurpose: 'customer_financial.document_numbering',
+      policyVersion: 'mission27.launch.v1', templateVersion: 'm27.owner.v1',
+      actionMode: 'single_control', assurance: 'current_session',
+    });
+    const policy = JSON.parse(read('config/mission27-launch-contract.v1.json'));
+    const omittedTemplate = structuredClone(policy);
+    omittedTemplate.team.ownerDefaultCapabilities = omittedTemplate.team.ownerDefaultCapabilities
+      .filter(value => value !== grantIssuer.CAPABILITY);
+    expect(() => grantIssuer.classifyNumberingReviewPolicy(omittedTemplate))
+      .toThrow('Document numbering capability policy is unavailable');
+    const omittedClassification = structuredClone(policy);
+    delete omittedClassification.actionControl[grantIssuer.CAPABILITY];
+    expect(() => grantIssuer.classifyNumberingReviewPolicy(omittedClassification))
+      .toThrow('Document numbering capability policy is unavailable');
+    const mismatchedAssurance = structuredClone(policy);
+    mismatchedAssurance.actionControl[grantIssuer.CAPABILITY].assurance = 'recent_auth';
+    expect(() => grantIssuer.classifyNumberingReviewPolicy(mismatchedAssurance))
+      .toThrow('Document numbering capability policy is unavailable');
+    const issuerSource = read('src/customerFinancial/launchCapabilityGrantIssuer.js');
+    const integrationSource = read('tests/integration/m27-part2c-exact-money-numbering-postgres.test.js');
+    expect(issuerSource).toContain('INSERT INTO canonical_customer_financial_numbering_capability_grants_v1');
+    expect(integrationSource).toContain('grantIssuer.issueNumberingReviewGrant');
+    expect(integrationSource).not.toContain(
+      'INSERT INTO canonical_customer_financial_numbering_capability_grants_v1');
   });
 
   test('preserves the later-slice and external-effect boundaries', () => {

@@ -89,11 +89,15 @@ describe('Mission 27 Part 1D first-supported-launch contract', () => {
       legalSufficiencyClaimed: false,
     });
     expect(value.team.roleAloneAuthorizes).toBe(false);
-    expect(value.team.ownerDefaultCapabilities).toHaveLength(25);
+    expect(value.team.ownerDefaultCapabilities).toHaveLength(26);
     expect(value.team.adminDefaultCapabilities).not.toEqual(expect.arrayContaining([
       'customer_financial.provider.connect',
       'customer_financial.record.delete',
       'customer_financial.record.recover',
+      'customer_financial.document_numbering.review',
+    ]));
+    expect(value.team.ownerOnlyCapabilities).toEqual(expect.arrayContaining([
+      'customer_financial.document_numbering.review',
     ]));
     expect(value.team.memberDefaultCapabilities).toEqual([]);
     expect(value.team.memberGrantableCapabilities).toEqual([
@@ -120,6 +124,7 @@ describe('Mission 27 Part 1D first-supported-launch contract', () => {
       'customer_financial.estimate.review_signature': 'single_control',
       'customer_financial.estimate.request_work_handoff': 'conditional_dual_control',
       'customer_financial.billing_identity.review': 'single_control',
+      'customer_financial.document_numbering.review': 'single_control',
       'customer_financial.billable_work.review': 'conditional_dual_control',
       'customer_financial.invoice.edit_draft': 'single_control',
       'customer_financial.invoice.approve': 'conditional_dual_control',
@@ -151,6 +156,11 @@ describe('Mission 27 Part 1D first-supported-launch contract', () => {
     expect(value.actionControl['customer_financial.billable_work.review']).toMatchObject({
       maximumMinorUnits: '10000000',
       singleControlAllowedWhen: expect.arrayContaining(['billable_amount_minor_units_lte_1000000']),
+    });
+    expect(value.actionControl['customer_financial.document_numbering.review']).toEqual({
+      mode: 'single_control', assurance: 'current_session',
+      requires: ['exact_frozen_tenant_global_numbering_contract', 'current_owner_capability',
+        'fresh_confirmation', 'reason'],
     });
     expect(value.actionControl['customer_financial.invoice.void']).toMatchObject({
       mode: 'dual_control', singleControlAllowed: false,

@@ -3,28 +3,22 @@
 const crypto = require('node:crypto');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const repository = require('../../src/customerFinancial/numberingPolicyRepository');
+const grantIssuer = require('../../src/customerFinancial/launchCapabilityGrantIssuer');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 
-async function insertGrant(client, source, options = {}) {
-  const grantId = options.grantId || crypto.randomUUID();
-  const revision = options.revision || 1;
-  await client.query(
-    `INSERT INTO canonical_customer_financial_numbering_capability_grants_v1(
-      organization_id,id,revision,actor_user_id,membership_id,capability,target_class,
-      business_purpose,policy_version,template_version,active,valid_from,expires_at,issued_at)
-     VALUES($1,$2,$3,$4,$4,$5,'tenant_document_numbering_policy',
-      'customer_financial.document_numbering',
-      'mission27.launch.v1','m27.owner.v1',$6,clock_timestamp()-INTERVAL '1 minute',
-      clock_timestamp()+INTERVAL '1 hour',clock_timestamp())`,
-    [source.organizationId, grantId, revision, source.actorUserId,
-      repository.CAPABILITY, options.active === undefined ? true : options.active]);
-  return { grantId, revision };
+async function issueGrant(client, source, options = {}) {
+  return grantIssuer.issueNumberingReviewGrant(client, {
+    organizationId: source.organizationId,
+    actorUserId: source.actorUserId,
+    membershipId: source.actorUserId,
+    actorAccessRole: source.actorAccessRole,
+  }, options);
 }
 
 async function authorize(fixture, source, options = {}) {
-  const grant = await insertGrant(fixture.ownerPool, source, options);
+  const grant = await issueGrant(fixture.ownerPool, source, options);
   return {
     organizationId: source.organizationId,
     actorUserId: source.actorUserId,
@@ -108,6 +102,23 @@ realPostgres('Mission 27 Part 2C exact money and numbering PostgreSQL authority'
   afterAll(async () => { if (fixture) await fixture.cleanup(); }, 120000);
 
   test('reviews the fixed tenant policy with exact owner authority and idempotency', async () => {
+    const grantsBefore = Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_customer_financial_numbering_capability_grants_v1'))
+      .rows[0].count);
+    await expect(issueGrant(fixture.ownerPool, fixture.actors.admin))
+      .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
+    await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
+      { templateVersion: 'm27.admin.v1' }))
+      .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
+    await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
+      { capability: 'customer_financial.source.review' }))
+      .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
+    await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
+      { assurance: 'recent_auth' }))
+      .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
+    expect(Number((await fixture.ownerPool.query(
+      'SELECT count(*) count FROM canonical_customer_financial_numbering_capability_grants_v1'))
+      .rows[0].count)).toBe(grantsBefore);
     reviewedOwner = await authorize(fixture, fixture.actors.owner);
     const key = crypto.randomUUID();
     const accepted = await reviewPolicy(fixture, reviewedOwner, key);
@@ -120,7 +131,10 @@ realPostgres('Mission 27 Part 2C exact money and numbering PostgreSQL authority'
         value: { contract: { currency: { code: 'USD', minorUnitExponent: 2 },
           location: { scope: 'tenant_global', locationId: null }, reuseAllowed: false,
           gapsAllowed: true, yearResetAllowed: false, serverAssigned: true,
-          statutorySufficiencyClaimed: false } } } });
+          statutorySufficiencyClaimed: false }, actor: {
+            capability: 'customer_financial.document_numbering.review',
+            actionMode: 'single_control', assurance: 'current_session',
+          } } } });
     const replay = await repository.review(
       fixture.runtimePool, mutationActor(reviewedOwner, key), {
         expectedPolicyDigest: accepted.candidate.policyDigest,
@@ -296,7 +310,7 @@ realPostgres('Mission 27 Part 2C exact money and numbering PostgreSQL authority'
       supersession = (async () => {
         await issuer.query('BEGIN');
         try {
-          await insertGrant(issuer, fixture.actors.owner,
+          await issueGrant(issuer, fixture.actors.owner,
             { grantId: staleActor.capabilityGrantId, revision: 2 });
           await issuer.query('COMMIT');
         } catch (error) { await issuer.query('ROLLBACK').catch(() => {}); throw error; }
@@ -346,7 +360,7 @@ realPostgres('Mission 27 Part 2C exact money and numbering PostgreSQL authority'
       delayedSupersession = (async () => {
         await delayedIssuer.query('BEGIN');
         try {
-          await insertGrant(delayedIssuer, fixture.actors.owner,
+          await issueGrant(delayedIssuer, fixture.actors.owner,
             { grantId: effectActor.capabilityGrantId, revision: 2 });
           await delayedIssuer.query('COMMIT');
         } catch (error) { await delayedIssuer.query('ROLLBACK').catch(() => {}); throw error; }
@@ -375,7 +389,7 @@ realPostgres('Mission 27 Part 2C exact money and numbering PostgreSQL authority'
     let rollbackEffect;
     try {
       await rolledBackIssuer.query('BEGIN');
-      await insertGrant(rolledBackIssuer, fixture.actors.owner,
+      await issueGrant(rolledBackIssuer, fixture.actors.owner,
         { grantId: rollbackActor.capabilityGrantId, revision: 2 });
       const effectPid = (await rollbackEffectClient.query('SELECT pg_backend_pid() pid')).rows[0].pid;
       rollbackEffect = repository.review({ connect: async () => rollbackEffectClient },

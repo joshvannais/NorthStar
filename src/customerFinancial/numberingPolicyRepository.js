@@ -67,14 +67,16 @@ function contract(value) {
 function reviewedValue(value, organizationId, policyId, policyDigest) {
   return exact(value, ['contract','actor','reason','reviewedAt']) && contract(value.contract) &&
     exact(value.actor, ['organizationId','userId','accessRole','membershipId','authSessionId',
-      'capability','capabilityGrantId','capabilityGrantRevision','businessPurpose','policyVersion']) &&
+      'capability','capabilityGrantId','capabilityGrantRevision','businessPurpose','policyVersion',
+      'actionMode','assurance']) &&
     value.actor.organizationId === organizationId && uuid(value.actor.userId) &&
     value.actor.accessRole === 'owner' && uuid(value.actor.membershipId) &&
     uuid(value.actor.authSessionId) && value.actor.capability === CAPABILITY &&
     uuid(value.actor.capabilityGrantId) &&
     Number.isSafeInteger(value.actor.capabilityGrantRevision) &&
     value.actor.capabilityGrantRevision >= 1 && value.actor.businessPurpose === BUSINESS_PURPOSE &&
-    value.actor.policyVersion === POLICY_VERSION && typeof value.reason === 'string' &&
+    value.actor.policyVersion === POLICY_VERSION && value.actor.actionMode === 'single_control' &&
+    value.actor.assurance === 'current_session' && typeof value.reason === 'string' &&
     value.reason === value.reason.trim() && Buffer.byteLength(value.reason) >= 12 &&
     Buffer.byteLength(value.reason) <= 500 && utc(value.reviewedAt) && uuid(policyId) && digest(policyDigest);
 }

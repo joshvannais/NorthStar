@@ -41,6 +41,8 @@ const { createForecastHandoffsRouter } = require('./routes/forecastHandoffs');
 const { createForecastPaidJourneyRouter } = require('./routes/forecastPaidJourney');
 const { createCustomerFinancialBillingIdentityRouter } =
   require('./routes/customerFinancialBillingIdentity');
+const { createCustomerFinancialEditableEstimateRouter } =
+  require('./routes/customerFinancialEditableEstimate');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -368,6 +370,8 @@ app.use('/api/v1/forecast/handoffs', createForecastHandoffsRouter());
 app.use('/api/v1/forecast/paid-journey', createForecastPaidJourneyRouter());
 app.use('/api/v1/customer-financial/billing-identities',
   createCustomerFinancialBillingIdentityRouter());
+app.use('/api/v1/customer-financial/editable-estimates',
+  createCustomerFinancialEditableEstimateRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());
 app.use('/api/v1/forecast/current-backlog', createForecastCurrentBacklogRouter());
 app.use('/api/v1/forecast/demand-to-schedule', createForecastDemandToScheduleRouter());

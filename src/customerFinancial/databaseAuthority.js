@@ -12,6 +12,7 @@ const ENTRIES = new Set([
   'canonical_customer_financial_numbering_v1_candidate',
   'canonical_customer_financial_numbering_v1_read',
   'canonical_customer_financial_numbering_v1_review',
+  'canonical_customer_financial_editable_basis_v1_read',
 ]);
 const TABLES = new Set([
   'canonical_customer_financial_billing_capability_grants_v1',
@@ -28,6 +29,8 @@ const TABLES = new Set([
   'canonical_customer_financial_numbering_sequences_v1',
   'canonical_customer_financial_numbering_reservations_v1',
   'canonical_customer_financial_numbering_events_v1',
+  'canonical_customer_financial_estimate_capability_grants_v1',
+  'canonical_customer_financial_estimate_capability_heads_v1',
 ]);
 const quote = value => '"' + value.replace(/"/g, '""') + '"';
 
@@ -37,7 +40,8 @@ async function grantAndVerify(client, runtimeRole) {
     `SELECT oid,relname FROM pg_class
       WHERE relnamespace='public'::regnamespace AND relkind='r'
         AND (relname LIKE 'canonical_customer_financial_billing_%'
-          OR relname LIKE 'canonical_customer_financial_numbering_%')`
+          OR relname LIKE 'canonical_customer_financial_numbering_%'
+          OR relname LIKE 'canonical_customer_financial_estimate_%')`
   )).rows;
   for (const table of tables) {
     const identity = 'public.' + quote(table.relname);
@@ -53,7 +57,8 @@ async function grantAndVerify(client, runtimeRole) {
         AND (proname LIKE 'canonical_customer_financial_billing_identity_v1_%'
           OR proname LIKE 'canonical_customer_financial_billing_review_v1_%'
           OR proname LIKE 'canonical_customer_financial_billing_journey_v1_%'
-          OR proname LIKE 'canonical_customer_financial_numbering_v1_%')`
+          OR proname LIKE 'canonical_customer_financial_numbering_v1_%'
+          OR proname LIKE 'canonical_customer_financial_editable_basis_v1_%')`
   )).rows;
   for (const entry of functions) {
     await client.query('REVOKE ALL ON FUNCTION ' + entry.identity + ' FROM PUBLIC, ' + role);

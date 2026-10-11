@@ -188,6 +188,9 @@ describe('Mission 27 Part 3A editable estimate basis', () => {
     expect(sql).toContain("':editable-estimate-capability-scope:'");
     expect(sql).toContain('ENABLE ROW LEVEL SECURITY');
     expect(sql).toContain('FORCE ROW LEVEL SECURITY');
+    expect(sql).toContain('current_user=pg_catalog.pg_get_userbyid');
+    expect(sql).not.toContain("current_setting('northstar.customer_financial_estimate_organization_id'");
+    expect(sql).not.toContain("set_config('northstar.customer_financial_estimate_organization_id'");
     expect(sql).toContain('canonical_customer_financial_editable_basis_v1_issue_grant');
     expect(sql).toContain('Editable estimate capability identity cannot change');
     expect(sql).toContain('pg_try_advisory_xact_lock');

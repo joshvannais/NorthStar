@@ -53,23 +53,27 @@ ALTER TABLE public.canonical_customer_financial_estimate_capability_grants_v1
  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.canonical_customer_financial_estimate_capability_grants_v1
  FORCE ROW LEVEL SECURITY;
-CREATE POLICY canonical_customer_financial_estimate_capability_grants_v1_tenant
+CREATE POLICY canonical_customer_financial_estimate_capability_grants_v1_owner_only
  ON public.canonical_customer_financial_estimate_capability_grants_v1
- USING(organization_id=NULLIF(current_setting(
-  'northstar.customer_financial_estimate_organization_id',TRUE),'')::UUID)
- WITH CHECK(organization_id=NULLIF(current_setting(
-  'northstar.customer_financial_estimate_organization_id',TRUE),'')::UUID);
+ USING(current_user=pg_catalog.pg_get_userbyid((
+  SELECT relation.relowner FROM pg_catalog.pg_class relation
+  WHERE relation.oid='public.canonical_customer_financial_estimate_capability_grants_v1'::pg_catalog.regclass)))
+ WITH CHECK(current_user=pg_catalog.pg_get_userbyid((
+  SELECT relation.relowner FROM pg_catalog.pg_class relation
+  WHERE relation.oid='public.canonical_customer_financial_estimate_capability_grants_v1'::pg_catalog.regclass)));
 
 ALTER TABLE public.canonical_customer_financial_estimate_capability_heads_v1
  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.canonical_customer_financial_estimate_capability_heads_v1
  FORCE ROW LEVEL SECURITY;
-CREATE POLICY canonical_customer_financial_estimate_capability_heads_v1_tenant
+CREATE POLICY canonical_customer_financial_estimate_capability_heads_v1_owner_only
  ON public.canonical_customer_financial_estimate_capability_heads_v1
- USING(organization_id=NULLIF(current_setting(
-  'northstar.customer_financial_estimate_organization_id',TRUE),'')::UUID)
- WITH CHECK(organization_id=NULLIF(current_setting(
-  'northstar.customer_financial_estimate_organization_id',TRUE),'')::UUID);
+ USING(current_user=pg_catalog.pg_get_userbyid((
+  SELECT relation.relowner FROM pg_catalog.pg_class relation
+  WHERE relation.oid='public.canonical_customer_financial_estimate_capability_heads_v1'::pg_catalog.regclass)))
+ WITH CHECK(current_user=pg_catalog.pg_get_userbyid((
+  SELECT relation.relowner FROM pg_catalog.pg_class relation
+  WHERE relation.oid='public.canonical_customer_financial_estimate_capability_heads_v1'::pg_catalog.regclass)));
 
 CREATE FUNCTION public.canonical_customer_financial_editable_basis_v1_grant_head()
 RETURNS TRIGGER LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -143,7 +147,6 @@ BEGIN
   RAISE EXCEPTION 'Editable estimate capability issuance restricted'
    USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_estimate_capability_issue_restricted';
  END IF;
- PERFORM set_config('northstar.customer_financial_estimate_organization_id',org::TEXT,TRUE);
  PERFORM pg_advisory_xact_lock(hashtextextended(
   org::text||':editable-estimate-capability:'||grant_value::text,0));
  SELECT grant_row.* INTO locked_identity
@@ -215,7 +218,6 @@ BEGIN
   RAISE EXCEPTION 'Current editable estimate basis entitlement unavailable'
    USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_editable_basis_unauthorized';
  END IF;
- PERFORM set_config('northstar.customer_financial_estimate_organization_id',org::TEXT,TRUE);
  FOR candidate_grant IN
   SELECT grant_value.*
   FROM public.canonical_customer_financial_estimate_capability_grants_v1 grant_value

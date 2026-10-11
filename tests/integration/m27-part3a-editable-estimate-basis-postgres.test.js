@@ -111,17 +111,8 @@ realPostgres('Mission 27 Part 3A current commercial editable basis', () => {
     expect(booking.status).toBe(201); return booking.body.data.reviewId;
   }
 
-  async function tenantQuery(sql, parameters = [], organizationId = f.org) {
-    const client = await f.ownerPool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query("SELECT set_config('northstar.customer_financial_estimate_organization_id',$1,TRUE)",
-        [organizationId]);
-      const result = await client.query(sql, parameters);
-      await client.query('COMMIT'); return result;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {}); throw error;
-    } finally { client.release(); }
+  async function ownerQuery(sql, parameters = []) {
+    return f.ownerPool.query(sql, parameters);
   }
 
   test('real mounted route is capability-gated, current, value-free on stale evidence, and restart-safe', async () => {
@@ -325,7 +316,6 @@ realPostgres('Mission 27 Part 3A current commercial editable basis', () => {
       const direct = await f.ownerPool.connect(); let error;
       try {
         await direct.query('BEGIN');
-        await direct.query("SELECT set_config('northstar.customer_financial_estimate_organization_id',$1,TRUE)", [f.org]);
         await direct.query(
           `INSERT INTO canonical_customer_financial_estimate_capability_grants_v1(
             organization_id,id,revision,actor_user_id,membership_id,estimate_id,capability,target_class,
@@ -339,7 +329,7 @@ realPostgres('Mission 27 Part 3A current commercial editable basis', () => {
       } catch (caught) { error = caught; }
       await direct.query('ROLLBACK').catch(() => {}); direct.release();
       expect(error?.code).toBe('23514');
-      const residue = await tenantQuery(
+      const residue = await ownerQuery(
         `SELECT (SELECT count(*)::int FROM canonical_customer_financial_estimate_capability_grants_v1
           WHERE organization_id=$1 AND id=$2) revisions,
          (SELECT latest_revision::int FROM canonical_customer_financial_estimate_capability_heads_v1
@@ -360,20 +350,20 @@ realPostgres('Mission 27 Part 3A current commercial editable basis', () => {
         { grantId: rolledBack.grantId, revision: 2, active: false });
       await transaction.query('ROLLBACK');
     } finally { transaction.release(); }
-    const afterReconnect = await tenantQuery(
+    const afterReconnect = await ownerQuery(
       `SELECT count(*)::int revisions,max(revision)::int head
        FROM canonical_customer_financial_estimate_capability_grants_v1
        WHERE organization_id=$1 AND id=$2`, [f.org, rolledBack.grantId]);
     expect(afterReconnect.rows[0]).toEqual({ revisions: 1, head: 1 });
     await issueEditableEstimateGrant(f.ownerPool, grantSource, estimate,
       { grantId: rolledBack.grantId, revision: 2, active: false });
-    expect((await tenantQuery(
+    expect((await ownerQuery(
       `SELECT latest_revision::int revision FROM canonical_customer_financial_estimate_capability_heads_v1
        WHERE organization_id=$1 AND capability_grant_id=$2`, [f.org, rolledBack.grantId])).rows[0])
       .toEqual({ revision: 2 });
   }, 120000);
 
-  test('migration 264 withholds tables/helpers and grants only the read entry', async () => {
+  test('migration 264 denies future direct grants despite arbitrary GUC spoofing and preserves guarded access', async () => {
     expect((await f.ownerPool.query(
       "SELECT filename FROM _migrations WHERE filename='264_customer_financial_editable_estimate_basis_v1.sql'"))
       .rows.map(row => row.filename)).toEqual(['264_customer_financial_editable_estimate_basis_v1.sql']);
@@ -401,46 +391,53 @@ realPostgres('Mission 27 Part 3A current commercial editable basis', () => {
       [f.roles.runtime])).rows[0].allowed).toBe(false);
     expect((await f.ownerPool.query('SELECT rolbypassrls FROM pg_roles WHERE rolname=$1',
       [f.roles.owner])).rows[0].rolbypassrls).toBe(false);
-    const invisible = await f.ownerPool.connect();
+    const tables = ['canonical_customer_financial_estimate_capability_grants_v1',
+      'canonical_customer_financial_estimate_capability_heads_v1'];
+    for (const table of tables) {
+      expect((await f.ownerPool.query(`SELECT count(*)::int count FROM public.${table}`))
+        .rows[0].count).toBeGreaterThan(0);
+    }
+    const guardedRoute = `/api/v1/customer-financial/editable-estimates/${
+      f.estimateGraphs[2].ids.estimate}/basis`;
+    expect((await request(f.app).get(guardedRoute).set(actor.session.headers)).status).toBe(200);
+
+    expect(f.roles.runtime).toMatch(/^[a-z0-9_]+$/);
+    const tableList = tables.map(table => `public.${table}`).join(',');
+    await f.ownerPool.query(`GRANT SELECT ON TABLE ${tableList} TO ${f.roles.runtime}`);
     try {
-      await invisible.query("RESET northstar.customer_financial_estimate_organization_id");
-      expect((await invisible.query(
-        'SELECT count(*)::int count FROM canonical_customer_financial_estimate_capability_grants_v1'))
-        .rows[0].count).toBe(0);
-    } finally { invisible.release(); }
-    const blocked = await f.ownerPool.connect(); let directError; let crossTenantError;
-    try {
-      await blocked.query('BEGIN');
-      await blocked.query(
-        `INSERT INTO canonical_customer_financial_estimate_capability_grants_v1(
-          organization_id,id,revision,actor_user_id,membership_id,estimate_id,capability,target_class,
-          business_purpose,policy_version,policy_digest,template_version,action_mode,assurance,
-          active,valid_from,expires_at,issued_at)
-         VALUES($1,$2,1,$3,$3,$4,'customer_financial.estimate.edit_draft','canonical_estimate',
-          'customer_financial.editable_estimate_basis','mission27.launch.v1',$5,'m27.owner.v1',
-          'single_control','current_session',TRUE,clock_timestamp()-INTERVAL '1 minute',
-          clock_timestamp()+INTERVAL '1 hour',clock_timestamp())`,
-        [f.org, crypto.randomUUID(), actor.actorUserId, estimate,
-          require('../../src/customerFinancial/estimateCapabilityGrantIssuer').POLICY_DIGEST]);
-    } catch (error) { directError = error; }
-    await blocked.query('ROLLBACK').catch(() => {});
-    try {
-      await blocked.query('BEGIN');
-      await blocked.query("SELECT set_config('northstar.customer_financial_estimate_organization_id',$1,TRUE)", [f.otherOrg]);
-      await blocked.query(
-        `INSERT INTO canonical_customer_financial_estimate_capability_grants_v1(
-          organization_id,id,revision,actor_user_id,membership_id,estimate_id,capability,target_class,
-          business_purpose,policy_version,policy_digest,template_version,action_mode,assurance,
-          active,valid_from,expires_at,issued_at)
-         VALUES($1,$2,1,$3,$3,$4,'customer_financial.estimate.edit_draft','canonical_estimate',
-          'customer_financial.editable_estimate_basis','mission27.launch.v1',$5,'m27.owner.v1',
-          'single_control','current_session',TRUE,clock_timestamp()-INTERVAL '1 minute',
-          clock_timestamp()+INTERVAL '1 hour',clock_timestamp())`,
-        [f.org, crypto.randomUUID(), actor.actorUserId, estimate,
-          require('../../src/customerFinancial/estimateCapabilityGrantIssuer').POLICY_DIGEST]);
-    } catch (error) { crossTenantError = error; }
-    await blocked.query('ROLLBACK').catch(() => {}); blocked.release();
-    expect(directError?.code).toBe('42501');
-    expect(crossTenantError?.code).toBe('42501');
+      let attacker;
+      try {
+        attacker = await f.runtimePool.connect();
+        await attacker.query('BEGIN');
+        for (const claimedOrganization of [f.org, f.otherOrg, crypto.randomUUID()]) {
+          await attacker.query(
+            "SELECT set_config('northstar.customer_financial_estimate_organization_id',$1,TRUE)",
+            [claimedOrganization]);
+          for (const table of tables) {
+            expect((await attacker.query(`SELECT count(*)::int count FROM public.${table}`))
+              .rows[0].count).toBe(0);
+          }
+        }
+        await attacker.query('ROLLBACK');
+      } finally {
+        if (attacker) attacker.release(true);
+      }
+      const restartedAttacker = await f.runtimePool.connect();
+      try {
+        await restartedAttacker.query(
+          "SELECT set_config('northstar.customer_financial_estimate_organization_id',$1,FALSE)",
+          [f.org]);
+        for (const table of tables) {
+          expect((await restartedAttacker.query(`SELECT count(*)::int count FROM public.${table}`))
+            .rows[0].count).toBe(0);
+        }
+      } finally { restartedAttacker.release(true); }
+    } finally {
+      await f.ownerPool.query(`REVOKE SELECT ON TABLE ${tableList} FROM ${f.roles.runtime}`);
+    }
+    for (const table of tables) {
+      expect((await f.ownerPool.query('SELECT has_table_privilege($1,$2,\'SELECT\') allowed',
+        [f.roles.runtime, `public.${table}`])).rows[0].allowed).toBe(false);
+    }
   });
 });

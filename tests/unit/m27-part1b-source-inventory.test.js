@@ -19,12 +19,14 @@ function files(directory, suffix = '.js') {
 }
 
 describe('Mission 27 Slice 1B source inventory quarantine', () => {
-  test('has no native Mission 27 financial store or migration 260', () => {
+  test('keeps the native financial store bounded to the later Part 2A billing identity authority', () => {
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql'))
       .sort();
-    expect(migrationNames.at(-1)).toBe('259_demo_forecast_journey.sql');
-    expect(migrationNames.some(name => /^260_/.test(name))).toBe(false);
+    expect(migrationNames.at(-1)).toBe('260_customer_financial_billing_identity_v1.sql');
+    expect(migrationNames.filter(name => /^260_/.test(name))).toEqual([
+      '260_customer_financial_billing_identity_v1.sql',
+    ]);
 
     const schema = migrationNames.map(name => read(path.join('migrations', name))).join('\n');
     expect(schema).not.toMatch(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?canonical_(?:invoices|payments|collections)\b/i);

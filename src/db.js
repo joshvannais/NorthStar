@@ -5189,6 +5189,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   await require('./estimating/materialAdoptionDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./learning/importDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./learning/travelImportDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
+  await require('./customerFinancial/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   const wrongRelationOwners = await client.query(
     `SELECT namespace.nspname, relation.relname,
             pg_get_userbyid(relation.relowner) AS owner
@@ -5260,6 +5261,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_lead_state_%'
            AND relation.relname NOT LIKE 'canonical_estimate_request_state_%'
            AND relation.relname NOT LIKE 'canonical_forecast_%'
+           AND relation.relname NOT LIKE 'canonical_customer_financial_billing_%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname <> 'canonical_labor_plans'
            AND relation.relname <> 'canonical_travel_plans'
@@ -6250,6 +6252,25 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege('public','public.canonical_forecast_paid_journey_v1_rerun(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_forecast_paid_journey_v1_review(uuid,uuid,text,uuid,text,text,text,uuid,text,text,text,integer,text,timestamp with time zone)','EXECUTE')
        END AS forecast_paid_journey_authority_private,
+       (to_regclass('public.canonical_customer_financial_billing_parties_v1') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_customer_financial_billing_parties_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_identity_snapshots_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_identity_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_candidate(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_establish(uuid,uuid,text,uuid,text,text,uuid,text,timestamp with time zone,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_utc(timestamp with time zone)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_source_digest(public.canonical_customers)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_source(public.canonical_customers,uuid,uuid,text,uuid,uuid,timestamp with time zone)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_access(uuid,uuid,text,uuid,text,boolean)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_unavailable(text,uuid,uuid,uuid,boolean)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_projection(public.canonical_customers,public.canonical_customer_financial_billing_parties_v1,public.canonical_customer_financial_billing_identity_snapshots_v1)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_saved_projection(public.canonical_customer_financial_billing_parties_v1,public.canonical_customer_financial_billing_identity_snapshots_v1)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_identity_v1_candidate(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_identity_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_identity_v1_establish(uuid,uuid,text,uuid,text,text,uuid,text,timestamp with time zone,text)','EXECUTE')
+       )) AS customer_financial_billing_identity_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -7365,6 +7386,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.forecast_settings_authority_private ||
       !runtimePrivileges.forecast_runs_authority_private ||
       !runtimePrivileges.forecast_paid_journey_authority_private ||
+      !runtimePrivileges.customer_financial_billing_identity_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

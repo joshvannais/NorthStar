@@ -1,6 +1,6 @@
 # Mission 27 — Customer financial lifecycle
 
-Status: frozen plan and original Slices 1A–1C released. Slice 1C was accepted at head `54a31eb4f31a0118d8153aefc7a04bd356dd7f70`, merged through PR #480 as exact main `204b40793b72c412a47632af54c323437fe8a40e`, and released by automatic Railway deployment `444c7436-80ab-4a90-9aee-e0f7bcee58ee` with migrations through 259 and PostgreSQL startup, `/api/health`, `/`, and `/demo/` HTTP 200. Original Slice 1D is now the first-supported-launch contract candidate; independent exact-head audit and its normal release lane remain pending.
+Status: frozen plan and original Slices 1A–1D released. Slice 1D was accepted at head `29a745f79a914924a7d72d542dfb10c46a8af590`, merged through PR #481 as exact main `a85107b68a880dee603270145e9dbb77362afa9d`, and released by automatic Railway deployment `e5add6e7-8222-4e8e-a2b4-0f9fa47661f0` with migrations through 259 and `/api/health`, `/`, and `/demo/` HTTP 200. Original Part 2A is now the billing-identity implementation candidate; independent exact-head audit and its normal release lane remain pending.
 
 Plan provenance: the complete original 14-part, 64-slice financial lifecycle and ledger were recovered from preserved exact plan head `cac1cd3ffa3d9b771285b7a5ba9b468958c26ff6`. All original slice identities and order remain; the only original-row change strengthens the final audit bar from P0–P2 to P0–P3. The quoted-job requirements are additive gates.
 
@@ -14,8 +14,8 @@ The fourteen-part structure and the slice order below are frozen before implemen
 
 | Part | Scope | Slices | Initial status |
 | --- | --- | ---: | --- |
-| 1 | Mission authority, source inventory, threat model, and acceptance contract | 4 | 1A–1C released; 1D candidate |
-| 2 | Financial parties, billing identity, currency, and document numbering authority | 4 | Planned |
+| 1 | Mission authority, source inventory, threat model, and acceptance contract | 4 | Released |
+| 2 | Financial parties, billing identity, currency, and document numbering authority | 4 | 2A candidate; 2B–2D planned |
 | 3 | Explicit billable-work handoff from the exact launch-approved commercial and operational source class | 4 | Planned |
 | 4 | Invoice draft composition, taxes, deposits, credits, and amount reconciliation | 5 | Planned |
 | 5 | Human approval, immutable issue, correction, void, and lifecycle state | 5 | Planned |
@@ -122,7 +122,7 @@ The primary phone path minimizes steps from authorized call or photo evidence to
 | C | Define the threat model and capability matrix for tenant crossing, amount tampering, replay, duplicate charge, confused-deputy actions, customer-link theft, webhook forgery, settlement mismatch, refund abuse, provider compromise, deletion, recovery, recent authentication/MFA, self-approval, dual control, amount limits, and immutable action reasons. |
 | D | Freeze the first-supported-launch matrix, acceptance ledger, unsupported-state contract, performance bounds, migration rules, audit independence, and release sequence before Part 2. The matrix names merchant/funds model, provider and mode, methods, countries, currencies, tax jurisdictions, accounting adapter, offline payments, method-specific cash/check evidence and balance rules, check-clearance authority, refunds/disputes, retention, deposit/progress scope, rollout flags, legal/provider/accounting reviews, and every typed exclusion. Unless separately authorized and reviewed, NorthStar does not take custody or control of contractor customer funds. |
 
-The released [Slice 1A authority and vocabulary contract](../architecture/MISSION_27_PART1A_AUTHORITY_CONTRACT.md) ratifies the original ownership, exclusions, dependency map, shared editable-record terminology, exact-money/currency rules, and unchanged fourteen-part/sixty-four-slice sequence. The released [Slice 1B source inventory and quarantine contract](../architecture/MISSION_27_PART1B_SOURCE_INVENTORY.md) covers every original and additive source family, quarantine decision, and misleading paid-copy correction. The released [Slice 1C threat and action-capability contract](../architecture/MISSION_27_PART1C_THREAT_AND_CAPABILITY_MATRIX.md) defines fail-closed future controls and grants no Mission 27 runtime authority. The [Slice 1D launch contract](../architecture/MISSION_27_PART1D_LAUNCH_CONTRACT.md) is the current policy candidate.
+The released [Slice 1A authority and vocabulary contract](../architecture/MISSION_27_PART1A_AUTHORITY_CONTRACT.md) ratifies the original ownership, exclusions, dependency map, shared editable-record terminology, exact-money/currency rules, and unchanged fourteen-part/sixty-four-slice sequence. The released [Slice 1B source inventory and quarantine contract](../architecture/MISSION_27_PART1B_SOURCE_INVENTORY.md) covers every original and additive source family, quarantine decision, and misleading paid-copy correction. The released [Slice 1C threat and action-capability contract](../architecture/MISSION_27_PART1C_THREAT_AND_CAPABILITY_MATRIX.md) defines fail-closed future controls. The released [Slice 1D launch contract](../architecture/MISSION_27_PART1D_LAUNCH_CONTRACT.md) freezes the first-supported-launch policy. The [Part 2A billing-identity contract](../architecture/MISSION_27_PART2A_BILLING_IDENTITY.md) is the current implementation candidate.
 
 Acceptance requires an exact source inventory with no unexplained invoice/payment surface, a reviewed authority matrix, and executable contract tests proving that legacy/demo/account-subscription data cannot satisfy Mission 27 authority.
 

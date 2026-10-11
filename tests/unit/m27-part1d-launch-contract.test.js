@@ -469,23 +469,24 @@ describe('Mission 27 Part 1D first-supported-launch contract', () => {
     });
   });
 
-  test('preserves the 64-slice sequence and grants no runtime or migration authority', () => {
+  test('preserves the 64-slice sequence and keeps Slice 1D policy separate from later authority', () => {
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql')).sort();
-    expect(migrationNames.at(-1)).toBe('259_demo_forecast_journey.sql');
-    expect(migrationNames.some(name => /^260_/.test(name))).toBe(false);
+    expect(migrationNames.at(-1)).toBe('260_customer_financial_billing_identity_v1.sql');
+    expect(migrationNames.filter(name => /^260_/.test(name))).toEqual([
+      '260_customer_financial_billing_identity_v1.sql']);
 
     const permissions = read('src/auth/permissions.js');
     expect(permissions).not.toContain('customer_financial');
     const runtimeFiles = fs.readdirSync(path.join(ROOT, 'src'));
-    expect(runtimeFiles).not.toContain('customerFinancial');
+    expect(runtimeFiles).toContain('customerFinancial');
 
     const roadmap = read('docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md');
     const ledger = read('docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md');
     expect(roadmap).toContain('fourteen-part structure and the slice order below are frozen');
-    expect(roadmap).toContain('| 1 | Mission authority, source inventory, threat model, and acceptance contract | 4 | 1A–1C released; 1D candidate |');
+    expect(roadmap).toContain('| 1 | Mission authority, source inventory, threat model, and acceptance contract | 4 | Released |');
     expect(ledger).toContain('| 1C | Threat model and action-capability/recent-auth/dual-control matrix | Complete');
-    expect(ledger).toContain('| 1D | Frozen launch matrix including method-specific offline/check-clearance rules, unsupported states, ledger, and release rules | Candidate');
+    expect(ledger).toContain('| 1D | Frozen launch matrix including method-specific offline/check-clearance rules, unsupported states, ledger, and release rules | Complete');
 
     const text = document();
     expect(text).toContain('Part 2 may begin only after the same independent auditor accepts this entire exact head with no P0–P3');

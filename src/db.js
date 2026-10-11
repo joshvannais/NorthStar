@@ -6328,10 +6328,12 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_editable_basis_v1_authority(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_editable_basis_v1_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_editable_basis_v1_grant_head()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_editable_basis_v1_issue_grant(uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,text,text,text,text,boolean)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_editable_basis_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_editable_basis_v1_authority(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_editable_basis_v1_immutable()','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_editable_basis_v1_grant_head()','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_editable_basis_v1_issue_grant(uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,text,text,text,text,boolean)','EXECUTE')
        )) AS customer_financial_editable_estimate_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,

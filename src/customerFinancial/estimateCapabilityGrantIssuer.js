@@ -60,12 +60,8 @@ async function issueEditableEstimateGrant(client, source, estimateId, options = 
     if (options[key] !== undefined && options[key] !== classified[key]) throw failure();
   }
   await client.query(
-    `INSERT INTO canonical_customer_financial_estimate_capability_grants_v1(
-      organization_id,id,revision,actor_user_id,membership_id,estimate_id,capability,target_class,
-      business_purpose,policy_version,policy_digest,template_version,action_mode,assurance,
-      active,valid_from,expires_at,issued_at)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-      clock_timestamp()-INTERVAL '1 minute',clock_timestamp()+INTERVAL '1 hour',clock_timestamp())`,
+    `SELECT public.canonical_customer_financial_editable_basis_v1_issue_grant(
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
     [source.organizationId, grantId, revision, source.actorUserId, source.membershipId,
       estimateId.toLowerCase(), classified.capability, classified.targetClass,
       classified.businessPurpose, classified.policyVersion, classified.policyDigest,

@@ -30,6 +30,8 @@ function raw() {
       acceptanceDigest: digest('acceptance') },
     source: { estimateSnapshotDigest: digest('snapshot'), calculationVersion: 'fence-v1',
       normalizedInputFingerprint: digest('input'), bookingReviewOrder: 1,
+      businessProfileId: id(), businessProfileVersion: 'org-profile-v1',
+      businessProfileDigest: digest('profile'),
       reviewedAt: '2026-10-10T12:00:00.000Z' },
     booking: { scheduleAssignmentId: id(), revision: 6, digest: digest('schedule'),
       state: 'scheduled', appointmentStatus: 'scheduled',
@@ -53,11 +55,98 @@ describe('Mission 27 Part 3A editable estimate basis', () => {
         extraction: { state: 'unavailable', value: null } } });
     expect(value.options).toHaveLength(1);
     expect(value.options[0].lines[0]).toMatchObject({ quantity: null, unit: null,
-      unitPrice: null, amount: { decimal: '10971.42', minorUnits: '1097142', exactZero: false } });
+      unitPrice: null, arithmeticRole: 'additive_pre_tax_component',
+      amount: { decimal: '10971.42', minorUnits: '1097142', exactZero: false } });
     expect(value.options[0].lines[0].missingEvidence).toEqual([
       'quantity_unavailable','unit_unavailable','unit_price_unavailable']);
     expect(value.digest).toMatch(/^[a-f0-9]{64}$/);
+    expect(value.sourceEvidence).toMatchObject({
+      receipt: { graphId: expect.any(String), operationId: expect.any(String),
+        estimateSnapshotDigest: digest('snapshot'), calculationVersion: 'fence-v1',
+        normalizedInputFingerprint: digest('input'), bookingReviewOrder: 1,
+        provenanceIdentity: expect.stringMatching(/^provenance_[a-f0-9]{32}$/),
+        provenanceDigest: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      configuration: { state: 'available', identity: expect.any(String),
+        version: 'org-profile-v1', digest: digest('profile') },
+      typedFields: { state: 'unavailable',
+        reason: 'source_typed_fields_not_exposed_by_mission24_contract', value: null },
+      optionValidity: { state: 'accepted_current', valid: true },
+    });
+    expect(value.inputs).toEqual([expect.objectContaining({
+      key: 'mission24.normalized_estimate_input', valueType: 'digest',
+      value: digest('input'), sourceVersion: 'fence-v1', sourceDigest: digest('snapshot'),
+    })]);
     expect(JSON.stringify(value)).not.toContain('undefined');
+  });
+
+  test('reconciles additive accepted charges while preserving adjustments, tax, and payments as non-additive evidence', () => {
+    const source = raw();
+    source.commercial.approvedPriceBeforeTax = '1475.00';
+    source.customerSafeDocument = { ...source.customerSafeDocument,
+      charges: [{ label: 'Tree removal', kind: 'charge', amount: '1400.00' },
+        { label: 'Permit', kind: 'fee', amount: '75.00' }],
+      adjustments: [{ label: 'Scheduling adjustment', amount: '-50.00' }],
+      taxes: [{ label: 'Connecticut tax', amount: '93.66' }],
+      payments: [{ label: 'Deposit', kind: 'deposit', amount: '400.00' }],
+      subtotal: '1475.00', tax: '93.66', total: '1568.66' };
+    const value = adapter.project(source); const option = value.options[0];
+    expect(option.lines.map(line => line.amount.minorUnits)).toEqual(['140000','7500']);
+    expect(option.pricingEvidence).toMatchObject({
+      additiveLineTotal: { minorUnits: '147500', decimal: '1475.00' },
+      totals: { beforeTax: { minorUnits: '147500' }, tax: { minorUnits: '9366' },
+        afterTax: { minorUnits: '156866' } },
+      reconciliation: { additiveLineTotalMatchesAcceptedBeforeTax: true,
+        acceptedBeforeTaxPlusTaxMatchesAfterTax: true,
+        adjustmentsAreInformational: true, taxesAreNonAdditive: true },
+    });
+    expect(option.pricingEvidence.adjustments[0]).toMatchObject({
+      arithmeticRole: 'adjustment_non_additive', amount: { minorUnits: '-5000' } });
+    expect(option.pricingEvidence.taxes[0]).toMatchObject({
+      arithmeticRole: 'tax_non_additive', amount: { minorUnits: '9366' } });
+    expect(option.pricingEvidence.paymentSchedule[0]).toMatchObject({
+      arithmeticRole: 'payment_schedule_non_additive', amount: { minorUnits: '40000' } });
+    expect(option.lines).toHaveLength(2);
+  });
+
+  test('preserves exact zero and signed evidence and rejects range, precision, and reconciliation errors', () => {
+    const source = raw();
+    source.commercial.approvedPriceBeforeTax = '0.00';
+    source.customerSafeDocument = { ...source.customerSafeDocument,
+      charges: [{ label: 'No-charge accepted scope', kind: 'charge', amount: '0.00' }],
+      adjustments: [{ label: 'Recorded correction', amount: '-281.48' }],
+      taxes: [{ label: 'Zero tax', amount: '0.00' }], subtotal: '0.00', tax: '0.00', total: '0.00' };
+    expect(adapter.project(source).options[0]).toMatchObject({
+      totalBeforeTax: { exactZero: true, minorUnits: '0' },
+      pricingEvidence: { adjustments: [{ amount: { decimal: '-281.48' } }],
+        taxes: [{ amount: { exactZero: true } }] } });
+    source.customerSafeDocument.charges[0].amount = '0.001';
+    expect(() => adapter.project(source)).toThrow('no more than two fractional digits');
+    source.customerSafeDocument.charges[0].amount = '90071992547409.92';
+    expect(() => adapter.project(source)).toThrow('exact application range');
+    source.customerSafeDocument.charges[0].amount = '0.00';
+    source.customerSafeDocument.total = '0.01';
+    expect(() => adapter.project(source)).toThrow('do not reconcile');
+  });
+
+  test('binds digest and provenance to distinct exact graph, operation, snapshot, build, input, and review evidence', () => {
+    const firstRaw = raw(); const secondRaw = structuredClone(firstRaw);
+    secondRaw.identity.graphId = id(); secondRaw.identity.operationId = id();
+    secondRaw.source.estimateSnapshotDigest = digest('snapshot-2');
+    secondRaw.source.normalizedInputFingerprint = digest('input-2');
+    secondRaw.source.calculationVersion = 'fence-v2';
+    secondRaw.source.bookingReviewOrder = 2;
+    secondRaw.source.reviewedAt = '2026-10-10T12:01:00.000Z';
+    const first = adapter.project(firstRaw); const second = adapter.project(secondRaw);
+    expect(second.digest).not.toBe(first.digest);
+    expect(second.sourceEvidence.receipt.provenanceDigest)
+      .not.toBe(first.sourceEvidence.receipt.provenanceDigest);
+    expect(second.provenance[0].sourceIdentity).not.toBe(first.provenance[0].sourceIdentity);
+    expect(second.sourceEvidence.receipt).toMatchObject({ graphId: secondRaw.identity.graphId,
+      operationId: secondRaw.identity.operationId,
+      estimateSnapshotDigest: digest('snapshot-2'), calculationVersion: 'fence-v2',
+      normalizedInputFingerprint: digest('input-2'), bookingReviewOrder: 2 });
+    secondRaw.source.reviewedAt = null;
+    expect(() => adapter.project(secondRaw)).toThrow('source invalid');
   });
 
   test('keeps exact zero distinct from unavailable and rejects malformed money', () => {
@@ -71,7 +160,8 @@ describe('Mission 27 Part 3A editable estimate basis', () => {
   });
 
   test.each(['current_booking_review_unavailable','current_booking_review_ambiguous',
-    'source_currentness_unavailable','commercial_lineage_unavailable'])(
+    'source_currentness_unavailable','commercial_lineage_unavailable',
+    'source_configuration_unavailable'])(
     'returns named value-free %s', reason => {
       expect(adapter.unavailable({ state: 'unavailable', reason, value: null,
         sourceCurrent: false, providerCallCount: 0, receiverMutationCount: 0 }))
@@ -96,6 +186,10 @@ describe('Mission 27 Part 3A editable estimate basis', () => {
     expect(sql).toContain('canonical_forecast_commercial_review_currentness');
     expect(sql).toContain('canonical_customer_financial_billing_identity_v1_entitlement(org,TRUE)');
     expect(sql).toContain("':editable-estimate-capability-scope:'");
+    expect(sql).toContain('ENABLE ROW LEVEL SECURITY');
+    expect(sql).toContain('FORCE ROW LEVEL SECURITY');
+    expect(sql).toContain('canonical_customer_financial_editable_basis_v1_issue_grant');
+    expect(sql).toContain('Editable estimate capability identity cannot change');
     expect(sql).toContain('pg_try_advisory_xact_lock');
     expect(sql).toContain('FROM public.organizations WHERE id=org FOR SHARE');
     expect(sql).toContain('FOR SHARE OF review,estimate,opportunity,issued,terms,approval,decision,acceptance,assignment');

@@ -49,16 +49,62 @@ CREATE TABLE public.canonical_customer_financial_estimate_capability_heads_v1 (
    organization_id,id,revision) ON DELETE RESTRICT
 );
 
+ALTER TABLE public.canonical_customer_financial_estimate_capability_grants_v1
+ ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.canonical_customer_financial_estimate_capability_grants_v1
+ FORCE ROW LEVEL SECURITY;
+CREATE POLICY canonical_customer_financial_estimate_capability_grants_v1_tenant
+ ON public.canonical_customer_financial_estimate_capability_grants_v1
+ USING(organization_id=NULLIF(current_setting(
+  'northstar.customer_financial_estimate_organization_id',TRUE),'')::UUID)
+ WITH CHECK(organization_id=NULLIF(current_setting(
+  'northstar.customer_financial_estimate_organization_id',TRUE),'')::UUID);
+
+ALTER TABLE public.canonical_customer_financial_estimate_capability_heads_v1
+ ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.canonical_customer_financial_estimate_capability_heads_v1
+ FORCE ROW LEVEL SECURITY;
+CREATE POLICY canonical_customer_financial_estimate_capability_heads_v1_tenant
+ ON public.canonical_customer_financial_estimate_capability_heads_v1
+ USING(organization_id=NULLIF(current_setting(
+  'northstar.customer_financial_estimate_organization_id',TRUE),'')::UUID)
+ WITH CHECK(organization_id=NULLIF(current_setting(
+  'northstar.customer_financial_estimate_organization_id',TRUE),'')::UUID);
+
 CREATE FUNCTION public.canonical_customer_financial_editable_basis_v1_grant_head()
 RETURNS TRIGGER LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE current_revision BIGINT;
+ locked_identity public.canonical_customer_financial_estimate_capability_grants_v1%ROWTYPE;
 BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  NEW.organization_id::text||':editable-estimate-capability:'||NEW.id::text,0));
+ SELECT grant_value.* INTO locked_identity
+ FROM public.canonical_customer_financial_estimate_capability_grants_v1 grant_value
+ WHERE grant_value.organization_id=NEW.organization_id AND grant_value.id=NEW.id
+  AND grant_value.revision<NEW.revision
+ ORDER BY grant_value.revision DESC LIMIT 1 FOR SHARE;
+ IF locked_identity.id IS NULL AND NEW.revision<>1 THEN
+  RAISE EXCEPTION 'Editable estimate capability must begin at revision one'
+   USING ERRCODE='23514',CONSTRAINT='canonical_customer_financial_estimate_capability_revision_origin';
+ ELSIF locked_identity.id IS NOT NULL AND (
+  locked_identity.actor_user_id IS DISTINCT FROM NEW.actor_user_id OR
+  locked_identity.membership_id IS DISTINCT FROM NEW.membership_id OR
+  locked_identity.estimate_id IS DISTINCT FROM NEW.estimate_id OR
+  locked_identity.capability IS DISTINCT FROM NEW.capability OR
+  locked_identity.target_class IS DISTINCT FROM NEW.target_class OR
+  locked_identity.business_purpose IS DISTINCT FROM NEW.business_purpose OR
+  locked_identity.policy_version IS DISTINCT FROM NEW.policy_version OR
+  rtrim(locked_identity.policy_digest) IS DISTINCT FROM rtrim(NEW.policy_digest) OR
+  locked_identity.template_version IS DISTINCT FROM NEW.template_version OR
+  locked_identity.action_mode IS DISTINCT FROM NEW.action_mode OR
+  locked_identity.assurance IS DISTINCT FROM NEW.assurance) THEN
+  RAISE EXCEPTION 'Editable estimate capability identity cannot change'
+   USING ERRCODE='23514',CONSTRAINT='canonical_customer_financial_estimate_capability_identity';
+ END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(
   NEW.organization_id::text||':editable-estimate-capability-scope:'||
   NEW.actor_user_id::text||':'||NEW.estimate_id::text,0));
- PERFORM pg_advisory_xact_lock(hashtextextended(
-  NEW.organization_id::text||':editable-estimate-capability:'||NEW.id::text,0));
  SELECT latest_revision INTO current_revision
  FROM public.canonical_customer_financial_estimate_capability_heads_v1
  WHERE organization_id=NEW.organization_id AND capability_grant_id=NEW.id
@@ -73,6 +119,66 @@ BEGIN
  ON CONFLICT(organization_id,capability_grant_id) DO UPDATE
  SET latest_revision=EXCLUDED.latest_revision,advanced_at=EXCLUDED.advanced_at;
  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.canonical_customer_financial_editable_basis_v1_issue_grant(
+ org UUID,grant_value UUID,revision_value BIGINT,actor UUID,membership UUID,
+ estimate_value UUID,capability_value TEXT,target_class_value TEXT,purpose_value TEXT,
+ policy_version_value TEXT,policy_digest_value TEXT,template_value TEXT,
+ action_mode_value TEXT,assurance_value TEXT,active_value BOOLEAN)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE locked_identity public.canonical_customer_financial_estimate_capability_grants_v1%ROWTYPE;
+BEGIN
+ IF org IS NULL OR grant_value IS NULL OR actor IS NULL OR membership IS NULL OR
+    estimate_value IS NULL OR revision_value IS NULL OR active_value IS NULL OR
+    capability_value<>'customer_financial.estimate.edit_draft' OR
+    target_class_value<>'canonical_estimate' OR
+    purpose_value<>'customer_financial.editable_estimate_basis' OR
+    policy_version_value<>'mission27.launch.v1' OR
+    policy_digest_value<>'d24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a' OR
+    template_value NOT IN('m27.owner.v1','m27.admin.v1') OR
+    action_mode_value<>'single_control' OR assurance_value<>'current_session' OR
+    revision_value<1 OR revision_value>9007199254740991 THEN
+  RAISE EXCEPTION 'Editable estimate capability issuance restricted'
+   USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_estimate_capability_issue_restricted';
+ END IF;
+ PERFORM set_config('northstar.customer_financial_estimate_organization_id',org::TEXT,TRUE);
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  org::text||':editable-estimate-capability:'||grant_value::text,0));
+ SELECT grant_row.* INTO locked_identity
+ FROM public.canonical_customer_financial_estimate_capability_grants_v1 grant_row
+ WHERE grant_row.organization_id=org AND grant_row.id=grant_value
+ ORDER BY grant_row.revision DESC LIMIT 1 FOR SHARE;
+ IF locked_identity.id IS NULL AND revision_value<>1 THEN
+  RAISE EXCEPTION 'Editable estimate capability must begin at revision one'
+   USING ERRCODE='23514',CONSTRAINT='canonical_customer_financial_estimate_capability_revision_origin';
+ ELSIF locked_identity.id IS NOT NULL AND (
+  locked_identity.actor_user_id IS DISTINCT FROM actor OR
+  locked_identity.membership_id IS DISTINCT FROM membership OR
+  locked_identity.estimate_id IS DISTINCT FROM estimate_value OR
+  locked_identity.capability IS DISTINCT FROM capability_value OR
+  locked_identity.target_class IS DISTINCT FROM target_class_value OR
+  locked_identity.business_purpose IS DISTINCT FROM purpose_value OR
+  locked_identity.policy_version IS DISTINCT FROM policy_version_value OR
+  rtrim(locked_identity.policy_digest) IS DISTINCT FROM policy_digest_value OR
+  locked_identity.template_version IS DISTINCT FROM template_value OR
+  locked_identity.action_mode IS DISTINCT FROM action_mode_value OR
+  locked_identity.assurance IS DISTINCT FROM assurance_value) THEN
+  RAISE EXCEPTION 'Editable estimate capability identity cannot change'
+   USING ERRCODE='23514',CONSTRAINT='canonical_customer_financial_estimate_capability_identity';
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(
+  org::text||':editable-estimate-capability-scope:'||actor::text||':'||estimate_value::text,0));
+ INSERT INTO public.canonical_customer_financial_estimate_capability_grants_v1(
+  organization_id,id,revision,actor_user_id,membership_id,estimate_id,capability,target_class,
+  business_purpose,policy_version,policy_digest,template_version,action_mode,assurance,
+  active,valid_from,expires_at,issued_at)
+ VALUES(org,grant_value,revision_value,actor,membership,estimate_value,capability_value,
+  target_class_value,purpose_value,policy_version_value,policy_digest_value,template_value,
+  action_mode_value,assurance_value,active_value,clock_timestamp()-INTERVAL '1 minute',
+  clock_timestamp()+INTERVAL '1 hour',clock_timestamp());
+ RETURN jsonb_build_object('grantId',grant_value,'revision',revision_value);
 END $$;
 
 CREATE TRIGGER canonical_customer_financial_estimate_capability_grants_v1_head
@@ -109,6 +215,7 @@ BEGIN
   RAISE EXCEPTION 'Current editable estimate basis entitlement unavailable'
    USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_editable_basis_unauthorized';
  END IF;
+ PERFORM set_config('northstar.customer_financial_estimate_organization_id',org::TEXT,TRUE);
  FOR candidate_grant IN
   SELECT grant_value.*
   FROM public.canonical_customer_financial_estimate_capability_grants_v1 grant_value
@@ -195,6 +302,7 @@ BEGIN
   review.reviewed_price_before_tax,review.currency,
   estimate.id estimate_id,estimate.graph_id,estimate.operation_id,estimate.snapshot_digest,
   estimate.calculation_version,estimate.normalized_input_fingerprint,
+  estimate.business_profile_id,estimate.business_profile_version,estimate.business_profile_hash,
   opportunity.customer_id,opportunity.service_type,
   issued.id issued_version_id,issued.revision issued_revision,issued.digest issued_digest,
   issued.document_digest,issued.document,issued.created_at issued_at,
@@ -261,6 +369,11 @@ BEGIN
   RETURN jsonb_build_object('state','unavailable','reason','commercial_lineage_unavailable',
    'value',NULL,'sourceCurrent',FALSE,'providerCallCount',0,'receiverMutationCount',0);
  END IF;
+ IF lineage.business_profile_id IS NULL OR lineage.business_profile_version IS NULL OR
+    lineage.business_profile_hash IS NULL THEN
+  RETURN jsonb_build_object('state','unavailable','reason','source_configuration_unavailable',
+   'value',NULL,'sourceCurrent',FALSE,'providerCallCount',0,'receiverMutationCount',0);
+ END IF;
  RETURN jsonb_build_object(
   'state','current_mission24_commercial_lineage','version','m27-mission24-commercial-editable-basis-v1',
   'sourceCurrent',TRUE,'capturedAt',to_char(
@@ -286,6 +399,9 @@ BEGIN
   'source',jsonb_build_object('estimateSnapshotDigest',rtrim(lineage.snapshot_digest),
    'calculationVersion',lineage.calculation_version,
    'normalizedInputFingerprint',rtrim(lineage.normalized_input_fingerprint),
+   'businessProfileId',lineage.business_profile_id,
+   'businessProfileVersion',lineage.business_profile_version,
+   'businessProfileDigest',rtrim(lineage.business_profile_hash),
    'bookingReviewOrder',lineage.review_order,'reviewedAt',lineage.reviewed_at),
   'booking',jsonb_build_object('scheduleAssignmentId',lineage.assignment_id,
    'revision',lineage.assignment_revision,'digest',lineage.assignment_digest,
@@ -304,6 +420,8 @@ REVOKE ALL ON TABLE public.canonical_customer_financial_estimate_capability_gran
 REVOKE ALL ON TABLE public.canonical_customer_financial_estimate_capability_heads_v1 FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_editable_basis_v1_immutable() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_editable_basis_v1_grant_head() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.canonical_customer_financial_editable_basis_v1_issue_grant(
+ UUID,UUID,BIGINT,UUID,UUID,UUID,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,BOOLEAN) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_editable_basis_v1_authority(
  UUID,UUID,TEXT,UUID,UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_editable_basis_v1_read(

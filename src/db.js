@@ -5262,6 +5262,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_estimate_request_state_%'
            AND relation.relname NOT LIKE 'canonical_forecast_%'
            AND relation.relname NOT LIKE 'canonical_customer_financial_billing_%'
+           AND relation.relname NOT LIKE 'canonical_customer_financial_numbering_%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname <> 'canonical_labor_plans'
            AND relation.relname <> 'canonical_travel_plans'
@@ -6258,8 +6259,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_parties_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
           AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_identity_snapshots_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_identity_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-         AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_identity_reviews_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-         AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_review_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_identity_reviews_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_billing_review_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_numbering_capability_grants_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_numbering_capability_heads_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_numbering_policies_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_numbering_policy_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_numbering_sequences_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_numbering_reservations_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+          AND NOT has_table_privilege($1,'public.canonical_customer_financial_numbering_events_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
           AND has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_candidate(uuid,uuid,text,uuid,uuid,bigint,text,text,uuid)','EXECUTE')
           AND has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_read(uuid,uuid,text,uuid,uuid,bigint,text,text,uuid)','EXECUTE')
           AND has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_establish(uuid,uuid,text,uuid,uuid,bigint,text,text,text,text,uuid,text,timestamp with time zone,text)','EXECUTE')
@@ -6267,6 +6275,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND has_function_privilege($1,'public.canonical_customer_financial_billing_review_v1_read(uuid,uuid,text,uuid,uuid,bigint,text,text,uuid)','EXECUTE')
           AND has_function_privilege($1,'public.canonical_customer_financial_billing_review_v1_history(uuid,uuid,text,uuid,uuid,bigint,text,text,uuid)','EXECUTE')
           AND has_function_privilege($1,'public.canonical_customer_financial_billing_review_v1_accept(uuid,uuid,text,uuid,uuid,bigint,text,text,text,text,uuid,uuid,uuid,text,timestamp with time zone,uuid,text,integer,jsonb,text)','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_candidate(uuid,uuid,text,uuid,uuid,bigint,text,text)','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_read(uuid,uuid,text,uuid,uuid,bigint,text,text)','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_review(uuid,uuid,text,uuid,uuid,bigint,text,text,text,text,text,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_immutable()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_utc(timestamp with time zone)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_identity_v1_source_digest(public.canonical_customers)','EXECUTE')
@@ -6286,6 +6297,18 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_review_v1_unavailable(text,uuid,uuid,uuid,boolean)','EXECUTE')
           AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_review_v1_saved_projection(public.canonical_customer_financial_billing_identity_reviews_v1)','EXECUTE')
           AND NOT has_function_privilege($1,'public.canonical_customer_financial_billing_review_v1_projection(public.canonical_customers,public.canonical_customer_financial_billing_identity_reviews_v1)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_exact_money(text,text)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_contract()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_grant_lock()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_grant_head()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_effect_grant_fence()','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_access(uuid,uuid,text,uuid,text,boolean,uuid,bigint,text,text)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_projection(uuid,public.canonical_customer_financial_numbering_policies_v1)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_reservation_event_projection(public.canonical_customer_financial_numbering_reservations_v1,public.canonical_customer_financial_numbering_events_v1)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_reservation_projection(public.canonical_customer_financial_numbering_reservations_v1)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_reserve(uuid,text,text,text)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_transition(uuid,uuid,text,text,uuid,text,text,text,text)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_numbering_v1_recover(uuid,text)','EXECUTE')
           AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_identity_v1_candidate(uuid,uuid,text,uuid,uuid,bigint,text,text,uuid)','EXECUTE')
           AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_identity_v1_read(uuid,uuid,text,uuid,uuid,bigint,text,text,uuid)','EXECUTE')
           AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_identity_v1_establish(uuid,uuid,text,uuid,uuid,bigint,text,text,text,text,uuid,text,timestamp with time zone,text)','EXECUTE')
@@ -6293,6 +6316,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_review_v1_read(uuid,uuid,text,uuid,uuid,bigint,text,text,uuid)','EXECUTE')
           AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_review_v1_history(uuid,uuid,text,uuid,uuid,bigint,text,text,uuid)','EXECUTE')
           AND NOT has_function_privilege('public','public.canonical_customer_financial_billing_review_v1_accept(uuid,uuid,text,uuid,uuid,bigint,text,text,text,text,uuid,uuid,uuid,text,timestamp with time zone,uuid,text,integer,jsonb,text)','EXECUTE')
+          AND NOT has_function_privilege('public','public.canonical_customer_financial_numbering_v1_candidate(uuid,uuid,text,uuid,uuid,bigint,text,text)','EXECUTE')
+          AND NOT has_function_privilege('public','public.canonical_customer_financial_numbering_v1_read(uuid,uuid,text,uuid,uuid,bigint,text,text)','EXECUTE')
+          AND NOT has_function_privilege('public','public.canonical_customer_financial_numbering_v1_review(uuid,uuid,text,uuid,uuid,bigint,text,text,text,text,text,text)','EXECUTE')
        )) AS customer_financial_billing_identity_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,

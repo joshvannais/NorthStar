@@ -8,6 +8,9 @@ const ENTRIES = new Set([
   'canonical_customer_financial_billing_review_v1_read',
   'canonical_customer_financial_billing_review_v1_history',
   'canonical_customer_financial_billing_review_v1_accept',
+  'canonical_customer_financial_numbering_v1_candidate',
+  'canonical_customer_financial_numbering_v1_read',
+  'canonical_customer_financial_numbering_v1_review',
 ]);
 const TABLES = new Set([
   'canonical_customer_financial_billing_capability_grants_v1',
@@ -17,6 +20,13 @@ const TABLES = new Set([
   'canonical_customer_financial_billing_identity_requests_v1',
   'canonical_customer_financial_billing_identity_reviews_v1',
   'canonical_customer_financial_billing_review_requests_v1',
+  'canonical_customer_financial_numbering_capability_grants_v1',
+  'canonical_customer_financial_numbering_capability_heads_v1',
+  'canonical_customer_financial_numbering_policies_v1',
+  'canonical_customer_financial_numbering_policy_requests_v1',
+  'canonical_customer_financial_numbering_sequences_v1',
+  'canonical_customer_financial_numbering_reservations_v1',
+  'canonical_customer_financial_numbering_events_v1',
 ]);
 const quote = value => '"' + value.replace(/"/g, '""') + '"';
 
@@ -25,7 +35,8 @@ async function grantAndVerify(client, runtimeRole) {
   const tables = (await client.query(
     `SELECT oid,relname FROM pg_class
       WHERE relnamespace='public'::regnamespace AND relkind='r'
-        AND relname LIKE 'canonical_customer_financial_billing_%'`
+        AND (relname LIKE 'canonical_customer_financial_billing_%'
+          OR relname LIKE 'canonical_customer_financial_numbering_%')`
   )).rows;
   for (const table of tables) {
     const identity = 'public.' + quote(table.relname);
@@ -39,7 +50,8 @@ async function grantAndVerify(client, runtimeRole) {
     `SELECT oid,proname,oid::regprocedure::text identity FROM pg_proc
       WHERE pronamespace='public'::regnamespace
         AND (proname LIKE 'canonical_customer_financial_billing_identity_v1_%'
-          OR proname LIKE 'canonical_customer_financial_billing_review_v1_%')`
+          OR proname LIKE 'canonical_customer_financial_billing_review_v1_%'
+          OR proname LIKE 'canonical_customer_financial_numbering_v1_%')`
   )).rows;
   for (const entry of functions) {
     await client.query('REVOKE ALL ON FUNCTION ' + entry.identity + ' FROM PUBLIC, ' + role);
@@ -50,12 +62,12 @@ async function grantAndVerify(client, runtimeRole) {
       "SELECT has_function_privilege($1,$2::oid,'EXECUTE') allowed",
       [runtimeRole, entry.oid])).rows[0].allowed;
     if (allowed !== ENTRIES.has(entry.proname)) {
-      throw new Error('Customer financial billing identity function authority invalid');
+      throw new Error('Customer financial function authority invalid');
     }
   }
   if (tables.length !== TABLES.size || tables.some(table => !TABLES.has(table.relname)) ||
       functions.filter(entry => ENTRIES.has(entry.proname)).length !== ENTRIES.size) {
-    throw new Error('Customer financial billing identity authority incomplete');
+    throw new Error('Customer financial authority incomplete');
   }
 }
 

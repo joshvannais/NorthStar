@@ -8,6 +8,7 @@ const ENTRIES = new Set([
   'canonical_customer_financial_billing_review_v1_read',
   'canonical_customer_financial_billing_review_v1_history',
   'canonical_customer_financial_billing_review_v1_accept',
+  'canonical_customer_financial_billing_journey_v1_authority',
   'canonical_customer_financial_numbering_v1_candidate',
   'canonical_customer_financial_numbering_v1_read',
   'canonical_customer_financial_numbering_v1_review',
@@ -51,6 +52,7 @@ async function grantAndVerify(client, runtimeRole) {
       WHERE pronamespace='public'::regnamespace
         AND (proname LIKE 'canonical_customer_financial_billing_identity_v1_%'
           OR proname LIKE 'canonical_customer_financial_billing_review_v1_%'
+          OR proname LIKE 'canonical_customer_financial_billing_journey_v1_%'
           OR proname LIKE 'canonical_customer_financial_numbering_v1_%')`
   )).rows;
   for (const entry of functions) {

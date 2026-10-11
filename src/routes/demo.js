@@ -41,6 +41,7 @@ const {
 const scenarios = require('./simulation/scenario-catalog');
 const demoLearningJourney = require('../learning/demoLearningJourney');
 const demoForecastJourney = require('../forecasting/forecastDemoJourney');
+const demoBillingIdentityJourney = require('../customerFinancial/demoBillingIdentityJourney');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -350,6 +351,43 @@ router.post('/forecast/journey/actions', express.json({ limit: '8kb' }), async f
       replayed: result.replayed, data });
   } catch (error) { return commandCenterFailure(req, res, error); }
 });
+
+router.get('/customer-financial/billing-identities/:customerId', async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  if (Object.keys(req.query).length) return res.status(400).json({ success: false,
+    error: { code: 'demo_billing_identity_request_invalid',
+      message: 'Check the fictional billing identity review.' } });
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    return res.json({ success: true,
+      data: demoBillingIdentityJourney.journeyEnvelope(
+        record.state, record.revision, req.params.customerId) });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.post('/customer-financial/billing-identities/:customerId/actions',
+  express.json({ limit: '40kb' }), async function (req, res) {
+    res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+    if (!mutationBoundary(req, res, 'billing-identity-review')) return undefined;
+    if (!exactBody(req.body, ['action','details','expectedRevision']) ||
+        !req.body.details || typeof req.body.details !== 'object' || Array.isArray(req.body.details)) {
+      return res.status(400).json({ success: false,
+        error: { code: 'demo_billing_identity_request_invalid',
+          message: 'Check the fictional billing identity review.' } });
+    }
+    try {
+      const token = commandCenterToken(req, res);
+      const result = await commandCenterRepository.mutate(token, {
+        operation: 'billing_identity', expectedRevision: req.body.expectedRevision,
+        billingIdentityAction: { ...req.body.details, action: req.body.action,
+          customerId: req.params.customerId }, idempotencyKey: req.get('Idempotency-Key'),
+      }, { sourceHash: durableSourceHash(req) });
+      return res.status(result.replayed ? 200 : 201).json({ success: true,
+        replayed: result.replayed,
+        data: demoBillingIdentityJourney.journeyEnvelope(
+          result.record.state, result.record.revision, req.params.customerId) });
+    } catch (error) { return commandCenterFailure(req, res, error); }
+  });
 
 function learningJourneyResponse(record) {
   return {

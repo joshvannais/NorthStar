@@ -1,0 +1,29 @@
+# Mission 27 Part 3B — current Mission 23 billable-work context
+
+Status: implementation candidate. This record defines only original Part 3B and additive Q5. It does not accept the candidate, begin Part 3C, review billable work, authorize an invoice, or mutate a Mission 22 or Mission 23 record.
+
+## Mounted private read
+
+`GET /api/v1/customer-financial/editable-estimates/:estimateId/work-context` joins one exact current Part 3A commercial basis to the current Mission 23 execution association, completed work evidence, operational risk advisory, and accepted Mission 27 reference-handoff receipt. It uses the released Part 3A owner or administrator capability and business-purpose boundary. Authentication, current subscription, current capability revision, tenant, customer, estimate, booking, assignment, execution, source pins, and handoff currentness are resolved server-side. Query parameters, another tenant, a disallowed role, absent authority, changed authority, reopened work, changed source pins, or a missing accepted handoff returns a named value-free result or the existing private access denial.
+
+The reader first obtains the exact current Part 3A basis and accepted Mission 23 execution association, then holds the released shared Mission 23 logical-work fence for the remaining join. It rechecks the association after acquiring that fence, reads operational intelligence and downstream handoff, and rereads both the Part 3A basis and execution association before projection. A reopen or work correction therefore either wins before the fence and makes the read unavailable, or waits until the coherent read completes. A changed commercial digest or execution identity clears the entire result rather than combining records from different snapshots. The selected Mission 27 receipt must remain prepared for the current handoff source digest, inert, nonfinancial, noncustomer-consequential, and unavailable for external delivery. When more than one equivalent current receipt exists, the server selects the newest exact `createdAt` and ID deterministically.
+
+## Source-owned work and risk evidence
+
+The projection contract is `m27-billable-work-context-v1`. Its association pins the accepted estimate, customer, appointment, assignment revision and completed execution revision. Completion is never inferred. Every completion, labor, materials, progress, field-evidence and equipment count and pin must agree between the current Mission 23 intelligence and handoff snapshots. Reopening or correcting any source makes the result value-free until a new current review path exists.
+
+Mission 23 remains the owner of work evidence and operational risk guidance. The response carries its advisory identity, refreshable advisory digest and expiry, confidence, uncertainty, missing inputs, conflicts, comparisons, recommendations and exact domain evidence. The timestamped advisory digest is deliberately not called a stable source digest; stable work identities and digests remain in the assignment, execution and domain pins. Advice always requires human review and grants no capability.
+
+The frozen launch contract does not provide one compatible current adapter combining the Mission 20 business profile, Mission 22 capacity, Mission 25 same-tenant outcome observations and Mission 26 advisory evidence. Capacity therefore remains explicitly value-free as `capacity_source_unavailable`, with all four missing sources named. It cannot book, assign, reserve, dispatch, start, complete, reopen or otherwise mutate work. Missing and conflicting risk inputs remain visible as source-owned advisory evidence and never become invented capacity facts.
+
+## Authority and action boundaries
+
+The returned billable-work state says only that the exact current Mission 23 completed-work source is ready for the human review owned by Part 3C. It does not authorize a final balance, invoice draft, invoice issue, payment, communication, scheduling decision, work mutation, provider call, receiver mutation or learning write. Mission 24 remains estimate, pricing, option, proposal, signature and acceptance authority; Mission 22 scheduling and dispatch; Mission 23 execution and work evidence; Mission 25 tenant-private learning; Mission 26 reviewed booking evidence; Mission 32 the later deep calculator over the Part 3A shared model.
+
+Part 3B stores no copied source, capability, review, receipt or financial record and performs no browser arithmetic. Migrations remain through 264; there is no migration 265. The mounted route is a private read and its result is `private, no-store`.
+
+## Candidate evidence and unavailable boundaries
+
+Candidate evidence covers the pure projection, deterministic receipt selection, named value-free currentness and authority failures, stale association and reopened work, accepted-reader orchestration and post-read rechecks, owner/admin route privacy, query bounding, and a fresh disposable PostgreSQL 17 journey through migration 264. The mounted journey creates a real accepted Mission 24 commercial basis and reviewed Mission 26 booking, authorized Mission 22 assignment, Mission 23 execution and source-owned completion evidence, and inert Mission 27 handoff receipt; the Part 3B read then proves stable source pins, restart recovery, role and tenant isolation, reopening invalidation, and zero scheduling, work, handoff, provider or receiver mutation.
+
+Independent whole-head audit, PR, deployment and production health remain later gates. Combined live capacity, natural private production history, providers, live money, Mission 32 execution, hosted CI, physical Safari/devices, disaster restore, professional legal/tax/accounting/security opinions, and founder visual approval remain unavailable. Live-money validation remains deferred until the first real paying customer.

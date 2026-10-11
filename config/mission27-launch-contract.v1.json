@@ -124,7 +124,6 @@
       "customer_financial.estimate.review_signature",
       "customer_financial.estimate.request_work_handoff",
       "customer_financial.billing_identity.review",
-      "customer_financial.document_numbering.review",
       "customer_financial.billable_work.review",
       "customer_financial.invoice.edit_draft",
       "customer_financial.invoice.approve",
@@ -175,7 +174,6 @@
       "customer_financial.estimate.edit_options"
     ],
     "ownerOnlyCapabilities": [
-      "customer_financial.document_numbering.review",
       "customer_financial.provider.connect",
       "customer_financial.record.delete",
       "customer_financial.record.recover"
@@ -222,11 +220,6 @@
     "customer_financial.billing_identity.review": {
       "mode": "single_control",
       "requires": ["exact_current_customer_billing_identity", "current_capability", "fresh_confirmation", "reason"]
-    },
-    "customer_financial.document_numbering.review": {
-      "mode": "single_control",
-      "assurance": "current_session",
-      "requires": ["exact_frozen_tenant_global_numbering_contract", "current_owner_capability", "fresh_confirmation", "reason"]
     },
     "customer_financial.billable_work.review": {
       "mode": "conditional_dual_control",

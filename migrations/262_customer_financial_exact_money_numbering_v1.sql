@@ -54,8 +54,13 @@ CREATE TABLE public.canonical_customer_financial_numbering_capability_grants_v1 
  capability TEXT NOT NULL CHECK(capability='customer_financial.document_numbering.review'),
  target_class TEXT NOT NULL CHECK(target_class='tenant_document_numbering_policy'),
  business_purpose TEXT NOT NULL CHECK(business_purpose='customer_financial.document_numbering'),
- policy_version TEXT NOT NULL CHECK(policy_version='mission27.launch.v1'),
- template_version TEXT NOT NULL CHECK(template_version='m27.owner.v1'),
+ policy_version TEXT NOT NULL CHECK(policy_version='mission27.document_numbering.v1'),
+ policy_digest CHAR(64) NOT NULL CHECK(
+  policy_digest='2b98aa283e4b3ad464419c7f8cb964892fc2fe28cbc6b7afdbac94ddc194b041'),
+ template_version TEXT NOT NULL CHECK(template_version='m27.document_numbering.owner.v1'),
+ predecessor_policy_version TEXT NOT NULL CHECK(predecessor_policy_version='mission27.launch.v1'),
+ predecessor_policy_digest CHAR(64) NOT NULL CHECK(
+  predecessor_policy_digest='d24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a'),
  action_mode TEXT NOT NULL CHECK(action_mode='single_control'),
  assurance TEXT NOT NULL CHECK(assurance='current_session'),
  active BOOLEAN NOT NULL,
@@ -121,7 +126,12 @@ CREATE TABLE public.canonical_customer_financial_numbering_policies_v1 (
  capability_grant_id UUID NOT NULL,
  capability_grant_revision BIGINT NOT NULL,
  business_purpose TEXT NOT NULL CHECK(business_purpose='customer_financial.document_numbering'),
- policy_version TEXT NOT NULL CHECK(policy_version='mission27.launch.v1'),
+ policy_version TEXT NOT NULL CHECK(policy_version='mission27.document_numbering.v1'),
+ policy_digest CHAR(64) NOT NULL CHECK(
+  policy_digest='2b98aa283e4b3ad464419c7f8cb964892fc2fe28cbc6b7afdbac94ddc194b041'),
+ predecessor_policy_version TEXT NOT NULL CHECK(predecessor_policy_version='mission27.launch.v1'),
+ predecessor_policy_digest CHAR(64) NOT NULL CHECK(
+  predecessor_policy_digest='d24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a'),
  capability_action_mode TEXT NOT NULL CHECK(capability_action_mode='single_control'),
  capability_assurance TEXT NOT NULL CHECK(capability_assurance='current_session'),
  review_reason TEXT NOT NULL CHECK(
@@ -152,7 +162,12 @@ CREATE TABLE public.canonical_customer_financial_numbering_policy_requests_v1 (
  capability_grant_id UUID NOT NULL,
  capability_grant_revision BIGINT NOT NULL,
  business_purpose TEXT NOT NULL CHECK(business_purpose='customer_financial.document_numbering'),
- policy_version TEXT NOT NULL CHECK(policy_version='mission27.launch.v1'),
+ policy_version TEXT NOT NULL CHECK(policy_version='mission27.document_numbering.v1'),
+ policy_digest CHAR(64) NOT NULL CHECK(
+  policy_digest='2b98aa283e4b3ad464419c7f8cb964892fc2fe28cbc6b7afdbac94ddc194b041'),
+ predecessor_policy_version TEXT NOT NULL CHECK(predecessor_policy_version='mission27.launch.v1'),
+ predecessor_policy_digest CHAR(64) NOT NULL CHECK(
+  predecessor_policy_digest='d24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a'),
  capability_action_mode TEXT NOT NULL CHECK(capability_action_mode='single_control'),
  capability_assurance TEXT NOT NULL CHECK(capability_assurance='current_session'),
  created_at TIMESTAMPTZ NOT NULL,
@@ -271,7 +286,7 @@ BEGIN
     capability_grant_revision_value IS NULL OR
     capability_grant_revision_value NOT BETWEEN 1 AND 9007199254740991 OR
     business_purpose_value<>'customer_financial.document_numbering' OR
-    policy_version_value<>'mission27.launch.v1' THEN
+    policy_version_value<>'mission27.document_numbering.v1' THEN
   RAISE EXCEPTION 'Document numbering policy access restricted'
    USING ERRCODE='42501',CONSTRAINT='canonical_customer_financial_numbering_unauthorized';
  END IF;
@@ -299,7 +314,12 @@ BEGIN
   AND grant_value.target_class='tenant_document_numbering_policy'
   AND grant_value.business_purpose=business_purpose_value
   AND grant_value.policy_version=policy_version_value
-  AND grant_value.template_version='m27.owner.v1'
+  AND rtrim(grant_value.policy_digest)=
+   '2b98aa283e4b3ad464419c7f8cb964892fc2fe28cbc6b7afdbac94ddc194b041'
+  AND grant_value.template_version='m27.document_numbering.owner.v1'
+  AND grant_value.predecessor_policy_version='mission27.launch.v1'
+  AND rtrim(grant_value.predecessor_policy_digest)=
+   'd24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a'
   AND grant_value.action_mode='single_control' AND grant_value.assurance='current_session'
   AND grant_value.active=TRUE
   AND grant_value.issued_at<=clock_timestamp() AND grant_value.valid_from<=clock_timestamp()
@@ -315,6 +335,9 @@ BEGIN
  RETURN authority||jsonb_build_object('capability','customer_financial.document_numbering.review',
   'capabilityGrantId',grant_record.id,'capabilityGrantRevision',grant_record.revision,
   'businessPurpose',grant_record.business_purpose,'policyVersion',grant_record.policy_version,
+  'policyDigest',rtrim(grant_record.policy_digest),
+  'predecessorPolicyVersion',grant_record.predecessor_policy_version,
+  'predecessorPolicyDigest',rtrim(grant_record.predecessor_policy_digest),
   'capabilityActionMode',grant_record.action_mode,'capabilityAssurance',grant_record.assurance);
 END $$;
 
@@ -344,6 +367,9 @@ BEGIN
     'capabilityGrantId',policy_record.capability_grant_id,
     'capabilityGrantRevision',policy_record.capability_grant_revision,
     'businessPurpose',policy_record.business_purpose,'policyVersion',policy_record.policy_version,
+    'policyDigest',rtrim(policy_record.policy_digest),
+    'predecessorPolicyVersion',policy_record.predecessor_policy_version,
+    'predecessorPolicyDigest',rtrim(policy_record.predecessor_policy_digest),
     'actionMode',policy_record.capability_action_mode,
     'assurance',policy_record.capability_assurance),
    'reason',policy_record.review_reason,
@@ -411,9 +437,12 @@ BEGIN
   'version','m27-document-numbering-policy-review-request-v1','organizationId',org,
   'actorUserId',actor,'authSessionId',session_value,
   'capabilityGrantId',capability_grant_id_value,
-  'capabilityGrantRevision',capability_grant_revision_value,
-  'businessPurpose',business_purpose_value,'policyVersion',policy_version_value,
-  'expectedPolicyDigest',expected_policy_digest_value,'reason',reason_value));
+   'capabilityGrantRevision',capability_grant_revision_value,
+   'businessPurpose',business_purpose_value,'policyVersion',policy_version_value,
+   'policyDigest',authority->>'policyDigest',
+   'predecessorPolicyVersion',authority->>'predecessorPolicyVersion',
+   'predecessorPolicyDigest',authority->>'predecessorPolicyDigest',
+   'expectedPolicyDigest',expected_policy_digest_value,'reason',reason_value));
  PERFORM pg_advisory_xact_lock(hashtextextended(
   org::text||':numbering-policy-request:'||actor::text||':'||session_value::text||':'||key_digest_value,0));
  SELECT request_value.* INTO request_record
@@ -448,11 +477,13 @@ BEGIN
   INSERT INTO public.canonical_customer_financial_numbering_policies_v1(
    organization_id,contract_version,contract,contract_digest,reviewed_by_user_id,
    reviewed_by_access_role,membership_id,auth_session_id,capability_grant_id,
-   capability_grant_revision,business_purpose,policy_version,capability_action_mode,
-   capability_assurance,review_reason,reviewed_at)
+   capability_grant_revision,business_purpose,policy_version,policy_digest,predecessor_policy_version,
+   predecessor_policy_digest,capability_action_mode,capability_assurance,review_reason,reviewed_at)
   VALUES(org,'m27-document-numbering-contract-v1',contract_value,policy_digest_value,actor,
    role_value,(authority->>'membershipId')::uuid,session_value,capability_grant_id_value,
    capability_grant_revision_value,business_purpose_value,policy_version_value,
+   authority->>'policyDigest',
+   authority->>'predecessorPolicyVersion',authority->>'predecessorPolicyDigest',
    authority->>'capabilityActionMode',authority->>'capabilityAssurance',reason_value,
    reviewed_at_value) RETURNING * INTO policy_record;
   response_status_value:=201;
@@ -463,10 +494,13 @@ BEGIN
  INSERT INTO public.canonical_customer_financial_numbering_policy_requests_v1(
   organization_id,actor_user_id,auth_session_id,request_key_digest,request_digest,
   policy_id,response_status,response_digest,capability_grant_id,capability_grant_revision,
-  business_purpose,policy_version,capability_action_mode,capability_assurance,created_at)
+  business_purpose,policy_version,policy_digest,predecessor_policy_version,predecessor_policy_digest,
+  capability_action_mode,capability_assurance,created_at)
  VALUES(org,actor,session_value,key_digest_value,request_digest_value,policy_record.id,
   response_status_value,public.canonical_completion_digest(response_value),capability_grant_id_value,
   capability_grant_revision_value,business_purpose_value,policy_version_value,
+  authority->>'policyDigest',
+  authority->>'predecessorPolicyVersion',authority->>'predecessorPolicyDigest',
   authority->>'capabilityActionMode',authority->>'capabilityAssurance',reviewed_at_value);
  RETURN jsonb_build_object('status',response_status_value,'body',response_value,'replayed',FALSE);
 END $$;

@@ -28,6 +28,9 @@ async function authorize(fixture, source, options = {}) {
     capabilityGrantRevision: grant.revision,
     businessPurpose: repository.BUSINESS_PURPOSE,
     policyVersion: repository.POLICY_VERSION,
+    policyDigest: repository.POLICY_DIGEST,
+    predecessorPolicyVersion: repository.PREDECESSOR_POLICY_VERSION,
+    predecessorPolicyDigest: repository.PREDECESSOR_POLICY_DIGEST,
     csrfToken: source.csrfToken,
   };
 }
@@ -108,7 +111,19 @@ realPostgres('Mission 27 Part 2C exact money and numbering PostgreSQL authority'
     await expect(issueGrant(fixture.ownerPool, fixture.actors.admin))
       .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
     await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
-      { templateVersion: 'm27.admin.v1' }))
+      { templateVersion: 'm27.owner.v1' }))
+      .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
+    await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
+      { policyVersion: 'mission27.launch.v1' }))
+      .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
+    await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
+      { policyDigest: 'b'.repeat(64) }))
+      .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
+    await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
+      { predecessorPolicyVersion: 'mission27.document_numbering.v1' }))
+      .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
+    await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
+      { predecessorPolicyDigest: 'a'.repeat(64) }))
       .rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_CAPABILITY_ISSUANCE_RESTRICTED' });
     await expect(issueGrant(fixture.ownerPool, fixture.actors.owner,
       { capability: 'customer_financial.source.review' }))
@@ -133,6 +148,10 @@ realPostgres('Mission 27 Part 2C exact money and numbering PostgreSQL authority'
           gapsAllowed: true, yearResetAllowed: false, serverAssigned: true,
           statutorySufficiencyClaimed: false }, actor: {
             capability: 'customer_financial.document_numbering.review',
+            policyVersion: 'mission27.document_numbering.v1',
+            policyDigest: repository.POLICY_DIGEST,
+            predecessorPolicyVersion: 'mission27.launch.v1',
+            predecessorPolicyDigest: repository.PREDECESSOR_POLICY_DIGEST,
             actionMode: 'single_control', assurance: 'current_session',
           } } } });
     const replay = await repository.review(
@@ -150,6 +169,34 @@ realPostgres('Mission 27 Part 2C exact money and numbering PostgreSQL authority'
     await expect(repository.candidate(fixture.runtimePool, {
       ...readActor(reviewedOwner), actorAccessRole: 'admin',
     })).rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_NUMBERING_POLICY_RESTRICTED' });
+    await expect(repository.candidate(fixture.runtimePool, {
+      ...readActor(reviewedOwner), policyVersion: 'mission27.launch.v1',
+    })).rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_NUMBERING_POLICY_RESTRICTED' });
+    await expect(repository.candidate(fixture.runtimePool, {
+      ...readActor(reviewedOwner), policyDigest: 'b'.repeat(64),
+    })).rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_NUMBERING_POLICY_RESTRICTED' });
+    await expect(repository.candidate(fixture.runtimePool, {
+      ...readActor(reviewedOwner), predecessorPolicyDigest: 'a'.repeat(64),
+    })).rejects.toMatchObject({ code: 'CUSTOMER_FINANCIAL_NUMBERING_POLICY_RESTRICTED' });
+    const persisted = (await fixture.ownerPool.query(
+      `SELECT 'grant' source,policy_version,rtrim(policy_digest) policy_digest,predecessor_policy_version,
+              rtrim(predecessor_policy_digest) predecessor_policy_digest
+       FROM canonical_customer_financial_numbering_capability_grants_v1
+       WHERE organization_id=$1 AND id=$2
+       UNION ALL
+       SELECT 'policy',policy_version,rtrim(policy_digest),predecessor_policy_version,
+              rtrim(predecessor_policy_digest)
+       FROM canonical_customer_financial_numbering_policies_v1 WHERE organization_id=$1
+       UNION ALL
+       SELECT 'receipt',policy_version,rtrim(policy_digest),predecessor_policy_version,
+              rtrim(predecessor_policy_digest)
+       FROM canonical_customer_financial_numbering_policy_requests_v1 WHERE organization_id=$1
+       ORDER BY source`, [fixture.org, reviewedOwner.capabilityGrantId])).rows;
+    expect(persisted).toEqual(['grant','policy','receipt'].map(source => ({ source,
+      policy_version: 'mission27.document_numbering.v1',
+      policy_digest: repository.POLICY_DIGEST,
+      predecessor_policy_version: 'mission27.launch.v1',
+      predecessor_policy_digest: repository.PREDECESSOR_POLICY_DIGEST })));
     expect((await fixture.ownerPool.query(
       "SELECT filename FROM _migrations WHERE filename LIKE '262\_%' ESCAPE '\\'"
     )).rows.map(row => row.filename)).toEqual([

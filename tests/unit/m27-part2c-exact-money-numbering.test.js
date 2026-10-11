@@ -48,8 +48,14 @@ describe('Mission 27 Part 2C exact money and numbering contract', () => {
     expect(sql).not.toMatch(/INSERT INTO public\.canonical_(?:invoices|payments|estimates|appointments)/i);
     expect(numbering.CAPABILITY).toBe('customer_financial.document_numbering.review');
     expect(numbering.BUSINESS_PURPOSE).toBe('customer_financial.document_numbering');
+    expect(numbering.POLICY_VERSION).toBe('mission27.document_numbering.v1');
+    expect(numbering.POLICY_DIGEST).toBe(
+      '2b98aa283e4b3ad464419c7f8cb964892fc2fe28cbc6b7afdbac94ddc194b041');
+    expect(numbering.PREDECESSOR_POLICY_VERSION).toBe('mission27.launch.v1');
     expect(sql).toContain("action_mode TEXT NOT NULL CHECK(action_mode='single_control')");
     expect(sql).toContain("assurance TEXT NOT NULL CHECK(assurance='current_session')");
+    expect(sql).toContain("policy_version='mission27.document_numbering.v1'");
+    expect(sql).toContain("predecessor_policy_version='mission27.launch.v1'");
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql')).sort();
     expect(names.at(-1)).toBe('262_customer_financial_exact_money_numbering_v1.sql');
     expect(names.filter(name => /^262_/.test(name))).toHaveLength(1);
@@ -60,22 +66,51 @@ describe('Mission 27 Part 2C exact money and numbering contract', () => {
       capability: 'customer_financial.document_numbering.review',
       targetClass: 'tenant_document_numbering_policy',
       businessPurpose: 'customer_financial.document_numbering',
-      policyVersion: 'mission27.launch.v1', templateVersion: 'm27.owner.v1',
+      policyVersion: 'mission27.document_numbering.v1',
+      policyDigest: '2b98aa283e4b3ad464419c7f8cb964892fc2fe28cbc6b7afdbac94ddc194b041',
+      templateVersion: 'm27.document_numbering.owner.v1',
+      predecessorPolicyVersion: 'mission27.launch.v1',
+      predecessorPolicyDigest: 'd24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a',
       actionMode: 'single_control', assurance: 'current_session',
     });
-    const policy = JSON.parse(read('config/mission27-launch-contract.v1.json'));
+    const predecessor = JSON.parse(read('config/mission27-launch-contract.v1.json'));
+    const policy = JSON.parse(read('config/mission27-document-numbering-policy.v1.json'));
+    expect(predecessor.contractVersion).toBe('mission27.launch.v1');
+    expect(predecessor.team.ownerDefaultCapabilities).toHaveLength(25);
+    expect(Object.keys(predecessor.actionControl)).toHaveLength(25);
+    expect(predecessor.team.ownerDefaultCapabilities).not.toContain(grantIssuer.CAPABILITY);
+    expect(predecessor.actionControl).not.toHaveProperty(grantIssuer.CAPABILITY);
+    expect(grantIssuer.canonicalDigest(predecessor)).toBe(grantIssuer.PREDECESSOR_POLICY_DIGEST);
+    expect(grantIssuer.canonicalDigest(policy)).toBe(grantIssuer.POLICY_DIGEST);
+    expect(read('src/customerFinancial/billingIdentityRepository.js'))
+      .toContain("const POLICY_VERSION = 'mission27.launch.v1';");
+    expect(read('src/customerFinancial/billingIdentityReviewRepository.js'))
+      .toContain("const POLICY_VERSION = 'mission27.launch.v1';");
     const omittedTemplate = structuredClone(policy);
-    omittedTemplate.team.ownerDefaultCapabilities = omittedTemplate.team.ownerDefaultCapabilities
+    omittedTemplate.template.capabilities = omittedTemplate.template.capabilities
       .filter(value => value !== grantIssuer.CAPABILITY);
     expect(() => grantIssuer.classifyNumberingReviewPolicy(omittedTemplate))
       .toThrow('Document numbering capability policy is unavailable');
     const omittedClassification = structuredClone(policy);
-    delete omittedClassification.actionControl[grantIssuer.CAPABILITY];
+    delete omittedClassification.actionControl.capability;
     expect(() => grantIssuer.classifyNumberingReviewPolicy(omittedClassification))
       .toThrow('Document numbering capability policy is unavailable');
     const mismatchedAssurance = structuredClone(policy);
-    mismatchedAssurance.actionControl[grantIssuer.CAPABILITY].assurance = 'recent_auth';
+    mismatchedAssurance.actionControl.assurance = 'recent_auth';
     expect(() => grantIssuer.classifyNumberingReviewPolicy(mismatchedAssurance))
+      .toThrow('Document numbering capability policy is unavailable');
+    const widenedPredecessor = structuredClone(predecessor);
+    widenedPredecessor.team.ownerDefaultCapabilities.push(grantIssuer.CAPABILITY);
+    widenedPredecessor.actionControl[grantIssuer.CAPABILITY] = structuredClone(policy.actionControl);
+    expect(() => grantIssuer.classifyNumberingReviewPolicy(policy, widenedPredecessor))
+      .toThrow('Document numbering capability policy is unavailable');
+    const substitutedPredecessor = structuredClone(predecessor);
+    substitutedPredecessor.policyState = 'substituted';
+    expect(() => grantIssuer.classifyNumberingReviewPolicy(policy, substitutedPredecessor))
+      .toThrow('Document numbering capability policy is unavailable');
+    const downgradedPolicy = structuredClone(policy);
+    downgradedPolicy.policyVersion = 'mission27.launch.v1';
+    expect(() => grantIssuer.classifyNumberingReviewPolicy(downgradedPolicy, predecessor))
       .toThrow('Document numbering capability policy is unavailable');
     const issuerSource = read('src/customerFinancial/launchCapabilityGrantIssuer.js');
     const integrationSource = read('tests/integration/m27-part2c-exact-money-numbering-postgres.test.js');

@@ -6,7 +6,11 @@ const KEY = /^[A-Za-z0-9._:-]{16,128}$/;
 const UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 const CAPABILITY = 'customer_financial.document_numbering.review';
 const BUSINESS_PURPOSE = 'customer_financial.document_numbering';
-const POLICY_VERSION = 'mission27.launch.v1';
+const POLICY_VERSION = 'mission27.document_numbering.v1';
+const POLICY_DIGEST = '2b98aa283e4b3ad464419c7f8cb964892fc2fe28cbc6b7afdbac94ddc194b041';
+const PREDECESSOR_POLICY_VERSION = 'mission27.launch.v1';
+const PREDECESSOR_POLICY_DIGEST =
+  'd24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a';
 
 function failure(code, status, message) {
   const error = new Error(message); error.code = code; error.status = status; return error;
@@ -30,13 +34,16 @@ const utc = value => typeof value === 'string' && UTC.test(value) && Number.isFi
 
 function actor(value, mutation) {
   const authorityKeys = ['organizationId','actorUserId','actorAccessRole','authSessionId',
-    'capabilityGrantId','capabilityGrantRevision','businessPurpose','policyVersion'];
+    'capabilityGrantId','capabilityGrantRevision','businessPurpose','policyVersion','policyDigest',
+    'predecessorPolicyVersion','predecessorPolicyDigest'];
   const keys = mutation ? [...authorityKeys,'csrfToken','idempotencyKey'] : authorityKeys;
   if (!exact(value, keys) || !uuid(value.organizationId) || !uuid(value.actorUserId) ||
       value.actorAccessRole !== 'owner' || !uuid(value.authSessionId) ||
       !uuid(value.capabilityGrantId) || !Number.isSafeInteger(value.capabilityGrantRevision) ||
       value.capabilityGrantRevision < 1 || value.businessPurpose !== BUSINESS_PURPOSE ||
-      value.policyVersion !== POLICY_VERSION ||
+      value.policyVersion !== POLICY_VERSION || value.policyDigest !== POLICY_DIGEST ||
+      value.predecessorPolicyVersion !== PREDECESSOR_POLICY_VERSION ||
+      value.predecessorPolicyDigest !== PREDECESSOR_POLICY_DIGEST ||
       (mutation && (typeof value.csrfToken !== 'string' || value.csrfToken.length < 32 ||
         value.csrfToken.length > 512 || !KEY.test(value.idempotencyKey || '')))) {
     throw failure('CUSTOMER_FINANCIAL_NUMBERING_POLICY_RESTRICTED', 403,
@@ -67,15 +74,18 @@ function contract(value) {
 function reviewedValue(value, organizationId, policyId, policyDigest) {
   return exact(value, ['contract','actor','reason','reviewedAt']) && contract(value.contract) &&
     exact(value.actor, ['organizationId','userId','accessRole','membershipId','authSessionId',
-      'capability','capabilityGrantId','capabilityGrantRevision','businessPurpose','policyVersion',
-      'actionMode','assurance']) &&
+      'capability','capabilityGrantId','capabilityGrantRevision','businessPurpose','policyVersion','policyDigest',
+      'predecessorPolicyVersion','predecessorPolicyDigest','actionMode','assurance']) &&
     value.actor.organizationId === organizationId && uuid(value.actor.userId) &&
     value.actor.accessRole === 'owner' && uuid(value.actor.membershipId) &&
     uuid(value.actor.authSessionId) && value.actor.capability === CAPABILITY &&
     uuid(value.actor.capabilityGrantId) &&
     Number.isSafeInteger(value.actor.capabilityGrantRevision) &&
     value.actor.capabilityGrantRevision >= 1 && value.actor.businessPurpose === BUSINESS_PURPOSE &&
-    value.actor.policyVersion === POLICY_VERSION && value.actor.actionMode === 'single_control' &&
+    value.actor.policyVersion === POLICY_VERSION && value.actor.policyDigest === POLICY_DIGEST &&
+    value.actor.predecessorPolicyVersion === PREDECESSOR_POLICY_VERSION &&
+    value.actor.predecessorPolicyDigest === PREDECESSOR_POLICY_DIGEST &&
+    value.actor.actionMode === 'single_control' &&
     value.actor.assurance === 'current_session' && typeof value.reason === 'string' &&
     value.reason === value.reason.trim() && Buffer.byteLength(value.reason) >= 12 &&
     Buffer.byteLength(value.reason) <= 500 && utc(value.reviewedAt) && uuid(policyId) && digest(policyDigest);
@@ -167,4 +177,5 @@ async function review(pool, actorValue, inputValue) {
 }
 
 module.exports = { candidate, read, review, normalizeReview, verified,
-  CAPABILITY, BUSINESS_PURPOSE, POLICY_VERSION };
+  CAPABILITY, BUSINESS_PURPOSE, POLICY_VERSION, POLICY_DIGEST,
+  PREDECESSOR_POLICY_VERSION, PREDECESSOR_POLICY_DIGEST };

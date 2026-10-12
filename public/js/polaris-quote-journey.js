@@ -8,7 +8,6 @@
   var generation = 0;
   var CAP_EDIT_DRAFT = 'customer_financial.estimate.edit_draft';
   var CAP_EDIT_OPTIONS = 'customer_financial.estimate.edit_options';
-  var CAP_PROPOSAL = 'customer_financial.estimate.request_signature';
 
   function node(tag, text, parent, className) {
     var value = document.createElement(tag);
@@ -74,18 +73,25 @@
     var summary = node('summary', 'Build a multi-option proposal', section);
     var intro = node('p', 'Edit every customer-facing scope, quantity, line, price, assumption and option. Prices remain human decisions under Mission 24.', section, 'polaris-quote-intro');
     var content = node('div', undefined, section); var data = null; var draft = null;
+    var requestGeneration = 0;
     var route = '/api/v1/customer-financial/editable-estimates/' + encodeURIComponent(review.pins.estimateId) + '/quote-journey';
     function status(text) { var current = content.querySelector('.polaris-quote-status'); if (current) { current.textContent = text; current.focus(); } }
+    function rejected(error) {
+      requestGeneration += 1; data = null; draft = null; content.replaceChildren();
+      var note = node('p', message(error), content, 'polaris-quote-status');
+      note.setAttribute('role', 'alert'); note.tabIndex = -1; note.focus();
+      var retry = node('button', 'Reload current quote', content, 'btn btn-secondary');
+      retry.type = 'button'; retry.onclick = load;
+    }
     function load() {
+      var requestToken = ++requestGeneration; data = null; draft = null;
       content.replaceChildren(); var loading = node('p', 'Loading the current editable quote…', content, 'polaris-quote-status');
       loading.setAttribute('role', 'status'); loading.tabIndex = -1;
       return request(route, { cache: 'no-store' }).then(function (value) {
-        if (token !== generation || !section.isConnected) return;
+        if (token !== generation || requestToken !== requestGeneration || !section.isConnected) return;
         data = value; draft = clone(value.draft || value); render();
       }).catch(function (error) {
-        if (token !== generation) return; content.replaceChildren();
-        var note = node('p', message(error), content, 'polaris-quote-status'); note.setAttribute('role', 'alert'); note.tabIndex = -1;
-        var retry = node('button', 'Reload quote', content, 'btn btn-secondary'); retry.type = 'button'; retry.onclick = load;
+        if (token !== generation || requestToken !== requestGeneration) return; rejected(error);
       });
     }
     function lineEditor(line, lines, index, parent) {
@@ -125,12 +131,12 @@
       var reasonLabel=node('label',undefined,form,'polaris-quote-reason');node('span','Review reason',reasonLabel);var reason=node('textarea',undefined,reasonLabel);reason.setAttribute('aria-label','Review reason');reason.required=true;reason.minLength=12;reason.maxLength=1000;
       var confirmLabel=node('label',undefined,form);var confirm=node('input',undefined,confirmLabel);confirm.type='checkbox';confirm.required=true;node('span',' I reviewed every option and price in this exact draft.',confirmLabel);
       var save=node('button','Save reviewed draft',actions,'btn btn-primary');save.type='submit';
-      var proposal=node('button',data && data.proposalState==='independent_review_required'?'Add independent proposal review':'Review multi-option proposal',actions,'btn btn-secondary');proposal.type='button';proposal.disabled=draft.options.length<2||!grant(data,CAP_PROPOSAL);
+      var reload=node('button','Reload current quote',actions,'btn btn-secondary');reload.type='button';reload.onclick=load;
       var live=node('p','Ready for human review.',form,'polaris-quote-status');live.setAttribute('role','status');live.setAttribute('aria-live','polite');live.tabIndex=-1;
-      node('p','Customer signature launch is unavailable until legal review is complete. No proposal is delivered automatically.',form,'polaris-quote-boundary');
+      if(data.sourceProposal){node('p','Current Mission 24 issued proposal '+data.sourceProposal.reference+' is pinned to source digest '+data.sourceProposal.sourceProposalDigest.slice(0,12)+'… for '+data.sourceProposal.reviewedRecipient.name+'.',form,'polaris-quote-boundary');}
+      node('p','Customer signature launch requires the exact current Mission 24 proposal, reviewed recipient and legal approval. It remains unavailable here and no proposal is created or delivered.',form,'polaris-quote-boundary');
       node('p','Accepted-estimate-to-work handoff is unavailable until the reviewed Mission 23 receiver exists. No scheduling, dispatch or work record is changed here.',form,'polaris-quote-boundary');
-      form.onsubmit=function(event){event.preventDefault();var capability=draft.options.length>1?CAP_EDIT_OPTIONS:CAP_EDIT_DRAFT,currentGrant=grant(data,capability);if(!currentGrant){status('A current quote-edit capability is unavailable.');return;}var body;try{body={draft:collectDraft(form),expectedRevision:Number(draft.revision||0),capabilityGrantId:currentGrant.grantId,capabilityGrantRevision:Number(currentGrant.revision),businessPurpose:currentGrant.businessPurpose,policyVersion:currentGrant.policyVersion,reason:reason.value.trim(),confirmed:confirm.checked,confirmationVersion:'m27-polaris-quote-journey-v1'};}catch(error){status(error.message);return;}save.disabled=true;status('Saving the reviewed draft…');request(route+'/draft',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':uuid()},body:JSON.stringify(body)}).then(function(){return load();}).catch(function(error){status(message(error));save.disabled=false;});};
-      proposal.onclick=function(){var currentGrant=grant(data,CAP_PROPOSAL),current=data.proposal;var proposalId=current&&current.id||uuid(),proposalRevision=current&&Number(current.revision)||1;if(!currentGrant||!draft.draftDigest){status('Save the exact multi-option draft before reviewing a proposal.');return;}if(!confirm.checked||reason.value.trim().length<12||!form.reportValidity()){status('Enter the review reason and confirm this exact proposal first.');return;}proposal.disabled=true;status('Recording this exact proposal review…');request(route+'/proposal',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':uuid()},body:JSON.stringify({expectedDraftRevision:Number(draft.revision),expectedDraftDigest:draft.draftDigest,proposalId:proposalId,proposalRevision:proposalRevision,capabilityGrantId:currentGrant.grantId,capabilityGrantRevision:Number(currentGrant.revision),businessPurpose:currentGrant.businessPurpose,policyVersion:currentGrant.policyVersion,reason:reason.value.trim(),confirmed:true,confirmationVersion:'m27-polaris-proposal-review-v1'})}).then(function(value){status(value.state==='proposal_current'?'The reviewed proposal is current. Nothing was delivered automatically.':'One independent review remains before this proposal is current.');return load();}).catch(function(error){status(message(error));proposal.disabled=false;});};
+      form.onsubmit=function(event){event.preventDefault();var capability=draft.options.length>1?CAP_EDIT_OPTIONS:CAP_EDIT_DRAFT,currentGrant=grant(data,capability);if(!currentGrant){rejected({status:403});return;}var body;try{body={draft:collectDraft(form),expectedRevision:Number(draft.revision||0),capabilityGrantId:currentGrant.grantId,capabilityGrantRevision:Number(currentGrant.revision),businessPurpose:currentGrant.businessPurpose,policyVersion:currentGrant.policyVersion,reason:reason.value.trim(),confirmed:confirm.checked,confirmationVersion:'m27-polaris-quote-journey-v1'};}catch(error){status(error.message);return;}save.disabled=true;status('Saving the reviewed draft…');request(route+'/draft',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':uuid()},body:JSON.stringify(body)}).then(function(){return load();}).catch(rejected);};
     }
     summary.addEventListener('click',function(){if(!data)setTimeout(load,0);});
     return section;

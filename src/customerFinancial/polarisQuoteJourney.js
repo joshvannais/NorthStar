@@ -5,7 +5,6 @@ const money = require('./exactMoney');
 
 const CONTRACT_VERSION = 'm27-polaris-quote-journey-v1';
 const DRAFT_VERSION = 'polaris.editable.estimate.v1';
-const PROPOSAL_VERSION = 'm24.polaris.multi_option_proposal.v1';
 const SIGNATURE_VERSION = 'm24.typed_name_explicit_consent.v1';
 const HANDOFF_VERSION = 'mission23.work_intake.review.v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -86,12 +85,16 @@ function normalizeDraft(raw, source) {
     invalid('Option and line identities must be unique and within the launch limits.');
   }
   if (!source || !UUID.test(source.estimateId || '') || !UUID.test(source.customerId || '') ||
-      !DIGEST.test(source.sourceDigest || '') || !DIGEST.test(source.sourceRevisionDigest || '')) {
+      !DIGEST.test(source.sourceDigest || '') || !DIGEST.test(source.sourceRevisionDigest || '') ||
+      !DIGEST.test(source.sourceProposalDigest || '') ||
+      !DIGEST.test(source.sourceProposalRevisionDigest || '')) {
     invalid('The current Mission 24 source is unavailable.');
   }
   const draft = { version: DRAFT_VERSION, estimateId: source.estimateId,
     customerId: source.customerId, sourceDigest: source.sourceDigest,
-    sourceRevisionDigest: source.sourceRevisionDigest, currency: 'USD',
+    sourceRevisionDigest: source.sourceRevisionDigest,
+    sourceProposalDigest: source.sourceProposalDigest,
+    sourceProposalRevisionDigest: source.sourceProposalRevisionDigest, currency: 'USD',
     options: Object.freeze(options), machineDraftApprovedPrice: false,
     commercialAuthority: 'mission24.authorized_human_price.v1',
     mission32Adapter: Object.freeze({ version: 'polaris.estimate_studio.adapter.v1',
@@ -107,7 +110,10 @@ function draftFromBasis(basis) {
   }
   return Object.freeze({ version: DRAFT_VERSION, estimateId: basis.estimate.id,
     customerId: basis.estimate.customerId, sourceDigest: basis.currentness.sourceDigest,
-    sourceRevisionDigest: basis.revision.digest, currency: 'USD', draftDigest: null,
+    sourceRevisionDigest: basis.revision.digest,
+    sourceProposalDigest: basis.revision.documentDigest,
+    sourceProposalRevisionDigest: basis.revision.digest,
+    currency: 'USD', draftDigest: null,
     revision: 0, state: 'ready_to_edit', machineDraftApprovedPrice: false,
     commercialAuthority: 'mission24.authorized_human_price.v1',
     options: Object.freeze([Object.freeze({ id: option.id, ordinal: 0,
@@ -121,20 +127,6 @@ function draftFromBasis(basis) {
     mission32Adapter: basis.mission32Adapter,
   });
 }
-function proposal(draft, identityValue, revision, createdAt) {
-  if (!draft || draft.version !== DRAFT_VERSION || !DIGEST.test(draft.draftDigest || '') ||
-      draft.options?.length < 2 || draft.options.length > 3 || !UUID.test(identityValue || '') ||
-      !Number.isSafeInteger(revision) || revision < 1 || !Number.isFinite(Date.parse(createdAt))) {
-    invalid('A current reviewed multi-option draft is required before requesting a signature.');
-  }
-  const value = { version: PROPOSAL_VERSION, id: identityValue, estimateId: draft.estimateId,
-    customerId: draft.customerId, revision, draftRevision: draft.revision,
-    draftDigest: draft.draftDigest, currency: 'USD', options: draft.options,
-    signatureMethod: SIGNATURE_VERSION, createdAt: new Date(createdAt).toISOString(),
-    exactMission24Authority: true, automaticDelivery: false,
-  };
-  return Object.freeze({ ...value, proposalDigest: digest(value) });
-}
 function unavailable(reason, missingEvidence) {
   return Object.freeze({ contractVersion: CONTRACT_VERSION, state: 'unavailable', reason,
     value: null, missingEvidence: Object.freeze([...(missingEvidence || [])]),
@@ -142,5 +134,5 @@ function unavailable(reason, missingEvidence) {
     workMutationCount: 0, financialActionAuthorized: false });
 }
 
-module.exports = { CONTRACT_VERSION, DRAFT_VERSION, PROPOSAL_VERSION, SIGNATURE_VERSION,
-  HANDOFF_VERSION, digest, invalid, normalizeDraft, draftFromBasis, proposal, unavailable };
+module.exports = { CONTRACT_VERSION, DRAFT_VERSION, SIGNATURE_VERSION,
+  HANDOFF_VERSION, digest, invalid, normalizeDraft, draftFromBasis, unavailable };

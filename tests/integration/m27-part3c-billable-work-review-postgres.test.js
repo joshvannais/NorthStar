@@ -23,7 +23,7 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
   let f; let actor; let estimate; let appointment; let firstReviewId; let context;
   let approvedCompletion; let laborInterval; let materialMovement; let businessProfile; let route;
   let ownerGrant; let adminGrant;
-  let quoteOptionGrant; let quoteOwnerProposalGrant; let quoteAdminProposalGrant;
+  let quoteOptionGrant; let quoteMemberOptionGrant;
 
   beforeAll(async () => {
     for (const key of ['OPENAI_API_KEY','POLARIS_OPENAI_ENABLED','RETELL_API_KEY',
@@ -66,14 +66,10 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
       actorUserId: actor.actorUserId, membershipId: actor.actorUserId,
       actorAccessRole: actor.actorAccessRole }, estimate,
     'customer_financial.estimate.edit_options');
-    quoteOwnerProposalGrant = await issueEstimateJourneyGrant(f.ownerPool, { organizationId: f.org,
-      actorUserId: actor.actorUserId, membershipId: actor.actorUserId,
-      actorAccessRole: actor.actorAccessRole }, estimate,
-    'customer_financial.estimate.request_signature');
-    quoteAdminProposalGrant = await issueEstimateJourneyGrant(f.ownerPool, { organizationId: f.org,
-      actorUserId: f.actors.admin.actorUserId, membershipId: f.actors.admin.actorUserId,
-      actorAccessRole: f.actors.admin.actorAccessRole }, estimate,
-    'customer_financial.estimate.request_signature');
+    quoteMemberOptionGrant = await issueEstimateJourneyGrant(f.ownerPool, { organizationId: f.org,
+      actorUserId: f.actors.member.actorUserId, membershipId: f.actors.member.actorUserId,
+      actorAccessRole: f.actors.member.actorAccessRole }, estimate,
+    'customer_financial.estimate.edit_options');
   }, 180000);
   afterAll(async () => {
     try { if (f) await f.cleanup(); } finally { jest.restoreAllMocks(); }
@@ -436,6 +432,26 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
         completionClaimed: true, completionInferred: false,
         amount: { currency: 'USD', minorUnitExponent: 2 } } });
     expect(candidate.body.data.source.decisionDigest).toMatch(/^[0-9a-f]{64}$/);
+    const fabricated = await request(f.app).post(route).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', crypto.randomUUID())
+      .send({ ...reviewBody('final_balance', candidate.body.data, ownerGrant,
+        'Caller attempts to author the source shape.'),
+      source: { amount: { minorUnits: '1' }, sourceDigest: 'f'.repeat(64) } });
+    expect(fabricated.status).toBe(400);
+    expect(JSON.stringify(fabricated.body)).not.toMatch(/minorUnits|sourceDigest/);
+    await expect(f.ownerPool.query(
+      `SELECT public.canonical_customer_financial_billable_review_v1_accept(
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) result`,
+      [f.org, actor.actorUserId, actor.actorAccessRole, actor.authSessionId,
+        actor.csrfToken, crypto.randomUUID(), estimate, ownerGrant.grantId,
+        ownerGrant.revision, BUSINESS_PURPOSE, POLICY_VERSION, 'final_balance',
+        'f'.repeat(64), 'Direct caller supplies a false source digest.',
+        'm27-billable-work-review-v1'])).rejects.toMatchObject({ code: '40001' });
+    const afterAdversarial = await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_billable_work_reviews_v1) reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_billable_review_requests_v1) requests`);
+    expect(afterAdversarial.rows[0]).toEqual({ reviews: before.rows[0].reviews,
+      requests: before.rows[0].requests });
     const noCsrf = await request(f.app).post(route).set({ Cookie: actor.session.headers.Cookie })
       .set('Idempotency-Key', `m27-p3c-no-csrf-${crypto.randomUUID()}`)
       .send(reviewBody('final_balance', candidate.body.data, ownerGrant,
@@ -519,12 +535,16 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     expect(migration.filename).toBe('266_customer_financial_billable_work_review_v1.sql');
   }, 180000);
 
-  test('mounted mobile quote journey edits every field and creates only an exact reviewed multi-option proposal', async () => {
+  test('mounted mobile quote journey consumes the exact current Mission 24 proposal and permits bounded member editing', async () => {
     const quoteRoute = `/api/v1/customer-financial/editable-estimates/${estimate}/quote-journey`;
     await expect(issueEstimateJourneyGrant(f.ownerPool, { organizationId: f.org,
       actorUserId: actor.actorUserId, membershipId: actor.actorUserId,
       actorAccessRole: actor.actorAccessRole }, estimate,
     'customer_financial.estimate.edit_options')).rejects.toMatchObject({ code: '23505' });
+    const currentMission24 = (await f.ownerPool.query(`SELECT id,revision,
+      rtrim(document_digest) document_digest,rtrim(digest) revision_digest,document
+      FROM canonical_customer_estimate_versions WHERE organization_id=$1 AND estimate_id=$2
+      ORDER BY revision DESC LIMIT 1`, [f.org, estimate])).rows[0];
     const initial = await request(f.app).get(quoteRoute).set(actor.session.headers);
     expect(initial.status).toBe(200);
     expect(initial.body.data).toMatchObject({ state: 'ready_to_edit', revision: 0,
@@ -534,6 +554,21 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
       receiverMutationCount: 0 });
     expect(initial.body.data.capabilities['customer_financial.estimate.edit_options']).toMatchObject({
       grantId: quoteOptionGrant.grantId, revision: quoteOptionGrant.revision });
+    expect(initial.body.data.sourceProposal).toMatchObject({
+      version: 'mission24.customer_estimate_version.v1', id: currentMission24.id,
+      revision: Number(currentMission24.revision), estimateId: estimate,
+      customerId: initial.body.data.customerId, sourceCurrent: true, automaticDelivery: false,
+      sourceProposalDigest: currentMission24.document_digest,
+      sourceProposalRevisionDigest: currentMission24.revision_digest,
+      reviewedRecipient: { state: 'reviewed_current',
+        name: currentMission24.document.customer.name,
+        address: currentMission24.document.customer.address },
+    });
+    expect(initial.body.data.sourceProposal.sourceProposalDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(initial.body.data.sourceProposal.sourceProposalRevisionDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(initial.body.data.sourceProposal.acceptedEvidence.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(initial.body.data.sourceProposal.acceptedEvidence.digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(initial.body.data.sourceProposal.reviewedRecipient.digest).toMatch(/^[0-9a-f]{64}$/);
     const sourceOption = initial.body.data.options[0];
     const sourceLine = sourceOption.lines[0];
     const draft = { options: [
@@ -560,107 +595,57 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     expect(save.body.data.draft).toMatchObject({ revision: 1,
       options: [{ name: 'Good', lines: [{ quantity: '1', unit: 'job' }] },
         { name: 'Better', total: { minorUnits: '900000' } }] });
-    const proposalId = crypto.randomUUID(); const proposalBody = grant => ({
-      expectedDraftRevision: 1, expectedDraftDigest: save.body.data.draft.draftDigest,
-      proposalId, proposalRevision: 1, capabilityGrantId: grant.grantId,
-      capabilityGrantRevision: grant.revision,
-      businessPurpose: PURPOSE['customer_financial.estimate.request_signature'],
-      policyVersion: 'mission27.launch.v1', reason: 'Human reviewed this exact proposal version.',
-      confirmed: true, confirmationVersion: 'm27-polaris-proposal-review-v1' });
-    const firstProposalKey = crypto.randomUUID();
-    const first = await request(f.app).post(`${quoteRoute}/proposal`).set(actor.session.headers)
-      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', firstProposalKey)
-      .send(proposalBody(quoteOwnerProposalGrant));
-    expect(first.status).toBe(202);
-    expect(first.body.data).toMatchObject({ state: 'independent_review_required',
-      approvalCount: 1, requiredApprovalCount: 2, automaticDelivery: false,
-      signature: { state: 'unavailable', reason: 'legal_review_unavailable' },
-      workHandoff: { state: 'unavailable', reason: 'work_handoff_receiver_unavailable' },
-      providerCallCount: 0, receiverMutationCount: 0 });
-    const pending = await request(f.app).get(quoteRoute).set(f.actors.admin.session.headers);
-    expect(pending.status).toBe(200);
-    expect(pending.body.data).toMatchObject({ proposalState: 'independent_review_required',
-      proposal: { id: proposalId, revision: 1,
-        proposalDigest: first.body.data.proposal.proposalDigest } });
-    const competing = await request(f.app).post(`${quoteRoute}/proposal`)
-      .set(f.actors.admin.session.headers).set('X-CSRF-Token', f.actors.admin.csrfToken)
-      .set('Idempotency-Key', crypto.randomUUID()).send({ ...proposalBody(quoteAdminProposalGrant),
-        proposalId: crypto.randomUUID() });
-    expect(competing.status).toBe(409);
-    expect(JSON.stringify(competing.body)).not.toContain('900000');
-    const second = await request(f.app).post(`${quoteRoute}/proposal`)
-      .set(f.actors.admin.session.headers).set('X-CSRF-Token', f.actors.admin.csrfToken)
-      .set('Idempotency-Key', crypto.randomUUID()).send(proposalBody(quoteAdminProposalGrant));
-    expect(second.status).toBe(201);
-    expect(second.body.data).toMatchObject({ state: 'proposal_current', approvalCount: 2,
-      requiredApprovalCount: 2 });
-    expect(second.body.data.proposal.proposalDigest).toBe(first.body.data.proposal.proposalDigest);
-    const proposalReplay = await request(f.app).post(`${quoteRoute}/proposal`).set(actor.session.headers)
-      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', firstProposalKey)
-      .send(proposalBody(quoteOwnerProposalGrant));
-    expect(proposalReplay.status).toBe(200);
-    expect(proposalReplay.body).toMatchObject({ data: { state: 'proposal_current', approvalCount: 2,
-      requiredApprovalCount: 2, proposal: { proposalDigest: first.body.data.proposal.proposalDigest } } });
-    const reread = await request(f.app).get(quoteRoute).set(actor.session.headers);
-    expect(reread.status).toBe(200);
-    expect(reread.body.data).toMatchObject({ state: 'current', draft: { revision: 1 },
-      proposal: { id: proposalId, revision: 1, automaticDelivery: false },
-      signature: { state: 'unavailable', reason: 'legal_review_unavailable' },
-      workHandoff: { state: 'unavailable', reason: 'work_handoff_receiver_unavailable' } });
-    const revisedDraft = structuredClone(draft);
-    revisedDraft.options[0].scope = 'Repair the revised reviewed fence scope.';
-    const revise = await request(f.app).post(`${quoteRoute}/draft`).set(actor.session.headers)
-      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', crypto.randomUUID())
+    const memberRead = await request(f.app).get(quoteRoute).set(f.actors.member.session.headers);
+    expect(memberRead.status).toBe(200);
+    expect(memberRead.body.data).toMatchObject({ state: 'current', draft: { revision: 1 },
+      sourceProposal: { sourceProposalDigest: initial.body.data.sourceProposal.sourceProposalDigest },
+      capabilities: { 'customer_financial.estimate.edit_options': {
+        grantId: quoteMemberOptionGrant.grantId, revision: quoteMemberOptionGrant.revision } } });
+    expect(memberRead.body.data.capabilities['customer_financial.estimate.request_signature'])
+      .toBeUndefined();
+    const revisedDraft = { options: memberRead.body.data.draft.options.map(option => ({
+      id: option.id, name: option.name, scope: option.scope, validityDays: option.validityDays,
+      assumptions: option.assumptions.map(assumption => assumption.text || assumption),
+      lines: option.lines.map(line => ({ id: line.id, description: line.description,
+        quantity: line.quantity, unit: line.unit, price: line.price })),
+    })) };
+    revisedDraft.options[0].scope = 'Member revised the reviewed fence scope.';
+    const revise = await request(f.app).post(`${quoteRoute}/draft`)
+      .set(f.actors.member.session.headers)
+      .set('X-CSRF-Token', f.actors.member.csrfToken).set('Idempotency-Key', crypto.randomUUID())
       .send({ draft: revisedDraft, expectedRevision: 1,
-        capabilityGrantId: quoteOptionGrant.grantId,
-        capabilityGrantRevision: quoteOptionGrant.revision,
+        capabilityGrantId: quoteMemberOptionGrant.grantId,
+        capabilityGrantRevision: quoteMemberOptionGrant.revision,
         businessPurpose: PURPOSE['customer_financial.estimate.edit_options'],
-        policyVersion: 'mission27.launch.v1', reason: 'Owner reviewed the revised option scope.',
+        policyVersion: 'mission27.launch.v1', reason: 'Member reviewed the revised option scope.',
         confirmed: true, confirmationVersion: 'm27-polaris-quote-journey-v1' });
     expect(revise.status).toBe(201);
-    expect(revise.body.data).toMatchObject({ proposalInvalidated: true,
+    expect(revise.body.data).toMatchObject({
       signatureInvalidated: true, handoffInvalidated: true, draft: { revision: 2 } });
     const cleared = await request(f.app).get(quoteRoute).set(actor.session.headers);
     expect(cleared.status).toBe(200);
-    expect(cleared.body.data).toMatchObject({ draft: { revision: 2 }, proposal: null,
-      proposalState: null });
+    expect(cleared.body.data).toMatchObject({ draft: { revision: 2 },
+      sourceProposal: { sourceProposalDigest: initial.body.data.sourceProposal.sourceProposalDigest },
+      signature: { state: 'unavailable', reason: 'legal_review_unavailable' } });
     const staleSaveReplay = await request(f.app).post(`${quoteRoute}/draft`).set(actor.session.headers)
       .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', saveKey).send(saveBody);
     expect(staleSaveReplay.status).toBe(409);
     expect(JSON.stringify(staleSaveReplay.body)).not.toContain('28148');
-    const staleProposalReplay = await request(f.app).post(`${quoteRoute}/proposal`)
-      .set(actor.session.headers).set('X-CSRF-Token', actor.csrfToken)
-      .set('Idempotency-Key', firstProposalKey).send(proposalBody(quoteOwnerProposalGrant));
-    expect(staleProposalReplay.status).toBe(409);
-    expect(JSON.stringify(staleProposalReplay.body)).not.toContain('900000');
-    const concurrentProposal = (grant, proposalIdentity, session, csrf) => request(f.app)
-      .post(`${quoteRoute}/proposal`).set(session.headers).set('X-CSRF-Token', csrf)
-      .set('Idempotency-Key', crypto.randomUUID()).send({ expectedDraftRevision: 2,
-        expectedDraftDigest: revise.body.data.draft.draftDigest, proposalId: proposalIdentity,
-        proposalRevision: 1, capabilityGrantId: grant.grantId,
-        capabilityGrantRevision: grant.revision,
-        businessPurpose: PURPOSE['customer_financial.estimate.request_signature'],
-        policyVersion: 'mission27.launch.v1', reason: 'Human reviewed this concurrent proposal.',
-        confirmed: true, confirmationVersion: 'm27-polaris-proposal-review-v1' });
-    const competingRace = await Promise.all([
-      concurrentProposal(quoteOwnerProposalGrant, crypto.randomUUID(), actor.session, actor.csrfToken),
-      concurrentProposal(quoteAdminProposalGrant, crypto.randomUUID(), f.actors.admin.session,
-        f.actors.admin.csrfToken),
-    ]);
-    const statuses = competingRace.map(value => value.status).sort();
-    expect(statuses[0]).toBe(202);
-    expect([409,503]).toContain(statuses[1]);
-    let denied = competingRace.find(value => value.status !== 202);
-    if (denied.status === 503) {
-      denied = await concurrentProposal(quoteAdminProposalGrant, crypto.randomUUID(),
-        f.actors.admin.session, f.actors.admin.csrfToken);
-    }
-    expect(denied.status).toBe(409);
-    expect(denied.body.error.category).toBe('CUSTOMER_FINANCIAL_EDITABLE_ESTIMATE_CONFLICT');
-    const currentProposalDigests = (await f.ownerPool.query(`SELECT count(DISTINCT proposal_digest)::int count
-      FROM canonical_customer_estimate_proposal_reviews_v1
-      WHERE organization_id=$1 AND estimate_id=$2 AND draft_revision=2`, [f.org,estimate])).rows[0].count;
-    expect(currentProposalDigests).toBe(1);
+    expect((await request(f.app).post(`${quoteRoute}/proposal`).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', crypto.randomUUID())
+      .send({})).status).toBe(404);
+    await expect(issueEstimateJourneyGrant(f.ownerPool, { organizationId: f.org,
+      actorUserId: f.actors.member.actorUserId, membershipId: f.actors.member.actorUserId,
+      actorAccessRole: f.actors.member.actorAccessRole }, estimate,
+    'customer_financial.estimate.request_signature')).rejects.toThrow(/restricted/i);
+    expect((await request(f.app).get(quoteRoute).set(f.actors.viewer.session.headers)).status).toBe(403);
+    const otherTenant = await request(f.app).get(quoteRoute).set(f.actors.otherOwner.session.headers);
+    expect([200,403,404,503]).toContain(otherTenant.status);
+    expect(JSON.stringify(otherTenant.body)).not.toContain(estimate);
+    const proposalTables = (await f.ownerPool.query(`SELECT
+      to_regclass('public.canonical_customer_estimate_multi_option_proposals_v1') multi,
+      to_regclass('public.canonical_customer_estimate_proposal_reviews_v1') reviews`)).rows[0];
+    expect(proposalTables).toEqual({ multi: null, reviews: null });
     const mutationCounts = (await f.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_schedule_human_approvals) schedule,
       (SELECT count(*)::int FROM canonical_field_executions) executions,

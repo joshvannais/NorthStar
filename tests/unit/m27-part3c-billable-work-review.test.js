@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 const review = require('../../src/customerFinancial/billableWorkReview');
 const grants = require('../../src/customerFinancial/billableWorkReviewGrantIssuer');
 const money = require('../../src/customerFinancial/exactMoney');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const id = () => crypto.randomUUID(); const digest = () => crypto.randomBytes(32).toString('hex');
 function basis(amount = '6800.00', payments = []) {
@@ -64,5 +66,19 @@ describe('Mission 27 Part 3C billable-work review contract', () => {
       policyVersion: 'mission27.launch.v1', actionMode: 'conditional_dual_control',
       assurance: 'recent_auth' });
     expect(() => grants.classify('member')).toThrow(/restricted/i);
+  });
+
+  test('keeps the billable effect source inside the database-owned boundary', () => {
+    const migration = fs.readFileSync(path.join(__dirname,
+      '../../migrations/266_customer_financial_billable_work_review_v1.sql'), 'utf8');
+    const repository = fs.readFileSync(path.join(__dirname,
+      '../../src/customerFinancial/billableWorkReviewRepository.js'), 'utf8');
+    expect(migration).toMatch(/canonical_customer_financial_billable_review_v1_source/);
+    expect(migration).toMatch(/canonical_customer_financial_editable_basis_v1_read/);
+    expect(migration).toMatch(/canonical_customer_financial_billable_review_v1_handoff_snapshot/);
+    expect(migration).not.toMatch(/handoff_value:=public\.canonical_handoff_read/);
+    expect(migration).not.toMatch(/source_value JSONB,reason_value/);
+    expect(repository).not.toContain('JSON.stringify(current.source)');
+    expect(repository).toContain("const allowed = new Set(['sourceClass','expectedDecisionDigest'");
   });
 });

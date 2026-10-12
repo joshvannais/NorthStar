@@ -27,7 +27,7 @@ function failure(res, error) {
         'CUSTOMER_FINANCIAL_EDITABLE_ESTIMATE_BUSY' :
         'CUSTOMER_FINANCIAL_EDITABLE_ESTIMATE_UNAVAILABLE';
   const message = error?.status ? error.message : status === 403 ?
-    'Editable estimate access requires a current owner or administrator capability.' :
+    'Editable estimate access requires a current role and action-specific capability.' :
     status === 400 ? 'Select one exact current estimate.' : status === 409 ?
       'The editable estimate source changed. Reload the current draft.' : busy ?
       'The editable estimate source is busy. Retry shortly.' :
@@ -42,10 +42,10 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const billableAccept = options.billableAccept || billableReviewRepository.accept;
   const quoteRead = options.quoteRead || quoteJourneyRepository.read;
   const quoteSave = options.quoteSave || quoteJourneyRepository.save;
-  const quoteProposal = options.quoteProposal || quoteJourneyRepository.requestProposal;
   const quoteHandoff = options.quoteHandoff || quoteJourneyRepository.requestHandoff;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
+  const quoteRole = options.quoteRole || requireRole('owner','admin','member');
   const throttle = options.throttle || rateLimit('internal-api', req =>
     `m27-editable-estimate:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
   router.use((_req,res,next) => { res.set('Cache-Control','private, no-store');
@@ -96,7 +96,7 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         replayed: result.replayed === true });
     } catch (error) { return failure(res,error); }
   });
-  router.get('/:estimateId/quote-journey', auth, role, throttle, async (req,res) => {
+  router.get('/:estimateId/quote-journey', auth, quoteRole, throttle, async (req,res) => {
     if (Object.keys(req.query).length) return failure(res, { status: 400,
       code: 'CUSTOMER_FINANCIAL_QUOTE_JOURNEY_INVALID',
       message: 'Select one exact current quote.' });
@@ -112,7 +112,7 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     };
     return { ...source(req), csrfToken, idempotencyKey: req.get('Idempotency-Key') };
   }
-  router.post('/:estimateId/quote-journey/draft', auth, role, throttle, async (req,res) => {
+  router.post('/:estimateId/quote-journey/draft', auth, quoteRole, throttle, async (req,res) => {
     if (Object.keys(req.query).length || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return failure(res, { status: 400, code: 'CUSTOMER_FINANCIAL_QUOTE_JOURNEY_INVALID',
         message: 'Review one exact quote draft.' });
@@ -120,16 +120,6 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     try {
       const data = await quoteSave(poolProvider(), mutationSource(req), req.params.estimateId, req.body);
       return res.status(data.replayed === true ? 200 : 201).json({ success: true, data });
-    } catch (error) { return failure(res,error); }
-  });
-  router.post('/:estimateId/quote-journey/proposal', auth, role, throttle, async (req,res) => {
-    if (Object.keys(req.query).length || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
-      return failure(res, { status: 400, code: 'CUSTOMER_FINANCIAL_QUOTE_JOURNEY_INVALID',
-        message: 'Review one exact multi-option proposal.' });
-    }
-    try {
-      const data = await quoteProposal(poolProvider(), mutationSource(req), req.params.estimateId, req.body);
-      return res.status(data.replayed === true ? 200 : Number(data.status || 201)).json({ success: true, data });
     } catch (error) { return failure(res,error); }
   });
   router.post('/:estimateId/quote-journey/work-handoff', auth, role, throttle, async (req,res) => {

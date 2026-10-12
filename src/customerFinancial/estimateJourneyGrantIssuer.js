@@ -30,9 +30,11 @@ function failure() {
 }
 function classify(role, capability) {
   const capabilities = role === 'owner' ? policy?.team?.ownerDefaultCapabilities :
-    role === 'admin' ? policy?.team?.adminDefaultCapabilities : null;
+    role === 'admin' ? policy?.team?.adminDefaultCapabilities :
+      role === 'member' ? policy?.team?.memberGrantableCapabilities : null;
   const templateVersion = role === 'owner' ? policy?.team?.ownerBootstrapTemplate :
-    role === 'admin' ? policy?.team?.adminBootstrapTemplate : null;
+    role === 'admin' ? policy?.team?.adminBootstrapTemplate :
+      role === 'member' ? 'm27.member.granted.v1' : null;
   const rule = policy?.actionControl?.[capability];
   if (policy?.contractVersion !== POLICY_VERSION || canonicalDigest(policy) !== POLICY_DIGEST ||
       !PURPOSE[capability] || !Array.isArray(capabilities) || !capabilities.includes(capability) ||
@@ -47,7 +49,7 @@ function classify(role, capability) {
 async function issueEstimateJourneyGrant(client, source, estimateId, capability, options = {}) {
   if (!client?.query || !UUID.test(source?.organizationId || '') ||
       !UUID.test(source?.actorUserId || '') || !UUID.test(source?.membershipId || '') ||
-      !UUID.test(estimateId || '') || !['owner','admin'].includes(source?.actorAccessRole) ||
+      !UUID.test(estimateId || '') || !['owner','admin','member'].includes(source?.actorAccessRole) ||
       !options || typeof options !== 'object' || Array.isArray(options)) throw failure();
   const classified = classify(source.actorAccessRole, capability);
   const grantId = options.grantId ?? crypto.randomUUID();

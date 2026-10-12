@@ -20,12 +20,19 @@ describe('Mission 27 Part 3C Polaris quote browser contract', () => {
   test('keeps the mounted browser contract on shared authenticated fetch and named boundaries', () => {
     const source = require('node:fs').readFileSync(modulePath, 'utf8');
     expect(source).toContain('window.NorthStarAccountSession.fetch');
-    expect(source).toContain('legal review is complete');
+    expect(source).toContain('reviewed recipient and legal approval');
     expect(source).toContain('Mission 23 receiver exists');
+    expect(source).toContain('requestGeneration');
+    expect(source).toContain('function rejected(error)');
+    expect(source).toContain('Reload current quote');
+    expect(source).toContain('Current Mission 24 issued proposal');
     expect(source).toContain("review.simulated");
-    expect(source).toContain("!confirm.checked||reason.value.trim().length<12");
+    expect(source).toContain('reason.minLength=12');
+    expect(source).toContain('confirm.required=true');
     expect(source).not.toContain("reason.value.trim()||'Human reviewed");
     expect(source).not.toContain('window.fetch(');
     expect(source).not.toContain('automaticDelivery: true');
+    expect(source).not.toContain("route+'/proposal'");
+    expect(source).not.toContain('exactMission24Authority');
   });
 });

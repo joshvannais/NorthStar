@@ -17,7 +17,6 @@ const ENTRIES = new Set([
   'canonical_customer_financial_billable_review_v1_accept',
   'canonical_customer_financial_estimate_journey_v1_read',
   'canonical_customer_financial_estimate_journey_v1_save_draft',
-  'canonical_customer_financial_estimate_journey_v1_proposal',
 ]);
 const TABLES = new Set([
   'canonical_customer_financial_billing_capability_grants_v1',
@@ -43,8 +42,6 @@ const TABLES = new Set([
   'canonical_customer_financial_estimate_journey_grants_v1',
   'canonical_customer_financial_estimate_journey_grant_heads_v1',
   'canonical_customer_financial_estimate_journey_drafts_v1',
-  'canonical_customer_estimate_proposal_reviews_v1',
-  'canonical_customer_estimate_multi_option_proposals_v1',
   'canonical_customer_financial_estimate_journey_requests_v1',
 ]);
 const quote = value => '"' + value.replace(/"/g, '""') + '"';

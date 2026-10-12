@@ -5264,6 +5264,9 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_customer_financial_billing_%'
            AND relation.relname NOT LIKE 'canonical_customer_financial_numbering_%'
            AND relation.relname NOT LIKE 'canonical_customer_financial_estimate_%'
+           AND relation.relname NOT LIKE 'canonical_customer_financial_billable_%'
+           AND relation.relname NOT LIKE 'canonical_customer_estimate_proposal_%'
+           AND relation.relname NOT LIKE 'canonical_customer_estimate_multi_option_%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
            AND relation.relname <> 'canonical_labor_plans'
            AND relation.relname <> 'canonical_travel_plans'
@@ -6335,6 +6338,38 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege('public','public.canonical_customer_financial_editable_basis_v1_grant_head()','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_editable_basis_v1_issue_grant(uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,text,text,text,text,boolean)','EXECUTE')
        )) AS customer_financial_editable_estimate_private,
+       (to_regclass('public.canonical_customer_financial_billable_review_grants_v1') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_customer_financial_billable_review_grants_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_financial_billable_review_grant_heads_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_financial_billable_work_reviews_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_financial_billable_review_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND has_function_privilege($1,'public.canonical_customer_financial_billable_review_v1_read(uuid,uuid,text,uuid,uuid,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_customer_financial_billable_review_v1_accept(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,jsonb,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billable_review_v1_issue_grant(uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,text,text,text,text,boolean)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billable_review_v1_access(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billable_review_v1_projection(uuid,uuid,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billable_review_v1_immutable()','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_billable_review_v1_grant_head()','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_billable_review_v1_read(uuid,uuid,text,uuid,uuid,text)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_billable_review_v1_accept(uuid,uuid,text,uuid,text,text,uuid,uuid,bigint,text,text,jsonb,text,text)','EXECUTE')
+       )) AS customer_financial_billable_review_private,
+       (to_regclass('public.canonical_customer_financial_estimate_journey_grants_v1') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_customer_financial_estimate_journey_grants_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_financial_estimate_journey_grant_heads_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_financial_estimate_journey_drafts_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_estimate_proposal_reviews_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_estimate_multi_option_proposals_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND NOT has_table_privilege($1,'public.canonical_customer_financial_estimate_journey_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+         AND has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_save_draft(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text,text,bigint,jsonb,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_proposal(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text,text,jsonb,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_issue_grant(uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,text,text,text,text,boolean)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_access(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_grant_head()','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_estimate_journey_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_estimate_journey_v1_save_draft(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text,text,bigint,jsonb,text,text)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_estimate_journey_v1_proposal(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text,text,jsonb,text,text)','EXECUTE')
+       )) AS customer_financial_estimate_journey_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR (
@@ -7452,6 +7487,8 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.forecast_paid_journey_authority_private ||
       !runtimePrivileges.customer_financial_billing_identity_private ||
       !runtimePrivileges.customer_financial_editable_estimate_private ||
+      !runtimePrivileges.customer_financial_billable_review_private ||
+      !runtimePrivileges.customer_financial_estimate_journey_private ||
       !runtimePrivileges.price_event_snapshot_table_withheld ||
       !runtimePrivileges.price_event_snapshot_entries_allowed ||
       !runtimePrivileges.price_event_snapshot_helpers_withheld ||

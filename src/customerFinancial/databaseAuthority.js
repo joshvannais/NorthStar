@@ -13,6 +13,11 @@ const ENTRIES = new Set([
   'canonical_customer_financial_numbering_v1_read',
   'canonical_customer_financial_numbering_v1_review',
   'canonical_customer_financial_editable_basis_v1_read',
+  'canonical_customer_financial_billable_review_v1_read',
+  'canonical_customer_financial_billable_review_v1_accept',
+  'canonical_customer_financial_estimate_journey_v1_read',
+  'canonical_customer_financial_estimate_journey_v1_save_draft',
+  'canonical_customer_financial_estimate_journey_v1_proposal',
 ]);
 const TABLES = new Set([
   'canonical_customer_financial_billing_capability_grants_v1',
@@ -31,6 +36,16 @@ const TABLES = new Set([
   'canonical_customer_financial_numbering_events_v1',
   'canonical_customer_financial_estimate_capability_grants_v1',
   'canonical_customer_financial_estimate_capability_heads_v1',
+  'canonical_customer_financial_billable_review_grants_v1',
+  'canonical_customer_financial_billable_review_grant_heads_v1',
+  'canonical_customer_financial_billable_work_reviews_v1',
+  'canonical_customer_financial_billable_review_requests_v1',
+  'canonical_customer_financial_estimate_journey_grants_v1',
+  'canonical_customer_financial_estimate_journey_grant_heads_v1',
+  'canonical_customer_financial_estimate_journey_drafts_v1',
+  'canonical_customer_estimate_proposal_reviews_v1',
+  'canonical_customer_estimate_multi_option_proposals_v1',
+  'canonical_customer_financial_estimate_journey_requests_v1',
 ]);
 const quote = value => '"' + value.replace(/"/g, '""') + '"';
 
@@ -39,9 +54,7 @@ async function grantAndVerify(client, runtimeRole) {
   const tables = (await client.query(
     `SELECT oid,relname FROM pg_class
       WHERE relnamespace='public'::regnamespace AND relkind='r'
-        AND (relname LIKE 'canonical_customer_financial_billing_%'
-          OR relname LIKE 'canonical_customer_financial_numbering_%'
-          OR relname LIKE 'canonical_customer_financial_estimate_%')`
+        AND relname=ANY($1::text[])`, [Array.from(TABLES)]
   )).rows;
   for (const table of tables) {
     const identity = 'public.' + quote(table.relname);
@@ -58,7 +71,9 @@ async function grantAndVerify(client, runtimeRole) {
           OR proname LIKE 'canonical_customer_financial_billing_review_v1_%'
           OR proname LIKE 'canonical_customer_financial_billing_journey_v1_%'
           OR proname LIKE 'canonical_customer_financial_numbering_v1_%'
-          OR proname LIKE 'canonical_customer_financial_editable_basis_v1_%')`
+          OR proname LIKE 'canonical_customer_financial_editable_basis_v1_%'
+          OR proname LIKE 'canonical_customer_financial_billable_review_v1_%'
+          OR proname LIKE 'canonical_customer_financial_estimate_journey_v1_%')`
   )).rows;
   for (const entry of functions) {
     await client.query('REVOKE ALL ON FUNCTION ' + entry.identity + ' FROM PUBLIC, ' + role);

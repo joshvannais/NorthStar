@@ -33,7 +33,29 @@ describe('Mission 27 Part 3D immutable handoff and revision history', () => {
     expect(migration).toContain("'sourceOriginal'");
     expect(migration).toContain("'humanRevisions'");
     expect(migration).toContain("'historyDigest'");
-    expect(migration).toMatch(/generate_series\(1,current_revision\)/);
+    expect(migration).toContain('history_chain_digest CHAR(64)');
+    expect(migration).toContain("'revokedEvidence'");
+    expect(migration).toContain("'currentAtHistoryCapture'");
+    expect(migration).toContain("revision_class='human_revision'");
+    expect(migration).toContain('ALTER COLUMN history_chain_digest SET NOT NULL');
+  });
+
+  test('bounds every private history response with deterministic cursor pagination', () => {
+    const repository = read('src/customerFinancial/polarisQuoteJourneyRepository.js');
+    const route = read('src/routes/customerFinancialEditableEstimate.js');
+    expect(migration).toContain('limit_value NOT BETWEEN 1 AND 20');
+    expect(migration).toContain('revision<COALESCE(before_revision,current_revision+1)');
+    expect(migration).toMatch(/ORDER BY revision DESC\s+LIMIT limit_value/);
+    expect(migration).toContain("'order','revision_desc'");
+    expect(migration).toContain("'nextCursor',next_cursor");
+    expect(migration).toContain("'hasEarlier',next_cursor IS NOT NULL");
+    expect(migration).not.toContain("'snapshot',snapshot");
+    expect(migration).not.toContain('SELECT count(*)::int,min(revision),max(revision)');
+    expect(repository).toContain('function checkedHistoryPage(raw = {})');
+    expect(repository).toContain('Number.isSafeInteger(limit) || limit < 1 || limit > 20');
+    expect(repository).toContain('Number.isSafeInteger(beforeRevision) || beforeRevision < 1');
+    expect(route).toContain("!['historyLimit','historyBefore'].includes(key)");
+    expect(route).toContain("typeof req.query.historyLimit === 'object'");
   });
 
   test('keeps unavailable learning and calculator execution explicitly inert', () => {
@@ -55,7 +77,7 @@ describe('Mission 27 Part 3D immutable handoff and revision history', () => {
     expect(authority).toContain("'canonical_customer_financial_billable_handoff_receipts_v1'");
     expect(authority).toContain("'canonical_customer_financial_estimate_journey_revisions_v1'");
     expect(db).toContain('canonical_customer_financial_billable_review_v1_ensure_handoff_receipt(uuid,uuid,text)');
-    expect(db).toContain('canonical_customer_financial_estimate_journey_v1_history(uuid,uuid,jsonb,jsonb)');
+    expect(db).toContain('canonical_customer_financial_estimate_journey_v1_history(uuid,uuid,jsonb,jsonb,integer,bigint)');
     expect(db).toContain('canonical_customer_financial_estimate_journey_v1_append_revision()');
     const entries = authority.slice(authority.indexOf('const ENTRIES'), authority.indexOf('const TABLES'));
     expect(entries).not.toContain('ensure_handoff_receipt');
@@ -66,9 +88,25 @@ describe('Mission 27 Part 3D immutable handoff and revision history', () => {
   test('mounted editor renders bounded history without enabling receivers', () => {
     const browser = read('public/js/polaris-quote-journey.js');
     expect(browser).toContain('Revision history · source original + ');
+    expect(browser).toContain("history.humanRevisions.length>20");
+    expect(browser).toContain("'Show earlier revisions'");
+    expect(browser).toContain("'Show latest revisions'");
+    expect(browser).toContain('requestToken !== requestGeneration');
     expect(browser).toContain('Mission 25 learning remains unavailable');
     expect(browser).toContain('Calculator execution remains unavailable.');
     expect(browser).not.toContain('learningObservation.publish');
     expect(browser).not.toContain('/mission32');
+  });
+
+  test('governing records distinguish released Parts 3A-3C from the current candidate', () => {
+    const roadmap = read('docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md');
+    const ledger = read('docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md');
+    expect(roadmap).toContain('Parts 3A–3C were released through PRs #486–#488');
+    expect(ledger).toContain('PR #486');
+    expect(ledger).toContain('PR #487');
+    expect(ledger).toContain('PR #488');
+    expect(ledger).toContain('| 3D | [Immutable handoff and revision history]');
+    expect(ledger).toContain('Independent whole-head audit, PR, deployment and health remain pending.');
+    expect(ledger).not.toMatch(/\| 3D \|[^\n]+\| Released \|/);
   });
 });

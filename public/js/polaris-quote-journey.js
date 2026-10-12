@@ -94,6 +94,27 @@
         if (token !== generation || requestToken !== requestGeneration) return; rejected(error);
       });
     }
+    function loadHistoryPage(beforeRevision) {
+      var requestToken = ++requestGeneration;
+      var url = route + '?historyLimit=20' + (beforeRevision === null ? '' :
+        '&historyBefore=' + encodeURIComponent(String(beforeRevision)));
+      status('Loading a bounded revision-history page…');
+      return request(url, { cache: 'no-store' }).then(function (value) {
+        if (token !== generation || requestToken !== requestGeneration || !section.isConnected) return;
+        if (!value || value.state !== 'current' || !value.draft || !value.revisionHistory ||
+            value.draft.draftDigest !== draft.draftDigest || !value.sourceProposal ||
+            value.sourceProposal.sourceProposalDigest !== data.sourceProposal.sourceProposalDigest ||
+            value.sourceProposal.sourceProposalRevisionDigest !==
+              data.sourceProposal.sourceProposalRevisionDigest) {
+          return rejected({ status: 409 });
+        }
+        data.revisionHistory = value.revisionHistory; render();
+        var target = content.querySelector('.polaris-quote-history > summary');
+        if (target) target.focus();
+      }).catch(function (error) {
+        if (token !== generation || requestToken !== requestGeneration) return; rejected(error);
+      });
+    }
     function lineEditor(line, lines, index, parent) {
       var row = node('div', undefined, parent, 'polaris-quote-line');
       function field(label, value, type) { var wrap=node('label',undefined,row);node('span',label,wrap);var input=node('input',undefined,wrap);input.type=type||'text';input.value=value;input.setAttribute('aria-label',label);return input; }
@@ -124,9 +145,13 @@
     function revisionHistory(parent) {
       var history=data&&data.revisionHistory;
       if(!history||history.state!=='current'||!history.sourceOriginal||!Array.isArray(history.humanRevisions))return;
+      var pagination=history.pagination||{};var total=Number(pagination.total);
+      if(!Number.isSafeInteger(total)||total<0||history.humanRevisions.length>20){
+        setTimeout(function(){rejected({status:409});},0);return;
+      }
       var details=node('details',undefined,parent,'polaris-quote-history');
-      var label='Revision history · source original + '+history.humanRevisions.length+' human '+
-        (history.humanRevisions.length===1?'revision':'revisions');
+      var label='Revision history · source original + '+total+' human '+
+        (total===1?'revision':'revisions');
       node('summary',label,details);var list=node('ol',undefined,details);
       node('li','Source original · '+history.sourceOriginal.sourceProposalDigest.slice(0,12)+'… · '+
         history.sourceOriginal.recordedAt,list);
@@ -134,6 +159,17 @@
         node('li','Revision '+entry.revision+' · '+entry.reason+' · '+entry.recordedAt+
           ' · '+entry.snapshotDigest.slice(0,12)+'…',list);
       });
+      node('p','Showing '+history.humanRevisions.length+' of '+total+
+        ' human revisions in deterministic newest-first order.',details,'polaris-quote-intro');
+      var historyActions=node('div',undefined,details,'polaris-quote-actions');
+      if(pagination.hasEarlier===true&&Number.isSafeInteger(Number(pagination.nextCursor))){
+        var earlier=node('button','Show earlier revisions',historyActions,'btn btn-secondary');earlier.type='button';
+        earlier.onclick=function(){loadHistoryPage(Number(pagination.nextCursor));};
+      }
+      if(pagination.beforeRevision!==null&&pagination.beforeRevision!==undefined){
+        var latest=node('button','Show latest revisions',historyActions,'btn btn-secondary');latest.type='button';
+        latest.onclick=function(){loadHistoryPage(null);};
+      }
       node('p','Mission 25 learning remains unavailable until its current tenant-private adapter and purpose permission are proven. No edit is applied automatically.',details,'polaris-quote-boundary');
       node('p','Mission 32 adapter '+history.mission32Adapter.name+' version '+
         history.mission32Adapter.compatibleSchemaVersion+' is pinned to these same estimate, option and line identities. Calculator execution remains unavailable.',details,'polaris-quote-boundary');

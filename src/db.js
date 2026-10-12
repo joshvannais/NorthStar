@@ -6363,15 +6363,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_table_privilege($1,'public.canonical_customer_financial_estimate_journey_drafts_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_customer_financial_estimate_journey_requests_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
          AND NOT has_table_privilege($1,'public.canonical_customer_financial_estimate_journey_revisions_v1','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-         AND has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+          AND has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_read(uuid,uuid,text,uuid,uuid,integer,bigint)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_save_draft(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text,text,bigint,jsonb,text,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_issue_grant(uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,text,text,text,text,boolean)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_access(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_source_proposal(uuid,uuid,text,uuid,uuid)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_grant_head()','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_append_revision()','EXECUTE')
-         AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_history(uuid,uuid,jsonb,jsonb)','EXECUTE')
-         AND NOT has_function_privilege('public','public.canonical_customer_financial_estimate_journey_v1_read(uuid,uuid,text,uuid,uuid)','EXECUTE')
+          AND NOT has_function_privilege($1,'public.canonical_customer_financial_estimate_journey_v1_history(uuid,uuid,jsonb,jsonb,integer,bigint)','EXECUTE')
+          AND NOT has_function_privilege('public','public.canonical_customer_financial_estimate_journey_v1_read(uuid,uuid,text,uuid,uuid,integer,bigint)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_estimate_journey_v1_save_draft(uuid,uuid,text,uuid,text,uuid,uuid,bigint,text,text,text,text,bigint,jsonb,text,text)','EXECUTE')
        )) AS customer_financial_estimate_journey_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
@@ -7850,7 +7850,7 @@ async function runMigrations(options = {}) {
   return true;
 }
 
-async function initDatabase() {
+async function initDatabase(options = {}) {
   dbAvailable = false;
   readinessFailure = null;
   const targetPool = getPool();
@@ -7878,9 +7878,10 @@ async function initDatabase() {
   try {
     await targetPool.query('SELECT 1');
     if (migrationPool) {
-      await runMigrations({ pool: migrationPool, runtimePool: targetPool });
+      await runMigrations({ pool: migrationPool, runtimePool: targetPool,
+        migrationsDirectory: options.migrationsDirectory });
     } else {
-      await runMigrations({ pool: targetPool });
+      await runMigrations({ pool: targetPool, migrationsDirectory: options.migrationsDirectory });
     }
     dbAvailable = true;
     return true;

@@ -97,11 +97,17 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     } catch (error) { return failure(res,error); }
   });
   router.get('/:estimateId/quote-journey', auth, quoteRole, throttle, async (req,res) => {
-    if (Object.keys(req.query).length) return failure(res, { status: 400,
-      code: 'CUSTOMER_FINANCIAL_QUOTE_JOURNEY_INVALID',
-      message: 'Select one exact current quote.' });
+    const keys = Object.keys(req.query);
+    if (keys.some(key => !['historyLimit','historyBefore'].includes(key)) ||
+        typeof req.query.historyLimit === 'object' || typeof req.query.historyBefore === 'object') {
+      return failure(res, { status: 400, code: 'CUSTOMER_FINANCIAL_QUOTE_JOURNEY_INVALID',
+        message: 'Choose one bounded revision-history page.' });
+    }
     try { return res.json({ success: true,
-      data: await quoteRead(poolProvider(), source(req), req.params.estimateId) });
+      data: await quoteRead(poolProvider(), source(req), req.params.estimateId, {
+        limit: req.query.historyLimit === undefined ? 20 : req.query.historyLimit,
+        beforeRevision: req.query.historyBefore === undefined ? null : req.query.historyBefore,
+      }) });
     } catch (error) { return failure(res,error); }
   });
   function mutationSource(req) {

@@ -25,6 +25,7 @@ CREATE TABLE public.canonical_customer_financial_estimate_journey_revisions_v1 (
  estimate_id UUID NOT NULL, revision BIGINT NOT NULL CHECK(revision BETWEEN 0 AND 9007199254740991),
  revision_class TEXT NOT NULL CHECK(revision_class IN('source_original','human_revision')),
  snapshot JSONB NOT NULL, snapshot_digest CHAR(64) NOT NULL CHECK(snapshot_digest~'^[0-9a-f]{64}$'),
+ history_chain_digest CHAR(64) CHECK(history_chain_digest IS NULL OR history_chain_digest~'^[0-9a-f]{64}$'),
  source_proposal_digest CHAR(64) NOT NULL CHECK(source_proposal_digest~'^[0-9a-f]{64}$'),
  source_proposal_revision_digest CHAR(64) NOT NULL CHECK(source_proposal_revision_digest~'^[0-9a-f]{64}$'),
  option_lineage_digest CHAR(64) NOT NULL CHECK(option_lineage_digest~'^[0-9a-f]{64}$'),
@@ -53,10 +54,6 @@ END $policy$;
 CREATE TRIGGER canonical_customer_financial_billable_handoff_receipts_v1_immutable
  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_customer_financial_billable_handoff_receipts_v1
  FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_customer_financial_billable_review_v1_immutable();
-CREATE TRIGGER canonical_customer_financial_estimate_journey_revisions_v1_immutable
- BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_customer_financial_estimate_journey_revisions_v1
- FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_customer_financial_billable_review_v1_immutable();
-
 CREATE FUNCTION public.canonical_customer_financial_billable_review_v1_ensure_handoff_receipt(
  org UUID,estimate_value UUID,decision_value TEXT)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
@@ -258,6 +255,8 @@ END $$;
 CREATE FUNCTION public.canonical_customer_financial_estimate_journey_v1_append_revision()
 RETURNS TRIGGER LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE source_snapshot JSONB; human_snapshot JSONB; source_row RECORD; existing_digest TEXT; existing_row RECORD;
+ source_snapshot_digest TEXT; previous_chain_digest TEXT; human_snapshot_digest TEXT; human_chain_digest TEXT;
+ chain_row RECORD; chain_value TEXT;
 BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(NEW.organization_id::text||':estimate-journey-history:'||NEW.estimate_id::text,0));
  IF NEW.revision>1 AND NOT EXISTS(SELECT 1 FROM public.canonical_customer_financial_estimate_journey_revisions_v1
@@ -265,34 +264,45 @@ BEGIN
    AND revision_class='human_revision') THEN
   RAISE EXCEPTION 'Estimate journey history is incomplete' USING ERRCODE='40001'; END IF;
  SELECT version.id,version.revision,rtrim(version.digest) digest,rtrim(version.document_digest) document_digest,
-  version.document,version.created_at,event.id acceptance_id,rtrim(event.digest) acceptance_digest,event.created_at accepted_at
+  version.document,version.created_at,event.id acceptance_id,rtrim(event.digest) acceptance_digest,event.created_at accepted_at,
+  revoked.id revoked_id,rtrim(revoked.digest) revoked_digest,revoked.created_at revoked_at
  INTO source_row FROM public.canonical_customer_estimate_versions version
  JOIN public.canonical_customer_estimate_delivery_events event ON event.organization_id=version.organization_id
   AND event.estimate_id=version.estimate_id AND event.version_id=version.id AND event.kind='accepted'
+ LEFT JOIN LATERAL (SELECT revoked_event.id,revoked_event.digest,revoked_event.created_at
+  FROM public.canonical_customer_estimate_delivery_events revoked_event
+  WHERE revoked_event.organization_id=event.organization_id AND revoked_event.link_id=event.link_id
+   AND revoked_event.kind='revoked' ORDER BY revoked_event.created_at DESC,revoked_event.id DESC LIMIT 1) revoked ON TRUE
  WHERE version.organization_id=NEW.organization_id AND version.estimate_id=NEW.estimate_id
   AND rtrim(version.document_digest)=rtrim(NEW.source_proposal_digest)
   AND rtrim(version.digest)=rtrim(NEW.source_proposal_revision_digest)
-  AND NOT EXISTS(SELECT 1 FROM public.canonical_customer_estimate_delivery_events revoked
-   WHERE revoked.organization_id=event.organization_id AND revoked.link_id=event.link_id AND revoked.kind='revoked')
  ORDER BY event.created_at DESC,event.id DESC LIMIT 1 FOR SHARE OF version,event;
  IF source_row.id IS NULL THEN RAISE EXCEPTION 'Mission 24 source original unavailable' USING ERRCODE='40001'; END IF;
  source_snapshot:=jsonb_build_object('contractVersion','m24-source-original-history-v1',
   'estimateId',NEW.estimate_id,'sourceVersionId',source_row.id,'sourceRevision',source_row.revision,
   'sourceProposalDigest',source_row.document_digest,'sourceProposalRevisionDigest',source_row.digest,
   'document',source_row.document,'issuedAt',source_row.created_at,
-  'acceptedEvidence',jsonb_build_object('id',source_row.acceptance_id,'digest',source_row.acceptance_digest,
-   'acceptedAt',source_row.accepted_at),'machineSource',TRUE,'humanRevision',FALSE);
+   'acceptedEvidence',jsonb_build_object('id',source_row.acceptance_id,'digest',source_row.acceptance_digest,
+    'acceptedAt',source_row.accepted_at),'revokedEvidence',CASE WHEN source_row.revoked_id IS NULL THEN NULL
+     ELSE jsonb_build_object('id',source_row.revoked_id,'digest',source_row.revoked_digest,
+      'revokedAt',source_row.revoked_at) END,
+   'currentAtHistoryCapture',source_row.revoked_id IS NULL,'machineSource',TRUE,'humanRevision',FALSE);
+ source_snapshot_digest:=public.canonical_completion_digest(source_snapshot);
  INSERT INTO public.canonical_customer_financial_estimate_journey_revisions_v1(
-  organization_id,estimate_id,revision,revision_class,snapshot,snapshot_digest,source_proposal_digest,
+  organization_id,estimate_id,revision,revision_class,snapshot,snapshot_digest,history_chain_digest,source_proposal_digest,
   source_proposal_revision_digest,option_lineage_digest,actor_user_id,actor_access_role,reason,request_key_digest,recorded_at)
- VALUES(NEW.organization_id,NEW.estimate_id,0,'source_original',source_snapshot,
-  public.canonical_completion_digest(source_snapshot),NEW.source_proposal_digest,NEW.source_proposal_revision_digest,
+  VALUES(NEW.organization_id,NEW.estimate_id,0,'source_original',source_snapshot,source_snapshot_digest,
+   public.canonical_completion_digest(jsonb_build_object('previousHistoryDigest',NULL,'revision',0,
+    'revisionClass','source_original','snapshotDigest',source_snapshot_digest,
+    'sourceProposalDigest',rtrim(NEW.source_proposal_digest),
+    'sourceProposalRevisionDigest',rtrim(NEW.source_proposal_revision_digest))),
+   NEW.source_proposal_digest,NEW.source_proposal_revision_digest,
   public.canonical_completion_digest(COALESCE(source_row.document->'options','[]'::jsonb)),NULL,NULL,
   'Mission 24 source-owned original',NULL,source_row.created_at)
  ON CONFLICT(organization_id,estimate_id,revision) DO NOTHING;
  SELECT rtrim(snapshot_digest) INTO existing_digest FROM public.canonical_customer_financial_estimate_journey_revisions_v1
   WHERE organization_id=NEW.organization_id AND estimate_id=NEW.estimate_id AND revision=0 FOR SHARE;
- IF existing_digest<>public.canonical_completion_digest(source_snapshot) THEN
+  IF existing_digest<>source_snapshot_digest THEN
   RAISE EXCEPTION 'Source original history conflict' USING ERRCODE='40001'; END IF;
  human_snapshot:=jsonb_build_object('contractVersion','m27-polaris-human-revision-v1',
   'estimateId',NEW.estimate_id,'revision',NEW.revision,'draft',NEW.draft,
@@ -307,11 +317,47 @@ BEGIN
   'acceptanceEvidence',source_snapshot->'acceptedEvidence',
   'mission32Adapter',jsonb_build_object('name','polaris.estimate_studio.adapter.v1','compatibleSchemaVersion',1,
    'mayCreateParallelEstimate',FALSE,'mayDuplicateAcceptedMath',FALSE));
- INSERT INTO public.canonical_customer_financial_estimate_journey_revisions_v1(
-  organization_id,estimate_id,revision,revision_class,snapshot,snapshot_digest,source_proposal_digest,
+  human_snapshot_digest:=public.canonical_completion_digest(human_snapshot);
+  SELECT rtrim(history_chain_digest) INTO previous_chain_digest
+   FROM public.canonical_customer_financial_estimate_journey_revisions_v1
+   WHERE organization_id=NEW.organization_id AND estimate_id=NEW.estimate_id AND revision=NEW.revision-1 FOR SHARE;
+  -- During the 267 upgrade only, retained pre-267 human rows have immutable
+  -- snapshots but no chain yet. Build their prefix after the exact historical
+  -- source original has been captured. Once the immutable trigger below is
+  -- installed, any attempted runtime repair is denied rather than fabricated.
+  IF previous_chain_digest IS NULL AND NEW.revision>1 THEN
+   previous_chain_digest:=NULL;
+   FOR chain_row IN SELECT revision,revision_class,rtrim(snapshot_digest) snapshot_digest,
+      rtrim(history_chain_digest) history_chain_digest,rtrim(source_proposal_digest) source_proposal_digest,
+      rtrim(source_proposal_revision_digest) source_proposal_revision_digest
+     FROM public.canonical_customer_financial_estimate_journey_revisions_v1
+     WHERE organization_id=NEW.organization_id AND estimate_id=NEW.estimate_id AND revision<NEW.revision
+     ORDER BY revision
+   LOOP
+    chain_value:=public.canonical_completion_digest(jsonb_build_object(
+     'previousHistoryDigest',previous_chain_digest,'revision',chain_row.revision,
+     'revisionClass',chain_row.revision_class,'snapshotDigest',chain_row.snapshot_digest,
+     'sourceProposalDigest',chain_row.source_proposal_digest,
+     'sourceProposalRevisionDigest',chain_row.source_proposal_revision_digest));
+    IF chain_row.history_chain_digest IS NOT NULL AND chain_row.history_chain_digest<>chain_value THEN
+     RAISE EXCEPTION 'Estimate journey history chain conflicts' USING ERRCODE='40001'; END IF;
+    UPDATE public.canonical_customer_financial_estimate_journey_revisions_v1 SET history_chain_digest=chain_value
+     WHERE organization_id=NEW.organization_id AND estimate_id=NEW.estimate_id
+      AND revision=chain_row.revision AND history_chain_digest IS NULL;
+    previous_chain_digest:=chain_value;
+   END LOOP;
+  END IF;
+  IF previous_chain_digest IS NULL AND NEW.revision>1 THEN
+   RAISE EXCEPTION 'Estimate journey history chain is incomplete' USING ERRCODE='40001'; END IF;
+  human_chain_digest:=public.canonical_completion_digest(jsonb_build_object(
+   'previousHistoryDigest',previous_chain_digest,'revision',NEW.revision,'revisionClass','human_revision',
+   'snapshotDigest',human_snapshot_digest,'sourceProposalDigest',rtrim(NEW.source_proposal_digest),
+   'sourceProposalRevisionDigest',rtrim(NEW.source_proposal_revision_digest)));
+  INSERT INTO public.canonical_customer_financial_estimate_journey_revisions_v1(
+   organization_id,estimate_id,revision,revision_class,snapshot,snapshot_digest,history_chain_digest,source_proposal_digest,
   source_proposal_revision_digest,option_lineage_digest,actor_user_id,actor_access_role,reason,request_key_digest,recorded_at)
- VALUES(NEW.organization_id,NEW.estimate_id,NEW.revision,'human_revision',human_snapshot,
-  public.canonical_completion_digest(human_snapshot),NEW.source_proposal_digest,NEW.source_proposal_revision_digest,
+  VALUES(NEW.organization_id,NEW.estimate_id,NEW.revision,'human_revision',human_snapshot,
+   human_snapshot_digest,human_chain_digest,NEW.source_proposal_digest,NEW.source_proposal_revision_digest,
   public.canonical_completion_digest(NEW.draft->'options'),NEW.actor_user_id,NEW.actor_access_role,NEW.reason,NULL,NEW.updated_at)
  ON CONFLICT(organization_id,estimate_id,revision) DO NOTHING;
  SELECT * INTO existing_row FROM public.canonical_customer_financial_estimate_journey_revisions_v1
@@ -320,7 +366,8 @@ BEGIN
   existing_row.actor_user_id<>NEW.actor_user_id OR existing_row.reason<>NEW.reason OR
   existing_row.snapshot->>'draftDigest'<>rtrim(NEW.draft_digest) OR
   rtrim(existing_row.source_proposal_digest)<>rtrim(NEW.source_proposal_digest) OR
-  rtrim(existing_row.source_proposal_revision_digest)<>rtrim(NEW.source_proposal_revision_digest) THEN
+   rtrim(existing_row.source_proposal_revision_digest)<>rtrim(NEW.source_proposal_revision_digest) OR
+   (existing_row.history_chain_digest IS NOT NULL AND rtrim(existing_row.history_chain_digest)<>human_chain_digest) THEN
   RAISE EXCEPTION 'Human revision history conflict' USING ERRCODE='40001'; END IF;
  RETURN NEW;
 END $$;
@@ -365,31 +412,67 @@ CREATE TRIGGER canonical_customer_financial_estimate_journey_drafts_v1_append_re
 -- immutable source originals/current human revisions and validates conflicts.
 UPDATE public.canonical_customer_financial_estimate_journey_drafts_v1 SET updated_at=updated_at;
 
+-- Complete a deterministic digest chain after every retained pre-267 row has
+-- received its historical source original. This backfill never changes a
+-- snapshot and does not interpret a revoked source as current authority.
+DO $history_chain$ DECLARE item RECORD; previous_digest TEXT; chain_value TEXT;
+ current_org UUID; current_estimate UUID; BEGIN
+ FOR item IN SELECT organization_id,estimate_id,revision,revision_class,rtrim(snapshot_digest) snapshot_digest,
+   rtrim(source_proposal_digest) source_proposal_digest,
+   rtrim(source_proposal_revision_digest) source_proposal_revision_digest
+  FROM public.canonical_customer_financial_estimate_journey_revisions_v1
+  ORDER BY organization_id,estimate_id,revision
+ LOOP
+  IF current_org IS DISTINCT FROM item.organization_id OR current_estimate IS DISTINCT FROM item.estimate_id THEN
+   previous_digest:=NULL; current_org:=item.organization_id; current_estimate:=item.estimate_id;
+  END IF;
+  chain_value:=public.canonical_completion_digest(jsonb_build_object(
+   'previousHistoryDigest',previous_digest,'revision',item.revision,'revisionClass',item.revision_class,
+   'snapshotDigest',item.snapshot_digest,'sourceProposalDigest',item.source_proposal_digest,
+   'sourceProposalRevisionDigest',item.source_proposal_revision_digest));
+  UPDATE public.canonical_customer_financial_estimate_journey_revisions_v1
+   SET history_chain_digest=chain_value WHERE organization_id=item.organization_id
+    AND estimate_id=item.estimate_id AND revision=item.revision;
+  previous_digest:=chain_value;
+ END LOOP;
+END $history_chain$;
+ALTER TABLE public.canonical_customer_financial_estimate_journey_revisions_v1
+ ALTER COLUMN history_chain_digest SET NOT NULL;
+CREATE TRIGGER canonical_customer_financial_estimate_journey_revisions_v1_immutable
+ BEFORE UPDATE OR DELETE OR TRUNCATE ON public.canonical_customer_financial_estimate_journey_revisions_v1
+ FOR EACH STATEMENT EXECUTE FUNCTION public.canonical_customer_financial_billable_review_v1_immutable();
+
 CREATE FUNCTION public.canonical_customer_financial_estimate_journey_v1_history(
- org UUID,estimate_value UUID,current_draft JSONB,current_source JSONB)
+ org UUID,estimate_value UUID,current_draft JSONB,current_source JSONB,limit_value INTEGER,before_revision BIGINT)
 RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE source_row RECORD; entries JSONB; human_count INTEGER; current_revision BIGINT; history_digest TEXT;
+DECLARE source_row RECORD; latest_row RECORD; entries JSONB; current_revision BIGINT;
+ history_digest TEXT; next_cursor BIGINT; returned_count INTEGER;
  option_ids JSONB; line_ids JSONB; assumption_ids JSONB;
 BEGIN
- IF current_draft IS NULL OR current_source IS NULL THEN RETURN NULL; END IF;
+ IF current_draft IS NULL OR current_source IS NULL OR limit_value NOT BETWEEN 1 AND 20 OR
+  (before_revision IS NOT NULL AND before_revision NOT BETWEEN 1 AND 9007199254740991) THEN
+  RAISE EXCEPTION 'Estimate journey history page invalid' USING ERRCODE='22023'; END IF;
  current_revision:=(current_draft->>'revision')::bigint;
  SELECT * INTO source_row FROM public.canonical_customer_financial_estimate_journey_revisions_v1
   WHERE organization_id=org AND estimate_id=estimate_value AND revision=0 AND revision_class='source_original';
- SELECT count(*)::int,jsonb_agg(jsonb_build_object('revision',revision,'revisionClass',revision_class,
-  'snapshotDigest',rtrim(snapshot_digest),'actorUserId',actor_user_id,'actorAccessRole',actor_access_role,
-  'reason',reason,'recordedAt',public.canonical_customer_financial_billing_identity_v1_utc(recorded_at),
-  'optionLineageDigest',rtrim(option_lineage_digest),'snapshot',snapshot) ORDER BY revision)
- INTO human_count,entries FROM public.canonical_customer_financial_estimate_journey_revisions_v1
- WHERE organization_id=org AND estimate_id=estimate_value AND revision_class='human_revision';
+ SELECT * INTO latest_row FROM public.canonical_customer_financial_estimate_journey_revisions_v1
+  WHERE organization_id=org AND estimate_id=estimate_value AND revision=current_revision
+   AND revision_class='human_revision';
+ SELECT COALESCE(jsonb_agg(jsonb_build_object('revision',revision,'revisionClass',revision_class,
+   'snapshotDigest',rtrim(snapshot_digest),'actorUserId',actor_user_id,'actorAccessRole',actor_access_role,
+   'reason',reason,'recordedAt',public.canonical_customer_financial_billing_identity_v1_utc(recorded_at),
+   'optionLineageDigest',rtrim(option_lineage_digest)) ORDER BY revision DESC),'[]'::jsonb)
+  INTO entries FROM (SELECT * FROM public.canonical_customer_financial_estimate_journey_revisions_v1
+   WHERE organization_id=org AND estimate_id=estimate_value AND revision_class='human_revision'
+    AND revision<COALESCE(before_revision,current_revision+1)
+   ORDER BY revision DESC LIMIT limit_value) page;
  IF source_row.estimate_id IS NULL OR rtrim(source_row.source_proposal_digest)<>current_source->>'sourceProposalDigest' OR
   rtrim(source_row.source_proposal_revision_digest)<>current_source->>'sourceProposalRevisionDigest' OR
-  human_count<>current_revision OR EXISTS(SELECT 1 FROM generate_series(1,current_revision) expected
-   WHERE NOT EXISTS(SELECT 1 FROM public.canonical_customer_financial_estimate_journey_revisions_v1 actual
-    WHERE actual.organization_id=org AND actual.estimate_id=estimate_value AND actual.revision=expected
-     AND actual.revision_class='human_revision')) OR
-  (entries->-1->'snapshot'->>'draftDigest') IS DISTINCT FROM current_draft->>'draftDigest' THEN RETURN NULL; END IF;
- history_digest:=public.canonical_completion_digest(jsonb_build_object(
-  'sourceOriginalDigest',rtrim(source_row.snapshot_digest),'humanRevisions',entries));
+  latest_row.snapshot->>'draftDigest' IS DISTINCT FROM current_draft->>'draftDigest' THEN RETURN NULL; END IF;
+ history_digest:=rtrim(latest_row.history_chain_digest);
+ returned_count:=jsonb_array_length(entries);
+ SELECT min((item->>'revision')::bigint) INTO next_cursor FROM jsonb_array_elements(entries) item;
+ IF next_cursor IS NULL OR next_cursor<=1 THEN next_cursor:=NULL; END IF;
  SELECT COALESCE(jsonb_agg(jsonb_build_object('id',option->>'id','digest',option->>'optionDigest') ORDER BY option->>'id'),'[]'::jsonb)
  INTO option_ids FROM jsonb_array_elements(current_draft->'options') option;
  SELECT COALESCE(jsonb_agg(jsonb_build_object('optionId',option->>'id','lineId',line->>'id') ORDER BY option->>'id',line->>'id'),'[]'::jsonb)
@@ -403,8 +486,11 @@ BEGIN
   'sourceOriginal',jsonb_build_object('revision',0,'snapshotDigest',rtrim(source_row.snapshot_digest),
    'recordedAt',public.canonical_customer_financial_billing_identity_v1_utc(source_row.recorded_at),
    'sourceProposalDigest',rtrim(source_row.source_proposal_digest),
-   'sourceProposalRevisionDigest',rtrim(source_row.source_proposal_revision_digest),'snapshot',source_row.snapshot),
-  'humanRevisions',entries,'currentRevision',current_revision,'historyDigest',history_digest,
+    'sourceProposalRevisionDigest',rtrim(source_row.source_proposal_revision_digest)),
+   'humanRevisions',entries,'currentRevision',current_revision,'historyDigest',history_digest,
+   'pagination',jsonb_build_object('limit',limit_value,'beforeRevision',before_revision,
+    'returned',returned_count,'total',current_revision,'order','revision_desc',
+     'nextCursor',next_cursor,'hasEarlier',next_cursor IS NOT NULL,'truncated',returned_count<current_revision),
   'signatureEvidence',jsonb_build_object('state','unavailable','reason','legal_review_unavailable','value',NULL),
   'mission25Observation',jsonb_build_object('adapter','mission25.tenant_edit_observation.v1',
    'state','unavailable','reason','learning_permission_unavailable','value',NULL,
@@ -419,8 +505,10 @@ BEGIN
   'providerCallCount',0,'receiverMutationCount',0,'learningWriteCount',0);
 END $$;
 
-CREATE OR REPLACE FUNCTION public.canonical_customer_financial_estimate_journey_v1_read(
- org UUID,actor UUID,role_value TEXT,session_value UUID,estimate_value UUID)
+DROP FUNCTION public.canonical_customer_financial_estimate_journey_v1_read(UUID,UUID,TEXT,UUID,UUID);
+CREATE FUNCTION public.canonical_customer_financial_estimate_journey_v1_read(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,estimate_value UUID,
+ history_limit INTEGER,history_before BIGINT)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE draft_row RECORD; capability_rows JSONB; actor_authority JSONB; source_proposal JSONB;
  draft_value JSONB; history_value JSONB;
@@ -482,7 +570,7 @@ BEGIN
  draft_value:=draft_row.draft||jsonb_build_object(
   'revision',draft_row.revision,'updatedAt',draft_row.updated_at,'reason',draft_row.reason);
  history_value:=public.canonical_customer_financial_estimate_journey_v1_history(
-  org,estimate_value,draft_value,source_proposal);
+   org,estimate_value,draft_value,source_proposal,history_limit,history_before);
  IF history_value IS NULL THEN RETURN jsonb_build_object('state','revision_history_unavailable','draft',NULL,
   'sourceProposal',NULL,'capabilities','{}'::jsonb,'revisionHistory',NULL,'value',NULL,
   'providerCallCount',0,'receiverMutationCount',0); END IF;
@@ -500,4 +588,5 @@ REVOKE ALL ON TABLE public.canonical_customer_financial_billable_handoff_receipt
  public.canonical_customer_financial_estimate_journey_revisions_v1 FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.canonical_customer_financial_billable_review_v1_ensure_handoff_receipt(UUID,UUID,TEXT),
  public.canonical_customer_financial_estimate_journey_v1_append_revision(),
- public.canonical_customer_financial_estimate_journey_v1_history(UUID,UUID,JSONB,JSONB) FROM PUBLIC;
+ public.canonical_customer_financial_estimate_journey_v1_history(UUID,UUID,JSONB,JSONB,INTEGER,BIGINT),
+ public.canonical_customer_financial_estimate_journey_v1_read(UUID,UUID,TEXT,UUID,UUID,INTEGER,BIGINT) FROM PUBLIC;

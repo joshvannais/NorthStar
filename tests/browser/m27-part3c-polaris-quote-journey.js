@@ -41,16 +41,16 @@ const runtimeScript = `(function(){
  window.m27Part3cFailNextGet=false;window.m27Part3cFailNextPost=false;window.m27Part3cDelayNextGet=false;window.m27Part3cHasDelayed=false;
  function response(status,data){return Promise.resolve({ok:status>=200&&status<300,status:status,json:function(){return Promise.resolve({success:true,data:data});}});}
  function failure(status,message){return Promise.resolve({ok:false,status:status,json:function(){return Promise.resolve({success:false,error:{category:'TEST_UNAVAILABLE',message:message}});}});}
- function history(){return {contractVersion:'m27-polaris-revision-history-v1',state:'current',currentRevision:saved.revision,historyDigest:'9'.repeat(64),sourceOriginal:{revision:0,sourceProposalDigest:'d'.repeat(64),sourceProposalRevisionDigest:'e'.repeat(64),snapshotDigest:'8'.repeat(64),recordedAt:'2026-10-11T10:00:00.000Z'},humanRevisions:[{revision:saved.revision,actorUserId:'77777777-7777-4777-8777-777777777777',actorAccessRole:'owner',reason:'Owner reviewed every option and exact price.',recordedAt:'2026-10-11T12:00:00.000Z',snapshotDigest:'c'.repeat(64)}],mission25Observation:{adapter:'mission25.tenant_edit_observation.v1',state:'unavailable',reason:'learning_permission_unavailable',value:null,published:false,automaticApplication:false},mission32Adapter:{name:'polaris.estimate_studio.adapter.v1',compatibleSchemaVersion:1,state:'compatible_contract',receiverExecutionAvailable:false,receiverMutationCount:0}};}
- function current(){if(!saved)return Object.assign({},${JSON.stringify(baseDraft)},{sourceProposal:${JSON.stringify(sourceProposal)}});return {state:'current',draft:saved,sourceProposal:${JSON.stringify(sourceProposal)},capabilities:${JSON.stringify(grants)},revisionHistory:history(),mission25Observation:history().mission25Observation,mission32Adapter:history().mission32Adapter,signature:{state:'unavailable',reason:'legal_review_unavailable'},workHandoff:{state:'unavailable',reason:'work_handoff_receiver_unavailable'}};}
+  function history(before){var total=45,upper=before===null?total+1:before,entries=[];for(var revision=Math.min(total,upper-1);revision>=1&&entries.length<20;revision--){entries.push({revision:revision,actorUserId:'77777777-7777-4777-8777-777777777777',actorAccessRole:'owner',reason:revision===total?'Owner reviewed every option and exact price.':'Earlier authorized revision '+revision+'.',recordedAt:'2026-10-11T12:00:00.000Z',snapshotDigest:revision.toString(16).padStart(64,'0')});}var next=entries.length&&entries[entries.length-1].revision>1?entries[entries.length-1].revision:null;return {contractVersion:'m27-polaris-revision-history-v1',state:'current',currentRevision:total,historyDigest:'9'.repeat(64),sourceOriginal:{revision:0,sourceProposalDigest:'d'.repeat(64),sourceProposalRevisionDigest:'e'.repeat(64),snapshotDigest:'8'.repeat(64),recordedAt:'2026-10-11T10:00:00.000Z'},humanRevisions:entries,pagination:{limit:20,beforeRevision:before,returned:entries.length,total:total,order:'revision_desc',nextCursor:next,hasEarlier:next!==null,truncated:true},mission25Observation:{adapter:'mission25.tenant_edit_observation.v1',state:'unavailable',reason:'learning_permission_unavailable',value:null,published:false,automaticApplication:false},mission32Adapter:{name:'polaris.estimate_studio.adapter.v1',compatibleSchemaVersion:1,state:'compatible_contract',receiverExecutionAvailable:false,receiverMutationCount:0}};}
+  function current(before){if(!saved)return Object.assign({},${JSON.stringify(baseDraft)},{sourceProposal:${JSON.stringify(sourceProposal)}});var page=history(before);return {state:'current',draft:saved,sourceProposal:${JSON.stringify(sourceProposal)},capabilities:${JSON.stringify(grants)},revisionHistory:page,mission25Observation:page.mission25Observation,mission32Adapter:page.mission32Adapter,signature:{state:'unavailable',reason:'legal_review_unavailable'},workHandoff:{state:'unavailable',reason:'work_handoff_receiver_unavailable'}};}
  window.m27Part3cSetServerOption=function(name,minor){if(!saved){saved=JSON.parse(JSON.stringify(${JSON.stringify(baseDraft)}));saved.revision=1;saved.draftDigest='c'.repeat(64);}saved.nameMarker=name;saved.options[0].name=name;saved.options[0].lines[0].price.minorUnits=minor;saved.options[0].lines[0].price.decimal=(BigInt(minor)/100n).toString()+'.'+(BigInt(minor)%100n).toString().padStart(2,'0');};
- window.m27Part3cResolveDelayed=function(){if(delayed){var pending=delayed;delayed=null;window.m27Part3cHasDelayed=false;pending.resolve(response(200,pending.snapshot));}};
+  window.m27Part3cResolveDelayed=function(){if(delayed){var pending=delayed;delayed=null;window.m27Part3cHasDelayed=false;pending.resolve(response(200,pending.snapshot));}};
  window.NorthStarAccountSession={fetch:function(url,options){options=options||{};var method=options.method||'GET',body=options.body?JSON.parse(options.body):null;calls.push({url:url,method:method,body:body});
   if(method==='GET'&&window.m27Part3cFailNextGet){window.m27Part3cFailNextGet=false;return failure(503,'Synthetic unavailable');}
-  if(method==='GET'&&window.m27Part3cDelayNextGet){window.m27Part3cDelayNextGet=false;window.m27Part3cHasDelayed=true;var snapshot=JSON.parse(JSON.stringify(current()));return new Promise(function(resolve){delayed={resolve:resolve,snapshot:snapshot};});}
-  if(method==='GET')return response(200,current());
+   if(method==='GET'&&window.m27Part3cDelayNextGet){window.m27Part3cDelayNextGet=false;window.m27Part3cHasDelayed=true;var snapshot=JSON.parse(JSON.stringify(current(null)));return new Promise(function(resolve){delayed={resolve:resolve,snapshot:snapshot};});}
+   if(method==='GET'){var parsed=new URL(url,'http://northstar.test');var before=parsed.searchParams.has('historyBefore')?Number(parsed.searchParams.get('historyBefore')):null;return response(200,current(before));}
   if(method==='POST'&&window.m27Part3cFailNextPost){window.m27Part3cFailNextPost=false;return failure(409,'Synthetic changed');}
-  if(url.endsWith('/draft')){saved=body.draft;saved.revision=1;saved.draftDigest='c'.repeat(64);saved.updatedAt='2026-10-11T12:00:00.000Z';return response(201,{draft:saved});}
+   if(url.endsWith('/draft')){saved=body.draft;saved.revision=45;saved.draftDigest='c'.repeat(64);saved.updatedAt='2026-10-11T12:00:00.000Z';return response(201,{draft:saved});}
   return response(503,null);
  }};
 })();`;
@@ -95,11 +95,19 @@ async function main() {
       assert.equal(await page.getByText(/Current Mission 24 issued proposal EST-0003/).count(),1);
       assert.equal(await page.getByText(/reviewed recipient and legal approval/).count(),1);
       assert.equal(await page.getByText(/reviewed Mission 23 receiver exists/).count(),1);
-      const historySummary=page.getByText(/Revision history · source original \+ 1 human revision/);
+      const historySummary=page.getByText(/Revision history · source original \+ 45 human revisions/);
       assert.equal(await historySummary.count(),1);await historySummary.focus();await page.keyboard.press('Enter');
       assert.equal(await page.getByText(/Mission 25 learning remains unavailable/).count(),1);
       assert.equal(await page.getByText(/Mission 32 adapter polaris\.estimate_studio\.adapter\.v1 version 1/).count(),1);
-      assert.equal(await page.getByText(/Revision 1 · Owner reviewed every option and exact price/).count(),1);
+      assert.equal(await page.getByText(/Revision 45 · Owner reviewed every option and exact price/).count(),1);
+      assert.ok(await page.locator('.polaris-quote-history li').count()<=21);
+      await page.getByRole('button',{name:'Show earlier revisions'}).focus();await page.keyboard.press('Enter');
+      await page.getByText(/Revision history · source original \+ 45 human revisions/).waitFor();
+      await page.getByText(/Revision history · source original \+ 45 human revisions/).focus();await page.keyboard.press('Enter');
+      assert.equal(await page.getByText(/Revision 25 · Earlier authorized revision 25/).count(),1);
+      assert.ok(await page.locator('.polaris-quote-history li').count()<=21);
+      await page.getByRole('button',{name:'Show latest revisions'}).focus();await page.keyboard.press('Enter');
+      await page.getByText(/Revision history · source original \+ 45 human revisions/).waitFor();
       const calls=await page.evaluate(()=>window.m27Part3cCalls);
       const save=calls.find(call=>call.url.endsWith('/draft'));
       assert.equal(save.body.draft.options[0].name,'Reviewed repair');

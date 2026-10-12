@@ -666,9 +666,9 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
       sourceProposal: { sourceProposalDigest: initial.body.data.sourceProposal.sourceProposalDigest },
       signature: { state: 'unavailable', reason: 'legal_review_unavailable' },
       revisionHistory: { state: 'current', currentRevision: 2,
-        humanRevisions: [{ revision: 1 }, { revision: 2,
+        humanRevisions: [{ revision: 2,
           actorUserId: f.actors.member.actorUserId,
-          reason: 'Member reviewed the revised option scope.' }] } });
+          reason: 'Member reviewed the revised option scope.' }, { revision: 1 }] } });
     expect(cleared.body.data.revisionHistory.historyDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(cleared.body.data.revisionHistory.mission32Adapter.optionIdentities).toHaveLength(2);
     expect(cleared.body.data.revisionHistory.mission32Adapter.lineIdentities).toHaveLength(2);
@@ -711,11 +711,58 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     const afterRace = await request(f.app).get(quoteRoute).set(actor.session.headers);
     expect(afterRace.status).toBe(200);
     expect(afterRace.body.data.revisionHistory).toMatchObject({ state: 'current',
-      currentRevision: 3, humanRevisions: [{ revision: 1 }, { revision: 2 }, { revision: 3 }] });
+      currentRevision: 3, humanRevisions: [{ revision: 3 }, { revision: 2 }, { revision: 1 }] });
     const raceRows = await f.ownerPool.query(`SELECT revision,count(*)::int total
       FROM canonical_customer_financial_estimate_journey_revisions_v1
       WHERE organization_id=$1 AND estimate_id=$2 GROUP BY revision ORDER BY revision`, [f.org, estimate]);
     expect(raceRows.rows.map(row => [Number(row.revision),row.total])).toEqual([[0,1],[1,1],[2,1],[3,1]]);
+    let expectedRevision = 3;
+    const rollingDraft = { options: afterRace.body.data.draft.options.map(option => ({
+      id: option.id, name: option.name, scope: option.scope, validityDays: option.validityDays,
+      assumptions: option.assumptions.map(assumption => assumption.text || assumption),
+      lines: option.lines.map(line => ({ id: line.id, description: line.description,
+        quantity: line.quantity, unit: line.unit, price: line.price })),
+    })) };
+    while (expectedRevision < 25) {
+      rollingDraft.options[0].scope = `Bounded immutable revision ${expectedRevision + 1}.`;
+      const response = await request(f.app).post(`${quoteRoute}/draft`).set(actor.session.headers)
+        .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', crypto.randomUUID())
+        .send({ draft: rollingDraft, expectedRevision,
+          capabilityGrantId: quoteOptionGrant.grantId,
+          capabilityGrantRevision: quoteOptionGrant.revision,
+          businessPurpose: PURPOSE['customer_financial.estimate.edit_options'],
+          policyVersion: 'mission27.launch.v1',
+          reason: `Owner retained bounded history revision ${expectedRevision + 1}.`,
+          confirmed: true, confirmationVersion: 'm27-polaris-quote-journey-v1' });
+      expect(response.status).toBe(201); expectedRevision += 1;
+    }
+    const boundedLatest = await request(f.app).get(quoteRoute).set(actor.session.headers);
+    expect(boundedLatest.status).toBe(200);
+    expect(boundedLatest.body.data.revisionHistory.pagination).toEqual({
+      limit: 20, beforeRevision: null, returned: 20, total: 25,
+      order: 'revision_desc', nextCursor: 6, hasEarlier: true, truncated: true,
+    });
+    expect(boundedLatest.body.data.revisionHistory.humanRevisions.map(item => item.revision))
+      .toEqual(Array.from({ length: 20 }, (_, index) => 25 - index));
+    expect(boundedLatest.body.data.revisionHistory.humanRevisions.every(item =>
+      item.snapshot === undefined)).toBe(true);
+    const boundedEarlier = await request(f.app).get(`${quoteRoute}?historyLimit=5&historyBefore=6`)
+      .set(actor.session.headers);
+    expect(boundedEarlier.status).toBe(200);
+    expect(boundedEarlier.body.data.revisionHistory.humanRevisions.map(item => item.revision))
+      .toEqual([5,4,3,2,1]);
+    expect(boundedEarlier.body.data.revisionHistory.pagination).toMatchObject({
+      limit: 5, beforeRevision: 6, returned: 5, total: 25,
+      nextCursor: null, hasEarlier: false, order: 'revision_desc' });
+    expect((await request(f.app).get(`${quoteRoute}?historyLimit=0`)
+      .set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(`${quoteRoute}?historyLimit=20&unexpected=true`)
+      .set(actor.session.headers)).status).toBe(400);
+    const retainedRows = await f.ownerPool.query(`SELECT revision,rtrim(history_chain_digest) history_chain_digest
+      FROM canonical_customer_financial_estimate_journey_revisions_v1
+      WHERE organization_id=$1 AND estimate_id=$2 ORDER BY revision`, [f.org, estimate]);
+    expect(retainedRows.rows).toHaveLength(26);
+    expect(new Set(retainedRows.rows.map(row => row.history_chain_digest)).size).toBe(26);
     const staleSaveReplay = await request(f.app).post(`${quoteRoute}/draft`).set(actor.session.headers)
       .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', saveKey).send(saveBody);
     expect(staleSaveReplay.status).toBe(409);
@@ -759,7 +806,7 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     const preserved = await f.ownerPool.query(`SELECT count(*)::int total
       FROM canonical_customer_financial_estimate_journey_revisions_v1
       WHERE organization_id=$1 AND estimate_id=$2`, [f.org, estimate]);
-    expect(preserved.rows[0].total).toBe(4);
-  }, 180000);
+    expect(preserved.rows[0].total).toBe(26);
+  }, 240000);
 
 });

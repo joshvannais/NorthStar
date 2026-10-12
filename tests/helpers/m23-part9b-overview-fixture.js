@@ -67,9 +67,10 @@ async function createDatabaseFixture(options = {}) {
     const url = new URL(database.connectionString); url.username = role; url.password = ''; return url.toString();
   };
   const ownerPool = new Pool({ connectionString: roleUrl(roles.owner), max: 5 });
-  const runtimePool = new Pool({ connectionString: roleUrl(roles.runtime), max: 6 });
-  process.env.DATABASE_URL = roleUrl(roles.runtime);
-  process.env.MIGRATION_DATABASE_URL = roleUrl(roles.owner);
+  const runtimePool = new Pool({ connectionString: roleUrl(options.singleRoleMigrations ? roles.owner : roles.runtime), max: 6 });
+  process.env.DATABASE_URL = roleUrl(options.singleRoleMigrations ? roles.owner : roles.runtime);
+  if (options.singleRoleMigrations) delete process.env.MIGRATION_DATABASE_URL;
+  else process.env.MIGRATION_DATABASE_URL = roleUrl(roles.owner);
   const db = require('../../src/db');
   const org = crypto.randomUUID(), otherOrg = crypto.randomUUID();
   const actors = {}, profiles = {};
@@ -205,7 +206,9 @@ async function createDatabaseFixture(options = {}) {
     },
   };
   try {
-    if (!await db.initDatabase()) throw new Error('Disposable overview database initialization failed');
+    if (!await db.initDatabase({ migrationsDirectory: options.migrationsDirectory })) {
+      throw new Error('Disposable overview database initialization failed');
+    }
     for (const tenant of [org, otherOrg]) await ownerPool.query(
       'INSERT INTO organizations(id,name,email) VALUES($1,$2,$3)',
       [tenant, 'Synthetic owner operations', `${tenant}@example.test`]);

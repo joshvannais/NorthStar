@@ -8,6 +8,7 @@ const repository = require('../customerFinancial/editableEstimateBasisRepository
 const workContextRepository = require('../customerFinancial/billableWorkContextRepository');
 const billableReviewRepository = require('../customerFinancial/billableWorkReviewRepository');
 const quoteJourneyRepository = require('../customerFinancial/polarisQuoteJourneyRepository');
+const invoiceDraftRepository = require('../customerFinancial/invoiceDraftOriginRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -43,6 +44,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const quoteRead = options.quoteRead || quoteJourneyRepository.read;
   const quoteSave = options.quoteSave || quoteJourneyRepository.save;
   const quoteHandoff = options.quoteHandoff || quoteJourneyRepository.requestHandoff;
+  const invoiceDraftRead = options.invoiceDraftRead || invoiceDraftRepository.read;
+  const invoiceDraftCapture = options.invoiceDraftCapture || invoiceDraftRepository.capture;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -94,6 +97,34 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         req.params.estimateId, req.body);
       return res.status(result.replayed === true ? 200 : result.status).json({ success: true, data: result.body,
         replayed: result.replayed === true });
+    } catch (error) { return failure(res,error); }
+  });
+  router.get('/:estimateId/invoice-draft-origin', auth, role, throttle, async (req,res) => {
+    const keys = Object.keys(req.query);
+    if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+        !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+        typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+      status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_DRAFT_INVALID',
+      message: 'Select one exact reviewed handoff.' });
+    try { return res.json({ success: true, data: await invoiceDraftRead(poolProvider(),
+      source(req), req.params.estimateId, req.query.handoffReceiptId,
+      req.query.handoffReceiptDigest) });
+    } catch (error) { return failure(res,error); }
+  });
+  router.post('/:estimateId/invoice-draft-origin', auth, role, throttle, async (req,res) => {
+    const csrfToken = req.get('X-CSRF-Token');
+    if (typeof csrfToken !== 'string' || csrfToken.length < 16) return failure(res, {
+      status: 403, code: 'CUSTOMER_FINANCIAL_INVOICE_DRAFT_RESTRICTED',
+      message: 'A current request confirmation is required for this draft origin.' });
+    if (Object.keys(req.query).length || !req.body || typeof req.body !== 'object' ||
+        Array.isArray(req.body)) return failure(res, { status: 400,
+      code: 'CUSTOMER_FINANCIAL_INVOICE_DRAFT_INVALID',
+      message: 'Capture one exact reviewed handoff.' });
+    try {
+      const result = await invoiceDraftCapture(poolProvider(), { ...source(req), csrfToken,
+        idempotencyKey: req.get('Idempotency-Key') }, req.params.estimateId, req.body);
+      return res.status(result.status).json({ success: true, data: result.body,
+        replayed: result.replayed });
     } catch (error) { return failure(res,error); }
   });
   router.get('/:estimateId/quote-journey', auth, quoteRole, throttle, async (req,res) => {

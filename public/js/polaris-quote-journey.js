@@ -56,7 +56,7 @@
   function injectStyles() {
     if (document.getElementById('polarisQuoteJourneyStyles')) return;
     var style = node('style'); style.id = 'polarisQuoteJourneyStyles';
-    style.textContent = '.polaris-quote-journey{margin-top:1rem;padding:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.polaris-quote-journey>summary{font-weight:700;cursor:pointer}.polaris-quote-intro{color:var(--text-muted,#5f6774)}.polaris-quote-option{margin:1rem 0;padding:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:12px}.polaris-quote-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.polaris-quote-grid label,.polaris-quote-reason{display:grid;gap:.35rem}.polaris-quote-grid .wide{grid-column:1/-1}.polaris-quote-line{display:grid;grid-template-columns:minmax(10rem,2fr) minmax(5rem,.6fr) minmax(5rem,.7fr) minmax(7rem,.8fr) auto;gap:.5rem;align-items:end;margin:.65rem 0}.polaris-quote-line label{display:grid;gap:.3rem}.polaris-quote-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:.75rem 0}.polaris-quote-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.polaris-quote-status:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}@media(max-width:680px){.polaris-quote-grid{grid-template-columns:1fr}.polaris-quote-line{grid-template-columns:1fr 1fr}.polaris-quote-line label:first-child{grid-column:1/-1}.polaris-quote-line button{grid-column:1/-1;justify-self:start}.polaris-quote-actions .btn{width:100%}}';
+    style.textContent = '.polaris-quote-journey{margin-top:1rem;padding:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.polaris-quote-journey>summary{font-weight:700;cursor:pointer}.polaris-quote-intro{color:var(--text-muted,#5f6774)}.polaris-quote-option{margin:1rem 0;padding:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:12px}.polaris-quote-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.polaris-quote-grid label,.polaris-quote-reason{display:grid;gap:.35rem}.polaris-quote-grid .wide{grid-column:1/-1}.polaris-quote-line{display:grid;grid-template-columns:minmax(10rem,2fr) minmax(5rem,.6fr) minmax(5rem,.7fr) minmax(7rem,.8fr) auto;gap:.5rem;align-items:end;margin:.65rem 0}.polaris-quote-line label{display:grid;gap:.3rem}.polaris-quote-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:.75rem 0}.polaris-quote-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.polaris-quote-history{margin:1rem 0;padding:.75rem;border:1px solid var(--border-color,#d6d7db);border-radius:10px}.polaris-quote-history summary{font-weight:650;cursor:pointer}.polaris-quote-history ol{padding-left:1.4rem}.polaris-quote-history li{margin:.45rem 0}.polaris-quote-status:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}@media(max-width:680px){.polaris-quote-grid{grid-template-columns:1fr}.polaris-quote-line{grid-template-columns:1fr 1fr}.polaris-quote-line label:first-child{grid-column:1/-1}.polaris-quote-line button{grid-column:1/-1;justify-self:start}.polaris-quote-actions .btn{width:100%}}';
     document.head.appendChild(style);
   }
   function grant(data, capability) { return data && data.capabilities && data.capabilities[capability]; }
@@ -83,13 +83,57 @@
       var retry = node('button', 'Reload current quote', content, 'btn btn-secondary');
       retry.type = 'button'; retry.onclick = load;
     }
+    function currentnessIdentity(value) {
+      var witness=value&&value.currentness,history=value&&value.revisionHistory,
+        currentDraft=value&&value.draft,source=value&&value.sourceProposal;
+      if(!witness||!history||!currentDraft||!source||
+          !/^[0-9a-f]{64}$/.test(witness.identityDigest||'')||
+          !/^[0-9a-f]{64}$/.test(witness.historyChainDigest||'')||
+          !/^[0-9a-f]{64}$/.test(witness.capabilityDigest||'')||
+          Number(witness.draftRevision)!==Number(currentDraft.revision)||
+          witness.draftUpdatedAt!==currentDraft.updatedAt||
+          witness.draftDigest!==currentDraft.draftDigest||
+          Number(witness.historyCurrentRevision)!==Number(history.currentRevision)||
+          witness.historyCurrentUpdatedAt!==history.currentUpdatedAt||
+          witness.historyChainDigest!==history.historyDigest||
+          witness.sourceProposalDigest!==source.sourceProposalDigest||
+          witness.sourceProposalRevisionDigest!==source.sourceProposalRevisionDigest)return null;
+      return witness.identityDigest;
+    }
     function load() {
       var requestToken = ++requestGeneration; data = null; draft = null;
       content.replaceChildren(); var loading = node('p', 'Loading the current editable quote…', content, 'polaris-quote-status');
       loading.setAttribute('role', 'status'); loading.tabIndex = -1;
       return request(route, { cache: 'no-store' }).then(function (value) {
         if (token !== generation || requestToken !== requestGeneration || !section.isConnected) return;
+        if(value&&value.revisionHistory&&!currentnessIdentity(value))return rejected({status:409});
         data = value; draft = clone(value.draft || value); render();
+      }).catch(function (error) {
+        if (token !== generation || requestToken !== requestGeneration) return; rejected(error);
+      });
+    }
+    function loadHistoryPage(beforeRevision) {
+      var mountedIdentity=currentnessIdentity(data);
+      if(!mountedIdentity)return rejected({status:409});
+      var requestToken = ++requestGeneration;
+      var url = route + '?historyLimit=20' + (beforeRevision === null ? '' :
+        '&historyBefore=' + encodeURIComponent(String(beforeRevision)));
+      status('Loading a bounded revision-history page…');
+      return request(url, { cache: 'no-store' }).then(function (value) {
+        if (token !== generation || requestToken !== requestGeneration || !section.isConnected) return;
+        if (!value || value.state !== 'current' || !value.draft || !value.revisionHistory ||
+            currentnessIdentity(value)!==mountedIdentity||
+            Number(value.draft.revision)!==Number(draft.revision)||
+            value.draft.updatedAt!==draft.updatedAt||value.draft.draftDigest !== draft.draftDigest ||
+            !value.sourceProposal ||
+            value.sourceProposal.sourceProposalDigest !== data.sourceProposal.sourceProposalDigest ||
+            value.sourceProposal.sourceProposalRevisionDigest !==
+              data.sourceProposal.sourceProposalRevisionDigest) {
+          return rejected({ status: 409 });
+        }
+        data.revisionHistory = value.revisionHistory; render();
+        var target = content.querySelector('.polaris-quote-history > summary');
+        if (target) target.focus();
       }).catch(function (error) {
         if (token !== generation || requestToken !== requestGeneration) return; rejected(error);
       });
@@ -121,6 +165,50 @@
       return { options: draft.options.map(function(option){return {id:option.id,name:option.name,scope:option.scope,validityDays:option.validityDays,
         assumptions:(option.assumptions||[]).map(function(value){return value.text||value;}),lines:option.lines.map(function(line){return{id:line.id,description:line.description,quantity:line.quantity,unit:line.unit,price:line.price};})};}) };
     }
+    function revisionHistory(parent) {
+      var history=data&&data.revisionHistory;
+      if(!history||history.state!=='current'||!Array.isArray(history.humanRevisions))return;
+      var pagination=history.pagination||{},totalHuman=Number(pagination.totalHumanRevisions),
+        totalRecords=Number(pagination.totalRecords),sourceCount=history.sourceOriginal?1:0,
+        returnedRecords=history.humanRevisions.length+sourceCount,limit=Number(pagination.limit);
+      if(!Number.isSafeInteger(totalHuman)||totalHuman<1||totalRecords!==totalHuman+1||
+          !Number.isSafeInteger(limit)||limit<1||limit>20||returnedRecords>limit||returnedRecords>20||
+          Number(pagination.returned)!==returnedRecords||Number(pagination.returnedRecords)!==returnedRecords||
+          Number(pagination.humanReturned)!==history.humanRevisions.length||
+          Number(history.currentRevision)!==totalHuman||
+          !history.currentUpdatedAt||!/^[0-9a-f]{64}$/.test(history.historyDigest||'')||
+          (history.sourceOriginal&&pagination.hasEarlier===true)||
+          (!history.sourceOriginal&&pagination.hasEarlier!==true)||
+          (pagination.hasEarlier===true&&(!Number.isSafeInteger(Number(pagination.nextCursor))||Number(pagination.nextCursor)<1))||
+          (pagination.hasEarlier!==true&&pagination.nextCursor!==null)||
+          pagination.hasLatest!==(pagination.beforeRevision!==null&&pagination.beforeRevision!==undefined)){
+        setTimeout(function(){rejected({status:409});},0);return;
+      }
+      var details=node('details',undefined,parent,'polaris-quote-history');
+      var label='Revision history · '+totalRecords+' total records ('+totalHuman+' human '+
+        (totalHuman===1?'revision':'revisions')+')';
+      node('summary',label,details);var list=node('ol',undefined,details);
+      if(history.sourceOriginal)node('li','Source original · '+history.sourceOriginal.sourceProposalDigest.slice(0,12)+'… · '+
+        history.sourceOriginal.recordedAt,list);
+      history.humanRevisions.forEach(function(entry){
+        node('li','Revision '+entry.revision+' · '+entry.reason+' · '+entry.recordedAt+
+          ' · '+entry.snapshotDigest.slice(0,12)+'…',list);
+      });
+      node('p','Showing '+returnedRecords+' of '+totalRecords+
+        ' immutable history records in deterministic newest-first order.',details,'polaris-quote-intro');
+      var historyActions=node('div',undefined,details,'polaris-quote-actions');
+      if(pagination.hasEarlier===true&&Number.isSafeInteger(Number(pagination.nextCursor))){
+        var earlier=node('button','Show earlier revisions',historyActions,'btn btn-secondary');earlier.type='button';
+        earlier.onclick=function(){loadHistoryPage(Number(pagination.nextCursor));};
+      }
+      if(pagination.hasLatest===true){
+        var latest=node('button','Show latest revisions',historyActions,'btn btn-secondary');latest.type='button';
+        latest.onclick=function(){loadHistoryPage(null);};
+      }
+      node('p','Mission 25 learning remains unavailable until its current tenant-private adapter and purpose permission are proven. No edit is applied automatically.',details,'polaris-quote-boundary');
+      node('p','Mission 32 adapter '+history.mission32Adapter.name+' version '+
+        history.mission32Adapter.compatibleSchemaVersion+' is pinned to these same estimate, option and line identities. Calculator execution remains unavailable.',details,'polaris-quote-boundary');
+    }
     function render() {
       content.replaceChildren(); var form=node('form',undefined,content);form.noValidate=false;
       var heading=node('h4','Editable Polaris quote',form);heading.id='polarisQuoteHeading';
@@ -134,6 +222,7 @@
       var reload=node('button','Reload current quote',actions,'btn btn-secondary');reload.type='button';reload.onclick=load;
       var live=node('p','Ready for human review.',form,'polaris-quote-status');live.setAttribute('role','status');live.setAttribute('aria-live','polite');live.tabIndex=-1;
       if(data.sourceProposal){node('p','Current Mission 24 issued proposal '+data.sourceProposal.reference+' is pinned to source digest '+data.sourceProposal.sourceProposalDigest.slice(0,12)+'… for '+data.sourceProposal.reviewedRecipient.name+'.',form,'polaris-quote-boundary');}
+      revisionHistory(form);
       node('p','Customer signature launch requires the exact current Mission 24 proposal, reviewed recipient and legal approval. It remains unavailable here and no proposal is created or delivered.',form,'polaris-quote-boundary');
       node('p','Accepted-estimate-to-work handoff is unavailable until the reviewed Mission 23 receiver exists. No scheduling, dispatch or work record is changed here.',form,'polaris-quote-boundary');
       form.onsubmit=function(event){event.preventDefault();var capability=draft.options.length>1?CAP_EDIT_OPTIONS:CAP_EDIT_DRAFT,currentGrant=grant(data,capability);if(!currentGrant){rejected({status:403});return;}var body;try{body={draft:collectDraft(form),expectedRevision:Number(draft.revision||0),capabilityGrantId:currentGrant.grantId,capabilityGrantRevision:Number(currentGrant.revision),businessPurpose:currentGrant.businessPurpose,policyVersion:currentGrant.policyVersion,reason:reason.value.trim(),confirmed:confirm.checked,confirmationVersion:'m27-polaris-quote-journey-v1'};}catch(error){status(error.message);return;}save.disabled=true;status('Saving the reviewed draft…');request(route+'/draft',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':uuid()},body:JSON.stringify(body)}).then(function(){return load();}).catch(rejected);};

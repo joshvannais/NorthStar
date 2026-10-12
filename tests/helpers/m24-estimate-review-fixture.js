@@ -8,8 +8,11 @@ const { ingestLead } = require('../../src/services/canonicalGraphService');
 async function createEstimateReviewFixture(options = {}) {
   const extra = options.additionalCompleteEstimates || 0;
   assert(Number.isInteger(extra) && extra >= 0 && extra <= 60);
-  const f = await createDatabaseFixture(options.operationalSchedule ?
-    { operationalSchedule: true } : {});
+  const f = await createDatabaseFixture({
+    ...(options.operationalSchedule ? { operationalSchedule: true } : {}),
+    ...(options.migrationsDirectory ? { migrationsDirectory: options.migrationsDirectory } : {}),
+    ...(options.singleRoleMigrations ? { singleRoleMigrations: true } : {}),
+  });
   try {
     const profile = canonicalFenceProfile(); profile.company.timeZone = 'UTC';
     if (options.operationalSchedule) {

@@ -57,7 +57,7 @@ describe('Mission 27 Part 2C exact money and numbering contract', () => {
     expect(sql).toContain("policy_version='mission27.document_numbering.v1'");
     expect(sql).toContain("predecessor_policy_version='mission27.launch.v1'");
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql')).sort();
-    expect(names.at(-1)).toBe('266_customer_financial_billable_work_review_v1.sql');
+    expect(names.at(-1)).toBe('267_customer_financial_part3_handoff_history_v1.sql');
     expect(names.filter(name => /^262_/.test(name))).toHaveLength(1);
   });
 

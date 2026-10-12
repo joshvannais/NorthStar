@@ -17,6 +17,17 @@ function checkedId(value, label) {
     `Choose one exact ${label}.`);
   return value.toLowerCase();
 }
+function checkedHistoryPage(raw = {}) {
+  const limit = raw.limit === undefined ? 20 : Number(raw.limit);
+  const beforeRevision = raw.beforeRevision === undefined || raw.beforeRevision === null ? null :
+    Number(raw.beforeRevision);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20 ||
+      (beforeRevision !== null && (!Number.isSafeInteger(beforeRevision) || beforeRevision < 1))) {
+    throw failure('CUSTOMER_FINANCIAL_QUOTE_JOURNEY_INVALID',
+      'Choose a valid bounded revision-history page.');
+  }
+  return Object.freeze({ limit, beforeRevision });
+}
 function checkedMutation(source, raw, capability, confirmationVersion) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
       !UUID.test(raw.capabilityGrantId || '') || !Number.isSafeInteger(raw.capabilityGrantRevision) ||
@@ -55,16 +66,17 @@ async function withCommercialFence(pool, organizationId, action) {
     client.release(discard);
   }
 }
-async function readSaved(client, source, estimateId) {
+async function readSaved(client, source, estimateId, historyPage = {}) {
+  const page = checkedHistoryPage(historyPage);
   return (await client.query(
-    'SELECT public.canonical_customer_financial_estimate_journey_v1_read($1,$2,$3,$4,$5) value',
+    'SELECT public.canonical_customer_financial_estimate_journey_v1_read($1,$2,$3,$4,$5,$6,$7) value',
     [source.organizationId, source.actorUserId, source.actorAccessRole,
-      source.authSessionId, estimateId])).rows[0]?.value;
+      source.authSessionId, estimateId, page.limit, page.beforeRevision])).rows[0]?.value;
 }
-async function read(pool, source, estimateId, dependencies = {}) {
+async function read(pool, source, estimateId, historyPage = {}, dependencies = {}) {
   estimateId = checkedId(estimateId, 'estimate');
   return withCommercialFence(pool, source.organizationId, async client => {
-    const saved = await readSaved(client, source, estimateId);
+    const saved = await readSaved(client, source, estimateId, historyPage);
     if (saved?.state === 'source_currentness_unavailable') return contract.unavailable(
       'source_currentness_unavailable', ['mission24.current_customer_estimate_version']);
     if (saved?.draft) return Object.freeze({ ...saved,
@@ -133,4 +145,4 @@ async function requestHandoff(pool, source, estimateId, raw) {
 }
 
 module.exports = { read, save, requestHandoff, withCommercialFence, readSaved,
-  checkedMutation, CAP_EDIT_DRAFT, CAP_EDIT_OPTIONS, CAP_REQUEST_HANDOFF };
+  checkedMutation, checkedHistoryPage, CAP_EDIT_DRAFT, CAP_EDIT_OPTIONS, CAP_REQUEST_HANDOFF };

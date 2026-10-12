@@ -39,10 +39,12 @@ const TABLES = new Set([
   'canonical_customer_financial_billable_review_grant_heads_v1',
   'canonical_customer_financial_billable_work_reviews_v1',
   'canonical_customer_financial_billable_review_requests_v1',
+  'canonical_customer_financial_billable_handoff_receipts_v1',
   'canonical_customer_financial_estimate_journey_grants_v1',
   'canonical_customer_financial_estimate_journey_grant_heads_v1',
   'canonical_customer_financial_estimate_journey_drafts_v1',
   'canonical_customer_financial_estimate_journey_requests_v1',
+  'canonical_customer_financial_estimate_journey_revisions_v1',
 ]);
 const quote = value => '"' + value.replace(/"/g, '""') + '"';
 

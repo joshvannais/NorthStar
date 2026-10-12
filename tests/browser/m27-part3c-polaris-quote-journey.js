@@ -41,7 +41,8 @@ const runtimeScript = `(function(){
  window.m27Part3cFailNextGet=false;window.m27Part3cFailNextPost=false;window.m27Part3cDelayNextGet=false;window.m27Part3cHasDelayed=false;
  function response(status,data){return Promise.resolve({ok:status>=200&&status<300,status:status,json:function(){return Promise.resolve({success:true,data:data});}});}
  function failure(status,message){return Promise.resolve({ok:false,status:status,json:function(){return Promise.resolve({success:false,error:{category:'TEST_UNAVAILABLE',message:message}});}});}
- function current(){if(!saved)return Object.assign({},${JSON.stringify(baseDraft)},{sourceProposal:${JSON.stringify(sourceProposal)}});return {state:'current',draft:saved,sourceProposal:${JSON.stringify(sourceProposal)},capabilities:${JSON.stringify(grants)},signature:{state:'unavailable',reason:'legal_review_unavailable'},workHandoff:{state:'unavailable',reason:'work_handoff_receiver_unavailable'}};}
+ function history(){return {contractVersion:'m27-polaris-revision-history-v1',state:'current',currentRevision:saved.revision,historyDigest:'9'.repeat(64),sourceOriginal:{revision:0,sourceProposalDigest:'d'.repeat(64),sourceProposalRevisionDigest:'e'.repeat(64),snapshotDigest:'8'.repeat(64),recordedAt:'2026-10-11T10:00:00.000Z'},humanRevisions:[{revision:saved.revision,actorUserId:'77777777-7777-4777-8777-777777777777',actorAccessRole:'owner',reason:'Owner reviewed every option and exact price.',recordedAt:'2026-10-11T12:00:00.000Z',snapshotDigest:'c'.repeat(64)}],mission25Observation:{adapter:'mission25.tenant_edit_observation.v1',state:'unavailable',reason:'learning_permission_unavailable',value:null,published:false,automaticApplication:false},mission32Adapter:{name:'polaris.estimate_studio.adapter.v1',compatibleSchemaVersion:1,state:'compatible_contract',receiverExecutionAvailable:false,receiverMutationCount:0}};}
+ function current(){if(!saved)return Object.assign({},${JSON.stringify(baseDraft)},{sourceProposal:${JSON.stringify(sourceProposal)}});return {state:'current',draft:saved,sourceProposal:${JSON.stringify(sourceProposal)},capabilities:${JSON.stringify(grants)},revisionHistory:history(),mission25Observation:history().mission25Observation,mission32Adapter:history().mission32Adapter,signature:{state:'unavailable',reason:'legal_review_unavailable'},workHandoff:{state:'unavailable',reason:'work_handoff_receiver_unavailable'}};}
  window.m27Part3cSetServerOption=function(name,minor){if(!saved){saved=JSON.parse(JSON.stringify(${JSON.stringify(baseDraft)}));saved.revision=1;saved.draftDigest='c'.repeat(64);}saved.nameMarker=name;saved.options[0].name=name;saved.options[0].lines[0].price.minorUnits=minor;saved.options[0].lines[0].price.decimal=(BigInt(minor)/100n).toString()+'.'+(BigInt(minor)%100n).toString().padStart(2,'0');};
  window.m27Part3cResolveDelayed=function(){if(delayed){var pending=delayed;delayed=null;window.m27Part3cHasDelayed=false;pending.resolve(response(200,pending.snapshot));}};
  window.NorthStarAccountSession={fetch:function(url,options){options=options||{};var method=options.method||'GET',body=options.body?JSON.parse(options.body):null;calls.push({url:url,method:method,body:body});
@@ -70,7 +71,7 @@ async function main() {
       page.on('request',request=>{if(request.url()!==fixture)external.push(request.url());});
       await page.route(fixture,route=>route.fulfill({contentType:'text/html',body:html.replace('<html>','<html data-theme="'+layout.colorScheme+'">')}));
       await page.goto(fixture);
-      await page.locator('.polaris-quote-journey summary').focus(); await page.keyboard.press('Enter');
+      await page.locator('.polaris-quote-journey > summary').focus(); await page.keyboard.press('Enter');
       await page.getByText('Ready for human review.',{exact:true}).waitFor({timeout:5000}).catch(async function(){
         throw new Error('Quote editor did not render: '+(await page.locator('body').innerText())+' | '+errors.join(' | '));
       });
@@ -94,6 +95,11 @@ async function main() {
       assert.equal(await page.getByText(/Current Mission 24 issued proposal EST-0003/).count(),1);
       assert.equal(await page.getByText(/reviewed recipient and legal approval/).count(),1);
       assert.equal(await page.getByText(/reviewed Mission 23 receiver exists/).count(),1);
+      const historySummary=page.getByText(/Revision history · source original \+ 1 human revision/);
+      assert.equal(await historySummary.count(),1);await historySummary.focus();await page.keyboard.press('Enter');
+      assert.equal(await page.getByText(/Mission 25 learning remains unavailable/).count(),1);
+      assert.equal(await page.getByText(/Mission 32 adapter polaris\.estimate_studio\.adapter\.v1 version 1/).count(),1);
+      assert.equal(await page.getByText(/Revision 1 · Owner reviewed every option and exact price/).count(),1);
       const calls=await page.evaluate(()=>window.m27Part3cCalls);
       const save=calls.find(call=>call.url.endsWith('/draft'));
       assert.equal(save.body.draft.options[0].name,'Reviewed repair');
@@ -103,7 +109,7 @@ async function main() {
       assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
       await auditRenderedPage(page,{mainSelector:'#mainContent',layout});
       await exerciseSkipLink(page,{mainSelector:'#mainContent'});
-      await page.locator('.polaris-quote-journey summary').click();
+      await page.locator('.polaris-quote-journey > summary').click();
       await page.getByText('Ready for human review.',{exact:true}).waitFor({timeout:5000});
       await page.locator('.polaris-quote-journey').screenshot({path:path.join(output,`${engine}-${layout.name}.png`)});
       await page.evaluate(function(){window.m27Part3cDelayNextGet=true;});
@@ -111,11 +117,11 @@ async function main() {
       await page.waitForFunction(function(){return window.m27Part3cHasDelayed===true;});
       await page.evaluate(function(){window.m27Part3cSetServerOption('Newer server quote','12345');});
       const getCount=await page.evaluate(function(){return window.m27Part3cCalls.filter(function(call){return call.method==='GET';}).length;});
-      await page.locator('#host summary').click();
+      await page.locator('#host > .polaris-quote-journey > summary').click();
       await page.waitForFunction(function(minimum){return window.m27Part3cCalls.filter(function(call){
         return call.method==='GET';}).length>=minimum;},getCount+1);
       await page.waitForFunction(function(){return Array.from(document.querySelectorAll('#host input')).some(function(input){return input.value==='Newer server quote';});});
-      await page.locator('#host summary').click();
+      await page.locator('#host > .polaris-quote-journey > summary').click();
       await page.getByLabel('Option name').waitFor({timeout:5000});
       assert.equal(await page.getByLabel('Option name').inputValue(),'Newer server quote');
       await page.evaluate(function(){window.m27Part3cResolveDelayed();});
@@ -132,6 +138,7 @@ async function main() {
       assert.equal(await page.locator('input').evaluateAll(function(inputs){return inputs.filter(function(input){return input.value==='123.45';}).length;}),0);
       assert.equal(await page.locator('#host').getByRole('button',{name:'Save reviewed draft'}).count(),0);
       assert.equal(await page.locator('#host').getByText(/Mission 24 issued proposal/).count(),0);
+      assert.equal(await page.locator('#host .polaris-quote-history').count(),0);
       await page.locator('#host').getByRole('button',{name:'Reload current quote'}).click();
       await page.getByLabel('Option name').waitFor({timeout:5000});
       assert.equal(await page.getByLabel('Option name').inputValue(),'Newer server quote');
@@ -143,7 +150,7 @@ async function main() {
       await page.evaluate(function(estimateIdentity){window.m27Part3cFailNextGet=true;var host=document.createElement('div');
         host.id='recoveryHost';document.body.appendChild(host);
         NorthStarPolarisQuoteJourney.mount({simulated:false,pins:{estimateId:estimateIdentity}},host);},estimateId);
-      await page.locator('#recoveryHost summary').click();
+      await page.locator('#recoveryHost > .polaris-quote-journey > summary').click();
       await page.locator('#recoveryHost [role=alert]').waitFor({timeout:5000});
       await page.locator('#recoveryHost').getByRole('button',{name:'Reload current quote'}).click();
       await page.locator('#recoveryHost').getByText('Ready for human review.',{exact:true}).waitFor({timeout:5000});

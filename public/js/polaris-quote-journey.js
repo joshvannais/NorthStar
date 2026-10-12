@@ -56,7 +56,7 @@
   function injectStyles() {
     if (document.getElementById('polarisQuoteJourneyStyles')) return;
     var style = node('style'); style.id = 'polarisQuoteJourneyStyles';
-    style.textContent = '.polaris-quote-journey{margin-top:1rem;padding:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.polaris-quote-journey>summary{font-weight:700;cursor:pointer}.polaris-quote-intro{color:var(--text-muted,#5f6774)}.polaris-quote-option{margin:1rem 0;padding:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:12px}.polaris-quote-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.polaris-quote-grid label,.polaris-quote-reason{display:grid;gap:.35rem}.polaris-quote-grid .wide{grid-column:1/-1}.polaris-quote-line{display:grid;grid-template-columns:minmax(10rem,2fr) minmax(5rem,.6fr) minmax(5rem,.7fr) minmax(7rem,.8fr) auto;gap:.5rem;align-items:end;margin:.65rem 0}.polaris-quote-line label{display:grid;gap:.3rem}.polaris-quote-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:.75rem 0}.polaris-quote-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.polaris-quote-status:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}@media(max-width:680px){.polaris-quote-grid{grid-template-columns:1fr}.polaris-quote-line{grid-template-columns:1fr 1fr}.polaris-quote-line label:first-child{grid-column:1/-1}.polaris-quote-line button{grid-column:1/-1;justify-self:start}.polaris-quote-actions .btn{width:100%}}';
+    style.textContent = '.polaris-quote-journey{margin-top:1rem;padding:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.polaris-quote-journey>summary{font-weight:700;cursor:pointer}.polaris-quote-intro{color:var(--text-muted,#5f6774)}.polaris-quote-option{margin:1rem 0;padding:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:12px}.polaris-quote-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.polaris-quote-grid label,.polaris-quote-reason{display:grid;gap:.35rem}.polaris-quote-grid .wide{grid-column:1/-1}.polaris-quote-line{display:grid;grid-template-columns:minmax(10rem,2fr) minmax(5rem,.6fr) minmax(5rem,.7fr) minmax(7rem,.8fr) auto;gap:.5rem;align-items:end;margin:.65rem 0}.polaris-quote-line label{display:grid;gap:.3rem}.polaris-quote-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin:.75rem 0}.polaris-quote-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.polaris-quote-history{margin:1rem 0;padding:.75rem;border:1px solid var(--border-color,#d6d7db);border-radius:10px}.polaris-quote-history summary{font-weight:650;cursor:pointer}.polaris-quote-history ol{padding-left:1.4rem}.polaris-quote-history li{margin:.45rem 0}.polaris-quote-status:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}@media(max-width:680px){.polaris-quote-grid{grid-template-columns:1fr}.polaris-quote-line{grid-template-columns:1fr 1fr}.polaris-quote-line label:first-child{grid-column:1/-1}.polaris-quote-line button{grid-column:1/-1;justify-self:start}.polaris-quote-actions .btn{width:100%}}';
     document.head.appendChild(style);
   }
   function grant(data, capability) { return data && data.capabilities && data.capabilities[capability]; }
@@ -121,6 +121,23 @@
       return { options: draft.options.map(function(option){return {id:option.id,name:option.name,scope:option.scope,validityDays:option.validityDays,
         assumptions:(option.assumptions||[]).map(function(value){return value.text||value;}),lines:option.lines.map(function(line){return{id:line.id,description:line.description,quantity:line.quantity,unit:line.unit,price:line.price};})};}) };
     }
+    function revisionHistory(parent) {
+      var history=data&&data.revisionHistory;
+      if(!history||history.state!=='current'||!history.sourceOriginal||!Array.isArray(history.humanRevisions))return;
+      var details=node('details',undefined,parent,'polaris-quote-history');
+      var label='Revision history · source original + '+history.humanRevisions.length+' human '+
+        (history.humanRevisions.length===1?'revision':'revisions');
+      node('summary',label,details);var list=node('ol',undefined,details);
+      node('li','Source original · '+history.sourceOriginal.sourceProposalDigest.slice(0,12)+'… · '+
+        history.sourceOriginal.recordedAt,list);
+      history.humanRevisions.forEach(function(entry){
+        node('li','Revision '+entry.revision+' · '+entry.reason+' · '+entry.recordedAt+
+          ' · '+entry.snapshotDigest.slice(0,12)+'…',list);
+      });
+      node('p','Mission 25 learning remains unavailable until its current tenant-private adapter and purpose permission are proven. No edit is applied automatically.',details,'polaris-quote-boundary');
+      node('p','Mission 32 adapter '+history.mission32Adapter.name+' version '+
+        history.mission32Adapter.compatibleSchemaVersion+' is pinned to these same estimate, option and line identities. Calculator execution remains unavailable.',details,'polaris-quote-boundary');
+    }
     function render() {
       content.replaceChildren(); var form=node('form',undefined,content);form.noValidate=false;
       var heading=node('h4','Editable Polaris quote',form);heading.id='polarisQuoteHeading';
@@ -134,6 +151,7 @@
       var reload=node('button','Reload current quote',actions,'btn btn-secondary');reload.type='button';reload.onclick=load;
       var live=node('p','Ready for human review.',form,'polaris-quote-status');live.setAttribute('role','status');live.setAttribute('aria-live','polite');live.tabIndex=-1;
       if(data.sourceProposal){node('p','Current Mission 24 issued proposal '+data.sourceProposal.reference+' is pinned to source digest '+data.sourceProposal.sourceProposalDigest.slice(0,12)+'… for '+data.sourceProposal.reviewedRecipient.name+'.',form,'polaris-quote-boundary');}
+      revisionHistory(form);
       node('p','Customer signature launch requires the exact current Mission 24 proposal, reviewed recipient and legal approval. It remains unavailable here and no proposal is created or delivered.',form,'polaris-quote-boundary');
       node('p','Accepted-estimate-to-work handoff is unavailable until the reviewed Mission 23 receiver exists. No scheduling, dispatch or work record is changed here.',form,'polaris-quote-boundary');
       form.onsubmit=function(event){event.preventDefault();var capability=draft.options.length>1?CAP_EDIT_OPTIONS:CAP_EDIT_DRAFT,currentGrant=grant(data,capability);if(!currentGrant){rejected({status:403});return;}var body;try{body={draft:collectDraft(form),expectedRevision:Number(draft.revision||0),capabilityGrantId:currentGrant.grantId,capabilityGrantRevision:Number(currentGrant.revision),businessPurpose:currentGrant.businessPurpose,policyVersion:currentGrant.policyVersion,reason:reason.value.trim(),confirmed:confirm.checked,confirmationVersion:'m27-polaris-quote-journey-v1'};}catch(error){status(error.message);return;}save.disabled=true;status('Saving the reviewed draft…');request(route+'/draft',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':uuid()},body:JSON.stringify(body)}).then(function(){return load();}).catch(rejected);};

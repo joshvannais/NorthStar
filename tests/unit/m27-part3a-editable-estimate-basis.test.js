@@ -178,7 +178,7 @@ describe('Mission 27 Part 3A editable estimate basis', () => {
     const sql = fs.readFileSync(path.join(__dirname,'../../migrations/264_customer_financial_editable_estimate_basis_v1.sql'),'utf8');
     const migrationNames = fs.readdirSync(path.join(__dirname,'../../migrations'))
       .filter(name => name.endsWith('.sql')).sort();
-    expect(migrationNames.at(-1)).toBe('266_customer_financial_billable_work_review_v1.sql');
+    expect(migrationNames.at(-1)).toBe('267_customer_financial_part3_handoff_history_v1.sql');
     expect(migrationNames.filter(name => /^264_/.test(name))).toHaveLength(1);
     expect(sql).toContain("capability='customer_financial.estimate.edit_draft'");
     expect(sql).toContain("business_purpose='customer_financial.editable_estimate_basis'");

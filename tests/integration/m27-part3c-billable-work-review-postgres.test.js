@@ -739,21 +739,69 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     const boundedLatest = await request(f.app).get(quoteRoute).set(actor.session.headers);
     expect(boundedLatest.status).toBe(200);
     expect(boundedLatest.body.data.revisionHistory.pagination).toEqual({
-      limit: 20, beforeRevision: null, returned: 20, total: 25,
-      order: 'revision_desc', nextCursor: 6, hasEarlier: true, truncated: true,
+      limit: 20, beforeRevision: null, returned: 20, returnedRecords: 20, total: 26,
+      humanReturned: 20, totalHumanRevisions: 25, totalRecords: 26,
+      order: 'revision_desc', nextCursor: 6, hasEarlier: true, hasLatest: false, truncated: true,
     });
+    expect(boundedLatest.body.data.revisionHistory.sourceOriginal).toBeNull();
     expect(boundedLatest.body.data.revisionHistory.humanRevisions.map(item => item.revision))
       .toEqual(Array.from({ length: 20 }, (_, index) => 25 - index));
     expect(boundedLatest.body.data.revisionHistory.humanRevisions.every(item =>
       item.snapshot === undefined)).toBe(true);
-    const boundedEarlier = await request(f.app).get(`${quoteRoute}?historyLimit=5&historyBefore=6`)
+    const boundedEarlier = await request(f.app).get(`${quoteRoute}?historyLimit=20&historyBefore=6`)
       .set(actor.session.headers);
     expect(boundedEarlier.status).toBe(200);
     expect(boundedEarlier.body.data.revisionHistory.humanRevisions.map(item => item.revision))
       .toEqual([5,4,3,2,1]);
-    expect(boundedEarlier.body.data.revisionHistory.pagination).toMatchObject({
-      limit: 5, beforeRevision: 6, returned: 5, total: 25,
-      nextCursor: null, hasEarlier: false, order: 'revision_desc' });
+    expect(boundedEarlier.body.data.revisionHistory.sourceOriginal).toMatchObject({ revision: 0 });
+    expect(boundedEarlier.body.data.revisionHistory.pagination).toEqual({
+      limit: 20, beforeRevision: 6, returned: 6, returnedRecords: 6, total: 26,
+      humanReturned: 5, totalHumanRevisions: 25, totalRecords: 26,
+      nextCursor: null, hasEarlier: false, hasLatest: true, order: 'revision_desc', truncated: true });
+    const boundedIdentities = [
+      ...boundedLatest.body.data.revisionHistory.humanRevisions.map(item => `human:${item.revision}`),
+      ...boundedEarlier.body.data.revisionHistory.humanRevisions.map(item => `human:${item.revision}`),
+      'source:0',
+    ];
+    expect(boundedIdentities).toHaveLength(26);
+    expect(new Set(boundedIdentities).size).toBe(26);
+    expect(boundedLatest.body.data.currentness).toMatchObject({ draftRevision: 25,
+      draftUpdatedAt: boundedLatest.body.data.draft.updatedAt,
+      historyCurrentRevision: 25,
+      historyCurrentUpdatedAt: boundedLatest.body.data.revisionHistory.currentUpdatedAt,
+      historyChainDigest: boundedLatest.body.data.revisionHistory.historyDigest,
+      sourceProposalDigest: boundedLatest.body.data.sourceProposal.sourceProposalDigest,
+      sourceProposalRevisionDigest: boundedLatest.body.data.sourceProposal.sourceProposalRevisionDigest });
+    expect(boundedLatest.body.data.currentness.identityDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(boundedLatest.body.data.currentness.capabilityDigest).toMatch(/^[0-9a-f]{64}$/);
+    const mountedWitness = boundedLatest.body.data.currentness;
+    const sameContentDigest = boundedLatest.body.data.draft.draftDigest;
+    const sameContentRevision = await request(f.app).post(`${quoteRoute}/draft`)
+      .set(f.actors.member.session.headers)
+      .set('X-CSRF-Token', f.actors.member.csrfToken).set('Idempotency-Key', crypto.randomUUID())
+      .send({ draft: rollingDraft, expectedRevision: 25,
+        capabilityGrantId: quoteMemberOptionGrant.grantId,
+        capabilityGrantRevision: quoteMemberOptionGrant.revision,
+        businessPurpose: PURPOSE['customer_financial.estimate.edit_options'],
+        policyVersion: 'mission27.launch.v1',
+        reason: 'Member recorded the same content under a new independent review.',
+        confirmed: true, confirmationVersion: 'm27-polaris-quote-journey-v1' });
+    expect(sameContentRevision.status).toBe(201);
+    expect(sameContentRevision.body.data.draft).toMatchObject({ revision: 26,
+      draftDigest: sameContentDigest });
+    const afterSameContentRevision = await request(f.app).get(`${quoteRoute}?historyLimit=20&historyBefore=6`)
+      .set(actor.session.headers);
+    expect(afterSameContentRevision.status).toBe(200);
+    expect(afterSameContentRevision.body.data.draft).toMatchObject({ revision: 26,
+      draftDigest: sameContentDigest });
+    expect(afterSameContentRevision.body.data.currentness).toMatchObject({ draftRevision: 26,
+      historyCurrentRevision: 26,
+      historyChainDigest: afterSameContentRevision.body.data.revisionHistory.historyDigest });
+    expect(afterSameContentRevision.body.data.currentness.identityDigest).not.toBe(mountedWitness.identityDigest);
+    expect(afterSameContentRevision.body.data.currentness.historyChainDigest)
+      .not.toBe(mountedWitness.historyChainDigest);
+    expect(afterSameContentRevision.body.data.currentness.draftUpdatedAt)
+      .not.toBe(mountedWitness.draftUpdatedAt);
     expect((await request(f.app).get(`${quoteRoute}?historyLimit=0`)
       .set(actor.session.headers)).status).toBe(400);
     expect((await request(f.app).get(`${quoteRoute}?historyLimit=20&unexpected=true`)
@@ -761,8 +809,8 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     const retainedRows = await f.ownerPool.query(`SELECT revision,rtrim(history_chain_digest) history_chain_digest
       FROM canonical_customer_financial_estimate_journey_revisions_v1
       WHERE organization_id=$1 AND estimate_id=$2 ORDER BY revision`, [f.org, estimate]);
-    expect(retainedRows.rows).toHaveLength(26);
-    expect(new Set(retainedRows.rows.map(row => row.history_chain_digest)).size).toBe(26);
+    expect(retainedRows.rows).toHaveLength(27);
+    expect(new Set(retainedRows.rows.map(row => row.history_chain_digest)).size).toBe(27);
     const staleSaveReplay = await request(f.app).post(`${quoteRoute}/draft`).set(actor.session.headers)
       .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', saveKey).send(saveBody);
     expect(staleSaveReplay.status).toBe(409);
@@ -806,7 +854,7 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     const preserved = await f.ownerPool.query(`SELECT count(*)::int total
       FROM canonical_customer_financial_estimate_journey_revisions_v1
       WHERE organization_id=$1 AND estimate_id=$2`, [f.org, estimate]);
-    expect(preserved.rows[0].total).toBe(26);
+    expect(preserved.rows[0].total).toBe(27);
   }, 240000);
 
 });

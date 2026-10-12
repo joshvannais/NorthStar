@@ -37,20 +37,21 @@ const sourceProposal = { version:'mission24.customer_estimate_version.v1',
   issuedAt:'2026-10-11T10:00:00.000Z',sourceCurrent:true,automaticDelivery:false };
 
 const runtimeScript = `(function(){
- var saved=null,calls=[],delayed=null;window.m27Part3cCalls=calls;
- window.m27Part3cFailNextGet=false;window.m27Part3cFailNextPost=false;window.m27Part3cDelayNextGet=false;window.m27Part3cHasDelayed=false;
+ var saved=null,calls=[],delayedLoad=null,delayedHistory=null;window.m27Part3cCalls=calls;
+ window.m27Part3cFailNextGet=false;window.m27Part3cFailNextPost=false;window.m27Part3cDelayNextGet=false;window.m27Part3cHasDelayed=false;window.m27Part3cDelayNextHistoryGet=false;window.m27Part3cHasDelayedHistory=false;
  function response(status,data){return Promise.resolve({ok:status>=200&&status<300,status:status,json:function(){return Promise.resolve({success:true,data:data});}});}
  function failure(status,message){return Promise.resolve({ok:false,status:status,json:function(){return Promise.resolve({success:false,error:{category:'TEST_UNAVAILABLE',message:message}});}});}
-  function history(before){var total=45,upper=before===null?total+1:before,entries=[];for(var revision=Math.min(total,upper-1);revision>=1&&entries.length<20;revision--){entries.push({revision:revision,actorUserId:'77777777-7777-4777-8777-777777777777',actorAccessRole:'owner',reason:revision===total?'Owner reviewed every option and exact price.':'Earlier authorized revision '+revision+'.',recordedAt:'2026-10-11T12:00:00.000Z',snapshotDigest:revision.toString(16).padStart(64,'0')});}var next=entries.length&&entries[entries.length-1].revision>1?entries[entries.length-1].revision:null;return {contractVersion:'m27-polaris-revision-history-v1',state:'current',currentRevision:total,historyDigest:'9'.repeat(64),sourceOriginal:{revision:0,sourceProposalDigest:'d'.repeat(64),sourceProposalRevisionDigest:'e'.repeat(64),snapshotDigest:'8'.repeat(64),recordedAt:'2026-10-11T10:00:00.000Z'},humanRevisions:entries,pagination:{limit:20,beforeRevision:before,returned:entries.length,total:total,order:'revision_desc',nextCursor:next,hasEarlier:next!==null,truncated:true},mission25Observation:{adapter:'mission25.tenant_edit_observation.v1',state:'unavailable',reason:'learning_permission_unavailable',value:null,published:false,automaticApplication:false},mission32Adapter:{name:'polaris.estimate_studio.adapter.v1',compatibleSchemaVersion:1,state:'compatible_contract',receiverExecutionAvailable:false,receiverMutationCount:0}};}
-  function current(before){if(!saved)return Object.assign({},${JSON.stringify(baseDraft)},{sourceProposal:${JSON.stringify(sourceProposal)}});var page=history(before);return {state:'current',draft:saved,sourceProposal:${JSON.stringify(sourceProposal)},capabilities:${JSON.stringify(grants)},revisionHistory:page,mission25Observation:page.mission25Observation,mission32Adapter:page.mission32Adapter,signature:{state:'unavailable',reason:'legal_review_unavailable'},workHandoff:{state:'unavailable',reason:'work_handoff_receiver_unavailable'}};}
+  function history(before){var total=saved.revision,limit=20,pageUpper=Math.min(total,before===null?total:before-1),includeSource=pageUpper<=limit-1,humanLimit=limit-(includeSource?1:0),entries=[];for(var revision=pageUpper;revision>=1&&entries.length<humanLimit;revision--){entries.push({revision:revision,actorUserId:revision===46?'88888888-8888-4888-8888-888888888888':'77777777-7777-4777-8777-777777777777',actorAccessRole:revision===46?'member':'owner',reason:revision===46?'Member recorded the same content under a new review.':revision===45?'Owner reviewed every option and exact price.':'Earlier authorized revision '+revision+'.',recordedAt:revision===46?'2026-10-11T12:00:01.000Z':'2026-10-11T12:00:00.000Z',snapshotDigest:revision.toString(16).padStart(64,'0')});}var source=includeSource?{revision:0,sourceProposalDigest:'d'.repeat(64),sourceProposalRevisionDigest:'e'.repeat(64),snapshotDigest:'8'.repeat(64),recordedAt:'2026-10-11T10:00:00.000Z'}:null,next=includeSource?null:entries[entries.length-1].revision,returned=entries.length+(source?1:0);return {contractVersion:'m27-polaris-revision-history-v1',state:'current',currentRevision:total,currentUpdatedAt:saved.updatedAt,historyDigest:saved.historyChainDigest,sourceOriginal:source,humanRevisions:entries,pagination:{limit:limit,beforeRevision:before,returned:returned,returnedRecords:returned,total:total+1,humanReturned:entries.length,totalHumanRevisions:total,totalRecords:total+1,order:'revision_desc',nextCursor:next,hasEarlier:next!==null,hasLatest:before!==null,truncated:returned<total+1},mission25Observation:{adapter:'mission25.tenant_edit_observation.v1',state:'unavailable',reason:'learning_permission_unavailable',value:null,published:false,automaticApplication:false},mission32Adapter:{name:'polaris.estimate_studio.adapter.v1',compatibleSchemaVersion:1,state:'compatible_contract',receiverExecutionAvailable:false,receiverMutationCount:0}};}
+  function current(before){if(!saved)return Object.assign({},${JSON.stringify(baseDraft)},{sourceProposal:${JSON.stringify(sourceProposal)}});var page=history(before),currentness={draftRevision:saved.revision,draftUpdatedAt:saved.updatedAt,draftDigest:saved.draftDigest,historyCurrentRevision:page.currentRevision,historyCurrentUpdatedAt:page.currentUpdatedAt,historyChainDigest:page.historyDigest,capabilityDigest:'2'.repeat(64),sourceProposalDigest:'d'.repeat(64),sourceProposalRevisionDigest:'e'.repeat(64),identityDigest:saved.currentnessIdentity};return {state:'current',draft:saved,sourceProposal:${JSON.stringify(sourceProposal)},capabilities:${JSON.stringify(grants)},revisionHistory:page,currentness:currentness,mission25Observation:page.mission25Observation,mission32Adapter:page.mission32Adapter,signature:{state:'unavailable',reason:'legal_review_unavailable'},workHandoff:{state:'unavailable',reason:'work_handoff_receiver_unavailable'}};}
  window.m27Part3cSetServerOption=function(name,minor){if(!saved){saved=JSON.parse(JSON.stringify(${JSON.stringify(baseDraft)}));saved.revision=1;saved.draftDigest='c'.repeat(64);}saved.nameMarker=name;saved.options[0].name=name;saved.options[0].lines[0].price.minorUnits=minor;saved.options[0].lines[0].price.decimal=(BigInt(minor)/100n).toString()+'.'+(BigInt(minor)%100n).toString().padStart(2,'0');};
-  window.m27Part3cResolveDelayed=function(){if(delayed){var pending=delayed;delayed=null;window.m27Part3cHasDelayed=false;pending.resolve(response(200,pending.snapshot));}};
+  window.m27Part3cAdvanceSameContentRevision=function(){saved.revision=46;saved.updatedAt='2026-10-11T12:00:01.000Z';saved.historyChainDigest='a'.repeat(64);saved.currentnessIdentity='6'.repeat(64);};
+  window.m27Part3cResolveDelayed=function(){if(delayedLoad){var pending=delayedLoad;delayedLoad=null;window.m27Part3cHasDelayed=false;pending.resolve(response(200,pending.snapshot));}};
+  window.m27Part3cResolveDelayedHistory=function(){if(delayedHistory){var pending=delayedHistory;delayedHistory=null;window.m27Part3cHasDelayedHistory=false;pending.resolve(response(200,current(pending.before)));}};
  window.NorthStarAccountSession={fetch:function(url,options){options=options||{};var method=options.method||'GET',body=options.body?JSON.parse(options.body):null;calls.push({url:url,method:method,body:body});
   if(method==='GET'&&window.m27Part3cFailNextGet){window.m27Part3cFailNextGet=false;return failure(503,'Synthetic unavailable');}
-   if(method==='GET'&&window.m27Part3cDelayNextGet){window.m27Part3cDelayNextGet=false;window.m27Part3cHasDelayed=true;var snapshot=JSON.parse(JSON.stringify(current(null)));return new Promise(function(resolve){delayed={resolve:resolve,snapshot:snapshot};});}
-   if(method==='GET'){var parsed=new URL(url,'http://northstar.test');var before=parsed.searchParams.has('historyBefore')?Number(parsed.searchParams.get('historyBefore')):null;return response(200,current(before));}
+   if(method==='GET'){var parsed=new URL(url,'http://northstar.test'),before=parsed.searchParams.has('historyBefore')?Number(parsed.searchParams.get('historyBefore')):null;if(window.m27Part3cDelayNextHistoryGet&&parsed.searchParams.has('historyBefore')){window.m27Part3cDelayNextHistoryGet=false;window.m27Part3cHasDelayedHistory=true;return new Promise(function(resolve){delayedHistory={resolve:resolve,before:before};});}if(window.m27Part3cDelayNextGet){window.m27Part3cDelayNextGet=false;window.m27Part3cHasDelayed=true;var snapshot=JSON.parse(JSON.stringify(current(null)));return new Promise(function(resolve){delayedLoad={resolve:resolve,snapshot:snapshot};});}return response(200,current(before));}
   if(method==='POST'&&window.m27Part3cFailNextPost){window.m27Part3cFailNextPost=false;return failure(409,'Synthetic changed');}
-   if(url.endsWith('/draft')){saved=body.draft;saved.revision=45;saved.draftDigest='c'.repeat(64);saved.updatedAt='2026-10-11T12:00:00.000Z';return response(201,{draft:saved});}
+   if(url.endsWith('/draft')){saved=body.draft;saved.revision=45;saved.draftDigest='c'.repeat(64);saved.updatedAt='2026-10-11T12:00:00.000Z';saved.historyChainDigest='9'.repeat(64);saved.currentnessIdentity='7'.repeat(64);return response(201,{draft:saved});}
   return response(503,null);
  }};
 })();`;
@@ -95,19 +96,43 @@ async function main() {
       assert.equal(await page.getByText(/Current Mission 24 issued proposal EST-0003/).count(),1);
       assert.equal(await page.getByText(/reviewed recipient and legal approval/).count(),1);
       assert.equal(await page.getByText(/reviewed Mission 23 receiver exists/).count(),1);
-      const historySummary=page.getByText(/Revision history · source original \+ 45 human revisions/);
+      const historySummary=page.getByText(/Revision history · 46 total records \(45 human revisions\)/);
       assert.equal(await historySummary.count(),1);await historySummary.focus();await page.keyboard.press('Enter');
       assert.equal(await page.getByText(/Mission 25 learning remains unavailable/).count(),1);
       assert.equal(await page.getByText(/Mission 32 adapter polaris\.estimate_studio\.adapter\.v1 version 1/).count(),1);
       assert.equal(await page.getByText(/Revision 45 · Owner reviewed every option and exact price/).count(),1);
-      assert.ok(await page.locator('.polaris-quote-history li').count()<=21);
+      assert.equal(await page.locator('.polaris-quote-history li').count(),20);
+      assert.equal(await page.getByText(/Source original ·/).count(),0);
       await page.getByRole('button',{name:'Show earlier revisions'}).focus();await page.keyboard.press('Enter');
-      await page.getByText(/Revision history · source original \+ 45 human revisions/).waitFor();
-      await page.getByText(/Revision history · source original \+ 45 human revisions/).focus();await page.keyboard.press('Enter');
+      await page.getByText(/Revision history · 46 total records \(45 human revisions\)/).waitFor();
+      await page.getByText(/Revision history · 46 total records \(45 human revisions\)/).focus();await page.keyboard.press('Enter');
       assert.equal(await page.getByText(/Revision 25 · Earlier authorized revision 25/).count(),1);
-      assert.ok(await page.locator('.polaris-quote-history li').count()<=21);
+      assert.equal(await page.locator('.polaris-quote-history li').count(),20);
+      assert.equal(await page.getByText(/Source original ·/).count(),0);
+      await page.getByRole('button',{name:'Show earlier revisions'}).focus();await page.keyboard.press('Enter');
+      await page.getByText(/Revision history · 46 total records \(45 human revisions\)/).waitFor();
+      await page.getByText(/Revision history · 46 total records \(45 human revisions\)/).focus();await page.keyboard.press('Enter');
+      assert.equal(await page.getByText(/Revision 5 · Earlier authorized revision 5/).count(),1);
+      assert.equal(await page.getByText(/Source original ·/).count(),1);
+      assert.equal(await page.locator('.polaris-quote-history li').count(),6);
+      assert.equal(await page.getByRole('button',{name:'Show earlier revisions'}).count(),0);
       await page.getByRole('button',{name:'Show latest revisions'}).focus();await page.keyboard.press('Enter');
-      await page.getByText(/Revision history · source original \+ 45 human revisions/).waitFor();
+      await page.getByText(/Revision history · 46 total records \(45 human revisions\)/).waitFor();
+      await page.getByText(/Revision history · 46 total records \(45 human revisions\)/).focus();await page.keyboard.press('Enter');
+      await page.evaluate(function(){window.m27Part3cDelayNextHistoryGet=true;});
+      await page.getByRole('button',{name:'Show earlier revisions'}).focus();await page.keyboard.press('Enter');
+      await page.waitForFunction(function(){return window.m27Part3cHasDelayedHistory===true;});
+      await page.evaluate(function(){window.m27Part3cAdvanceSameContentRevision();window.m27Part3cResolveDelayedHistory();});
+      await page.locator('#host [role=alert]').waitFor({timeout:5000});
+      assert.equal(await page.locator('#host [role=alert]').evaluate(function(element){return document.activeElement===element;}),true);
+      assert.equal(await page.locator('#host .polaris-quote-option').count(),0);
+      assert.equal(await page.locator('#host .polaris-quote-history').count(),0);
+      assert.equal(await page.locator('#host').getByRole('button',{name:'Save reviewed draft'}).count(),0);
+      assert.equal(await page.locator('#host').getByText(/Mission 24 issued proposal/).count(),0);
+      await page.locator('#host').getByRole('button',{name:'Reload current quote'}).focus();await page.keyboard.press('Enter');
+      await page.getByText('Ready for human review.',{exact:true}).waitFor({timeout:5000});
+      assert.equal(await page.getByText(/Revision history · 47 total records \(46 human revisions\)/).count(),1);
+      assert.equal(await page.getByLabel('Option name').first().inputValue(),'Reviewed repair');
       const calls=await page.evaluate(()=>window.m27Part3cCalls);
       const save=calls.find(call=>call.url.endsWith('/draft'));
       assert.equal(save.body.draft.options[0].name,'Reviewed repair');
@@ -115,11 +140,6 @@ async function main() {
       assert.equal(save.body.draft.options.length,2);
       assert.equal(calls.some(call=>call.url.endsWith('/proposal')),false);
       assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
-      await auditRenderedPage(page,{mainSelector:'#mainContent',layout});
-      await exerciseSkipLink(page,{mainSelector:'#mainContent'});
-      await page.locator('.polaris-quote-journey > summary').click();
-      await page.getByText('Ready for human review.',{exact:true}).waitFor({timeout:5000});
-      await page.locator('.polaris-quote-journey').screenshot({path:path.join(output,`${engine}-${layout.name}.png`)});
       await page.evaluate(function(){window.m27Part3cDelayNextGet=true;});
       await page.locator('#host').getByRole('button',{name:'Reload current quote'}).click();
       await page.waitForFunction(function(){return window.m27Part3cHasDelayed===true;});
@@ -128,14 +148,16 @@ async function main() {
       await page.locator('#host > .polaris-quote-journey > summary').click();
       await page.waitForFunction(function(minimum){return window.m27Part3cCalls.filter(function(call){
         return call.method==='GET';}).length>=minimum;},getCount+1);
-      await page.waitForFunction(function(){return Array.from(document.querySelectorAll('#host input')).some(function(input){return input.value==='Newer server quote';});});
+      await page.waitForFunction(function(){return Array.from(document.querySelectorAll('#host input')).some(function(input){return input.value==='Newer server quote';});}).catch(async function(){
+        throw new Error('Newer same-mount load did not render: '+(await page.locator('#host').innerText())+' | '+JSON.stringify(await page.evaluate(function(){return window.m27Part3cCalls;}))+' | '+errors.join(' | '));
+      });
       await page.locator('#host > .polaris-quote-journey > summary').click();
-      await page.getByLabel('Option name').waitFor({timeout:5000});
-      assert.equal(await page.getByLabel('Option name').inputValue(),'Newer server quote');
+      await page.getByLabel('Option name').first().waitFor({timeout:5000});
+      assert.equal(await page.getByLabel('Option name').first().inputValue(),'Newer server quote');
       await page.evaluate(function(){window.m27Part3cResolveDelayed();});
       await page.waitForTimeout(50);
       assert.equal(await page.locator('input').evaluateAll(function(inputs){return inputs.filter(function(input){return input.value==='Newer server quote';}).length;}),1);
-      assert.equal(await page.locator('input').evaluateAll(function(inputs){return inputs.filter(function(input){return input.value==='281.48';}).length;}),0);
+      assert.equal(await page.getByLabel('Price (USD)').first().inputValue(),'123.45');
       await page.getByLabel('Review reason').fill('This rejected mutation must clear every stale value.');
       await page.getByText('I reviewed every option and price in this exact draft.').click();
       await page.evaluate(function(){window.m27Part3cFailNextPost=true;});
@@ -148,8 +170,11 @@ async function main() {
       assert.equal(await page.locator('#host').getByText(/Mission 24 issued proposal/).count(),0);
       assert.equal(await page.locator('#host .polaris-quote-history').count(),0);
       await page.locator('#host').getByRole('button',{name:'Reload current quote'}).click();
-      await page.getByLabel('Option name').waitFor({timeout:5000});
-      assert.equal(await page.getByLabel('Option name').inputValue(),'Newer server quote');
+      await page.getByLabel('Option name').first().waitFor({timeout:5000});
+      assert.equal(await page.getByLabel('Option name').first().inputValue(),'Newer server quote');
+      await page.locator('.polaris-quote-journey').screenshot({path:path.join(output,`${engine}-${layout.name}.png`)});
+      await auditRenderedPage(page,{mainSelector:'#mainContent',layout});
+      await exerciseSkipLink(page,{mainSelector:'#mainContent'});
       const demoIsolation=await page.evaluate(function(estimateIdentity){var before=window.m27Part3cCalls.length;
         var host=document.createElement('div');document.body.appendChild(host);
         var mounted=NorthStarPolarisQuoteJourney.mount({simulated:true,pins:{estimateId:estimateIdentity}},host);

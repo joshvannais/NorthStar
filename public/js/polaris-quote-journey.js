@@ -83,18 +83,38 @@
       var retry = node('button', 'Reload current quote', content, 'btn btn-secondary');
       retry.type = 'button'; retry.onclick = load;
     }
+    function currentnessIdentity(value) {
+      var witness=value&&value.currentness,history=value&&value.revisionHistory,
+        currentDraft=value&&value.draft,source=value&&value.sourceProposal;
+      if(!witness||!history||!currentDraft||!source||
+          !/^[0-9a-f]{64}$/.test(witness.identityDigest||'')||
+          !/^[0-9a-f]{64}$/.test(witness.historyChainDigest||'')||
+          !/^[0-9a-f]{64}$/.test(witness.capabilityDigest||'')||
+          Number(witness.draftRevision)!==Number(currentDraft.revision)||
+          witness.draftUpdatedAt!==currentDraft.updatedAt||
+          witness.draftDigest!==currentDraft.draftDigest||
+          Number(witness.historyCurrentRevision)!==Number(history.currentRevision)||
+          witness.historyCurrentUpdatedAt!==history.currentUpdatedAt||
+          witness.historyChainDigest!==history.historyDigest||
+          witness.sourceProposalDigest!==source.sourceProposalDigest||
+          witness.sourceProposalRevisionDigest!==source.sourceProposalRevisionDigest)return null;
+      return witness.identityDigest;
+    }
     function load() {
       var requestToken = ++requestGeneration; data = null; draft = null;
       content.replaceChildren(); var loading = node('p', 'Loading the current editable quote…', content, 'polaris-quote-status');
       loading.setAttribute('role', 'status'); loading.tabIndex = -1;
       return request(route, { cache: 'no-store' }).then(function (value) {
         if (token !== generation || requestToken !== requestGeneration || !section.isConnected) return;
+        if(value&&value.revisionHistory&&!currentnessIdentity(value))return rejected({status:409});
         data = value; draft = clone(value.draft || value); render();
       }).catch(function (error) {
         if (token !== generation || requestToken !== requestGeneration) return; rejected(error);
       });
     }
     function loadHistoryPage(beforeRevision) {
+      var mountedIdentity=currentnessIdentity(data);
+      if(!mountedIdentity)return rejected({status:409});
       var requestToken = ++requestGeneration;
       var url = route + '?historyLimit=20' + (beforeRevision === null ? '' :
         '&historyBefore=' + encodeURIComponent(String(beforeRevision)));
@@ -102,7 +122,10 @@
       return request(url, { cache: 'no-store' }).then(function (value) {
         if (token !== generation || requestToken !== requestGeneration || !section.isConnected) return;
         if (!value || value.state !== 'current' || !value.draft || !value.revisionHistory ||
-            value.draft.draftDigest !== draft.draftDigest || !value.sourceProposal ||
+            currentnessIdentity(value)!==mountedIdentity||
+            Number(value.draft.revision)!==Number(draft.revision)||
+            value.draft.updatedAt!==draft.updatedAt||value.draft.draftDigest !== draft.draftDigest ||
+            !value.sourceProposal ||
             value.sourceProposal.sourceProposalDigest !== data.sourceProposal.sourceProposalDigest ||
             value.sourceProposal.sourceProposalRevisionDigest !==
               data.sourceProposal.sourceProposalRevisionDigest) {
@@ -144,29 +167,41 @@
     }
     function revisionHistory(parent) {
       var history=data&&data.revisionHistory;
-      if(!history||history.state!=='current'||!history.sourceOriginal||!Array.isArray(history.humanRevisions))return;
-      var pagination=history.pagination||{};var total=Number(pagination.total);
-      if(!Number.isSafeInteger(total)||total<0||history.humanRevisions.length>20){
+      if(!history||history.state!=='current'||!Array.isArray(history.humanRevisions))return;
+      var pagination=history.pagination||{},totalHuman=Number(pagination.totalHumanRevisions),
+        totalRecords=Number(pagination.totalRecords),sourceCount=history.sourceOriginal?1:0,
+        returnedRecords=history.humanRevisions.length+sourceCount,limit=Number(pagination.limit);
+      if(!Number.isSafeInteger(totalHuman)||totalHuman<1||totalRecords!==totalHuman+1||
+          !Number.isSafeInteger(limit)||limit<1||limit>20||returnedRecords>limit||returnedRecords>20||
+          Number(pagination.returned)!==returnedRecords||Number(pagination.returnedRecords)!==returnedRecords||
+          Number(pagination.humanReturned)!==history.humanRevisions.length||
+          Number(history.currentRevision)!==totalHuman||
+          !history.currentUpdatedAt||!/^[0-9a-f]{64}$/.test(history.historyDigest||'')||
+          (history.sourceOriginal&&pagination.hasEarlier===true)||
+          (!history.sourceOriginal&&pagination.hasEarlier!==true)||
+          (pagination.hasEarlier===true&&(!Number.isSafeInteger(Number(pagination.nextCursor))||Number(pagination.nextCursor)<1))||
+          (pagination.hasEarlier!==true&&pagination.nextCursor!==null)||
+          pagination.hasLatest!==(pagination.beforeRevision!==null&&pagination.beforeRevision!==undefined)){
         setTimeout(function(){rejected({status:409});},0);return;
       }
       var details=node('details',undefined,parent,'polaris-quote-history');
-      var label='Revision history · source original + '+total+' human '+
-        (total===1?'revision':'revisions');
+      var label='Revision history · '+totalRecords+' total records ('+totalHuman+' human '+
+        (totalHuman===1?'revision':'revisions')+')';
       node('summary',label,details);var list=node('ol',undefined,details);
-      node('li','Source original · '+history.sourceOriginal.sourceProposalDigest.slice(0,12)+'… · '+
+      if(history.sourceOriginal)node('li','Source original · '+history.sourceOriginal.sourceProposalDigest.slice(0,12)+'… · '+
         history.sourceOriginal.recordedAt,list);
       history.humanRevisions.forEach(function(entry){
         node('li','Revision '+entry.revision+' · '+entry.reason+' · '+entry.recordedAt+
           ' · '+entry.snapshotDigest.slice(0,12)+'…',list);
       });
-      node('p','Showing '+history.humanRevisions.length+' of '+total+
-        ' human revisions in deterministic newest-first order.',details,'polaris-quote-intro');
+      node('p','Showing '+returnedRecords+' of '+totalRecords+
+        ' immutable history records in deterministic newest-first order.',details,'polaris-quote-intro');
       var historyActions=node('div',undefined,details,'polaris-quote-actions');
       if(pagination.hasEarlier===true&&Number.isSafeInteger(Number(pagination.nextCursor))){
         var earlier=node('button','Show earlier revisions',historyActions,'btn btn-secondary');earlier.type='button';
         earlier.onclick=function(){loadHistoryPage(Number(pagination.nextCursor));};
       }
-      if(pagination.beforeRevision!==null&&pagination.beforeRevision!==undefined){
+      if(pagination.hasLatest===true){
         var latest=node('button','Show latest revisions',historyActions,'btn btn-secondary');latest.type='button';
         latest.onclick=function(){loadHistoryPage(null);};
       }

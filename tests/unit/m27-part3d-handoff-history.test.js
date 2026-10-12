@@ -45,10 +45,15 @@ describe('Mission 27 Part 3D immutable handoff and revision history', () => {
     const route = read('src/routes/customerFinancialEditableEstimate.js');
     expect(migration).toContain('limit_value NOT BETWEEN 1 AND 20');
     expect(migration).toContain('revision<COALESCE(before_revision,current_revision+1)');
-    expect(migration).toMatch(/ORDER BY revision DESC\s+LIMIT limit_value/);
+    expect(migration).toMatch(/ORDER BY revision DESC\s+LIMIT human_limit/);
+    expect(migration).toContain('include_source:=page_upper<=limit_value-1');
+    expect(migration).toContain('returned_records>limit_value OR returned_records>20');
+    expect(migration).toContain("'returnedRecords',returned_records");
+    expect(migration).toContain("'totalRecords',current_revision+1");
     expect(migration).toContain("'order','revision_desc'");
     expect(migration).toContain("'nextCursor',next_cursor");
     expect(migration).toContain("'hasEarlier',next_cursor IS NOT NULL");
+    expect(migration).toContain("'hasLatest',before_revision IS NOT NULL");
     expect(migration).not.toContain("'snapshot',snapshot");
     expect(migration).not.toContain('SELECT count(*)::int,min(revision),max(revision)');
     expect(repository).toContain('function checkedHistoryPage(raw = {})');
@@ -87,11 +92,17 @@ describe('Mission 27 Part 3D immutable handoff and revision history', () => {
 
   test('mounted editor renders bounded history without enabling receivers', () => {
     const browser = read('public/js/polaris-quote-journey.js');
-    expect(browser).toContain('Revision history · source original + ');
-    expect(browser).toContain("history.humanRevisions.length>20");
+    expect(browser).toContain("label='Revision history · '+totalRecords+' total records ('");
+    expect(browser).toContain('returnedRecords>limit||returnedRecords>20');
+    expect(browser).toContain('Number(pagination.returnedRecords)!==returnedRecords');
+    expect(browser).toContain('(pagination.hasEarlier!==true&&pagination.nextCursor!==null)');
+    expect(browser).toContain('Number(history.currentRevision)!==totalHuman');
     expect(browser).toContain("'Show earlier revisions'");
     expect(browser).toContain("'Show latest revisions'");
     expect(browser).toContain('requestToken !== requestGeneration');
+    expect(browser).toContain('function currentnessIdentity(value)');
+    expect(browser).toContain('currentnessIdentity(value)!==mountedIdentity');
+    expect(browser).toContain('witness.historyChainDigest!==history.historyDigest');
     expect(browser).toContain('Mission 25 learning remains unavailable');
     expect(browser).toContain('Calculator execution remains unavailable.');
     expect(browser).not.toContain('learningObservation.publish');

@@ -445,14 +445,20 @@ CREATE TRIGGER canonical_customer_financial_estimate_journey_revisions_v1_immuta
 CREATE FUNCTION public.canonical_customer_financial_estimate_journey_v1_history(
  org UUID,estimate_value UUID,current_draft JSONB,current_source JSONB,limit_value INTEGER,before_revision BIGINT)
 RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE source_row RECORD; latest_row RECORD; entries JSONB; current_revision BIGINT;
- history_digest TEXT; next_cursor BIGINT; returned_count INTEGER;
+DECLARE source_row RECORD; latest_row RECORD; entries JSONB; current_revision BIGINT; page_upper BIGINT;
+ history_digest TEXT; next_cursor BIGINT; returned_count INTEGER; returned_records INTEGER;
+ human_limit INTEGER; include_source BOOLEAN; source_value JSONB;
  option_ids JSONB; line_ids JSONB; assumption_ids JSONB;
 BEGIN
  IF current_draft IS NULL OR current_source IS NULL OR limit_value NOT BETWEEN 1 AND 20 OR
   (before_revision IS NOT NULL AND before_revision NOT BETWEEN 1 AND 9007199254740991) THEN
   RAISE EXCEPTION 'Estimate journey history page invalid' USING ERRCODE='22023'; END IF;
  current_revision:=(current_draft->>'revision')::bigint;
+ IF before_revision IS NOT NULL AND before_revision>current_revision+1 THEN
+  RAISE EXCEPTION 'Estimate journey history cursor is not current' USING ERRCODE='22023'; END IF;
+ page_upper:=LEAST(current_revision,COALESCE(before_revision-1,current_revision));
+ include_source:=page_upper<=limit_value-1;
+ human_limit:=limit_value-CASE WHEN include_source THEN 1 ELSE 0 END;
  SELECT * INTO source_row FROM public.canonical_customer_financial_estimate_journey_revisions_v1
   WHERE organization_id=org AND estimate_id=estimate_value AND revision=0 AND revision_class='source_original';
  SELECT * INTO latest_row FROM public.canonical_customer_financial_estimate_journey_revisions_v1
@@ -465,14 +471,23 @@ BEGIN
   INTO entries FROM (SELECT * FROM public.canonical_customer_financial_estimate_journey_revisions_v1
    WHERE organization_id=org AND estimate_id=estimate_value AND revision_class='human_revision'
     AND revision<COALESCE(before_revision,current_revision+1)
-   ORDER BY revision DESC LIMIT limit_value) page;
+   ORDER BY revision DESC LIMIT human_limit) page;
  IF source_row.estimate_id IS NULL OR rtrim(source_row.source_proposal_digest)<>current_source->>'sourceProposalDigest' OR
   rtrim(source_row.source_proposal_revision_digest)<>current_source->>'sourceProposalRevisionDigest' OR
   latest_row.snapshot->>'draftDigest' IS DISTINCT FROM current_draft->>'draftDigest' THEN RETURN NULL; END IF;
  history_digest:=rtrim(latest_row.history_chain_digest);
  returned_count:=jsonb_array_length(entries);
  SELECT min((item->>'revision')::bigint) INTO next_cursor FROM jsonb_array_elements(entries) item;
- IF next_cursor IS NULL OR next_cursor<=1 THEN next_cursor:=NULL; END IF;
+ IF include_source THEN next_cursor:=NULL;
+ ELSIF next_cursor IS NULL THEN RAISE EXCEPTION 'Estimate journey history page incomplete' USING ERRCODE='40001'; END IF;
+ source_value:=CASE WHEN include_source THEN jsonb_build_object('revision',0,
+  'snapshotDigest',rtrim(source_row.snapshot_digest),
+  'recordedAt',public.canonical_customer_financial_billing_identity_v1_utc(source_row.recorded_at),
+  'sourceProposalDigest',rtrim(source_row.source_proposal_digest),
+  'sourceProposalRevisionDigest',rtrim(source_row.source_proposal_revision_digest)) ELSE NULL END;
+ returned_records:=returned_count+CASE WHEN include_source THEN 1 ELSE 0 END;
+ IF returned_records>limit_value OR returned_records>20 THEN
+  RAISE EXCEPTION 'Estimate journey history page exceeds launch bound' USING ERRCODE='54000'; END IF;
  SELECT COALESCE(jsonb_agg(jsonb_build_object('id',option->>'id','digest',option->>'optionDigest') ORDER BY option->>'id'),'[]'::jsonb)
  INTO option_ids FROM jsonb_array_elements(current_draft->'options') option;
  SELECT COALESCE(jsonb_agg(jsonb_build_object('optionId',option->>'id','lineId',line->>'id') ORDER BY option->>'id',line->>'id'),'[]'::jsonb)
@@ -483,14 +498,13 @@ BEGIN
  INTO assumption_ids FROM jsonb_array_elements(current_draft->'options') option
  CROSS JOIN LATERAL jsonb_array_elements(option->'assumptions') assumption;
  RETURN jsonb_build_object('contractVersion','m27-polaris-revision-history-v1','state','current',
-  'sourceOriginal',jsonb_build_object('revision',0,'snapshotDigest',rtrim(source_row.snapshot_digest),
-   'recordedAt',public.canonical_customer_financial_billing_identity_v1_utc(source_row.recorded_at),
-   'sourceProposalDigest',rtrim(source_row.source_proposal_digest),
-    'sourceProposalRevisionDigest',rtrim(source_row.source_proposal_revision_digest)),
-   'humanRevisions',entries,'currentRevision',current_revision,'historyDigest',history_digest,
+  'sourceOriginal',source_value,'humanRevisions',entries,'currentRevision',current_revision,
+   'currentUpdatedAt',current_draft->>'updatedAt','historyDigest',history_digest,
    'pagination',jsonb_build_object('limit',limit_value,'beforeRevision',before_revision,
-    'returned',returned_count,'total',current_revision,'order','revision_desc',
-     'nextCursor',next_cursor,'hasEarlier',next_cursor IS NOT NULL,'truncated',returned_count<current_revision),
+    'returned',returned_records,'returnedRecords',returned_records,'total',current_revision+1,'humanReturned',returned_count,
+     'totalHumanRevisions',current_revision,'totalRecords',current_revision+1,'order','revision_desc',
+     'nextCursor',next_cursor,'hasEarlier',next_cursor IS NOT NULL,'hasLatest',before_revision IS NOT NULL,
+     'truncated',returned_records<current_revision+1),
   'signatureEvidence',jsonb_build_object('state','unavailable','reason','legal_review_unavailable','value',NULL),
   'mission25Observation',jsonb_build_object('adapter','mission25.tenant_edit_observation.v1',
    'state','unavailable','reason','learning_permission_unavailable','value',NULL,
@@ -511,7 +525,7 @@ CREATE FUNCTION public.canonical_customer_financial_estimate_journey_v1_read(
  history_limit INTEGER,history_before BIGINT)
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE draft_row RECORD; capability_rows JSONB; actor_authority JSONB; source_proposal JSONB;
- draft_value JSONB; history_value JSONB;
+ draft_value JSONB; history_value JSONB; currentness_value JSONB;
 BEGIN
  actor_authority:=public.canonical_field_execution_actor_authority(org,actor,role_value,session_value,NULL,FALSE);
  IF role_value NOT IN('owner','admin','member') OR NOT public.canonical_customer_financial_billing_identity_v1_entitlement(org,TRUE) THEN
@@ -568,14 +582,26 @@ BEGIN
    'sourceProposal',NULL,'capabilities','{}'::jsonb,'revisionHistory',NULL,'mission32Adapter',NULL,
    'mission25Observation',NULL,'value',NULL,'providerCallCount',0,'receiverMutationCount',0); END IF;
  draft_value:=draft_row.draft||jsonb_build_object(
-  'revision',draft_row.revision,'updatedAt',draft_row.updated_at,'reason',draft_row.reason);
+  'revision',draft_row.revision,
+  'updatedAt',public.canonical_customer_financial_billing_identity_v1_utc(draft_row.updated_at),
+  'reason',draft_row.reason);
  history_value:=public.canonical_customer_financial_estimate_journey_v1_history(
    org,estimate_value,draft_value,source_proposal,history_limit,history_before);
  IF history_value IS NULL THEN RETURN jsonb_build_object('state','revision_history_unavailable','draft',NULL,
   'sourceProposal',NULL,'capabilities','{}'::jsonb,'revisionHistory',NULL,'value',NULL,
   'providerCallCount',0,'receiverMutationCount',0); END IF;
+ currentness_value:=jsonb_build_object('draftRevision',draft_row.revision,
+  'draftUpdatedAt',public.canonical_customer_financial_billing_identity_v1_utc(draft_row.updated_at),
+  'draftDigest',draft_value->>'draftDigest','historyCurrentRevision',(history_value->>'currentRevision')::bigint,
+  'historyCurrentUpdatedAt',history_value->>'currentUpdatedAt','historyChainDigest',history_value->>'historyDigest',
+  'capabilityDigest',public.canonical_completion_digest(capability_rows),
+  'sourceProposalDigest',source_proposal->>'sourceProposalDigest',
+  'sourceProposalRevisionDigest',source_proposal->>'sourceProposalRevisionDigest');
+ currentness_value:=currentness_value||jsonb_build_object(
+  'identityDigest',public.canonical_completion_digest(currentness_value));
  RETURN jsonb_build_object('state','current','draft',draft_value,
   'sourceProposal',source_proposal,'capabilities',capability_rows,'revisionHistory',history_value,
+  'currentness',currentness_value,
   'mission25Observation',history_value->'mission25Observation','mission32Adapter',history_value->'mission32Adapter',
   'signature',jsonb_build_object('state','unavailable','reason','legal_review_unavailable','value',NULL,
    'missingEvidence',jsonb_build_array('mission24.current_source_proposal_digest',

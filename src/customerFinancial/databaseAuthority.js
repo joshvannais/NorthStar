@@ -24,6 +24,7 @@ const ENTRIES = new Set([
   'canonical_customer_financial_invoice_draft_components_v1_read',
   'canonical_customer_financial_invoice_tax_review_v1_read',
   'canonical_customer_financial_invoice_tax_review_v1_record',
+  'canonical_customer_financial_invoice_draft_workflow_v1_grant',
   'canonical_customer_financial_invoice_draft_preview_v1_read',
 ]);
 const TABLES = new Set([
@@ -93,6 +94,7 @@ async function grantAndVerify(client, runtimeRole) {
           OR proname LIKE 'canonical_customer_financial_invoice_draft_revision_v1_%'
           OR proname LIKE 'canonical_customer_financial_invoice_draft_components_v1_%'
           OR proname LIKE 'canonical_customer_financial_invoice_tax_review_v1_%'
+          OR proname LIKE 'canonical_customer_financial_invoice_draft_workflow_v1_%'
           OR proname LIKE 'canonical_customer_financial_invoice_draft_preview_v1_%')`
   )).rows;
   for (const entry of functions) {

@@ -47,21 +47,37 @@ function preview({ fictional = false, revision = 4, subtotal = 28148, tax = 1759
     receiverMutationCount: 0, previewDigest: digest(revision % 2 ? '7' : '8') };
 }
 
-const paidPreview = preview();
+const paidPreview = preview({ revision: 1 });
 const demoPreview = preview({ fictional: true, revision: 1, subtotal: 960000, tax: 0, marker: 'Fictional reviewed project' });
 const runtimeScript = `(function(){
- var calls=[],current=${JSON.stringify(paidPreview)},demo=${JSON.stringify(demoPreview)},delayed=null;
- window.m27Part4eCalls=calls;window.m27Part4eDelayNext=false;window.m27Part4eHasDelayed=false;window.m27Part4eFailNext=false;
+ var calls=[],methods=[],current=${JSON.stringify(paidPreview)},demo=${JSON.stringify(demoPreview)},delayed=null;
+ var originCaptured=false,draftSaved=false,taxRecorded=false,draftRevision=0,sourceRevision=0,taxRevision=0;
+ var grant={contractVersion:'m27-invoice-draft-workflow-capability-v1',state:'current',capability:'customer_financial.invoice.edit_draft',grantId:'44444444-4444-4444-8444-444444444444',revision:1,businessPurpose:'customer_financial.invoice_draft',policyVersion:'mission27.launch.v1',estimateId:'${estimateId}',sourceCurrent:true,invoiceAuthorized:false,providerCallCount:0,receiverMutationCount:0};
+ window.m27Part4eCalls=calls;window.m27Part4eMethods=methods;window.m27Part4eDelayNext=false;window.m27Part4eHasDelayed=false;window.m27Part4eFailNext=false;
  function response(status,data){return Promise.resolve({ok:status>=200&&status<300,status:status,json:function(){return Promise.resolve({success:status>=200&&status<300,data:data,error:status>=400?{message:'Synthetic currentness rejection'}:undefined});}});}
- window.m27Part4eUseNewer=function(){current=${JSON.stringify(preview({ revision: 5, subtotal: 36500, tax: 2281, marker: 'Newer reviewed electrical repair' }))};};
+ function sourceDigest(){return sourceRevision===0?'${digest('1')}':sourceRevision===1?'${digest('b')}':'${digest('c')}';}
+ function taxDigest(){return taxRevision===0?'${digest('f')}':taxRevision===1?'${digest('e')}':'${digest('d')}';}
+ function receiptDigest(){return sourceRevision===0?'${digest('9')}':sourceRevision===1?'${digest('8')}':'${digest('6')}';}
+ function sourceMoney(){return sourceRevision===0?${JSON.stringify(money(28148))}:sourceRevision===1?${JSON.stringify(money(36500))}:${JSON.stringify(money(41200))};}
+ function preparedTax(){return taxRevision===0?${JSON.stringify(money(1759))}:taxRevision===1?${JSON.stringify(money(2281))}:${JSON.stringify(money(2575))};}
+ function sourceDescription(){return sourceRevision===0?(draftSaved?'Reviewed fence repair':'Fence repair'):sourceRevision===1?'Newer reviewed electrical repair':'Newest reviewed roof repair';}
+ function draft(){return {contractVersion:'m27-invoice-draft-revision-v1',state:'current',originId:'33333333-3333-4333-8333-333333333333',originDigest:sourceDigest(),candidateDigest:'${digest('c')}',revision:draftRevision,draftDigest:draftRevision?'${digest('d')}':'${digest('e')}',historyChainDigest:'${digest('4')}',currency:'USD',subtotalBeforeTax:sourceMoney(),lines:[{ordinal:0,sourceLineDigest:sourceRevision===0?'${digest('a')}':sourceDigest(),group:'Service',description:sourceDescription(),quantity:{version:'m27-invoice-quantity-v1',value:'1',unit:'customer_safe_charge'},allocatedAmount:sourceMoney()}],sourceCurrent:true,invoiceAuthorized:false,receivableAuthorized:false,issueAuthorized:false,providerCallCount:0,receiverMutationCount:0};}
+ function tax(){return {contractVersion:'m27-invoice-date-tax-review-v1',state:taxRecorded?'recorded_policy_unavailable':'ready_to_record',candidateDigest:taxDigest(),preparation:{invoiceDate:taxRevision?'2026-10-14':'2026-10-13',serviceJurisdiction:{region:'MA'},billingJurisdiction:{region:'MA'},collectedTaxLiability:{amount:preparedTax()}}};}
+ window.m27Part4eUseNewer=function(){sourceRevision=1;taxRevision=1;draftRevision=2;current=${JSON.stringify(preview({ revision: 2, subtotal: 36500, tax: 2281, marker: 'Newer reviewed electrical repair' }))};current.draftIdentity.originDigest=sourceDigest();current.draftIdentity.draftDigest='${digest('d')}';current.draftIdentity.preparationDigest=taxDigest();};
+ window.m27Part4eUseNewest=function(){sourceRevision=2;taxRevision=2;draftRevision=3;current=${JSON.stringify(preview({ revision: 3, subtotal: 41200, tax: 2575, marker: 'Newest reviewed roof repair' }))};current.draftIdentity.originDigest=sourceDigest();current.draftIdentity.draftDigest='${digest('d')}';current.draftIdentity.preparationDigest=taxDigest();};
  window.m27Part4eResolveDelayed=function(){if(delayed){var pending=delayed;delayed=null;window.m27Part4eHasDelayed=false;pending.resolve(response(200,pending.snapshot));}};
- window.NorthStarAccountSession={fetch:function(url){calls.push(url);
-  if(url.indexOf('/billable-work-review?sourceClass=final_balance')>=0)return response(200,{state:'reviewed_current',handoffReceipt:{receiptId:'${receiptId}',receiptDigest:'${digest('9')}'}});
+ window.NorthStarAccountSession={fetch:function(url,options){calls.push(url);var method=options&&options.method||'GET';methods.push(method+' '+url);
+  if(url.indexOf('/billable-work-review?sourceClass=final_balance')>=0)return response(200,{state:'reviewed_current',handoffReceipt:{receiptId:'${receiptId}',receiptDigest:receiptDigest()}});
+  if(url.indexOf('/invoice-draft/workflow-capability')>=0)return response(200,grant);
+  if(url.indexOf('/invoice-draft-origin')>=0){if(method==='POST'){originCaptured=true;return response(201,{state:'current'});}return response(200,originCaptured?{state:'current'}:{state:'ready_to_capture',candidateDigest:'${digest('0')}'});}
+  if(url.indexOf('/invoice-draft/tax-review')>=0){if(method==='POST'){taxRecorded=true;return response(201,tax());}return response(200,tax());}
   if(url.indexOf('/invoice-draft/preview?')>=0){if(window.m27Part4eFailNext){window.m27Part4eFailNext=false;return response(409,null);}if(window.m27Part4eDelayNext){window.m27Part4eDelayNext=false;window.m27Part4eHasDelayed=true;var snapshot=JSON.parse(JSON.stringify(current));return new Promise(function(resolve){delayed={resolve:resolve,snapshot:snapshot};});}return response(200,current);}
+  if(url.endsWith('/invoice-draft')||url.indexOf('/invoice-draft?')>=0){if(method==='POST'){draftSaved=true;draftRevision+=1;return response(201,draft());}return response(200,draft());}
   if(url.indexOf('/api/demo/customer-financial/invoice-drafts/')===0)return response(200,demo);
   return response(503,null);
  }};
 })();`;
+new Function(runtimeScript);
 const moduleSource = fs.readFileSync(path.join(__dirname, '../../public/js/customer-financial-invoice-preview.js'), 'utf8');
 const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:light dark;--border-color:#aaadb3;--surface:#fff;--surface-subtle:#f4f1e9;--focus-ring:#9b741b}html[data-theme=dark]{--surface:#12151a;--surface-subtle:#252931;color:#f5f5f5;background:#0c0f13}body{margin:0;font:16px/1.45 system-ui;background:var(--surface);color:inherit}.skip-link{position:absolute;left:1rem;top:-100%;padding:.5rem;background:Canvas;color:CanvasText}.skip-link:focus{top:.5rem}.shell{max-width:960px;margin:auto;padding:4rem 1rem 2rem}.btn{border:1px solid currentColor;border-radius:8px;padding:.65rem .8rem;background:transparent;color:inherit}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}</style></head><body><a class="skip-link" href="#mainContent" tabindex="0">Skip to content</a><main id="mainContent" class="shell" tabindex="-1"><h1>Invoice draft review</h1><div id="host"></div><div id="demoHost"></div></main><script>${runtimeScript}</script><script>${moduleSource}</script><script>NorthStarCustomerFinancialInvoicePreview.mount({simulated:false,pins:{estimateId:'${estimateId}'}},document.getElementById('host'));</script></body></html>`;
 
@@ -69,6 +85,20 @@ async function openPreview(page, host = '#host') {
   await page.locator(`${host} > .invoice-draft-preview > summary`).focus();
   await page.keyboard.press('Enter');
   await page.locator(`${host} .invoice-draft-preview-heading`).waitFor({ timeout: 5000 });
+}
+
+async function completePaidWorkflow(page) {
+  await openPreview(page);
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Capture reviewed invoice source' }).click();
+  await page.getByRole('button', { name: 'Save reviewed invoice draft' }).waitFor({ timeout: 5000 });
+  await page.getByLabel('Customer description').fill('Reviewed fence repair');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Save reviewed invoice draft' }).click();
+  await page.getByRole('button', { name: 'Record tax preparation review' }).waitFor({ timeout: 5000 });
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Record tax preparation review' }).click();
+  await page.getByText('Invoice draft — not issued', { exact: true }).waitFor({ timeout: 5000 });
 }
 
 async function main() {
@@ -87,7 +117,7 @@ async function main() {
       await page.route(fixture, route => route.fulfill({ contentType: 'text/html',
         body: html.replace('<html>', `<html data-theme="${layout.colorScheme}">`) }));
       await page.goto(fixture);
-      await openPreview(page);
+      await completePaidWorkflow(page);
       assert.equal(await page.getByText('Invoice draft — not issued', { exact: true }).count(), 1);
       assert.equal(await page.getByText('Reviewed fence repair', { exact: true }).count(), 1);
       assert.equal(await page.getByText('$281.48', { exact: true }).count(), 2);
@@ -98,30 +128,54 @@ async function main() {
       assert.equal(await page.getByText(/PDF and immutable customer-facing document generation begin/).count(), 1);
       assert.equal(await page.getByRole('button', { name: /issue|approve|send|collect/i }).count(), 0);
 
+      const mountedMethods = await page.evaluate(() => window.m27Part4eMethods);
+      assert.equal(mountedMethods.some(value => value.startsWith('POST ') && value.includes('/invoice-draft-origin')), true);
+      assert.equal(mountedMethods.some(value => value.startsWith('POST ') && /\/invoice-draft$/.test(value)), true);
+      assert.equal(mountedMethods.some(value => value.startsWith('POST ') && value.includes('/invoice-draft/tax-review')), true);
+
+      // A settled preview never survives collapse. Reopen performs the full
+      // guarded currentness chain before rendering the newer exact values.
+      await page.locator('#host > .invoice-draft-preview > summary').click();
+      await page.locator('#host table').waitFor({ state: 'detached', timeout: 5000 });
+      assert.equal(await page.locator('#host table').count(), 0);
+      assert.equal(await page.locator('#host').getByText('$299.07', { exact: true }).count(), 0);
+      const reopenMethodOffset = mountedMethods.length;
+      await page.evaluate(() => { window.m27Part4eUseNewer(); });
+      await page.locator('#host > .invoice-draft-preview > summary').click();
+      await page.getByText('Newer reviewed electrical repair', { exact: true }).waitFor({ timeout: 5000 });
+      assert.equal(await page.getByText('$387.81', { exact: true }).count(), 1);
+      const reopenMethods = (await page.evaluate(() => window.m27Part4eMethods)).slice(reopenMethodOffset);
+      for (const path of ['/billable-work-review?sourceClass=final_balance',
+        '/invoice-draft/workflow-capability','/invoice-draft-origin?','/invoice-draft?',
+        '/invoice-draft/tax-review?','/invoice-draft/preview?']) {
+        assert.equal(reopenMethods.some(value => value.includes(path)), true,
+          `reopen must revalidate ${path}`);
+      }
+
       await page.evaluate(() => { window.m27Part4eDelayNext = true; });
       await page.getByRole('button', { name: 'Reload current preview' }).focus();
       await page.keyboard.press('Enter');
       await page.waitForFunction(() => window.m27Part4eHasDelayed === true);
-      await page.evaluate(() => { window.m27Part4eUseNewer(); });
+      await page.evaluate(() => { window.m27Part4eUseNewest(); });
       await page.locator('#host > .invoice-draft-preview > summary').click();
       await page.locator('#host > .invoice-draft-preview > summary').click();
-      await page.getByText('Newer reviewed electrical repair', { exact: true }).waitFor({ timeout: 5000 });
-      assert.equal(await page.getByText('$387.81', { exact: true }).count(), 1);
+      await page.getByText('Newest reviewed roof repair', { exact: true }).waitFor({ timeout: 5000 });
+      assert.equal(await page.getByText('$437.75', { exact: true }).count(), 1);
       await page.evaluate(() => { window.m27Part4eResolveDelayed(); });
       await page.waitForTimeout(50);
-      assert.equal(await page.getByText('Newer reviewed electrical repair', { exact: true }).count(), 1);
-      assert.equal(await page.getByText('Reviewed fence repair', { exact: true }).count(), 0);
+      assert.equal(await page.getByText('Newest reviewed roof repair', { exact: true }).count(), 1);
+      assert.equal(await page.getByText('Newer reviewed electrical repair', { exact: true }).count(), 0);
 
       await page.evaluate(() => { window.m27Part4eFailNext = true; });
       await page.getByRole('button', { name: 'Reload current preview' }).click();
       await page.locator('#host [role=alert]').waitFor({ timeout: 5000 });
       assert.equal(await page.locator('#host [role=alert]').evaluate(element => document.activeElement === element), true);
       assert.equal(await page.locator('#host table').count(), 0);
-      assert.equal(await page.locator('#host').getByText('$387.81', { exact: true }).count(), 0);
+      assert.equal(await page.locator('#host').getByText('$437.75', { exact: true }).count(), 0);
       assert.equal(await page.locator('#host').getByRole('button', { name: 'Reload current preview' }).count(), 0);
       await page.getByRole('button', { name: 'Retry invoice preview' }).focus();
       await page.keyboard.press('Enter');
-      await page.getByText('Newer reviewed electrical repair', { exact: true }).waitFor({ timeout: 5000 });
+      await page.getByText('Newest reviewed roof repair', { exact: true }).waitFor({ timeout: 5000 });
       assert.equal(await page.locator('#host .invoice-draft-preview-heading').evaluate(element => document.activeElement === element), true);
 
       await page.evaluate(estimate => { NorthStarCustomerFinancialInvoicePreview.mount({ simulated: true,

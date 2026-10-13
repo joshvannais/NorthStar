@@ -12,7 +12,7 @@ const { issueBillableWorkReviewGrant, BUSINESS_PURPOSE, POLICY_VERSION } =
   require('../../src/customerFinancial/billableWorkReviewGrantIssuer');
 const { issueEstimateJourneyGrant, PURPOSE } =
   require('../../src/customerFinancial/estimateJourneyGrantIssuer');
-const { issueInvoiceDraftGrant, BUSINESS_PURPOSE: INVOICE_PURPOSE,
+const { BUSINESS_PURPOSE: INVOICE_PURPOSE,
   POLICY_VERSION: INVOICE_POLICY } = require('../../src/customerFinancial/invoiceDraftGrantIssuer');
 const billingIdentity = require('../../src/customerFinancial/billingIdentityRepository');
 const operations = require('../../src/operations/repository');
@@ -67,12 +67,6 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       actorUserId: actor.actorUserId, membershipId: actor.actorUserId,
       actorAccessRole: actor.actorAccessRole }, estimate);
     adminGrant = await issueBillableWorkReviewGrant(f.ownerPool, { organizationId: f.org,
-      actorUserId: f.actors.admin.actorUserId, membershipId: f.actors.admin.actorUserId,
-      actorAccessRole: f.actors.admin.actorAccessRole }, estimate);
-    invoiceDraftGrant = await issueInvoiceDraftGrant(f.ownerPool, { organizationId: f.org,
-      actorUserId: actor.actorUserId, membershipId: actor.actorUserId,
-      actorAccessRole: actor.actorAccessRole }, estimate);
-    invoiceDraftAdminGrant = await issueInvoiceDraftGrant(f.ownerPool, { organizationId: f.org,
       actorUserId: f.actors.admin.actorUserId, membershipId: f.actors.admin.actorUserId,
       actorAccessRole: f.actors.admin.actorAccessRole }, estimate);
     quoteOptionGrant = await issueEstimateJourneyGrant(f.ownerPool, { organizationId: f.org,
@@ -536,6 +530,54 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
     expect(after.rows[0].numbers).toBe(before.rows[0].numbers);
     expect(after.rows[0].handoffs).toBe(before.rows[0].handoffs);
     expect(after.rows[0].billable_handoffs - before.rows[0].billable_handoffs).toBe(1);
+  }, 180000);
+
+  test('mounted Part 4 workflow issues one current default capability without private setup', async () => {
+    const capabilityRoute = `/api/v1/customer-financial/editable-estimates/${estimate}` +
+      '/invoice-draft/workflow-capability';
+    const body = { confirmed: true,
+      confirmationVersion: 'm27-invoice-draft-workflow-capability-v1' };
+    const before = Number((await f.ownerPool.query(
+      'SELECT count(*) count FROM canonical_customer_financial_invoice_draft_grants_v1')).rows[0].count);
+    expect(before).toBe(0);
+    expect((await request(f.app).post(capabilityRoute).set('Cookie', actor.session.headers.Cookie)
+      .send(body)).status).toBe(403);
+    expect((await request(f.app).post(capabilityRoute).set(f.actors.member.session.headers)
+      .set('X-CSRF-Token', f.actors.member.csrfToken).send(body)).status).toBe(403);
+    expect((await request(f.app).post(capabilityRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).send({ confirmed: false,
+        confirmationVersion: body.confirmationVersion })).status).toBe(400);
+    const [ownerFirst, ownerSecond] = await Promise.all([0,1].map(() => request(f.app)
+      .post(capabilityRoute).set(actor.session.headers).set('X-CSRF-Token', actor.csrfToken)
+      .set('Idempotency-Key', crypto.randomUUID()).send(body)));
+    expect([ownerFirst.status,ownerSecond.status]).toEqual([200,200]);
+    expect(ownerFirst.body.data).toEqual(ownerSecond.body.data);
+    expect(ownerFirst.body.data).toMatchObject({
+      contractVersion: 'm27-invoice-draft-workflow-capability-v1', state: 'current',
+      capability: 'customer_financial.invoice.edit_draft', revision: 1,
+      businessPurpose: INVOICE_PURPOSE, policyVersion: INVOICE_POLICY,
+      estimateId: estimate, sourceCurrent: true, invoiceAuthorized: false,
+      providerCallCount: 0, receiverMutationCount: 0 });
+    invoiceDraftGrant = { grantId: ownerFirst.body.data.grantId,
+      revision: ownerFirst.body.data.revision };
+    const admin = await request(f.app).post(capabilityRoute).set(f.actors.admin.session.headers)
+      .set('X-CSRF-Token', f.actors.admin.csrfToken)
+      .set('Idempotency-Key', crypto.randomUUID()).send(body);
+    expect(admin.status).toBe(200);
+    invoiceDraftAdminGrant = { grantId: admin.body.data.grantId, revision: admin.body.data.revision };
+    expect(admin.body.data.grantId).not.toBe(invoiceDraftGrant.grantId);
+    const crossTenant = await request(f.app).post(capabilityRoute)
+      .set(f.actors.otherOwner.session.headers).set('X-CSRF-Token', f.actors.otherOwner.csrfToken)
+      .set('Idempotency-Key', crypto.randomUUID()).send(body);
+    expect([403,409,503]).toContain(crossTenant.status);
+    expect(JSON.stringify(crossTenant.body)).not.toMatch(new RegExp(estimate, 'i'));
+    const stored = await f.ownerPool.query(`SELECT actor_user_id,estimate_id,capability,
+      business_purpose,policy_version,active FROM canonical_customer_financial_invoice_draft_grants_v1
+      WHERE organization_id=$1 ORDER BY actor_user_id`, [f.org]);
+    expect(stored.rows).toHaveLength(2);
+    expect(stored.rows.every(row => row.estimate_id === estimate && row.active === true &&
+      row.capability === 'customer_financial.invoice.edit_draft' &&
+      row.business_purpose === INVOICE_PURPOSE && row.policy_version === INVOICE_POLICY)).toBe(true);
   }, 180000);
 
   test('mounted Part 4A captures one exact immutable customer-safe origin with no invoice effect', async () => {

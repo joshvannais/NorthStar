@@ -974,6 +974,66 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
     }
   }, 180000);
 
+  test('mounted Part 4E reconciles exact draft totals while amount due and every effect remain unavailable', async () => {
+    const query = { handoffReceiptId: billableHandoffReceipt.receiptId,
+      handoffReceiptDigest: billableHandoffReceipt.receiptDigest };
+    const route = `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-draft/preview`;
+    expect((await request(f.app).get(route).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(route).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const crossTenant = await request(f.app).get(route).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(crossTenant.status);
+    expect(JSON.stringify(crossTenant.body)).not.toMatch(/minorUnits|description|documentPreview/);
+    const before = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) tax_reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) numbers`)).rows[0];
+    const response = await request(f.app).get(route).query(query).set(actor.session.headers);
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers.vary).toMatch(/Cookie/);
+    const value = response.body.data;
+    expect(value).toMatchObject({ contractVersion:'m27-invoice-draft-preview-v1', state:'current',
+      mode:'paid', fictional:false, sourceCurrent:true, commercialSourceAuthorityCurrent:true,
+      taxAuthorityCurrent:false, amountDueCurrent:false, invoiceAuthorized:false,
+      receivableAuthorized:false, issueAuthorized:false, providerCallCount:0,receiverMutationCount:0,
+      documentPreview:{ state:'review_required', fictional:false, issuedDocument:false,
+        customerFacingDocumentAuthorized:false, pdf:{state:'unavailable',value:null}},
+      reconciliation:{ preparedDocumentTotal:{state:'preparation_only'},
+        amountDue:{state:'unavailable',reason:'invoice_reconciliation_evidence_unavailable',value:null},
+        zeroRequiresExplicitSupportedArithmetic:true,missingEvidenceTreatedAsZero:false,
+        browserArithmeticUsed:false } });
+    expect(value.previewDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(value.draftIdentity).toMatchObject({ estimateId:estimate,
+      originDigest:expect.stringMatching(/^[0-9a-f]{64}$/),
+      draftDigest:expect.stringMatching(/^[0-9a-f]{64}$/),
+      historyChainDigest:expect.stringMatching(/^[0-9a-f]{64}$/),
+      componentsDigest:expect.stringMatching(/^[0-9a-f]{64}$/),
+      preparationDigest:expect.stringMatching(/^[0-9a-f]{64}$/) });
+    const lines = value.documentPreview.lines;
+    expect(lines.length).toBeGreaterThan(0);expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.reduce((sum,line)=>sum+BigInt(line.amount.minorUnits),0n).toString())
+      .toBe(value.reconciliation.subtotalBeforeTax.minorUnits);
+    expect(BigInt(value.reconciliation.subtotalBeforeTax.minorUnits)+
+      BigInt(value.reconciliation.preparedTax.minorUnits))
+      .toBe(BigInt(value.reconciliation.preparedDocumentTotal.value.minorUnits));
+    expect(value.reconciliation.amountDue.missingEvidence).toHaveLength(6);
+    expect(value.reconciliation.amountDue.missingEvidence.every(gap=>gap.state==='unavailable')).toBe(true);
+    const repeated = await request(f.app).get(route).query(query).set(actor.session.headers);
+    expect(repeated.status).toBe(200);expect(repeated.body.data.previewDigest).toBe(value.previewDigest);
+    const after = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) tax_reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) numbers`)).rows[0];
+    expect(after).toEqual(before);
+    await expect(f.runtimePool.query(
+      "SELECT public.canonical_customer_financial_invoice_draft_preview_v1_unavailable('x')"))
+      .rejects.toMatchObject({code:'42501'});
+  }, 180000);
+
   completeOnly('missing accepted deposit terms remain value-free and a real M23 source change clears reviewed final values', async () => {
     const deposit = await readReview(actor, 'pre_work_deposit');
     expect(deposit.status).toBe(200);
@@ -1022,6 +1082,15 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       reason: 'reviewed_handoff_stale', sourceCurrent: false, taxAuthorityCurrent: false,
       taxBearingInvoiceAuthorized: false, invoiceAuthorized: false });
     expect(JSON.stringify(taxStale.body.data)).not.toMatch(/minorUnits|jurisdiction|preparation|reviewId/);
+    const previewStale = await request(f.app)
+      .get(`/api/v1/customer-financial/editable-estimates/${estimate}/invoice-draft/preview`)
+      .query({ handoffReceiptId: billableHandoffReceipt.receiptId,
+        handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
+    expect(previewStale.status).toBe(200);
+    expect(previewStale.body.data).toMatchObject({state:'unavailable',value:null,
+      sourceCurrent:false,amountDueCurrent:false,invoiceAuthorized:false,receivableAuthorized:false,
+      issueAuthorized:false,providerCallCount:0,receiverMutationCount:0});
+    expect(JSON.stringify(previewStale.body.data)).not.toMatch(/minorUnits|description|documentPreview/);
     const stale = await readReview(actor, 'final_balance');
     expect(stale.status).toBe(200);
     expect(stale.body.data).toMatchObject({ state: 'unavailable', value: null,
@@ -1057,7 +1126,7 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
     const migration = (await f.ownerPool.query(
       "SELECT filename FROM _migrations ORDER BY id DESC LIMIT 1",
     )).rows[0];
-    expect(migration.filename).toBe('271_customer_financial_invoice_tax_review_v1.sql');
+    expect(migration.filename).toBe('272_customer_financial_invoice_draft_preview_v1.sql');
   }, 180000);
 
   completeOnly('mounted mobile quote journey consumes the exact current Mission 24 proposal and permits bounded member editing', async () => {

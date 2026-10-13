@@ -116,7 +116,7 @@ describe('Mission 27 Part 2B billing identity review contract', () => {
     expect(sql).not.toMatch(/INSERT INTO public\.canonical_(?:estimates|appointments|invoice|payment)/i);
     expect(sql).not.toMatch(/customer_price|minor_units|currency|invoice_number/i);
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql')).sort();
-    expect(names.at(-1)).toBe('271_customer_financial_invoice_tax_review_v1.sql');
+    expect(names.at(-1)).toBe('272_customer_financial_invoice_draft_preview_v1.sql');
     expect(names.filter(name => /^261_/.test(name))).toHaveLength(1);
     expect(read('src/customerFinancial/databaseAuthority.js')).toContain(
       "'canonical_customer_financial_billing_review_v1_accept'");

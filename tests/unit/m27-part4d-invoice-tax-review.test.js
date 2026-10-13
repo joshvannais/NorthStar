@@ -133,7 +133,7 @@ describe('Mission 27 Part 4D invoice-date tax review', () => {
     expect(migration).toContain('FORCE ROW LEVEL SECURITY');
     expect(migration).not.toContain('CREATE INVOICE');
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql')).sort();
-    expect(names.at(-1)).toBe('271_customer_financial_invoice_tax_review_v1.sql');
+    expect(names.at(-1)).toBe('272_customer_financial_invoice_draft_preview_v1.sql');
     expect(names.filter(name => /^271_/.test(name))).toHaveLength(1);
   });
 });

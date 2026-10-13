@@ -313,6 +313,30 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
     expect(await demoProtectedCounts(fixture.ownerPool)).toEqual(protectedBefore);
   }, 120000);
 
+  test('mounts a resettable fictional invoice preview without paid, provider, or money effects', async () => {
+    const before=await demoProtectedCounts(fixture.ownerPool);
+    const workspaceResponse=await request(fixture.app).get('/api/demo/command-center').set('Host','northstar.test');
+    expect(workspaceResponse.status).toBe(200);const savedCookie=cookie(workspaceResponse);
+    const estimateId=workspaceResponse.body.data.graphs[0].ids.estimate;
+    const route=`/api/demo/customer-financial/invoice-drafts/${estimateId}/preview`;
+    const first=await request(fixture.app).get(route).set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(first.status).toBe(200);
+    expect(first.body.data).toMatchObject({contractVersion:'m27-invoice-draft-preview-v1',state:'current',
+      mode:'demo',fictional:true,sourceCurrent:true,taxAuthorityCurrent:false,amountDueCurrent:false,
+      invoiceAuthorized:false,receivableAuthorized:false,issueAuthorized:false,providerCallCount:0,
+      receiverMutationCount:0,documentPreview:{state:'review_required',fictional:true,
+        issuedDocument:false,pdf:{state:'unavailable',value:null}},
+      reconciliation:{amountDue:{state:'unavailable',value:null},browserArithmeticUsed:false}});
+    expect(first.body.data.documentPreview.label).toContain('Fictional');
+    expect(first.body.data.previewDigest).toMatch(/^[0-9a-f]{64}$/);
+    const again=await request(fixture.app).get(route).set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(again.status).toBe(200);expect(again.body.data.previewDigest).toBe(first.body.data.previewDigest);
+    const denied=await request(fixture.app).get('/api/demo/customer-financial/invoice-drafts/'+
+      crypto.randomUUID()+'/preview').set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(denied.status).toBe(404);expect(JSON.stringify(denied.body)).not.toMatch(/minorUnits|customerPrice/);
+    expect(await demoProtectedCounts(fixture.ownerPool)).toEqual(before);
+  },120000);
+
   test('installs only the scoped resolver and keeps runtime away from private tables', async () => {
     expect((await fixture.ownerPool.query(
       "SELECT filename FROM _migrations WHERE filename LIKE '263\\_%' ESCAPE '\\'"

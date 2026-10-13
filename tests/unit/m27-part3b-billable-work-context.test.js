@@ -229,7 +229,7 @@ test('ratifies the Part 3B read-only boundary, unavailable capacity and migratio
   expect(architecture).toMatch(/migration 265/i);
   expect(architecture).toMatch(/Live-money validation remains deferred/);
   expect(Math.max(...migrations.map(name => Number((name.match(/^(\d+)_/) || [])[1] || 0))))
-    .toBe(270);
+    .toBe(271);
   expect(routeSource).toContain("router.get('/:estimateId/work-context'");
   expect(routeSource).not.toContain("router.post('/:estimateId/work-context'");
   expect(repositorySource).toContain('readOperationalIntelligence');

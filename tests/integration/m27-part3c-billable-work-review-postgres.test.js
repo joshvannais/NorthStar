@@ -14,19 +14,23 @@ const { issueEstimateJourneyGrant, PURPOSE } =
   require('../../src/customerFinancial/estimateJourneyGrantIssuer');
 const { issueInvoiceDraftGrant, BUSINESS_PURPOSE: INVOICE_PURPOSE,
   POLICY_VERSION: INVOICE_POLICY } = require('../../src/customerFinancial/invoiceDraftGrantIssuer');
+const billingIdentity = require('../../src/customerFinancial/billingIdentityRepository');
 const operations = require('../../src/operations/repository');
 const operationContracts = require('../../src/operations/contract');
 const workContextRepository = require('../../src/customerFinancial/billableWorkContextRepository');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const priceRoot = '/api/v1/forecast/price-history';
+const taxBehavior = process.env.M27_P4D_TAX_BEHAVIOR === 'inclusive' ? 'inclusive' : 'exclusive';
+const completeCampaign = taxBehavior === 'exclusive';
 
-realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
+realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior})`, () => {
+  const completeOnly = completeCampaign ? test : test.skip;
   let f; let actor; let estimate; let appointment; let firstReviewId; let context;
   let approvedCompletion; let laborInterval; let materialMovement; let businessProfile; let route;
   let ownerGrant; let adminGrant;
   let quoteOptionGrant; let quoteMemberOptionGrant;
-  let invoiceDraftGrant; let billableHandoffReceipt;
+  let invoiceDraftGrant; let invoiceDraftAdminGrant; let billableHandoffReceipt;
 
   beforeAll(async () => {
     for (const key of ['OPENAI_API_KEY','POLARIS_OPENAI_ENABLED','RETELL_API_KEY',
@@ -68,6 +72,9 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     invoiceDraftGrant = await issueInvoiceDraftGrant(f.ownerPool, { organizationId: f.org,
       actorUserId: actor.actorUserId, membershipId: actor.actorUserId,
       actorAccessRole: actor.actorAccessRole }, estimate);
+    invoiceDraftAdminGrant = await issueInvoiceDraftGrant(f.ownerPool, { organizationId: f.org,
+      actorUserId: f.actors.admin.actorUserId, membershipId: f.actors.admin.actorUserId,
+      actorAccessRole: f.actors.admin.actorAccessRole }, estimate);
     quoteOptionGrant = await issueEstimateJourneyGrant(f.ownerPool, { organizationId: f.org,
       actorUserId: actor.actorUserId, membershipId: actor.actorUserId,
       actorAccessRole: actor.actorAccessRole }, estimate,
@@ -108,7 +115,8 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
       workContext: 'new_construction', customerExemption: 'none',
       evidenceRef: { serviceOperation: 'Reviewed scope', propertyUse: 'Recorded property',
         workContext: 'Reviewed scope', customerExemption: 'Customer statement' } };
-    inputs.transactionDate = terms.sources.asOfDate; inputs.taxGroups = [group(['installation'])];
+    inputs.transactionDate = terms.sources.asOfDate;
+    inputs.taxGroups = [group(['installation'], { behavior: taxBehavior })];
     inputs.taxGroups[0].source.serviceKey = terms.sources.serviceKey;
     Object.assign(inputs.taxGroups[0].source, { legalEffectiveOn: inputs.taxGroups[0].source.effectiveOn,
       legalEndsOn: null, reviewedOn: terms.sources.asOfDate,
@@ -407,6 +415,19 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
       .set(requestActor.session.headers);
   }
 
+  async function issueBillingIdentityReviewGrant(customerId) {
+    const grantId = crypto.randomUUID();
+    await f.ownerPool.query(
+      `INSERT INTO canonical_customer_financial_billing_capability_grants_v1(
+        organization_id,id,revision,actor_user_id,membership_id,customer_id,capability,
+        business_purpose,policy_version,template_version,active,valid_from,expires_at,issued_at)
+       VALUES($1,$2,1,$3,$3,$4,$5,$6,$7,'m27.owner.v1',TRUE,
+        clock_timestamp()-INTERVAL '1 minute',clock_timestamp()+INTERVAL '1 hour',clock_timestamp())`,
+      [f.org, grantId, actor.actorUserId, customerId, billingIdentity.CAPABILITY,
+        billingIdentity.BUSINESS_PURPOSE, billingIdentity.POLICY_VERSION]);
+    return grantId;
+  }
+
   function reviewBody(sourceClass, candidate, grant, reason) {
     return { sourceClass, confirmed: true,
       confirmationVersion: 'm27-billable-work-review-v1',
@@ -535,6 +556,21 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     expect(ready.body.data.lines.length).toBeGreaterThan(0);
     const sum = ready.body.data.lines.reduce((total, line) => total + BigInt(line.lineAmount.minorUnits), 0n);
     expect(sum.toString()).toBe(ready.body.data.subtotalBeforeTax.minorUnits);
+    const exactCommercial = (await f.ownerPool.query(`SELECT terms.result,issued.document
+      FROM canonical_customer_estimate_versions issued
+      JOIN canonical_commercial_terms terms ON terms.organization_id=issued.organization_id
+       AND terms.estimate_id=issued.estimate_id AND terms.id=issued.terms_id
+      WHERE issued.organization_id=$1 AND issued.estimate_id=$2
+      ORDER BY issued.revision DESC LIMIT 1`, [f.org, estimate])).rows[0];
+    expect(exactCommercial.result.taxGroups[0].behavior).toBe(taxBehavior);
+    expect(exactCommercial.document.charges[0].amount)
+      .toBe(exactCommercial.result.lines[0].adjustedAmount);
+    const grossLineMinor = BigInt(exactCommercial.document.charges[0].amount.replace('.',''));
+    const preTaxLineMinor = BigInt(ready.body.data.lines[0].lineAmount.minorUnits);
+    if (taxBehavior === 'inclusive') expect(grossLineMinor).toBeGreaterThan(preTaxLineMinor);
+    else expect(grossLineMinor).toBe(preTaxLineMinor);
+    expect(ready.body.data.subtotalBeforeTax.decimal).toBe(exactCommercial.result.netBeforeTax);
+    expect(exactCommercial.document.subtotal).toBe(exactCommercial.result.netBeforeTax);
     expect(ready.body.data.lines.every(line => line.quantity.value === '1' &&
       line.quantity.unit === 'customer_safe_charge')).toBe(true);
     expect(JSON.stringify(ready.body.data)).not.toMatch(
@@ -773,7 +809,172 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     )).rejects.toMatchObject({ code: '42501' });
   }, 180000);
 
-  test('missing accepted deposit terms remain value-free and a real M23 source change clears reviewed final values', async () => {
+  test('mounted Part 4D records exact invoice-date preparation while professional policy stays unavailable', async () => {
+    const query = { handoffReceiptId: billableHandoffReceipt.receiptId,
+      handoffReceiptDigest: billableHandoffReceipt.receiptDigest };
+    const origin = (await f.ownerPool.query(`SELECT customer_id FROM
+      canonical_customer_financial_invoice_draft_origins_v1
+      WHERE organization_id=$1 AND estimate_id=$2`, [f.org, estimate])).rows[0];
+    await issueBillingIdentityReviewGrant(origin.customer_id);
+    const billingRoute = `/api/v1/customer-financial/billing-identities/${origin.customer_id}`;
+    let billing = await request(f.app).get(billingRoute).set(actor.session.headers);
+    expect(billing.status).toBe(200);
+    expect(billing.body.data.identity.state).toBe('candidate_unreviewed');
+    const establish = await request(f.app).post(`${billingRoute}/establish`)
+      .set(actor.session.headers).set('X-CSRF-Token', actor.csrfToken)
+      .set('Idempotency-Key', `m27-p4d-establish-${crypto.randomUUID()}`).send({
+        expectedSourceDigest: billing.body.data.identity.sourceDigest,
+        expectedSourceUpdatedAt: billing.body.data.identity.sourceUpdatedAt,
+        reason: 'Begin the exact invoice-date billing jurisdiction review.',
+      });
+    expect(establish.status).toBe(201);
+    billing = await request(f.app).get(billingRoute).set(actor.session.headers);
+    expect(billing.status).toBe(200);
+    expect(billing.body.data.review.state).toBe('review_required');
+    const review = billing.body.data.review;
+    const reviewed = await request(f.app).post(`${billingRoute}/reviews`)
+      .set(actor.session.headers).set('X-CSRF-Token', actor.csrfToken)
+      .set('Idempotency-Key', `m27-p4d-billing-${crypto.randomUUID()}`).send({
+        billingPartyId: review.billingPartyId,
+        originSnapshotId: billing.body.data.identity.snapshotId,
+        expectedSourceDigest: review.sourceDigest,
+        expectedSourceUpdatedAt: review.sourceUpdatedAt,
+        expectedPreviousReviewId: review.reviewId,
+        expectedPreviousReviewDigest: review.reviewDigest,
+        expectedPreviousSequence: review.sequence,
+        payload: { contact: { name: 'Taylor Customer', email: 'taylor@example.test', phone: null },
+          serviceAddress: { line1: '10 Service Street', line2: null, city: 'Boston',
+            region: 'MA', postalCode: '02108', countryCode: 'US' },
+          billingAddress: { line1: '20 Billing Street', line2: null, city: 'Boston',
+            region: 'MA', postalCode: '02108', countryCode: 'US' },
+          purchaseOrderReference: 'PO-P4D', customerReference: 'CUSTOMER-P4D' },
+        reason: 'Owner reviewed both invoice-date jurisdiction addresses.',
+      });
+    expect(reviewed.status).toBe(201);
+
+    const taxRoute = `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-draft/tax-review`;
+    const lineBasis = await f.ownerPool.query(`SELECT
+      public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+       '110.00','110.00','inclusive','10.00') inclusive,
+      public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+       '110.00','110.00','exclusive','10.00') exclusive,
+      public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+       '0.00','0.00','inclusive','0.00') exact_zero,
+      public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+       '110.00','109.99','inclusive','10.00') tampered,
+      public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+       '5.00','5.00','inclusive','5.01') impossible_tax`);
+    expect(lineBasis.rows[0]).toEqual({ inclusive: '10000', exclusive: '11000',
+      exact_zero: '0', tampered: null, impossible_tax: null });
+    expect((await request(f.app).get(taxRoute).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(taxRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const crossTenant = await request(f.app).get(taxRoute).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(crossTenant.status);
+    expect(JSON.stringify(crossTenant.body)).not.toMatch(/minorUnits|jurisdiction|preparation/);
+    const candidate = await request(f.app).get(taxRoute).query(query).set(actor.session.headers);
+    expect(candidate.status).toBe(200);
+    expect(candidate.body.data).toMatchObject({ contractVersion: 'm27-invoice-date-tax-review-v1',
+      state: 'ready_to_record', sourceCurrent: true, taxAuthorityCurrent: false,
+      taxBearingInvoiceAuthorized: false, invoiceAuthorized: false, receivableAuthorized: false,
+      issueAuthorized: false, providerCallCount: 0, receiverMutationCount: 0,
+      professionalPolicy: { state: 'unavailable', reason: 'tax_authority_unavailable', value: null },
+      taxReviewDisposition: { state: 'unavailable', taxBearingInvoiceAuthorized: false },
+      preparation: { version: 'm27-invoice-date-tax-preparation-v1',
+        serviceJurisdiction: { countryCode: 'US', region: 'MA' },
+        billingJurisdiction: { countryCode: 'US', region: 'MA' },
+        sourceCurrent: true, providerCalculationUsed: false, browserArithmeticUsed: false,
+        nexusEvidence: { state: 'unavailable', value: null },
+        creditRefundAdjustmentLineage: { state: 'unavailable', value: null } } });
+    const adminCandidate = await request(f.app).get(taxRoute).query(query)
+      .set(f.actors.admin.session.headers);
+    expect(adminCandidate.status).toBe(200);
+    expect(adminCandidate.body.data.candidateDigest).toBe(candidate.body.data.candidateDigest);
+    expect(invoiceDraftAdminGrant.revision).toBe(1);
+    const lineTax = candidate.body.data.preparation.lines.reduce(
+      (sum, line) => sum + BigInt(line.collectedTax.minorUnits), 0n);
+    const preparedBasis = candidate.body.data.preparation.lines.reduce(
+      (sum, line) => sum + BigInt(line.taxableBasis.minorUnits), 0n);
+    expect(lineTax.toString()).toBe(
+      candidate.body.data.preparation.collectedTaxLiability.amount.minorUnits);
+    expect(preparedBasis.toString()).toBe(
+      candidate.body.data.preparation.invoiceDraft.subtotalBeforeTax.minorUnits);
+    expect(candidate.body.data.preparation.lines.every(
+      line => line.inclusiveExclusive === taxBehavior)).toBe(true);
+    const key = `m27-p4d-record-${crypto.randomUUID()}`;
+    const body = { ...query, capabilityGrantId: invoiceDraftGrant.grantId,
+      capabilityGrantRevision: invoiceDraftGrant.revision, businessPurpose: INVOICE_PURPOSE,
+      policyVersion: INVOICE_POLICY, expectedCandidateDigest: candidate.body.data.candidateDigest,
+      reason: 'Owner reviewed the exact invoice-date tax preparation evidence.', confirmed: true,
+      confirmationVersion: 'm27-invoice-date-tax-review-record-v1' };
+    expect((await request(f.app).post(taxRoute).set('Cookie', actor.session.headers.Cookie)
+      .set('Idempotency-Key', key).send(body)).status).toBe(403);
+    expect((await request(f.app).post(taxRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', crypto.randomUUID())
+      .send({ ...body, businessPurpose: 'customer_financial.billing_identity' })).status).toBe(400);
+    const beforeRecords = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_review_requests_v1) requests`)).rows[0];
+    const simultaneous = await Promise.all([0,1].map(() => request(f.app).post(taxRoute)
+      .set(actor.session.headers).set('X-CSRF-Token', actor.csrfToken)
+      .set('Idempotency-Key', key).send(body)));
+    expect(simultaneous.map(value => value.status).sort()).toEqual([200,201]);
+    const saved = simultaneous.find(value => value.status === 201);
+    expect(saved.body.data).toMatchObject({ state: 'recorded_policy_unavailable',
+      preparationDigest: candidate.body.data.preparationDigest, taxAuthorityCurrent: false,
+      taxBearingInvoiceAuthorized: false, invoiceAuthorized: false });
+    const replay = await request(f.app).post(taxRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', key).send(body);
+    expect(replay.status).toBe(200); expect(replay.body.replayed).toBe(true);
+    const changedReuse = await request(f.app).post(taxRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', key)
+      .send({ ...body, reason: 'Changed reuse must conflict without exposing tax preparation values.' });
+    expect(changedReuse.status).toBe(409);
+    expect(JSON.stringify(changedReuse.body)).not.toMatch(/minorUnits|serviceJurisdiction|preparation/);
+    const afterRecords = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_review_requests_v1) requests`)).rows[0];
+    expect(afterRecords.reviews - beforeRecords.reviews).toBe(1);
+    expect(afterRecords.requests - beforeRecords.requests).toBe(1);
+    const readback = await request(f.app).get(taxRoute).query(query).set(actor.session.headers);
+    expect(readback.status).toBe(200); expect(readback.body.data.reviewId).toBe(saved.body.data.reviewId);
+    await expect(f.runtimePool.query(
+      'SELECT * FROM canonical_customer_financial_invoice_tax_reviews_v1')).rejects
+      .toMatchObject({ code: '42501' });
+    await expect(f.runtimePool.query(
+      `SELECT public.canonical_customer_financial_invoice_tax_review_v1_source(
+        $1,$2,$3,$4,$5,$6,$7)`, [f.org,actor.actorUserId,actor.actorAccessRole,
+        actor.authSessionId,estimate,query.handoffReceiptId,query.handoffReceiptDigest])).rejects
+      .toMatchObject({ code: '42501' });
+    await expect(f.runtimePool.query(
+      `SELECT public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+        '110.00','110.00','inclusive','10.00')`)).rejects.toMatchObject({ code: '42501' });
+    const privateTables = ['canonical_customer_financial_invoice_tax_reviews_v1',
+      'canonical_customer_financial_invoice_tax_review_requests_v1'];
+    for (const table of privateTables) {
+      expect((await f.ownerPool.query(
+        'SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass',
+        [`public.${table}`])).rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
+    }
+    expect(f.roles.runtime).toMatch(/^[a-z0-9_]+$/);
+    const tableList = privateTables.map(table => `public.${table}`).join(',');
+    await f.ownerPool.query(`GRANT SELECT ON TABLE ${tableList} TO ${f.roles.runtime}`);
+    try {
+      for (const claimedOrganization of [f.org, f.otherOrg, crypto.randomUUID()]) {
+        await f.runtimePool.query("SELECT set_config('northstar.invoice_tax_organization_id',$1,FALSE)",
+          [claimedOrganization]);
+        for (const table of privateTables) {
+          expect((await f.runtimePool.query(`SELECT count(*)::int count FROM public.${table}`))
+            .rows[0].count).toBe(0);
+        }
+      }
+    } finally {
+      await f.ownerPool.query(`REVOKE SELECT ON TABLE ${tableList} FROM ${f.roles.runtime}`);
+    }
+  }, 180000);
+
+  completeOnly('missing accepted deposit terms remain value-free and a real M23 source change clears reviewed final values', async () => {
     const deposit = await readReview(actor, 'pre_work_deposit');
     expect(deposit.status).toBe(200);
     expect(deposit.body.data).toMatchObject({ state: 'unavailable', value: null,
@@ -812,6 +1013,15 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
       receivableAuthorized: false, issueAuthorized: false });
     expect(JSON.stringify(componentsStale.body.data)).not.toMatch(
       /minorUnits|commercialRevision|financialComponents|invoiceDraft/);
+    const taxStale = await request(f.app)
+      .get(`/api/v1/customer-financial/editable-estimates/${estimate}/invoice-draft/tax-review`)
+      .query({ handoffReceiptId: billableHandoffReceipt.receiptId,
+        handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
+    expect(taxStale.status).toBe(200);
+    expect(taxStale.body.data).toMatchObject({ state: 'unavailable', value: null,
+      reason: 'reviewed_handoff_stale', sourceCurrent: false, taxAuthorityCurrent: false,
+      taxBearingInvoiceAuthorized: false, invoiceAuthorized: false });
+    expect(JSON.stringify(taxStale.body.data)).not.toMatch(/minorUnits|jurisdiction|preparation|reviewId/);
     const stale = await readReview(actor, 'final_balance');
     expect(stale.status).toBe(200);
     expect(stale.body.data).toMatchObject({ state: 'unavailable', value: null,
@@ -821,7 +1031,7 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
       /amount|sourceDigest|commercialBasisDigest|approvals|reviewId|workId/);
   }, 180000);
 
-  test('mounted access, CSRF, tenant privacy, immutable tables and direct runtime access fail closed', async () => {
+  completeOnly('mounted access, CSRF, tenant privacy, immutable tables and direct runtime access fail closed', async () => {
     expect((await request(f.app).get(route).set(actor.session.headers)).status).toBe(400);
     expect((await readReview(f.actors.viewer, 'final_balance')).status).toBe(403);
     const crossTenant = await readReview(f.actors.otherOwner, 'final_balance');
@@ -847,10 +1057,10 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     const migration = (await f.ownerPool.query(
       "SELECT filename FROM _migrations ORDER BY id DESC LIMIT 1",
     )).rows[0];
-    expect(migration.filename).toBe('270_customer_financial_invoice_draft_components_v1.sql');
+    expect(migration.filename).toBe('271_customer_financial_invoice_tax_review_v1.sql');
   }, 180000);
 
-  test('mounted mobile quote journey consumes the exact current Mission 24 proposal and permits bounded member editing', async () => {
+  completeOnly('mounted mobile quote journey consumes the exact current Mission 24 proposal and permits bounded member editing', async () => {
     const quoteRoute = `/api/v1/customer-financial/editable-estimates/${estimate}/quote-journey`;
     await expect(issueEstimateJourneyGrant(f.ownerPool, { organizationId: f.org,
       actorUserId: actor.actorUserId, membershipId: actor.actorUserId,

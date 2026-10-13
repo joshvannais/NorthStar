@@ -472,7 +472,7 @@ describe('Mission 27 Part 1D first-supported-launch contract', () => {
   test('preserves the 64-slice sequence and keeps Slice 1D policy separate from later authority', () => {
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql')).sort();
-    expect(migrationNames.at(-1)).toBe('268_customer_financial_invoice_draft_origin_v1.sql');
+    expect(migrationNames.at(-1)).toBe('269_customer_financial_invoice_draft_revisions_v1.sql');
     expect(migrationNames.filter(name => /^260_/.test(name))).toEqual([
       '260_customer_financial_billing_identity_v1.sql']);
 

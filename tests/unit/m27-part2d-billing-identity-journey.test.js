@@ -149,7 +149,7 @@ describe('Mission 27 Part 2D mounted billing identity journeys', () => {
   test('keeps migration 263 additive, admits only the bounded demo operation, and keeps runtime access function-only', () => {
     const sql = read('migrations/263_customer_financial_billing_journey_v1.sql');
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql')).sort();
-    expect(names.at(-1)).toBe('268_customer_financial_invoice_draft_origin_v1.sql');
+    expect(names.at(-1)).toBe('269_customer_financial_invoice_draft_revisions_v1.sql');
     expect(names.filter(name => /^263_/.test(name))).toHaveLength(1);
     expect(sql).toContain('SECURITY DEFINER');
     expect(sql).toContain('REVOKE ALL ON FUNCTION');

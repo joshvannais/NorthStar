@@ -23,7 +23,7 @@ describe('Mission 27 Slice 1B source inventory quarantine', () => {
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql'))
       .sort();
-    expect(migrationNames.at(-1)).toBe('271_customer_financial_invoice_tax_review_v1.sql');
+    expect(migrationNames.at(-1)).toBe('272_customer_financial_invoice_draft_preview_v1.sql');
     expect(migrationNames.filter(name => /^260_/.test(name))).toEqual([
       '260_customer_financial_billing_identity_v1.sql',
     ]);

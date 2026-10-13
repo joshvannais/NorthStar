@@ -1,6 +1,6 @@
 # Mission 27 Part 4D — invoice-date tax preparation and immutable review
 
-Status: implementation candidate for original Part 4D and the tax portion of Q8. It does not accept the candidate, begin Part 4E, establish professional tax policy, authorize a tax-bearing invoice, calculate amount due, approve or issue an invoice, create a receivable, file or remit tax, recognize revenue, or perform any provider, payment, credit, refund, accounting or downstream action.
+Status: released original Part 4D and tax portion of Q8 at accepted head `31d1f61b77a70a579b0c890d2d082f3ef7a1ec5b`, PR #493, exact deployed main `5c9567854ff4cd80f36cd12304f2f040bda0cded`, Railway deployment `6ee53c77-0c23-4535-8747-2cb74f566f6f` and migration 271. It did not establish professional tax policy, authorize a tax-bearing invoice, calculate amount due, approve or issue an invoice, create a receivable, file or remit tax, recognize revenue, or perform any provider, payment, credit, refund, accounting or downstream action.
 
 ## Exact source authority
 

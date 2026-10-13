@@ -12,6 +12,7 @@ const invoiceDraftRepository = require('../customerFinancial/invoiceDraftOriginR
 const invoiceDraftRevisionRepository = require('../customerFinancial/invoiceDraftRevisionRepository');
 const invoiceDraftComponentsRepository = require('../customerFinancial/invoiceDraftComponentsRepository');
 const invoiceTaxReviewRepository = require('../customerFinancial/invoiceTaxReviewRepository');
+const invoiceDraftPreviewRepository = require('../customerFinancial/invoiceDraftPreviewRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -54,6 +55,9 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const invoiceDraftComponentsRead = options.invoiceDraftComponentsRead || invoiceDraftComponentsRepository.read;
   const invoiceTaxReviewRead = options.invoiceTaxReviewRead || invoiceTaxReviewRepository.read;
   const invoiceTaxReviewRecord = options.invoiceTaxReviewRecord || invoiceTaxReviewRepository.record;
+  const invoiceDraftPreviewRead = options.invoiceDraftPreviewRead || invoiceDraftPreviewRepository.read;
+  const invoiceDraftWorkflowCapability = options.invoiceDraftWorkflowCapability ||
+    invoiceDraftPreviewRepository.ensureWorkflowCapability;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -185,6 +189,33 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     try { return res.json({ success: true, data: await invoiceTaxReviewRead(poolProvider(),
       source(req), req.params.estimateId, req.query.handoffReceiptId,
       req.query.handoffReceiptDigest) });
+    } catch (error) { return failure(res,error); }
+  });
+  router.get('/:estimateId/invoice-draft/preview', auth, role, throttle, async (req,res) => {
+    res.set('Cache-Control','no-store'); res.vary('Cookie');
+    const keys = Object.keys(req.query);
+    if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+        !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+        typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+      status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_PREVIEW_INVALID',
+      message: 'Select one exact current invoice draft.' });
+    try { return res.json({ success: true, data: await invoiceDraftPreviewRead(poolProvider(),
+      source(req), req.params.estimateId, req.query.handoffReceiptId,
+      req.query.handoffReceiptDigest) });
+    } catch (error) { return failure(res,error); }
+  });
+  router.post('/:estimateId/invoice-draft/workflow-capability', auth, role, throttle, async (req,res) => {
+    const csrfToken = req.get('X-CSRF-Token');
+    if (typeof csrfToken !== 'string' || csrfToken.length < 16) return failure(res, {
+      status: 403, code: 'CUSTOMER_FINANCIAL_INVOICE_DRAFT_RESTRICTED',
+      message: 'A current request confirmation is required for this invoice-draft workflow.' });
+    if (Object.keys(req.query).length || !req.body || typeof req.body !== 'object' ||
+        Array.isArray(req.body) || Object.keys(req.body).length !== 2 || req.body.confirmed !== true ||
+        req.body.confirmationVersion !== 'm27-invoice-draft-workflow-capability-v1') return failure(res, {
+      status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_DRAFT_INVALID',
+      message: 'Confirm the exact current invoice-draft workflow.' });
+    try { return res.json({ success: true, data: await invoiceDraftWorkflowCapability(poolProvider(),
+      { ...source(req), csrfToken, idempotencyKey: req.get('Idempotency-Key') }, req.params.estimateId) });
     } catch (error) { return failure(res,error); }
   });
   router.post('/:estimateId/invoice-draft/tax-review', auth, role, throttle, async (req,res) => {

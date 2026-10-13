@@ -158,7 +158,7 @@ realPostgres('Mission 27 Part 3D retained-stale rolling upgrade', () => {
     await expect(f.db.runMigrations({ pool: f.ownerPool, migrationsDirectory: migrations }))
       .resolves.toBe(true);
     expect((await f.ownerPool.query('SELECT filename FROM _migrations ORDER BY id DESC LIMIT 1')).rows[0].filename)
-      .toBe('271_customer_financial_invoice_tax_review_v1.sql');
+      .toBe('272_customer_financial_invoice_draft_preview_v1.sql');
     const retained = await f.ownerPool.query(`SELECT revision,revision_class,rtrim(history_chain_digest) chain,
       snapshot#>>'{currentAtHistoryCapture}' current_at_capture,snapshot#>>'{revokedEvidence,id}' revoked_id
       FROM canonical_customer_financial_estimate_journey_revisions_v1

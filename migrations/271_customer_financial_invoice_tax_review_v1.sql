@@ -116,6 +116,183 @@ BEGIN
  RETURN public.canonical_customer_financial_invoice_draft_revision_v1_exact_money(minor_value);
 END $$;
 
+-- Mission 24 publishes an issued charge as the gross amount for an inclusive
+-- group and as the pre-tax amount for an exclusive group.  Keep that source
+-- distinction inside the database boundary and return only the exact pre-tax
+-- allocation used by the reviewed final-balance handoff.  NULL is deliberate:
+-- callers translate every malformed or inconsistent source into the existing
+-- value-free reconciliation failure.
+CREATE FUNCTION public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+ document_amount TEXT,adjusted_amount TEXT,behavior_value TEXT,tax_amount TEXT)
+RETURNS BIGINT LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE gross_minor BIGINT;tax_minor BIGINT;basis_minor BIGINT;
+BEGIN
+ IF document_amount IS NULL OR adjusted_amount IS NULL OR tax_amount IS NULL OR
+    document_amount!~'^(0|[1-9][0-9]{0,5})(\.[0-9]{1,2})?$' OR
+    adjusted_amount!~'^(0|[1-9][0-9]{0,5})(\.[0-9]{1,2})?$' OR
+    tax_amount!~'^(0|[1-9][0-9]{0,7})\.[0-9]{2}$' OR
+    document_amount::numeric<>adjusted_amount::numeric OR
+    behavior_value NOT IN('inclusive','exclusive') THEN RETURN NULL; END IF;
+ gross_minor:=(adjusted_amount::numeric*100)::bigint;
+ tax_minor:=(tax_amount::numeric*100)::bigint;
+ IF gross_minor NOT BETWEEN 0 AND 10000000 OR tax_minor<0 OR tax_minor>gross_minor THEN
+  RETURN NULL; END IF;
+ basis_minor:=CASE WHEN behavior_value='inclusive' THEN gross_minor-tax_minor ELSE gross_minor END;
+ RETURN basis_minor;
+END $$;
+
+-- Part 4D closes the only missing Part 4A reconciliation case without changing
+-- the sealed source authorities or their tables.  Exact exclusive candidates
+-- remain byte-for-byte compatible; inclusive candidates use Mission 24's own
+-- immutable line tax allocation to derive the accepted pre-tax line amounts.
+CREATE OR REPLACE FUNCTION public.canonical_customer_financial_invoice_draft_v1_source(
+ org UUID,actor UUID,role_value TEXT,session_value UUID,estimate_value UUID,
+ receipt_value UUID,receipt_digest_value TEXT)
+RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE receipt_row public.canonical_customer_financial_billable_handoff_receipts_v1%ROWTYPE;
+ terms_row public.canonical_commercial_terms%ROWTYPE;
+ source_value JSONB;projection JSONB;basis JSONB;item JSONB;payment JSONB;
+ term_line JSONB;input_group JSONB;result_group JSONB;allocation JSONB;
+ lines JSONB:='[]'::jsonb;amount_value BIGINT;gross_minor BIGINT;item_amount BIGINT;
+ tax_minor BIGINT;total_value BIGINT:=0;item_count INTEGER:=0;ordinal_value INTEGER:=0;
+ description_value TEXT;candidate JSONB;group_count INTEGER;result_group_count INTEGER;
+ allocation_count INTEGER;
+BEGIN
+ SELECT * INTO receipt_row FROM public.canonical_customer_financial_billable_handoff_receipts_v1
+  WHERE organization_id=org AND id=receipt_value AND estimate_id=estimate_value
+   AND receipt_digest=receipt_digest_value FOR SHARE;
+ IF receipt_row.id IS NULL THEN RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('reviewed_handoff_unavailable'); END IF;
+ source_value:=public.canonical_customer_financial_billable_review_v1_source(
+  org,actor,role_value,session_value,estimate_value,receipt_row.source_class);
+ IF source_value->>'state'<>'review_required' OR source_value#>>'{source,decisionDigest}'<>rtrim(receipt_row.decision_digest) OR
+  source_value#>>'{source,sourceIdentity}'<>receipt_row.source_identity::text OR
+  source_value#>>'{source,sourceDigest}'<>rtrim(receipt_row.source_digest) OR
+  source_value#>>'{source,sourceAuthorityIdentity}'<>receipt_row.source_authority_identity::text OR
+  source_value#>>'{source,sourceAuthorityDigest}'<>rtrim(receipt_row.source_authority_digest) OR
+  source_value#>>'{source,commercialBasisDigest}'<>rtrim(receipt_row.commercial_basis_digest) THEN
+  RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('reviewed_handoff_stale'); END IF;
+ projection:=public.canonical_customer_financial_billable_review_v1_projection(org,estimate_value,rtrim(receipt_row.decision_digest));
+ IF projection->>'state'<>'reviewed_current' OR projection#>>'{handoffReceipt,receiptId}'<>receipt_row.id::text OR
+  projection#>>'{handoffReceipt,receiptDigest}'<>rtrim(receipt_row.receipt_digest) THEN
+  RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('reviewed_handoff_not_current'); END IF;
+ basis:=public.canonical_customer_financial_editable_basis_v1_read(org,actor,role_value,session_value,estimate_value);
+ IF basis->>'state'<>'current_mission24_commercial_lineage' OR basis->'sourceCurrent' IS DISTINCT FROM 'true'::jsonb OR
+  public.canonical_completion_digest(basis-'authority')<>rtrim(receipt_row.commercial_basis_digest) THEN
+  RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('mission24_commercial_source_stale'); END IF;
+ amount_value:=(receipt_row.receipt#>>'{amount,minorUnits}')::bigint;
+ IF amount_value<0 OR amount_value>10000000 OR receipt_row.receipt#>>'{amount,currency}'<>'USD' THEN
+  RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('reviewed_amount_unavailable'); END IF;
+ IF receipt_row.source_class='final_balance' THEN
+  SELECT * INTO terms_row FROM public.canonical_commercial_terms
+   WHERE organization_id=org AND estimate_id=estimate_value
+    AND id=(basis#>>'{commercial,termsId}')::uuid
+    AND revision=(basis#>>'{commercial,termsRevision}')::bigint
+    AND rtrim(digest)=basis#>>'{commercial,termsDigest}' FOR SHARE;
+  IF terms_row.id IS NULL OR terms_row.action<>'save' OR
+     terms_row.result->'complete' IS DISTINCT FROM 'true'::jsonb OR
+     terms_row.result->>'currency'<>'USD' OR terms_row.body->>'currency'<>'USD' OR
+     jsonb_typeof(terms_row.result->'lines')<>'array' OR
+     jsonb_typeof(terms_row.body#>'{inputs,taxGroups}')<>'array' OR
+     jsonb_typeof(terms_row.result->'taxGroups')<>'array' OR
+     jsonb_array_length(terms_row.result->'lines')<>
+      jsonb_array_length(COALESCE(basis#>'{customerSafeDocument,charges}','[]'::jsonb)) OR
+     COALESCE(terms_row.result->>'netBeforeTax','')<>COALESCE(basis#>>'{customerSafeDocument,subtotal}','') OR
+     COALESCE(terms_row.result->>'tax','')<>COALESCE(basis#>>'{customerSafeDocument,tax}','') OR
+     COALESCE(terms_row.result->>'total','')<>COALESCE(basis#>>'{customerSafeDocument,total}','') OR
+     COALESCE(terms_row.result->>'netBeforeTax','')!~'^(0|[1-9][0-9]{0,5})(\.[0-9]{1,2})?$' OR
+     (terms_row.result->>'netBeforeTax')::numeric*100<>amount_value THEN
+   RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('invoice_origin_reconciliation_failed'); END IF;
+  FOR item IN SELECT value FROM jsonb_array_elements(COALESCE(basis#>'{customerSafeDocument,charges}','[]'::jsonb)) LOOP
+   item_count:=item_count+1;description_value:=btrim(item->>'label');
+   term_line:=terms_row.result->'lines'->ordinal_value;
+   IF item_count>24 OR description_value IS NULL OR octet_length(description_value) NOT BETWEEN 1 AND 500 OR
+      (item->>'amount')!~'^(0|[1-9][0-9]{0,5})(\.[0-9]{1,2})?$' OR
+      COALESCE(term_line->>'lineId','')='' OR COALESCE(term_line->>'adjustedAmount','')='' THEN
+    RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('customer_safe_lines_unavailable'); END IF;
+   SELECT count(*)::integer,(jsonb_agg(entry.value ORDER BY entry.value->>'groupId')->0)
+    INTO group_count,input_group
+    FROM jsonb_array_elements(terms_row.body#>'{inputs,taxGroups}') entry(value)
+    WHERE entry.value->'lineIds' ? (term_line->>'lineId');
+   IF group_count<>1 OR input_group->>'behavior' NOT IN('inclusive','exclusive') THEN
+    RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('invoice_origin_reconciliation_failed'); END IF;
+   SELECT count(*)::integer,(jsonb_agg(entry.value ORDER BY entry.value->>'groupId')->0)
+    INTO result_group_count,result_group
+    FROM jsonb_array_elements(terms_row.result->'taxGroups') entry(value)
+    WHERE entry.value->>'groupId'=input_group->>'groupId';
+   IF result_group_count<>1 OR jsonb_typeof(result_group->'allocations')<>'array' THEN
+    RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('invoice_origin_reconciliation_failed'); END IF;
+   SELECT count(*)::integer,(jsonb_agg(entry.value ORDER BY entry.value->>'lineId')->0)
+    INTO allocation_count,allocation
+    FROM jsonb_array_elements(result_group->'allocations') entry(value)
+    WHERE entry.value->>'lineId'=term_line->>'lineId';
+   IF allocation_count<>1 THEN
+    RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('invoice_origin_reconciliation_failed'); END IF;
+   item_amount:=public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+    item->>'amount',term_line->>'adjustedAmount',input_group->>'behavior',allocation->>'tax');
+   IF item_amount IS NULL THEN
+    RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('invoice_origin_reconciliation_failed'); END IF;
+   gross_minor:=((item->>'amount')::numeric*100)::bigint;
+   tax_minor:=((allocation->>'tax')::numeric*100)::bigint;
+   total_value:=total_value+item_amount;
+   lines:=lines||jsonb_build_array(jsonb_build_object('ordinal',ordinal_value,
+    'lineDigest',public.canonical_completion_digest(CASE WHEN input_group->>'behavior'='exclusive'
+     THEN jsonb_build_object('issuedVersionId',basis#>>'{identity,issuedVersionId}',
+      'ordinal',ordinal_value,'description',description_value,'minorUnits',item_amount::text)
+     ELSE jsonb_build_object('issuedVersionId',basis#>>'{identity,issuedVersionId}',
+      'ordinal',ordinal_value,'description',description_value,'minorUnits',item_amount::text,
+      'grossMinorUnits',gross_minor::text,'taxMinorUnits',tax_minor::text,
+      'taxBehavior','inclusive','mission24LineId',term_line->>'lineId',
+      'termsDigest',basis#>>'{commercial,termsDigest}') END),
+    'kind','mission24_customer_safe_charge','description',description_value,
+    'quantity',jsonb_build_object('version','m27-invoice-quantity-v1','value','1','unit','customer_safe_charge',
+     'meaning','one accepted customer-safe commercial charge; not a field quantity'),
+    'unitAmount',jsonb_build_object('version','m27-exact-money-v1','currency','USD','minorUnitExponent',2,
+     'minorUnits',item_amount::text,'decimal',to_char(item_amount/100.0,'FM999999999999990.00'),'exactZero',item_amount=0),
+    'lineAmount',jsonb_build_object('version','m27-exact-money-v1','currency','USD','minorUnitExponent',2,
+     'minorUnits',item_amount::text,'decimal',to_char(item_amount/100.0,'FM999999999999990.00'),'exactZero',item_amount=0),
+    'source','mission24.accepted_customer_safe_charge'));
+   ordinal_value:=ordinal_value+1;
+  END LOOP;
+ ELSE
+  SELECT value INTO payment FROM jsonb_array_elements(COALESCE(basis#>'{customerSafeDocument,payments}','[]'::jsonb))
+   WHERE value->>'kind'='deposit';
+  IF payment IS NULL THEN RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('accepted_deposit_line_unavailable'); END IF;
+  description_value:=btrim(COALESCE(payment->>'label','Accepted pre-work deposit'));
+  IF octet_length(description_value) NOT BETWEEN 1 AND 500 THEN
+   RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('accepted_deposit_line_unavailable'); END IF;
+  item_count:=1;total_value:=amount_value;
+  lines:=jsonb_build_array(jsonb_build_object('ordinal',0,
+   'lineDigest',public.canonical_completion_digest(jsonb_build_object('issuedVersionId',basis#>>'{identity,issuedVersionId}',
+    'deposit',payment,'minorUnits',amount_value::text)),
+   'kind','mission24_accepted_deposit','description',description_value,
+   'quantity',jsonb_build_object('version','m27-invoice-quantity-v1','value','1','unit','accepted_deposit',
+    'meaning','one exact accepted deposit schedule obligation; not a field quantity'),
+   'unitAmount',receipt_row.receipt->'amount','lineAmount',receipt_row.receipt->'amount',
+   'source','mission24.exact_accepted_deposit_schedule'));
+ END IF;
+ IF item_count<1 OR total_value<>amount_value THEN
+  RETURN public.canonical_customer_financial_invoice_draft_v1_unavailable('invoice_origin_reconciliation_failed'); END IF;
+ candidate:=jsonb_build_object('contractVersion','m27-invoice-draft-origin-candidate-v1',
+  'estimateId',estimate_value,'customerId',basis#>>'{identity,customerId}',
+  'handoffReceiptId',receipt_row.id,'handoffReceiptDigest',rtrim(receipt_row.receipt_digest),
+  'sourceClass',receipt_row.source_class,'decisionDigest',rtrim(receipt_row.decision_digest),
+  'commercialBasisDigest',rtrim(receipt_row.commercial_basis_digest),
+  'mission24Source',jsonb_build_object('issuedVersionId',basis#>>'{identity,issuedVersionId}',
+   'issuedRevision',(basis#>>'{commercial,issuedRevision}')::bigint,
+   'issuedDigest',basis#>>'{commercial,issuedDigest}','documentDigest',basis#>>'{commercial,documentDigest}',
+   'commercialApprovalId',basis#>>'{commercial,commercialApprovalId}',
+   'commercialApprovalDigest',basis#>>'{commercial,commercialApprovalDigest}',
+   'acceptanceId',basis#>>'{identity,acceptanceId}','acceptanceDigest',basis#>>'{commercial,acceptanceDigest}'),
+  'currency','USD','lines',lines,
+  'subtotalBeforeTax',jsonb_build_object('version','m27-exact-money-v1','currency','USD','minorUnitExponent',2,
+   'minorUnits',amount_value::text,'decimal',to_char(amount_value/100.0,'FM999999999999990.00'),'exactZero',amount_value=0),
+  'tax',jsonb_build_object('state','unavailable','reason','invoice_date_tax_review_required','value',NULL),
+  'amountDue',jsonb_build_object('state','unavailable','reason','invoice_reconciliation_not_yet_authorized','value',NULL),
+  'sourceCurrent',TRUE,'invoiceAuthorized',FALSE,'receivableAuthorized',FALSE,'issueAuthorized',FALSE,
+  'providerCallCount',0,'receiverMutationCount',0);
+ RETURN candidate||jsonb_build_object('candidateDigest',public.canonical_completion_digest(candidate));
+END $$;
+
 CREATE FUNCTION public.canonical_customer_financial_invoice_tax_review_v1_source(
  org UUID,actor UUID,role_value TEXT,session_value UUID,estimate_value UUID,
  receipt_value UUID,receipt_digest_value TEXT)
@@ -134,7 +311,8 @@ DECLARE components_value JSONB;draft_value JSONB;
  allocation JSONB;source_value JSONB;line_value JSONB;lines_value JSONB:='[]'::jsonb;
  registration_value JSONB;preparation_value JSONB;base_value JSONB;
  ordinal_value INTEGER;line_count INTEGER;tax_sum BIGINT:=0;tax_minor BIGINT;
- line_minor BIGINT;basis_minor BIGINT;invoice_day DATE:=(clock_timestamp() AT TIME ZONE 'UTC')::date;
+ basis_minor BIGINT;basis_sum BIGINT:=0;
+ invoice_day DATE:=(clock_timestamp() AT TIME ZONE 'UTC')::date;
 BEGIN
  components_value:=public.canonical_customer_financial_invoice_draft_components_v1_read(
   org,actor,role_value,session_value,estimate_value,receipt_value,receipt_digest_value);
@@ -226,9 +404,7 @@ BEGIN
  FOR ordinal_value IN 0..line_count-1 LOOP
   term_line:=terms.result->'lines'->ordinal_value;
   draft_line:=draft_value->'lines'->ordinal_value;
-  line_minor:=((term_line->>'adjustedAmount')::numeric*100)::bigint;
-  IF draft_line#>>'{allocatedAmount,minorUnits}'<>line_minor::text OR
-     issued.document#>>ARRAY['charges',ordinal_value::text,'amount']<>term_line->>'adjustedAmount' THEN
+  IF issued.document#>>ARRAY['charges',ordinal_value::text,'amount']<>term_line->>'adjustedAmount' THEN
    RETURN public.canonical_customer_financial_invoice_tax_review_v1_unavailable('invoice_tax_basis_incompatible'); END IF;
   SELECT entry.value INTO input_group FROM jsonb_array_elements(terms.body#>'{inputs,taxGroups}') AS entry(value)
    WHERE entry.value->'lineIds' ? (term_line->>'lineId') LIMIT 1;
@@ -252,9 +428,12 @@ BEGIN
      COALESCE(allocation->>'tax','')!~'^(0|[1-9][0-9]{0,7})\.[0-9]{2}$' THEN
    RETURN public.canonical_customer_financial_invoice_tax_review_v1_unavailable('tax_authority_unavailable'); END IF;
   tax_minor:=((allocation->>'tax')::numeric*100)::bigint;
-  basis_minor:=CASE WHEN input_group->>'behavior'='inclusive' THEN line_minor-tax_minor ELSE line_minor END;
-  IF basis_minor<0 THEN
+  basis_minor:=public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(
+   issued.document#>>ARRAY['charges',ordinal_value::text,'amount'],term_line->>'adjustedAmount',
+   input_group->>'behavior',allocation->>'tax');
+  IF basis_minor IS NULL OR draft_line#>>'{allocatedAmount,minorUnits}'<>basis_minor::text THEN
    RETURN public.canonical_customer_financial_invoice_tax_review_v1_unavailable('invoice_tax_basis_incompatible'); END IF;
+  basis_sum:=basis_sum+basis_minor;
   tax_sum:=tax_sum+tax_minor;
   line_value:=jsonb_build_object('ordinal',ordinal_value,
    'invoiceSourceLineDigest',draft_line->>'sourceLineDigest','mission24LineId',term_line->>'lineId',
@@ -270,7 +449,9 @@ BEGIN
     'ruleId',source_value->'ruleId','ruleDigest',source_value->'ruleDigest'));
   lines_value:=lines_value||jsonb_build_array(line_value);
  END LOOP;
- IF tax_sum<>((terms.result->>'tax')::numeric*100)::bigint THEN
+ IF tax_sum<>((terms.result->>'tax')::numeric*100)::bigint OR
+    basis_sum<>((terms.result->>'netBeforeTax')::numeric*100)::bigint OR
+    basis_sum<>(draft_value#>>'{subtotalBeforeTax,minorUnits}')::bigint THEN
   RETURN public.canonical_customer_financial_invoice_tax_review_v1_unavailable('invoice_tax_basis_incompatible'); END IF;
 
  IF tax_profile.id IS NOT NULL THEN
@@ -471,6 +652,7 @@ REVOKE ALL ON TABLE public.canonical_customer_financial_invoice_tax_reviews_v1,
 REVOKE ALL ON FUNCTION
  public.canonical_customer_financial_invoice_tax_review_v1_unavailable(TEXT),
  public.canonical_customer_financial_invoice_tax_review_v1_money(TEXT),
+ public.canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor(TEXT,TEXT,TEXT,TEXT),
  public.canonical_customer_financial_invoice_tax_review_v1_source(UUID,UUID,TEXT,UUID,UUID,UUID,TEXT),
  public.canonical_customer_financial_invoice_tax_review_v1_saved(public.canonical_customer_financial_invoice_tax_reviews_v1),
  public.canonical_customer_financial_invoice_tax_review_v1_read(UUID,UUID,TEXT,UUID,UUID,UUID,TEXT),

@@ -84,6 +84,17 @@ describe('Mission 27 Part 4D invoice-date tax review', () => {
     expect(migration).toContain("'WV','WI','WY','DC'");
   });
 
+  test('reconciles gross inclusive charges to exact pre-tax lines inside the database boundary', () => {
+    expect(migration).toContain('canonical_customer_financial_invoice_draft_v1_pre_tax_line_minor');
+    expect(migration).toContain('CREATE OR REPLACE FUNCTION public.canonical_customer_financial_invoice_draft_v1_source');
+    expect(migration).toContain("behavior_value='inclusive' THEN gross_minor-tax_minor");
+    expect(migration).toContain("input_group->>'behavior'='exclusive'");
+    expect(migration).toContain("'invoice_origin_reconciliation_failed'");
+    expect(migration).toContain("basis_sum<>(draft_value#>>'{subtotalBeforeTax,minorUnits}')::bigint");
+    expect(migration).toContain('document_amount::numeric<>adjusted_amount::numeric');
+    expect(migration).toContain('tax_minor>gross_minor');
+  });
+
   test('accepts an immutable reviewed record but rejects provider or invoice effects', () => {
     const value = candidate(); delete value.candidateDigest;
     Object.assign(value, { state: 'recorded_policy_unavailable', reviewId: UUID, reviewSequence: 1,

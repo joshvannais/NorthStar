@@ -1,6 +1,6 @@
 # Mission 27 Part 4B — append-only invoice-draft revisions
 
-Status: released. The accepted head `fc3157428be6edd1191e720873a22787cd3ac10c`, tree `16b50682ad5c2a99595ecb76529294761855710b`, was normally merged as PR #491 to exact main `50c2eab5dc462739069d28c93b425ef4b02b0b2a`. Sole automatic Railway deployment `07b6e6e9-076c-453b-a9ce-7d3a4c9e1a48` succeeded with image `sha256:8a1341eb5ced77f835fbd80f14e2da08dccc6b95d1149bc4e21ce54a0b2f6824`, migration 269 after 268 with no 270, and `/api/health`, `/`, and `/demo/` HTTP 200. Part 4C is the current candidate.
+Status: released. The accepted head `fc3157428be6edd1191e720873a22787cd3ac10c`, tree `16b50682ad5c2a99595ecb76529294761855710b`, was normally merged as PR #491 to exact main `50c2eab5dc462739069d28c93b425ef4b02b0b2a`. Sole automatic Railway deployment `07b6e6e9-076c-453b-a9ce-7d3a4c9e1a48` succeeded with image `sha256:8a1341eb5ced77f835fbd80f14e2da08dccc6b95d1149bc4e21ce54a0b2f6824`, migration 269 after 268 with no 270, and `/api/health`, `/`, and `/demo/` HTTP 200. Part 4C is released; Part 4D is the current candidate.
 
 Part 4B lets a current owner or admin revise customer-facing wording, grouping, and allocations over one exact-current Part 4A origin. It does not create or alter Mission 24 price authority. Every revision retains the exact source-line identities and exact line count, and PostgreSQL recalculates every allocation in USD minor units. The resulting subtotal must equal the immutable Part 4A subtotal exactly, including an explicit zero.
 

@@ -11,6 +11,7 @@ const quoteJourneyRepository = require('../customerFinancial/polarisQuoteJourney
 const invoiceDraftRepository = require('../customerFinancial/invoiceDraftOriginRepository');
 const invoiceDraftRevisionRepository = require('../customerFinancial/invoiceDraftRevisionRepository');
 const invoiceDraftComponentsRepository = require('../customerFinancial/invoiceDraftComponentsRepository');
+const invoiceTaxReviewRepository = require('../customerFinancial/invoiceTaxReviewRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -51,6 +52,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const invoiceDraftRevisionRead = options.invoiceDraftRevisionRead || invoiceDraftRevisionRepository.read;
   const invoiceDraftRevisionSave = options.invoiceDraftRevisionSave || invoiceDraftRevisionRepository.save;
   const invoiceDraftComponentsRead = options.invoiceDraftComponentsRead || invoiceDraftComponentsRepository.read;
+  const invoiceTaxReviewRead = options.invoiceTaxReviewRead || invoiceTaxReviewRepository.read;
+  const invoiceTaxReviewRecord = options.invoiceTaxReviewRecord || invoiceTaxReviewRepository.record;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -170,6 +173,34 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     try { return res.json({ success: true, data: await invoiceDraftComponentsRead(poolProvider(),
       source(req), req.params.estimateId, req.query.handoffReceiptId,
       req.query.handoffReceiptDigest) });
+    } catch (error) { return failure(res,error); }
+  });
+  router.get('/:estimateId/invoice-draft/tax-review', auth, role, throttle, async (req,res) => {
+    const keys = Object.keys(req.query);
+    if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+        !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+        typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+      status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_TAX_REVIEW_INVALID',
+      message: 'Select one exact current invoice draft.' });
+    try { return res.json({ success: true, data: await invoiceTaxReviewRead(poolProvider(),
+      source(req), req.params.estimateId, req.query.handoffReceiptId,
+      req.query.handoffReceiptDigest) });
+    } catch (error) { return failure(res,error); }
+  });
+  router.post('/:estimateId/invoice-draft/tax-review', auth, role, throttle, async (req,res) => {
+    const csrfToken = req.get('X-CSRF-Token');
+    if (typeof csrfToken !== 'string' || csrfToken.length < 16) return failure(res, {
+      status: 403, code: 'CUSTOMER_FINANCIAL_INVOICE_TAX_REVIEW_RESTRICTED',
+      message: 'A current request confirmation is required for this tax review.' });
+    if (Object.keys(req.query).length || !req.body || typeof req.body !== 'object' ||
+        Array.isArray(req.body)) return failure(res, { status: 400,
+      code: 'CUSTOMER_FINANCIAL_INVOICE_TAX_REVIEW_INVALID',
+      message: 'Record one exact invoice-date tax preparation.' });
+    try {
+      const result = await invoiceTaxReviewRecord(poolProvider(), { ...source(req), csrfToken,
+        idempotencyKey: req.get('Idempotency-Key') }, req.params.estimateId, req.body);
+      return res.status(result.status).json({ success: result.status !== 409, data: result.body,
+        replayed: result.replayed });
     } catch (error) { return failure(res,error); }
   });
   router.get('/:estimateId/quote-journey', auth, quoteRole, throttle, async (req,res) => {

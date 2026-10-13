@@ -1,6 +1,6 @@
 # Mission 27 Part 4C — exact commercial source and typed financial components
 
-Status: implementation candidate for original Part 4C and the bound Q8 invoice-separation gate. This record does not accept the candidate, begin Part 4D, authorize tax, calculate amount due, approve or issue an invoice, create a receivable, or perform a provider, payment, credit, refund, accounting or downstream action.
+Status: released. Accepted head `af14f5cc9feff22c8c9e109919181c0c0501fc4b`, tree `55767bba158fc24d8c835610ea0c5d1e05c45b29`, was normally merged as PR #492 to exact main `90dc034938a8d249daf59a701dd478cd1de2b211`. Sole automatic Railway deployment `32cc565c-77c1-438e-bf06-bd6200844b0b` succeeded with image `sha256:f0c9d0032d694fb06c198ff47dd250cfa8a1e04db1997b8fe2c0ed0577e0f645`, migration 270 after 269 with no 271, and `/api/health`, `/`, and `/demo/` HTTP 200. Part 4D is the current candidate. This record does not authorize tax, calculate amount due, approve or issue an invoice, create a receivable, or perform a provider, payment, credit, refund, accounting or downstream action.
 
 ## Exact authority boundary
 

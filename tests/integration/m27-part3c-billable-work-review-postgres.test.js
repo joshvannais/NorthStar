@@ -612,6 +612,98 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     expect(after.numbers).toBe(before.numbers); expect(after.handoffs).toBe(before.handoffs);
   }, 180000);
 
+  test('mounted Part 4B appends exact-total wording, grouping and allocation revisions', async () => {
+    const draftRoute = `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-draft`;
+    const query = { handoffReceiptId: billableHandoffReceipt.receiptId,
+      handoffReceiptDigest: billableHandoffReceipt.receiptDigest };
+    const baseline = await request(f.app).get(draftRoute).query(query).set(actor.session.headers);
+    expect(baseline.status).toBe(200);
+    expect(baseline.body.data).toMatchObject({ contractVersion: 'm27-invoice-draft-revision-v1',
+      state: 'current', revision: 0, currency: 'USD', sourceCurrent: true,
+      invoiceAuthorized: false, receivableAuthorized: false, issueAuthorized: false,
+      providerCallCount: 0, receiverMutationCount: 0 });
+    expect((await request(f.app).get(draftRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const edit = { contractVersion: 'm27-invoice-draft-edit-v1',
+      originId: baseline.body.data.originId, originDigest: baseline.body.data.originDigest,
+      lines: baseline.body.data.lines.map((line, ordinal) => ({ ordinal,
+        sourceLineDigest: line.sourceLineDigest, group: ordinal ? 'Additional services' : 'Core service',
+        description: `${line.description} — reviewed for customer invoice`,
+        allocatedMinorUnits: line.allocatedAmount.minorUnits })) };
+    if (edit.lines.length > 1 && BigInt(edit.lines[1].allocatedMinorUnits) > 0n) {
+      edit.lines[0].allocatedMinorUnits = (BigInt(edit.lines[0].allocatedMinorUnits) + 1n).toString();
+      edit.lines[1].allocatedMinorUnits = (BigInt(edit.lines[1].allocatedMinorUnits) - 1n).toString();
+    }
+    const key = `m27-p4b-save-${crypto.randomUUID()}`;
+    const body = { ...query, capabilityGrantId: invoiceDraftGrant.grantId,
+      capabilityGrantRevision: invoiceDraftGrant.revision, businessPurpose: INVOICE_PURPOSE,
+      policyVersion: INVOICE_POLICY, expectedRevision: 0,
+      expectedDraftDigest: baseline.body.data.draftDigest, draft: edit,
+      reason: 'Owner clarified customer wording, grouping, and exact allocations.',
+      confirmed: true, confirmationVersion: 'm27-invoice-draft-revision-save-v1' };
+    expect((await request(f.app).post(draftRoute).set('Cookie', actor.session.headers.Cookie)
+      .set('Idempotency-Key', key).send(body)).status).toBe(403);
+    const wrongTotal = structuredClone(body);
+    wrongTotal.draft.lines[0].allocatedMinorUnits =
+      (BigInt(wrongTotal.draft.lines[0].allocatedMinorUnits) + 1n).toString();
+    const rejected = await request(f.app).post(draftRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken)
+      .set('Idempotency-Key', `m27-p4b-wrong-total-${crypto.randomUUID()}`).send(wrongTotal);
+    expect(rejected.status).toBe(400);
+    expect(JSON.stringify(rejected.body)).not.toMatch(/minorUnits|description|customerId/);
+    const saved = await request(f.app).post(draftRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', key).send(body);
+    expect(saved.status).toBe(201);
+    expect(saved.body.data).toMatchObject({ revision: 1, sourceCurrent: true,
+      subtotalBeforeTax: baseline.body.data.subtotalBeforeTax, invoiceAuthorized: false });
+    expect(saved.body.data.draftDigest).not.toBe(baseline.body.data.draftDigest);
+    expect(saved.body.data.historyChainDigest).not.toBe(baseline.body.data.historyChainDigest);
+    expect(saved.body.data.lines.map(line => line.sourceLineDigest))
+      .toEqual(baseline.body.data.lines.map(line => line.sourceLineDigest));
+    const savedTotal = saved.body.data.lines.reduce(
+      (sum, line) => sum + BigInt(line.allocatedAmount.minorUnits), 0n);
+    expect(savedTotal.toString()).toBe(baseline.body.data.subtotalBeforeTax.minorUnits);
+    const replay = await request(f.app).post(draftRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', key).send(body);
+    expect(replay.status).toBe(200); expect(replay.body.replayed).toBe(true);
+    expect(replay.body.data.draftDigest).toBe(saved.body.data.draftDigest);
+    const changedReuse = await request(f.app).post(draftRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', key)
+      .send({ ...body, reason: 'Changed key reuse cannot select an older invoice-draft revision.' });
+    expect(changedReuse.status).toBe(409);
+
+    const revisions = ['Concurrent owner revision A.', 'Concurrent owner revision B.'].map((suffix, index) => {
+      const draft = structuredClone(edit);
+      draft.lines[0].description = `${edit.lines[0].description} ${suffix}`;
+      return request(f.app).post(draftRoute).set(actor.session.headers)
+        .set('X-CSRF-Token', actor.csrfToken)
+        .set('Idempotency-Key', `m27-p4b-race-${index}-${crypto.randomUUID()}`)
+        .send({ ...body, draft, expectedRevision: 1,
+          expectedDraftDigest: saved.body.data.draftDigest,
+          reason: `Owner submitted ${suffix.toLowerCase()} with exact total preserved.` });
+    });
+    const raced = await Promise.all(revisions);
+    expect(raced.map(response => response.status).sort()).toEqual([201,409]);
+    const current = await request(f.app).get(draftRoute).query(query).set(actor.session.headers);
+    expect(current.status).toBe(200); expect(current.body.data.revision).toBe(2);
+    expect(current.body.data.draftDigest).toBe(raced.find(response => response.status === 201).body.data.draftDigest);
+    const supersededReplay = await request(f.app).post(draftRoute).set(actor.session.headers)
+      .set('X-CSRF-Token', actor.csrfToken).set('Idempotency-Key', key).send(body);
+    expect(supersededReplay.status).toBe(409);
+    expect(JSON.stringify(supersededReplay.body)).not.toMatch(/minorUnits|description|customerId/);
+    const stored = await f.ownerPool.query(`SELECT revision,rtrim(draft_digest) draft_digest
+      FROM canonical_customer_financial_invoice_draft_revisions_v1
+      WHERE organization_id=$1 AND origin_id=$2 ORDER BY revision`, [f.org, baseline.body.data.originId]);
+    expect(stored.rows).toHaveLength(2);
+    expect(stored.rows.map(row => Number(row.revision))).toEqual([1,2]);
+    await expect(f.ownerPool.query(`UPDATE canonical_customer_financial_invoice_draft_revisions_v1
+      SET draft=draft WHERE organization_id=$1 AND origin_id=$2`,
+    [f.org,baseline.body.data.originId])).rejects.toMatchObject({ code: '55000' });
+    await expect(f.runtimePool.query(
+      'SELECT * FROM canonical_customer_financial_invoice_draft_revisions_v1')).rejects
+      .toMatchObject({ code: '42501' });
+  }, 180000);
+
   test('missing accepted deposit terms remain value-free and a real M23 source change clears reviewed final values', async () => {
     const deposit = await readReview(actor, 'pre_work_deposit');
     expect(deposit.status).toBe(200);
@@ -632,6 +724,14 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     expect(originStale.body.data).toMatchObject({ state: 'unavailable', value: null,
       reason: 'reviewed_handoff_stale', sourceCurrent: false, invoiceAuthorized: false });
     expect(JSON.stringify(originStale.body.data)).not.toMatch(/minorUnits|description|customerId|sourceIdentity/);
+    const draftStale = await request(f.app)
+      .get(`/api/v1/customer-financial/editable-estimates/${estimate}/invoice-draft`)
+      .query({ handoffReceiptId: billableHandoffReceipt.receiptId,
+        handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
+    expect(draftStale.status).toBe(200);
+    expect(draftStale.body.data).toMatchObject({ state: 'unavailable', value: null,
+      reason: 'reviewed_handoff_stale', sourceCurrent: false, invoiceAuthorized: false });
+    expect(JSON.stringify(draftStale.body.data)).not.toMatch(/minorUnits|description|customerId|lines/);
     const stale = await readReview(actor, 'final_balance');
     expect(stale.status).toBe(200);
     expect(stale.body.data).toMatchObject({ state: 'unavailable', value: null,
@@ -667,7 +767,7 @@ realPostgres('Mission 27 Part 3C exact human billable-work review', () => {
     const migration = (await f.ownerPool.query(
       "SELECT filename FROM _migrations ORDER BY id DESC LIMIT 1",
     )).rows[0];
-    expect(migration.filename).toBe('268_customer_financial_invoice_draft_origin_v1.sql');
+    expect(migration.filename).toBe('269_customer_financial_invoice_draft_revisions_v1.sql');
   }, 180000);
 
   test('mounted mobile quote journey consumes the exact current Mission 24 proposal and permits bounded member editing', async () => {

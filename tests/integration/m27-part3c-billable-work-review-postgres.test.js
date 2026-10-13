@@ -1076,6 +1076,52 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       .rejects.toMatchObject({code:'42501'});
   }, 180000);
 
+  test('mounted Part 5A validates the current paid source but returns the MFA gate value-free', async () => {
+    const query = { handoffReceiptId: billableHandoffReceipt.receiptId,
+      handoffReceiptDigest: billableHandoffReceipt.receiptDigest };
+    const finalReviewRoute =
+      `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-final-review`;
+    expect((await request(f.app).get(finalReviewRoute).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(finalReviewRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const crossTenant = await request(f.app).get(finalReviewRoute).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(crossTenant.status);
+    const before = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) tax_reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) numbers`)).rows[0];
+    const response = await request(f.app).get(finalReviewRoute).query(query)
+      .set(actor.session.headers);
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers.vary).toMatch(/Cookie/);
+    expect(response.body.data).toMatchObject({
+      contractVersion:'m27-invoice-final-review-v1', state:'unavailable',
+      reason:'recent_auth_mfa_unavailable', value:null,
+      requiredCapability:'customer_financial.invoice.approve',
+      requiredAssurance:'recent_auth_mfa', sourceCurrent:false,
+      approvalAuthorized:false,invoiceAuthorized:false,issueAuthorized:false,
+      receivableAuthorized:false,providerCallCount:0,receiverMutationCount:0,
+    });
+    expect(response.body.data.missingEvidence.map(item=>item.reason)).toEqual([
+      'recent_auth_fact_unavailable','mfa_authority_unavailable',
+      'invoice_due_terms_policy_unavailable','invoice_delivery_choice_policy_unavailable',
+      'invoice_reconciliation_evidence_unavailable',
+    ]);
+    expect(JSON.stringify(response.body.data)).not.toMatch(
+      /customerId|workId|minorUnits|draftDigest|receiptId|deliveryChoice/);
+    expect(await request(f.app).post(finalReviewRoute).set(actor.session.headers)
+      .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
+    const after = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) tax_reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) numbers`)).rows[0];
+    expect(after).toEqual(before);
+  }, 180000);
+
   completeOnly('missing accepted deposit terms remain value-free and a real M23 source change clears reviewed final values', async () => {
     const deposit = await readReview(actor, 'pre_work_deposit');
     expect(deposit.status).toBe(200);

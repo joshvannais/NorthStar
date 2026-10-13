@@ -109,15 +109,16 @@ describe('Mission 27 Part 3D immutable handoff and revision history', () => {
     expect(browser).not.toContain('/mission32');
   });
 
-  test('governing records distinguish released Parts 3A-3C from the current candidate', () => {
+  test('governing records preserve the released Part 3 chain before the Part 4A candidate', () => {
     const roadmap = read('docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md');
     const ledger = read('docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md');
-    expect(roadmap).toContain('Parts 3A–3C were released through PRs #486–#488');
+    expect(roadmap).toContain('Parts 3A–3D were released through PRs #486–#489');
     expect(ledger).toContain('PR #486');
     expect(ledger).toContain('PR #487');
     expect(ledger).toContain('PR #488');
+    expect(ledger).toContain('PR #489');
     expect(ledger).toContain('| 3D | [Immutable handoff and revision history]');
-    expect(ledger).toContain('Independent whole-head audit, PR, deployment and health remain pending.');
-    expect(ledger).not.toMatch(/\| 3D \|[^\n]+\| Released \|/);
+    expect(ledger).toMatch(/\| 3D \|[^\n]+\| Released \|/);
+    expect(ledger).toContain('| 4A | [Immutable invoice-draft origin and customer-safe lines]');
   });
 });

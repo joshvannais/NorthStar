@@ -21,6 +21,7 @@ const ENTRIES = new Set([
   'canonical_customer_financial_invoice_draft_v1_capture',
   'canonical_customer_financial_invoice_draft_revision_v1_read',
   'canonical_customer_financial_invoice_draft_revision_v1_save',
+  'canonical_customer_financial_invoice_draft_components_v1_read',
 ]);
 const TABLES = new Set([
   'canonical_customer_financial_billing_capability_grants_v1',
@@ -84,7 +85,8 @@ async function grantAndVerify(client, runtimeRole) {
           OR proname LIKE 'canonical_customer_financial_billable_review_v1_%'
           OR proname LIKE 'canonical_customer_financial_estimate_journey_v1_%'
           OR proname LIKE 'canonical_customer_financial_invoice_draft_v1_%'
-          OR proname LIKE 'canonical_customer_financial_invoice_draft_revision_v1_%')`
+          OR proname LIKE 'canonical_customer_financial_invoice_draft_revision_v1_%'
+          OR proname LIKE 'canonical_customer_financial_invoice_draft_components_v1_%')`
   )).rows;
   for (const entry of functions) {
     await client.query('REVOKE ALL ON FUNCTION ' + entry.identity + ' FROM PUBLIC, ' + role);

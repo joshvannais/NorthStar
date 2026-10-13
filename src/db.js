@@ -6386,6 +6386,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_v1_capture(uuid,uuid,text,uuid,text,text,uuid,uuid,text,uuid,bigint,text,text,text,text,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_revision_v1_read(uuid,uuid,text,uuid,uuid,uuid,text)','EXECUTE')
          AND has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_revision_v1_save(uuid,uuid,text,uuid,text,text,uuid,uuid,text,uuid,bigint,text,text,bigint,text,uuid,jsonb,text,text)','EXECUTE')
+         AND has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_components_v1_read(uuid,uuid,text,uuid,uuid,uuid,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_v1_issue_grant(uuid,uuid,bigint,uuid,uuid,uuid,text,text,text,text,text,text,text,text,boolean)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_v1_access(uuid,uuid,text,uuid,text,uuid,uuid,bigint,boolean)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_v1_source(uuid,uuid,text,uuid,uuid,uuid,text)','EXECUTE')
@@ -6395,10 +6396,14 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_revision_v1_current(uuid,uuid,text,uuid,uuid,uuid,text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_revision_v1_unavailable(text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_revision_v1_exact_money(bigint)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_components_v1_unavailable(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_components_v1_missing(text,text,text,text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_customer_financial_invoice_draft_components_v1_unsupported(text,text)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_invoice_draft_v1_read(uuid,uuid,text,uuid,uuid,uuid,text)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_invoice_draft_v1_capture(uuid,uuid,text,uuid,text,text,uuid,uuid,text,uuid,bigint,text,text,text,text,text)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_invoice_draft_revision_v1_read(uuid,uuid,text,uuid,uuid,uuid,text)','EXECUTE')
          AND NOT has_function_privilege('public','public.canonical_customer_financial_invoice_draft_revision_v1_save(uuid,uuid,text,uuid,text,text,uuid,uuid,text,uuid,bigint,text,text,bigint,text,uuid,jsonb,text,text)','EXECUTE')
+         AND NOT has_function_privilege('public','public.canonical_customer_financial_invoice_draft_components_v1_read(uuid,uuid,text,uuid,uuid,uuid,text)','EXECUTE')
        )) AS customer_financial_invoice_draft_private,
        (to_regclass('public.canonical_forecast_price_event_snapshots') IS NULL OR
          NOT has_table_privilege($1,'public.canonical_forecast_price_event_snapshots','SELECT,INSERT,UPDATE,DELETE')) AS price_event_snapshot_table_withheld,

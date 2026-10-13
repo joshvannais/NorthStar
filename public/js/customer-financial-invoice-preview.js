@@ -43,7 +43,7 @@
   function injectStyles() {
     if (document.getElementById('customerFinancialInvoicePreviewStyles')) return;
     var style = node('style'); style.id = 'customerFinancialInvoicePreviewStyles';
-    style.textContent = '.invoice-draft-preview{margin-top:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.invoice-draft-preview>summary{padding:1rem;font-weight:700;cursor:pointer}.invoice-draft-preview-body{padding:0 1rem 1rem}.invoice-draft-preview-status:focus,.invoice-draft-preview-heading:focus,.invoice-draft-preview button:focus,.invoice-draft-preview input:focus,.invoice-draft-preview textarea:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}.invoice-draft-preview-document,.invoice-draft-workflow-step{border:1px solid var(--border-color,#d6d7db);border-radius:12px;padding:1rem;background:var(--surface-subtle,#f7f5ef)}.invoice-draft-preview-demo{display:inline-block;padding:.25rem .55rem;border-radius:999px;background:#f3d57b;color:#241b00;font-weight:750}.invoice-draft-preview-lines{width:100%;border-collapse:collapse;margin:.75rem 0}.invoice-draft-preview-lines th,.invoice-draft-preview-lines td{padding:.55rem;text-align:left;border-bottom:1px solid var(--border-color,#d6d7db)}.invoice-draft-preview-lines th:last-child,.invoice-draft-preview-lines td:last-child{text-align:right}.invoice-draft-preview-totals{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.45rem 1rem;max-width:30rem;margin-left:auto}.invoice-draft-preview-totals dt{font-weight:650}.invoice-draft-preview-totals dd{margin:0;text-align:right}.invoice-draft-preview-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.invoice-draft-preview-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}.invoice-draft-workflow-form,.invoice-draft-workflow-field{display:grid;gap:.6rem}.invoice-draft-workflow-line{display:grid;grid-template-columns:minmax(9rem,1fr) minmax(12rem,2fr) auto;gap:.6rem;align-items:end;margin:.7rem 0}.invoice-draft-workflow-line label{display:grid;gap:.3rem}.invoice-draft-workflow-form textarea{min-height:5rem}@media(max-width:680px){.invoice-draft-preview{border-radius:10px}.invoice-draft-preview-lines thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.invoice-draft-preview-lines tr{display:grid;padding:.65rem 0;border-bottom:1px solid var(--border-color,#d6d7db)}.invoice-draft-preview-lines td{display:flex;justify-content:space-between;gap:1rem;border:0;padding:.2rem 0}.invoice-draft-preview-lines td:before{content:attr(data-label);font-weight:650}.invoice-draft-preview-actions .btn{width:100%}.invoice-draft-workflow-line{grid-template-columns:1fr}.invoice-draft-workflow-line .invoice-draft-workflow-amount{justify-self:start}}@media(forced-colors:active){.invoice-draft-preview,.invoice-draft-preview-document,.invoice-draft-workflow-step{border:2px solid CanvasText}.invoice-draft-preview-demo{border:1px solid CanvasText}}';
+    style.textContent = '.invoice-draft-preview{margin-top:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.invoice-draft-preview>summary{padding:1rem;font-weight:700;cursor:pointer}.invoice-draft-preview-body{padding:0 1rem 1rem}.invoice-draft-preview-status:focus,.invoice-draft-preview-heading:focus,.invoice-draft-preview button:focus,.invoice-draft-preview input:focus,.invoice-draft-preview textarea:focus,.invoice-draft-tax-evidence>summary:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}.invoice-draft-preview-document,.invoice-draft-workflow-step{border:1px solid var(--border-color,#d6d7db);border-radius:12px;padding:1rem;background:var(--surface-subtle,#f7f5ef)}.invoice-draft-preview-demo{display:inline-block;padding:.25rem .55rem;border-radius:999px;background:#f3d57b;color:#241b00;font-weight:750}.invoice-draft-preview-lines{width:100%;border-collapse:collapse;margin:.75rem 0}.invoice-draft-preview-lines th,.invoice-draft-preview-lines td{padding:.55rem;text-align:left;border-bottom:1px solid var(--border-color,#d6d7db);vertical-align:top;overflow-wrap:anywhere}.invoice-draft-preview-lines th:last-child,.invoice-draft-preview-lines td:last-child{text-align:right}.invoice-draft-preview-totals{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.45rem 1rem;max-width:30rem;margin-left:auto}.invoice-draft-preview-totals dt{font-weight:650}.invoice-draft-preview-totals dd{margin:0;text-align:right}.invoice-draft-preview-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.invoice-draft-preview-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}.invoice-draft-workflow-form,.invoice-draft-workflow-field{display:grid;gap:.6rem}.invoice-draft-workflow-line{display:grid;grid-template-columns:minmax(9rem,1fr) minmax(12rem,2fr) auto;gap:.6rem;align-items:end;margin:.7rem 0}.invoice-draft-workflow-line label{display:grid;gap:.3rem}.invoice-draft-workflow-form textarea{min-height:5rem}.invoice-draft-tax-evidence{margin:.75rem 0;border-block:1px solid var(--border-color,#d6d7db);padding:.65rem 0}.invoice-draft-tax-evidence>summary{font-weight:700;cursor:pointer}.invoice-draft-tax-evidence dl{display:grid;grid-template-columns:minmax(10rem,auto) minmax(0,1fr);gap:.35rem .75rem}.invoice-draft-tax-evidence dt{font-weight:650}.invoice-draft-tax-evidence dd{margin:0;overflow-wrap:anywhere}.invoice-draft-tax-gaps{margin:.35rem 0}.invoice-draft-tax-provenance{max-width:24rem}@media(max-width:680px){.invoice-draft-preview{border-radius:10px}.invoice-draft-preview-lines thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.invoice-draft-preview-lines tr{display:grid;padding:.65rem 0;border-bottom:1px solid var(--border-color,#d6d7db)}.invoice-draft-preview-lines td{display:flex;justify-content:space-between;gap:1rem;border:0;padding:.2rem 0;text-align:right}.invoice-draft-preview-lines td:before{content:attr(data-label);font-weight:650;text-align:left}.invoice-draft-preview-actions .btn{width:100%}.invoice-draft-workflow-line{grid-template-columns:1fr}.invoice-draft-workflow-line .invoice-draft-workflow-amount{justify-self:start}.invoice-draft-tax-evidence dl{grid-template-columns:1fr}.invoice-draft-tax-evidence dd{margin-bottom:.45rem}}@media(forced-colors:active){.invoice-draft-preview,.invoice-draft-preview-document,.invoice-draft-workflow-step{border:2px solid CanvasText}.invoice-draft-preview-demo{border:1px solid CanvasText}}';
     document.head.appendChild(style);
   }
   function mount(review, host) {
@@ -145,6 +145,59 @@
         money(liability.amount) + '.', card);
       node('p', 'Professional tax policy remains unavailable. Recording this exact preparation does not authorize approval, issue, delivery, a receivable, or collection.', card,
         'invoice-draft-preview-boundary');
+      var evidence = node('details', undefined, card, 'invoice-draft-tax-evidence'); evidence.open = true;
+      node('summary', 'Exact tax preparation evidence to review', evidence);
+      node('p', 'Every value below is the bounded server-owned preparation that this review records. Missing authority stays unavailable.', evidence);
+      var table = node('table', undefined, evidence, 'invoice-draft-preview-lines');
+      var caption = node('caption', 'Prepared line tax evidence', table, 'sr-only');
+      caption.textContent = 'Prepared line tax evidence';
+      var head = node('thead', undefined, table), headRow = node('tr', undefined, head);
+      ['Line','Treatment','Mode','Rate','Taxable basis','Prepared tax','Provenance'].forEach(function (label) {
+        var heading = node('th', label, headRow); heading.scope = 'col';
+      });
+      var tableBody = node('tbody', undefined, table);
+      (preparation.lines || []).forEach(function (line) {
+        var row = node('tr', undefined, tableBody), source = line.source || {};
+        var provenance = ['Mission 24 line ' + (line.mission24LineId || 'not recorded'),
+          'tax group ' + (line.taxGroupId || 'not recorded'),
+          'invoice source digest ' + (line.invoiceSourceLineDigest || 'not recorded'),
+          source.kind, source.jurisdiction, source.location, source.serviceKey,
+          source.collectionBasis, source.reference, source.effectiveOn,
+          source.endsOn || 'open-ended', source.reviewedOn, source.reviewValidThrough,
+          source.ruleId, source.ruleDigest].map(function (value) { return value || 'not recorded'; }).join(' · ');
+        [String(Number(line.ordinal) + 1), line.treatment, line.inclusiveExclusive,
+          String(line.ratePercent) + '%', money(line.taxableBasis), money(line.collectedTax), provenance]
+          .forEach(function (value, index) { var cell = node('td', value, row,
+            index === 6 ? 'invoice-draft-tax-provenance' : undefined);
+          cell.dataset.label = ['Line','Treatment','Mode','Rate','Taxable basis','Prepared tax','Provenance'][index]; });
+      });
+      var facts = node('dl', undefined, evidence);
+      function fact(label, value) { node('dt', label, facts); node('dd', value, facts); }
+      var registration = preparation.registrationEvidence || {};
+      fact('Registration evidence', registration.state === 'source_snapshot' ?
+        [registration.state, registration.registration, registration.registrationReference,
+          registration.collectionBasis, registration.taxProfileId, 'revision ' + registration.taxProfileRevision,
+          registration.taxProfileDigest].map(function (value) { return value || 'not recorded'; }).join(' · ') :
+        'Unavailable · ' + (registration.reason || 'registration_evidence_unavailable'));
+      var nexus = preparation.nexusEvidence || {};
+      fact('Nexus evidence', (nexus.state || 'unavailable') + ' · ' +
+        (nexus.reason || 'professional_tax_policy_unavailable'));
+      var exemption = preparation.exemptionSnapshot || {};
+      fact('Exemption snapshot', [exemption.classification, exemption.evidenceReference,
+        exemption.profileExemptionReference].map(function (value) { return value || 'not recorded'; }).join(' · '));
+      var rounding = preparation.rounding || {};
+      fact('Rounding identity', [rounding.version, rounding.mode,
+        'minor-unit exponent ' + String(rounding.minorUnitExponent)].join(' · '));
+      fact('Separated collected-tax liability', [money(liability.amount), liability.arithmeticRole,
+        'revenue recognition ' + (liability.revenueRecognitionAuthorized === true ? 'authorized' : 'not authorized'),
+        'filing ' + (liability.filingAuthorized === true ? 'authorized' : 'not authorized')].join(' · '));
+      var lineage = preparation.creditRefundAdjustmentLineage || {};
+      fact('Credit/refund lineage', (lineage.state || 'unavailable') + ' · ' +
+        (lineage.reason || 'credit_refund_lineage_unavailable'));
+      var gaps = node('ul', undefined, evidence, 'invoice-draft-tax-gaps');
+      (lineage.missingEvidence || []).forEach(function (gap) { node('li', 'Missing evidence · ' + gap, gaps); });
+      fact('Professional tax policy', (tax.professionalPolicy?.state || 'unavailable') + ' · ' +
+        (tax.professionalPolicy?.reason || 'tax_authority_unavailable'));
       var form = node('form', undefined, card, 'invoice-draft-workflow-form');
       var controls = confirmation(form, 'Review this exact invoice-date tax preparation evidence.',
         'I reviewed this exact preparation and understand professional tax authority remains unavailable.');

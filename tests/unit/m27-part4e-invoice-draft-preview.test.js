@@ -98,6 +98,8 @@ describe('Mission 27 Part 4E invoice-draft preview', () => {
   test('mounts the same currentness-clearing preview module on every estimate surface', () => {
     const ui=read('public/js/customer-financial-invoice-preview.js');
     const browser=read('tests/browser/m27-part4e-invoice-draft-preview.js');
+    const mounted=read('tests/browser/m27-part4e-mounted-paid-journey.js');
+    const mountedFixture=read('tests/helpers/m27-part4e-paid-journey-fixture.js');
     expect(ui).toContain('requestToken += 1; clearAndStatus');
     expect(ui).toContain('mountToken === mountGeneration');
     expect(ui).toContain("'/invoice-draft/workflow-capability'");
@@ -107,6 +109,14 @@ describe('Mission 27 Part 4E invoice-draft preview', () => {
     expect(ui).toContain('function clearCollapsed() { requestToken += 1; data = null; context = null; body.replaceChildren(); }');
     expect(ui).toContain("summary.addEventListener('click', function () { if (section.open) clearCollapsed(); });");
     expect(ui).toContain('Missing evidence is never shown as zero.');
+    ['Exact tax preparation evidence to review','Registration evidence','Nexus evidence',
+      'Exemption snapshot','Rounding identity','Separated collected-tax liability',
+      'Credit/refund lineage','Professional tax policy'].forEach(label=>expect(ui).toContain(label));
+    expect(ui).toContain('line.taxableBasis');expect(ui).toContain('line.collectedTax');
+    expect(ui).toContain('line.inclusiveExclusive');expect(ui).toContain('line.ratePercent');
+    expect(ui).toContain('line.invoiceSourceLineDigest');expect(ui).toContain('line.mission24LineId');
+    expect(ui).toContain('line.taxGroupId');
+    expect(ui).toContain('source.ruleDigest');expect(ui).toContain('lineage.missingEvidence');
     expect(browser).toContain('for (const layout of MISSION_26_FIVE_LAYOUTS)');
     expect(browser).toContain('m27Part4eDelayNext');
     expect(browser).toContain('m27Part4eFailNext');
@@ -117,6 +127,18 @@ describe('Mission 27 Part 4E invoice-draft preview', () => {
     expect(browser).toContain('A settled preview never survives collapse');
     expect(browser).toContain("exerciseSkipLink(page, { mainSelector: '#mainContent' })");
     expect(browser).toContain("assert.equal(cases.length, 5)");
+    expect(mounted).toContain("page.goto(origin + '/dashboard'");
+    expect(mounted).toContain('createPart4ePaidBrowserFixture()');
+    expect(mounted).not.toContain('page.route(');
+    expect(mounted).not.toContain('NorthStarAccountSession={');
+    expect(mounted).toContain('for (let index = 0; index < MISSION_26_FIVE_LAYOUTS.length; index += 1)');
+    expect(mounted).toContain("name: 'Capture reviewed invoice source'");
+    expect(mounted).toContain("name: 'Save reviewed invoice draft'");
+    expect(mounted).toContain("name: 'Record tax preparation review'");
+    expect(mounted).toContain('correctDraftThroughRealSession');
+    expect(mounted).toContain("root.locator('[role=alert]')");
+    expect(mountedFixture).toContain('reviewed Mission 27 Part 3 final-balance handoff');
+    expect(mountedFixture).toContain('deliberately stops before every Part 4 effect');
     const pages=['public/dashboard.html','public/demo-dashboard.html','public/dashboard/command-center.html',
       'public/dashboard/communications.html','public/dashboard/leads.html','public/dashboard/polaris.html'];
     pages.forEach(page=>expect(read(page)).toContain('/js/customer-financial-invoice-preview.js?v=m27-part4e'));

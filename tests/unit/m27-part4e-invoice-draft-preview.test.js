@@ -106,7 +106,7 @@ describe('Mission 27 Part 4E invoice-draft preview', () => {
     expect(ui).toContain("'/invoice-draft-origin'");
     expect(ui).toContain("'/invoice-draft/tax-review'");
     expect(ui).toContain("confirmationVersion: 'm27-invoice-draft-revision-save-v1'");
-    expect(ui).toContain('function clearCollapsed() { requestToken += 1; data = null; part5 = null; context = null; body.replaceChildren(); }');
+    expect(ui).toContain('function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; context = null; body.replaceChildren(); }');
     expect(ui).toContain("summary.addEventListener('click', function () { if (section.open) clearCollapsed(); });");
     expect(ui).toContain('Missing evidence is never shown as zero.');
     ['Exact tax preparation evidence to review','Registration evidence','Nexus evidence',

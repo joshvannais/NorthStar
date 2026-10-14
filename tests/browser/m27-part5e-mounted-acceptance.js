@@ -168,6 +168,7 @@ async function auditActualSurface(page, root, layout) {
         const url = new URL(request.url());
         if (url.origin !== origin && !['data:','blob:'].includes(url.protocol)) external.push(request.url());
         if (url.pathname.includes('/invoice-draft') || url.pathname.includes('/invoice-part5') ||
+            url.pathname.includes('/invoice-part6') ||
             url.pathname.includes('/billable-work-review')) {
           routeEvidence.push({ method: request.method(), path: url.pathname + url.search });
         }
@@ -179,10 +180,11 @@ async function auditActualSurface(page, root, layout) {
             status: response.status() });
         }
         if (url.pathname.includes('/invoice-draft') || url.pathname.includes('/invoice-part5') ||
+            url.pathname.includes('/invoice-part6') ||
             url.pathname.includes('/billable-work-review')) {
           const row = [...routeEvidence].reverse().find(value => value.path === url.pathname + url.search &&
             value.status === undefined); if (row) row.status = response.status();
-          if (url.pathname.includes('/invoice-part5-acceptance') && response.status() === 200) {
+          if (url.pathname.includes('/invoice-part6-acceptance') && response.status() === 200) {
             response.json().then(body => bundleEvidence.push(body.data)).catch(error =>
               consoleErrors.push(error.message));
           }
@@ -220,7 +222,9 @@ async function auditActualSurface(page, root, layout) {
       await root.getByText('Approval, issue, and invoice lifecycle', { exact: true }).waitFor({ timeout: 30000 });
       assert.equal(await root.locator('.invoice-part5-axes li').count(), 7);
       assert.equal(await root.locator('.invoice-part5-corrections li').count(), 4);
-      assert.equal(await root.getByRole('button', { name: /approve invoice|issue|send|collect|correct invoice/i }).count(), 0);
+      await root.getByText('Customer document, portal, and delivery', { exact: true }).waitFor({ timeout: 30000 });
+      assert.equal(await root.locator('.invoice-part6-actions li').count(), 6);
+      assert.equal(await root.getByRole('button', { name: /approve invoice|issue|send|resend|revoke|deliver|collect|correct invoice/i }).count(), 0);
       assert.ok(await root.getByText(`Mounted ${engine} ${layout.name} reviewed line`, { exact: true }).count() ||
         await root.getByText(`Concurrent ${engine} exact-current line`, { exact: true }).count());
       const summary = root.locator(':scope > summary'); await summary.focus(); await summary.press('Enter');
@@ -233,32 +237,71 @@ async function auditActualSurface(page, root, layout) {
       await root.getByRole('button', { name: 'Record tax preparation review' }).waitFor({ timeout: 30000 });
       assert.equal(await root.locator('.invoice-draft-preview-document').count(), 0);
       assert.equal(await root.locator('.invoice-part5-acceptance').count(), 0);
+      assert.equal(await root.locator('.invoice-part6-acceptance').count(), 0);
       assert.equal(await root.getByText(/Mounted .* reviewed line/, { exact: false }).count(), 0);
       await recordTax(root);
       await root.getByText('Invoice draft — not issued', { exact: true }).waitFor({ timeout: 30000 });
       await root.getByText(`Reopen ${engine} ${layout.name} exact-current line`, { exact: true })
         .waitFor({ timeout: 30000 });
+      if (index === 0) {
+        await page.evaluate(() => {
+          const realFetch = window.fetch.bind(window);
+          let armed = true;
+          window.m27Part6dDelayedResponseReady = false;
+          window.m27Part6dResolveDelayedResponse = null;
+          window.m27Part6dRestoreFetch = () => { window.fetch = realFetch; };
+          window.fetch = async function delayedRealPart6Response(url, options) {
+            const response = await realFetch(url, options);
+            if (armed && String(url).includes('/invoice-part6-acceptance?')) {
+              armed = false;
+              window.m27Part6dDelayedResponseReady = true;
+              await new Promise(resolve => { window.m27Part6dResolveDelayedResponse = resolve; });
+            }
+            return response;
+          };
+        });
+        await root.getByRole('button', { name: 'Reload current preview' }).click();
+        await page.waitForFunction(() => window.m27Part6dDelayedResponseReady === true &&
+          typeof window.m27Part6dResolveDelayedResponse === 'function', null, { timeout: 30000 });
+        await summary.focus(); await summary.press('Enter');
+        await summary.focus(); await summary.press('Enter');
+        await root.getByText(`Reopen ${engine} ${layout.name} exact-current line`, { exact: true })
+          .waitFor({ timeout: 30000 });
+        await page.evaluate(async () => {
+          window.m27Part6dResolveDelayedResponse();
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          window.m27Part6dRestoreFetch();
+        });
+        assert.equal(await root.getByText(`Reopen ${engine} ${layout.name} exact-current line`,
+          { exact: true }).count(), 1);
+        assert.equal(await root.locator('.invoice-part6-acceptance').count(), 1);
+      }
       await auditActualSurface(page, root, layout);
       assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft/workflow-capability') && row.status === 200));
       assert.ok(routeEvidence.some(row => row.method === 'POST' && /\/invoice-draft$/.test(row.path) && [200,201].includes(row.status)));
       assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft/tax-review') && [200,201,409].includes(row.status)));
-      assert.ok(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-part5-acceptance?') && row.status === 200));
+      assert.ok(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-part6-acceptance?') && row.status === 200));
       assert.equal(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-draft/preview?')), false);
       assert.ok(bundleEvidence.length >= 1);
       for (const bundle of bundleEvidence) {
-        assert.equal(bundle.contractVersion, 'm27-invoice-part5-preview-bundle-v1');
+        assert.equal(bundle.contractVersion, 'm27-invoice-part6-preview-bundle-v1');
         assert.equal(bundle.preview.draftIdentity.revision,
-          bundle.acceptance.previewWitness.draftRevision);
+          bundle.part5Acceptance.previewWitness.draftRevision);
         assert.equal(bundle.preview.draftIdentity.draftDigest,
-          bundle.acceptance.previewWitness.draftDigest);
+          bundle.part5Acceptance.previewWitness.draftDigest);
         assert.equal(bundle.preview.previewDigest,
-          bundle.acceptance.previewWitness.previewDigest);
+          bundle.part5Acceptance.previewWitness.previewDigest);
+        assert.deepEqual(bundle.part6Acceptance.previewWitness,
+          bundle.part5Acceptance.previewWitness);
+        assert.equal(bundle.part6Acceptance.delivery.actions.length, 6);
+        assert.equal(bundle.part6Acceptance.outboundMessageCount, 0);
       }
       if (index === 0) assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft-origin') && [200,201].includes(row.status)));
       assert.deepEqual(external, []); assert.deepEqual(errors, []);
       await page.screenshot({ fullPage: true, path: path.join(output, `${engine}-${layout.name}.png`) });
       ledger.layouts.push({ name: layout.name, routeEvidence, taxEvidence: true,
-        part5Acceptance: true, keyboard: true, responsive: true, currentnessRecovery: index === 0 });
+        part5Acceptance: true, part6Acceptance: true, keyboard: true, responsive: true,
+        currentnessRecovery: index === 0, delayedResponseSuppression: index === 0 });
       delete ledger.current;
       await context.close();
 
@@ -293,10 +336,12 @@ async function auditActualSurface(page, root, layout) {
       await demoRoot.getByText('Approval, issue, and invoice lifecycle', { exact: true }).waitFor({ timeout:30000 });
       assert.equal(await demoRoot.locator('.invoice-part5-axes li').count(), 7);
       assert.equal(await demoRoot.locator('.invoice-part5-corrections li').count(), 4);
-      assert.equal(await demoRoot.getByText(/Fictional demo boundary/).count(), 1);
-      assert.equal(await demoRoot.getByRole('button', {name:/approve invoice|issue|send|collect|correct invoice/i}).count(),0);
+      await demoRoot.getByText('Customer document, portal, and delivery', { exact:true }).waitFor({timeout:30000});
+      assert.equal(await demoRoot.locator('.invoice-part6-actions li').count(),6);
+      assert.equal(await demoRoot.getByText(/Fictional demo boundary/).count(), 2);
+      assert.equal(await demoRoot.getByRole('button', {name:/approve invoice|issue|send|resend|revoke|deliver|collect|correct invoice/i}).count(),0);
       assert.equal(demoRoutes.some(row => row.path.endsWith('/preview')), false);
-      assert.ok(demoRoutes.some(row => row.path.endsWith('/part5-acceptance') && row.status === 200));
+      assert.ok(demoRoutes.some(row => row.path.endsWith('/part6-acceptance') && row.status === 200));
       const oldSummary = demoRoot.locator(':scope > summary'); await oldSummary.focus(); await oldSummary.press('Enter');
       await demoRoot.locator('table').waitFor({state:'detached',timeout:10000});
       const resetGraph = await demoPage.evaluate(async () => {
@@ -313,6 +358,7 @@ async function auditActualSurface(page, root, layout) {
       await demoRoot.locator('[role=alert]').waitFor({timeout:30000});
       assert.equal(await demoRoot.locator('table').count(),0);
       assert.equal(await demoRoot.locator('.invoice-part5-acceptance').count(),0);
+      assert.equal(await demoRoot.locator('.invoice-part6-acceptance').count(),0);
       await demoPage.reload({waitUntil:'networkidle'});
       const recoveredDemoRoot=await openActualCustomerInvoice(demoPage,resetGraph.ids.customer);
       await recoveredDemoRoot.getByText('Fictional invoice draft — not issued',{exact:true})

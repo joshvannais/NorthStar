@@ -7,6 +7,7 @@ const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { MISSION_26_FIVE_LAYOUTS, auditRenderedPage, exerciseSkipLink } =
   require('../helpers/m26-part12d-rendered-review');
 const part5Contract = require('../../src/customerFinancial/invoicePart5Acceptance');
+const part6Contract = require('../../src/customerFinancial/invoicePart6Acceptance');
 
 const output = process.argv.find(value => value.startsWith('--output='))?.slice(9);
 assert.ok(output && !fs.existsSync(output), 'Supply a new output directory');
@@ -52,14 +53,17 @@ const paidPreview = preview({ revision: 1 });
 const demoPreview = preview({ fictional: true, revision: 1, subtotal: 960000, tax: 0, marker: 'Fictional reviewed project' });
 const paidPart5 = part5Contract.unavailable('paid', paidPreview);
 const demoPart5 = part5Contract.unavailable('demo', demoPreview);
-const demoBundle = part5Contract.bundle(demoPreview, demoPart5);
+const paidPart6 = part6Contract.unavailable('paid', paidPart5.previewWitness);
+const demoPart6 = part6Contract.unavailable('demo', demoPart5.previewWitness);
+const demoPart5Bundle = part5Contract.bundle(demoPreview, demoPart5);
+const demoBundle = part6Contract.bundle(demoPart5Bundle, demoPart6);
 const runtimeScript = `(function(){
- var calls=[],methods=[],current=${JSON.stringify(paidPreview)},demo=${JSON.stringify(demoPreview)},paidPart5=${JSON.stringify(paidPart5)},demoBundle=${JSON.stringify(demoBundle)},delayed=null;
+ var calls=[],methods=[],current=${JSON.stringify(paidPreview)},demo=${JSON.stringify(demoPreview)},paidPart5=${JSON.stringify(paidPart5)},paidPart6=${JSON.stringify(paidPart6)},demoBundle=${JSON.stringify(demoBundle)},delayed=null;
  var originCaptured=false,draftSaved=false,taxRecorded=false,draftRevision=0,sourceRevision=0,taxRevision=0;
  var grant={contractVersion:'m27-invoice-draft-workflow-capability-v1',state:'current',capability:'customer_financial.invoice.edit_draft',grantId:'44444444-4444-4444-8444-444444444444',revision:1,businessPurpose:'customer_financial.invoice_draft',policyVersion:'mission27.launch.v1',estimateId:'${estimateId}',sourceCurrent:true,invoiceAuthorized:false,providerCallCount:0,receiverMutationCount:0};
  window.m27Part4eCalls=calls;window.m27Part4eMethods=methods;window.m27Part4eDelayNext=false;window.m27Part4eHasDelayed=false;window.m27Part4eFailNext=false;window.m27Part5eFailNext=false;window.m27Part5eMismatchNext=false;
  function response(status,data){return Promise.resolve({ok:status>=200&&status<300,status:status,json:function(){return Promise.resolve({success:status>=200&&status<300,data:data,error:status>=400?{message:'Synthetic currentness rejection'}:undefined});}});}
- function bundleFor(previewValue){var acceptance=JSON.parse(JSON.stringify(paidPart5));acceptance.previewWitness.draftRevision=previewValue.draftIdentity.revision;acceptance.previewWitness.draftDigest=previewValue.draftIdentity.draftDigest;acceptance.previewWitness.previewDigest=previewValue.previewDigest;return {contractVersion:'m27-invoice-part5-preview-bundle-v1',preview:JSON.parse(JSON.stringify(previewValue)),acceptance:acceptance};}
+ function bundleFor(previewValue){var acceptance=JSON.parse(JSON.stringify(paidPart5)),part6=JSON.parse(JSON.stringify(paidPart6));acceptance.previewWitness.draftRevision=previewValue.draftIdentity.revision;acceptance.previewWitness.draftDigest=previewValue.draftIdentity.draftDigest;acceptance.previewWitness.previewDigest=previewValue.previewDigest;part6.previewWitness=JSON.parse(JSON.stringify(acceptance.previewWitness));return {contractVersion:'m27-invoice-part6-preview-bundle-v1',preview:JSON.parse(JSON.stringify(previewValue)),part5Acceptance:acceptance,part6Acceptance:part6};}
  function sourceDigest(){return sourceRevision===0?'${digest('1')}':sourceRevision===1?'${digest('b')}':'${digest('c')}';}
  function taxDigest(){return taxRevision===0?'${digest('f')}':taxRevision===1?'${digest('e')}':'${digest('d')}';}
  function receiptDigest(){return sourceRevision===0?'${digest('9')}':sourceRevision===1?'${digest('8')}':'${digest('6')}';}
@@ -77,9 +81,9 @@ const runtimeScript = `(function(){
   if(url.indexOf('/invoice-draft-origin')>=0){if(method==='POST'){originCaptured=true;return response(201,{state:'current'});}return response(200,originCaptured?{state:'current'}:{state:'ready_to_capture',candidateDigest:'${digest('0')}'});}
   if(url.indexOf('/invoice-draft/tax-review')>=0){if(method==='POST'){taxRecorded=true;return response(201,tax());}return response(200,tax());}
   if(url.indexOf('/invoice-draft/preview?')>=0)return response(200,current);
-  if(url.indexOf('/invoice-part5-acceptance?')>=0){if(window.m27Part4eFailNext||window.m27Part5eFailNext){window.m27Part4eFailNext=false;window.m27Part5eFailNext=false;return response(409,null);}if(window.m27Part4eDelayNext){window.m27Part4eDelayNext=false;window.m27Part4eHasDelayed=true;var snapshot=bundleFor(current);return new Promise(function(resolve){delayed={resolve:resolve,snapshot:snapshot};});}var bundle=bundleFor(current);if(window.m27Part5eMismatchNext){window.m27Part5eMismatchNext=false;bundle.acceptance.previewWitness.previewDigest='${digest('0')}';}return response(200,bundle);}
+  if(url.indexOf('/invoice-part6-acceptance?')>=0){if(window.m27Part4eFailNext||window.m27Part5eFailNext){window.m27Part4eFailNext=false;window.m27Part5eFailNext=false;return response(409,null);}if(window.m27Part4eDelayNext){window.m27Part4eDelayNext=false;window.m27Part4eHasDelayed=true;var snapshot=bundleFor(current);return new Promise(function(resolve){delayed={resolve:resolve,snapshot:snapshot};});}var bundle=bundleFor(current);if(window.m27Part5eMismatchNext){window.m27Part5eMismatchNext=false;bundle.part6Acceptance.previewWitness.previewDigest='${digest('0')}';}return response(200,bundle);}
   if(url.endsWith('/invoice-draft')||url.indexOf('/invoice-draft?')>=0){if(method==='POST'){draftSaved=true;draftRevision+=1;return response(201,draft());}return response(200,draft());}
-  if(url.indexOf('/api/demo/customer-financial/invoice-drafts/')===0)return response(200,url.endsWith('/part5-acceptance')?demoBundle:demo);
+  if(url.indexOf('/api/demo/customer-financial/invoice-drafts/')===0)return response(200,url.endsWith('/part6-acceptance')?demoBundle:demo);
   return response(503,null);
  }};
 })();`;
@@ -168,7 +172,7 @@ async function main() {
       const reopenMethods = (await page.evaluate(() => window.m27Part4eMethods)).slice(reopenMethodOffset);
       for (const path of ['/billable-work-review?sourceClass=final_balance',
         '/invoice-draft/workflow-capability','/invoice-draft-origin?','/invoice-draft?',
-        '/invoice-draft/tax-review?','/invoice-part5-acceptance?']) {
+        '/invoice-draft/tax-review?','/invoice-part6-acceptance?']) {
         assert.equal(reopenMethods.some(value => value.includes(path)), true,
           `reopen must revalidate ${path}`);
       }

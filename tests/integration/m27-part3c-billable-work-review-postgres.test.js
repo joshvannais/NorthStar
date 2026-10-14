@@ -1122,6 +1122,58 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
     expect(after).toEqual(before);
   }, 180000);
 
+  test('mounted Part 5B refuses issue readiness before reserving a number', async () => {
+    const query = { handoffReceiptId: billableHandoffReceipt.receiptId,
+      handoffReceiptDigest: billableHandoffReceipt.receiptDigest };
+    const readinessRoute =
+      `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-issue-readiness`;
+    expect((await request(f.app).get(readinessRoute).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(readinessRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const crossTenant = await request(f.app).get(readinessRoute).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(crossTenant.status);
+    const before = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) reservations,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_events_v1) events`)).rows[0];
+    const first = await request(f.app).get(readinessRoute).query(query).set(actor.session.headers);
+    const repeated = await request(f.app).get(readinessRoute).query(query).set(actor.session.headers);
+    expect(first.status).toBe(200); expect(repeated.status).toBe(200);
+    expect(first.headers['cache-control']).toBe('no-store');
+    expect(first.headers.vary).toMatch(/Cookie/);
+    expect(first.body).toEqual(repeated.body);
+    expect(first.body.data).toMatchObject({
+      contractVersion:'m27-invoice-issue-readiness-v1', state:'unavailable',
+      reason:'final_invoice_approval_unavailable', value:null,
+      requiredCapability:'customer_financial.invoice.issue',
+      requiredAssurance:'recent_auth_mfa', approvalCurrent:false,
+      numberReservationAuthorized:false,numberAssigned:false,
+      issueReceiptCreated:false,uncertainRetryAvailable:false,
+      invoiceAuthorized:false,receivableAuthorized:false,
+      providerCallCount:0,receiverMutationCount:0,
+    });
+    expect(first.body.data.missingEvidence.map(item=>item.reason)).toEqual([
+      'final_invoice_approval_unavailable','approved_invoice_digest_unavailable',
+      'recent_auth_fact_unavailable','mfa_authority_unavailable',
+      'invoice_issue_capability_unavailable',
+    ]);
+    expect(JSON.stringify(first.body.data)).not.toMatch(
+      /customerId|workId|minorUnits|draftDigest|receiptId|documentNumber|sequence/);
+    const issueRoute = `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-issue`;
+    expect(await request(f.app).post(issueRoute).set(actor.session.headers)
+      .set('X-CSRF-Token',actor.csrfToken).set('Idempotency-Key',crypto.randomUUID())
+      .send({ confirmed:true })).toMatchObject({status:404});
+    await expect(f.runtimePool.query(
+      'SELECT public.canonical_customer_financial_numbering_v1_reserve($1,$2,$3,$4)',
+      [f.org,'invoice',crypto.createHash('sha256').update('blocked-issue-key').digest('hex'),
+        crypto.createHash('sha256').update('blocked-issue-request').digest('hex')]))
+      .rejects.toMatchObject({code:'42501'});
+    const after = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) reservations,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_events_v1) events`)).rows[0];
+    expect(after).toEqual(before);
+  }, 180000);
+
   completeOnly('missing accepted deposit terms remain value-free and a real M23 source change clears reviewed final values', async () => {
     const deposit = await readReview(actor, 'pre_work_deposit');
     expect(deposit.status).toBe(200);

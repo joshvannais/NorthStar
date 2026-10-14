@@ -14,6 +14,7 @@ const invoiceDraftComponentsRepository = require('../customerFinancial/invoiceDr
 const invoiceTaxReviewRepository = require('../customerFinancial/invoiceTaxReviewRepository');
 const invoiceDraftPreviewRepository = require('../customerFinancial/invoiceDraftPreviewRepository');
 const invoiceFinalReviewRepository = require('../customerFinancial/invoiceFinalReviewRepository');
+const invoiceIssueReadinessRepository = require('../customerFinancial/invoiceIssueReadinessRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -60,6 +61,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const invoiceDraftWorkflowCapability = options.invoiceDraftWorkflowCapability ||
     invoiceDraftPreviewRepository.ensureWorkflowCapability;
   const invoiceFinalReviewRead = options.invoiceFinalReviewRead || invoiceFinalReviewRepository.read;
+  const invoiceIssueReadinessRead = options.invoiceIssueReadinessRead ||
+    invoiceIssueReadinessRepository.read;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -215,6 +218,19 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
       status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_FINAL_REVIEW_INVALID',
       message: 'Select one exact current invoice draft.' });
     try { return res.json({ success: true, data: await invoiceFinalReviewRead(poolProvider(),
+      source(req), req.params.estimateId, req.query.handoffReceiptId,
+      req.query.handoffReceiptDigest) });
+    } catch (error) { return failure(res,error); }
+  });
+  router.get('/:estimateId/invoice-issue-readiness', auth, role, throttle, async (req,res) => {
+    res.set('Cache-Control','no-store'); res.vary('Cookie');
+    const keys = Object.keys(req.query);
+    if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+        !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+        typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+      status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_ISSUE_INVALID',
+      message: 'Select one exact current invoice draft.' });
+    try { return res.json({ success: true, data: await invoiceIssueReadinessRead(poolProvider(),
       source(req), req.params.estimateId, req.query.handoffReceiptId,
       req.query.handoffReceiptDigest) });
     } catch (error) { return failure(res,error); }

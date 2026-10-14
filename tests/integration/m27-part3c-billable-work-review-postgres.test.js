@@ -1264,10 +1264,59 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       record.value===null && record.appendOnlyRecordAuthorized===false &&
       record.issuedVersionMutationAuthorized===false)).toBe(true);
     expect(JSON.stringify(first.body.data)).not.toMatch(
-      /customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId/);
+      /"customerId":|"workId":|"minorUnits":|"currency":|"documentNumber":|"dueDate":|"invoiceDigest":|"receiptId":/);
     expect(await request(f.app).post(correctionRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({recordType:'credit',reason:'test'}))
       .toMatchObject({status:404});
+    const after = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) tax_reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) reservations,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_events_v1) events`)).rows[0];
+    expect(after).toEqual(before);
+  }, 180000);
+
+  test('mounted Part 5E composes the exact current journey value-free with replay and ACL', async () => {
+    const query = { handoffReceiptId: billableHandoffReceipt.receiptId,
+      handoffReceiptDigest: billableHandoffReceipt.receiptDigest };
+    const acceptanceRoute =
+      `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-part5-acceptance`;
+    expect((await request(f.app).get(acceptanceRoute).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(acceptanceRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const crossTenant = await request(f.app).get(acceptanceRoute).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(crossTenant.status);
+    const before = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) tax_reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) reservations,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_events_v1) events`)).rows[0];
+    const first = await request(f.app).get(acceptanceRoute).query(query).set(actor.session.headers);
+    const replay = await request(f.app).get(acceptanceRoute).query(query).set(actor.session.headers);
+    expect(first.status).toBe(200);expect(replay.status).toBe(200);expect(replay.body).toEqual(first.body);
+    expect(first.headers['cache-control']).toBe('no-store');expect(first.headers.vary).toMatch(/Cookie/);
+    expect(first.body.data).toMatchObject({contractVersion:'m27-invoice-part5-preview-bundle-v1',
+      preview:{contractVersion:'m27-invoice-draft-preview-v1',state:'current',mode:'paid'},
+      acceptance:{contractVersion:'m27-invoice-part5-acceptance-v1',
+      state:'unavailable',reason:'invoice_issue_authority_unavailable',mode:'paid',fictional:false,
+      exactCurrentnessRevalidated:true,approvalAuthorized:false,issueAuthorized:false,
+      reminderAuthorized:false,feeAuthorized:false,collectionAuthorized:false,
+      automaticChargeAuthorized:false,correctionAuthorized:false,providerCallCount:0,
+      receiverMutationCount:0}});
+    expect(first.body.data.acceptance.lifecycle.axes).toHaveLength(7);
+    expect(first.body.data.acceptance.postIssueCorrection.records).toHaveLength(4);
+    expect(first.body.data.acceptance.previewWitness).toEqual({
+      contractVersion:'m27-invoice-part5-preview-witness-v1',mode:'paid',
+      draftRevision:first.body.data.preview.draftIdentity.revision,
+      draftDigest:first.body.data.preview.draftIdentity.draftDigest,
+      previewDigest:first.body.data.preview.previewDigest});
+    expect(JSON.stringify(first.body.data.acceptance)).not.toMatch(
+      /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId)":/);
+    expect(await request(f.app).post(acceptanceRoute).set(actor.session.headers)
+      .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
     const after = (await f.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
       (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,

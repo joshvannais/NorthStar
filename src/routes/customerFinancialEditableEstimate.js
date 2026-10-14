@@ -19,6 +19,8 @@ const invoiceLifecycleProjectionRepository =
   require('../customerFinancial/invoiceLifecycleProjectionRepository');
 const invoicePostIssueCorrectionRepository =
   require('../customerFinancial/invoicePostIssueCorrectionRepository');
+const invoicePart5AcceptanceRepository =
+  require('../customerFinancial/invoicePart5AcceptanceRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -71,6 +73,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     invoiceLifecycleProjectionRepository.read;
   const invoicePostIssueCorrectionRead = options.invoicePostIssueCorrectionRead ||
     invoicePostIssueCorrectionRepository.read;
+  const invoicePart5AcceptanceRead = options.invoicePart5AcceptanceRead ||
+    invoicePart5AcceptanceRepository.readBundle;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -266,6 +270,20 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_CORRECTION_INVALID',
         message: 'Select one exact current issued invoice.' });
       try { return res.json({ success: true, data: await invoicePostIssueCorrectionRead(
+        poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest) });
+      } catch (error) { return failure(res,error); }
+    });
+  router.get('/:estimateId/invoice-part5-acceptance', auth, role, throttle,
+    async (req,res) => {
+      res.set('Cache-Control','no-store'); res.vary('Cookie');
+      const keys = Object.keys(req.query);
+      if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+          typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+        status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_PART5_INVALID',
+        message: 'Select one exact current invoice journey.' });
+      try { return res.json({ success: true, data: await invoicePart5AcceptanceRead(
         poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
         req.query.handoffReceiptDigest) });
       } catch (error) { return failure(res,error); }

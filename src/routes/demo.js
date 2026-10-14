@@ -43,6 +43,7 @@ const demoLearningJourney = require('../learning/demoLearningJourney');
 const demoForecastJourney = require('../forecasting/forecastDemoJourney');
 const demoBillingIdentityJourney = require('../customerFinancial/demoBillingIdentityJourney');
 const demoInvoiceDraftPreview = require('../customerFinancial/demoInvoiceDraftPreview');
+const demoInvoicePart5Acceptance = require('../customerFinancial/demoInvoicePart5Acceptance');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -379,6 +380,23 @@ router.get('/customer-financial/invoice-drafts/:estimateId/preview', async funct
       error: { code: 'demo_invoice_preview_unavailable',
         message: 'That fictional invoice draft is unavailable.' } });
     return res.json({ success: true, data: demoInvoiceDraftPreview.project(item, record.revision) });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.get('/customer-financial/invoice-drafts/:estimateId/part5-acceptance', async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  if (Object.keys(req.query).length) return res.status(400).json({ success: false,
+    error: { code: 'demo_invoice_part5_request_invalid',
+      message: 'Choose one fictional invoice journey.' } });
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    const item = demoCanonicalItems(demoWorkspace(record))
+      .find(candidate => candidate.ids.estimate === req.params.estimateId);
+    if (!item) return res.status(404).json({ success: false,
+      error: { code: 'demo_invoice_part5_unavailable',
+        message: 'That fictional invoice journey is unavailable.' } });
+    return res.json({ success: true,
+      data: demoInvoicePart5Acceptance.bundle(item, record.revision) });
   } catch (error) { return commandCenterFailure(req, res, error); }
 });
 

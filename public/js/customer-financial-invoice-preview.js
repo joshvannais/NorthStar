@@ -70,9 +70,15 @@
     function invalidPart5(value) {
       var finalReview = value && value.finalReview, issue = value && value.issueReadiness;
       var lifecycle = value && value.lifecycle, correction = value && value.postIssueCorrection;
+      var witness = value && value.previewWitness;
       return !value || value.contractVersion !== 'm27-invoice-part5-acceptance-v1' ||
         value.state !== 'unavailable' || value.reason !== 'invoice_issue_authority_unavailable' ||
         value.mode !== (review.simulated ? 'demo' : 'paid') || value.fictional !== !!review.simulated ||
+        witness?.contractVersion !== 'm27-invoice-part5-preview-witness-v1' ||
+        witness.mode !== value.mode ||
+        !Number.isSafeInteger(witness.draftRevision) || witness.draftRevision < 0 ||
+        !/^[0-9a-f]{64}$/.test(witness.draftDigest || '') ||
+        !/^[0-9a-f]{64}$/.test(witness.previewDigest || '') ||
         value.exactCurrentnessRevalidated !== true ||
         finalReview?.contractVersion !== 'm27-invoice-final-review-v1' ||
         finalReview.state !== 'unavailable' || finalReview.value !== null ||
@@ -105,6 +111,16 @@
           value.feeAuthorized,value.collectionAuthorized,value.automaticChargeAuthorized,
           value.correctionAuthorized].some(function (allowed) { return allowed !== false; }) ||
         value.providerCallCount !== 0 || value.receiverMutationCount !== 0;
+    }
+    function samePart5Witness(preview, acceptance) {
+      var identity = preview && preview.draftIdentity, witness = acceptance && acceptance.previewWitness;
+      return !!identity && !!witness && identity.revision === witness.draftRevision &&
+        identity.draftDigest === witness.draftDigest && preview.previewDigest === witness.previewDigest;
+    }
+    function invalidBundle(value) {
+      return !value || value.contractVersion !== 'm27-invoice-part5-preview-bundle-v1' ||
+        Object.keys(value).length !== 3 || !Object.prototype.hasOwnProperty.call(value, 'preview') ||
+        !Object.prototype.hasOwnProperty.call(value, 'acceptance');
     }
     function workflowHeading(text) {
       body.replaceChildren(); var card = node('section', undefined, body, 'invoice-draft-workflow-step');
@@ -276,8 +292,9 @@
       axisHeading.className = 'invoice-part5-subheading'; correctionHeading.className = 'invoice-part5-subheading';
     }
     function render(bundle) {
-      var value = bundle && bundle.preview, acceptance = bundle && bundle.part5;
-      if (invalid(value) || invalidPart5(acceptance)) return rejected({ status: 409,
+      var value = bundle && bundle.preview, acceptance = bundle && bundle.acceptance;
+      if (invalidBundle(bundle) || invalid(value) || invalidPart5(acceptance) ||
+          !samePart5Witness(value, acceptance)) return rejected({ status: 409,
         message: 'The exact invoice draft changed. Reload its current evidence.' });
       data = value; part5 = acceptance; body.replaceChildren(); var preview = value.documentPreview, totals = value.reconciliation;
       var heading = node('h4', preview.label, body, 'invoice-draft-preview-heading'); heading.tabIndex = -1;
@@ -348,23 +365,14 @@
         if (tax.state === 'ready_to_record') { renderTax(tax, capability, receipt, draft); return null; }
         if (tax.state !== 'recorded_policy_unavailable') throw { status: 409 };
         context = { capability: capability, receipt: receipt, draft: draft, tax: tax };
-        return request(base + '/invoice-draft/preview?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
-          '&handoffReceiptDigest=' + encodeURIComponent(receipt.receiptDigest)).then(function (preview) {
-          if (!preview || !active(token)) return null;
-          return request(base + '/invoice-part5-acceptance?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
-            '&handoffReceiptDigest=' + encodeURIComponent(receipt.receiptDigest)).then(function (acceptance) {
-              return { preview: preview, part5: acceptance };
-            });
-        });
+        return request(base + '/invoice-part5-acceptance?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
+          '&handoffReceiptDigest=' + encodeURIComponent(receipt.receiptDigest));
       });
     }
     function load() {
       var token = ++requestToken; clearAndStatus('Loading the exact current invoice draft…', false);
       var demoBase = '/api/demo/customer-financial/invoice-drafts/' + encodeURIComponent(review.pins.estimateId);
-      var promise = review.simulated ? Promise.all([request(demoBase + '/preview'),
-        request(demoBase + '/part5-acceptance')]).then(function (values) {
-          return { preview: values[0], part5: values[1] };
-        }) : loadPaid(token);
+      var promise = review.simulated ? request(demoBase + '/part5-acceptance') : loadPaid(token);
       return promise.then(function (value) { if (value && active(token)) render(value); })
         .catch(function (error) { if (active(token)) rejected(error); });
     }

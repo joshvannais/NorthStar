@@ -396,7 +396,7 @@ router.get('/customer-financial/invoice-drafts/:estimateId/part5-acceptance', as
       error: { code: 'demo_invoice_part5_unavailable',
         message: 'That fictional invoice journey is unavailable.' } });
     return res.json({ success: true,
-      data: demoInvoicePart5Acceptance.project(item, record.revision) });
+      data: demoInvoicePart5Acceptance.bundle(item, record.revision) });
   } catch (error) { return commandCenterFailure(req, res, error); }
 });
 

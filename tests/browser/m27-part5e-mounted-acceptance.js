@@ -160,7 +160,7 @@ async function auditActualSurface(page, root, layout) {
       await context.addCookies(Object.entries(prepared.actor.session.cookies).map(([name,value]) => ({
         name, value, url: origin, sameSite: 'Lax', httpOnly: name !== 'northstar_csrf' })));
       const page = await context.newPage(); activePage = page; const errors = []; const external = [];
-      const routeEvidence = []; const failedResponses = []; const consoleErrors = [];
+      const routeEvidence = []; const bundleEvidence = []; const failedResponses = []; const consoleErrors = [];
       ledger.current = { name: layout.name, errors, failedResponses, consoleErrors };
       page.on('pageerror', error => errors.push(error.message));
       page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
@@ -182,6 +182,10 @@ async function auditActualSurface(page, root, layout) {
             url.pathname.includes('/billable-work-review')) {
           const row = [...routeEvidence].reverse().find(value => value.path === url.pathname + url.search &&
             value.status === undefined); if (row) row.status = response.status();
+          if (url.pathname.includes('/invoice-part5-acceptance') && response.status() === 200) {
+            response.json().then(body => bundleEvidence.push(body.data)).catch(error =>
+              consoleErrors.push(error.message));
+          }
         }
       });
       await page.goto(origin + '/dashboard', { waitUntil: 'networkidle' });
@@ -222,13 +226,34 @@ async function auditActualSurface(page, root, layout) {
       const summary = root.locator(':scope > summary'); await summary.focus(); await summary.press('Enter');
       await root.locator('table').waitFor({ state: 'detached', timeout: 10000 });
       assert.equal(await root.getByText('Invoice draft — not issued', { exact: true }).count(), 0);
+      assert.equal(await root.getByText(/\$/, { exact: false }).count(), 0);
+      await correctDraftThroughRealSession(page, prepared.estimate,
+        `Reopen ${engine} ${layout.name} exact-current line`);
       await summary.focus(); await summary.press('Enter');
+      await root.getByRole('button', { name: 'Record tax preparation review' }).waitFor({ timeout: 30000 });
+      assert.equal(await root.locator('.invoice-draft-preview-document').count(), 0);
+      assert.equal(await root.locator('.invoice-part5-acceptance').count(), 0);
+      assert.equal(await root.getByText(/Mounted .* reviewed line/, { exact: false }).count(), 0);
+      await recordTax(root);
       await root.getByText('Invoice draft — not issued', { exact: true }).waitFor({ timeout: 30000 });
+      await root.getByText(`Reopen ${engine} ${layout.name} exact-current line`, { exact: true })
+        .waitFor({ timeout: 30000 });
       await auditActualSurface(page, root, layout);
       assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft/workflow-capability') && row.status === 200));
       assert.ok(routeEvidence.some(row => row.method === 'POST' && /\/invoice-draft$/.test(row.path) && [200,201].includes(row.status)));
       assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft/tax-review') && [200,201,409].includes(row.status)));
       assert.ok(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-part5-acceptance?') && row.status === 200));
+      assert.equal(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-draft/preview?')), false);
+      assert.ok(bundleEvidence.length >= 1);
+      for (const bundle of bundleEvidence) {
+        assert.equal(bundle.contractVersion, 'm27-invoice-part5-preview-bundle-v1');
+        assert.equal(bundle.preview.draftIdentity.revision,
+          bundle.acceptance.previewWitness.draftRevision);
+        assert.equal(bundle.preview.draftIdentity.draftDigest,
+          bundle.acceptance.previewWitness.draftDigest);
+        assert.equal(bundle.preview.previewDigest,
+          bundle.acceptance.previewWitness.previewDigest);
+      }
       if (index === 0) assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft-origin') && [200,201].includes(row.status)));
       assert.deepEqual(external, []); assert.deepEqual(errors, []);
       await page.screenshot({ fullPage: true, path: path.join(output, `${engine}-${layout.name}.png`) });
@@ -241,13 +266,16 @@ async function auditActualSurface(page, root, layout) {
         colorScheme: layout.colorScheme, reducedMotion: 'reduce' });
       await demoContext.addInitScript(theme => localStorage.setItem('northstar-theme', theme), layout.colorScheme);
       const demoPage = await demoContext.newPage(); activePage = demoPage;
-      const demoErrors = [], demoExternal = [], demoRoutes = [];
+      const demoErrors = [], demoExternal = [], demoRoutes = [], demoPaidRoutes = [];
       demoPage.on('pageerror', error => demoErrors.push(error.message));
       demoPage.on('request', request => {
         const url = new URL(request.url());
         if (url.origin !== origin && !['data:','blob:'].includes(url.protocol)) demoExternal.push(request.url());
         if (url.pathname.includes('/api/demo/customer-financial/invoice-drafts/')) {
           demoRoutes.push({method:request.method(),path:url.pathname});
+        }
+        if (url.pathname.startsWith('/api/v1/customer-financial/')) {
+          demoPaidRoutes.push({method:request.method(),path:url.pathname});
         }
       });
       demoPage.on('response', response => {
@@ -267,12 +295,35 @@ async function auditActualSurface(page, root, layout) {
       assert.equal(await demoRoot.locator('.invoice-part5-corrections li').count(), 4);
       assert.equal(await demoRoot.getByText(/Fictional demo boundary/).count(), 1);
       assert.equal(await demoRoot.getByRole('button', {name:/approve invoice|issue|send|collect|correct invoice/i}).count(),0);
-      assert.ok(demoRoutes.some(row => row.path.endsWith('/preview') && row.status === 200));
+      assert.equal(demoRoutes.some(row => row.path.endsWith('/preview')), false);
       assert.ok(demoRoutes.some(row => row.path.endsWith('/part5-acceptance') && row.status === 200));
+      const oldSummary = demoRoot.locator(':scope > summary'); await oldSummary.focus(); await oldSummary.press('Enter');
+      await demoRoot.locator('table').waitFor({state:'detached',timeout:10000});
+      const resetGraph = await demoPage.evaluate(async () => {
+        const currentResponse=await fetch('/api/demo/command-center',{cache:'no-store'});
+        const current=(await currentResponse.json()).data;
+        const response=await fetch('/api/demo/command-center/reset',{method:'POST',cache:'no-store',
+          headers:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID(),
+            'X-NorthStar-Demo-Intent':'reset'},
+          body:JSON.stringify({expectedRevision:current.integrity.revision})});
+        const body=await response.json(); if(!response.ok||!body.success)throw new Error('demo reset failed');
+        return body.data.graphs[0];
+      });
+      await oldSummary.focus(); await oldSummary.press('Enter');
+      await demoRoot.locator('[role=alert]').waitFor({timeout:30000});
+      assert.equal(await demoRoot.locator('table').count(),0);
+      assert.equal(await demoRoot.locator('.invoice-part5-acceptance').count(),0);
+      await demoPage.reload({waitUntil:'networkidle'});
+      const recoveredDemoRoot=await openActualCustomerInvoice(demoPage,resetGraph.ids.customer);
+      await recoveredDemoRoot.getByText('Fictional invoice draft — not issued',{exact:true})
+        .waitFor({timeout:30000});
+      await recoveredDemoRoot.getByText('Approval, issue, and invoice lifecycle',{exact:true})
+        .waitFor({timeout:30000});
       assert.deepEqual(demoExternal, []); assert.deepEqual(demoErrors, []);
+      assert.deepEqual(demoPaidRoutes, []);
       await demoPage.screenshot({fullPage:true,path:path.join(output,`${engine}-${layout.name}-demo.png`)});
       ledger.layouts.at(-1).demo = { actualPage:'/demo', routes:demoRoutes, fictional:true,
-        paidRouteCalls:demoRoutes.filter(row=>row.path.startsWith('/api/v1/')).length };
+        resetClearing:true, paidRouteCalls:demoPaidRoutes.length };
       await demoContext.close();
     }
     assert.equal(ledger.layouts.length, 5);

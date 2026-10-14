@@ -1298,15 +1298,22 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
     const replay = await request(f.app).get(acceptanceRoute).query(query).set(actor.session.headers);
     expect(first.status).toBe(200);expect(replay.status).toBe(200);expect(replay.body).toEqual(first.body);
     expect(first.headers['cache-control']).toBe('no-store');expect(first.headers.vary).toMatch(/Cookie/);
-    expect(first.body.data).toMatchObject({contractVersion:'m27-invoice-part5-acceptance-v1',
+    expect(first.body.data).toMatchObject({contractVersion:'m27-invoice-part5-preview-bundle-v1',
+      preview:{contractVersion:'m27-invoice-draft-preview-v1',state:'current',mode:'paid'},
+      acceptance:{contractVersion:'m27-invoice-part5-acceptance-v1',
       state:'unavailable',reason:'invoice_issue_authority_unavailable',mode:'paid',fictional:false,
       exactCurrentnessRevalidated:true,approvalAuthorized:false,issueAuthorized:false,
       reminderAuthorized:false,feeAuthorized:false,collectionAuthorized:false,
       automaticChargeAuthorized:false,correctionAuthorized:false,providerCallCount:0,
-      receiverMutationCount:0});
-    expect(first.body.data.lifecycle.axes).toHaveLength(7);
-    expect(first.body.data.postIssueCorrection.records).toHaveLength(4);
-    expect(JSON.stringify(first.body.data)).not.toMatch(
+      receiverMutationCount:0}});
+    expect(first.body.data.acceptance.lifecycle.axes).toHaveLength(7);
+    expect(first.body.data.acceptance.postIssueCorrection.records).toHaveLength(4);
+    expect(first.body.data.acceptance.previewWitness).toEqual({
+      contractVersion:'m27-invoice-part5-preview-witness-v1',mode:'paid',
+      draftRevision:first.body.data.preview.draftIdentity.revision,
+      draftDigest:first.body.data.preview.draftIdentity.draftDigest,
+      previewDigest:first.body.data.preview.previewDigest});
+    expect(JSON.stringify(first.body.data.acceptance)).not.toMatch(
       /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId)":/);
     expect(await request(f.app).post(acceptanceRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});

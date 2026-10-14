@@ -74,7 +74,7 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const invoicePostIssueCorrectionRead = options.invoicePostIssueCorrectionRead ||
     invoicePostIssueCorrectionRepository.read;
   const invoicePart5AcceptanceRead = options.invoicePart5AcceptanceRead ||
-    invoicePart5AcceptanceRepository.read;
+    invoicePart5AcceptanceRepository.readBundle;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');

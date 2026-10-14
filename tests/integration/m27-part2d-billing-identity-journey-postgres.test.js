@@ -335,12 +335,19 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
     const acceptance=await request(fixture.app).get(acceptanceRoute)
       .set('Host','northstar.test').set('Cookie',savedCookie);
     expect(acceptance.status).toBe(200);
-    expect(acceptance.body.data).toMatchObject({contractVersion:'m27-invoice-part5-acceptance-v1',
+    expect(acceptance.body.data).toMatchObject({contractVersion:'m27-invoice-part5-preview-bundle-v1',
+      preview:{contractVersion:'m27-invoice-draft-preview-v1',state:'current',mode:'demo',fictional:true},
+      acceptance:{contractVersion:'m27-invoice-part5-acceptance-v1',
       state:'unavailable',reason:'invoice_issue_authority_unavailable',mode:'demo',fictional:true,
       exactCurrentnessRevalidated:true,approvalAuthorized:false,issueAuthorized:false,
-      correctionAuthorized:false,providerCallCount:0,receiverMutationCount:0});
-    expect(acceptance.body.data.lifecycle.axes).toHaveLength(7);
-    expect(acceptance.body.data.postIssueCorrection.records).toHaveLength(4);
+      correctionAuthorized:false,providerCallCount:0,receiverMutationCount:0}});
+    expect(acceptance.body.data.acceptance.lifecycle.axes).toHaveLength(7);
+    expect(acceptance.body.data.acceptance.postIssueCorrection.records).toHaveLength(4);
+    expect(acceptance.body.data.acceptance.previewWitness).toEqual({
+      contractVersion:'m27-invoice-part5-preview-witness-v1',mode:'demo',
+      draftRevision:acceptance.body.data.preview.draftIdentity.revision,
+      draftDigest:acceptance.body.data.preview.draftIdentity.draftDigest,
+      previewDigest:acceptance.body.data.preview.previewDigest});
     const acceptanceAgain=await request(fixture.app).get(acceptanceRoute)
       .set('Host','northstar.test').set('Cookie',savedCookie);
     expect(acceptanceAgain.body).toEqual(acceptance.body);

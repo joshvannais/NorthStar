@@ -17,6 +17,8 @@ const invoiceFinalReviewRepository = require('../customerFinancial/invoiceFinalR
 const invoiceIssueReadinessRepository = require('../customerFinancial/invoiceIssueReadinessRepository');
 const invoiceLifecycleProjectionRepository =
   require('../customerFinancial/invoiceLifecycleProjectionRepository');
+const invoicePostIssueCorrectionRepository =
+  require('../customerFinancial/invoicePostIssueCorrectionRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -67,6 +69,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     invoiceIssueReadinessRepository.read;
   const invoiceLifecycleProjectionRead = options.invoiceLifecycleProjectionRead ||
     invoiceLifecycleProjectionRepository.read;
+  const invoicePostIssueCorrectionRead = options.invoicePostIssueCorrectionRead ||
+    invoicePostIssueCorrectionRepository.read;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -252,6 +256,20 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
       req.query.handoffReceiptDigest) });
     } catch (error) { return failure(res,error); }
   });
+  router.get('/:estimateId/invoice-post-issue-correction', auth, role, throttle,
+    async (req,res) => {
+      res.set('Cache-Control','no-store'); res.vary('Cookie');
+      const keys = Object.keys(req.query);
+      if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+          typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+        status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_CORRECTION_INVALID',
+        message: 'Select one exact current issued invoice.' });
+      try { return res.json({ success: true, data: await invoicePostIssueCorrectionRead(
+        poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest) });
+      } catch (error) { return failure(res,error); }
+    });
   router.post('/:estimateId/invoice-draft/workflow-capability', auth, role, throttle, async (req,res) => {
     const csrfToken = req.get('X-CSRF-Token');
     if (typeof csrfToken !== 'string' || csrfToken.length < 16) return failure(res, {

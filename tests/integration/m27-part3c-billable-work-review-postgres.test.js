@@ -1227,6 +1227,56 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
     expect(after).toEqual(before);
   }, 180000);
 
+  test('mounted Part 5D names every append-only correction class and performs no effect', async () => {
+    const query = { handoffReceiptId: billableHandoffReceipt.receiptId,
+      handoffReceiptDigest: billableHandoffReceipt.receiptDigest };
+    const correctionRoute =
+      `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-post-issue-correction`;
+    expect((await request(f.app).get(correctionRoute).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(correctionRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const crossTenant = await request(f.app).get(correctionRoute).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(crossTenant.status);
+    const before = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) tax_reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) reservations,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_events_v1) events`)).rows[0];
+    const first = await request(f.app).get(correctionRoute).query(query).set(actor.session.headers);
+    const repeated = await request(f.app).get(correctionRoute).query(query).set(actor.session.headers);
+    expect(first.status).toBe(200); expect(repeated.status).toBe(200);
+    expect(first.headers['cache-control']).toBe('no-store');
+    expect(first.headers.vary).toMatch(/Cookie/);
+    expect(first.body).toEqual(repeated.body);
+    expect(first.body.data).toMatchObject({
+      contractVersion:'m27-invoice-post-issue-correction-v1',state:'unavailable',
+      reason:'issued_invoice_unavailable',value:null,issuedInvoiceCurrent:false,
+      issuedVersionImmutable:true,originalIssuedVersionMutationAuthorized:false,
+      creditRecordAuthorized:false,debitRecordAuthorized:false,
+      replacementRecordAuthorized:false,voidRecordAuthorized:false,
+      providerCallCount:0,receiverMutationCount:0,
+    });
+    expect(first.body.data.records.map(record=>record.recordType))
+      .toEqual(['credit','debit','replacement','void']);
+    expect(first.body.data.records.every(record=>record.state==='unavailable' &&
+      record.value===null && record.appendOnlyRecordAuthorized===false &&
+      record.issuedVersionMutationAuthorized===false)).toBe(true);
+    expect(JSON.stringify(first.body.data)).not.toMatch(
+      /customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId/);
+    expect(await request(f.app).post(correctionRoute).set(actor.session.headers)
+      .set('X-CSRF-Token',actor.csrfToken).send({recordType:'credit',reason:'test'}))
+      .toMatchObject({status:404});
+    const after = (await f.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_tax_reviews_v1) tax_reviews,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_reservations_v1) reservations,
+      (SELECT count(*)::int FROM canonical_customer_financial_numbering_events_v1) events`)).rows[0];
+    expect(after).toEqual(before);
+  }, 180000);
+
   completeOnly('missing accepted deposit terms remain value-free and a real M23 source change clears reviewed final values', async () => {
     const deposit = await readReview(actor, 'pre_work_deposit');
     expect(deposit.status).toBe(200);
@@ -1298,6 +1348,20 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
     expect(lifecycleStale.body.data.axes.every(axis=>axis.value===null)).toBe(true);
     expect(JSON.stringify(lifecycleStale.body.data)).not.toMatch(
       /customerId|workId|minorUnits|amount|currency|documentNumber|dueDate|invoiceDigest|receiptId/);
+    const correctionStale = await request(f.app)
+      .get(`/api/v1/customer-financial/editable-estimates/${estimate}/invoice-post-issue-correction`)
+      .query({ handoffReceiptId: billableHandoffReceipt.receiptId,
+        handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
+    expect(correctionStale.status).toBe(200);
+    expect(correctionStale.body.data).toMatchObject({state:'unavailable',value:null,
+      reason:'issued_invoice_unavailable',issuedInvoiceCurrent:false,
+      originalIssuedVersionMutationAuthorized:false,creditRecordAuthorized:false,
+      debitRecordAuthorized:false,replacementRecordAuthorized:false,voidRecordAuthorized:false,
+      providerCallCount:0,receiverMutationCount:0});
+    expect(correctionStale.body.data.records).toHaveLength(4);
+    expect(correctionStale.body.data.records.every(record=>record.value===null)).toBe(true);
+    expect(JSON.stringify(correctionStale.body.data)).not.toMatch(
+      /customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId/);
     const stale = await readReview(actor, 'final_balance');
     expect(stale.status).toBe(200);
     expect(stale.body.data).toMatchObject({ state: 'unavailable', value: null,

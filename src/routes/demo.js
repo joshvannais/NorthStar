@@ -45,6 +45,7 @@ const demoBillingIdentityJourney = require('../customerFinancial/demoBillingIden
 const demoInvoiceDraftPreview = require('../customerFinancial/demoInvoiceDraftPreview');
 const demoInvoicePart5Acceptance = require('../customerFinancial/demoInvoicePart5Acceptance');
 const demoInvoiceDocument = require('../customerFinancial/demoInvoiceDocument');
+const demoInvoicePublicSession = require('../customerFinancial/demoInvoicePublicSession');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -415,6 +416,23 @@ router.get('/customer-financial/invoice-drafts/:estimateId/document', async func
         message: 'That fictional issued invoice document is unavailable.' } });
     return res.json({ success: true,
       data: demoInvoiceDocument.project(item, record.revision) });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.get('/customer-financial/invoice-drafts/:estimateId/public-session', async function (req, res) {
+  res.set('Cache-Control', 'private, no-store'); res.vary('Cookie');
+  if (Object.keys(req.query).length) return res.status(400).json({ success: false,
+    error: { code: 'demo_invoice_public_session_request_invalid',
+      message: 'Choose one fictional issued invoice document.' } });
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    const item = demoCanonicalItems(demoWorkspace(record))
+      .find(candidate => candidate.ids.estimate === req.params.estimateId);
+    if (!item) return res.status(404).json({ success: false,
+      error: { code: 'demo_invoice_public_session_unavailable',
+        message: 'That fictional invoice public session is unavailable.' } });
+    return res.json({ success: true,
+      data: demoInvoicePublicSession.project(item, record.revision) });
   } catch (error) { return commandCenterFailure(req, res, error); }
 });
 

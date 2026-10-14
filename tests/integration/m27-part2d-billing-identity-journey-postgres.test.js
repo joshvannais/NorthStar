@@ -414,6 +414,26 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
       /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
     expect((await request(fixture.app).post(portalRoute)
       .set('Host','northstar.test').set('Cookie',savedCookie).send({question:'Why?'})).status).toBe(404);
+    const part6Route=`/api/demo/customer-financial/invoice-drafts/${estimateId}/part6-acceptance`;
+    const part6=await request(fixture.app).get(part6Route)
+      .set('Host','northstar.test').set('Cookie',savedCookie);
+    const part6Replay=await request(fixture.app).get(part6Route)
+      .set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(part6.status).toBe(200);expect(part6Replay.body).toEqual(part6.body);
+    expect(part6.headers['cache-control']).toBe('private, no-store');
+    expect(part6.headers['set-cookie']).toBeUndefined();
+    expect(part6.body.data).toMatchObject({contractVersion:'m27-invoice-part6-preview-bundle-v1',
+      preview:{mode:'demo',fictional:true},part5Acceptance:{mode:'demo',fictional:true},
+      part6Acceptance:{contractVersion:'m27-invoice-part6-acceptance-v1',state:'unavailable',
+        reason:'issued_invoice_unavailable',mode:'demo',fictional:true,
+        exactCurrentnessRevalidated:true,emailDeliveryAuthorized:false,
+        smsDeliveryAuthorized:false,resendAuthorized:false,revocationAuthorized:false,
+        recoveryAuthorized:false,mission28HandoffAuthorized:false,messageSent:false,
+        deliveryReceiptCreated:false,accessRevocationRecorded:false,providerCallCount:0,
+        receiverMutationCount:0,outboundMessageCount:0}});
+    expect(part6.body.data.part6Acceptance.delivery.actions).toHaveLength(6);
+    expect((await request(fixture.app).post(part6Route)
+      .set('Host','northstar.test').set('Cookie',savedCookie).send({confirmed:true})).status).toBe(404);
     const denied=await request(fixture.app).get('/api/demo/customer-financial/invoice-drafts/'+
       crypto.randomUUID()+'/preview').set('Host','northstar.test').set('Cookie',savedCookie);
     expect(denied.status).toBe(404);expect(JSON.stringify(denied.body)).not.toMatch(/minorUnits|customerPrice/);
@@ -430,6 +450,10 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
     expect(portalDenied.status).toBe(404);
     expect(JSON.stringify(portalDenied.body)).not.toMatch(
       /minorUnits|customerPrice|invoiceDigest|receiptId|tokenHash/);
+    const part6Denied=await request(fixture.app).get('/api/demo/customer-financial/invoice-drafts/'+
+      crypto.randomUUID()+'/part6-acceptance').set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(part6Denied.status).toBe(404);
+    expect(JSON.stringify(part6Denied.body)).not.toMatch(/minorUnits|customerPrice|invoiceDigest|receiptId|tokenHash/);
     expect(await demoProtectedCounts(fixture.ownerPool)).toEqual(before);
   },120000);
 

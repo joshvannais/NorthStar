@@ -1395,6 +1395,31 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
     expect(await request(f.app).post(portalRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({question:'Why?'})).toMatchObject({status:404});
+    const part6Route =
+      `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-part6-acceptance`;
+    expect((await request(f.app).get(part6Route).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(part6Route).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const part6CrossTenant=await request(f.app).get(part6Route).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(part6CrossTenant.status);
+    const part6=await request(f.app).get(part6Route).query(query).set(actor.session.headers);
+    const part6Replay=await request(f.app).get(part6Route).query(query).set(actor.session.headers);
+    expect(part6.status).toBe(200);expect(part6Replay.body).toEqual(part6.body);
+    expect(part6.headers['cache-control']).toBe('private, no-store');
+    expect(part6.headers['set-cookie']).toBeUndefined();
+    expect(part6.body.data).toMatchObject({contractVersion:'m27-invoice-part6-preview-bundle-v1',
+      preview:{mode:'paid',fictional:false},part5Acceptance:{mode:'paid',fictional:false},
+      part6Acceptance:{contractVersion:'m27-invoice-part6-acceptance-v1',state:'unavailable',
+        reason:'issued_invoice_unavailable',mode:'paid',fictional:false,
+        exactCurrentnessRevalidated:true,emailDeliveryAuthorized:false,
+        smsDeliveryAuthorized:false,resendAuthorized:false,revocationAuthorized:false,
+        recoveryAuthorized:false,mission28HandoffAuthorized:false,messageSent:false,
+        deliveryReceiptCreated:false,accessRevocationRecorded:false,providerCallCount:0,
+        receiverMutationCount:0,outboundMessageCount:0}});
+    expect(part6.body.data.part6Acceptance.delivery.actions).toHaveLength(6);
+    expect(await request(f.app).post(part6Route).set(actor.session.headers)
+      .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
     const after = (await f.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
       (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
@@ -1457,6 +1482,13 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
         handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
     expect([409,503]).toContain(portalStale.status);
     expect(JSON.stringify(portalStale.body)).not.toMatch(
+      /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
+    const part6Stale=await request(f.app)
+      .get(`/api/v1/customer-financial/editable-estimates/${estimate}/invoice-part6-acceptance`)
+      .query({handoffReceiptId:billableHandoffReceipt.receiptId,
+        handoffReceiptDigest:billableHandoffReceipt.receiptDigest}).set(actor.session.headers);
+    expect([409,503]).toContain(part6Stale.status);
+    expect(JSON.stringify(part6Stale.body)).not.toMatch(
       /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
     expect(componentsStale.body.data).toMatchObject({ state: 'unavailable', value: null,
       reason: 'reviewed_handoff_stale', sourceCurrent: false,

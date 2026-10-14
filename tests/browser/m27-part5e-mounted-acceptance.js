@@ -24,6 +24,16 @@ const output = path.resolve(argument('output'));
 assert.ok(['chrome','webkit'].includes(engine));
 assert.ok(!fs.existsSync(output), 'Supply a new output directory');
 fs.mkdirSync(output, { recursive: true });
+const PART6_REQUIREMENTS = [
+  'exact_current_issued_document',
+  'reviewed_recipient_and_delivery_choice',
+  'customer_financial_invoice_send_capability',
+  'recent_auth_and_required_control',
+  'exact_delivery_idempotency',
+  'delivery_evidence_receipt',
+  'scoped_customer_access_revocation',
+  'mission28_broader_communication_adapter',
+];
 
 async function listen(app) {
   const server = app.listen(0, '127.0.0.1');
@@ -31,6 +41,66 @@ async function listen(app) {
     server.once('listening', resolve); server.once('error', reject);
   });
   return server;
+}
+
+async function waitForDatabaseBlockedQuery(pool, relation, blockerPid) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const result = await pool.query(
+      `SELECT count(*)::int AS count
+         FROM pg_catalog.pg_locks waiting
+         JOIN pg_catalog.pg_locks held
+           ON held.locktype = waiting.locktype
+          AND held.database IS NOT DISTINCT FROM waiting.database
+          AND held.relation IS NOT DISTINCT FROM waiting.relation
+        WHERE waiting.pid <> $2::int
+          AND waiting.relation = pg_catalog.to_regclass($1)
+          AND waiting.granted = false
+          AND held.pid = $2::int
+          AND held.granted = true`, [relation, blockerPid]);
+    if (Number(result.rows[0]?.count) > 0) return;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error('Mounted request did not reach the exact database locker');
+}
+
+async function proveDatabaseDelayedSuppression(options) {
+  const allowedRelations = new Set([
+    'public.canonical_customer_financial_invoice_draft_revisions_v1',
+    'public.demo_command_center_sessions',
+  ]);
+  assert.ok(allowedRelations.has(options.relation));
+  const client = await options.pool.connect(); let open = false; let released = false;
+  try {
+    await client.query('BEGIN'); open = true;
+    const blocker = await client.query('SELECT pg_backend_pid()::int AS pid');
+    await client.query(`LOCK TABLE ${options.relation} IN ACCESS EXCLUSIVE MODE`);
+    const started = options.page.waitForRequest(request =>
+      new URL(request.url()).pathname.endsWith(options.routePath), { timeout: 30000 });
+    const completed = options.page.waitForResponse(response =>
+      new URL(response.url()).pathname.endsWith(options.routePath), { timeout: 30000 })
+      .then(response => ({ response }), error => ({ error }));
+    await options.root.getByRole('button', { name: 'Reload current preview' }).click();
+    await started;
+    await waitForDatabaseBlockedQuery(options.pool, options.relation, blocker.rows[0].pid);
+    await options.summary.focus(); await options.summary.press('Enter');
+    await options.root.locator('table').waitFor({ state: 'detached', timeout: 10000 });
+    assert.equal(await options.root.locator('.invoice-part5-acceptance').count(), 0);
+    assert.equal(await options.root.locator('.invoice-part6-acceptance').count(), 0);
+    assert.equal(await options.root.getByText(/\$/, { exact: false }).count(), 0);
+    await client.query('COMMIT'); open = false; client.release(); released = true;
+    const completion = await completed;
+    if (completion.error) throw completion.error;
+    assert.equal(completion.response.status(), 200);
+    await options.page.waitForTimeout(100);
+    assert.equal(await options.root.locator('table').count(), 0);
+    assert.equal(await options.root.locator('.invoice-part6-acceptance').count(), 0);
+    await options.summary.focus(); await options.summary.press('Enter');
+    await options.root.getByText(options.expectedText, { exact: true }).waitFor({ timeout: 30000 });
+    assert.equal(await options.root.locator('.invoice-part6-requirements li').count(), 8);
+  } finally {
+    if (open) await client.query('ROLLBACK').catch(() => {});
+    if (!released) client.release();
+  }
 }
 
 async function openActualCustomerInvoice(page, customer) {
@@ -145,6 +215,7 @@ async function auditActualSurface(page, root, layout) {
 (async () => {
   let prepared; let server; let browser; let activePage;
   const ledger = { engine, layouts: [], actualPage: '/dashboard', mockedResponses: 0,
+    requestInterceptions: 0, responseInterceptions: 0,
     providerCalls: 0, receiverMutations: 0, liveMoneyEvidence: 'not-run-deferred-first-paying-customer' };
   try {
     prepared = await createPart4ePaidBrowserFixture();
@@ -168,6 +239,7 @@ async function auditActualSurface(page, root, layout) {
         const url = new URL(request.url());
         if (url.origin !== origin && !['data:','blob:'].includes(url.protocol)) external.push(request.url());
         if (url.pathname.includes('/invoice-draft') || url.pathname.includes('/invoice-part5') ||
+            url.pathname.includes('/invoice-part6') ||
             url.pathname.includes('/billable-work-review')) {
           routeEvidence.push({ method: request.method(), path: url.pathname + url.search });
         }
@@ -179,10 +251,11 @@ async function auditActualSurface(page, root, layout) {
             status: response.status() });
         }
         if (url.pathname.includes('/invoice-draft') || url.pathname.includes('/invoice-part5') ||
+            url.pathname.includes('/invoice-part6') ||
             url.pathname.includes('/billable-work-review')) {
           const row = [...routeEvidence].reverse().find(value => value.path === url.pathname + url.search &&
             value.status === undefined); if (row) row.status = response.status();
-          if (url.pathname.includes('/invoice-part5-acceptance') && response.status() === 200) {
+          if (url.pathname.includes('/invoice-part6-acceptance') && response.status() === 200) {
             response.json().then(body => bundleEvidence.push(body.data)).catch(error =>
               consoleErrors.push(error.message));
           }
@@ -220,7 +293,13 @@ async function auditActualSurface(page, root, layout) {
       await root.getByText('Approval, issue, and invoice lifecycle', { exact: true }).waitFor({ timeout: 30000 });
       assert.equal(await root.locator('.invoice-part5-axes li').count(), 7);
       assert.equal(await root.locator('.invoice-part5-corrections li').count(), 4);
-      assert.equal(await root.getByRole('button', { name: /approve invoice|issue|send|collect|correct invoice/i }).count(), 0);
+      await root.getByText('Customer document, portal, and delivery', { exact: true }).waitFor({ timeout: 30000 });
+      assert.equal(await root.locator('.invoice-part6-requirements li').count(), 8);
+      for (const requirement of PART6_REQUIREMENTS) {
+        assert.equal(await root.getByText(`${requirement} · Unavailable`, { exact: true }).count(), 1);
+      }
+      assert.equal(await root.locator('.invoice-part6-actions li').count(), 6);
+      assert.equal(await root.getByRole('button', { name: /approve invoice|issue|send|resend|revoke|deliver|collect|correct invoice/i }).count(), 0);
       assert.ok(await root.getByText(`Mounted ${engine} ${layout.name} reviewed line`, { exact: true }).count() ||
         await root.getByText(`Concurrent ${engine} exact-current line`, { exact: true }).count());
       const summary = root.locator(':scope > summary'); await summary.focus(); await summary.press('Enter');
@@ -233,32 +312,47 @@ async function auditActualSurface(page, root, layout) {
       await root.getByRole('button', { name: 'Record tax preparation review' }).waitFor({ timeout: 30000 });
       assert.equal(await root.locator('.invoice-draft-preview-document').count(), 0);
       assert.equal(await root.locator('.invoice-part5-acceptance').count(), 0);
+      assert.equal(await root.locator('.invoice-part6-acceptance').count(), 0);
       assert.equal(await root.getByText(/Mounted .* reviewed line/, { exact: false }).count(), 0);
       await recordTax(root);
       await root.getByText('Invoice draft — not issued', { exact: true }).waitFor({ timeout: 30000 });
       await root.getByText(`Reopen ${engine} ${layout.name} exact-current line`, { exact: true })
         .waitFor({ timeout: 30000 });
+      if (index === 0) {
+        await proveDatabaseDelayedSuppression({ page, root, summary,
+          pool: prepared.fixture.ownerPool,
+          relation: 'public.canonical_customer_financial_invoice_draft_revisions_v1',
+          routePath: '/invoice-draft',
+          expectedText: `Reopen ${engine} ${layout.name} exact-current line` });
+      }
       await auditActualSurface(page, root, layout);
       assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft/workflow-capability') && row.status === 200));
       assert.ok(routeEvidence.some(row => row.method === 'POST' && /\/invoice-draft$/.test(row.path) && [200,201].includes(row.status)));
       assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft/tax-review') && [200,201,409].includes(row.status)));
-      assert.ok(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-part5-acceptance?') && row.status === 200));
+      assert.ok(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-part6-acceptance?') && row.status === 200));
       assert.equal(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-draft/preview?')), false);
       assert.ok(bundleEvidence.length >= 1);
       for (const bundle of bundleEvidence) {
-        assert.equal(bundle.contractVersion, 'm27-invoice-part5-preview-bundle-v1');
+        assert.equal(bundle.contractVersion, 'm27-invoice-part6-preview-bundle-v1');
         assert.equal(bundle.preview.draftIdentity.revision,
-          bundle.acceptance.previewWitness.draftRevision);
+          bundle.part5Acceptance.previewWitness.draftRevision);
         assert.equal(bundle.preview.draftIdentity.draftDigest,
-          bundle.acceptance.previewWitness.draftDigest);
+          bundle.part5Acceptance.previewWitness.draftDigest);
         assert.equal(bundle.preview.previewDigest,
-          bundle.acceptance.previewWitness.previewDigest);
+          bundle.part5Acceptance.previewWitness.previewDigest);
+        assert.deepEqual(bundle.part6Acceptance.previewWitness,
+          bundle.part5Acceptance.previewWitness);
+        assert.deepEqual(bundle.part6Acceptance.delivery.requirements.map(value => value.requirement),
+          PART6_REQUIREMENTS);
+        assert.equal(bundle.part6Acceptance.delivery.actions.length, 6);
+        assert.equal(bundle.part6Acceptance.outboundMessageCount, 0);
       }
       if (index === 0) assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft-origin') && [200,201].includes(row.status)));
       assert.deepEqual(external, []); assert.deepEqual(errors, []);
       await page.screenshot({ fullPage: true, path: path.join(output, `${engine}-${layout.name}.png`) });
       ledger.layouts.push({ name: layout.name, routeEvidence, taxEvidence: true,
-        part5Acceptance: true, keyboard: true, responsive: true, currentnessRecovery: index === 0 });
+        part5Acceptance: true, part6Acceptance: true, keyboard: true, responsive: true,
+        currentnessRecovery: index === 0, delayedResponseSuppression: index === 0 });
       delete ledger.current;
       await context.close();
 
@@ -293,10 +387,24 @@ async function auditActualSurface(page, root, layout) {
       await demoRoot.getByText('Approval, issue, and invoice lifecycle', { exact: true }).waitFor({ timeout:30000 });
       assert.equal(await demoRoot.locator('.invoice-part5-axes li').count(), 7);
       assert.equal(await demoRoot.locator('.invoice-part5-corrections li').count(), 4);
-      assert.equal(await demoRoot.getByText(/Fictional demo boundary/).count(), 1);
-      assert.equal(await demoRoot.getByRole('button', {name:/approve invoice|issue|send|collect|correct invoice/i}).count(),0);
+      await demoRoot.getByText('Customer document, portal, and delivery', { exact:true }).waitFor({timeout:30000});
+      assert.equal(await demoRoot.locator('.invoice-part6-requirements li').count(),8);
+      for (const requirement of PART6_REQUIREMENTS) {
+        assert.equal(await demoRoot.getByText(`${requirement} · Unavailable`, { exact:true }).count(),1);
+      }
+      assert.equal(await demoRoot.locator('.invoice-part6-actions li').count(),6);
+      assert.equal(await demoRoot.getByText(/Fictional demo boundary/).count(), 2);
+      assert.equal(await demoRoot.getByRole('button', {name:/approve invoice|issue|send|resend|revoke|deliver|collect|correct invoice/i}).count(),0);
       assert.equal(demoRoutes.some(row => row.path.endsWith('/preview')), false);
-      assert.ok(demoRoutes.some(row => row.path.endsWith('/part5-acceptance') && row.status === 200));
+      assert.ok(demoRoutes.some(row => row.path.endsWith('/part6-acceptance') && row.status === 200));
+      if (index === 0) {
+        const delayedDemoSummary = demoRoot.locator(':scope > summary');
+        await proveDatabaseDelayedSuppression({ page:demoPage, root:demoRoot,
+          summary:delayedDemoSummary, pool:prepared.fixture.ownerPool,
+          relation:'public.demo_command_center_sessions',
+          routePath:'/part6-acceptance',
+          expectedText:'Fictional invoice draft — not issued' });
+      }
       const oldSummary = demoRoot.locator(':scope > summary'); await oldSummary.focus(); await oldSummary.press('Enter');
       await demoRoot.locator('table').waitFor({state:'detached',timeout:10000});
       const resetGraph = await demoPage.evaluate(async () => {
@@ -313,6 +421,7 @@ async function auditActualSurface(page, root, layout) {
       await demoRoot.locator('[role=alert]').waitFor({timeout:30000});
       assert.equal(await demoRoot.locator('table').count(),0);
       assert.equal(await demoRoot.locator('.invoice-part5-acceptance').count(),0);
+      assert.equal(await demoRoot.locator('.invoice-part6-acceptance').count(),0);
       await demoPage.reload({waitUntil:'networkidle'});
       const recoveredDemoRoot=await openActualCustomerInvoice(demoPage,resetGraph.ids.customer);
       await recoveredDemoRoot.getByText('Fictional invoice draft — not issued',{exact:true})
@@ -323,7 +432,8 @@ async function auditActualSurface(page, root, layout) {
       assert.deepEqual(demoPaidRoutes, []);
       await demoPage.screenshot({fullPage:true,path:path.join(output,`${engine}-${layout.name}-demo.png`)});
       ledger.layouts.at(-1).demo = { actualPage:'/demo', routes:demoRoutes, fictional:true,
-        resetClearing:true, paidRouteCalls:demoPaidRoutes.length };
+        resetClearing:true, delayedResponseSuppression:index===0,
+        paidRouteCalls:demoPaidRoutes.length };
       await demoContext.close();
     }
     assert.equal(ledger.layouts.length, 5);

@@ -26,6 +26,8 @@ const invoicePublicSessionRepository =
   require('../customerFinancial/invoicePublicSessionRepository');
 const invoiceCustomerPortalRepository =
   require('../customerFinancial/invoiceCustomerPortalRepository');
+const invoicePart6AcceptanceRepository =
+  require('../customerFinancial/invoicePart6AcceptanceRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -85,6 +87,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     invoicePublicSessionRepository.read;
   const invoiceCustomerPortalRead = options.invoiceCustomerPortalRead ||
     invoiceCustomerPortalRepository.read;
+  const invoicePart6AcceptanceRead = options.invoicePart6AcceptanceRead ||
+    invoicePart6AcceptanceRepository.readBundle;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -337,6 +341,20 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
       req.query.handoffReceiptDigest) });
     } catch (error) { return failure(res,error); }
   });
+  router.get('/:estimateId/invoice-part6-acceptance', auth, role, throttle,
+    async (req,res) => {
+      res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+      const keys = Object.keys(req.query);
+      if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+          typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+        status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_PART6_INVALID',
+        message: 'Select one exact current invoice delivery journey.' });
+      try { return res.json({ success: true, data: await invoicePart6AcceptanceRead(
+        poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest) });
+      } catch (error) { return failure(res,error); }
+    });
   router.post('/:estimateId/invoice-draft/workflow-capability', auth, role, throttle, async (req,res) => {
     const csrfToken = req.get('X-CSRF-Token');
     if (typeof csrfToken !== 'string' || csrfToken.length < 16) return failure(res, {

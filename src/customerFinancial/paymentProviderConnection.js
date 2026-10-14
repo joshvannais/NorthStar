@@ -141,17 +141,18 @@ function project(raw) {
 }
 
 function validateIntent(body) {
+  const reason = typeof body?.reason === 'string' ? body.reason.trim() : null;
   if (!body || typeof body !== 'object' || Array.isArray(body) ||
       JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(BODY_KEYS) ||
       !OPERATIONS.includes(body.operation) || body.confirmed !== true ||
-      typeof body.reason !== 'string' || body.reason.length < 12 || body.reason.length > 500 ||
-      /[\u0000-\u001f\u007f]/.test(body.reason)) {
+      reason === null || body.reason !== reason || reason.length < 12 || reason.length > 500 ||
+      /[\u0000-\u001f\u007f]/.test(reason)) {
     const error = new Error('Review the provider lifecycle action.');
     error.code = 'CUSTOMER_FINANCIAL_PROVIDER_CONNECTION_INVALID';
     error.status = 400;
     throw error;
   }
-  return Object.freeze({ operation: body.operation, reason: body.reason, confirmed: true });
+  return Object.freeze({ operation: body.operation, reason, confirmed: true });
 }
 
 module.exports = { CONTRACT_VERSION, REASON, CAPABILITY, OPERATIONS, policy,

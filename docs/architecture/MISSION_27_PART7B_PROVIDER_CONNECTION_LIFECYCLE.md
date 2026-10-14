@@ -24,7 +24,9 @@ paid owner a private, no-store projection of the exact prerequisites and four
 policy operations. `POST .../actions` accepts only one exact operation, an
 explicit confirmation, and a printable bounded reason after the normal
 PostgreSQL-backed session, tenant, subscription, owner-role, CSRF, and rate
-boundaries. The payload cannot carry a provider account, mode, capability set,
+boundaries. Every action query is rejected before repository entry, and the
+body reason must already be trimmed, nonblank, printable, and bounded. The
+payload cannot carry a provider account, mode, capability set,
 credential, secret, instrument, or live-enable claim.
 
 No accepted tenant provider-account identity, provider capability set, MFA

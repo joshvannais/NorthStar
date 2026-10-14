@@ -41,6 +41,9 @@ function createCustomerFinancialProviderConnectionRouter(options = {}) {
     catch (error) { return sendError(res, error); }
   });
   router.post('/actions', auth, role, throttle, async (req, res) => {
+    if (Object.keys(req.query).length !== 0) return sendError(res, Object.assign(
+      new Error('Review the provider lifecycle action.'),
+      { code: 'CUSTOMER_FINANCIAL_PROVIDER_CONNECTION_INVALID', status: 400 }));
     try {
       const data = await attempt(source(req), req.body);
       return res.status(409).json({ success: false, data, error: {

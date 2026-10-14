@@ -2,9 +2,13 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const express = require('express');
+const request = require('supertest');
 const base = require('../../src/customerFinancial/paymentProviderBoundary');
 const contract = require('../../src/customerFinancial/paymentProviderConnection');
 const repository = require('../../src/customerFinancial/paymentProviderConnectionRepository');
+const { createCustomerFinancialProviderConnectionRouter } =
+  require('../../src/routes/customerFinancialProviderConnection');
 
 const ROOT = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
@@ -75,17 +79,39 @@ describe('Mission 27 Part 7B provider connection lifecycle boundary', () => {
       reconnectRequiresVerifiedDisconnectedPredecessor: true,
       automaticReconnectAuthorized: false });
     for (const operation of contract.OPERATIONS) {
-      expect(contract.validateIntent({ operation, confirmed: true,
-        reason: `Review ${operation} in test mode.` })).toMatchObject({ operation, confirmed: true });
+      const reason = `Review ${operation} in test mode.`;
+      expect(contract.validateIntent({ operation, confirmed: true, reason }))
+        .toEqual({ operation, confirmed: true, reason });
     }
     for (const invalid of [null, {}, { operation: 'enable', confirmed: true,
       reason: 'Try live mode now.' }, { operation: 'reconnect', confirmed: true,
       reason: 'Reconnect automatically.' }, { operation: 'connect', confirmed: false,
       reason: 'Not confirmed by owner.' }, { operation: 'connect', confirmed: true, reason: 'short' },
     { operation: 'connect', confirmed: true, reason: 'Includes a forbidden secret.',
-      credential: 'sk_test_forbidden' }]) {
+      credential: 'sk_test_forbidden' }, { operation: 'connect', confirmed: true,
+      reason: '            ' }, { operation: 'connect', confirmed: true,
+      reason: '  Review this test connection.  ' }]) {
       expect(() => contract.validateIntent(invalid)).toThrow('Review the provider lifecycle action.');
     }
+  });
+
+  test('rejects every action query before repository entry and never reflects secret-shaped input', async () => {
+    const attempt = jest.fn();
+    const app = express();
+    app.use(express.json());
+    app.use('/api/v1/customer-financial/payment-provider/connection',
+      createCustomerFinancialProviderConnectionRouter({
+        auth: (_req, _res, next) => next(), role: (_req, _res, next) => next(),
+        throttle: (_req, _res, next) => next(), attempt,
+      }));
+    const response = await request(app)
+      .post('/api/v1/customer-financial/payment-provider/connection/actions' +
+        '?credential=sk_test_forbidden&providerAccountId=acct_victim&mode=live')
+      .send({ operation: 'connect', confirmed: true, reason: 'Review test connection now.' });
+    expect(response.status).toBe(400);
+    expect(response.body.error.category).toBe('CUSTOMER_FINANCIAL_PROVIDER_CONNECTION_INVALID');
+    expect(JSON.stringify(response.body)).not.toMatch(/sk_test_forbidden|acct_victim|mode=live/);
+    expect(attempt).not.toHaveBeenCalled();
   });
 
   test('repository permits only an exact owner source and every intent remains no-effect', async () => {

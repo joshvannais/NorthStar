@@ -89,6 +89,8 @@ realPostgres('Mission 27 Part 7B mounted provider connection boundary', () => {
     for (const body of [
       { operation: 'enable', confirmed: true, reason: 'Attempt to enable live mode.' },
       { operation: 'reconnect', confirmed: true, reason: 'Attempt automatic reconnect.' },
+      { operation: 'connect', confirmed: true, reason: '            ' },
+      { operation: 'connect', confirmed: true, reason: '  Review this test connection.  ' },
       { operation: 'connect', confirmed: true, reason: 'Attempt caller account injection.',
         providerAccountId: 'acct_victim' },
       { operation: 'connect', confirmed: true, reason: 'Attempt caller secret injection.',
@@ -99,6 +101,14 @@ realPostgres('Mission 27 Part 7B mounted provider connection boundary', () => {
       expect(response.status).toBe(400);
       expect(JSON.stringify(response.body)).not.toMatch(/acct_victim|sk_test_forbidden/);
     }
+    const queryInjection = await request(fixture.app)
+      .post(route + '/actions?credential=sk_test_forbidden&providerAccountId=acct_victim&mode=live')
+      .set(owner.session.headers).set('X-CSRF-Token', owner.csrfToken)
+      .send({ operation: 'connect', confirmed: true, reason: 'Review test connection now.' });
+    expect(queryInjection.status).toBe(400);
+    expect(queryInjection.body.error.category)
+      .toBe('CUSTOMER_FINANCIAL_PROVIDER_CONNECTION_INVALID');
+    expect(JSON.stringify(queryInjection.body)).not.toMatch(/acct_victim|sk_test_forbidden|mode=live/);
     expect(transport).not.toHaveBeenCalled();
   });
 

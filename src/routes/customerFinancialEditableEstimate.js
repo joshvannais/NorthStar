@@ -28,6 +28,8 @@ const invoiceCustomerPortalRepository =
   require('../customerFinancial/invoiceCustomerPortalRepository');
 const invoicePart6AcceptanceRepository =
   require('../customerFinancial/invoicePart6AcceptanceRepository');
+const paymentInitiationPlanRepository =
+  require('../customerFinancial/paymentInitiationPlanRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -89,6 +91,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     invoiceCustomerPortalRepository.read;
   const invoicePart6AcceptanceRead = options.invoicePart6AcceptanceRead ||
     invoicePart6AcceptanceRepository.readBundle;
+  const paymentInitiationPlanRead = options.paymentInitiationPlanRead ||
+    paymentInitiationPlanRepository.read;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -351,6 +355,20 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_PART6_INVALID',
         message: 'Select one exact current invoice delivery journey.' });
       try { return res.json({ success: true, data: await invoicePart6AcceptanceRead(
+        poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest) });
+      } catch (error) { return failure(res,error); }
+    });
+  router.get('/:estimateId/payment-initiation-plan', auth, role, throttle,
+    async (req,res) => {
+      res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+      const keys = Object.keys(req.query);
+      if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+          typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+        status: 400, code: 'CUSTOMER_FINANCIAL_PAYMENT_INITIATION_INVALID',
+        message: 'Select one exact current issued invoice balance.' });
+      try { return res.json({ success: true, data: await paymentInitiationPlanRead(
         poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
         req.query.handoffReceiptDigest) });
       } catch (error) { return failure(res,error); }

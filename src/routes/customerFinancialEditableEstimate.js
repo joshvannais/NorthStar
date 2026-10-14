@@ -22,6 +22,8 @@ const invoicePostIssueCorrectionRepository =
 const invoicePart5AcceptanceRepository =
   require('../customerFinancial/invoicePart5AcceptanceRepository');
 const invoiceDocumentRepository = require('../customerFinancial/invoiceDocumentRepository');
+const invoicePublicSessionRepository =
+  require('../customerFinancial/invoicePublicSessionRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -77,6 +79,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const invoicePart5AcceptanceRead = options.invoicePart5AcceptanceRead ||
     invoicePart5AcceptanceRepository.readBundle;
   const invoiceDocumentRead = options.invoiceDocumentRead || invoiceDocumentRepository.read;
+  const invoicePublicSessionRead = options.invoicePublicSessionRead ||
+    invoicePublicSessionRepository.read;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -299,6 +303,19 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
       status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_DOCUMENT_INVALID',
       message: 'Select one exact current issued invoice document.' });
     try { return res.json({ success: true, data: await invoiceDocumentRead(
+      poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+      req.query.handoffReceiptDigest) });
+    } catch (error) { return failure(res,error); }
+  });
+  router.get('/:estimateId/invoice-public-session', auth, role, throttle, async (req,res) => {
+    res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+    const keys = Object.keys(req.query);
+    if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+        !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+        typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+      status: 400, code: 'CUSTOMER_FINANCIAL_INVOICE_PUBLIC_SESSION_INVALID',
+      message: 'Select one exact current issued invoice document.' });
+    try { return res.json({ success: true, data: await invoicePublicSessionRead(
       poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
       req.query.handoffReceiptDigest) });
     } catch (error) { return failure(res,error); }

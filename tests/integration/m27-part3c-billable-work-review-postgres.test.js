@@ -1337,9 +1337,34 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       formats:{html:{state:'unavailable',value:null},pdf:{state:'unavailable',value:null}}});
     expect(JSON.stringify(document.body.data)).not.toMatch(
       /customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|staff|margin|cost/);
+    const sessionRoute =
+      `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-public-session`;
+    expect((await request(f.app).get(sessionRoute).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(sessionRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const sessionCrossTenant = await request(f.app).get(sessionRoute).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(sessionCrossTenant.status);
+    const session = await request(f.app).get(sessionRoute).query(query).set(actor.session.headers);
+    const sessionReplay = await request(f.app).get(sessionRoute).query(query).set(actor.session.headers);
+    expect(session.status).toBe(200);expect(sessionReplay.body).toEqual(session.body);
+    expect(session.headers['cache-control']).toBe('private, no-store');
+    expect(session.headers['set-cookie']).toBeUndefined();
+    expect(session.body.data).toMatchObject({contractVersion:'m27-invoice-public-session-v1',
+      state:'unavailable',reason:'issued_invoice_unavailable',mode:'paid',fictional:false,value:null,
+      bearerIdentityLimitation:'possession_does_not_prove_customer_or_recipient_identity',
+      rawTokenReturned:false,tokenHashStored:false,publicLookupMounted:false,
+      publicRateLimitMounted:false,customerSessionCreated:false,exactIssuedVersionBound:false,
+      expirationAssigned:false,revocationRecorded:false,downloadAuthorized:false,
+      customerMutationAuthorized:false,thirdPartyContentIncluded:false,
+      tokenInCookieUrlReferrerLogOrBrowserStorage:false,providerCallCount:0,receiverMutationCount:0});
+    expect(JSON.stringify(session.body.data)).not.toMatch(
+      /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
     expect(await request(f.app).post(acceptanceRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
     expect(await request(f.app).post(documentRoute).set(actor.session.headers)
+      .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
+    expect(await request(f.app).post(sessionRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
     const after = (await f.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
@@ -1390,6 +1415,13 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
     expect([409,503]).toContain(documentStale.status);
     expect(JSON.stringify(documentStale.body)).not.toMatch(
       /customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|staff|margin|cost/);
+    const sessionStale = await request(f.app)
+      .get(`/api/v1/customer-financial/editable-estimates/${estimate}/invoice-public-session`)
+      .query({ handoffReceiptId: billableHandoffReceipt.receiptId,
+        handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
+    expect([409,503]).toContain(sessionStale.status);
+    expect(JSON.stringify(sessionStale.body)).not.toMatch(
+      /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
     expect(componentsStale.body.data).toMatchObject({ state: 'unavailable', value: null,
       reason: 'reviewed_handoff_stale', sourceCurrent: false,
       commercialSourceAuthorityCurrent: false, invoiceAuthorized: false,

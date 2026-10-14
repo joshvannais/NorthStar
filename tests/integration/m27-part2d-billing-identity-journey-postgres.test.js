@@ -331,6 +331,19 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
     expect(first.body.data.previewDigest).toMatch(/^[0-9a-f]{64}$/);
     const again=await request(fixture.app).get(route).set('Host','northstar.test').set('Cookie',savedCookie);
     expect(again.status).toBe(200);expect(again.body.data.previewDigest).toBe(first.body.data.previewDigest);
+    const acceptanceRoute=`/api/demo/customer-financial/invoice-drafts/${estimateId}/part5-acceptance`;
+    const acceptance=await request(fixture.app).get(acceptanceRoute)
+      .set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(acceptance.status).toBe(200);
+    expect(acceptance.body.data).toMatchObject({contractVersion:'m27-invoice-part5-acceptance-v1',
+      state:'unavailable',reason:'invoice_issue_authority_unavailable',mode:'demo',fictional:true,
+      exactCurrentnessRevalidated:true,approvalAuthorized:false,issueAuthorized:false,
+      correctionAuthorized:false,providerCallCount:0,receiverMutationCount:0});
+    expect(acceptance.body.data.lifecycle.axes).toHaveLength(7);
+    expect(acceptance.body.data.postIssueCorrection.records).toHaveLength(4);
+    const acceptanceAgain=await request(fixture.app).get(acceptanceRoute)
+      .set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(acceptanceAgain.body).toEqual(acceptance.body);
     const denied=await request(fixture.app).get('/api/demo/customer-financial/invoice-drafts/'+
       crypto.randomUUID()+'/preview').set('Host','northstar.test').set('Cookie',savedCookie);
     expect(denied.status).toBe(404);expect(JSON.stringify(denied.body)).not.toMatch(/minorUnits|customerPrice/);

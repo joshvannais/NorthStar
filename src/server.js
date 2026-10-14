@@ -45,6 +45,8 @@ const { createCustomerFinancialEditableEstimateRouter } =
   require('./routes/customerFinancialEditableEstimate');
 const { createCustomerFinancialPaymentProviderRouter } =
   require('./routes/customerFinancialPaymentProvider');
+const { createCustomerFinancialProviderConnectionRouter } =
+  require('./routes/customerFinancialProviderConnection');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -374,6 +376,8 @@ app.use('/api/v1/customer-financial/billing-identities',
   createCustomerFinancialBillingIdentityRouter());
 app.use('/api/v1/customer-financial/editable-estimates',
   createCustomerFinancialEditableEstimateRouter());
+app.use('/api/v1/customer-financial/payment-provider/connection',
+  createCustomerFinancialProviderConnectionRouter());
 app.use('/api/v1/customer-financial/payment-provider',
   createCustomerFinancialPaymentProviderRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());

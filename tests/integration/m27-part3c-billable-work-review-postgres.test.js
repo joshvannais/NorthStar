@@ -1315,7 +1315,31 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       previewDigest:first.body.data.preview.previewDigest});
     expect(JSON.stringify(first.body.data.acceptance)).not.toMatch(
       /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId)":/);
+    const documentRoute =
+      `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-document`;
+    expect((await request(f.app).get(documentRoute).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(documentRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const documentCrossTenant = await request(f.app).get(documentRoute).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(documentCrossTenant.status);
+    const document = await request(f.app).get(documentRoute).query(query).set(actor.session.headers);
+    const documentReplay = await request(f.app).get(documentRoute).query(query).set(actor.session.headers);
+    expect(document.status).toBe(200);expect(documentReplay.body).toEqual(document.body);
+    expect(document.headers['cache-control']).toBe('no-store');
+    expect(document.body.data).toMatchObject({contractVersion:'m27-customer-invoice-document-v1',
+      state:'unavailable',reason:'issued_invoice_unavailable',mode:'paid',fictional:false,value:null,
+      exactCurrentnessRevalidated:true,issuedDocumentCurrent:false,
+      customerSafeProjectionCurrent:false,htmlRenderingAuthorized:false,pdfRenderingAuthorized:false,
+      downloadAuthorized:false,publicAccessAuthorized:false,deliveryAuthorized:false,
+      privateFieldValuesExposed:false,thirdPartyContentIncluded:false,
+      providerCallCount:0,receiverMutationCount:0,
+      formats:{html:{state:'unavailable',value:null},pdf:{state:'unavailable',value:null}}});
+    expect(JSON.stringify(document.body.data)).not.toMatch(
+      /customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|staff|margin|cost/);
     expect(await request(f.app).post(acceptanceRoute).set(actor.session.headers)
+      .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
+    expect(await request(f.app).post(documentRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
     const after = (await f.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
@@ -1359,6 +1383,13 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       .query({ handoffReceiptId: billableHandoffReceipt.receiptId,
         handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
     expect(componentsStale.status).toBe(200);
+    const documentStale = await request(f.app)
+      .get(`/api/v1/customer-financial/editable-estimates/${estimate}/invoice-document`)
+      .query({ handoffReceiptId: billableHandoffReceipt.receiptId,
+        handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
+    expect([409,503]).toContain(documentStale.status);
+    expect(JSON.stringify(documentStale.body)).not.toMatch(
+      /customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|staff|margin|cost/);
     expect(componentsStale.body.data).toMatchObject({ state: 'unavailable', value: null,
       reason: 'reviewed_handoff_stale', sourceCurrent: false,
       commercialSourceAuthorityCurrent: false, invoiceAuthorized: false,

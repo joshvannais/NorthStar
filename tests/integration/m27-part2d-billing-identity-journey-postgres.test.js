@@ -351,9 +351,32 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
     const acceptanceAgain=await request(fixture.app).get(acceptanceRoute)
       .set('Host','northstar.test').set('Cookie',savedCookie);
     expect(acceptanceAgain.body).toEqual(acceptance.body);
+    const documentRoute=`/api/demo/customer-financial/invoice-drafts/${estimateId}/document`;
+    const document=await request(fixture.app).get(documentRoute)
+      .set('Host','northstar.test').set('Cookie',savedCookie);
+    const documentAgain=await request(fixture.app).get(documentRoute)
+      .set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(document.status).toBe(200);expect(documentAgain.body).toEqual(document.body);
+    expect(document.headers['cache-control']).toBe('no-store');
+    expect(document.body.data).toMatchObject({contractVersion:'m27-customer-invoice-document-v1',
+      state:'unavailable',reason:'issued_invoice_unavailable',mode:'demo',fictional:true,value:null,
+      exactCurrentnessRevalidated:true,issuedDocumentCurrent:false,
+      customerSafeProjectionCurrent:false,htmlRenderingAuthorized:false,pdfRenderingAuthorized:false,
+      downloadAuthorized:false,publicAccessAuthorized:false,deliveryAuthorized:false,
+      privateFieldValuesExposed:false,thirdPartyContentIncluded:false,
+      providerCallCount:0,receiverMutationCount:0,
+      formats:{html:{state:'unavailable',value:null},pdf:{state:'unavailable',value:null}}});
+    expect(JSON.stringify(document.body.data)).not.toMatch(
+      /customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|staff|margin|cost/);
+    expect((await request(fixture.app).post(documentRoute)
+      .set('Host','northstar.test').set('Cookie',savedCookie).send({confirmed:true})).status).toBe(404);
     const denied=await request(fixture.app).get('/api/demo/customer-financial/invoice-drafts/'+
       crypto.randomUUID()+'/preview').set('Host','northstar.test').set('Cookie',savedCookie);
     expect(denied.status).toBe(404);expect(JSON.stringify(denied.body)).not.toMatch(/minorUnits|customerPrice/);
+    const documentDenied=await request(fixture.app).get('/api/demo/customer-financial/invoice-drafts/'+
+      crypto.randomUUID()+'/document').set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(documentDenied.status).toBe(404);
+    expect(JSON.stringify(documentDenied.body)).not.toMatch(/minorUnits|customerPrice|invoiceDigest|receiptId/);
     expect(await demoProtectedCounts(fixture.ownerPool)).toEqual(before);
   },120000);
 

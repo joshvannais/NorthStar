@@ -1360,12 +1360,41 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
       tokenInCookieUrlReferrerLogOrBrowserStorage:false,providerCallCount:0,receiverMutationCount:0});
     expect(JSON.stringify(session.body.data)).not.toMatch(
       /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
+    const portalRoute =
+      `/api/v1/customer-financial/editable-estimates/${estimate}/invoice-customer-portal`;
+    expect((await request(f.app).get(portalRoute).set(actor.session.headers)).status).toBe(400);
+    expect((await request(f.app).get(portalRoute).query(query)
+      .set(f.actors.member.session.headers)).status).toBe(403);
+    const portalCrossTenant = await request(f.app).get(portalRoute).query(query)
+      .set(f.actors.otherOwner.session.headers);
+    expect([403,404]).toContain(portalCrossTenant.status);
+    const portal = await request(f.app).get(portalRoute).query(query).set(actor.session.headers);
+    const portalReplay = await request(f.app).get(portalRoute).query(query).set(actor.session.headers);
+    expect(portal.status).toBe(200);expect(portalReplay.body).toEqual(portal.body);
+    expect(portal.headers['cache-control']).toBe('private, no-store');
+    expect(portal.headers['set-cookie']).toBeUndefined();
+    expect(portal.body.data).toMatchObject({contractVersion:'m27-invoice-customer-portal-v1',
+      state:'unavailable',reason:'issued_invoice_unavailable',mode:'paid',fictional:false,value:null,
+      exactCurrentnessRevalidated:true,customerSessionCurrent:false,recipientVerified:false,
+      customerViewAuthorized:false,downloadAuthorized:false,questionSubmissionAuthorized:false,
+      billingDetailCorrectionRequestAuthorized:false,deliveryAcknowledgementAuthorized:false,
+      viewAcknowledgementAuthorized:false,invoiceMutationAuthorized:false,publicViewMounted:false,
+      publicDownloadMounted:false,customerMutationRouteMounted:false,
+      originCsrfProtectionMounted:false,questionRecorded:false,
+      billingDetailCorrectionRequestRecorded:false,deliveryAcknowledgementRecorded:false,
+      viewAcknowledgementRecorded:false,privateFieldValuesExposed:false,
+      thirdPartyContentIncluded:false,rawTokenReturned:false,providerCallCount:0,
+      receiverMutationCount:0});
+    expect(JSON.stringify(portal.body.data)).not.toMatch(
+      /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
     expect(await request(f.app).post(acceptanceRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
     expect(await request(f.app).post(documentRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
     expect(await request(f.app).post(sessionRoute).set(actor.session.headers)
       .set('X-CSRF-Token',actor.csrfToken).send({confirmed:true})).toMatchObject({status:404});
+    expect(await request(f.app).post(portalRoute).set(actor.session.headers)
+      .set('X-CSRF-Token',actor.csrfToken).send({question:'Why?'})).toMatchObject({status:404});
     const after = (await f.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_origins_v1) origins,
       (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) revisions,
@@ -1421,6 +1450,13 @@ realPostgres(`Mission 27 Part 3C exact human billable-work review (${taxBehavior
         handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
     expect([409,503]).toContain(sessionStale.status);
     expect(JSON.stringify(sessionStale.body)).not.toMatch(
+      /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
+    const portalStale = await request(f.app)
+      .get(`/api/v1/customer-financial/editable-estimates/${estimate}/invoice-customer-portal`)
+      .query({ handoffReceiptId: billableHandoffReceipt.receiptId,
+        handoffReceiptDigest: billableHandoffReceipt.receiptDigest }).set(actor.session.headers);
+    expect([409,503]).toContain(portalStale.status);
+    expect(JSON.stringify(portalStale.body)).not.toMatch(
       /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
     expect(componentsStale.body.data).toMatchObject({ state: 'unavailable', value: null,
       reason: 'reviewed_handoff_stale', sourceCurrent: false,

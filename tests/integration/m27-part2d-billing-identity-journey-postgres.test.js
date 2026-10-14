@@ -390,6 +390,30 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
       /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
     expect((await request(fixture.app).post(sessionRoute)
       .set('Host','northstar.test').set('Cookie',savedCookie).send({confirmed:true})).status).toBe(404);
+    const portalRoute=`/api/demo/customer-financial/invoice-drafts/${estimateId}/customer-portal`;
+    const portal=await request(fixture.app).get(portalRoute)
+      .set('Host','northstar.test').set('Cookie',savedCookie);
+    const portalAgain=await request(fixture.app).get(portalRoute)
+      .set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(portal.status).toBe(200);expect(portalAgain.body).toEqual(portal.body);
+    expect(portal.headers['cache-control']).toBe('private, no-store');
+    expect(portal.headers['set-cookie']).toBeUndefined();
+    expect(portal.body.data).toMatchObject({contractVersion:'m27-invoice-customer-portal-v1',
+      state:'unavailable',reason:'issued_invoice_unavailable',mode:'demo',fictional:true,value:null,
+      exactCurrentnessRevalidated:true,customerSessionCurrent:false,recipientVerified:false,
+      customerViewAuthorized:false,downloadAuthorized:false,questionSubmissionAuthorized:false,
+      billingDetailCorrectionRequestAuthorized:false,deliveryAcknowledgementAuthorized:false,
+      viewAcknowledgementAuthorized:false,invoiceMutationAuthorized:false,publicViewMounted:false,
+      publicDownloadMounted:false,customerMutationRouteMounted:false,
+      originCsrfProtectionMounted:false,questionRecorded:false,
+      billingDetailCorrectionRequestRecorded:false,deliveryAcknowledgementRecorded:false,
+      viewAcknowledgementRecorded:false,privateFieldValuesExposed:false,
+      thirdPartyContentIncluded:false,rawTokenReturned:false,providerCallCount:0,
+      receiverMutationCount:0});
+    expect(JSON.stringify(portal.body.data)).not.toMatch(
+      /"(?:customerId|workId|minorUnits|currency|documentNumber|dueDate|invoiceDigest|receiptId|rawToken|tokenHash|staff|margin|cost)"\s*:/);
+    expect((await request(fixture.app).post(portalRoute)
+      .set('Host','northstar.test').set('Cookie',savedCookie).send({question:'Why?'})).status).toBe(404);
     const denied=await request(fixture.app).get('/api/demo/customer-financial/invoice-drafts/'+
       crypto.randomUUID()+'/preview').set('Host','northstar.test').set('Cookie',savedCookie);
     expect(denied.status).toBe(404);expect(JSON.stringify(denied.body)).not.toMatch(/minorUnits|customerPrice/);
@@ -401,6 +425,11 @@ realPostgres('Mission 27 Part 2D mounted billing identity PostgreSQL acceptance'
       crypto.randomUUID()+'/public-session').set('Host','northstar.test').set('Cookie',savedCookie);
     expect(sessionDenied.status).toBe(404);
     expect(JSON.stringify(sessionDenied.body)).not.toMatch(/minorUnits|customerPrice|invoiceDigest|receiptId|tokenHash/);
+    const portalDenied=await request(fixture.app).get('/api/demo/customer-financial/invoice-drafts/'+
+      crypto.randomUUID()+'/customer-portal').set('Host','northstar.test').set('Cookie',savedCookie);
+    expect(portalDenied.status).toBe(404);
+    expect(JSON.stringify(portalDenied.body)).not.toMatch(
+      /minorUnits|customerPrice|invoiceDigest|receiptId|tokenHash/);
     expect(await demoProtectedCounts(fixture.ownerPool)).toEqual(before);
   },120000);
 

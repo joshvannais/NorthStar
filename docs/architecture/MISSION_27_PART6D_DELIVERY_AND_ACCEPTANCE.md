@@ -37,6 +37,10 @@ separate unavailable actions. Exact document, recipient, explicit delivery
 choice, invoice-send capability, recent authentication/control, idempotency,
 delivery receipt and revocation evidence remain named gaps. No send, automatic
 retry, customer access, provider call, receiver mutation or money effect occurs.
+The browser validates the complete ordered eight-requirement server contract
+and renders every exact requirement name. A missing, reordered, renamed or
+non-unavailable requirement rejects the entire bundle and clears its private
+preview, Part 5 and Part 6 state.
 
 The account-free demo builds the same bundle from one immutable fictional
 workspace revision and performs no paid read or provider fallback. The staff
@@ -53,7 +57,13 @@ Collapse, request rejection, exact-witness mismatch, delayed response, source
 change and demo reset clear preview amounts and both acceptance cards before
 recovery. The same production session/CSRF/routes execute in Chrome and
 Playwright WebKit across the required five layouts with no response interception
-or prebuilt acceptance payload.
+or prebuilt acceptance payload. Delayed-response evidence uses database relation
+locks to hold the actual paid and demo route reads. PostgreSQL-owned
+`pg_locks` evidence binds each waiting relation lock to that exact relation
+and locker backend before the mounted surface collapses to
+invalidate its generation and release the lock. The completed older response cannot restore
+the cleared DOM; a subsequent ordinary guarded read recovers. The campaign does
+not wrap or replace `fetch` and registers no Playwright request/response route.
 
 Part 6D requires focused strict-contract and mounted PostgreSQL evidence through
 migration 272, plus the genuine paid/demo browser matrix. Migration 273 is not

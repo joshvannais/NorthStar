@@ -55,6 +55,16 @@ describe('Mission 27 Part 6D complete delivery and portal acceptance', () => {
       ['delivery_recovery','unavailable',false,null],
       ['mission28_broader_communication_handoff','unavailable',false,null],
     ]);
+    expect(value.delivery.requirements).toEqual([
+      { requirement:'exact_current_issued_document',state:'unavailable' },
+      { requirement:'reviewed_recipient_and_delivery_choice',state:'unavailable' },
+      { requirement:'customer_financial_invoice_send_capability',state:'unavailable' },
+      { requirement:'recent_auth_and_required_control',state:'unavailable' },
+      { requirement:'exact_delivery_idempotency',state:'unavailable' },
+      { requirement:'delivery_evidence_receipt',state:'unavailable' },
+      { requirement:'scoped_customer_access_revocation',state:'unavailable' },
+      { requirement:'mission28_broader_communication_adapter',state:'unavailable' },
+    ]);
     expect(value.document.state).toBe('unavailable');
     expect(value.publicSession.state).toBe('unavailable');
     expect(value.customerPortal.state).toBe('unavailable');
@@ -63,6 +73,11 @@ describe('Mission 27 Part 6D complete delivery and portal acceptance', () => {
     const bundle = contract.bundle(part5Bundle,value);
     expect(contract.projectBundle(JSON.parse(JSON.stringify(bundle)),mode)).toEqual(bundle);
     expect(() => contract.project({...value,messageSent:true},mode)).toThrow();
+    expect(() => contract.project({...value,delivery:{...value.delivery,
+      requirements:value.delivery.requirements.slice(0,-1)}},mode)).toThrow();
+    expect(() => contract.project({...value,delivery:{...value.delivery,
+      requirements:value.delivery.requirements.map((row,index)=>index===4?
+        {...row,requirement:'caller_claimed_idempotency'}:row)}},mode)).toThrow();
     expect(() => contract.bundle(part5Bundle,{...value,previewWitness:{...value.previewWitness,
       previewDigest:'c'.repeat(64)}})).toThrow();
   });
@@ -115,7 +130,12 @@ describe('Mission 27 Part 6D complete delivery and portal acceptance', () => {
     expect(ui).toContain('function invalidPart6(value)');
     expect(ui).toContain("value.contractVersion !== 'm27-invoice-part6-preview-bundle-v1'");
     expect(ui).toContain('Customer document, portal, and delivery');
+    expect(ui).toContain('Eight required delivery prerequisites');
+    for (const requirement of contract.REQUIREMENTS) expect(ui).toContain(requirement.requirement);
     expect(ui).not.toMatch(/button[^\n]*(?:send|resend|revoke|deliver invoice)/i);
+    const mountedBrowser=read('tests/browser/m27-part5e-mounted-acceptance.js');
+    expect(mountedBrowser).not.toMatch(/window\.fetch\s*=/);
+    expect(mountedBrowser).not.toMatch(/\.route\(|route\.fulfill|route\.continue/);
     const source=[read('src/customerFinancial/invoicePart6Acceptance.js'),
       read('src/customerFinancial/invoicePart6AcceptanceRepository.js'),
       read('src/customerFinancial/demoInvoicePart6Acceptance.js')].join('\n');

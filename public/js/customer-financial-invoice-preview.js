@@ -5,7 +5,7 @@
 }(typeof window !== 'undefined' ? window : globalThis, function () {
   'use strict';
 
-  var mountGeneration = 0;
+  var mountGeneration = 0, activeDemoMount = null;
   function node(tag, text, parent, className) {
     var value = document.createElement(tag); if (text !== undefined) value.textContent = text;
     if (parent) parent.appendChild(value); if (className) value.className = className; return value;
@@ -57,6 +57,11 @@
     return value && typeof value === 'object' && !Array.isArray(value) &&
       Object.keys(value).length === keys.length &&
       Object.keys(value).every(function (key) { return keys.includes(key); });
+  }
+  function matchesDemoWorkspaceRevision(preview, expectedRevision) {
+    return Number.isSafeInteger(expectedRevision) && expectedRevision >= 1 &&
+      !!preview && !!preview.draftIdentity &&
+      preview.draftIdentity.revision === expectedRevision;
   }
   function invalidPart7(value, expectedMode) {
     var witness = value && value.previewWitness, sources = value && value.sourceWitnesses;
@@ -312,6 +317,8 @@
     if (!review || !host || !review.pins || !review.pins.estimateId) return null;
     injectStyles(); var mountToken = ++mountGeneration, requestToken = 0, data = null,
       part5 = null, part6 = null, part7 = null, part9 = null, context = null;
+    var expectedDemoRevision = review.simulated ?
+      Number(document.documentElement.dataset.demoRevision) : null;
     var section = node('details', undefined, host, 'invoice-draft-preview');
     var summary = node('summary', review.simulated ? 'Review fictional invoice draft' : 'Review invoice draft', section);
     var body = node('div', undefined, section, 'invoice-draft-preview-body');
@@ -322,6 +329,12 @@
       status.setAttribute('role', alert ? 'alert' : 'status'); status.setAttribute('aria-live', 'polite');
       status.tabIndex = -1; status.focus(); return status;
     }
+    function invalidateDemoMount() {
+      requestToken += 1;
+      clearAndStatus('The invoice draft changed. Reload its exact current evidence.', true);
+    }
+    activeDemoMount = review.simulated ? { expectedRevision: expectedDemoRevision,
+      section: section, invalidate: invalidateDemoMount } : null;
     function invalid(value) {
       return !value || value.contractVersion !== 'm27-invoice-draft-preview-v1' ||
         value.state !== 'current' || value.sourceCurrent !== true ||
@@ -468,7 +481,9 @@
     }
     function mutate(url, value) {
       var token = ++requestToken; clearAndStatus('Saving the exact reviewed invoice draft…', false);
-      return post(url, value).then(function () { if (active(token)) load(); })
+      return post(url, value).then(function () { if (active(token)) {
+        if (!section.open) section.open = true; else load();
+      } })
         .catch(function (error) { if (active(token)) rejected(error); });
     }
     function renderOrigin(origin, capability, receipt) {
@@ -781,7 +796,9 @@
       var deliveryAcceptance = bundle && bundle.part6Acceptance;
       var paymentAcceptance = bundle && bundle.part7Acceptance;
       var part9Acceptance = bundle && bundle.part9Acceptance;
-      if (invalidBundle(bundle) || invalid(value) || invalidPart5(acceptance) ||
+      if (invalidBundle(bundle) || invalid(value) ||
+          (review.simulated && !matchesDemoWorkspaceRevision(value, expectedDemoRevision)) ||
+          invalidPart5(acceptance) ||
           invalidPart6(deliveryAcceptance) || !samePart5Witness(value, acceptance) ||
           !samePart6Witness(value, deliveryAcceptance) ||
           invalidPart7(paymentAcceptance, review.simulated ? 'demo' : 'paid') ||
@@ -882,7 +899,20 @@
     });
     return section;
   }
-  function clear() { mountGeneration += 1; }
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('northstar:demo-workspace', function (event) {
+      if (!activeDemoMount) return;
+      if (!activeDemoMount.section.isConnected) { activeDemoMount = null; return; }
+      var revision = Number(event && event.detail && event.detail.integrity &&
+        event.detail.integrity.revision);
+      if (revision !== activeDemoMount.expectedRevision) activeDemoMount.invalidate();
+    });
+  }
+  function clear() {
+    mountGeneration += 1;
+    if (activeDemoMount && activeDemoMount.section.isConnected) activeDemoMount.invalidate();
+    activeDemoMount = null;
+  }
   return { mount: mount, clear: clear, money: money, invalidPart7: invalidPart7,
-    invalidPart9: invalidPart9 };
+    invalidPart9: invalidPart9, matchesDemoWorkspaceRevision: matchesDemoWorkspaceRevision };
 }));

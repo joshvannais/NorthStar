@@ -112,6 +112,15 @@ describe('Mission 27 Part 9F complete Part 9 acceptance', () => {
     expect(invoicePreviewUi.invalidPart9(clone(canonical),'paid')).toBe(true);
   });
 
+  test('binds a demo mount to its exact workspace revision across reset', () => {
+    const preview=demo.bundle(demoItem(),1).preview;
+    expect(invoicePreviewUi.matchesDemoWorkspaceRevision(preview,1)).toBe(true);
+    expect(invoicePreviewUi.matchesDemoWorkspaceRevision(preview,2)).toBe(false);
+    expect(invoicePreviewUi.matchesDemoWorkspaceRevision({...preview,
+      draftIdentity:{...preview.draftIdentity,revision:2}},1)).toBe(false);
+    expect(invoicePreviewUi.matchesDemoWorkspaceRevision(preview,null)).toBe(false);
+  });
+
   test('revalidates the current Part 7 bundle on both sides of all Part 9 sources', async () => {
     const current = paidPart7(); const sources = contract.defaultSources(current);
     const repository = require('../../src/customerFinancial/paymentPart9AcceptanceRepository');

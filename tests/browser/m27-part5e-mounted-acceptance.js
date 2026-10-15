@@ -539,6 +539,7 @@ async function auditActualSurface(page, root, layout) {
       }
       const oldSummary = demoRoot.locator(':scope > summary'); await oldSummary.focus(); await oldSummary.press('Enter');
       await demoRoot.locator('table').waitFor({state:'detached',timeout:10000});
+      const oldDemoRevision=await demoPage.evaluate(() => Number(document.documentElement.dataset.demoRevision));
       const resetGraph = await demoPage.evaluate(async () => {
         const currentResponse=await fetch('/api/demo/command-center',{cache:'no-store'});
         const current=(await currentResponse.json()).data;
@@ -547,16 +548,20 @@ async function auditActualSurface(page, root, layout) {
             'X-NorthStar-Demo-Intent':'reset'},
           body:JSON.stringify({expectedRevision:current.integrity.revision})});
         const body=await response.json(); if(!response.ok||!body.success)throw new Error('demo reset failed');
-        return body.data.graphs[0];
+        return {...body.data.graphs[0],workspaceRevision:body.data.integrity.revision};
       });
+      assert.ok(resetGraph.workspaceRevision > oldDemoRevision);
       await oldSummary.focus(); await oldSummary.press('Enter');
-      await demoRoot.locator('[role=alert]').waitFor({timeout:30000});
+      const resetAlert=demoRoot.locator('[role=alert]'); await resetAlert.waitFor({timeout:30000});
+      assert.match(await resetAlert.textContent(), /changed|unavailable/i);
       assert.equal(await demoRoot.locator('table').count(),0);
       assert.equal(await demoRoot.locator('.invoice-part5-acceptance').count(),0);
       assert.equal(await demoRoot.locator('.invoice-part6-acceptance').count(),0);
       assert.equal(await demoRoot.locator('.invoice-part7-acceptance').count(),0);
       assert.equal(await demoRoot.locator('.invoice-part9-acceptance').count(),0);
       await demoPage.reload({waitUntil:'networkidle'});
+      assert.equal(await demoPage.evaluate(() => Number(document.documentElement.dataset.demoRevision)),
+        resetGraph.workspaceRevision);
       const recoveredDemoRoot=await openActualCustomerInvoice(demoPage,resetGraph.ids.customer);
       await recoveredDemoRoot.getByText('Fictional invoice draft — not issued',{exact:true})
         .waitFor({timeout:30000});

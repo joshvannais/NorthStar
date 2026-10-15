@@ -63,6 +63,18 @@
       !!preview && !!preview.draftIdentity &&
       preview.draftIdentity.revision === expectedRevision;
   }
+  function recoverAfterSuccessfulMutation(options) {
+    var defer = options.defer || function (callback) { setTimeout(callback, 0); };
+    return new Promise(function (resolve, reject) {
+      defer(function () {
+        if (!options.active()) { resolve(false); return; }
+        var reopened = !options.section.open;
+        if (reopened) { options.beforeOpen(); options.section.open = true; }
+        try { Promise.resolve(options.reload()).then(function () { resolve(reopened); }, reject); }
+        catch (error) { reject(error); }
+      });
+    });
+  }
   function invalidPart7(value, expectedMode) {
     var witness = value && value.previewWitness, sources = value && value.sourceWitnesses;
     var schema = value && value.adapterSchema, sandbox = value && value.sandbox;
@@ -317,6 +329,7 @@
     if (!review || !host || !review.pins || !review.pins.estimateId) return null;
     injectStyles(); var mountToken = ++mountGeneration, requestToken = 0, data = null,
       part5 = null, part6 = null, part7 = null, part9 = null, context = null;
+    var ignoreProgrammaticOpenToggle = false;
     var expectedDemoRevision = review.simulated ?
       Number(document.documentElement.dataset.demoRevision) : null;
     var section = node('details', undefined, host, 'invoice-draft-preview');
@@ -481,9 +494,11 @@
     }
     function mutate(url, value) {
       var token = ++requestToken; clearAndStatus('Saving the exact reviewed invoice draft…', false);
-      return post(url, value).then(function () { if (active(token)) {
-        if (!section.open) section.open = true; else load();
-      } })
+      return post(url, value).then(function () {
+        return recoverAfterSuccessfulMutation({ section: section,
+          active: function () { return active(token); },
+          beforeOpen: function () { ignoreProgrammaticOpenToggle = true; }, reload: load });
+      })
         .catch(function (error) { if (active(token)) rejected(error); });
     }
     function renderOrigin(origin, capability, receipt) {
@@ -894,7 +909,8 @@
     function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; context = null; body.replaceChildren(); }
     summary.addEventListener('click', function () { if (section.open) clearCollapsed(); });
     section.addEventListener('toggle', function () {
-      if (!section.open) { clearCollapsed(); return; }
+      if (!section.open) { ignoreProgrammaticOpenToggle = false; clearCollapsed(); return; }
+      if (ignoreProgrammaticOpenToggle) { ignoreProgrammaticOpenToggle = false; return; }
       load();
     });
     return section;
@@ -914,5 +930,6 @@
     activeDemoMount = null;
   }
   return { mount: mount, clear: clear, money: money, invalidPart7: invalidPart7,
-    invalidPart9: invalidPart9, matchesDemoWorkspaceRevision: matchesDemoWorkspaceRevision };
+    invalidPart9: invalidPart9, matchesDemoWorkspaceRevision: matchesDemoWorkspaceRevision,
+    recoverAfterSuccessfulMutation: recoverAfterSuccessfulMutation };
 }));

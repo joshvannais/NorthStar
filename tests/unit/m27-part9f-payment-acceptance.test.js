@@ -121,6 +121,27 @@ describe('Mission 27 Part 9F complete Part 9 acceptance', () => {
     expect(invoicePreviewUi.matchesDemoWorkspaceRevision(preview,null)).toBe(false);
   });
 
+  test('defers keyboard mutation recovery, reopens a collapsed disclosure, and reloads once', async () => {
+    const section={open:false}; let beforeOpen=0; let reloads=0; let deferred=0;
+    const reopened=await invoicePreviewUi.recoverAfterSuccessfulMutation({section,
+      active:()=>true, beforeOpen:()=>{beforeOpen+=1;}, reload:()=>{reloads+=1;},
+      defer:callback=>{deferred+=1; callback();}});
+    expect({reopened,open:section.open,beforeOpen,reloads,deferred})
+      .toEqual({reopened:true,open:true,beforeOpen:1,reloads:1,deferred:1});
+
+    beforeOpen=0; reloads=0;
+    const alreadyOpen=await invoicePreviewUi.recoverAfterSuccessfulMutation({section,
+      active:()=>true, beforeOpen:()=>{beforeOpen+=1;}, reload:()=>{reloads+=1;},
+      defer:callback=>callback()});
+    expect({alreadyOpen,beforeOpen,reloads}).toEqual({alreadyOpen:false,beforeOpen:0,reloads:1});
+
+    section.open=false; reloads=0;
+    const stale=await invoicePreviewUi.recoverAfterSuccessfulMutation({section,
+      active:()=>false, beforeOpen:()=>{beforeOpen+=1;}, reload:()=>{reloads+=1;},
+      defer:callback=>callback()});
+    expect({stale,open:section.open,reloads}).toEqual({stale:false,open:false,reloads:0});
+  });
+
   test('revalidates the current Part 7 bundle on both sides of all Part 9 sources', async () => {
     const current = paidPart7(); const sources = contract.defaultSources(current);
     const repository = require('../../src/customerFinancial/paymentPart9AcceptanceRepository');

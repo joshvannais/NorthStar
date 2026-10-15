@@ -49,6 +49,8 @@ const { createCustomerFinancialProviderConnectionRouter } =
   require('./routes/customerFinancialProviderConnection');
 const { createCustomerFinancialProviderEventReceiptRouter } =
   require('./routes/customerFinancialProviderEventReceipt');
+const { createCustomerFinancialProviderEventNormalizationRouter } =
+  require('./routes/customerFinancialProviderEventNormalization');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -382,6 +384,8 @@ app.use('/api/v1/customer-financial/payment-provider/connection',
   createCustomerFinancialProviderConnectionRouter());
 app.use('/api/v1/customer-financial/payment-provider/event-receipt',
   createCustomerFinancialProviderEventReceiptRouter());
+app.use('/api/v1/customer-financial/payment-provider/event-normalization',
+  createCustomerFinancialProviderEventNormalizationRouter());
 app.use('/api/v1/customer-financial/payment-provider',
   createCustomerFinancialPaymentProviderRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());

@@ -125,10 +125,10 @@ describe('Mission 27 Part 6D complete delivery and portal acceptance', () => {
     expect(paid).not.toContain("router.post('/:estimateId/invoice-part6-acceptance'");
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part6-acceptance'");
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part6-acceptance'");
-    expect(ui).toContain("'/invoice-part6-acceptance?");
-    expect(ui).toContain("'/part6-acceptance'");
+    expect(ui).toContain("'/payment-part7-acceptance?");
+    expect(ui).toContain("'/part7-acceptance'");
     expect(ui).toContain('function invalidPart6(value)');
-    expect(ui).toContain("value.contractVersion !== 'm27-invoice-part6-preview-bundle-v1'");
+    expect(ui).toContain("value.contractVersion !== 'm27-payment-part7-preview-bundle-v1'");
     expect(ui).toContain('Customer document, portal, and delivery');
     expect(ui).toContain('Eight required delivery prerequisites');
     for (const requirement of contract.REQUIREMENTS) expect(ui).toContain(requirement.requirement);

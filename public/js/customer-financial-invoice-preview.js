@@ -43,20 +43,20 @@
   function injectStyles() {
     if (document.getElementById('customerFinancialInvoicePreviewStyles')) return;
     var style = node('style'); style.id = 'customerFinancialInvoicePreviewStyles';
-    style.textContent = '.invoice-draft-preview{margin-top:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.invoice-draft-preview>summary{padding:1rem;font-weight:700;cursor:pointer}.invoice-draft-preview-body{padding:0 1rem 1rem}.invoice-draft-preview-status:focus,.invoice-draft-preview-heading:focus,.invoice-draft-preview button:focus,.invoice-draft-preview input:focus,.invoice-draft-preview textarea:focus,.invoice-draft-tax-evidence>summary:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}.invoice-draft-preview-document,.invoice-draft-workflow-step,.invoice-part5-acceptance,.invoice-part6-acceptance{border:1px solid var(--border-color,#d6d7db);border-radius:12px;padding:1rem;background:var(--surface-subtle,#f7f5ef)}.invoice-draft-preview-demo{display:inline-block;padding:.25rem .55rem;border-radius:999px;background:#f3d57b;color:#241b00;font-weight:750}.invoice-draft-preview-lines{width:100%;border-collapse:collapse;margin:.75rem 0}.invoice-draft-preview-lines th,.invoice-draft-preview-lines td{padding:.55rem;text-align:left;border-bottom:1px solid var(--border-color,#d6d7db);vertical-align:top;overflow-wrap:anywhere}.invoice-draft-preview-lines th:last-child,.invoice-draft-preview-lines td:last-child{text-align:right}.invoice-draft-preview-totals{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.45rem 1rem;max-width:30rem;margin-left:auto}.invoice-draft-preview-totals dt{font-weight:650}.invoice-draft-preview-totals dd{margin:0;text-align:right}.invoice-draft-preview-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.invoice-draft-preview-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}.invoice-part5-acceptance,.invoice-part6-acceptance{margin-top:1rem}.invoice-part5-gates,.invoice-part6-gates{display:grid;grid-template-columns:minmax(9rem,auto) minmax(0,1fr);gap:.35rem .8rem}.invoice-part5-gates dt,.invoice-part6-gates dt{font-weight:700}.invoice-part5-gates dd,.invoice-part6-gates dd{margin:0;overflow-wrap:anywhere}.invoice-part5-axes,.invoice-part5-corrections,.invoice-part6-requirements,.invoice-part6-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem 1.2rem;padding-left:1.2rem}.invoice-part6-requirements li,.invoice-part6-actions li{overflow-wrap:anywhere}.invoice-part5-subheading,.invoice-part6-subheading{margin-bottom:.4rem}.invoice-draft-workflow-form,.invoice-draft-workflow-field{display:grid;gap:.6rem}.invoice-draft-workflow-line{display:grid;grid-template-columns:minmax(9rem,1fr) minmax(12rem,2fr) auto;gap:.6rem;align-items:end;margin:.7rem 0}.invoice-draft-workflow-line label{display:grid;gap:.3rem}.invoice-draft-workflow-form textarea{min-height:5rem}.invoice-draft-tax-evidence{margin:.75rem 0;border-block:1px solid var(--border-color,#d6d7db);padding:.65rem 0}.invoice-draft-tax-evidence>summary{font-weight:700;cursor:pointer}.invoice-draft-tax-evidence dl{display:grid;grid-template-columns:minmax(10rem,auto) minmax(0,1fr);gap:.35rem .75rem}.invoice-draft-tax-evidence dt{font-weight:650}.invoice-draft-tax-evidence dd{margin:0;overflow-wrap:anywhere}.invoice-draft-tax-gaps{margin:.35rem 0}.invoice-draft-tax-provenance{max-width:24rem}@media(max-width:680px){.invoice-draft-preview{border-radius:10px}.invoice-draft-preview-lines thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.invoice-draft-preview-lines tr{display:grid;padding:.65rem 0;border-bottom:1px solid var(--border-color,#d6d7db)}.invoice-draft-preview-lines td{display:flex;justify-content:space-between;gap:1rem;border:0;padding:.2rem 0;text-align:right}.invoice-draft-preview-lines td:before{content:attr(data-label);font-weight:650;text-align:left}.invoice-draft-preview-actions .btn{width:100%}.invoice-part5-gates,.invoice-part5-axes,.invoice-part5-corrections,.invoice-part6-gates,.invoice-part6-requirements,.invoice-part6-actions{grid-template-columns:1fr}.invoice-draft-workflow-line{grid-template-columns:1fr}.invoice-draft-workflow-line .invoice-draft-workflow-amount{justify-self:start}.invoice-draft-tax-evidence dl{grid-template-columns:1fr}.invoice-draft-tax-evidence dd{margin-bottom:.45rem}}@media(forced-colors:active){.invoice-draft-preview,.invoice-draft-preview-document,.invoice-draft-workflow-step,.invoice-part5-acceptance,.invoice-part6-acceptance{border:2px solid CanvasText}.invoice-draft-preview-demo{border:1px solid CanvasText}}';
+    style.textContent = '.invoice-draft-preview{margin-top:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.invoice-draft-preview>summary{padding:1rem;font-weight:700;cursor:pointer}.invoice-draft-preview-body{padding:0 1rem 1rem}.invoice-draft-preview-status:focus,.invoice-draft-preview-heading:focus,.invoice-draft-preview button:focus,.invoice-draft-preview input:focus,.invoice-draft-preview textarea:focus,.invoice-draft-tax-evidence>summary:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}.invoice-draft-preview-document,.invoice-draft-workflow-step,.invoice-part5-acceptance,.invoice-part6-acceptance,.invoice-part7-acceptance{border:1px solid var(--border-color,#d6d7db);border-radius:12px;padding:1rem;background:var(--surface-subtle,#f7f5ef)}.invoice-draft-preview-demo{display:inline-block;padding:.25rem .55rem;border-radius:999px;background:#f3d57b;color:#241b00;font-weight:750}.invoice-draft-preview-lines{width:100%;border-collapse:collapse;margin:.75rem 0}.invoice-draft-preview-lines th,.invoice-draft-preview-lines td{padding:.55rem;text-align:left;border-bottom:1px solid var(--border-color,#d6d7db);vertical-align:top;overflow-wrap:anywhere}.invoice-draft-preview-lines th:last-child,.invoice-draft-preview-lines td:last-child{text-align:right}.invoice-draft-preview-totals{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.45rem 1rem;max-width:30rem;margin-left:auto}.invoice-draft-preview-totals dt{font-weight:650}.invoice-draft-preview-totals dd{margin:0;text-align:right}.invoice-draft-preview-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.invoice-draft-preview-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}.invoice-part5-acceptance,.invoice-part6-acceptance,.invoice-part7-acceptance{margin-top:1rem}.invoice-part5-gates,.invoice-part6-gates,.invoice-part7-gates{display:grid;grid-template-columns:minmax(9rem,auto) minmax(0,1fr);gap:.35rem .8rem}.invoice-part5-gates dt,.invoice-part6-gates dt,.invoice-part7-gates dt{font-weight:700}.invoice-part5-gates dd,.invoice-part6-gates dd,.invoice-part7-gates dd{margin:0;overflow-wrap:anywhere}.invoice-part5-axes,.invoice-part5-corrections,.invoice-part6-requirements,.invoice-part6-actions,.invoice-part7-requirements,.invoice-part7-methods,.invoice-part7-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem 1.2rem;padding-left:1.2rem}.invoice-part6-requirements li,.invoice-part6-actions li,.invoice-part7-requirements li,.invoice-part7-methods li,.invoice-part7-controls li{overflow-wrap:anywhere}.invoice-part5-subheading,.invoice-part6-subheading,.invoice-part7-subheading{margin-bottom:.4rem}.invoice-draft-workflow-form,.invoice-draft-workflow-field{display:grid;gap:.6rem}.invoice-draft-workflow-line{display:grid;grid-template-columns:minmax(9rem,1fr) minmax(12rem,2fr) auto;gap:.6rem;align-items:end;margin:.7rem 0}.invoice-draft-workflow-line label{display:grid;gap:.3rem}.invoice-draft-workflow-form textarea{min-height:5rem}.invoice-draft-tax-evidence{margin:.75rem 0;border-block:1px solid var(--border-color,#d6d7db);padding:.65rem 0}.invoice-draft-tax-evidence>summary{font-weight:700;cursor:pointer}.invoice-draft-tax-evidence dl{display:grid;grid-template-columns:minmax(10rem,auto) minmax(0,1fr);gap:.35rem .75rem}.invoice-draft-tax-evidence dt{font-weight:650}.invoice-draft-tax-evidence dd{margin:0;overflow-wrap:anywhere}.invoice-draft-tax-gaps{margin:.35rem 0}.invoice-draft-tax-provenance{max-width:24rem}@media(max-width:680px){.invoice-draft-preview{border-radius:10px}.invoice-draft-preview-lines thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.invoice-draft-preview-lines tr{display:grid;padding:.65rem 0;border-bottom:1px solid var(--border-color,#d6d7db)}.invoice-draft-preview-lines td{display:flex;justify-content:space-between;gap:1rem;border:0;padding:.2rem 0;text-align:right}.invoice-draft-preview-lines td:before{content:attr(data-label);font-weight:650;text-align:left}.invoice-draft-preview-actions .btn{width:100%}.invoice-part5-gates,.invoice-part5-axes,.invoice-part5-corrections,.invoice-part6-gates,.invoice-part6-requirements,.invoice-part6-actions,.invoice-part7-gates,.invoice-part7-requirements,.invoice-part7-methods,.invoice-part7-controls{grid-template-columns:1fr}.invoice-draft-workflow-line{grid-template-columns:1fr}.invoice-draft-workflow-line .invoice-draft-workflow-amount{justify-self:start}.invoice-draft-tax-evidence dl{grid-template-columns:1fr}.invoice-draft-tax-evidence dd{margin-bottom:.45rem}}@media(forced-colors:active){.invoice-draft-preview,.invoice-draft-preview-document,.invoice-draft-workflow-step,.invoice-part5-acceptance,.invoice-part6-acceptance,.invoice-part7-acceptance{border:2px solid CanvasText}.invoice-draft-preview-demo{border:1px solid CanvasText}}';
     document.head.appendChild(style);
   }
   function mount(review, host) {
     if (!review || !host || !review.pins || !review.pins.estimateId) return null;
     injectStyles(); var mountToken = ++mountGeneration, requestToken = 0, data = null,
-      part5 = null, part6 = null, context = null;
+      part5 = null, part6 = null, part7 = null, context = null;
     var section = node('details', undefined, host, 'invoice-draft-preview');
     var summary = node('summary', review.simulated ? 'Review fictional invoice draft' : 'Review invoice draft', section);
     var body = node('div', undefined, section, 'invoice-draft-preview-body');
     var base = '/api/v1/customer-financial/editable-estimates/' + encodeURIComponent(review.pins.estimateId);
     function active(token) { return token === requestToken && mountToken === mountGeneration && section.isConnected; }
     function clearAndStatus(text, alert) {
-      data = null; part5 = null; part6 = null; context = null; body.replaceChildren(); var status = node('p', text, body, 'invoice-draft-preview-status');
+      data = null; part5 = null; part6 = null; part7 = null; context = null; body.replaceChildren(); var status = node('p', text, body, 'invoice-draft-preview-status');
       status.setAttribute('role', alert ? 'alert' : 'status'); status.setAttribute('aria-live', 'polite');
       status.tabIndex = -1; status.focus(); return status;
     }
@@ -168,11 +168,72 @@
       return !!identity && !!witness && identity.revision === witness.draftRevision &&
         identity.draftDigest === witness.draftDigest && preview.previewDigest === witness.previewDigest;
     }
+    function invalidPart7(value) {
+      var witness = value && value.previewWitness, sources = value && value.sourceWitnesses;
+      var schema = value && value.adapterSchema, sandbox = value && value.sandbox;
+      var rollout = value && value.rollout, drift = value && value.driftAndDisconnect;
+      var protections = value && value.protections, access = value && value.access;
+      var requirementNames = ['exact_current_launch_policy','tenant_bound_test_provider_connection',
+        'current_provider_capability_grant','recent_authentication_and_mfa',
+        'compatible_adapter_schema','provider_sandbox_journey_evidence',
+        'exact_current_issued_balance','current_scoped_customer_session',
+        'exact_payment_idempotency_receipt','server_owned_rollout_flag'];
+      var denied = [value?.providerSandboxAccepted,value?.providerConnectionCurrent,
+        value?.paymentPlanCurrent,value?.paymentInitiationAuthorized,value?.providerSessionCreated,
+        value?.paymentSuccessRecorded,value?.settlementRecorded];
+      return !value || value.contractVersion !== 'm27-payment-part7-acceptance-v1' ||
+        value.state !== 'unavailable' || value.reason !== 'provider_sandbox_evidence_unavailable' ||
+        value.mode !== (review.simulated ? 'demo' : 'paid') || value.fictional !== !!review.simulated ||
+        witness?.contractVersion !== 'm27-invoice-part5-preview-witness-v1' ||
+        !/^[0-9a-f]{64}$/.test(witness.draftDigest || '') ||
+        !/^[0-9a-f]{64}$/.test(witness.previewDigest || '') ||
+        sources?.providerBoundaryContractVersion !== 'm27-payment-provider-boundary-v1' ||
+        sources?.providerConnectionContractVersion !== 'm27-payment-provider-connection-v1' ||
+        sources?.paymentInitiationContractVersion !== 'm27-payment-initiation-plan-v1' ||
+        [sources?.providerBoundaryDigest,sources?.providerConnectionDigest,
+          sources?.paymentInitiationDigest].some(function (digest) { return !/^[0-9a-f]{64}$/.test(digest || ''); }) ||
+        !Array.isArray(value.requirements) || value.requirements.length !== requirementNames.length ||
+        value.requirements.some(function (item,index) {
+          return !item || item.requirement !== requirementNames[index] ||
+            !['current','unavailable','not_created','disabled'].includes(item.state);
+        }) || schema?.contractVersion !== 'm27-payment-provider-adapter-schema-v1' ||
+        schema.state !== 'unavailable' || schema.value !== null || schema.mode !== 'test' ||
+        schema.acceptedMajorVersion !== 1 || schema.minimumSupportedMinorVersion !== 0 ||
+        schema.maximumTestedMinorVersion !== 0 || schema.unknownRequiredFieldAccepted !== false ||
+        schema.unknownOptionalFieldMayAuthorizeEffect !== false ||
+        schema.providerPayloadMayMarkInvoicePaid !== false ||
+        sandbox?.state !== 'unavailable' || sandbox.value !== null ||
+        sandbox.requiredForMissionCompletion !== true || sandbox.evidenceAccepted !== false ||
+        sandbox.syntheticEvidenceMaySubstitute !== false || rollout?.stage !== 'disabled' ||
+        rollout.tenantFlagDefault !== 'off' || rollout.tenantFlagEnabled !== false ||
+        rollout.featureFlagRollbackState !== 'active' || rollout.liveCapabilityEnabled !== false ||
+        drift?.capabilityDriftBehavior !== 'deny_and_require_current_reauthorization' ||
+        drift.disconnectBehavior !== 'deny_new_initiation_and_clear_provider_state' ||
+        !Array.isArray(value.methods) || value.methods.length !== 2 ||
+        value.methods[0]?.method !== 'card' || value.methods[0].runtimeState !== 'unavailable' ||
+        value.methods[1]?.method !== 'any_other_online_method' ||
+        value.methods[1].runtimeState !== 'unsupported' ||
+        protections?.duplicateClickRequiresSameIdempotencyReceipt !== true ||
+        protections.changedRequestUnderSameIdempotencyKeyConflicts !== true ||
+        protections.amountCurrencyInvoiceOrAllocationChangeInvalidatesPlan !== true ||
+        protections.stalePlanMayReachProvider !== false ||
+        access?.staffReadRoles?.join(',') !== 'owner,admin' ||
+        access.providerConnectionRole !== 'owner' || access.tenantCrossingAllowed !== false ||
+        value.exactCurrentnessRevalidated !== true || denied.some(function (item) { return item !== false; }) ||
+        value.providerCallCount !== 0 || value.providerMutationCount !== 0 ||
+        value.receiverMutationCount !== 0 || value.liveMoneyMovementCount !== 0;
+    }
+    function samePart7Witness(preview, acceptance) {
+      var identity = preview && preview.draftIdentity, witness = acceptance && acceptance.previewWitness;
+      return !!identity && !!witness && identity.revision === witness.draftRevision &&
+        identity.draftDigest === witness.draftDigest && preview.previewDigest === witness.previewDigest;
+    }
     function invalidBundle(value) {
-      return !value || value.contractVersion !== 'm27-invoice-part6-preview-bundle-v1' ||
-        Object.keys(value).length !== 4 || !Object.prototype.hasOwnProperty.call(value, 'preview') ||
+      return !value || value.contractVersion !== 'm27-payment-part7-preview-bundle-v1' ||
+        Object.keys(value).length !== 5 || !Object.prototype.hasOwnProperty.call(value, 'preview') ||
         !Object.prototype.hasOwnProperty.call(value, 'part5Acceptance') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part6Acceptance');
+        !Object.prototype.hasOwnProperty.call(value, 'part6Acceptance') ||
+        !Object.prototype.hasOwnProperty.call(value, 'part7Acceptance');
     }
     function workflowHeading(text) {
       body.replaceChildren(); var card = node('section', undefined, body, 'invoice-draft-workflow-step');
@@ -373,14 +434,65 @@
         'No customer credential, message, delivery receipt, revocation, provider call, receiver mutation, or money action was created.',
         card, value.fictional ? 'invoice-draft-preview-demo' : 'invoice-draft-preview-boundary');
     }
+    function renderPart7(value) {
+      var card = node('section', undefined, body, 'invoice-part7-acceptance');
+      var headingId = 'invoicePart7AcceptanceHeading-' + String(mountToken);
+      card.setAttribute('aria-labelledby', headingId);
+      var heading = node('h5', 'Payment provider and initiation', card,
+        'invoice-part7-acceptance-heading'); heading.id = headingId;
+      node('p', 'NorthStar rechecked the complete payment-provider boundary. Sandbox proof, connection authority, compatible adapter runtime, customer checkout, payment success, and settlement remain unavailable. Live payment capability stays off.',
+        card, 'invoice-draft-preview-boundary');
+      var gates = node('dl', undefined, card, 'invoice-part7-gates');
+      [['Provider sandbox',value.sandbox.reason],
+        ['Provider connection','provider_connection_prerequisites_unavailable'],
+        ['Payment initiation','issued_invoice_unavailable'],
+        ['Rollout',value.rollout.stage + ' · tenant flag ' + value.rollout.tenantFlagDefault]]
+        .forEach(function (entry) { node('dt', entry[0], gates);
+          node('dd', entry[0] === 'Rollout' ? entry[1] : 'Unavailable · ' + entry[1], gates); });
+      var requirementHeading = node('h6', 'Ten exact payment prerequisites', card,
+        'invoice-part7-subheading'); requirementHeading.className = 'invoice-part7-subheading';
+      var requirements = node('ul', undefined, card, 'invoice-part7-requirements');
+      value.requirements.forEach(function (requirement) {
+        node('li', requirement.requirement + ' · ' + requirement.state +
+          (requirement.reason ? ' · ' + requirement.reason : ''), requirements);
+      });
+      var schema = value.adapterSchema;
+      var schemaHeading = node('h6', 'Adapter compatibility and rollback controls', card,
+        'invoice-part7-subheading'); schemaHeading.className = 'invoice-part7-subheading';
+      var controls = node('ul', undefined, card, 'invoice-part7-controls');
+      [
+        'Schema major ' + schema.acceptedMajorVersion + ', tested minor ' + schema.maximumTestedMinorVersion +
+          ' · runtime unavailable',
+        'Unknown required fields cannot authorize an effect',
+        'Optional output cannot authorize an effect',
+        'Capability drift · deny and require current reauthorization',
+        'Disconnect · deny new initiation and clear provider state',
+        'Feature flag rollback · blocks new initiation and cannot mark an invoice paid',
+        'Duplicate click · exact idempotency receipt required',
+        'Amount, currency, invoice, or allocation change · invalidate the plan',
+      ].forEach(function (text) { node('li', text, controls); });
+      var methodsHeading = node('h6', 'Payment method states', card,
+        'invoice-part7-subheading'); methodsHeading.className = 'invoice-part7-subheading';
+      var methods = node('ul', undefined, card, 'invoice-part7-methods');
+      value.methods.forEach(function (method) {
+        node('li', method.method + ' · ' + method.policyState + ' · ' + method.runtimeState +
+          ' · ' + method.reason, methods);
+      });
+      node('p', (value.fictional ? 'Fictional demo boundary. ' : '') +
+        'No provider account, credential, checkout, payment event, receiver mutation, or money movement was created. Sandbox evidence remains required and synthetic evidence cannot substitute.',
+        card, value.fictional ? 'invoice-draft-preview-demo' : 'invoice-draft-preview-boundary');
+    }
     function render(bundle) {
       var value = bundle && bundle.preview, acceptance = bundle && bundle.part5Acceptance;
       var deliveryAcceptance = bundle && bundle.part6Acceptance;
+      var paymentAcceptance = bundle && bundle.part7Acceptance;
       if (invalidBundle(bundle) || invalid(value) || invalidPart5(acceptance) ||
           invalidPart6(deliveryAcceptance) || !samePart5Witness(value, acceptance) ||
-          !samePart6Witness(value, deliveryAcceptance)) return rejected({ status: 409,
+          invalidPart7(paymentAcceptance) || !samePart6Witness(value, deliveryAcceptance) ||
+          !samePart7Witness(value, paymentAcceptance)) return rejected({ status: 409,
         message: 'The exact invoice draft changed. Reload its current evidence.' });
-      data = value; part5 = acceptance; part6 = deliveryAcceptance; body.replaceChildren(); var preview = value.documentPreview, totals = value.reconciliation;
+      data = value; part5 = acceptance; part6 = deliveryAcceptance; part7 = paymentAcceptance;
+      body.replaceChildren(); var preview = value.documentPreview, totals = value.reconciliation;
       var heading = node('h4', preview.label, body, 'invoice-draft-preview-heading'); heading.tabIndex = -1;
       if (value.fictional) node('p', 'Fictional demo · no customer, provider, invoice, receivable, or money action', body,
         'invoice-draft-preview-demo');
@@ -404,6 +516,7 @@
       node('p','PDF and immutable customer-facing document generation begin in their owning later slices. No provider or receiver was called.',body,'invoice-draft-preview-boundary');
       renderPart5(acceptance);
       renderPart6(deliveryAcceptance);
+      renderPart7(paymentAcceptance);
       var actions = node('div', undefined, body, 'invoice-draft-preview-actions');
       var reload = node('button','Reload current preview',actions,'btn btn-secondary'); reload.type='button'; reload.onclick=load;
       if (!value.fictional && context?.draft) { var edit = node('button','Edit current invoice draft',actions,'btn btn-secondary');
@@ -450,18 +563,18 @@
         if (tax.state === 'ready_to_record') { renderTax(tax, capability, receipt, draft); return null; }
         if (tax.state !== 'recorded_policy_unavailable') throw { status: 409 };
         context = { capability: capability, receipt: receipt, draft: draft, tax: tax };
-        return request(base + '/invoice-part6-acceptance?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
+        return request(base + '/payment-part7-acceptance?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
           '&handoffReceiptDigest=' + encodeURIComponent(receipt.receiptDigest));
       });
     }
     function load() {
       var token = ++requestToken; clearAndStatus('Loading the exact current invoice draft…', false);
       var demoBase = '/api/demo/customer-financial/invoice-drafts/' + encodeURIComponent(review.pins.estimateId);
-      var promise = review.simulated ? request(demoBase + '/part6-acceptance') : loadPaid(token);
+      var promise = review.simulated ? request(demoBase + '/part7-acceptance') : loadPaid(token);
       return promise.then(function (value) { if (value && active(token)) render(value); })
         .catch(function (error) { if (active(token)) rejected(error); });
     }
-    function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; context = null; body.replaceChildren(); }
+    function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; context = null; body.replaceChildren(); }
     summary.addEventListener('click', function () { if (section.open) clearCollapsed(); });
     section.addEventListener('toggle', function () {
       if (!section.open) { clearCollapsed(); return; }

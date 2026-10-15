@@ -48,6 +48,10 @@ applicable to Part 7C.
 Issued invoice authority, customer token/session, tenant provider connection,
 provider checkout, sandbox/private production, legal/provider/security review,
 payment events, success, settlement, payout, reconciliation and live money
-remain unavailable. Part 7D and Parts 8–14 remain unstarted. Live-money
-validation stays deferred until the first real paying customer, and founder
-visual approval remains separate.
+remain unavailable. Part 7C was accepted at head
+`4f7f409e284a77932511d1951740918dfd697db4`, merged as PR #506 to exact main
+`85129675ce0c1e13065255ef2dc85cc862963540`, and released through deployment
+`5e56eb5e-0fbc-4f46-b82e-7620641b34f0` with migration 272 latest and health,
+root and demo HTTP 200. Part 7D is the current candidate; Parts 8–14 remain
+unstarted. Live-money validation stays deferred until the first real paying
+customer, and founder visual approval remains separate.

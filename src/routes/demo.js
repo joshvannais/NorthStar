@@ -50,6 +50,7 @@ const demoInvoiceCustomerPortal = require('../customerFinancial/demoInvoiceCusto
 const demoInvoicePart6Acceptance = require('../customerFinancial/demoInvoicePart6Acceptance');
 const demoPaymentPart7Acceptance = require('../customerFinancial/demoPaymentPart7Acceptance');
 const demoPaymentPart9Acceptance = require('../customerFinancial/demoPaymentPart9Acceptance');
+const demoCollectionPart10Acceptance = require('../customerFinancial/demoCollectionPart10Acceptance');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -505,6 +506,32 @@ router.get('/customer-financial/invoice-drafts/:estimateId/part9-acceptance', as
         message: 'That fictional Part 9 financial journey is unavailable.' } });
     return res.json({ success: true,
       data: demoPaymentPart9Acceptance.bundle(item, record.revision) });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.all('/customer-financial/invoice-drafts/:estimateId/part10-acceptance', function (req, res, next) {
+  if (req.method === 'GET') return next();
+  res.set('Allow', 'GET');
+  return res.status(405).json({ success: false, error: {
+    code: 'demo_collection_part10_method_not_allowed',
+    message: 'Use the exact fictional Part 10 collection acceptance read boundary.',
+  } });
+});
+
+router.get('/customer-financial/invoice-drafts/:estimateId/part10-acceptance', async function (req, res) {
+  res.set('Cache-Control', 'private, no-store'); res.vary('Cookie');
+  if (Object.keys(req.query).length) return res.status(400).json({ success: false,
+    error: { code: 'demo_collection_part10_request_invalid',
+      message: 'Choose one fictional Part 10 collection journey.' } });
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    const item = demoCanonicalItems(demoWorkspace(record))
+      .find(candidate => candidate.ids.estimate === req.params.estimateId);
+    if (!item) return res.status(404).json({ success: false,
+      error: { code: 'demo_collection_part10_unavailable',
+        message: 'That fictional Part 10 collection journey is unavailable.' } });
+    return res.json({ success: true,
+      data: demoCollectionPart10Acceptance.bundle(item, record.revision) });
   } catch (error) { return commandCenterFailure(req, res, error); }
 });
 

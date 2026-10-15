@@ -51,6 +51,13 @@
       '.invoice-part9-sources li,.invoice-part9-controls li{overflow-wrap:anywhere}' +
       '@media(max-width:680px){.invoice-part9-gates,.invoice-part9-sources,.invoice-part9-controls{grid-template-columns:1fr}}' +
       '@media(forced-colors:active){.invoice-part9-acceptance{border:2px solid CanvasText}}';
+    style.textContent += '.invoice-part10-acceptance{border:1px solid var(--border-color,#d6d7db);border-radius:12px;padding:1rem;background:var(--surface-subtle,#f7f5ef);margin-top:1rem}' +
+      '.invoice-part10-gates{display:grid;grid-template-columns:minmax(9rem,auto) minmax(0,1fr);gap:.35rem .8rem}' +
+      '.invoice-part10-gates dt{font-weight:700}.invoice-part10-gates dd{margin:0;overflow-wrap:anywhere}' +
+      '.invoice-part10-sources,.invoice-part10-failures,.invoice-part10-revocations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem 1.2rem;padding-left:1.2rem}' +
+      '.invoice-part10-sources li,.invoice-part10-failures li,.invoice-part10-revocations li{overflow-wrap:anywhere}' +
+      '@media(max-width:680px){.invoice-part10-gates,.invoice-part10-sources,.invoice-part10-failures,.invoice-part10-revocations{grid-template-columns:1fr}}' +
+      '@media(forced-colors:active){.invoice-part10-acceptance{border:2px solid CanvasText}}';
     document.head.appendChild(style);
   }
   function exactObject(value, keys) {
@@ -69,7 +76,8 @@
       defer(function () {
         if (!options.active()) { resolve(false); return; }
         var reopened = !options.section.open;
-        if (reopened) { options.beforeOpen(); options.section.open = true; }
+        options.beforeOpen();
+        if (reopened) options.section.open = true;
         try { Promise.resolve(options.reload()).then(function () { resolve(reopened); }, reject); }
         catch (error) { reject(error); }
       });
@@ -325,11 +333,120 @@
       acceptance.founderVisualApprovalAccepted !== false ||
       value.exactCurrentnessRevalidated !== true || counts.some(function (count) { return count !== 0; });
   }
+  function invalidPart10(value, expectedMode) {
+    var witness = value && value.previewWitness, part9Witness = value && value.part9Witness;
+    var failure = value && value.failureRetry, revocation = value && value.revocation;
+    var access = value && value.access, privacy = value && value.privacy;
+    var acceptance = value && value.acceptance;
+    var expectedParts = [
+      ['10A','m27-receivable-aging-v1','incomplete','receivable_population_incomplete'],
+      ['10B','m27-collection-review-v1','unavailable','receivable_population_incomplete'],
+      ['10C','m27-collection-handoff-readiness-v1','unavailable','receivable_population_incomplete'],
+    ];
+    var expectedFailures = ['source_unavailable','source_changed','request_rejected',
+      'retry_currentness_unknown','cooldown_unknown','receiver_unavailable','delivery_evidence_unknown'];
+    var expectedRevocations = ['issued_invoice_or_document','scoped_customer_session',
+      'reviewed_recipient','delivery_authority','provider_checkout_session',
+      'collection_capability','mission28_receiver','idempotency_receipt'];
+    var counts = value && [value.receivableRowCount,value.collectionReviewRowCount,
+      value.promiseToPayRowCount,value.handoffRequestRowCount,value.manualResendRequestRowCount,
+      value.outboundMessageCount,value.providerCallCount,value.providerMutationCount,
+      value.receiverMutationCount,value.accountingMutationCount,value.liveMoneyMovementCount];
+    return !exactObject(value,['contractVersion','policyVersion','policyDigest','state','reason',
+      'mode','fictional','previewWitness','part9Witness','sourceParts','failureRetry','revocation',
+      'access','privacy','acceptance','exactCurrentnessRevalidated','receivableRowCount',
+      'collectionReviewRowCount','promiseToPayRowCount','handoffRequestRowCount',
+      'manualResendRequestRowCount','outboundMessageCount','providerCallCount',
+      'providerMutationCount','receiverMutationCount','accountingMutationCount',
+      'liveMoneyMovementCount']) || value.contractVersion !== 'm27-collection-part10-acceptance-v1' ||
+      value.policyVersion !== 'mission27.launch.v1' ||
+      value.policyDigest !== 'd24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a' ||
+      value.state !== 'unavailable' || value.reason !== 'part10_collection_evidence_unavailable' ||
+      !['paid','demo'].includes(expectedMode) || value.mode !== expectedMode ||
+      value.fictional !== (expectedMode === 'demo') ||
+      !exactObject(witness,['contractVersion','mode','draftRevision','draftDigest','previewDigest']) ||
+      witness.contractVersion !== 'm27-invoice-part5-preview-witness-v1' || witness.mode !== expectedMode ||
+      !Number.isSafeInteger(witness.draftRevision) || witness.draftRevision < 0 ||
+      !/^[0-9a-f]{64}$/.test(witness.draftDigest || '') ||
+      !/^[0-9a-f]{64}$/.test(witness.previewDigest || '') ||
+      !exactObject(part9Witness,['contractVersion','state','reason','digest']) ||
+      part9Witness.contractVersion !== 'm27-payment-part9-acceptance-v1' ||
+      part9Witness.state !== 'unavailable' ||
+      part9Witness.reason !== 'part9_financial_evidence_unavailable' ||
+      !/^[0-9a-f]{64}$/.test(part9Witness.digest || '') ||
+      !Array.isArray(value.sourceParts) || value.sourceParts.length !== expectedParts.length ||
+      value.sourceParts.some(function (part,index) { var expected = expectedParts[index];
+        return !exactObject(part,['part','contractVersion','state','reason','digest']) ||
+          part.part !== expected[0] || part.contractVersion !== expected[1] ||
+          part.state !== expected[2] || part.reason !== expected[3] ||
+          !/^[0-9a-f]{64}$/.test(part.digest || ''); }) ||
+      new Set(value.sourceParts.map(function (part) { return part.digest; })).size !== 3 ||
+      !exactObject(failure,['state','reason','orderedFailureStates',
+        'exactCurrentSourceRequiredBeforeEveryRetry','humanReviewedRetryRequired',
+        'automaticReminderRetryOrChargeSupported','priorProviderSessionMayBeReused',
+        'missingOrUnknownCooldownDenies','failedOrRejectedRequestMayCreateEffect',
+        'changedSourceMayReusePriorRequestOrReceipt',
+        'retryMayBypassRecipientCapabilityAssuranceOrControl','retryMayExceedOriginalReviewedRequest',
+        'staleGenerationOrDelayedResponseMayRepopulateRenderedState']) ||
+      failure.state !== 'unavailable' || failure.reason !== 'receivable_population_incomplete' ||
+      !Array.isArray(failure.orderedFailureStates) ||
+      failure.orderedFailureStates.join(',') !== expectedFailures.join(',') ||
+      failure.exactCurrentSourceRequiredBeforeEveryRetry !== true ||
+      failure.humanReviewedRetryRequired !== true ||
+      failure.automaticReminderRetryOrChargeSupported !== false ||
+      failure.priorProviderSessionMayBeReused !== false ||
+      failure.missingOrUnknownCooldownDenies !== true ||
+      failure.failedOrRejectedRequestMayCreateEffect !== false ||
+      failure.changedSourceMayReusePriorRequestOrReceipt !== false ||
+      failure.retryMayBypassRecipientCapabilityAssuranceOrControl !== false ||
+      failure.retryMayExceedOriginalReviewedRequest !== false ||
+      failure.staleGenerationOrDelayedResponseMayRepopulateRenderedState !== false ||
+      !exactObject(revocation,['state','reason','orderedRevocationAxes',
+        'everyAxisRevalidatedBeforeDisplayOrAction','revocationClearsRenderedPrivateAndCollectionState',
+        'revokedInvoiceDocumentSessionRecipientOrCheckoutMayBeReused',
+        'revokedCapabilityDeliveryAuthorityReceiverOrReceiptMayAuthorize',
+        'roleOrRetryMayBypassRevocation','revocationCreatesFinancialOrExternalEffect']) ||
+      revocation.state !== 'unavailable' || revocation.reason !== 'revocation_authority_unavailable' ||
+      !Array.isArray(revocation.orderedRevocationAxes) ||
+      revocation.orderedRevocationAxes.join(',') !== expectedRevocations.join(',') ||
+      revocation.everyAxisRevalidatedBeforeDisplayOrAction !== true ||
+      revocation.revocationClearsRenderedPrivateAndCollectionState !== true ||
+      revocation.revokedInvoiceDocumentSessionRecipientOrCheckoutMayBeReused !== false ||
+      revocation.revokedCapabilityDeliveryAuthorityReceiverOrReceiptMayAuthorize !== false ||
+      revocation.roleOrRetryMayBypassRevocation !== false ||
+      revocation.revocationCreatesFinancialOrExternalEffect !== false ||
+      !exactObject(access,['eligiblePaidRoles','currentTenantSessionRequired',
+        'currentSubscriptionRequired','roleAloneAuthorizesCollectionAction',
+        'scopedCustomerSessionRequiredForCustomerAction','staffRoleMaySubstituteForCustomerSession',
+        'demoPhysicallyAndLogicallyIsolated','tenantCrossingAllowed']) ||
+      !Array.isArray(access.eligiblePaidRoles) || access.eligiblePaidRoles.join(',') !== 'owner,admin' ||
+      access.currentTenantSessionRequired !== true || access.currentSubscriptionRequired !== true ||
+      access.roleAloneAuthorizesCollectionAction !== false ||
+      access.scopedCustomerSessionRequiredForCustomerAction !== true ||
+      access.staffRoleMaySubstituteForCustomerSession !== false ||
+      access.demoPhysicallyAndLogicallyIsolated !== true || access.tenantCrossingAllowed !== false ||
+      !exactObject(privacy,['tenantIdentityExposed','customerIdentityExposed','invoiceIdentityExposed',
+        'amountDueDateOrHoldExposed','recipientOrContactDetailExposed','collectionNoteOrPromiseExposed',
+        'messageContentExposed','rawLinkTokenProviderSessionOrSecretExposed',
+        'actorOrApproverIdentityExposed']) ||
+      Object.keys(privacy).some(function (key) { return privacy[key] !== false; }) ||
+      !exactObject(acceptance,['sourceContractsRevalidated','wholePart10FunctionalBoundaryPresent',
+        'paidDemoIsolationAccepted','failureRetryRevocationPrivacyBoundaryPresent',
+        'independentWholeHeadAuditAccepted','firstPayingCustomerLiveMoneyValidated',
+        'founderVisualApprovalAccepted']) || acceptance.sourceContractsRevalidated !== true ||
+      acceptance.wholePart10FunctionalBoundaryPresent !== true ||
+      acceptance.paidDemoIsolationAccepted !== true ||
+      acceptance.failureRetryRevocationPrivacyBoundaryPresent !== true ||
+      acceptance.independentWholeHeadAuditAccepted !== false ||
+      acceptance.firstPayingCustomerLiveMoneyValidated !== false ||
+      acceptance.founderVisualApprovalAccepted !== false ||
+      value.exactCurrentnessRevalidated !== true || counts.some(function (count) { return count !== 0; });
+  }
   function mount(review, host) {
     if (!review || !host || !review.pins || !review.pins.estimateId) return null;
     injectStyles(); var mountToken = ++mountGeneration, requestToken = 0, data = null,
-      part5 = null, part6 = null, part7 = null, part9 = null, context = null;
-    var suppressedToggleState = null, keyboardActivationState = null, keyboardActivationUntil = 0;
+      part5 = null, part6 = null, part7 = null, part9 = null, part10 = null, context = null;
+    var desiredOpenState = false, keyboardActivationState = null, mutationRecoveryActive = false;
     var expectedDemoRevision = review.simulated ?
       Number(document.documentElement.dataset.demoRevision) : null;
     var section = node('details', undefined, host, 'invoice-draft-preview');
@@ -338,7 +455,7 @@
     var base = '/api/v1/customer-financial/editable-estimates/' + encodeURIComponent(review.pins.estimateId);
     function active(token) { return token === requestToken && mountToken === mountGeneration && section.isConnected; }
     function clearAndStatus(text, alert) {
-      data = null; part5 = null; part6 = null; part7 = null; part9 = null; context = null; body.replaceChildren(); var status = node('p', text, body, 'invoice-draft-preview-status');
+      data = null; part5 = null; part6 = null; part7 = null; part9 = null; part10 = null; context = null; body.replaceChildren(); var status = node('p', text, body, 'invoice-draft-preview-status');
       status.setAttribute('role', alert ? 'alert' : 'status'); status.setAttribute('aria-live', 'polite');
       status.tabIndex = -1; status.focus(); return status;
     }
@@ -466,13 +583,23 @@
       return !!identity && !!witness && identity.revision === witness.draftRevision &&
         identity.draftDigest === witness.draftDigest && preview.previewDigest === witness.previewDigest;
     }
+    function samePart10Witness(preview, acceptance, part9Acceptance) {
+      var identity = preview && preview.draftIdentity, witness = acceptance && acceptance.previewWitness;
+      var part9Witness = acceptance && acceptance.part9Witness;
+      return !!identity && !!witness && !!part9Witness &&
+        identity.revision === witness.draftRevision &&
+        identity.draftDigest === witness.draftDigest && preview.previewDigest === witness.previewDigest &&
+        part9Witness.contractVersion === part9Acceptance.contractVersion &&
+        part9Witness.state === part9Acceptance.state && part9Witness.reason === part9Acceptance.reason;
+    }
     function invalidBundle(value) {
-      return !value || value.contractVersion !== 'm27-payment-part9-preview-bundle-v1' ||
-        Object.keys(value).length !== 6 || !Object.prototype.hasOwnProperty.call(value, 'preview') ||
+      return !value || value.contractVersion !== 'm27-collection-part10-preview-bundle-v1' ||
+        Object.keys(value).length !== 7 || !Object.prototype.hasOwnProperty.call(value, 'preview') ||
         !Object.prototype.hasOwnProperty.call(value, 'part5Acceptance') ||
         !Object.prototype.hasOwnProperty.call(value, 'part6Acceptance') ||
         !Object.prototype.hasOwnProperty.call(value, 'part7Acceptance') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part9Acceptance');
+        !Object.prototype.hasOwnProperty.call(value, 'part9Acceptance') ||
+        !Object.prototype.hasOwnProperty.call(value, 'part10Acceptance');
     }
     function workflowHeading(text) {
       body.replaceChildren(); var card = node('section', undefined, body, 'invoice-draft-workflow-step');
@@ -497,7 +624,8 @@
       return post(url, value).then(function () {
         return recoverAfterSuccessfulMutation({ section: section,
           active: function () { return active(token); },
-          beforeOpen: function () { suppressedToggleState = true; }, reload: load });
+          beforeOpen: function () { mutationRecoveryActive = true; desiredOpenState = true; },
+          reload: load }).finally(function () { mutationRecoveryActive = false; });
       })
         .catch(function (error) { if (active(token)) rejected(error); });
     }
@@ -806,11 +934,75 @@
         'independent audit, and founder visual approval remain unaccepted.', card,
         value.fictional ? 'invoice-draft-preview-demo' : 'invoice-draft-preview-boundary');
     }
+    function renderPart10(value) {
+      var card = node('section', undefined, body, 'invoice-part10-acceptance');
+      var headingId = 'invoicePart10AcceptanceHeading-' + String(mountToken);
+      card.setAttribute('aria-labelledby', headingId);
+      var heading = node('h5', 'Collections review and follow-up', card,
+        'invoice-part10-acceptance-heading'); heading.id = headingId;
+      node('p', 'NorthStar rechecked the complete Part 10 boundary. Receivable aging, human ' +
+        'collection review, and both reviewed follow-up paths remain value-free until exact current ' +
+        'invoice, recipient, authority, cooldown, receiver, and delivery evidence exists.', card,
+      'invoice-draft-preview-boundary');
+      var gates = node('dl', undefined, card, 'invoice-part10-gates');
+      [['Receivable population', value.sourceParts[0].state + ' · ' + value.sourceParts[0].reason],
+        ['Collection review', value.sourceParts[1].state + ' · ' + value.sourceParts[1].reason],
+        ['Reviewed handoff or resend', value.sourceParts[2].state + ' · ' + value.sourceParts[2].reason],
+        ['Independent audit', value.acceptance.independentWholeHeadAuditAccepted ? 'accepted' : 'not accepted']]
+        .forEach(function (entry) { node('dt', entry[0], gates); node('dd', entry[1], gates); });
+      node('h6', 'Three exact Part 10 source boundaries', card, 'invoice-part7-subheading');
+      var sources = node('ul', undefined, card, 'invoice-part10-sources');
+      value.sourceParts.forEach(function (part) {
+        node('li', part.part + ' · ' + part.state + ' · ' + part.reason, sources);
+      });
+      node('h6', 'Failure and reviewed retry boundary', card, 'invoice-part7-subheading');
+      var failures = node('ul', undefined, card, 'invoice-part10-failures');
+      value.failureRetry.orderedFailureStates.forEach(function (state) {
+        node('li', state.replace(/_/g, ' ') + ' · unavailable', failures);
+      });
+      [
+        'Exact current source required before every retry · ' +
+          String(value.failureRetry.exactCurrentSourceRequiredBeforeEveryRetry),
+        'Human-reviewed retry required · ' + String(value.failureRetry.humanReviewedRetryRequired),
+        'Automatic reminder, retry, or charge supported · ' +
+          String(value.failureRetry.automaticReminderRetryOrChargeSupported),
+        'Prior provider session may be reused · ' +
+          String(value.failureRetry.priorProviderSessionMayBeReused),
+        'Unknown cooldown denies · ' + String(value.failureRetry.missingOrUnknownCooldownDenies),
+        'Failed or rejected request may create an effect · ' +
+          String(value.failureRetry.failedOrRejectedRequestMayCreateEffect),
+      ].forEach(function (text) { node('li', text, failures); });
+      node('h6', 'Revocation and privacy boundary', card, 'invoice-part7-subheading');
+      var revocations = node('ul', undefined, card, 'invoice-part10-revocations');
+      value.revocation.orderedRevocationAxes.forEach(function (axis) {
+        node('li', axis.replace(/_/g, ' ') + ' · revalidated before display or action', revocations);
+      });
+      [
+        'Revocation clears rendered private and collection state · ' +
+          String(value.revocation.revocationClearsRenderedPrivateAndCollectionState),
+        'Revoked invoice, session, recipient, or checkout may be reused · ' +
+          String(value.revocation.revokedInvoiceDocumentSessionRecipientOrCheckoutMayBeReused),
+        'Role or retry may bypass revocation · ' + String(value.revocation.roleOrRetryMayBypassRevocation),
+        'Revocation creates a financial or external effect · ' +
+          String(value.revocation.revocationCreatesFinancialOrExternalEffect),
+      ].forEach(function (text) { node('li', text, revocations); });
+      node('p', (value.fictional ? 'Fictional demo boundary. ' : '') +
+        'Receivable rows ' + value.receivableRowCount + ' · review rows ' +
+        value.collectionReviewRowCount + ' · promises ' + value.promiseToPayRowCount +
+        ' · handoff requests ' + value.handoffRequestRowCount + ' · resend requests ' +
+        value.manualResendRequestRowCount + ' · outbound messages ' + value.outboundMessageCount +
+        ' · provider calls ' + value.providerCallCount + ' · receiver mutations ' +
+        value.receiverMutationCount + ' · live-money movements ' + value.liveMoneyMovementCount +
+        '. Mission 28 receiver evidence, private production, first-customer live-money validation, ' +
+        'independent audit, and founder visual approval remain unaccepted.', card,
+        value.fictional ? 'invoice-draft-preview-demo' : 'invoice-draft-preview-boundary');
+    }
     function render(bundle) {
       var value = bundle && bundle.preview, acceptance = bundle && bundle.part5Acceptance;
       var deliveryAcceptance = bundle && bundle.part6Acceptance;
       var paymentAcceptance = bundle && bundle.part7Acceptance;
       var part9Acceptance = bundle && bundle.part9Acceptance;
+      var part10Acceptance = bundle && bundle.part10Acceptance;
       if (invalidBundle(bundle) || invalid(value) ||
           (review.simulated && !matchesDemoWorkspaceRevision(value, expectedDemoRevision)) ||
           invalidPart5(acceptance) ||
@@ -819,10 +1011,12 @@
           invalidPart7(paymentAcceptance, review.simulated ? 'demo' : 'paid') ||
           !samePart7Witness(value, paymentAcceptance) ||
           invalidPart9(part9Acceptance, review.simulated ? 'demo' : 'paid') ||
-          !samePart9Witness(value, part9Acceptance)) return rejected({ status: 409,
+          !samePart9Witness(value, part9Acceptance) ||
+          invalidPart10(part10Acceptance, review.simulated ? 'demo' : 'paid') ||
+          !samePart10Witness(value, part10Acceptance, part9Acceptance)) return rejected({ status: 409,
         message: 'The exact invoice draft changed. Reload its current evidence.' });
       data = value; part5 = acceptance; part6 = deliveryAcceptance;
-      part7 = paymentAcceptance; part9 = part9Acceptance;
+      part7 = paymentAcceptance; part9 = part9Acceptance; part10 = part10Acceptance;
       body.replaceChildren(); var preview = value.documentPreview, totals = value.reconciliation;
       var heading = node('h4', preview.label, body, 'invoice-draft-preview-heading'); heading.tabIndex = -1;
       if (value.fictional) node('p', 'Fictional demo · no customer, provider, invoice, receivable, or money action', body,
@@ -849,6 +1043,7 @@
       renderPart6(deliveryAcceptance);
       renderPart7(paymentAcceptance);
       renderPart9(part9Acceptance);
+      renderPart10(part10Acceptance);
       var actions = node('div', undefined, body, 'invoice-draft-preview-actions');
       var reload = node('button','Reload current preview',actions,'btn btn-secondary'); reload.type='button'; reload.onclick=load;
       if (!value.fictional && context?.draft) { var edit = node('button','Edit current invoice draft',actions,'btn btn-secondary');
@@ -895,55 +1090,44 @@
         if (tax.state === 'ready_to_record') { renderTax(tax, capability, receipt, draft); return null; }
         if (tax.state !== 'recorded_policy_unavailable') throw { status: 409 };
         context = { capability: capability, receipt: receipt, draft: draft, tax: tax };
-        return request(base + '/payment-part9-acceptance?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
+        return request(base + '/collection-part10-acceptance?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
           '&handoffReceiptDigest=' + encodeURIComponent(receipt.receiptDigest));
       });
     }
     function load() {
       var token = ++requestToken; clearAndStatus('Loading the exact current invoice draft…', false);
       var demoBase = '/api/demo/customer-financial/invoice-drafts/' + encodeURIComponent(review.pins.estimateId);
-      var promise = review.simulated ? request(demoBase + '/part9-acceptance') : loadPaid(token);
+      var promise = review.simulated ? request(demoBase + '/part10-acceptance') : loadPaid(token);
       return promise.then(function (value) { if (value && active(token)) render(value); })
         .catch(function (error) { if (active(token)) rejected(error); });
     }
-    function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; context = null; body.replaceChildren(); }
+    function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; part10 = null; context = null; body.replaceChildren(); }
     function toggleDisclosure() {
-      var opening = !section.open; suppressedToggleState = opening; section.open = opening;
+      var opening = !desiredOpenState; desiredOpenState = opening; section.open = opening;
       if (opening) load(); else clearCollapsed();
     }
     summary.addEventListener('keydown', function (event) {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
       event.preventDefault(); if (event.repeat) return;
-      keyboardActivationState = !section.open; keyboardActivationUntil = Date.now() + 10000;
+      mutationRecoveryActive = false;
+      keyboardActivationState = !desiredOpenState;
       toggleDisclosure();
     });
     summary.addEventListener('keyup', function (event) {
       if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') event.preventDefault();
     });
     summary.addEventListener('pointerdown', function () {
-      keyboardActivationState = null; keyboardActivationUntil = 0;
+      mutationRecoveryActive = false;
+      keyboardActivationState = null;
     });
     summary.addEventListener('click', function (event) {
-      if (keyboardActivationState !== null && Date.now() <= keyboardActivationUntil) {
-        event.preventDefault(); return;
-      }
-      keyboardActivationState = null; keyboardActivationUntil = 0;
-      if (section.open) clearCollapsed();
+      event.preventDefault();
+      if (mutationRecoveryActive) return;
+      if (keyboardActivationState !== null) { keyboardActivationState = null; return; }
+      toggleDisclosure();
     });
     section.addEventListener('toggle', function () {
-      if (suppressedToggleState !== null) {
-        var suppress = section.open === suppressedToggleState; suppressedToggleState = null;
-        if (suppress) return;
-      }
-      if (keyboardActivationState !== null && Date.now() <= keyboardActivationUntil) {
-        if (section.open !== keyboardActivationState) {
-          suppressedToggleState = keyboardActivationState; section.open = keyboardActivationState;
-        }
-        return;
-      }
-      keyboardActivationState = null; keyboardActivationUntil = 0;
-      if (!section.open) { clearCollapsed(); return; }
-      load();
+      if (section.open !== desiredOpenState) section.open = desiredOpenState;
     });
     return section;
   }
@@ -962,6 +1146,7 @@
     activeDemoMount = null;
   }
   return { mount: mount, clear: clear, money: money, invalidPart7: invalidPart7,
-    invalidPart9: invalidPart9, matchesDemoWorkspaceRevision: matchesDemoWorkspaceRevision,
+    invalidPart9: invalidPart9, invalidPart10: invalidPart10,
+    matchesDemoWorkspaceRevision: matchesDemoWorkspaceRevision,
     recoverAfterSuccessfulMutation: recoverAfterSuccessfulMutation };
 }));

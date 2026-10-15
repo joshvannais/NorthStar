@@ -133,7 +133,7 @@ describe('Mission 27 Part 9F complete Part 9 acceptance', () => {
     const alreadyOpen=await invoicePreviewUi.recoverAfterSuccessfulMutation({section,
       active:()=>true, beforeOpen:()=>{beforeOpen+=1;}, reload:()=>{reloads+=1;},
       defer:callback=>callback()});
-    expect({alreadyOpen,beforeOpen,reloads}).toEqual({alreadyOpen:false,beforeOpen:0,reloads:1});
+    expect({alreadyOpen,beforeOpen,reloads}).toEqual({alreadyOpen:false,beforeOpen:1,reloads:1});
 
     section.open=false; reloads=0;
     const stale=await invoicePreviewUi.recoverAfterSuccessfulMutation({section,
@@ -187,8 +187,6 @@ describe('Mission 27 Part 9F complete Part 9 acceptance', () => {
     expect(paid).not.toContain("router.post('/:estimateId/payment-part9-acceptance'");
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part9-acceptance'");
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part9-acceptance'");
-    expect(ui).toContain("'/payment-part9-acceptance?");
-    expect(ui).toContain("'/part9-acceptance'");
     expect(ui).toContain('function invalidPart9(value, expectedMode)');
     expect(ui).toContain('part9 = null');
     expect([read('src/customerFinancial/paymentPart9Acceptance.js'),

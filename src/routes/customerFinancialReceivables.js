@@ -25,6 +25,13 @@ function createCustomerFinancialReceivablesRouter(options = {}) {
     res.vary('Cookie');
     next();
   });
+  router.all('/', (req, res, next) => {
+    if (req.method === 'GET') return next();
+    return res.status(405).json({ success: false, error: {
+      category: 'CUSTOMER_FINANCIAL_RECEIVABLE_AGING_METHOD_NOT_ALLOWED',
+      message: 'Use the exact receivable-aging read boundary.',
+    } });
+  });
   router.get('/', auth, role, throttle, async (req, res) => {
     if (Object.keys(req.query).length !== 0) return res.status(400).json({ success: false,
       error: { category: 'CUSTOMER_FINANCIAL_RECEIVABLE_AGING_INVALID',

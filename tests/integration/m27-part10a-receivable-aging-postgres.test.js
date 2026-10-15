@@ -7,7 +7,7 @@ const contract = require('../../src/customerFinancial/receivableAging');
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
 realPostgres('Mission 27 Part 10A mounted receivable population and aging', () => {
-  let fixture; let transport;
+  let fixture; let transport; let repositoryRead;
   const route = '/api/v1/customer-financial/receivables';
 
   beforeAll(async () => {
@@ -15,6 +15,8 @@ realPostgres('Mission 27 Part 10A mounted receivable population and aging', () =
       'RETELL_API_KEY','TWILIO_AUTH_TOKEN','RESEND_API_KEY','SMTP_HOST','SMTP_USER','SMTP_PASS']) {
       delete process.env[key];
     }
+    repositoryRead = jest.spyOn(
+      require('../../src/customerFinancial/receivableAgingRepository'), 'read');
     transport = jest.spyOn(require('https'), 'request').mockImplementation(() => {
       throw new Error('External transport forbidden in Part 10A');
     });
@@ -76,6 +78,30 @@ realPostgres('Mission 27 Part 10A mounted receivable population and aging', () =
     expect(transport).not.toHaveBeenCalled();
   }, 120000);
 
+  test('HEAD and OPTIONS stop before the read boundary without disclosure or effect', async () => {
+    const count = async () => (await fixture.ownerPool.query(`SELECT
+      (SELECT count(*)::int FROM integration_credentials) credentials,
+      (SELECT count(*)::int FROM canonical_customer_financial_invoice_draft_revisions_v1) drafts,
+      (SELECT count(*)::int FROM information_schema.tables WHERE table_schema='public' AND
+       (table_name LIKE '%receivable%' OR table_name LIKE '%aging%' OR
+        table_name LIKE '%collection%' OR table_name LIKE '%promise%to%pay%')) part10_tables`)).rows[0];
+    const before = await count();
+    repositoryRead.mockClear();
+    const head = await request(fixture.app).head(route)
+      .set(fixture.actors.owner.session.headers);
+    const options = await request(fixture.app).options(route)
+      .set(fixture.actors.owner.session.headers);
+    expect(head.status).toBe(405); expect(options.status).toBe(405);
+    expect(head.headers['cache-control']).toContain('no-store');
+    expect(options.headers['cache-control']).toContain('no-store');
+    expect(options.headers.allow).toBeUndefined();
+    expect(JSON.stringify(options.body)).not.toMatch(
+      new RegExp(`${fixture.org}|${fixture.actors.owner.actorUserId}|balance|dueDate`, 'i'));
+    expect(repositoryRead).not.toHaveBeenCalled();
+    expect(await count()).toEqual(before);
+    expect(transport).not.toHaveBeenCalled();
+  }, 120000);
+
   test('read is restart-safe and creates no receivable, collection or external residue', async () => {
     const count = async () => (await fixture.ownerPool.query(`SELECT
       (SELECT count(*)::int FROM integration_credentials) credentials,
@@ -90,7 +116,7 @@ realPostgres('Mission 27 Part 10A mounted receivable population and aging', () =
       .set(fixture.actors.owner.session.headers);
     expect(first.status).toBe(200);
     expect((await request(fixture.app).post(route)
-      .set(fixture.actors.owner.session.headers).send({ action: 'collect' })).status).toBe(404);
+      .set(fixture.actors.owner.session.headers).send({ action: 'collect' })).status).toBe(405);
     expect(await count()).toEqual(before);
     expect(await fixture.db.initDatabase()).toBe(true);
     const restarted = await request(fixture.app).get(route)

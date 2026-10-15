@@ -7,6 +7,7 @@ const request = require('supertest');
 const providerBoundary = require('../../src/customerFinancial/paymentProviderBoundary');
 const contract = require('../../src/customerFinancial/receivableAging');
 const repository = require('../../src/customerFinancial/receivableAgingRepository');
+const { corsOptions } = require('../../src/middleware/security');
 const { createCustomerFinancialReceivablesRouter } =
   require('../../src/routes/customerFinancialReceivables');
 
@@ -20,6 +21,18 @@ const source = Object.freeze({
 });
 
 describe('Mission 27 Part 10A receivable population and aging', () => {
+  test('keeps exact receivable OPTIONS requests inside the fail-closed route boundary', async () => {
+    const resolveOptions = requestPath => new Promise((resolve, reject) => corsOptions({
+      path: requestPath, header: () => undefined,
+    }, (error, options) => error ? reject(error) : resolve(options)));
+    await expect(resolveOptions('/api/v1/customer-financial/receivables')).resolves
+      .toMatchObject({ methods: ['GET'], preflightContinue: true });
+    await expect(resolveOptions('/api/v1/customer-financial/receivables/')).resolves
+      .toMatchObject({ methods: ['GET'], preflightContinue: true });
+    await expect(resolveOptions('/api/v1/customer-financial/payment-provider')).resolves
+      .toMatchObject({ preflightContinue: false });
+  });
+
   test('pins the exact frozen aging authority and typed incomplete coverage', () => {
     const value = contract.unavailable();
     expect(contract.project(JSON.parse(JSON.stringify(value)))).toEqual(value);
@@ -145,6 +158,14 @@ describe('Mission 27 Part 10A receivable population and aging', () => {
       .query({ customerId: 'victim', balanceMinorUnits: '0', dueDate: '2026-01-01' });
     expect(widened.status).toBe(400); expect(repositoryRead).not.toHaveBeenCalled();
     expect(JSON.stringify(widened.body)).not.toMatch(/victim|2026-01-01/);
+    const head = await request(app).head('/api/v1/customer-financial/receivables');
+    const options = await request(app).options('/api/v1/customer-financial/receivables');
+    expect(head.status).toBe(405); expect(options.status).toBe(405);
+    expect(head.headers['cache-control']).toContain('no-store');
+    expect(options.headers['cache-control']).toContain('no-store');
+    expect(options.headers.allow).toBeUndefined();
+    expect(JSON.stringify(options.body)).not.toMatch(/victim|balance|dueDate/i);
+    expect(repositoryRead).not.toHaveBeenCalled();
     const response = await request(app).get('/api/v1/customer-financial/receivables');
     expect(response.status).toBe(200); expect(response.body.data).toEqual(contract.unavailable());
     expect(response.headers['cache-control']).toContain('private');
@@ -152,7 +173,7 @@ describe('Mission 27 Part 10A receivable population and aging', () => {
     expect(response.headers.vary).toContain('Cookie');
     expect(repositoryRead).toHaveBeenCalledTimes(1);
     expect((await request(app).post('/api/v1/customer-financial/receivables')
-      .send({ action: 'collect' })).status).toBe(404);
+      .send({ action: 'collect' })).status).toBe(405);
   });
 
   test('adds no financial table, mutation, demo surface, provider transport or migration 273', () => {
@@ -160,6 +181,8 @@ describe('Mission 27 Part 10A receivable population and aging', () => {
     const sourceCode = [read('src/customerFinancial/receivableAging.js'),
       read('src/customerFinancial/receivableAgingRepository.js'), route].join('\n');
     expect(route).toContain("router.get('/', auth, role, throttle");
+    expect(route).toContain("router.all('/', (req, res, next)");
+    expect(route).toContain("req.method === 'GET'");
     expect(route).not.toMatch(/router\.(post|put|patch|delete)\(/);
     expect(route).toContain("requireRole('owner','admin')");
     expect(sourceCode).not.toMatch(/INSERT|UPDATE|DELETE|fetch\(|axios|stripe\./i);

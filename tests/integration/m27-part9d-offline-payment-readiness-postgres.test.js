@@ -132,11 +132,30 @@ realPostgres('Mission 27 Part 9D mounted offline-payment intake readiness', () =
         clearedTransitionEnabled: false,
         clearanceAuthority: 'unavailable_until_authenticated_bank_source',
         customerReceiptCopy: 'check received — clearance unknown' },
+      clearedCheckSemantics: { acceptedState: 'check_cleared',
+        currentProjectionState: 'check_clearance_authority_unavailable', value: null,
+        transitionEnabled: false,
+        requiredAuthority: 'unavailable_until_authenticated_bank_source',
+        authenticatedBankSourceAccepted: false,
+        clearedCashAmountMinorUnits: null, settledAmountMinorUnits: null,
+        cashOnHandAmountMinorUnits: null, checkPaidAmountMinorUnits: null },
       returnedCheckPolicy: { returnedState: 'check_returned',
         humanAttestationAloneAccepted: false, authorizesBankClearanceClaim: false,
         reopensOnlyExactPendingAllocation: true,
         missingAuthorityState: 'returned_check_authority_unavailable',
         returnProcessingOwnedByPart9E: true },
+      returnedCheckSemantics: { acceptedState: 'check_returned',
+        currentProjectionState: 'unavailable', value: null,
+        acceptedReturnSource: null, exactOriginalCheckReceiptAndAllocation: null,
+        reopenedCollectibleAmountMinorUnits: null, bankClearanceClaimed: false,
+        settlementClaimed: false, payoutClaimed: false, feeClaimed: false,
+        positiveProcessingOwnedByPart9E: true },
+      offlineReversalSemantics: { acceptedState: 'offline_reversed',
+        currentProjectionState: 'unavailable', value: null,
+        originalReceiptAndExactAllocation: null, replacementReceiptIdentity: null,
+        reversalReceiptIdentity: null, inPlaceEditAllowed: false,
+        physicalCashReturnClaimed: false, providerSettlementReversalClaimed: false,
+        balanceMutationAuthorized: false, positiveProcessingOwnedByPart9E: true },
       authority: { offlineReceiptReviewAuthorized: false,
         offlineReceiptAcceptanceAuthorized: false, cashReceiptRecordingAuthorized: false,
         checkReceiptRecordingAuthorized: false,
@@ -148,15 +167,31 @@ realPostgres('Mission 27 Part 9D mounted offline-payment intake readiness', () =
         accountingMutationAuthorized: false,
         revenueRecognitionAuthorized: false },
       offlineReceiptRowCount: 0, offlineReceiptCorrectionRowCount: 0,
-      returnedCheckRowCount: 0, invoiceBalanceMutationCount: 0, providerCallCount: 0,
+      checkClearedRowCount: 0, returnedCheckRowCount: 0, offlineReversalRowCount: 0,
+      invoiceBalanceMutationCount: 0, providerCallCount: 0,
       providerMutationCount: 0, receiverMutationCount: 0,
       accountingMutationCount: 0, liveMoneyMovementCount: 0 });
     expect(owner.body.data.requirements).toHaveLength(19);
+    expect(owner.body.data.stateVocabulary).toEqual([
+      'offline_received', 'check_clearance_unknown', 'check_cleared', 'check_returned',
+      'offline_reversed',
+    ]);
     expect(owner.body.data.requirements.every(value => value.state === 'unavailable' &&
       value.value === null)).toBe(true);
-    expect(Object.entries(owner.body.data.projection).every(([key,value]) =>
-      ['cashState','checkState','checkClearanceState'].includes(key) ?
-        value === 'unavailable' : value === null)).toBe(true);
+    expect(owner.body.data.projection).toMatchObject({ offlineReceivedState: 'unavailable',
+      checkClearanceUnknownState: 'unavailable',
+      checkClearedState: 'check_clearance_authority_unavailable',
+      checkReturnedState: 'unavailable', offlineReversedState: 'unavailable' });
+    const mounted = owner.body.data;
+    expect(() => contract.project({ ...mounted,
+      stateVocabulary: [...mounted.stateVocabulary].reverse() })).toThrow();
+    const { offlineReversalSemantics: _missing, ...missingReversal } = mounted;
+    expect(() => contract.project(missingReversal)).toThrow();
+    expect(() => contract.project({ ...mounted,
+      clearedCheckSemantics: { ...mounted.clearedCheckSemantics,
+        currentProjectionState: 'unavailable' } })).toThrow();
+    expect(() => contract.project({ ...mounted,
+      projection: { ...mounted.projection, checkClearedState: 'check_cleared' } })).toThrow();
     expect(JSON.stringify(owner.body.data)).not.toMatch(
       /acct_victim|evt_victim|pi_victim|sk_test|customer@example|123 main/i);
     const admin = await request(prepared.fixture.app).get(route).query(query)

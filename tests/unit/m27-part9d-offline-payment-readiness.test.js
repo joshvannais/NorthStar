@@ -66,8 +66,12 @@ describe('Mission 27 Part 9D offline-payment intake readiness', () => {
       correctionShape: 'append_only_replacement_or_reversal_never_in_place' });
   });
 
-  test('keeps cash receipt, check received and check cleared meanings separate', () => {
+  test('keeps every exact offline state and its value-free meaning separate', () => {
     const value = contract.unavailable();
+    expect(value.stateVocabulary).toEqual([
+      'offline_received', 'check_clearance_unknown', 'check_cleared', 'check_returned',
+      'offline_reversed',
+    ]);
     expect(value.cashSemantics).toEqual({ acceptedState: 'offline_received',
       effect: 'accepted_offline_receipt_reduces_collectible_balance_without_provider_settlement_claim',
       reducesOnlyExactCollectibleAllocation: true, providerAuthorizationClaimed: false,
@@ -83,6 +87,14 @@ describe('Mission 27 Part 9D offline-payment intake readiness', () => {
       humanAttestationMayClaimClearance: false,
       accountingAcknowledgementMayClaimClearance: false,
       customerReceiptCopy: 'check received — clearance unknown' });
+    expect(value.clearedCheckSemantics).toEqual({ acceptedState: 'check_cleared',
+      currentProjectionState: 'check_clearance_authority_unavailable', value: null,
+      transitionEnabled: false,
+      requiredAuthority: 'unavailable_until_authenticated_bank_source',
+      authenticatedBankSourceAccepted: false, humanAttestationMayClaimClearance: false,
+      accountingAcknowledgementMayClaimClearance: false,
+      clearedCashAmountMinorUnits: null, settledAmountMinorUnits: null,
+      cashOnHandAmountMinorUnits: null, checkPaidAmountMinorUnits: null });
   });
 
   test('freezes return-source classes without preempting Part 9E outcome processing', () => {
@@ -102,6 +114,21 @@ describe('Mission 27 Part 9D offline-payment intake readiness', () => {
     expect(returned.acceptedEvidenceClasses.every(value =>
       value.currentRuntimeAvailable === false &&
       value.requires.includes('exact_original_check_receipt_and_allocation'))).toBe(true);
+    expect(contract.unavailable().returnedCheckSemantics).toEqual({
+      acceptedState: 'check_returned', currentProjectionState: 'unavailable', value: null,
+      effect: 'authorized_return_disposition_reverses_exact_pending_tender_and_reopens_exact_collectible_allocation',
+      missingAuthorityState: 'returned_check_authority_unavailable',
+      acceptedReturnSource: null, exactOriginalCheckReceiptAndAllocation: null,
+      reopenedCollectibleAmountMinorUnits: null, bankClearanceClaimed: false,
+      settlementClaimed: false, payoutClaimed: false, feeClaimed: false,
+      positiveProcessingOwnedByPart9E: true });
+    expect(contract.unavailable().offlineReversalSemantics).toEqual({
+      acceptedState: 'offline_reversed', currentProjectionState: 'unavailable', value: null,
+      correctionShape: 'append_only_replacement_or_reversal_never_in_place',
+      originalReceiptAndExactAllocation: null, replacementReceiptIdentity: null,
+      reversalReceiptIdentity: null, inPlaceEditAllowed: false,
+      physicalCashReturnClaimed: false, providerSettlementReversalClaimed: false,
+      balanceMutationAuthorized: false, positiveProcessingOwnedByPart9E: true });
   });
 
   test('requires the complete intake record and keeps every value and effect unavailable', () => {
@@ -130,13 +157,22 @@ describe('Mission 27 Part 9D offline-payment intake readiness', () => {
     ]);
     expect(value.requirements.every(item => item.state === 'unavailable' &&
       item.value === null)).toBe(true);
-    expect(Object.entries(value.projection).every(([key,item]) =>
-      ['cashState','checkState','checkClearanceState'].includes(key) ?
-        item === 'unavailable' : item === null)).toBe(true);
+    expect(value.projection).toMatchObject({ offlineReceivedState: 'unavailable',
+      checkClearanceUnknownState: 'unavailable',
+      checkClearedState: 'check_clearance_authority_unavailable',
+      checkReturnedState: 'unavailable', offlineReversedState: 'unavailable' });
+    expect(Object.entries(value.projection).every(([key,item]) => {
+      const typed = { offlineReceivedState: 'unavailable',
+        checkClearanceUnknownState: 'unavailable',
+        checkClearedState: 'check_clearance_authority_unavailable',
+        checkReturnedState: 'unavailable', offlineReversedState: 'unavailable' };
+      return Object.prototype.hasOwnProperty.call(typed, key) ? item === typed[key] : item === null;
+    })).toBe(true);
     expect(Object.values(value.authority).every(item => item === false)).toBe(true);
     expect(Object.values(value.privacy).every(item => item === false)).toBe(true);
     expect(value).toMatchObject({ offlineReceiptRowCount: 0,
-      offlineReceiptCorrectionRowCount: 0, returnedCheckRowCount: 0,
+      offlineReceiptCorrectionRowCount: 0, checkClearedRowCount: 0,
+      returnedCheckRowCount: 0, offlineReversalRowCount: 0,
       invoiceBalanceMutationCount: 0, providerCallCount: 0, providerMutationCount: 0,
       receiverMutationCount: 0, accountingMutationCount: 0, liveMoneyMovementCount: 0 });
   });
@@ -144,7 +180,16 @@ describe('Mission 27 Part 9D offline-payment intake readiness', () => {
   test('rejects contradictory semantics, leaked values and malformed source witnesses', () => {
     const value = contract.unavailable();
     expect(() => contract.project({ ...value,
+      stateVocabulary: [...value.stateVocabulary].reverse() })).toThrow();
+    expect(() => contract.project({ ...value,
+      clearedCheckSemantics: { ...value.clearedCheckSemantics,
+        currentProjectionState: 'unavailable' } })).toThrow();
+    const { offlineReversalSemantics: _missing, ...missingReversal } = value;
+    expect(() => contract.project(missingReversal)).toThrow();
+    expect(() => contract.project({ ...value,
       checkSemantics: { ...value.checkSemantics, clearedTransitionEnabled: true } })).toThrow();
+    expect(() => contract.project({ ...value,
+      projection: { ...value.projection, checkClearedState: 'check_cleared' } })).toThrow();
     expect(() => contract.project({ ...value,
       projection: { ...value.projection, amountMinorUnits: '0' } })).toThrow();
     expect(() => contract.project({ ...value,

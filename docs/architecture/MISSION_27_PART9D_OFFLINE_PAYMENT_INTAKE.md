@@ -28,11 +28,18 @@ tender only, changes neither invoice face value nor paid/settled balance, and
 blocks duplicate collection for the exact pending allocation. Customer copy is
 **check received — clearance unknown**.
 
-`check_cleared` remains disabled until an authenticated bank-owned source is
-separately accepted. Human attestation, free text, a photo or accounting
-acknowledgement cannot claim clearance. A return can later reopen only the exact
-pending allocation from one of the two frozen retained bank-source classes; both
-are unavailable today. Part 9E owns positive returned/NSF outcome processing.
+The exact ordered state vocabulary is `offline_received`,
+`check_clearance_unknown`, `check_cleared`, `check_returned`, and
+`offline_reversed`; each remains separately projected. `check_cleared` remains
+disabled until an authenticated bank-owned source is separately accepted, so
+its current value-free projection is exactly
+`check_clearance_authority_unavailable`. Human attestation, free text, a photo
+or accounting acknowledgement cannot claim clearance. `check_returned` can
+later reopen only the exact pending allocation from one of the two frozen
+retained bank-source classes; both are unavailable today. `offline_reversed`
+remains a separate append-only correction fact and cannot imply a physical cash
+return, provider reversal, or balance mutation. Part 9E owns positive
+return/reversal outcome processing.
 
 ## Value-free readiness boundary
 
@@ -61,7 +68,8 @@ cleared check, paid invoice or fabricated cash position.
 
 Acceptance requires strict launch-policy, source-witness, action-control,
 amount, allocation, occurrence/acceptance chronology, evidence/reason,
-idempotency/duplicate, cash/check semantic, clearance/return, correction,
+idempotency/duplicate, exact ordered offline-state vocabulary, cash/check
+semantic, typed missing-clearance, clearance/return, correction,
 privacy, no-effect, repository, route and static tests plus a mounted fresh
 disposable PostgreSQL 17 journey through migration 272. The journey covers paid
 owner/administrator reads, authentication, role, tenant, subscription, exact

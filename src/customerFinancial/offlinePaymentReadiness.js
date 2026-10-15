@@ -6,6 +6,14 @@ const creditRefund = require('./creditRefundReadiness');
 const CONTRACT_VERSION = 'm27-offline-payment-intake-readiness-v1';
 const REASON = 'issued_invoice_allocation_unavailable';
 const CAPABILITY = 'customer_financial.payment.record_offline';
+const CHECK_CLEARANCE_UNAVAILABLE_STATE = 'check_clearance_authority_unavailable';
+const OFFLINE_STATES = Object.freeze([
+  'offline_received',
+  'check_clearance_unknown',
+  'check_cleared',
+  'check_returned',
+  'offline_reversed',
+]);
 
 const RETURN_SOURCES = Object.freeze([
   Object.freeze({
@@ -74,6 +82,7 @@ function policy() {
       offline?.cashReceiptEnabled !== true || offline.checkReceiptEnabled !== true ||
       offline.checkClearedTransitionEnabled !== false ||
       offline.checkClearanceAuthority !== 'unavailable_until_authenticated_bank_source' ||
+      !launch.unavailableCodes.includes(CHECK_CLEARANCE_UNAVAILABLE_STATE) ||
       offline.cashEffect !==
         'accepted_offline_receipt_reduces_collectible_balance_without_provider_settlement_claim' ||
       offline.checkEffect !==
@@ -100,6 +109,7 @@ function unavailable(sourceRaw = creditRefund.unavailable()) {
   const source = creditRefund.project(sourceRaw);
   const launch = policy();
   const offline = launch.financial.offline;
+  const returned = offline.returnedCheckAuthority;
   const control = launch.actionControl[CAPABILITY];
   const amounts = launch.amountPolicy;
   return Object.freeze({
@@ -161,6 +171,7 @@ function unavailable(sourceRaw = creditRefund.unavailable()) {
       inPlaceEditAllowed: false,
       correctionShape: offline.correctionEffect,
     }),
+    stateVocabulary: OFFLINE_STATES,
     cashSemantics: Object.freeze({
       acceptedState: 'offline_received',
       effect: offline.cashEffect,
@@ -188,6 +199,20 @@ function unavailable(sourceRaw = creditRefund.unavailable()) {
       accountingAcknowledgementMayClaimClearance: false,
       customerReceiptCopy: 'check received — clearance unknown',
     }),
+    clearedCheckSemantics: Object.freeze({
+      acceptedState: 'check_cleared',
+      currentProjectionState: CHECK_CLEARANCE_UNAVAILABLE_STATE,
+      value: null,
+      transitionEnabled: offline.checkClearedTransitionEnabled,
+      requiredAuthority: offline.checkClearanceAuthority,
+      authenticatedBankSourceAccepted: false,
+      humanAttestationMayClaimClearance: false,
+      accountingAcknowledgementMayClaimClearance: false,
+      clearedCashAmountMinorUnits: null,
+      settledAmountMinorUnits: null,
+      cashOnHandAmountMinorUnits: null,
+      checkPaidAmountMinorUnits: null,
+    }),
     returnedCheckPolicy: Object.freeze({
       returnedState: 'check_returned',
       effect: offline.returnedCheckEffect,
@@ -199,6 +224,35 @@ function unavailable(sourceRaw = creditRefund.unavailable()) {
       feeEffect: 'none',
       missingAuthorityState: 'returned_check_authority_unavailable',
       returnProcessingOwnedByPart9E: true,
+    }),
+    returnedCheckSemantics: Object.freeze({
+      acceptedState: 'check_returned',
+      currentProjectionState: 'unavailable',
+      value: null,
+      effect: offline.returnedCheckEffect,
+      missingAuthorityState: returned.missingAuthorityState,
+      acceptedReturnSource: null,
+      exactOriginalCheckReceiptAndAllocation: null,
+      reopenedCollectibleAmountMinorUnits: null,
+      bankClearanceClaimed: false,
+      settlementClaimed: false,
+      payoutClaimed: false,
+      feeClaimed: false,
+      positiveProcessingOwnedByPart9E: true,
+    }),
+    offlineReversalSemantics: Object.freeze({
+      acceptedState: 'offline_reversed',
+      currentProjectionState: 'unavailable',
+      value: null,
+      correctionShape: offline.correctionEffect,
+      originalReceiptAndExactAllocation: null,
+      replacementReceiptIdentity: null,
+      reversalReceiptIdentity: null,
+      inPlaceEditAllowed: false,
+      physicalCashReturnClaimed: false,
+      providerSettlementReversalClaimed: false,
+      balanceMutationAuthorized: false,
+      positiveProcessingOwnedByPart9E: true,
     }),
     requirements: Object.freeze([
       requirement('exact_current_issued_invoice_versions', 'issued_invoice_unavailable'),
@@ -248,9 +302,11 @@ function unavailable(sourceRaw = creditRefund.unavailable()) {
       receiptIdentity: null,
       receiptNumber: null,
       receiptDigest: null,
-      cashState: 'unavailable',
-      checkState: 'unavailable',
-      checkClearanceState: 'unavailable',
+      offlineReceivedState: 'unavailable',
+      checkClearanceUnknownState: 'unavailable',
+      checkClearedState: CHECK_CLEARANCE_UNAVAILABLE_STATE,
+      checkReturnedState: 'unavailable',
+      offlineReversedState: 'unavailable',
       replacementReceiptIdentity: null,
       reversalReceiptIdentity: null,
       returnedCheckIdentity: null,
@@ -287,7 +343,9 @@ function unavailable(sourceRaw = creditRefund.unavailable()) {
     exactCurrentnessRevalidated: true,
     offlineReceiptRowCount: 0,
     offlineReceiptCorrectionRowCount: 0,
+    checkClearedRowCount: 0,
     returnedCheckRowCount: 0,
+    offlineReversalRowCount: 0,
     invoiceBalanceMutationCount: 0,
     providerCallCount: 0,
     providerMutationCount: 0,
@@ -317,5 +375,5 @@ function projectWithSource(raw, source) {
   return expected;
 }
 
-module.exports = { CONTRACT_VERSION, REASON, CAPABILITY, RETURN_SOURCES,
-  policy, unavailable, project, projectWithSource };
+module.exports = { CONTRACT_VERSION, REASON, CAPABILITY, CHECK_CLEARANCE_UNAVAILABLE_STATE,
+  OFFLINE_STATES, RETURN_SOURCES, policy, unavailable, project, projectWithSource };

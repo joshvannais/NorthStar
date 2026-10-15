@@ -205,6 +205,27 @@ async function recordTax(root) {
   await record.focus(); await record.press('Enter');
 }
 
+async function assertPart7ClientContract(page, acceptance, mode) {
+  const result=await page.evaluate(({value,expectedMode})=>{
+    const canonical=JSON.parse(JSON.stringify(value));
+    const auditor=JSON.parse(JSON.stringify(value));
+    Object.assign(auditor.requirements[0],{state:'unavailable',reason:'forged_reason'});
+    auditor.sandbox.providerAccountId='acct_victim';
+    auditor.adapterSchema.callerAuthoredProviderObjectAccepted=true;
+    auditor.rollout.rollbackCanMarkInvoicePaid=true;
+    auditor.driftAndDisconnect.automaticReconnectAuthorized=true;
+    auditor.access.staffRoleMaySubstituteForCustomerSession=true;
+    auditor.protections.missingAmountMayBeTreatedAsZero=true;
+    auditor.methods[0].policyState='unsupported';
+    auditor.methods[1].policyState='launch_supported';
+    return {
+      canonicalAccepted:!window.NorthStarCustomerFinancialInvoicePreview.invalidPart7(canonical,expectedMode),
+      auditorContradictionRejected:window.NorthStarCustomerFinancialInvoicePreview.invalidPart7(auditor,expectedMode),
+    };
+  },{value:acceptance,expectedMode:mode});
+  assert.deepEqual(result,{canonicalAccepted:true,auditorContradictionRejected:true});
+}
+
 async function auditActualSurface(page, root, layout) {
   const audit = await page.evaluate(({ width }) => {
     const visible = element => {
@@ -321,6 +342,8 @@ async function auditActualSurface(page, root, layout) {
       }
       assert.equal(await root.locator('.invoice-part7-controls li').count(), 8);
       assert.equal(await root.locator('.invoice-part7-methods li').count(), 2);
+      assert.equal(await root.getByText('Unknown required field accepted · false',{exact:true}).count(),1);
+      assert.equal(await root.getByText('Optional output may authorize an effect · false',{exact:true}).count(),1);
       assert.equal(await root.getByRole('button', { name: /approve invoice|issue|send|resend|revoke|deliver|collect|correct invoice|connect provider|start checkout|pay invoice/i }).count(), 0);
       assert.ok(await root.getByText(`Mounted ${engine} ${layout.name} reviewed line`, { exact: true }).count() ||
         await root.getByText(`Concurrent ${engine} exact-current line`, { exact: true }).count());
@@ -378,12 +401,14 @@ async function auditActualSurface(page, root, layout) {
         assert.equal(bundle.part7Acceptance.rollout.stage, 'disabled');
         assert.equal(bundle.part7Acceptance.providerCallCount, 0);
         assert.equal(bundle.part7Acceptance.liveMoneyMovementCount, 0);
+        await assertPart7ClientContract(page,bundle.part7Acceptance,'paid');
       }
       if (index === 0) assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft-origin') && [200,201].includes(row.status)));
       assert.deepEqual(external, []); assert.deepEqual(errors, []);
       await page.screenshot({ fullPage: true, path: path.join(output, `${engine}-${layout.name}.png`) });
       ledger.layouts.push({ name: layout.name, routeEvidence, taxEvidence: true,
         part5Acceptance: true, part6Acceptance: true, part7Acceptance: true,
+        completePart7ContractValidation: true,
         keyboard: true, responsive: true,
         currentnessRecovery: index === 0, delayedResponseSuppression: index === 0 });
       delete ledger.current;
@@ -433,10 +458,18 @@ async function auditActualSurface(page, root, layout) {
       }
       assert.equal(await demoRoot.locator('.invoice-part7-controls li').count(),8);
       assert.equal(await demoRoot.locator('.invoice-part7-methods li').count(),2);
+      assert.equal(await demoRoot.getByText('Unknown required field accepted · false',{exact:true}).count(),1);
+      assert.equal(await demoRoot.getByText('Optional output may authorize an effect · false',{exact:true}).count(),1);
       assert.equal(await demoRoot.getByText(/Fictional demo boundary/).count(), 3);
       assert.equal(await demoRoot.getByRole('button', {name:/approve invoice|issue|send|resend|revoke|deliver|collect|correct invoice|connect provider|start checkout|pay invoice/i}).count(),0);
       assert.equal(demoRoutes.some(row => row.path.endsWith('/preview')), false);
       assert.ok(demoRoutes.some(row => row.path.endsWith('/part7-acceptance') && row.status === 200));
+      const demoPart7=await demoPage.evaluate(async estimateId=>{
+        const response=await fetch('/api/demo/customer-financial/invoice-drafts/'+
+          encodeURIComponent(estimateId)+'/part7-acceptance',{cache:'no-store'});
+        const body=await response.json(); return body.data.part7Acceptance;
+      },graph.ids.estimate);
+      await assertPart7ClientContract(demoPage,demoPart7,'demo');
       if (index === 0) {
         const delayedDemoSummary = demoRoot.locator(':scope > summary');
         await proveDatabaseDelayedSuppression({ page:demoPage, root:demoRoot,
@@ -476,6 +509,7 @@ async function auditActualSurface(page, root, layout) {
       await demoPage.screenshot({fullPage:true,path:path.join(output,`${engine}-${layout.name}-demo.png`)});
       ledger.layouts.at(-1).demo = { actualPage:'/demo', routes:demoRoutes, fictional:true,
         resetClearing:true, delayedResponseSuppression:index===0,
+        completePart7ContractValidation:true,
         paidRouteCalls:demoPaidRoutes.length };
       await demoContext.close();
     }

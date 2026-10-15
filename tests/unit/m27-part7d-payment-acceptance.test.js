@@ -8,6 +8,7 @@ const part6Contract = require('../../src/customerFinancial/invoicePart6Acceptanc
 const demo = require('../../src/customerFinancial/demoPaymentPart7Acceptance');
 const demoPart6 = require('../../src/customerFinancial/demoInvoicePart6Acceptance');
 const workspace = require('../../src/commandCenter/workspace');
+const invoicePreviewUi = require('../../public/js/customer-financial-invoice-preview');
 
 const ROOT = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
@@ -131,7 +132,7 @@ describe('Mission 27 Part 7D complete payment-provider acceptance', () => {
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part7-acceptance'");
     expect(ui).toContain("'/payment-part7-acceptance?");
     expect(ui).toContain("'/part7-acceptance'");
-    expect(ui).toContain('function invalidPart7(value)');
+    expect(ui).toContain('function invalidPart7(value, expectedMode)');
     expect(ui).toContain('Ten exact payment prerequisites');
     for (const requirement of contract.REQUIREMENTS) expect(ui).toContain(requirement.requirement);
     expect(ui).not.toMatch(/button[^\n]*(?:connect provider|start checkout|pay invoice)/i);
@@ -142,5 +143,64 @@ describe('Mission 27 Part 7D complete payment-provider acceptance', () => {
     const names=fs.readdirSync(path.join(ROOT,'migrations')).filter(name=>name.endsWith('.sql')).sort();
     expect(names.at(-1)).toBe('272_customer_financial_invoice_draft_preview_v1.sql');
     expect(names.some(name=>/^273_/.test(name))).toBe(false);
+  });
+
+  test('browser contract validation rejects authority, privacy, rollback, method and access contradictions', () => {
+    const canonical=contract.unavailable('paid',paidPart6());
+    expect(invoicePreviewUi.invalidPart7(JSON.parse(JSON.stringify(canonical)),'paid')).toBe(false);
+    const mutations=[
+      value=>{ value.extra='not_allowed'; },
+      value=>{ value.requirements.reverse(); },
+      value=>{ delete value.requirements[0].reason; },
+      value=>{ value.requirements[0].state='unavailable'; value.requirements[0].reason='forged_reason'; },
+      value=>{ value.sandbox.providerAccountId='acct_victim'; },
+      value=>{ value.adapterSchema.callerAuthoredProviderObjectAccepted=true; },
+      value=>{ value.rollout.rollbackCanMarkInvoicePaid=true; },
+      value=>{ value.driftAndDisconnect.automaticReconnectAuthorized=true; },
+      value=>{ value.access.staffRoleMaySubstituteForCustomerSession=true; },
+      value=>{ value.protections.missingAmountMayBeTreatedAsZero=true; },
+      value=>{ const first=value.methods[0]; value.methods[0]=value.methods[1]; value.methods[1]=first; },
+      value=>{ value.methods[0].policyState='unsupported'; value.methods[1].policyState='launch_supported'; },
+    ];
+    for (const mutate of mutations) {
+      const value=JSON.parse(JSON.stringify(canonical)); mutate(value);
+      expect(invoicePreviewUi.invalidPart7(value,'paid')).toBe(true);
+    }
+    const auditorPayload=JSON.parse(JSON.stringify(canonical));
+    Object.assign(auditorPayload.requirements[0],{state:'unavailable',reason:'forged_reason'});
+    Object.assign(auditorPayload.sandbox,{providerAccountId:'acct_victim'});
+    auditorPayload.adapterSchema.callerAuthoredProviderObjectAccepted=true;
+    auditorPayload.rollout.rollbackCanMarkInvoicePaid=true;
+    auditorPayload.driftAndDisconnect.automaticReconnectAuthorized=true;
+    auditorPayload.access.staffRoleMaySubstituteForCustomerSession=true;
+    auditorPayload.protections.missingAmountMayBeTreatedAsZero=true;
+    auditorPayload.methods[0].policyState='unsupported';
+    auditorPayload.methods[1].policyState='launch_supported';
+    expect(invoicePreviewUi.invalidPart7(auditorPayload,'paid')).toBe(true);
+  });
+
+  test('browser contract validation rejects every missing or extra server-owned field', () => {
+    const canonical=JSON.parse(JSON.stringify(contract.unavailable('paid',paidPart6())));
+    const objectPaths=[[],['previewWitness'],['sourceWitnesses'],['adapterSchema'],['sandbox'],
+      ['rollout'],['driftAndDisconnect'],['protections'],['access']];
+    for (const pathParts of objectPaths) {
+      let source=canonical; for (const part of pathParts) source=source[part];
+      for (const key of Object.keys(source)) {
+        const value=JSON.parse(JSON.stringify(canonical));
+        let target=value; for (const part of pathParts) target=target[part];
+        delete target[key];
+        expect(invoicePreviewUi.invalidPart7(value,'paid')).toBe(true);
+      }
+      const value=JSON.parse(JSON.stringify(canonical));
+      let target=value; for (const part of pathParts) target=target[part];
+      target.unexpectedAuthority='not_allowed';
+      expect(invoicePreviewUi.invalidPart7(value,'paid')).toBe(true);
+    }
+    for (const collection of ['requirements','methods']) {
+      canonical[collection].forEach((entry,index)=>Object.keys(entry).forEach(key=>{
+        const value=JSON.parse(JSON.stringify(canonical)); delete value[collection][index][key];
+        expect(invoicePreviewUi.invalidPart7(value,'paid')).toBe(true);
+      }));
+    }
   });
 });

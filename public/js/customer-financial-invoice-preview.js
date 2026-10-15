@@ -46,6 +46,132 @@
     style.textContent = '.invoice-draft-preview{margin-top:1rem;border:1px solid var(--border-color,#d6d7db);border-radius:14px;background:var(--surface,#fff);color:inherit}.invoice-draft-preview>summary{padding:1rem;font-weight:700;cursor:pointer}.invoice-draft-preview-body{padding:0 1rem 1rem}.invoice-draft-preview-status:focus,.invoice-draft-preview-heading:focus,.invoice-draft-preview button:focus,.invoice-draft-preview input:focus,.invoice-draft-preview textarea:focus,.invoice-draft-tax-evidence>summary:focus{outline:3px solid var(--focus-ring,#d0a847);outline-offset:3px}.invoice-draft-preview-document,.invoice-draft-workflow-step,.invoice-part5-acceptance,.invoice-part6-acceptance,.invoice-part7-acceptance{border:1px solid var(--border-color,#d6d7db);border-radius:12px;padding:1rem;background:var(--surface-subtle,#f7f5ef)}.invoice-draft-preview-demo{display:inline-block;padding:.25rem .55rem;border-radius:999px;background:#f3d57b;color:#241b00;font-weight:750}.invoice-draft-preview-lines{width:100%;border-collapse:collapse;margin:.75rem 0}.invoice-draft-preview-lines th,.invoice-draft-preview-lines td{padding:.55rem;text-align:left;border-bottom:1px solid var(--border-color,#d6d7db);vertical-align:top;overflow-wrap:anywhere}.invoice-draft-preview-lines th:last-child,.invoice-draft-preview-lines td:last-child{text-align:right}.invoice-draft-preview-totals{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.45rem 1rem;max-width:30rem;margin-left:auto}.invoice-draft-preview-totals dt{font-weight:650}.invoice-draft-preview-totals dd{margin:0;text-align:right}.invoice-draft-preview-boundary{padding:.75rem;border-radius:10px;background:var(--surface-subtle,#f4f1e9)}.invoice-draft-preview-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}.invoice-part5-acceptance,.invoice-part6-acceptance,.invoice-part7-acceptance{margin-top:1rem}.invoice-part5-gates,.invoice-part6-gates,.invoice-part7-gates{display:grid;grid-template-columns:minmax(9rem,auto) minmax(0,1fr);gap:.35rem .8rem}.invoice-part5-gates dt,.invoice-part6-gates dt,.invoice-part7-gates dt{font-weight:700}.invoice-part5-gates dd,.invoice-part6-gates dd,.invoice-part7-gates dd{margin:0;overflow-wrap:anywhere}.invoice-part5-axes,.invoice-part5-corrections,.invoice-part6-requirements,.invoice-part6-actions,.invoice-part7-requirements,.invoice-part7-methods,.invoice-part7-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem 1.2rem;padding-left:1.2rem}.invoice-part6-requirements li,.invoice-part6-actions li,.invoice-part7-requirements li,.invoice-part7-methods li,.invoice-part7-controls li{overflow-wrap:anywhere}.invoice-part5-subheading,.invoice-part6-subheading,.invoice-part7-subheading{margin-bottom:.4rem}.invoice-draft-workflow-form,.invoice-draft-workflow-field{display:grid;gap:.6rem}.invoice-draft-workflow-line{display:grid;grid-template-columns:minmax(9rem,1fr) minmax(12rem,2fr) auto;gap:.6rem;align-items:end;margin:.7rem 0}.invoice-draft-workflow-line label{display:grid;gap:.3rem}.invoice-draft-workflow-form textarea{min-height:5rem}.invoice-draft-tax-evidence{margin:.75rem 0;border-block:1px solid var(--border-color,#d6d7db);padding:.65rem 0}.invoice-draft-tax-evidence>summary{font-weight:700;cursor:pointer}.invoice-draft-tax-evidence dl{display:grid;grid-template-columns:minmax(10rem,auto) minmax(0,1fr);gap:.35rem .75rem}.invoice-draft-tax-evidence dt{font-weight:650}.invoice-draft-tax-evidence dd{margin:0;overflow-wrap:anywhere}.invoice-draft-tax-gaps{margin:.35rem 0}.invoice-draft-tax-provenance{max-width:24rem}@media(max-width:680px){.invoice-draft-preview{border-radius:10px}.invoice-draft-preview-lines thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.invoice-draft-preview-lines tr{display:grid;padding:.65rem 0;border-bottom:1px solid var(--border-color,#d6d7db)}.invoice-draft-preview-lines td{display:flex;justify-content:space-between;gap:1rem;border:0;padding:.2rem 0;text-align:right}.invoice-draft-preview-lines td:before{content:attr(data-label);font-weight:650;text-align:left}.invoice-draft-preview-actions .btn{width:100%}.invoice-part5-gates,.invoice-part5-axes,.invoice-part5-corrections,.invoice-part6-gates,.invoice-part6-requirements,.invoice-part6-actions,.invoice-part7-gates,.invoice-part7-requirements,.invoice-part7-methods,.invoice-part7-controls{grid-template-columns:1fr}.invoice-draft-workflow-line{grid-template-columns:1fr}.invoice-draft-workflow-line .invoice-draft-workflow-amount{justify-self:start}.invoice-draft-tax-evidence dl{grid-template-columns:1fr}.invoice-draft-tax-evidence dd{margin-bottom:.45rem}}@media(forced-colors:active){.invoice-draft-preview,.invoice-draft-preview-document,.invoice-draft-workflow-step,.invoice-part5-acceptance,.invoice-part6-acceptance,.invoice-part7-acceptance{border:2px solid CanvasText}.invoice-draft-preview-demo{border:1px solid CanvasText}}';
     document.head.appendChild(style);
   }
+  function exactObject(value, keys) {
+    return value && typeof value === 'object' && !Array.isArray(value) &&
+      Object.keys(value).length === keys.length &&
+      Object.keys(value).every(function (key) { return keys.includes(key); });
+  }
+  function invalidPart7(value, expectedMode) {
+    var witness = value && value.previewWitness, sources = value && value.sourceWitnesses;
+    var schema = value && value.adapterSchema, sandbox = value && value.sandbox;
+    var rollout = value && value.rollout, drift = value && value.driftAndDisconnect;
+    var protections = value && value.protections, access = value && value.access;
+    var expectedRequirements = [
+      ['exact_current_launch_policy','current',null],
+      ['tenant_bound_test_provider_connection','unavailable','provider_connection_prerequisites_unavailable'],
+      ['current_provider_capability_grant','unavailable','provider_connection_capability_unavailable'],
+      ['recent_authentication_and_mfa','unavailable','mfa_authority_unavailable'],
+      ['compatible_adapter_schema','unavailable','provider_adapter_runtime_unavailable'],
+      ['provider_sandbox_journey_evidence','unavailable','provider_sandbox_evidence_unavailable'],
+      ['exact_current_issued_balance','unavailable','issued_invoice_unavailable'],
+      ['current_scoped_customer_session','unavailable','invoice_public_session_unavailable'],
+      ['exact_payment_idempotency_receipt','not_created','payment_plan_not_authorized'],
+      ['server_owned_rollout_flag','disabled','payment_rollout_disabled'],
+    ];
+    var denied = [value && value.providerSandboxAccepted,value && value.providerConnectionCurrent,
+      value && value.paymentPlanCurrent,value && value.paymentInitiationAuthorized,
+      value && value.providerSessionCreated,value && value.paymentSuccessRecorded,
+      value && value.settlementRecorded];
+    var sourceDigests = sources && [sources.providerBoundaryDigest,sources.providerConnectionDigest,
+      sources.paymentInitiationDigest];
+    return !exactObject(value, ['contractVersion','state','reason','mode','fictional','previewWitness',
+      'sourceWitnesses','requirements','adapterSchema','sandbox','rollout','driftAndDisconnect',
+      'methods','protections','access','exactCurrentnessRevalidated','providerSandboxAccepted',
+      'providerConnectionCurrent','paymentPlanCurrent','paymentInitiationAuthorized',
+      'providerSessionCreated','paymentSuccessRecorded','settlementRecorded','providerCallCount',
+      'providerMutationCount','receiverMutationCount','liveMoneyMovementCount']) ||
+      value.contractVersion !== 'm27-payment-part7-acceptance-v1' ||
+      value.state !== 'unavailable' || value.reason !== 'provider_sandbox_evidence_unavailable' ||
+      !['paid','demo'].includes(expectedMode) || value.mode !== expectedMode ||
+      value.fictional !== (expectedMode === 'demo') ||
+      !exactObject(witness, ['contractVersion','mode','draftRevision','draftDigest','previewDigest']) ||
+      witness.contractVersion !== 'm27-invoice-part5-preview-witness-v1' || witness.mode !== expectedMode ||
+      !Number.isSafeInteger(witness.draftRevision) || witness.draftRevision < 0 ||
+      !/^[0-9a-f]{64}$/.test(witness.draftDigest || '') ||
+      !/^[0-9a-f]{64}$/.test(witness.previewDigest || '') ||
+      !exactObject(sources, ['providerBoundaryContractVersion','providerBoundaryDigest',
+        'providerConnectionContractVersion','providerConnectionDigest',
+        'paymentInitiationContractVersion','paymentInitiationDigest']) ||
+      sources.providerBoundaryContractVersion !== 'm27-payment-provider-boundary-v1' ||
+      sources.providerConnectionContractVersion !== 'm27-payment-provider-connection-v1' ||
+      sources.paymentInitiationContractVersion !== 'm27-payment-initiation-plan-v1' ||
+      sourceDigests.some(function (digest) { return !/^[0-9a-f]{64}$/.test(digest || ''); }) ||
+      new Set(sourceDigests).size !== sourceDigests.length ||
+      !Array.isArray(value.requirements) || value.requirements.length !== expectedRequirements.length ||
+      value.requirements.some(function (item,index) {
+        var expected = expectedRequirements[index];
+        return !exactObject(item, ['requirement','state','reason']) ||
+          item.requirement !== expected[0] || item.state !== expected[1] || item.reason !== expected[2];
+      }) ||
+      !exactObject(schema, ['contractVersion','state','reason','value','provider','mode',
+        'acceptedMajorVersion','minimumSupportedMinorVersion','maximumTestedMinorVersion',
+        'breakingChangeRequiresNewMajorVersion','unknownRequiredFieldAccepted',
+        'unknownOptionalFieldMayAuthorizeEffect','backwardCompatibleMinorInputRequired',
+        'forwardCompatibleOptionalOutputRequired','callerAuthoredProviderObjectAccepted',
+        'providerPayloadMayMarkInvoicePaid']) ||
+      schema.contractVersion !== 'm27-payment-provider-adapter-schema-v1' ||
+      schema.state !== 'unavailable' || schema.reason !== 'provider_adapter_runtime_unavailable' ||
+      schema.value !== null || schema.provider !== 'stripe_connect' || schema.mode !== 'test' ||
+      schema.acceptedMajorVersion !== 1 || schema.minimumSupportedMinorVersion !== 0 ||
+      schema.maximumTestedMinorVersion !== 0 || schema.breakingChangeRequiresNewMajorVersion !== true ||
+      schema.unknownRequiredFieldAccepted !== false ||
+      schema.unknownOptionalFieldMayAuthorizeEffect !== false ||
+      schema.backwardCompatibleMinorInputRequired !== true ||
+      schema.forwardCompatibleOptionalOutputRequired !== true ||
+      schema.callerAuthoredProviderObjectAccepted !== false ||
+      schema.providerPayloadMayMarkInvoicePaid !== false ||
+      !exactObject(sandbox, ['state','reason','value','requiredForMissionCompletion',
+        'evidenceAccepted','syntheticEvidenceMaySubstitute','providerAccountId','providerSessionId',
+        'hostedCheckoutUrl']) || sandbox.state !== 'unavailable' ||
+      sandbox.reason !== 'provider_sandbox_evidence_unavailable' || sandbox.value !== null ||
+      sandbox.requiredForMissionCompletion !== true || sandbox.evidenceAccepted !== false ||
+      sandbox.syntheticEvidenceMaySubstitute !== false || sandbox.providerAccountId !== null ||
+      sandbox.providerSessionId !== null || sandbox.hostedCheckoutUrl !== null ||
+      !exactObject(rollout, ['stage','tenantFlagDefault','tenantFlagEnabled','featureFlagRollbackState',
+        'rollbackBlocksNewInitiation','rollbackCanMarkInvoicePaid','liveCapabilityEnabled',
+        'liveCapabilityPrerequisites']) || rollout.stage !== 'disabled' ||
+      rollout.tenantFlagDefault !== 'off' || rollout.tenantFlagEnabled !== false ||
+      rollout.featureFlagRollbackState !== 'active' || rollout.rollbackBlocksNewInitiation !== true ||
+      rollout.rollbackCanMarkInvoicePaid !== false || rollout.liveCapabilityEnabled !== false ||
+      !Array.isArray(rollout.liveCapabilityPrerequisites) ||
+      rollout.liveCapabilityPrerequisites.join(',') !==
+        'accepted_parts_8_and_9,accepted_part_13_controls,separately_authorized_live_canary' ||
+      !exactObject(drift, ['capabilityDriftBehavior','accountOrModeDriftBehavior','disconnectBehavior',
+        'credentialRotationBehavior','automaticReconnectAuthorized','browserReturnMayRestoreAuthority']) ||
+      drift.capabilityDriftBehavior !== 'deny_and_require_current_reauthorization' ||
+      drift.accountOrModeDriftBehavior !== 'deny_and_require_exact_revalidation' ||
+      drift.disconnectBehavior !== 'deny_new_initiation_and_clear_provider_state' ||
+      drift.credentialRotationBehavior !== 'deny_until_current_server_credential_authority' ||
+      drift.automaticReconnectAuthorized !== false || drift.browserReturnMayRestoreAuthority !== false ||
+      !Array.isArray(value.methods) || value.methods.length !== 2 ||
+      !exactObject(value.methods[0], ['method','policyState','runtimeState','reason']) ||
+      value.methods[0].method !== 'card' || value.methods[0].policyState !== 'launch_supported' ||
+      value.methods[0].runtimeState !== 'unavailable' ||
+      value.methods[0].reason !== 'payment_provider_unavailable' ||
+      !exactObject(value.methods[1], ['method','policyState','runtimeState','reason']) ||
+      value.methods[1].method !== 'any_other_online_method' ||
+      value.methods[1].policyState !== 'unsupported' || value.methods[1].runtimeState !== 'unsupported' ||
+      value.methods[1].reason !== 'payment_method_unsupported' ||
+      !exactObject(protections, ['duplicateClickRequiresSameIdempotencyReceipt',
+        'changedRequestUnderSameIdempotencyKeyConflicts',
+        'amountCurrencyInvoiceOrAllocationChangeInvalidatesPlan','stalePlanMayReachProvider',
+        'missingAmountMayBeTreatedAsZero','browserReturnAuthorizesPayment']) ||
+      protections.duplicateClickRequiresSameIdempotencyReceipt !== true ||
+      protections.changedRequestUnderSameIdempotencyKeyConflicts !== true ||
+      protections.amountCurrencyInvoiceOrAllocationChangeInvalidatesPlan !== true ||
+      protections.stalePlanMayReachProvider !== false || protections.missingAmountMayBeTreatedAsZero !== false ||
+      protections.browserReturnAuthorizesPayment !== false ||
+      !exactObject(access, ['staffReadRoles','providerConnectionRole','customerInitiationAuthority',
+        'staffRoleMaySubstituteForCustomerSession','roleAloneAuthorizesProviderAction',
+        'tenantCrossingAllowed']) || !Array.isArray(access.staffReadRoles) ||
+      access.staffReadRoles.join(',') !== 'owner,admin' || access.providerConnectionRole !== 'owner' ||
+      access.customerInitiationAuthority !== 'current_scoped_customer_session' ||
+      access.staffRoleMaySubstituteForCustomerSession !== false ||
+      access.roleAloneAuthorizesProviderAction !== false || access.tenantCrossingAllowed !== false ||
+      value.exactCurrentnessRevalidated !== true || denied.some(function (item) { return item !== false; }) ||
+      value.providerCallCount !== 0 || value.providerMutationCount !== 0 ||
+      value.receiverMutationCount !== 0 || value.liveMoneyMovementCount !== 0;
+  }
   function mount(review, host) {
     if (!review || !host || !review.pins || !review.pins.estimateId) return null;
     injectStyles(); var mountToken = ++mountGeneration, requestToken = 0, data = null,
@@ -167,61 +293,6 @@
       var identity = preview && preview.draftIdentity, witness = acceptance && acceptance.previewWitness;
       return !!identity && !!witness && identity.revision === witness.draftRevision &&
         identity.draftDigest === witness.draftDigest && preview.previewDigest === witness.previewDigest;
-    }
-    function invalidPart7(value) {
-      var witness = value && value.previewWitness, sources = value && value.sourceWitnesses;
-      var schema = value && value.adapterSchema, sandbox = value && value.sandbox;
-      var rollout = value && value.rollout, drift = value && value.driftAndDisconnect;
-      var protections = value && value.protections, access = value && value.access;
-      var requirementNames = ['exact_current_launch_policy','tenant_bound_test_provider_connection',
-        'current_provider_capability_grant','recent_authentication_and_mfa',
-        'compatible_adapter_schema','provider_sandbox_journey_evidence',
-        'exact_current_issued_balance','current_scoped_customer_session',
-        'exact_payment_idempotency_receipt','server_owned_rollout_flag'];
-      var denied = [value?.providerSandboxAccepted,value?.providerConnectionCurrent,
-        value?.paymentPlanCurrent,value?.paymentInitiationAuthorized,value?.providerSessionCreated,
-        value?.paymentSuccessRecorded,value?.settlementRecorded];
-      return !value || value.contractVersion !== 'm27-payment-part7-acceptance-v1' ||
-        value.state !== 'unavailable' || value.reason !== 'provider_sandbox_evidence_unavailable' ||
-        value.mode !== (review.simulated ? 'demo' : 'paid') || value.fictional !== !!review.simulated ||
-        witness?.contractVersion !== 'm27-invoice-part5-preview-witness-v1' ||
-        !/^[0-9a-f]{64}$/.test(witness.draftDigest || '') ||
-        !/^[0-9a-f]{64}$/.test(witness.previewDigest || '') ||
-        sources?.providerBoundaryContractVersion !== 'm27-payment-provider-boundary-v1' ||
-        sources?.providerConnectionContractVersion !== 'm27-payment-provider-connection-v1' ||
-        sources?.paymentInitiationContractVersion !== 'm27-payment-initiation-plan-v1' ||
-        [sources?.providerBoundaryDigest,sources?.providerConnectionDigest,
-          sources?.paymentInitiationDigest].some(function (digest) { return !/^[0-9a-f]{64}$/.test(digest || ''); }) ||
-        !Array.isArray(value.requirements) || value.requirements.length !== requirementNames.length ||
-        value.requirements.some(function (item,index) {
-          return !item || item.requirement !== requirementNames[index] ||
-            !['current','unavailable','not_created','disabled'].includes(item.state);
-        }) || schema?.contractVersion !== 'm27-payment-provider-adapter-schema-v1' ||
-        schema.state !== 'unavailable' || schema.value !== null || schema.mode !== 'test' ||
-        schema.acceptedMajorVersion !== 1 || schema.minimumSupportedMinorVersion !== 0 ||
-        schema.maximumTestedMinorVersion !== 0 || schema.unknownRequiredFieldAccepted !== false ||
-        schema.unknownOptionalFieldMayAuthorizeEffect !== false ||
-        schema.providerPayloadMayMarkInvoicePaid !== false ||
-        sandbox?.state !== 'unavailable' || sandbox.value !== null ||
-        sandbox.requiredForMissionCompletion !== true || sandbox.evidenceAccepted !== false ||
-        sandbox.syntheticEvidenceMaySubstitute !== false || rollout?.stage !== 'disabled' ||
-        rollout.tenantFlagDefault !== 'off' || rollout.tenantFlagEnabled !== false ||
-        rollout.featureFlagRollbackState !== 'active' || rollout.liveCapabilityEnabled !== false ||
-        drift?.capabilityDriftBehavior !== 'deny_and_require_current_reauthorization' ||
-        drift.disconnectBehavior !== 'deny_new_initiation_and_clear_provider_state' ||
-        !Array.isArray(value.methods) || value.methods.length !== 2 ||
-        value.methods[0]?.method !== 'card' || value.methods[0].runtimeState !== 'unavailable' ||
-        value.methods[1]?.method !== 'any_other_online_method' ||
-        value.methods[1].runtimeState !== 'unsupported' ||
-        protections?.duplicateClickRequiresSameIdempotencyReceipt !== true ||
-        protections.changedRequestUnderSameIdempotencyKeyConflicts !== true ||
-        protections.amountCurrencyInvoiceOrAllocationChangeInvalidatesPlan !== true ||
-        protections.stalePlanMayReachProvider !== false ||
-        access?.staffReadRoles?.join(',') !== 'owner,admin' ||
-        access.providerConnectionRole !== 'owner' || access.tenantCrossingAllowed !== false ||
-        value.exactCurrentnessRevalidated !== true || denied.some(function (item) { return item !== false; }) ||
-        value.providerCallCount !== 0 || value.providerMutationCount !== 0 ||
-        value.receiverMutationCount !== 0 || value.liveMoneyMovementCount !== 0;
     }
     function samePart7Witness(preview, acceptance) {
       var identity = preview && preview.draftIdentity, witness = acceptance && acceptance.previewWitness;
@@ -440,12 +511,15 @@
       card.setAttribute('aria-labelledby', headingId);
       var heading = node('h5', 'Payment provider and initiation', card,
         'invoice-part7-acceptance-heading'); heading.id = headingId;
-      node('p', 'NorthStar rechecked the complete payment-provider boundary. Sandbox proof, connection authority, compatible adapter runtime, customer checkout, payment success, and settlement remain unavailable. Live payment capability stays off.',
+      node('p', 'NorthStar rechecked the complete payment-provider boundary. Sandbox proof is ' +
+        value.sandbox.state + ' (' + value.sandbox.reason + '), the rollout is ' +
+        value.rollout.stage + ', and live payment capability is ' +
+        (value.rollout.liveCapabilityEnabled ? 'enabled' : 'disabled') + '.',
         card, 'invoice-draft-preview-boundary');
       var gates = node('dl', undefined, card, 'invoice-part7-gates');
       [['Provider sandbox',value.sandbox.reason],
-        ['Provider connection','provider_connection_prerequisites_unavailable'],
-        ['Payment initiation','issued_invoice_unavailable'],
+        ['Provider connection',value.requirements[1].reason],
+        ['Payment initiation',value.requirements[6].reason],
         ['Rollout',value.rollout.stage + ' · tenant flag ' + value.rollout.tenantFlagDefault]]
         .forEach(function (entry) { node('dt', entry[0], gates);
           node('dd', entry[0] === 'Rollout' ? entry[1] : 'Unavailable · ' + entry[1], gates); });
@@ -461,15 +535,19 @@
         'invoice-part7-subheading'); schemaHeading.className = 'invoice-part7-subheading';
       var controls = node('ul', undefined, card, 'invoice-part7-controls');
       [
-        'Schema major ' + schema.acceptedMajorVersion + ', tested minor ' + schema.maximumTestedMinorVersion +
-          ' · runtime unavailable',
-        'Unknown required fields cannot authorize an effect',
-        'Optional output cannot authorize an effect',
-        'Capability drift · deny and require current reauthorization',
-        'Disconnect · deny new initiation and clear provider state',
-        'Feature flag rollback · blocks new initiation and cannot mark an invoice paid',
-        'Duplicate click · exact idempotency receipt required',
-        'Amount, currency, invoice, or allocation change · invalidate the plan',
+        schema.provider + ' adapter · schema major ' + schema.acceptedMajorVersion +
+          ', tested minor ' + schema.maximumTestedMinorVersion + ' · ' + schema.state + ' · ' + schema.reason,
+        'Unknown required field accepted · ' + String(schema.unknownRequiredFieldAccepted),
+        'Optional output may authorize an effect · ' + String(schema.unknownOptionalFieldMayAuthorizeEffect),
+        'Capability drift · ' + value.driftAndDisconnect.capabilityDriftBehavior,
+        'Disconnect · ' + value.driftAndDisconnect.disconnectBehavior,
+        'Feature flag rollback · ' + value.rollout.featureFlagRollbackState +
+          ' · blocks new initiation ' + String(value.rollout.rollbackBlocksNewInitiation) +
+          ' · may mark invoice paid ' + String(value.rollout.rollbackCanMarkInvoicePaid),
+        'Duplicate click requires same idempotency receipt · ' +
+          String(value.protections.duplicateClickRequiresSameIdempotencyReceipt),
+        'Amount, currency, invoice, or allocation change invalidates plan · ' +
+          String(value.protections.amountCurrencyInvoiceOrAllocationChangeInvalidatesPlan),
       ].forEach(function (text) { node('li', text, controls); });
       var methodsHeading = node('h6', 'Payment method states', card,
         'invoice-part7-subheading'); methodsHeading.className = 'invoice-part7-subheading';
@@ -479,7 +557,11 @@
           ' · ' + method.reason, methods);
       });
       node('p', (value.fictional ? 'Fictional demo boundary. ' : '') +
-        'No provider account, credential, checkout, payment event, receiver mutation, or money movement was created. Sandbox evidence remains required and synthetic evidence cannot substitute.',
+        'Provider calls ' + value.providerCallCount + ' · provider mutations ' +
+        value.providerMutationCount + ' · receiver mutations ' + value.receiverMutationCount +
+        ' · live-money movements ' + value.liveMoneyMovementCount + '. Sandbox evidence required · ' +
+        String(value.sandbox.requiredForMissionCompletion) + '; synthetic evidence may substitute · ' +
+        String(value.sandbox.syntheticEvidenceMaySubstitute) + '.',
         card, value.fictional ? 'invoice-draft-preview-demo' : 'invoice-draft-preview-boundary');
     }
     function render(bundle) {
@@ -488,7 +570,8 @@
       var paymentAcceptance = bundle && bundle.part7Acceptance;
       if (invalidBundle(bundle) || invalid(value) || invalidPart5(acceptance) ||
           invalidPart6(deliveryAcceptance) || !samePart5Witness(value, acceptance) ||
-          invalidPart7(paymentAcceptance) || !samePart6Witness(value, deliveryAcceptance) ||
+          !samePart6Witness(value, deliveryAcceptance) ||
+          invalidPart7(paymentAcceptance, review.simulated ? 'demo' : 'paid') ||
           !samePart7Witness(value, paymentAcceptance)) return rejected({ status: 409,
         message: 'The exact invoice draft changed. Reload its current evidence.' });
       data = value; part5 = acceptance; part6 = deliveryAcceptance; part7 = paymentAcceptance;
@@ -583,5 +666,5 @@
     return section;
   }
   function clear() { mountGeneration += 1; }
-  return { mount: mount, clear: clear, money: money };
+  return { mount: mount, clear: clear, money: money, invalidPart7: invalidPart7 };
 }));

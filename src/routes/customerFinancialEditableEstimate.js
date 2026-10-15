@@ -38,6 +38,8 @@ const paymentSettlementPayoutRepository =
   require('../customerFinancial/paymentSettlementPayoutRepository');
 const paymentAttemptAllocationOverpaymentRepository =
   require('../customerFinancial/paymentAttemptAllocationOverpaymentRepository');
+const depositApplicationRepository =
+  require('../customerFinancial/depositApplicationRepository');
 
 const PART8D_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PART8D_DIGEST = /^[0-9a-f]{64}$/i;
@@ -113,6 +115,7 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
   const paymentAttemptAllocationOverpaymentRead =
     options.paymentAttemptAllocationOverpaymentRead ||
     paymentAttemptAllocationOverpaymentRepository.read;
+  const depositApplicationRead = options.depositApplicationRead || depositApplicationRepository.read;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -452,6 +455,21 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         data: await paymentAttemptAllocationOverpaymentRead(
           poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
           req.query.handoffReceiptDigest) });
+      } catch (error) { return failure(res,error); }
+    });
+  router.get('/:estimateId/deposit-application', auth, role, throttle, async (req,res) => {
+      res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+      const keys = Object.keys(req.query);
+      if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+          typeof req.query.handoffReceiptDigest !== 'string' ||
+          !PART8D_UUID.test(req.query.handoffReceiptId) ||
+          !PART8D_DIGEST.test(req.query.handoffReceiptDigest)) return failure(res, {
+        status: 400, code: 'CUSTOMER_FINANCIAL_DEPOSIT_APPLICATION_INVALID',
+        message: 'Select one exact reviewed deposit schedule and payment boundary.' });
+      try { return res.json({ success: true, data: await depositApplicationRead(
+        poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest) });
       } catch (error) { return failure(res,error); }
     });
   router.post('/:estimateId/invoice-draft/workflow-capability', auth, role, throttle, async (req,res) => {

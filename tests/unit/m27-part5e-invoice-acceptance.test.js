@@ -104,11 +104,11 @@ describe('Mission 27 Part 5E complete invoice acceptance boundary', () => {
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part5-acceptance'");
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part5-acceptance'");
     const ui=read('public/js/customer-financial-invoice-preview.js');
-    expect(ui).toContain("'/payment-part7-acceptance?");
-    expect(ui).toContain("'/part7-acceptance'");
+    expect(ui).toContain("'/payment-part9-acceptance?");
+    expect(ui).toContain("'/part9-acceptance'");
     expect(ui).toContain('function invalidPart5(value)');
     expect(ui).toContain('function invalidBundle(value)');
-    expect(ui).toContain("value.contractVersion !== 'm27-payment-part7-preview-bundle-v1'");
+    expect(ui).toContain("value.contractVersion !== 'm27-payment-part9-preview-bundle-v1'");
     expect(ui).not.toContain("Promise.all([request(demoBase + '/preview')");
     expect(ui).toContain('requestToken += 1; data = null; part5 = null; part6 = null; part7 = null;');
     expect(ui).toContain('Seven independent lifecycle checks');

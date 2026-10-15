@@ -106,8 +106,19 @@ describe('Mission 27 Part 4E invoice-draft preview', () => {
     expect(ui).toContain("'/invoice-draft-origin'");
     expect(ui).toContain("'/invoice-draft/tax-review'");
     expect(ui).toContain("confirmationVersion: 'm27-invoice-draft-revision-save-v1'");
-    expect(ui).toContain('function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; context = null; body.replaceChildren(); }');
-    expect(ui).toContain("summary.addEventListener('click', function () { if (section.open) clearCollapsed(); });");
+    expect(ui).toContain('function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; context = null; body.replaceChildren(); }');
+    expect(ui).toContain("summary.addEventListener('keydown', function (event) {");
+    expect(ui).toContain("event.key !== 'Enter'");
+    expect(ui).toContain('event.preventDefault(); if (event.repeat) return;');
+    expect(ui).toContain('keyboardActivationState = !section.open; keyboardActivationUntil = Date.now() + 10000;');
+    expect(ui).toContain("summary.addEventListener('keyup', function (event) {");
+    expect(ui).toContain("event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar'");
+    expect(ui).toContain("summary.addEventListener('pointerdown', function () {");
+    expect(ui).toContain('keyboardActivationState = null; keyboardActivationUntil = 0;');
+    expect(ui).toContain("summary.addEventListener('click', function (event) {");
+    expect(ui).toContain('keyboardActivationState !== null && Date.now() <= keyboardActivationUntil');
+    expect(ui).toContain('if (section.open !== keyboardActivationState) {');
+    expect(ui).toContain('if (section.open) clearCollapsed();');
     expect(ui).toContain('Missing evidence is never shown as zero.');
     ['Exact tax preparation evidence to review','Registration evidence','Nexus evidence',
       'Exemption snapshot','Rounding identity','Separated collected-tax liability',
@@ -141,7 +152,7 @@ describe('Mission 27 Part 4E invoice-draft preview', () => {
     expect(mountedFixture).toContain('deliberately stops before every Part 4 effect');
     const pages=['public/dashboard.html','public/demo-dashboard.html','public/dashboard/command-center.html',
       'public/dashboard/communications.html','public/dashboard/leads.html','public/dashboard/polaris.html'];
-    pages.forEach(page=>expect(read(page)).toContain('/js/customer-financial-invoice-preview.js?v=m27-part5e'));
+    pages.forEach(page=>expect(read(page)).toContain('/js/customer-financial-invoice-preview.js?v=m27-part9f'));
     expect(read('public/js/customer-detail.js')).toContain('NorthStarCustomerFinancialInvoicePreview.mount');
   });
   test('keeps migration order exact through one additive 272', () => {

@@ -46,6 +46,8 @@ const offlinePaymentReadinessRepository =
   require('../customerFinancial/offlinePaymentReadinessRepository');
 const paymentOutcomeReadinessRepository =
   require('../customerFinancial/paymentOutcomeReadinessRepository');
+const paymentPart9AcceptanceRepository =
+  require('../customerFinancial/paymentPart9AcceptanceRepository');
 
 const PART8D_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PART8D_DIGEST = /^[0-9a-f]{64}$/i;
@@ -128,6 +130,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     offlinePaymentReadinessRepository.read;
   const paymentOutcomeReadinessRead = options.paymentOutcomeReadinessRead ||
     paymentOutcomeReadinessRepository.read;
+  const paymentPart9AcceptanceRead = options.paymentPart9AcceptanceRead ||
+    paymentPart9AcceptanceRepository.readBundle;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -525,6 +529,21 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         status: 400, code: 'CUSTOMER_FINANCIAL_PAYMENT_OUTCOME_INVALID',
         message: 'Select one exact current payment and outcome boundary.' });
       try { return res.json({ success: true, data: await paymentOutcomeReadinessRead(
+        poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest) });
+      } catch (error) { return failure(res,error); }
+    });
+  router.get('/:estimateId/payment-part9-acceptance', auth, role, throttle, async (req,res) => {
+      res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+      const keys = Object.keys(req.query);
+      if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+          typeof req.query.handoffReceiptDigest !== 'string' ||
+          !PART8D_UUID.test(req.query.handoffReceiptId) ||
+          !PART8D_DIGEST.test(req.query.handoffReceiptDigest)) return failure(res, {
+        status: 400, code: 'CUSTOMER_FINANCIAL_PAYMENT_PART9_INVALID',
+        message: 'Select one exact current Part 9 financial journey.' });
+      try { return res.json({ success: true, data: await paymentPart9AcceptanceRead(
         poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
         req.query.handoffReceiptDigest) });
       } catch (error) { return failure(res,error); }

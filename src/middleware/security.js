@@ -76,6 +76,8 @@ function corsOptions(req, callback) {
     '/api/v1/customer-financial/receivables/',
     '/api/v1/customer-financial/collection-review',
     '/api/v1/customer-financial/collection-review/',
+    '/api/v1/customer-financial/collection-handoff',
+    '/api/v1/customer-financial/collection-handoff/',
   ].includes(req.path);
 
   callback(null, {

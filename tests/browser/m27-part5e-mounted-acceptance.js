@@ -111,8 +111,18 @@ async function proveDatabaseDelayedSuppression(options) {
     assert.equal(await options.root.locator('.invoice-part6-acceptance').count(), 0);
     assert.equal(await options.root.locator('.invoice-part7-acceptance').count(), 0);
     assert.equal(await options.root.locator('.invoice-part9-acceptance').count(), 0);
-    await options.summary.focus(); await options.summary.press('Enter');
-    await options.root.getByText(options.expectedText, { exact: true }).waitFor({ timeout: 30000 });
+    let reopenedRequests=0;
+    const countReopenedRequest=request=>{
+      if(new URL(request.url()).pathname.endsWith(options.routePath))reopenedRequests+=1;
+    };
+    options.page.on('request',countReopenedRequest);
+    try {
+      await options.summary.focus(); await options.summary.press('Enter');
+      assert.equal(await options.root.evaluate(node=>node.open),true);
+      await options.root.getByText(options.expectedText, { exact: true }).waitFor({ timeout: 30000 });
+      await options.page.waitForTimeout(100);
+    } finally { options.page.off('request',countReopenedRequest); }
+    assert.equal(reopenedRequests,1);
     assert.equal(await options.root.locator('.invoice-part6-requirements li').count(), 8);
     assert.equal(await options.root.locator('.invoice-part7-requirements li').count(), 10);
     assert.equal(await options.root.locator('.invoice-part9-sources li').count(), 5);
@@ -552,6 +562,7 @@ async function auditActualSurface(page, root, layout) {
       });
       assert.ok(resetGraph.workspaceRevision > oldDemoRevision);
       await oldSummary.focus(); await oldSummary.press('Enter');
+      assert.equal(await demoRoot.evaluate(node=>node.open),true);
       const resetAlert=demoRoot.locator('[role=alert]'); await resetAlert.waitFor({timeout:30000});
       assert.match(await resetAlert.textContent(), /changed|unavailable/i);
       assert.equal(await demoRoot.locator('table').count(),0);

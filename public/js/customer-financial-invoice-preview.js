@@ -329,7 +329,7 @@
     if (!review || !host || !review.pins || !review.pins.estimateId) return null;
     injectStyles(); var mountToken = ++mountGeneration, requestToken = 0, data = null,
       part5 = null, part6 = null, part7 = null, part9 = null, context = null;
-    var ignoreProgrammaticOpenToggle = false;
+    var suppressedToggleState = null, keyboardActivationState = null, keyboardActivationUntil = 0;
     var expectedDemoRevision = review.simulated ?
       Number(document.documentElement.dataset.demoRevision) : null;
     var section = node('details', undefined, host, 'invoice-draft-preview');
@@ -497,7 +497,7 @@
       return post(url, value).then(function () {
         return recoverAfterSuccessfulMutation({ section: section,
           active: function () { return active(token); },
-          beforeOpen: function () { ignoreProgrammaticOpenToggle = true; }, reload: load });
+          beforeOpen: function () { suppressedToggleState = true; }, reload: load });
       })
         .catch(function (error) { if (active(token)) rejected(error); });
     }
@@ -907,10 +907,42 @@
         .catch(function (error) { if (active(token)) rejected(error); });
     }
     function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; context = null; body.replaceChildren(); }
-    summary.addEventListener('click', function () { if (section.open) clearCollapsed(); });
+    function toggleDisclosure() {
+      var opening = !section.open; suppressedToggleState = opening; section.open = opening;
+      if (opening) load(); else clearCollapsed();
+    }
+    summary.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+      event.preventDefault(); if (event.repeat) return;
+      keyboardActivationState = !section.open; keyboardActivationUntil = Date.now() + 10000;
+      toggleDisclosure();
+    });
+    summary.addEventListener('keyup', function (event) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') event.preventDefault();
+    });
+    summary.addEventListener('pointerdown', function () {
+      keyboardActivationState = null; keyboardActivationUntil = 0;
+    });
+    summary.addEventListener('click', function (event) {
+      if (keyboardActivationState !== null && Date.now() <= keyboardActivationUntil) {
+        event.preventDefault(); return;
+      }
+      keyboardActivationState = null; keyboardActivationUntil = 0;
+      if (section.open) clearCollapsed();
+    });
     section.addEventListener('toggle', function () {
-      if (!section.open) { ignoreProgrammaticOpenToggle = false; clearCollapsed(); return; }
-      if (ignoreProgrammaticOpenToggle) { ignoreProgrammaticOpenToggle = false; return; }
+      if (suppressedToggleState !== null) {
+        var suppress = section.open === suppressedToggleState; suppressedToggleState = null;
+        if (suppress) return;
+      }
+      if (keyboardActivationState !== null && Date.now() <= keyboardActivationUntil) {
+        if (section.open !== keyboardActivationState) {
+          suppressedToggleState = keyboardActivationState; section.open = keyboardActivationState;
+        }
+        return;
+      }
+      keyboardActivationState = null; keyboardActivationUntil = 0;
+      if (!section.open) { clearCollapsed(); return; }
       load();
     });
     return section;

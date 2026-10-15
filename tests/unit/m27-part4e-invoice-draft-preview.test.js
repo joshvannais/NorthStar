@@ -107,7 +107,18 @@ describe('Mission 27 Part 4E invoice-draft preview', () => {
     expect(ui).toContain("'/invoice-draft/tax-review'");
     expect(ui).toContain("confirmationVersion: 'm27-invoice-draft-revision-save-v1'");
     expect(ui).toContain('function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; context = null; body.replaceChildren(); }');
-    expect(ui).toContain("summary.addEventListener('click', function () { if (section.open) clearCollapsed(); });");
+    expect(ui).toContain("summary.addEventListener('keydown', function (event) {");
+    expect(ui).toContain("event.key !== 'Enter'");
+    expect(ui).toContain('event.preventDefault(); if (event.repeat) return;');
+    expect(ui).toContain('keyboardActivationState = !section.open; keyboardActivationUntil = Date.now() + 10000;');
+    expect(ui).toContain("summary.addEventListener('keyup', function (event) {");
+    expect(ui).toContain("event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar'");
+    expect(ui).toContain("summary.addEventListener('pointerdown', function () {");
+    expect(ui).toContain('keyboardActivationState = null; keyboardActivationUntil = 0;');
+    expect(ui).toContain("summary.addEventListener('click', function (event) {");
+    expect(ui).toContain('keyboardActivationState !== null && Date.now() <= keyboardActivationUntil');
+    expect(ui).toContain('if (section.open !== keyboardActivationState) {');
+    expect(ui).toContain('if (section.open) clearCollapsed();');
     expect(ui).toContain('Missing evidence is never shown as zero.');
     ['Exact tax preparation evidence to review','Registration evidence','Nexus evidence',
       'Exemption snapshot','Rounding identity','Separated collected-tax liability',

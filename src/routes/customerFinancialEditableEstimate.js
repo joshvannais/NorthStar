@@ -32,6 +32,8 @@ const paymentInitiationPlanRepository =
   require('../customerFinancial/paymentInitiationPlanRepository');
 const paymentPart7AcceptanceRepository =
   require('../customerFinancial/paymentPart7AcceptanceRepository');
+const paymentAllocationBalanceRepository =
+  require('../customerFinancial/paymentAllocationBalanceRepository');
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -97,6 +99,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     paymentInitiationPlanRepository.read;
   const paymentPart7AcceptanceRead = options.paymentPart7AcceptanceRead ||
     paymentPart7AcceptanceRepository.readBundle;
+  const paymentAllocationBalanceRead = options.paymentAllocationBalanceRead ||
+    paymentAllocationBalanceRepository.read;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -387,6 +391,20 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         status: 400, code: 'CUSTOMER_FINANCIAL_PAYMENT_PART7_INVALID',
         message: 'Select one exact current payment-provider journey.' });
       try { return res.json({ success: true, data: await paymentPart7AcceptanceRead(
+        poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest) });
+      } catch (error) { return failure(res,error); }
+    });
+  router.get('/:estimateId/payment-allocation-balance', auth, role, throttle,
+    async (req,res) => {
+      res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+      const keys = Object.keys(req.query);
+      if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+          typeof req.query.handoffReceiptDigest !== 'string') return failure(res, {
+        status: 400, code: 'CUSTOMER_FINANCIAL_PAYMENT_ALLOCATION_INVALID',
+        message: 'Select one exact current issued invoice and accepted payment.' });
+      try { return res.json({ success: true, data: await paymentAllocationBalanceRead(
         poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
         req.query.handoffReceiptDigest) });
       } catch (error) { return failure(res,error); }

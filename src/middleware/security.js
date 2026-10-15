@@ -71,15 +71,19 @@ function corsOptions(req, callback) {
     corsEnabled = true;
   }
 
-  const exactReceivableRead = req.path === '/api/v1/customer-financial/receivables' ||
-    req.path === '/api/v1/customer-financial/receivables/';
+  const exactCustomerFinancialRead = [
+    '/api/v1/customer-financial/receivables',
+    '/api/v1/customer-financial/receivables/',
+    '/api/v1/customer-financial/collection-review',
+    '/api/v1/customer-financial/collection-review/',
+  ].includes(req.path);
 
   callback(null, {
     origin: corsEnabled,
     credentials: true,
-    methods: exactReceivableRead ? ['GET'] :
+    methods: exactCustomerFinancialRead ? ['GET'] :
       ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    preflightContinue: exactReceivableRead,
+    preflightContinue: exactCustomerFinancialRead,
     allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Correlation-ID'],
     exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
     maxAge: 86400

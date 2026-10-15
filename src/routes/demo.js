@@ -48,6 +48,7 @@ const demoInvoiceDocument = require('../customerFinancial/demoInvoiceDocument');
 const demoInvoicePublicSession = require('../customerFinancial/demoInvoicePublicSession');
 const demoInvoiceCustomerPortal = require('../customerFinancial/demoInvoiceCustomerPortal');
 const demoInvoicePart6Acceptance = require('../customerFinancial/demoInvoicePart6Acceptance');
+const demoPaymentPart7Acceptance = require('../customerFinancial/demoPaymentPart7Acceptance');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -469,6 +470,23 @@ router.get('/customer-financial/invoice-drafts/:estimateId/part6-acceptance', as
         message: 'That fictional invoice delivery journey is unavailable.' } });
     return res.json({ success: true,
       data: demoInvoicePart6Acceptance.bundle(item, record.revision) });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.get('/customer-financial/invoice-drafts/:estimateId/part7-acceptance', async function (req, res) {
+  res.set('Cache-Control', 'private, no-store'); res.vary('Cookie');
+  if (Object.keys(req.query).length) return res.status(400).json({ success: false,
+    error: { code: 'demo_payment_part7_request_invalid',
+      message: 'Choose one fictional payment-provider journey.' } });
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    const item = demoCanonicalItems(demoWorkspace(record))
+      .find(candidate => candidate.ids.estimate === req.params.estimateId);
+    if (!item) return res.status(404).json({ success: false,
+      error: { code: 'demo_payment_part7_unavailable',
+        message: 'That fictional payment-provider journey is unavailable.' } });
+    return res.json({ success: true,
+      data: demoPaymentPart7Acceptance.bundle(item, record.revision) });
   } catch (error) { return commandCenterFailure(req, res, error); }
 });
 

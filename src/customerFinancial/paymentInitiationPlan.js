@@ -42,8 +42,8 @@ function requirement(requirementName, state, reason) {
 }
 
 function unavailable(publicSession = invoicePublicSession.unavailable('paid'),
-  connection = providerConnection.unavailable()) {
-  invoicePublicSession.project(publicSession, 'paid');
+  connection = providerConnection.unavailable(), mode = 'paid') {
+  invoicePublicSession.project(publicSession, mode);
   providerConnection.project(connection);
   const launch = policy();
   const action = launch.actionControl[CAPABILITY];
@@ -144,4 +144,15 @@ function project(raw) {
   return expected;
 }
 
-module.exports = { CONTRACT_VERSION, REASON, CAPABILITY, policy, unavailable, project };
+function projectWithSources(raw, publicSession, connection, mode = 'paid') {
+  const expected = unavailable(publicSession, connection, mode);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+      Object.keys(raw).length !== Object.keys(expected).length ||
+      JSON.stringify(raw) !== JSON.stringify(expected)) {
+    throw new Error('Payment-initiation plan boundary invalid');
+  }
+  return expected;
+}
+
+module.exports = { CONTRACT_VERSION, REASON, CAPABILITY, policy, unavailable, project,
+  projectWithSources };

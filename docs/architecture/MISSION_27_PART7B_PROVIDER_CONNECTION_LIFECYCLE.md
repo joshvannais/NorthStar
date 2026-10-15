@@ -59,5 +59,5 @@ credential storage/rotation/revocation, provider sandbox/private production,
 events, fees, legal/provider/security opinions, payment initiation, settlement,
 payout, reconciliation and live money remain unavailable. Live-money validation
 stays deferred until the first real paying customer, and founder visual approval
-remains separate. Part 7B is released; Part 7C is the current implementation
-candidate and Part 7D remains unstarted.
+remains separate. Part 7B is released; Part 7C was released through PR #506,
+and Part 7D is the current implementation candidate.

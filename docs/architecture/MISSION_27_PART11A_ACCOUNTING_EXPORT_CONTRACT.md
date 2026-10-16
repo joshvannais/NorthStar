@@ -1,6 +1,6 @@
 # Mission 27 Part 11A — provider-neutral accounting export contract
 
-Status: implementation candidate for original Part 11A. This slice adds one owner/administrator, tenant-private, read-only `GET /api/v1/customer-financial/editable-estimates/:estimateId/accounting-export-contract` boundary. It does not select an accounting destination, map an account, preview or transmit a batch, record an acknowledgement, reconcile an external record, create a journal or tax fact, or expose a demo, customer or public route. Parts 11B–11D own those later behaviors and acceptance.
+Status: released original Part 11A at accepted head `976a06188b174b1ce2c1f3130637a0ccfb76b627`, tree `8b65129ba0a6af0a24e9aa5aaec7449eaf60b9ee`, PR #522, exact deployed main `1b567594c340b393c4313ac9ca667c23d68bb835` and sole deployment `8830cfa8-d549-42b8-b139-d91b5845a9da` SUCCESS. This slice adds one owner/administrator, tenant-private, read-only `GET /api/v1/customer-financial/editable-estimates/:estimateId/accounting-export-contract` boundary. It does not select an accounting destination, map an account, preview or transmit a batch, record an acknowledgement, reconcile an external record, create a journal or tax fact, or expose a demo, customer or public route. Part 11B is the current implementation candidate; Parts 11C–11D own later reconciliation and acceptance.
 
 ## Exact source and record contract
 

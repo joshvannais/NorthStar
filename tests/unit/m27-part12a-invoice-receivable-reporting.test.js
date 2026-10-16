@@ -10,7 +10,7 @@ const receivableAging = require('../../src/customerFinancial/receivableAging');
 const reporting = require('../../src/customerFinancial/invoiceReceivableReporting');
 const repository = require('../../src/customerFinancial/invoiceReceivableReportingRepository');
 const { createCustomerFinancialReportingRouter, hasRequestBody, hasFramedRequestBody,
-  rejectCustomerFinancialReportingReadBody } =
+  isInvoiceReceivableReadPath, rejectCustomerFinancialReportingReadBody } =
   require('../../src/routes/customerFinancialReporting');
 
 const ROOT = path.resolve(__dirname,'../..');
@@ -40,12 +40,12 @@ function mutateLeaf(value,pathParts) {
   else throw new Error(`Unsupported reporting leaf ${pathParts.join('.')}`);
 }
 
-function rawGet(server,{pathName='/api/v1/customer-financial/reporting/invoice-receivables',
-  body,headers={}}={}) {
+function rawRequest(server,{pathName='/api/v1/customer-financial/reporting/invoice-receivables',
+  method='GET',body,headers={}}={}) {
   return new Promise((resolve,reject) => {
     const address=server.address();
     const req=http.request({host:'127.0.0.1',port:address.port,path:pathName,
-      method:'GET',headers},res=>{
+      method,headers},res=>{
       const chunks=[];
       res.on('data',chunk=>chunks.push(chunk));
       res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,
@@ -166,6 +166,48 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
     }
   });
 
+  test('matches exactly the case-insensitive mounted Express route equivalence set',() => {
+    const equivalents=[
+      '/api/v1/customer-financial/reporting/invoice-receivables',
+      '/API/v1/customer-financial/reporting/invoice-receivables',
+      '/api/V1/customer-financial/reporting/invoice-receivables',
+      '/api/v1/CUSTOMER-FINANCIAL/reporting/invoice-receivables',
+      '/api/v1/customer-financial/REPORTING/invoice-receivables',
+      '/api/v1/customer-financial/reporting/INVOICE-RECEIVABLES',
+      '/ApI/V1/CuStOmEr-FiNaNcIaL/RePoRtInG/InVoIcE-ReCeIvAbLeS',
+      '/api/v1/customer-financial/reporting/invoice-receivables/',
+      '/API/V1/CUSTOMER-FINANCIAL/REPORTING/INVOICE-RECEIVABLES/',
+      '/api/v1/customer-financial/reporting//invoice-receivables',
+      '/API/V1/CUSTOMER-FINANCIAL/REPORTING//INVOICE-RECEIVABLES/',
+    ];
+    const nearMisses=[
+      '/api/v1/customer-financial/reportinginvoice-receivables',
+      '/api//v1/customer-financial/reporting/invoice-receivables',
+      '/api/v1/customer-financial//reporting/invoice-receivables',
+      '/api/v1/customer-financial/reporting///invoice-receivables',
+      '/api/v1/customer-financial/reporting/invoice-receivables//',
+      '/api/v1/customer-financial/reporting/./invoice-receivables',
+      '/api/v1/customer-financial/reporting/x/../invoice-receivables',
+      '/api/v1/customer-financial/reporting/%2e/invoice-receivables',
+      '/api/v1/customer-financial/reporting/x/%2e%2e/invoice-receivables',
+      '/api/v1/customer-financial/reporting\\invoice-receivables',
+      '/api/v1/customer-financial/reporting/%69nvoice-receivables',
+      '/api/v1/customer-financial/reporting/invoice%2Dreceivables',
+      '/api/v1/customer-financial/reporting%2Finvoice-receivables',
+      '/api/v1/customer-financial/reporting%5Cinvoice-receivables',
+      '/api/v1/customer-financial/reporting/invoice-receivables%2F',
+      '/api/v1/customer-financial/reporting/invoice-receivable',
+      '/api/v1/customer-financial/reporting/invoice-receivables-extra',
+      '/x/api/v1/customer-financial/reporting/invoice-receivables',
+    ];
+    for (const pathname of equivalents) {
+      expect(isInvoiceReceivableReadPath(pathname)).toBe(true);
+    }
+    for (const pathname of nearMisses) {
+      expect(isInvoiceReceivableReadPath(pathname)).toBe(false);
+    }
+  });
+
   test('mounts an exact private GET and rejects queries and methods before source access',async () => {
     const repositoryRead=jest.fn().mockResolvedValue(reporting.unavailable());
     const throttle=jest.fn((_req,_res,next)=>next());
@@ -264,7 +306,7 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
     for (const [req,expected] of framedCases) expect(hasFramedRequestBody(req)).toBe(expected);
   });
 
-  test('pre-parser exact-route gate rejects raw scalar, malformed and chunked bytes',async () => {
+  test('pre-parser route-equivalence and raw-body matrices match mounted Express',async () => {
     const repositoryRead=jest.fn().mockResolvedValue(reporting.unavailable());
     const throttle=jest.fn((_req,_res,next)=>next());
     const app=express();
@@ -297,7 +339,7 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
         const body=bodyCase.body;
         const headers={...bodyCase.headers};
         if (!headers['Transfer-Encoding']) headers['Content-Length']=Buffer.byteLength(body);
-        const response=await rawGet(server,{body,headers});
+        const response=await rawRequest(server,{body,headers});
         expect(response.status).toBe(400);
         expect(response.headers['cache-control']).toContain('private');
         expect(response.headers['cache-control']).toContain('no-store');
@@ -306,18 +348,100 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
           message:'Review the exact current invoice and receivable facts.'}});
         expect(response.text).not.toMatch(/victim|sk_secret|123456789|credential|identity/);
       }
-      const empty=await rawGet(server,{headers:{'Content-Length':'0'}});
+      const protectedPaths=[
+        {pathName:'/api/v1/customer-financial/reporting/invoice-receivables',
+          emptyStatus:200},
+        {pathName:'/API/v1/customer-financial/reporting/invoice-receivables',
+          emptyStatus:200},
+        {pathName:'/api/V1/customer-financial/reporting/invoice-receivables',
+          emptyStatus:200},
+        {pathName:'/api/v1/CUSTOMER-FINANCIAL/reporting/invoice-receivables',
+          emptyStatus:200},
+        {pathName:'/api/v1/customer-financial/REPORTING/invoice-receivables',
+          emptyStatus:200},
+        {pathName:'/api/v1/customer-financial/reporting/INVOICE-RECEIVABLES',
+          emptyStatus:200},
+        {pathName:'/ApI/V1/CuStOmEr-FiNaNcIaL/RePoRtInG/InVoIcE-ReCeIvAbLeS/',
+          emptyStatus:200},
+        {pathName:'/api/v1/customer-financial/reporting//invoice-receivables',
+          emptyStatus:200},
+        {pathName:'/API/V1/CUSTOMER-FINANCIAL/REPORTING//INVOICE-RECEIVABLES/',
+          emptyStatus:200},
+        {pathName:'/api/v1/customer-financial/reporting/invoice-receivables?tenant=victim',
+          emptyStatus:400},
+      ];
+      for (const pathCase of protectedPaths) {
+        const body='"sk_path_secret"';
+        const response=await rawRequest(server,{pathName:pathCase.pathName,body,
+          headers:{'Content-Type':'application/json',
+            'Content-Length':String(Buffer.byteLength(body))}});
+        expect(response.status).toBe(400);
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+        expect(JSON.parse(response.text)).toEqual({success:false,error:{
+          category:'CUSTOMER_FINANCIAL_REPORTING_INVALID',
+          message:'Review the exact current invoice and receivable facts.'}});
+        expect(response.text).not.toMatch(/sk_path_secret|tenant|victim/);
+      }
+      expect(repositoryRead).not.toHaveBeenCalled();
+      expect(throttle).not.toHaveBeenCalled();
+      for (const pathCase of protectedPaths) {
+        const response=await rawRequest(server,{pathName:pathCase.pathName,
+          headers:{'Content-Length':'0'}});
+        expect(response.status).toBe(pathCase.emptyStatus);
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+      }
+      const successfulEmptyPaths=protectedPaths.filter(item=>item.emptyStatus === 200).length;
+      expect(repositoryRead).toHaveBeenCalledTimes(successfulEmptyPaths);
+      expect(throttle).toHaveBeenCalledTimes(successfulEmptyPaths);
+      for (const pathCase of protectedPaths) {
+        for (const method of ['HEAD','OPTIONS','POST','PUT','PATCH','DELETE']) {
+          const response=await rawRequest(server,{pathName:pathCase.pathName,method});
+          expect(response.status).toBe(405);
+          expect(response.headers.allow).toBeUndefined();
+        }
+      }
+      expect(repositoryRead).toHaveBeenCalledTimes(successfulEmptyPaths);
+      expect(throttle).toHaveBeenCalledTimes(successfulEmptyPaths);
+      const nearMisses=[
+        '/api/v1/customer-financial/reportinginvoice-receivables',
+        '/api//v1/customer-financial/reporting/invoice-receivables',
+        '/api/v1/customer-financial//reporting/invoice-receivables',
+        '/api/v1/customer-financial/reporting///invoice-receivables',
+        '/api/v1/customer-financial/reporting/invoice-receivables//',
+        '/api/v1/customer-financial/reporting/./invoice-receivables',
+        '/api/v1/customer-financial/reporting/x/../invoice-receivables',
+        '/api/v1/customer-financial/reporting/%2e/invoice-receivables',
+        '/api/v1/customer-financial/reporting/x/%2e%2e/invoice-receivables',
+        '/api/v1/customer-financial/reporting\\invoice-receivables',
+        '/api/v1/customer-financial/reporting/%69nvoice-receivables',
+        '/api/v1/customer-financial/reporting/invoice%2Dreceivables',
+        '/api/v1/customer-financial/reporting%2Finvoice-receivables',
+        '/api/v1/customer-financial/reporting%5Cinvoice-receivables',
+        '/api/v1/customer-financial/reporting/invoice-receivables%2F',
+        '/api/v1/customer-financial/reporting/invoice-receivable',
+        '/api/v1/customer-financial/reporting/invoice-receivables-extra',
+        '/x/api/v1/customer-financial/reporting/invoice-receivables',
+      ];
+      for (const pathName of nearMisses) {
+        const response=await rawRequest(server,{pathName,body:'{}',
+          headers:{'Content-Type':'application/json','Content-Length':'2'}});
+        expect(response.status).toBe(404);
+        expect(response.text).not.toContain('CUSTOMER_FINANCIAL_REPORTING_INVALID');
+      }
+      const empty=await rawRequest(server,{headers:{'Content-Length':'0'}});
       expect(empty.status).toBe(200);
-      const trailing=await rawGet(server,{
+      const trailing=await rawRequest(server,{
         pathName:'/api/v1/customer-financial/reporting/invoice-receivables/',
         body:'account=acct_secret',headers:{'Content-Type':'text/plain',
           'Content-Length':String(Buffer.byteLength('account=acct_secret'))}});
       expect(trailing.status).toBe(400);
-      const unrelated=await rawGet(server,{pathName:'/unrelated',body:'{}',
+      const unrelated=await rawRequest(server,{pathName:'/unrelated',body:'{}',
         headers:{'Content-Type':'application/json','Content-Length':'2'}});
       expect(unrelated.status).toBe(200);
-      expect(repositoryRead).toHaveBeenCalledTimes(1);
-      expect(throttle).toHaveBeenCalledTimes(1);
+      expect(repositoryRead).toHaveBeenCalledTimes(successfulEmptyPaths+1);
+      expect(throttle).toHaveBeenCalledTimes(successfulEmptyPaths+1);
     } finally {
       await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
     }

@@ -119,6 +119,39 @@ realPostgres('Mission 27 Part 12A mounted invoice and receivable reporting',() =
         new RegExp(`${fixture.org}|victim|acct_secret|sk_secret|invoice_secret|123456789|amountMinorUnits`,'i'));
       expect(repositoryRead).not.toHaveBeenCalled();
     }
+    const equivalentPaths=[
+      '/API/v1/customer-financial/reporting/invoice-receivables',
+      '/api/V1/customer-financial/reporting/invoice-receivables',
+      '/api/v1/CUSTOMER-FINANCIAL/reporting/invoice-receivables',
+      '/api/v1/customer-financial/REPORTING/invoice-receivables',
+      '/api/v1/customer-financial/reporting/INVOICE-RECEIVABLES',
+      '/ApI/V1/CuStOmEr-FiNaNcIaL/RePoRtInG/InVoIcE-ReCeIvAbLeS/',
+      '/api/v1/customer-financial/reporting//invoice-receivables',
+      '/API/V1/CUSTOMER-FINANCIAL/REPORTING//INVOICE-RECEIVABLES/',
+      '/api/v1/customer-financial/reporting/invoice-receivables?tenant=victim',
+    ];
+    for (const pathName of equivalentPaths) {
+      const response=await request(fixture.app).get(pathName).type('json')
+        .send('"sk_path_secret"').set(fixture.actors.owner.session.headers);
+      expect(response.status).toBe(400);
+      expect(response.headers['cache-control']).toContain('private');
+      expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.headers['x-ratelimit-limit']).toBeUndefined();
+      expect(response.body).toEqual({success:false,error:{
+        category:'CUSTOMER_FINANCIAL_REPORTING_INVALID',
+        message:'Review the exact current invoice and receivable facts.'}});
+      expect(JSON.stringify(response.body)).not.toMatch(/sk_path_secret|tenant|victim/);
+      expect(repositoryRead).not.toHaveBeenCalled();
+    }
+    const uppercaseEmpty=await request(fixture.app)
+      .get('/API/V1/CUSTOMER-FINANCIAL/REPORTING/INVOICE-RECEIVABLES/')
+      .set(fixture.actors.owner.session.headers);
+    const doubleSlashEmpty=await request(fixture.app)
+      .get('/api/v1/customer-financial/reporting//invoice-receivables')
+      .set(fixture.actors.owner.session.headers);
+    expect(uppercaseEmpty.status).toBe(200);
+    expect(doubleSlashEmpty.status).toBe(200);
+    expect(repositoryRead).toHaveBeenCalledTimes(2);
     expect(transport).not.toHaveBeenCalled();
   },120000);
 

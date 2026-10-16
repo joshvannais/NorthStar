@@ -5,10 +5,23 @@ const { requireOnboardedInternal, requireRole } = require('../auth/middleware');
 const { rateLimit } = require('../middleware/rateLimit');
 const repository = require('../customerFinancial/invoiceReceivableReportingRepository');
 
-const READ_PATHS = new Set([
-  '/api/v1/customer-financial/reporting/invoice-receivables',
-  '/api/v1/customer-financial/reporting/invoice-receivables/',
-]);
+const READ_ROUTE = Object.freeze({
+  mountSegments:Object.freeze(['api','v1','customer-financial','reporting']),
+  leaf:'invoice-receivables',
+});
+const escapePattern = value => value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+const mountPattern = READ_ROUTE.mountSegments.map(escapePattern).join('/');
+const leafPattern = escapePattern(READ_ROUTE.leaf);
+// Express mount paths and routes are case-insensitive by default. A mount also
+// consumes one optional separating slash, so both one and two slashes between
+// the mount and leaf resolve to this route; no other separator is equivalent.
+const READ_ABSOLUTE_PATH_PATTERN = new RegExp(
+  `^/${mountPattern}/{1,2}${leafPattern}/?$`,'i');
+const READ_RELATIVE_PATH_PATTERN = new RegExp(`^/${leafPattern}/?$`,'i');
+
+function isInvoiceReceivableReadPath(pathname) {
+  return typeof pathname === 'string' && READ_ABSOLUTE_PATH_PATTERN.test(pathname);
+}
 
 function source(req) {
   return { organizationId: req.tenantContext.organizationId,
@@ -60,7 +73,8 @@ function setPrivateReadHeaders(res) {
 }
 
 function rejectCustomerFinancialReportingReadBody(req,res,next) {
-  if (req.method !== 'GET' || !READ_PATHS.has(req.path) || !hasFramedRequestBody(req)) {
+  if (req.method !== 'GET' || !isInvoiceReceivableReadPath(req.path) ||
+      !hasFramedRequestBody(req)) {
     return next();
   }
   setPrivateReadHeaders(res);
@@ -89,24 +103,26 @@ function createCustomerFinancialReportingRouter(options = {}) {
     setPrivateReadHeaders(res);
     next();
   });
-  router.all('/invoice-receivables',(req,res,next) => {
+  router.all(READ_RELATIVE_PATH_PATTERN,(req,res,next) => {
     if (req.method === 'GET') return next();
     return res.status(405).json({ success:false, error:{
       category:'CUSTOMER_FINANCIAL_REPORTING_METHOD_NOT_ALLOWED',
       message:'Use the exact invoice and receivable reporting read boundary.',
     } });
   });
-  router.get('/invoice-receivables',auth,role,requireExactReadInput,throttle,async (req,res) => {
-    try { return res.json({ success:true,data:await read(source(req)) }); }
-    catch (error) {
-      return res.status(error?.status || 503).json({ success:false,error:{
-        category:error?.code || 'CUSTOMER_FINANCIAL_REPORTING_UNAVAILABLE',
-        message:error?.message || 'Invoice and receivable reporting is unavailable.',
-      } });
-    }
-  });
+  router.get(READ_RELATIVE_PATH_PATTERN,auth,role,requireExactReadInput,throttle,
+    async (req,res) => {
+      try { return res.json({ success:true,data:await read(source(req)) }); }
+      catch (error) {
+        return res.status(error?.status || 503).json({ success:false,error:{
+          category:error?.code || 'CUSTOMER_FINANCIAL_REPORTING_UNAVAILABLE',
+          message:error?.message || 'Invoice and receivable reporting is unavailable.',
+        } });
+      }
+    });
   return router;
 }
 
 module.exports = { createCustomerFinancialReportingRouter, hasRequestBody,
-  hasFramedRequestBody, rejectCustomerFinancialReportingReadBody, requireExactReadInput };
+  hasFramedRequestBody, isInvoiceReceivableReadPath,
+  rejectCustomerFinancialReportingReadBody, requireExactReadInput };

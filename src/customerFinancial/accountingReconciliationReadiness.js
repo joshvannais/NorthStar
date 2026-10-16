@@ -45,11 +45,11 @@ function stateSemantics() {
   ]);
 }
 
-function unavailable(readinessRaw, sourceRaw, part10Raw) {
+function unavailable(readinessRaw, sourceRaw, part10Raw, expectedMode = 'paid') {
   let source; let readiness;
   try {
-    source = accountingExport.project(sourceRaw, part10Raw);
-    readiness = exportReadiness.project(readinessRaw, source, part10Raw);
+    source = accountingExport.project(sourceRaw, part10Raw, expectedMode);
+    readiness = exportReadiness.project(readinessRaw, source, part10Raw, expectedMode);
   } catch (_error) {
     throw new Error('Accounting reconciliation source contract invalid');
   }
@@ -201,8 +201,8 @@ function unavailable(readinessRaw, sourceRaw, part10Raw) {
   });
 }
 
-function project(raw, readiness, source, part10) {
-  const expected = unavailable(readiness, source, part10);
+function project(raw, readiness, source, part10, expectedMode = 'paid') {
+  const expected = unavailable(readiness, source, part10, expectedMode);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
       Object.keys(raw).length !== Object.keys(expected).length ||
       JSON.stringify(raw) !== JSON.stringify(expected)) {

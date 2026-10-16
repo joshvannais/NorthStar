@@ -26,6 +26,49 @@ const ESTIMATE='11111111-1111-4111-8111-111111111111';
 const RECEIPT='22222222-2222-4222-8222-222222222222';
 const DIGEST='a'.repeat(64);
 function clone(value){return JSON.parse(JSON.stringify(value));}
+function rechainPart11SourceWitnesses(bundle){
+  const sources=bundle.part11SourceContracts;
+  const sourceParts=bundle.part11Acceptance.sourceParts;
+  const part11ADigest=providerBoundary.digest(sources.part11A);
+  sources.part11B.sourceWitness.digest=part11ADigest;
+  const part11BDigest=providerBoundary.digest(sources.part11B);
+  sources.part11C.sourceWitness.exportContractDigest=part11ADigest;
+  sources.part11C.sourceWitness.digest=part11BDigest;
+  sourceParts[0].digest=part11ADigest;
+  sourceParts[1].digest=part11BDigest;
+  sourceParts[2].digest=providerBoundary.digest(sources.part11C);
+}
+const PART11_DYNAMIC_DIGEST_PATHS=new Set([
+  'part11A.part10Witness.digest',
+  'part11B.sourceWitness.digest',
+  'part11C.sourceWitness.digest',
+  'part11C.sourceWitness.exportContractDigest',
+]);
+function part11SemanticLeafCases(bundle){
+  const cases=[];
+  function visit(value,path){
+    if(value&&typeof value==='object'){
+      if(Array.isArray(value)) value.forEach((item,index)=>visit(item,[...path,index]));
+      else Object.keys(value).forEach(key=>visit(value[key],[...path,key]));
+      return;
+    }
+    const label=path.join('.');
+    if(!PART11_DYNAMIC_DIGEST_PATHS.has(label)) cases.push({label,path});
+  }
+  for(const part of ['part11A','part11B','part11C'])
+    visit(bundle.part11SourceContracts[part],[part]);
+  return cases;
+}
+function forgeSemanticLeaf(bundle,path){
+  let target=bundle.part11SourceContracts;
+  for(let index=0;index<path.length-1;index+=1) target=target[path[index]];
+  const key=path.at(-1); const value=target[key];
+  if(typeof value==='boolean') target[key]=!value;
+  else if(typeof value==='number') target[key]=value+1;
+  else if(typeof value==='string') target[key]=`${value}__forged`;
+  else if(value===null) target[key]='__forged_null__';
+  else throw new Error(`Unsupported semantic leaf ${path.join('.')}`);
+}
 let cachedItem; let cachedPaidPart10; let cachedDemoPart11;
 function item(){
   if(cachedItem) return cachedItem;
@@ -181,7 +224,8 @@ describe('Mission 27 Part 11D complete Part 11 acceptance',()=>{
     const canonical=bundle.part11Acceptance;
     const sources=bundle.part11SourceContracts;
     expect(ui.invalidPart11(clone(canonical),'demo')).toBe(false);
-    expect(await ui.invalidPart11SourceWitnesses(clone(canonical),clone(sources))).toBe(false);
+    expect(await ui.invalidPart11SourceWitnesses(clone(canonical),clone(sources),
+      bundle.part10Acceptance)).toBe(false);
     expect(await ui.samePart11Witness(bundle.preview,clone(canonical),
       bundle.part10Acceptance)).toBe(true);
     const mutations=[
@@ -212,14 +256,64 @@ describe('Mission 27 Part 11D complete Part 11 acceptance',()=>{
       value=>{value.part11A.state='current';},
       value=>{const first=value.part11A; value.part11A=value.part11B; value.part11B=first;},
     ]) { const changed=clone(sources); mutate(changed);
-      expect(await ui.invalidPart11SourceWitnesses(clone(canonical),changed)).toBe(true); }
+      expect(await ui.invalidPart11SourceWitnesses(clone(canonical),changed,
+        bundle.part10Acceptance)).toBe(true); }
     const wrongPart10=clone(canonical);wrongPart10.part10Witness.digest='f'.repeat(64);
     expect(await ui.samePart11Witness(bundle.preview,wrongPart10,
       bundle.part10Acceptance)).toBe(false);
     const wrongSource=clone(canonical);wrongSource.sourceParts[0].digest='e'.repeat(64);
-    expect(await ui.invalidPart11SourceWitnesses(wrongSource,clone(sources))).toBe(true);
+    expect(await ui.invalidPart11SourceWitnesses(wrongSource,clone(sources),
+      bundle.part10Acceptance)).toBe(true);
+    for (const mutate of [
+      value=>{value.part11SourceContracts.part11A.state='current';},
+      value=>{value.part11SourceContracts.part11B.destination.state='current';},
+      value=>{value.part11SourceContracts.part11C.matching.state='current';},
+    ]) {
+      const jointlyForged=clone(bundle); mutate(jointlyForged);
+      rechainPart11SourceWitnesses(jointlyForged);
+      expect(await ui.invalidPart11SourceWitnesses(jointlyForged.part11Acceptance,
+        jointlyForged.part11SourceContracts,jointlyForged.part10Acceptance)).toBe(true);
+    }
+    const semanticCases=part11SemanticLeafCases(bundle);
+    expect(semanticCases.length).toBeGreaterThan(300);
+    const structuralCases=[
+      {label:'wrong digest',mutate:value=>{value.part11Acceptance.sourceParts[0].digest=
+        'f'.repeat(64);}},
+      {label:'missing digest',mutate:value=>{delete value.part11Acceptance.sourceParts[0].digest;}},
+      {label:'malformed digest',mutate:value=>{value.part11Acceptance.sourceParts[0].digest='wrong';}},
+      {label:'duplicate digest',mutate:value=>{value.part11Acceptance.sourceParts[1].digest=
+        value.part11Acceptance.sourceParts[0].digest;}},
+      {label:'reordered witness',mutate:value=>{value.part11Acceptance.sourceParts.reverse();}},
+      {label:'renamed witness',mutate:value=>{value.part11Acceptance.sourceParts[0].part='11Z';}},
+      {label:'missing source',mutate:value=>{delete value.part11SourceContracts.part11A;}},
+      {label:'malformed source',mutate:value=>{value.part11SourceContracts.part11B=[];}},
+      {label:'duplicate source',mutate:value=>{value.part11SourceContracts.part11B=
+        clone(value.part11SourceContracts.part11A);}},
+      {label:'reordered source',mutate:value=>{const first=value.part11SourceContracts.part11A;
+        value.part11SourceContracts.part11A=value.part11SourceContracts.part11B;
+        value.part11SourceContracts.part11B=first;}},
+      {label:'renamed source',mutate:value=>{value.part11SourceContracts.part11X=
+        value.part11SourceContracts.part11A;delete value.part11SourceContracts.part11A;}},
+    ];
+    const failures=[];
+    for(const testCase of semanticCases){
+      const changed=clone(bundle);forgeSemanticLeaf(changed,testCase.path);
+      rechainPart11SourceWitnesses(changed);
+      const rejected=ui.invalidPart11(changed.part11Acceptance,'demo') ||
+        await ui.invalidPart11SourceWitnesses(changed.part11Acceptance,
+          changed.part11SourceContracts,changed.part10Acceptance);
+      if(!rejected) failures.push(testCase.label);
+    }
+    for(const testCase of structuralCases){
+      const changed=clone(bundle);testCase.mutate(changed);
+      const rejected=ui.invalidPart11(changed.part11Acceptance,'demo') ||
+        await ui.invalidPart11SourceWitnesses(changed.part11Acceptance,
+          changed.part11SourceContracts,changed.part10Acceptance);
+      if(!rejected) failures.push(testCase.label);
+    }
+    expect(failures).toEqual([]);
     expect(ui.invalidPart11(clone(canonical),'paid')).toBe(true);
-  },120000);
+  },300000);
 
   test('mounted campaign renews the real account session for every layout',()=>{
     const mounted=read('tests/browser/m27-part5e-mounted-acceptance.js');

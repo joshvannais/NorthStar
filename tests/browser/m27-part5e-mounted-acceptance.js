@@ -14,6 +14,7 @@ for (const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','POL
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { MISSION_26_FIVE_LAYOUTS } = require('../helpers/m26-part12d-rendered-review');
+const providerBoundary = require('../../src/customerFinancial/paymentProviderBoundary');
 const paidPart11Repository = require('../../src/customerFinancial/accountingPart11AcceptanceRepository');
 const demoPart11 = require('../../src/customerFinancial/demoAccountingPart11Acceptance');
 const realPaidPart11Read = paidPart11Repository.readBundle;
@@ -22,7 +23,19 @@ let part11DigestFault = null;
 function corruptPart11Digest(value, kind) {
   const changed=JSON.parse(JSON.stringify(value));
   if (kind === 'part10') changed.part11Acceptance.part10Witness.digest='f'.repeat(64);
-  else changed.part11Acceptance.sourceParts[0].digest='e'.repeat(64);
+  else {
+    changed.part11SourceContracts.part11A.state='current';
+    const sources=changed.part11SourceContracts;
+    const sourceParts=changed.part11Acceptance.sourceParts;
+    const part11ADigest=providerBoundary.digest(sources.part11A);
+    sources.part11B.sourceWitness.digest=part11ADigest;
+    const part11BDigest=providerBoundary.digest(sources.part11B);
+    sources.part11C.sourceWitness.exportContractDigest=part11ADigest;
+    sources.part11C.sourceWitness.digest=part11BDigest;
+    sourceParts[0].digest=part11ADigest;
+    sourceParts[1].digest=part11BDigest;
+    sourceParts[2].digest=providerBoundary.digest(sources.part11C);
+  }
   return changed;
 }
 paidPart11Repository.readBundle = async function () {
@@ -360,13 +373,14 @@ async function assertPart11ClientContract(page, bundle, mode) {
     const api=window.NorthStarCustomerFinancialInvoicePreview;
     return {
       canonicalAccepted:!api.invalidPart11(canonical,expectedMode) &&
-        !await api.invalidPart11SourceWitnesses(canonical,canonicalSources) &&
+        !await api.invalidPart11SourceWitnesses(canonical,canonicalSources,part10) &&
         await api.samePart11Witness(preview,canonical,part10),
       auditorContradictionRejected:api.invalidPart11(auditor,expectedMode),
       wrongPart10Rejected:!await api.samePart11Witness(preview,wrongPart10,part10),
-      wrongSourceRejected:await api.invalidPart11SourceWitnesses(wrongSource,canonicalSources),
+      wrongSourceRejected:await api.invalidPart11SourceWitnesses(
+        wrongSource,canonicalSources,part10),
       wrongSourceContractRejected:await api.invalidPart11SourceWitnesses(
-        canonical,wrongSourceContract),
+        canonical,wrongSourceContract,part10),
     };
   },{value:bundle.part11Acceptance,sources:bundle.part11SourceContracts,
     part10:bundle.part10Acceptance,preview:bundle.preview,expectedMode:mode});
@@ -544,7 +558,7 @@ async function assertPart11FailureCleared(root) {
       assert.ok(await root.getByText(`Mounted ${engine} ${layout.name} reviewed line`, { exact: true }).count() ||
         await root.getByText(`Concurrent ${engine} exact-current line`, { exact: true }).count());
       if (index === 0) {
-        part11DigestFault={mode:'paid',kind:'part10'};
+        part11DigestFault={mode:'paid',kind:'source'};
         await root.getByRole('button',{name:'Reload current preview'}).focus();
         await root.getByRole('button',{name:'Reload current preview'}).press('Enter');
         await assertPart11FailureCleared(root);
@@ -589,10 +603,10 @@ async function assertPart11FailureCleared(root) {
       assert.equal(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-draft/preview?')), false);
       assert.ok(bundleEvidence.length >= 1);
       const malformedBundles=bundleEvidence.filter(bundle =>
-        bundle.part11Acceptance.part10Witness.digest==='f'.repeat(64));
+        bundle.part11SourceContracts.part11A.state==='current');
       assert.equal(malformedBundles.length,index===0?1:0);
       const exactBundles=bundleEvidence.filter(bundle =>
-        bundle.part11Acceptance.part10Witness.digest!=='f'.repeat(64));
+        bundle.part11SourceContracts.part11A.state!=='current');
       for (const bundle of exactBundles) {
         assert.equal(bundle.contractVersion, 'm27-accounting-part11-preview-bundle-v1');
         assert.equal(bundle.preview.draftIdentity.revision,

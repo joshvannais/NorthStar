@@ -94,6 +94,32 @@
       }).join('');
     });
   }
+  var PART11_SOURCE_DIGEST_MARKER='__EXACT_UPSTREAM_DIGEST__';
+  var PART11_SOURCE_SEMANTIC_DIGESTS=Object.freeze([
+    'c2ed3cb5b88883c17bb1c32268315ace21270993288e8c575613977463ec91a9',
+    'efbe2cddc2c48da32ca627e23bd529fc30fbdb9b24aa29ae6ef64b39df76a69f',
+    'e631008106c452f332927a0143e56f400e17d5dae6610e834924d5ca9f993a60',
+  ]);
+  function part11SourceSemanticProjection(value,part) {
+    if (!value || typeof value!=='object' || Array.isArray(value)) return null;
+    var projected=JSON.parse(JSON.stringify(value));
+    if (part==='11A') {
+      if (!projected.part10Witness ||
+          !/^[0-9a-f]{64}$/.test(projected.part10Witness.digest||'')) return null;
+      projected.part10Witness.digest=PART11_SOURCE_DIGEST_MARKER;
+    } else if (part==='11B') {
+      if (!projected.sourceWitness ||
+          !/^[0-9a-f]{64}$/.test(projected.sourceWitness.digest||'')) return null;
+      projected.sourceWitness.digest=PART11_SOURCE_DIGEST_MARKER;
+    } else if (part==='11C') {
+      if (!projected.sourceWitness ||
+          !/^[0-9a-f]{64}$/.test(projected.sourceWitness.digest||'') ||
+          !/^[0-9a-f]{64}$/.test(projected.sourceWitness.exportContractDigest||'')) return null;
+      projected.sourceWitness.digest=PART11_SOURCE_DIGEST_MARKER;
+      projected.sourceWitness.exportContractDigest=PART11_SOURCE_DIGEST_MARKER;
+    } else return null;
+    return projected;
+  }
   function matchesDemoWorkspaceRevision(preview, expectedRevision) {
     return Number.isSafeInteger(expectedRevision) && expectedRevision >= 1 &&
       !!preview && !!preview.draftIdentity &&
@@ -637,15 +663,28 @@
       value.exactCurrentnessRevalidated!==true ||
       counts.some(function(count){return count!==0;});
   }
-  function invalidPart11SourceWitnesses(acceptance, sourceContracts) {
+  function invalidPart11SourceWitnesses(acceptance, sourceContracts, part10Acceptance) {
     if (!exactObject(sourceContracts,['part11A','part11B','part11C']) ||
         !acceptance || !Array.isArray(acceptance.sourceParts) ||
-        acceptance.sourceParts.length!==3) return Promise.resolve(true);
+        acceptance.sourceParts.length!==3 || !part10Acceptance) return Promise.resolve(true);
+    var sources=[sourceContracts.part11A,sourceContracts.part11B,sourceContracts.part11C];
+    var semantic=sources.map(function(value,index){
+      return part11SourceSemanticProjection(value,['11A','11B','11C'][index]);
+    });
+    if (semantic.some(function(value){return !value;})) return Promise.resolve(true);
     return Promise.all([
-      digestObject(sourceContracts.part11A),digestObject(sourceContracts.part11B),
-      digestObject(sourceContracts.part11C),
+      digestObject(part10Acceptance),digestObject(sources[0]),digestObject(sources[1]),
+      digestObject(sources[2]),digestObject(semantic[0]),digestObject(semantic[1]),
+      digestObject(semantic[2]),
     ]).then(function(digests){
-      return acceptance.sourceParts.some(function(part,index){return part.digest!==digests[index];});
+      return sources[0].part10Witness.digest!==digests[0] ||
+        sources[1].sourceWitness.digest!==digests[1] ||
+        sources[2].sourceWitness.digest!==digests[2] ||
+        sources[2].sourceWitness.exportContractDigest!==digests[1] ||
+        acceptance.sourceParts.some(function(part,index){return part.digest!==digests[index+1];}) ||
+        PART11_SOURCE_SEMANTIC_DIGESTS.some(function(expected,index){
+          return digests[index+4]!==expected;
+        });
     }).catch(function(){return true;});
   }
   function samePart11Witness(preview, acceptance, part10Acceptance) {
@@ -1313,7 +1352,7 @@
           !samePart10Witness(value, part10Acceptance, part9Acceptance) ||
           invalidPart11(part11Acceptance, review.simulated ? 'demo' : 'paid');
       var digestResults=invalidSynchronous ? [true,false] : await Promise.all([
-        invalidPart11SourceWitnesses(part11Acceptance,part11SourceContracts),
+        invalidPart11SourceWitnesses(part11Acceptance,part11SourceContracts,part10Acceptance),
         samePart11Witness(value,part11Acceptance,part10Acceptance),
       ]);
       if (token!==undefined && !active(token)) return;

@@ -24,7 +24,7 @@ The fourteen-part structure and the slice order below are frozen before implemen
 | 8 | Provider events, payment success, settlement, and cash reconciliation | 5 | Released |
 | 9 | Partial payments, deposits, credits, refunds, failures, disputes, and reversals | 6 | Released |
 | 10 | Accounts-receivable aging and human-controlled collection workflow | 4 | Released |
-| 11 | Accounting and tax handoff, export, acknowledgement, and reconciliation | 4 | 11A released; 11B candidate |
+| 11 | Accounting and tax handoff, export, acknowledgement, and reconciliation | 4 | Parts 11A-11B released; Part 11C current |
 | 12 | Financial reporting and exact downstream evidence for Missions 25, 26, and 33 | 4 | Planned |
 | 13 | Provider lifecycle, observability, retention, deletion, recovery, and operational controls | 4 | Planned |
 | 14 | Complete paid/demo journeys, migration proof, accessibility, independent audit, and release | 7 | Planned |

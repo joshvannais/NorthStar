@@ -201,42 +201,41 @@ function unavailable(mode, part10Raw, sourcesRaw) {
 }
 
 function project(raw, mode, part10Raw, sources) {
-  const expected = unavailable(mode, part10Raw, sources);
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
-      Object.keys(raw).length !== Object.keys(expected).length) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('Accounting Part 11 acceptance invalid');
   }
-  if (sources) {
-    if (JSON.stringify(raw) !== JSON.stringify(expected)) {
-      throw new Error('Accounting Part 11 acceptance invalid');
-    }
-    return expected;
-  }
-  const actualComparable = JSON.parse(JSON.stringify(raw));
-  const expectedComparable = JSON.parse(JSON.stringify(expected));
-  if (!/^[0-9a-f]{64}$/.test(actualComparable.part10Witness?.digest || '') ||
-      !Array.isArray(actualComparable.sourceParts) || actualComparable.sourceParts.length !== 3 ||
-      actualComparable.sourceParts.some(value => !/^[0-9a-f]{64}$/.test(value.digest || ''))) {
+  const derived = sources || derive(part10Raw, mode);
+  const exactPart10 = derived.part10 || part10Raw;
+  const exactPart10Digest = providerBoundary.digest(exactPart10.part10Acceptance);
+  const exactSourceParts = sourceParts([
+    derived.source,derived.readiness,derived.reconciliation,
+  ]);
+  if (raw.part10Witness?.digest !== exactPart10Digest ||
+      JSON.stringify(raw.sourceParts) !== JSON.stringify(exactSourceParts)) {
     throw new Error('Accounting Part 11 acceptance invalid');
   }
-  actualComparable.part10Witness.digest = expectedComparable.part10Witness.digest;
-  actualComparable.sourceParts.forEach((value,index) => {
-    value.digest = expectedComparable.sourceParts[index].digest;
-  });
-  if (JSON.stringify(actualComparable) !== JSON.stringify(expectedComparable)) {
+  const expected = unavailable(mode, part10Raw, derived);
+  if (Object.keys(raw).length !== Object.keys(expected).length ||
+      JSON.stringify(raw) !== JSON.stringify(expected)) {
     throw new Error('Accounting Part 11 acceptance invalid');
   }
-  return raw;
+  return expected;
 }
 
 function bundle(part10Raw, acceptance, sources) {
   const mode = part10Raw?.preview?.mode;
   const part10 = part10Contract.projectBundle(part10Raw, mode);
-  const value = project(acceptance, mode, part10, sources);
+  const derived = sources || derive(part10, mode);
+  const value = project(acceptance, mode, part10, derived);
   if (JSON.stringify(value.previewWitness) !==
       JSON.stringify(part10.part10Acceptance.previewWitness)) {
     throw new Error('Accounting Part 11 preview bundle currentness mismatch');
   }
+  const sourceContracts = Object.freeze({
+    part11A:derived.source,
+    part11B:derived.readiness,
+    part11C:derived.reconciliation,
+  });
   return Object.freeze({
     contractVersion:BUNDLE_VERSION,
     preview:part10.preview,
@@ -245,13 +244,15 @@ function bundle(part10Raw, acceptance, sources) {
     part7Acceptance:part10.part7Acceptance,
     part9Acceptance:part10.part9Acceptance,
     part10Acceptance:part10.part10Acceptance,
+    part11SourceContracts:sourceContracts,
     part11Acceptance:value,
   });
 }
 
 function projectBundle(raw, expectedMode, sources) {
   if (!exact(raw,['contractVersion','preview','part5Acceptance','part6Acceptance',
-    'part7Acceptance','part9Acceptance','part10Acceptance','part11Acceptance']) ||
+    'part7Acceptance','part9Acceptance','part10Acceptance','part11SourceContracts',
+    'part11Acceptance']) ||
       raw.contractVersion !== BUNDLE_VERSION) {
     throw new Error('Accounting Part 11 preview bundle invalid');
   }
@@ -264,7 +265,11 @@ function projectBundle(raw, expectedMode, sources) {
     part9Acceptance:raw.part9Acceptance,
     part10Acceptance:raw.part10Acceptance,
   };
-  const value = bundle(part10,raw.part11Acceptance,sources);
+  const derived = sources || derive(part10,raw.preview?.mode);
+  const value = bundle(part10,raw.part11Acceptance,derived);
+  if (JSON.stringify(raw) !== JSON.stringify(value)) {
+    throw new Error('Accounting Part 11 preview bundle invalid');
+  }
   if (expectedMode && value.preview.mode !== expectedMode) {
     throw new Error('Accounting Part 11 preview bundle mode mismatch');
   }

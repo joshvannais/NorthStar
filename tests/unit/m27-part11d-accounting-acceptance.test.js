@@ -6,6 +6,7 @@ const cors=require('cors');
 const express=require('express');
 const request=require('supertest');
 const contract=require('../../src/customerFinancial/accountingPart11Acceptance');
+const providerBoundary=require('../../src/customerFinancial/paymentProviderBoundary');
 const part5Contract=require('../../src/customerFinancial/invoicePart5Acceptance');
 const part6Contract=require('../../src/customerFinancial/invoicePart6Acceptance');
 const part7Contract=require('../../src/customerFinancial/paymentPart7Acceptance');
@@ -25,7 +26,7 @@ const ESTIMATE='11111111-1111-4111-8111-111111111111';
 const RECEIPT='22222222-2222-4222-8222-222222222222';
 const DIGEST='a'.repeat(64);
 function clone(value){return JSON.parse(JSON.stringify(value));}
-let cachedItem; let cachedPaidPart10;
+let cachedItem; let cachedPaidPart10; let cachedDemoPart11;
 function item(){
   if(cachedItem) return cachedItem;
   const tenant='44444444-4444-4444-8444-444444444444';
@@ -55,6 +56,10 @@ function paidPart10(){
   cachedPaidPart10=part10Contract.bundle(part9,
     part10Contract.unavailable('paid',part9,part10Sources),part10Sources);
   return clone(cachedPaidPart10);
+}
+function demoPart11(){
+  if(!cachedDemoPart11) cachedDemoPart11=demo.bundle(item(),1);
+  return clone(cachedDemoPart11);
 }
 
 describe('Mission 27 Part 11D complete Part 11 acceptance',()=>{
@@ -140,9 +145,45 @@ describe('Mission 27 Part 11D complete Part 11 acceptance',()=>{
         .toThrow('Accounting Part 11 acceptance invalid');}
   });
 
-  test('client validates the complete exact server-owned Part 11 contract',()=>{
-    const canonical=demo.bundle(item(),1).part11Acceptance;
+  test('binds every Part 11 witness digest to the freshly derived upstream contract',()=>{
+    const canonical=demoPart11();
+    const part10={contractVersion:part10Contract.BUNDLE_VERSION,preview:canonical.preview,
+      part5Acceptance:canonical.part5Acceptance,part6Acceptance:canonical.part6Acceptance,
+      part7Acceptance:canonical.part7Acceptance,part9Acceptance:canonical.part9Acceptance,
+      part10Acceptance:canonical.part10Acceptance};
+    const sources=contract.derive(part10,'demo');
+    const wrong='f'.repeat(64);
+    const mutations=[
+      value=>{value.part11Acceptance.part10Witness.digest=wrong;},
+      value=>{delete value.part11Acceptance.sourceParts[0].digest;},
+      value=>{value.part11Acceptance.sourceParts[0].digest='not-a-digest';},
+      value=>{value.part11Acceptance.sourceParts[1].digest=
+        value.part11Acceptance.sourceParts[0].digest;},
+      value=>{value.part11Acceptance.sourceParts.reverse();},
+      value=>{value.part11Acceptance.sourceParts[0].part='11Z';},
+      value=>{delete value.part11SourceContracts.part11A;},
+      value=>{value.part11SourceContracts.part11A.state='current';},
+      value=>{const first=value.part11SourceContracts.part11A;
+        value.part11SourceContracts.part11A=value.part11SourceContracts.part11B;
+        value.part11SourceContracts.part11B=first;},
+      value=>{value.part11SourceContracts.part11A.state='current';
+        value.part11Acceptance.sourceParts[0].digest=
+          providerBoundary.digest(value.part11SourceContracts.part11A);},
+    ];
+    expect(()=>contract.projectBundle(clone(canonical),'demo',sources)).not.toThrow();
+    for(const mutate of mutations){const changed=clone(canonical);mutate(changed);
+      expect(()=>contract.projectBundle(changed,'demo',sources))
+        .toThrow(/Accounting Part 11 (acceptance|preview bundle) invalid/);}
+  });
+
+  test('client validates the complete exact server-owned Part 11 contract',async()=>{
+    const bundle=demoPart11();
+    const canonical=bundle.part11Acceptance;
+    const sources=bundle.part11SourceContracts;
     expect(ui.invalidPart11(clone(canonical),'demo')).toBe(false);
+    expect(await ui.invalidPart11SourceWitnesses(clone(canonical),clone(sources))).toBe(false);
+    expect(await ui.samePart11Witness(bundle.preview,clone(canonical),
+      bundle.part10Acceptance)).toBe(true);
     const mutations=[
       value=>value.sourceParts.reverse(),
       value=>{value.sourceParts[0].reason='forged';},
@@ -158,8 +199,27 @@ describe('Mission 27 Part 11D complete Part 11 acceptance',()=>{
     ];
     for(const mutate of mutations){const changed=clone(canonical);mutate(changed);
       expect(ui.invalidPart11(changed,'demo')).toBe(true);}
+    for(const mutate of [
+      value=>{delete value.sourceParts[0].digest;},
+      value=>{value.sourceParts[0].digest='wrong';},
+      value=>{value.sourceParts[1].digest=value.sourceParts[0].digest;},
+      value=>{value.sourceParts.reverse();},
+      value=>{value.sourceParts[0].part='11Z';},
+    ]) { const changed=clone(canonical); mutate(changed);
+      expect(ui.invalidPart11(changed,'demo')).toBe(true); }
+    for(const mutate of [
+      value=>{delete value.part11A;},
+      value=>{value.part11A.state='current';},
+      value=>{const first=value.part11A; value.part11A=value.part11B; value.part11B=first;},
+    ]) { const changed=clone(sources); mutate(changed);
+      expect(await ui.invalidPart11SourceWitnesses(clone(canonical),changed)).toBe(true); }
+    const wrongPart10=clone(canonical);wrongPart10.part10Witness.digest='f'.repeat(64);
+    expect(await ui.samePart11Witness(bundle.preview,wrongPart10,
+      bundle.part10Acceptance)).toBe(false);
+    const wrongSource=clone(canonical);wrongSource.sourceParts[0].digest='e'.repeat(64);
+    expect(await ui.invalidPart11SourceWitnesses(wrongSource,clone(sources))).toBe(true);
     expect(ui.invalidPart11(clone(canonical),'paid')).toBe(true);
-  });
+  },120000);
 
   test('mounted campaign renews the real account session for every layout',()=>{
     const mounted=read('tests/browser/m27-part5e-mounted-acceptance.js');

@@ -150,6 +150,26 @@ realPostgres('Mission 27 Part 11D mounted whole-Part-11 acceptance', () => {
       .toEqual(['11A','11B','11C']);
     expect(owner.body.data.part11Acceptance.sourceParts.every(item =>
       item.state === 'unavailable' && /^[0-9a-f]{64}$/.test(item.digest))).toBe(true);
+    expect(Object.keys(owner.body.data.part11SourceContracts))
+      .toEqual(['part11A','part11B','part11C']);
+    const upstream={contractVersion:'m27-collection-part10-preview-bundle-v1',
+      preview:owner.body.data.preview,part5Acceptance:owner.body.data.part5Acceptance,
+      part6Acceptance:owner.body.data.part6Acceptance,
+      part7Acceptance:owner.body.data.part7Acceptance,
+      part9Acceptance:owner.body.data.part9Acceptance,
+      part10Acceptance:owner.body.data.part10Acceptance};
+    const sources=contract.derive(upstream,'paid');
+    for (const mutate of [
+      value => { value.part11Acceptance.part10Witness.digest='f'.repeat(64); },
+      value => { value.part11Acceptance.sourceParts[0].digest='e'.repeat(64); },
+      value => { delete value.part11Acceptance.sourceParts[0].digest; },
+      value => { value.part11Acceptance.sourceParts.reverse(); },
+      value => { value.part11SourceContracts.part11A.state='current'; },
+    ]) {
+      const changed=JSON.parse(JSON.stringify(owner.body.data)); mutate(changed);
+      expect(()=>contract.projectBundle(changed,'paid',sources))
+        .toThrow(/Accounting Part 11 (acceptance|preview bundle) invalid/);
+    }
     expect(JSON.stringify(owner.body.data)).not.toMatch(
       /acct_victim|evt_victim|pi_victim|sk_test|customer@example|123 main/i);
     const admin = await request(prepared.fixture.app).get(route).query(query)

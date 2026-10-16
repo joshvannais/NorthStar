@@ -11,10 +11,33 @@ for (const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','POL
   delete process.env[key];
 }
 
-const { createPart4ePaidBrowserFixture } = require('../helpers/m27-part4e-paid-journey-fixture');
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
 const { MISSION_26_FIVE_LAYOUTS } = require('../helpers/m26-part12d-rendered-review');
+const paidPart11Repository = require('../../src/customerFinancial/accountingPart11AcceptanceRepository');
+const demoPart11 = require('../../src/customerFinancial/demoAccountingPart11Acceptance');
+const realPaidPart11Read = paidPart11Repository.readBundle;
+const realDemoPart11Bundle = demoPart11.bundle;
+let part11DigestFault = null;
+function corruptPart11Digest(value, kind) {
+  const changed=JSON.parse(JSON.stringify(value));
+  if (kind === 'part10') changed.part11Acceptance.part10Witness.digest='f'.repeat(64);
+  else changed.part11Acceptance.sourceParts[0].digest='e'.repeat(64);
+  return changed;
+}
+paidPart11Repository.readBundle = async function () {
+  const value=await realPaidPart11Read.apply(this,arguments);
+  if (!part11DigestFault || part11DigestFault.mode !== 'paid') return value;
+  const fault=part11DigestFault; part11DigestFault=null;
+  return corruptPart11Digest(value,fault.kind);
+};
+demoPart11.bundle = function () {
+  const value=realDemoPart11Bundle.apply(this,arguments);
+  if (!part11DigestFault || part11DigestFault.mode !== 'demo') return value;
+  const fault=part11DigestFault; part11DigestFault=null;
+  return corruptPart11Digest(value,fault.kind);
+};
+const { createPart4ePaidBrowserFixture } = require('../helpers/m27-part4e-paid-journey-fixture');
 
 function argument(name) {
   const value = process.argv.find(item => item.startsWith(`--${name}=`));
@@ -311,9 +334,10 @@ async function assertPart10ClientContract(page, acceptance, mode) {
   assert.deepEqual(result,{canonicalAccepted:true,auditorContradictionRejected:true});
 }
 
-async function assertPart11ClientContract(page, acceptance, mode) {
-  const result=await page.evaluate(({value,expectedMode})=>{
+async function assertPart11ClientContract(page, bundle, mode) {
+  const result=await page.evaluate(async({value,sources,part10,preview,expectedMode})=>{
     const canonical=JSON.parse(JSON.stringify(value));
+    const canonicalSources=JSON.parse(JSON.stringify(sources));
     const auditor=JSON.parse(JSON.stringify(value));
     auditor.sourceParts.reverse();
     auditor.taxAccountingBoundary.accountingRuntimeAvailable=true;
@@ -327,12 +351,27 @@ async function assertPart11ClientContract(page, acceptance, mode) {
     auditor.privacy.adapterCredentialSecretOrIdempotencyKeyExposed=true;
     auditor.acceptance.independentWholeHeadAuditAccepted=true;
     auditor.accountingMutationCount=1;
+    const wrongPart10=JSON.parse(JSON.stringify(value));
+    wrongPart10.part10Witness.digest='f'.repeat(64);
+    const wrongSource=JSON.parse(JSON.stringify(value));
+    wrongSource.sourceParts[0].digest='e'.repeat(64);
+    const wrongSourceContract=JSON.parse(JSON.stringify(sources));
+    wrongSourceContract.part11A.state='current';
+    const api=window.NorthStarCustomerFinancialInvoicePreview;
     return {
-      canonicalAccepted:!window.NorthStarCustomerFinancialInvoicePreview.invalidPart11(canonical,expectedMode),
-      auditorContradictionRejected:window.NorthStarCustomerFinancialInvoicePreview.invalidPart11(auditor,expectedMode),
+      canonicalAccepted:!api.invalidPart11(canonical,expectedMode) &&
+        !await api.invalidPart11SourceWitnesses(canonical,canonicalSources) &&
+        await api.samePart11Witness(preview,canonical,part10),
+      auditorContradictionRejected:api.invalidPart11(auditor,expectedMode),
+      wrongPart10Rejected:!await api.samePart11Witness(preview,wrongPart10,part10),
+      wrongSourceRejected:await api.invalidPart11SourceWitnesses(wrongSource,canonicalSources),
+      wrongSourceContractRejected:await api.invalidPart11SourceWitnesses(
+        canonical,wrongSourceContract),
     };
-  },{value:acceptance,expectedMode:mode});
-  assert.deepEqual(result,{canonicalAccepted:true,auditorContradictionRejected:true});
+  },{value:bundle.part11Acceptance,sources:bundle.part11SourceContracts,
+    part10:bundle.part10Acceptance,preview:bundle.preview,expectedMode:mode});
+  assert.deepEqual(result,{canonicalAccepted:true,auditorContradictionRejected:true,
+    wrongPart10Rejected:true,wrongSourceRejected:true,wrongSourceContractRejected:true});
 }
 
 async function auditActualSurface(page, root, layout) {
@@ -355,6 +394,19 @@ async function auditActualSurface(page, root, layout) {
   assert.deepEqual(Array.from(new Set(audit.duplicateIds)), []);
   assert.equal(audit.drawerVisible, true); assert.equal(audit.privatePricesVisible, true);
   assert.equal(await root.getByRole('button', { name: /issue|send|collect|approve invoice/i }).count(), 0);
+}
+
+async function assertPart11FailureCleared(root) {
+  await root.locator('[role=alert]').waitFor({timeout:120000});
+  assert.equal(await root.locator('table').count(),0);
+  assert.equal(await root.locator('.invoice-draft-preview-document').count(),0);
+  assert.equal(await root.locator('.invoice-part5-acceptance').count(),0);
+  assert.equal(await root.locator('.invoice-part6-acceptance').count(),0);
+  assert.equal(await root.locator('.invoice-part7-acceptance').count(),0);
+  assert.equal(await root.locator('.invoice-part9-acceptance').count(),0);
+  assert.equal(await root.locator('.invoice-part10-acceptance').count(),0);
+  assert.equal(await root.locator('.invoice-part11-acceptance').count(),0);
+  assert.equal(await root.getByText(/\$/, {exact:false}).count(),0);
 }
 
 (async () => {
@@ -491,6 +543,17 @@ async function auditActualSurface(page, root, layout) {
       assert.equal(await root.getByRole('button', { name: /approve invoice|issue|send|resend|revoke|deliver|collect|correct invoice|connect provider|start checkout|pay invoice/i }).count(), 0);
       assert.ok(await root.getByText(`Mounted ${engine} ${layout.name} reviewed line`, { exact: true }).count() ||
         await root.getByText(`Concurrent ${engine} exact-current line`, { exact: true }).count());
+      if (index === 0) {
+        part11DigestFault={mode:'paid',kind:'part10'};
+        await root.getByRole('button',{name:'Reload current preview'}).focus();
+        await root.getByRole('button',{name:'Reload current preview'}).press('Enter');
+        await assertPart11FailureCleared(root);
+        assert.equal(part11DigestFault,null);
+        await root.getByRole('button',{name:'Retry invoice preview'}).focus();
+        await root.getByRole('button',{name:'Retry invoice preview'}).press('Enter');
+        await root.getByText('Accounting handoff and reconciliation',{exact:true})
+          .waitFor({timeout:120000});
+      }
       const summary = root.locator(':scope > summary'); await summary.focus(); await summary.press('Enter');
       await root.locator('table').waitFor({ state: 'detached', timeout: 10000 });
       assert.equal(await root.getByText('Invoice draft — not issued', { exact: true }).count(), 0);
@@ -525,7 +588,12 @@ async function auditActualSurface(page, root, layout) {
       assert.ok(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/accounting-part11-acceptance?') && row.status === 200));
       assert.equal(routeEvidence.some(row => row.method === 'GET' && row.path.includes('/invoice-draft/preview?')), false);
       assert.ok(bundleEvidence.length >= 1);
-      for (const bundle of bundleEvidence) {
+      const malformedBundles=bundleEvidence.filter(bundle =>
+        bundle.part11Acceptance.part10Witness.digest==='f'.repeat(64));
+      assert.equal(malformedBundles.length,index===0?1:0);
+      const exactBundles=bundleEvidence.filter(bundle =>
+        bundle.part11Acceptance.part10Witness.digest!=='f'.repeat(64));
+      for (const bundle of exactBundles) {
         assert.equal(bundle.contractVersion, 'm27-accounting-part11-preview-bundle-v1');
         assert.equal(bundle.preview.draftIdentity.revision,
           bundle.part5Acceptance.previewWitness.draftRevision);
@@ -592,7 +660,7 @@ async function auditActualSurface(page, root, layout) {
         assert.equal(bundle.part11Acceptance.receiverMutationCount,0);
         assert.equal(bundle.part11Acceptance.accountingMutationCount,0);
         assert.equal(bundle.part11Acceptance.liveMoneyMovementCount,0);
-        await assertPart11ClientContract(page,bundle.part11Acceptance,'paid');
+        await assertPart11ClientContract(page,bundle,'paid');
       }
       if (index === 0) assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft-origin') && [200,201].includes(row.status)));
       assert.deepEqual(external, []); assert.deepEqual(errors, []);
@@ -604,7 +672,8 @@ async function auditActualSurface(page, root, layout) {
         completePart9ContractValidation: true,
         completePart10ContractValidation: true, completePart11ContractValidation: true,
         keyboard: true, responsive: true,
-        currentnessRecovery: index === 0, delayedResponseSuppression: index === 0 });
+        currentnessRecovery: index === 0, delayedResponseSuppression: index === 0,
+        malformedPart11DigestClearing: index === 0 });
       delete ledger.current;
       await context.close();
 
@@ -692,8 +761,17 @@ async function auditActualSurface(page, root, layout) {
       await assertPart7ClientContract(demoPage,demoPart11.part7Acceptance,'demo');
       await assertPart9ClientContract(demoPage,demoPart11.part9Acceptance,'demo');
       await assertPart10ClientContract(demoPage,demoPart11.part10Acceptance,'demo');
-      await assertPart11ClientContract(demoPage,demoPart11.part11Acceptance,'demo');
+      await assertPart11ClientContract(demoPage,demoPart11,'demo');
       if (index === 0) {
+        part11DigestFault={mode:'demo',kind:'source'};
+        await demoRoot.getByRole('button',{name:'Reload current preview'}).focus();
+        await demoRoot.getByRole('button',{name:'Reload current preview'}).press('Enter');
+        await assertPart11FailureCleared(demoRoot);
+        assert.equal(part11DigestFault,null);
+        await demoRoot.getByRole('button',{name:'Retry invoice preview'}).focus();
+        await demoRoot.getByRole('button',{name:'Retry invoice preview'}).press('Enter');
+        await demoRoot.getByText('Accounting handoff and reconciliation',{exact:true})
+          .waitFor({timeout:120000});
         const delayedDemoSummary = demoRoot.locator(':scope > summary');
         await proveDatabaseDelayedSuppression({ page:demoPage, root:demoRoot,
           summary:delayedDemoSummary, pool:prepared.fixture.ownerPool,
@@ -747,6 +825,7 @@ async function auditActualSurface(page, root, layout) {
       await demoPage.screenshot({fullPage:true,path:path.join(output,`${engine}-${layout.name}-demo.png`)});
       ledger.layouts.at(-1).demo = { actualPage:'/demo', routes:demoRoutes, fictional:true,
         resetClearing:true, delayedResponseSuppression:index===0,
+        malformedPart11DigestClearing:index===0,
         completePart7ContractValidation:true, completePart9ContractValidation:true,
         completePart10ContractValidation:true, completePart11ContractValidation:true,
         paidRouteCalls:demoPaidRoutes.length };
@@ -765,6 +844,8 @@ async function auditActualSurface(page, root, layout) {
       await activePage.screenshot({ fullPage: true, path: path.join(output, 'failure.png') }).catch(() => {});
     }
   } finally {
+    paidPart11Repository.readBundle=realPaidPart11Read;
+    demoPart11.bundle=realDemoPart11Bundle;
     fs.writeFileSync(path.join(output, 'ledger.json'), JSON.stringify(ledger, null, 2));
     if (browser) await browser.close();
     if (server) await new Promise(resolve => server.close(resolve));

@@ -51,6 +51,7 @@ const demoInvoicePart6Acceptance = require('../customerFinancial/demoInvoicePart
 const demoPaymentPart7Acceptance = require('../customerFinancial/demoPaymentPart7Acceptance');
 const demoPaymentPart9Acceptance = require('../customerFinancial/demoPaymentPart9Acceptance');
 const demoCollectionPart10Acceptance = require('../customerFinancial/demoCollectionPart10Acceptance');
+const demoAccountingPart11Acceptance = require('../customerFinancial/demoAccountingPart11Acceptance');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -533,6 +534,30 @@ router.get('/customer-financial/invoice-drafts/:estimateId/part10-acceptance', a
     return res.json({ success: true,
       data: demoCollectionPart10Acceptance.bundle(item, record.revision) });
   } catch (error) { return commandCenterFailure(req, res, error); }
+});
+router.all('/customer-financial/invoice-drafts/:estimateId/part11-acceptance', function (req,res,next) {
+  if (req.method === 'GET') return next();
+  res.set('Allow','GET');
+  return res.status(405).json({ success:false, error:{
+    code:'demo_accounting_part11_method_not_allowed',
+    message:'Use the exact fictional Part 11 accounting acceptance read boundary.',
+  } });
+});
+router.get('/customer-financial/invoice-drafts/:estimateId/part11-acceptance', async function (req,res) {
+  res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+  if (Object.keys(req.query).length) return res.status(400).json({ success:false,
+    error:{ code:'demo_accounting_part11_request_invalid',
+      message:'Choose one fictional Part 11 accounting journey.' } });
+  try {
+    const record = await readCommandCenterEntry(req,res);
+    const item = demoCanonicalItems(demoWorkspace(record))
+      .find(candidate => candidate.ids.estimate === req.params.estimateId);
+    if (!item) return res.status(404).json({ success:false,
+      error:{ code:'demo_accounting_part11_unavailable',
+        message:'That fictional Part 11 accounting journey is unavailable.' } });
+    return res.json({ success:true,
+      data:demoAccountingPart11Acceptance.bundle(item,record.revision) });
+  } catch (error) { return commandCenterFailure(req,res,error); }
 });
 
 router.post('/customer-financial/billing-identities/:customerId/actions',

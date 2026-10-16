@@ -56,6 +56,8 @@ const accountingExportReadinessRepository =
   require('../customerFinancial/accountingExportReadinessRepository');
 const accountingReconciliationReadinessRepository =
   require('../customerFinancial/accountingReconciliationReadinessRepository');
+const accountingPart11AcceptanceRepository =
+  require('../customerFinancial/accountingPart11AcceptanceRepository');
 
 const PART8D_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PART8D_DIGEST = /^[0-9a-f]{64}$/i;
@@ -148,6 +150,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     accountingExportReadinessRepository.read;
   const accountingReconciliationReadinessRead = options.accountingReconciliationReadinessRead ||
     accountingReconciliationReadinessRepository.read;
+  const accountingPart11AcceptanceRead = options.accountingPart11AcceptanceRead ||
+    accountingPart11AcceptanceRepository.readBundle;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -654,6 +658,30 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         message: 'Select one exact current accounting reconciliation source.' });
       try { return res.json({ success: true, data: await accountingReconciliationReadinessRead(
         poolProvider(), source(req), req.params.estimateId, req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest) });
+      } catch (error) { return failure(res,error); }
+    });
+  router.all('/:estimateId/accounting-part11-acceptance', (req,res,next) => {
+      if (req.method === 'GET') return next();
+      res.set('Allow','GET');
+      return res.status(405).json({ success:false, error:{
+        category:'CUSTOMER_FINANCIAL_ACCOUNTING_PART11_METHOD_NOT_ALLOWED',
+        message:'Use the exact Part 11 accounting acceptance read boundary.',
+      } });
+    });
+  router.get('/:estimateId/accounting-part11-acceptance', auth, role, throttle,
+    async (req,res) => {
+      res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+      const keys = Object.keys(req.query);
+      if (keys.length !== 2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') || typeof req.query.handoffReceiptId !== 'string' ||
+          typeof req.query.handoffReceiptDigest !== 'string' ||
+          !PART8D_UUID.test(req.query.handoffReceiptId) ||
+          !PART8D_DIGEST.test(req.query.handoffReceiptDigest)) return failure(res, {
+        status:400, code:'CUSTOMER_FINANCIAL_ACCOUNTING_PART11_INVALID',
+        message:'Select one exact current Part 11 accounting journey.' });
+      try { return res.json({ success:true, data:await accountingPart11AcceptanceRead(
+        poolProvider(),source(req),req.params.estimateId,req.query.handoffReceiptId,
         req.query.handoffReceiptDigest) });
       } catch (error) { return failure(res,error); }
     });

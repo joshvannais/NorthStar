@@ -115,8 +115,8 @@ function exportFacts() {
   }));
 }
 
-function unavailable(part10Raw) {
-  const part10 = part10Contract.projectBundle(part10Raw, 'paid');
+function unavailable(part10Raw, expectedMode = 'paid') {
+  const part10 = part10Contract.projectBundle(part10Raw, expectedMode);
   const launch = paymentPart9.policy();
   const accounting = launch.financial.accounting;
   const exportControl = launch.actionControl[CAPABILITY];
@@ -228,8 +228,8 @@ function unavailable(part10Raw) {
   });
 }
 
-function project(raw, part10Raw) {
-  const expected = unavailable(part10Raw);
+function project(raw, part10Raw, expectedMode = 'paid') {
+  const expected = unavailable(part10Raw, expectedMode);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
       Object.keys(raw).length !== Object.keys(expected).length ||
       JSON.stringify(raw) !== JSON.stringify(expected)) {

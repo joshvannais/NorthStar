@@ -57,9 +57,9 @@ function mappingEntries(source) {
   }));
 }
 
-function unavailable(sourceRaw, part10Raw) {
+function unavailable(sourceRaw, part10Raw, expectedMode = 'paid') {
   let source;
-  try { source = accountingExport.project(sourceRaw, part10Raw); }
+  try { source = accountingExport.project(sourceRaw, part10Raw, expectedMode); }
   catch (_error) { throw new Error('Accounting export source contract invalid'); }
   const control = providerBoundary.validateLaunchPolicy()
     .actionControl[accountingExport.CAPABILITY];
@@ -248,8 +248,8 @@ function unavailable(sourceRaw, part10Raw) {
   });
 }
 
-function project(raw, source, part10) {
-  const expected = unavailable(source, part10);
+function project(raw, source, part10, expectedMode = 'paid') {
+  const expected = unavailable(source, part10, expectedMode);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
       Object.keys(raw).length !== Object.keys(expected).length ||
       JSON.stringify(raw) !== JSON.stringify(expected)) {

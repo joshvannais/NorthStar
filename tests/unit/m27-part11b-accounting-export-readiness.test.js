@@ -2,6 +2,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const cors = require('cors');
+const express = require('express');
+const request = require('supertest');
 const contract = require('../../src/customerFinancial/accountingExportReadiness');
 const exportContract = require('../../src/customerFinancial/accountingExportContract');
 const part5Contract = require('../../src/customerFinancial/invoicePart5Acceptance');
@@ -11,6 +14,9 @@ const part9Contract = require('../../src/customerFinancial/paymentPart9Acceptanc
 const part10Contract = require('../../src/customerFinancial/collectionPart10Acceptance');
 const demoPart6 = require('../../src/customerFinancial/demoInvoicePart6Acceptance');
 const workspace = require('../../src/commandCenter/workspace');
+const { corsOptions } = require('../../src/middleware/security');
+const { createCustomerFinancialEditableEstimateRouter } =
+  require('../../src/routes/customerFinancialEditableEstimate');
 
 const ROOT = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
@@ -46,6 +52,42 @@ function sources() { const part10=paidPart10();
   return { part10, export:exportContract.unavailable(part10) }; }
 
 describe('Mission 27 Part 11B accounting export readiness', () => {
+  test('keeps exact OPTIONS inside the GET-only boundary before auth, throttle or source read', async () => {
+    const route = `/api/v1/customer-financial/editable-estimates/${ESTIMATE}/accounting-export-readiness`;
+    const resolveOptions = requestPath => new Promise((resolve, reject) => corsOptions({
+      path: requestPath, header: () => undefined,
+    }, (error, options) => error ? reject(error) : resolve(options)));
+    await expect(resolveOptions(route)).resolves
+      .toMatchObject({ methods: ['GET'], preflightContinue: true });
+    await expect(resolveOptions(`${route}/`)).resolves
+      .toMatchObject({ methods: ['GET'], preflightContinue: true });
+    await expect(resolveOptions(route.replace(ESTIMATE,
+      '11111111-1111-7111-8111-111111111111'))).resolves
+      .toMatchObject({ methods: ['GET'], preflightContinue: true });
+    await expect(resolveOptions(route.replace('accounting-export-readiness',
+      'accounting-export-contract'))).resolves.toMatchObject({ preflightContinue: false });
+
+    const calls = { auth:0, role:0, throttle:0, read:0 };
+    const app = express(); app.use(cors(corsOptions));
+    app.use('/api/v1/customer-financial/editable-estimates',
+      createCustomerFinancialEditableEstimateRouter({
+        poolProvider: () => { throw new Error('pool must not be reached'); },
+        accountingExportReadinessRead: async () => { calls.read += 1; },
+        auth: (_req,_res,next) => { calls.auth += 1; next(); },
+        role: (_req,_res,next) => { calls.role += 1; next(); },
+        throttle: (_req,_res,next) => { calls.throttle += 1; next(); },
+      }));
+    const response = await request(app).options(route)
+      .set('Origin','http://localhost:3000').set('Access-Control-Request-Method','POST');
+    expect(response.status).toBe(405);
+    expect(response.headers.allow).toBe('GET');
+    expect(response.headers['access-control-allow-methods']).toBe('GET');
+    expect(response.headers['cache-control']).toContain('no-store');
+    expect(response.body.error.category)
+      .toBe('CUSTOMER_FINANCIAL_ACCOUNTING_EXPORT_READINESS_METHOD_NOT_ALLOWED');
+    expect(calls).toEqual({ auth:0, role:0, throttle:0, read:0 });
+  });
+
   test('projects exact owner destination, mapping, preview, transmission and receipt contracts', () => {
     const source=sources(); const value=contract.unavailable(source.export,source.part10);
     expect(contract.project(clone(value),source.export,source.part10)).toEqual(value);

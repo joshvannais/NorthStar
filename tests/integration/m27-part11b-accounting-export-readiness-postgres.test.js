@@ -9,7 +9,8 @@ const contract = require('../../src/customerFinancial/accountingExportReadiness'
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 
 realPostgres('Mission 27 Part 11B mounted accounting export readiness', () => {
-  let prepared; let transport; let route; let exportContractRoute; let part10Route; let query;
+  let prepared; let transport; let repositoryRead; let route; let exportContractRoute;
+  let part10Route; let query;
 
   async function completeCurrentPart4() {
     const { fixture, actor, estimate, receipt } = prepared;
@@ -90,6 +91,8 @@ realPostgres('Mission 27 Part 11B mounted accounting export readiness', () => {
       'RETELL_API_KEY','TWILIO_AUTH_TOKEN','RESEND_API_KEY','SMTP_HOST','SMTP_USER','SMTP_PASS']) {
       delete process.env[key];
     }
+    repositoryRead = jest.spyOn(
+      require('../../src/customerFinancial/accountingExportReadinessRepository'), 'read');
     transport = jest.spyOn(require('https'), 'request').mockImplementation(() => {
       throw new Error('External transport forbidden in Part 11B');
     });
@@ -188,9 +191,17 @@ realPostgres('Mission 27 Part 11B mounted accounting export readiness', () => {
       .send({ action: 'export', destination: 'quickbooks' })).status).toBe(405);
     expect((await request(prepared.fixture.app).head(route).query(query)
       .set(prepared.actor.session.headers)).status).toBe(405);
+    repositoryRead.mockClear();
     const preflight = await request(prepared.fixture.app).options(route).query(query)
-      .set(prepared.actor.session.headers);
-    expect(preflight.status).toBe(204); expect(preflight.text).toBe('');
+      .set('Origin','http://localhost:3000').set('Access-Control-Request-Method','POST');
+    expect(preflight.status).toBe(405);
+    expect(preflight.headers.allow).toBe('GET');
+    expect(preflight.headers['access-control-allow-methods']).toBe('GET');
+    expect(preflight.headers['cache-control']).toContain('no-store');
+    expect(preflight.headers['referrer-policy']).toBe('no-referrer');
+    expect(preflight.body.error.category)
+      .toBe('CUSTOMER_FINANCIAL_ACCOUNTING_EXPORT_READINESS_METHOD_NOT_ALLOWED');
+    expect(repositoryRead).not.toHaveBeenCalled();
     await prepared.fixture.ownerPool.query(
       "UPDATE subscriptions SET status='canceled',updated_at=clock_timestamp() WHERE organization_id=$1",
       [prepared.fixture.org]);

@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
 const express = require('express');
 const request = require('supertest');
@@ -8,9 +9,9 @@ const providerBoundary = require('../../src/customerFinancial/paymentProviderBou
 const receivableAging = require('../../src/customerFinancial/receivableAging');
 const reporting = require('../../src/customerFinancial/invoiceReceivableReporting');
 const repository = require('../../src/customerFinancial/invoiceReceivableReportingRepository');
-const { createCustomerFinancialReportingRouter } =
+const { createCustomerFinancialReportingRouter, hasRequestBody, hasFramedRequestBody,
+  rejectCustomerFinancialReportingReadBody } =
   require('../../src/routes/customerFinancialReporting');
-const { hasRequestBody } = require('../../src/routes/customerFinancialReporting');
 
 const ROOT = path.resolve(__dirname,'../..');
 const read = relative => fs.readFileSync(path.join(ROOT,relative),'utf8');
@@ -37,6 +38,22 @@ function mutateLeaf(value,pathParts) {
   else if (typeof current === 'string') target[key]=`${current}__forged`;
   else if (current === null) target[key]='__forged_null__';
   else throw new Error(`Unsupported reporting leaf ${pathParts.join('.')}`);
+}
+
+function rawGet(server,{pathName='/api/v1/customer-financial/reporting/invoice-receivables',
+  body,headers={}}={}) {
+  return new Promise((resolve,reject) => {
+    const address=server.address();
+    const req=http.request({host:'127.0.0.1',port:address.port,path:pathName,
+      method:'GET',headers},res=>{
+      const chunks=[];
+      res.on('data',chunk=>chunks.push(chunk));
+      res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,
+        text:Buffer.concat(chunks).toString('utf8')}));
+    });
+    req.on('error',reject);
+    req.end(body);
+  });
 }
 
 describe('Mission 27 Part 12A source-backed invoice and receivable reporting',() => {
@@ -153,6 +170,7 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
     const repositoryRead=jest.fn().mockResolvedValue(reporting.unavailable());
     const throttle=jest.fn((_req,_res,next)=>next());
     const app=express();
+    app.use(rejectCustomerFinancialReportingReadBody);
     app.use(express.json({verify(req,_res,buffer){req.rawBody=buffer.toString();}}));
     app.use((req,_res,next)=>{req.tenantContext={organizationId:source.organizationId,
       userId:source.actorUserId};req.userRole='owner';
@@ -173,6 +191,12 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
       {name:'JSON array',configure:req=>req.type('json').send([
         {customerIdentity:'victim',providerAccountId:'acct_secret'}])},
       {name:'empty JSON object',configure:req=>req.type('json').send({})},
+      {name:'JSON string',configure:req=>req.type('json').send('"sk_secret_scalar"')},
+      {name:'JSON number',configure:req=>req.type('json').send('123456789')},
+      {name:'JSON boolean',configure:req=>req.type('json').send('true')},
+      {name:'JSON null',configure:req=>req.type('json').send('null')},
+      {name:'malformed JSON',configure:req=>req.type('json')
+        .send('{"credential":"sk_secret"')},
       {name:'form body',configure:req=>req.type('form').send(
         {accountId:'acct_secret',amountMinorUnits:'100'})},
       {name:'text body',configure:req=>req.type('text').send('credential=sk_secret')},
@@ -184,8 +208,11 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
       expect(response.status).toBe(400);
       expect(response.headers['cache-control']).toContain('private');
       expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.body).toEqual({success:false,error:{
+        category:'CUSTOMER_FINANCIAL_REPORTING_INVALID',
+        message:'Review the exact current invoice and receivable facts.'}});
       expect(JSON.stringify(response.body)).not.toMatch(
-        /victim|acct_secret|sk_secret|amountMinorUnits|customerIdentity|credential/);
+        /victim|acct_secret|sk_secret|123456789|amountMinorUnits|customerIdentity|credential/);
       expect(repositoryRead).not.toHaveBeenCalled();
       expect(throttle).not.toHaveBeenCalled();
     }
@@ -224,6 +251,76 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
       [{headers:{}},false],
     ];
     for (const [req,expected] of cases) expect(hasRequestBody(req)).toBe(expected);
+    const framedCases=[
+      [{headers:{'content-length':'1'},rawHeaders:['Content-Length','1']},true],
+      [{headers:{'content-length':'0'},rawHeaders:['Content-Length','0']},false],
+      [{headers:{'content-length':'invalid'},rawHeaders:['Content-Length','invalid']},true],
+      [{headers:{'content-length':'0'},rawHeaders:[
+        'Content-Length','0','Content-Length','0']},true],
+      [{headers:{'transfer-encoding':'chunked'},rawHeaders:[
+        'Transfer-Encoding','chunked']},true],
+      [{headers:{},rawHeaders:[]},false],
+    ];
+    for (const [req,expected] of framedCases) expect(hasFramedRequestBody(req)).toBe(expected);
+  });
+
+  test('pre-parser exact-route gate rejects raw scalar, malformed and chunked bytes',async () => {
+    const repositoryRead=jest.fn().mockResolvedValue(reporting.unavailable());
+    const throttle=jest.fn((_req,_res,next)=>next());
+    const app=express();
+    app.use(rejectCustomerFinancialReportingReadBody);
+    app.use(express.json({verify(req,_res,buffer){req.rawBody=buffer.toString();}}));
+    app.use((req,_res,next)=>{req.tenantContext={organizationId:source.organizationId,
+      userId:source.actorUserId};req.userRole='owner';
+      req.authSession={id:source.authSessionId};next();});
+    app.use('/api/v1/customer-financial/reporting',
+      createCustomerFinancialReportingRouter({read:repositoryRead,
+        auth:(_req,_res,next)=>next(),role:(_req,_res,next)=>next(),throttle}));
+    app.get('/unrelated',(req,res)=>res.json({accepted:req.body}));
+    const server=await new Promise((resolve,reject)=>{
+      const listener=app.listen(0,'127.0.0.1',()=>resolve(listener));
+      listener.on('error',reject);
+    });
+    try {
+      const cases=[
+        {body:'"sk_secret_scalar"',headers:{'Content-Type':'application/json'}},
+        {body:'123456789',headers:{'Content-Type':'application/json'}},
+        {body:'true',headers:{'Content-Type':'application/json'}},
+        {body:'null',headers:{'Content-Type':'application/json'}},
+        {body:'{"credential":"sk_secret"',headers:{'Content-Type':'application/json'}},
+        {body:'credential=sk_secret',headers:{'Content-Type':'text/plain'}},
+        {body:Buffer.from([0,1,2,3]),headers:{'Content-Type':'application/octet-stream'}},
+        {body:'identity=victim',headers:{'Content-Type':'text/plain',
+          'Transfer-Encoding':'chunked'}},
+      ];
+      for (const bodyCase of cases) {
+        const body=bodyCase.body;
+        const headers={...bodyCase.headers};
+        if (!headers['Transfer-Encoding']) headers['Content-Length']=Buffer.byteLength(body);
+        const response=await rawGet(server,{body,headers});
+        expect(response.status).toBe(400);
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+        expect(JSON.parse(response.text)).toEqual({success:false,error:{
+          category:'CUSTOMER_FINANCIAL_REPORTING_INVALID',
+          message:'Review the exact current invoice and receivable facts.'}});
+        expect(response.text).not.toMatch(/victim|sk_secret|123456789|credential|identity/);
+      }
+      const empty=await rawGet(server,{headers:{'Content-Length':'0'}});
+      expect(empty.status).toBe(200);
+      const trailing=await rawGet(server,{
+        pathName:'/api/v1/customer-financial/reporting/invoice-receivables/',
+        body:'account=acct_secret',headers:{'Content-Type':'text/plain',
+          'Content-Length':String(Buffer.byteLength('account=acct_secret'))}});
+      expect(trailing.status).toBe(400);
+      const unrelated=await rawGet(server,{pathName:'/unrelated',body:'{}',
+        headers:{'Content-Type':'application/json','Content-Length':'2'}});
+      expect(unrelated.status).toBe(200);
+      expect(repositoryRead).toHaveBeenCalledTimes(1);
+      expect(throttle).toHaveBeenCalledTimes(1);
+    } finally {
+      await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+    }
   });
 
   test('adds no mutation, demo surface, transport, table or migration 273',() => {
@@ -234,6 +331,8 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
     expect(read('src/routes/demo.js')).not.toContain('invoice-receivables');
     expect(read('src/server.js')).toContain(
       "app.use('/api/v1/customer-financial/reporting'");
+    expect(read('src/server.js').indexOf('app.use(rejectCustomerFinancialReportingReadBody)'))
+      .toBeLessThan(read('src/server.js').indexOf('app.use(express.json({'));
     expect(read('src/middleware/security.js')).toContain(
       "'/api/v1/customer-financial/reporting/invoice-receivables'");
     const migrations=fs.readdirSync(path.join(ROOT,'migrations'))

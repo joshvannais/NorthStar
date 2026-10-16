@@ -95,6 +95,11 @@ realPostgres('Mission 27 Part 12A mounted invoice and receivable reporting',() =
       request(fixture.app).get(route).type('json').send([
         {customerIdentity:'victim',invoiceIdentity:'invoice_secret'}]),
       request(fixture.app).get(route).type('json').send({}),
+      request(fixture.app).get(route).type('json').send('"sk_secret_scalar"'),
+      request(fixture.app).get(route).type('json').send('123456789'),
+      request(fixture.app).get(route).type('json').send('true'),
+      request(fixture.app).get(route).type('json').send('null'),
+      request(fixture.app).get(route).type('json').send('{"credential":"sk_secret"'),
       request(fixture.app).get(route).type('form').send(
         {accountId:'acct_secret',amountMinorUnits:'100'}),
       request(fixture.app).get(route).type('text').send('credential=sk_secret'),
@@ -107,8 +112,11 @@ realPostgres('Mission 27 Part 12A mounted invoice and receivable reporting',() =
       expect(response.headers['cache-control']).toContain('private');
       expect(response.headers['cache-control']).toContain('no-store');
       expect(response.headers['x-ratelimit-limit']).toBeUndefined();
+      expect(response.body).toEqual({success:false,error:{
+        category:'CUSTOMER_FINANCIAL_REPORTING_INVALID',
+        message:'Review the exact current invoice and receivable facts.'}});
       expect(JSON.stringify(response.body)).not.toMatch(
-        new RegExp(`${fixture.org}|victim|acct_secret|sk_secret|invoice_secret|amountMinorUnits`,'i'));
+        new RegExp(`${fixture.org}|victim|acct_secret|sk_secret|invoice_secret|123456789|amountMinorUnits`,'i'));
       expect(repositoryRead).not.toHaveBeenCalled();
     }
     expect(transport).not.toHaveBeenCalled();

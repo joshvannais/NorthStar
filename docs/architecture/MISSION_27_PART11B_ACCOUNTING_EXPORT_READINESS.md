@@ -1,6 +1,6 @@
 # Mission 27 Part 11B — accounting destination and export readiness
 
-Status: implementation candidate for original Part 11B. Released Part 11A remains the provider-neutral source-fact contract. This slice adds one owner/administrator, tenant-private, read-only `GET /api/v1/customer-financial/editable-estimates/:estimateId/accounting-export-readiness` boundary. It does not select a destination, accept an account mapping, transmit an export, record an acknowledgement or partial failure, reconcile an external record, create a journal or tax fact, or expose a demo, customer or public route. Parts 11C–11D own reconciliation and whole-Part-11 acceptance.
+Status: released original Part 11B at accepted corrected head `20a6ed48eaefa6e798adbb7df01d25fa77aed082`, PR #523, exact deployed main `d1146ff567022371f744e091dc7d130cb454fe2a` and sole deployment `4ffd6e3f-7dd0-4e2e-a0dc-5b3e83826b7a` SUCCESS. Released Part 11A remains the provider-neutral source-fact contract. This slice adds one owner/administrator, tenant-private, read-only `GET /api/v1/customer-financial/editable-estimates/:estimateId/accounting-export-readiness` boundary. It does not select a destination, accept an account mapping, transmit an export, record an acknowledgement or partial failure, reconcile an external record, create a journal or tax fact, or expose a demo, customer or public route. Part 11C is the current implementation candidate; Part 11D owns whole-Part-11 acceptance.
 
 ## Exact source, destination and mapping boundary
 

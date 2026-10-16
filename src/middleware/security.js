@@ -81,6 +81,8 @@ function corsOptions(req, callback) {
     '/api/v1/customer-financial/reporting/invoice-receivables',
     '/api/v1/customer-financial/reporting/invoice-receivables/',
   ].includes(req.path) ||
+    /^\/api\/v1\/customer-financial\/reporting\/{1,2}payment-cash\/?$/i
+      .test(req.path) ||
     /^\/api\/v1\/customer-financial\/editable-estimates\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/accounting-(?:(?:export|reconciliation)-readiness|part11-acceptance)\/?$/i
       .test(req.path);
 

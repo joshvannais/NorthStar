@@ -11,6 +11,34 @@ function source(req) {
     authSessionId: req.authSession.id };
 }
 
+function hasRequestBody(req) {
+  const headers = req.headers || {};
+  const transferEncoding = headers['transfer-encoding'];
+  if (transferEncoding !== undefined && String(transferEncoding).trim() !== '') return true;
+  const contentLength = headers['content-length'];
+  if (contentLength !== undefined) {
+    const normalized = String(contentLength).trim();
+    if (!/^\d+$/.test(normalized) || Number(normalized) > 0) return true;
+  }
+  if (typeof req.rawBody === 'string' && req.rawBody.length !== 0) return true;
+  if (Buffer.isBuffer(req.body)) return req.body.length !== 0;
+  if (req.body !== undefined) {
+    if (typeof req.body === 'string') return req.body.length !== 0;
+    if (req.body && typeof req.body === 'object' && !Array.isArray(req.body) &&
+        Object.keys(req.body).length === 0) return false;
+    return true;
+  }
+  return false;
+}
+
+function requireExactReadInput(req,res,next) {
+  if (Object.keys(req.query).length === 0 && !hasRequestBody(req)) return next();
+  return res.status(400).json({ success:false,error:{
+    category:'CUSTOMER_FINANCIAL_REPORTING_INVALID',
+    message:'Review the exact current invoice and receivable facts.',
+  } });
+}
+
 function createCustomerFinancialReportingRouter(options = {}) {
   const router = express.Router();
   const auth = options.auth || requireOnboardedInternal;
@@ -32,10 +60,7 @@ function createCustomerFinancialReportingRouter(options = {}) {
       message:'Use the exact invoice and receivable reporting read boundary.',
     } });
   });
-  router.get('/invoice-receivables',auth,role,throttle,async (req,res) => {
-    if (Object.keys(req.query).length !== 0) return res.status(400).json({ success:false,
-      error:{ category:'CUSTOMER_FINANCIAL_REPORTING_INVALID',
-        message:'Review the exact current invoice and receivable facts.' } });
+  router.get('/invoice-receivables',auth,role,requireExactReadInput,throttle,async (req,res) => {
     try { return res.json({ success:true,data:await read(source(req)) }); }
     catch (error) {
       return res.status(error?.status || 503).json({ success:false,error:{
@@ -47,4 +72,5 @@ function createCustomerFinancialReportingRouter(options = {}) {
   return router;
 }
 
-module.exports = { createCustomerFinancialReportingRouter };
+module.exports = { createCustomerFinancialReportingRouter, hasRequestBody,
+  requireExactReadInput };

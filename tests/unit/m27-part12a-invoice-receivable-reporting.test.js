@@ -10,6 +10,7 @@ const reporting = require('../../src/customerFinancial/invoiceReceivableReportin
 const repository = require('../../src/customerFinancial/invoiceReceivableReportingRepository');
 const { createCustomerFinancialReportingRouter } =
   require('../../src/routes/customerFinancialReporting');
+const { hasRequestBody } = require('../../src/routes/customerFinancialReporting');
 
 const ROOT = path.resolve(__dirname,'../..');
 const read = relative => fs.readFileSync(path.join(ROOT,relative),'utf8');
@@ -150,19 +151,44 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
 
   test('mounts an exact private GET and rejects queries and methods before source access',async () => {
     const repositoryRead=jest.fn().mockResolvedValue(reporting.unavailable());
+    const throttle=jest.fn((_req,_res,next)=>next());
     const app=express();
+    app.use(express.json({verify(req,_res,buffer){req.rawBody=buffer.toString();}}));
     app.use((req,_res,next)=>{req.tenantContext={organizationId:source.organizationId,
       userId:source.actorUserId};req.userRole='owner';
       req.authSession={id:source.authSessionId};next();});
     app.use('/api/v1/customer-financial/reporting',
       createCustomerFinancialReportingRouter({read:repositoryRead,
         auth:(_req,_res,next)=>next(),role:(_req,_res,next)=>next(),
-        throttle:(_req,_res,next)=>next()}));
+        throttle}));
     const pathName='/api/v1/customer-financial/reporting/invoice-receivables';
     const widened=await request(app).get(pathName)
       .query({tenantId:'victim',issuedMinorUnits:'0',lifecycleState:'paid'});
     expect(widened.status).toBe(400);expect(repositoryRead).not.toHaveBeenCalled();
+    expect(throttle).not.toHaveBeenCalled();
     expect(JSON.stringify(widened.body)).not.toMatch(/victim|paid|issuedMinorUnits/);
+    const bodyCases=[
+      {name:'JSON object',configure:req=>req.type('json').send({tenantId:'victim',
+        accountId:'acct_secret',amountMinorUnits:'100',credential:'sk_secret'})},
+      {name:'JSON array',configure:req=>req.type('json').send([
+        {customerIdentity:'victim',providerAccountId:'acct_secret'}])},
+      {name:'empty JSON object',configure:req=>req.type('json').send({})},
+      {name:'form body',configure:req=>req.type('form').send(
+        {accountId:'acct_secret',amountMinorUnits:'100'})},
+      {name:'text body',configure:req=>req.type('text').send('credential=sk_secret')},
+      {name:'buffer body',configure:req=>req.type('application/octet-stream')
+        .send(Buffer.from('customerIdentity=victim'))},
+    ];
+    for (const bodyCase of bodyCases) {
+      const response=await bodyCase.configure(request(app).get(pathName));
+      expect(response.status).toBe(400);
+      expect(response.headers['cache-control']).toContain('private');
+      expect(response.headers['cache-control']).toContain('no-store');
+      expect(JSON.stringify(response.body)).not.toMatch(
+        /victim|acct_secret|sk_secret|amountMinorUnits|customerIdentity|credential/);
+      expect(repositoryRead).not.toHaveBeenCalled();
+      expect(throttle).not.toHaveBeenCalled();
+    }
     const head=await request(app).head(pathName);
     const options=await request(app).options(pathName);
     const post=await request(app).post(pathName).send({amountMinorUnits:'0'});
@@ -176,6 +202,28 @@ describe('Mission 27 Part 12A source-backed invoice and receivable reporting',()
     expect(response.headers.vary).toContain('Cookie');
     expect(response.body.data).toEqual(reporting.unavailable());
     expect(repositoryRead).toHaveBeenCalledTimes(1);
+    expect(throttle).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects every framed, parsed and injected body-presence shape',() => {
+    const cases=[
+      [{headers:{'content-length':'1'}},true],
+      [{headers:{'content-length':'000'}},false],
+      [{headers:{'content-length':'not-a-number'}},true],
+      [{headers:{'transfer-encoding':'chunked'}},true],
+      [{headers:{},rawBody:'{}'},true],
+      [{headers:{'content-length':'2'},body:{}},true],
+      [{headers:{},body:{}},false],
+      [{headers:{},body:[]},true],
+      [{headers:{},body:null},true],
+      [{headers:{},body:0},true],
+      [{headers:{},body:false},true],
+      [{headers:{},body:'credential'},true],
+      [{headers:{},body:Buffer.from('credential')},true],
+      [{headers:{},rawBody:'',body:''},false],
+      [{headers:{}},false],
+    ];
+    for (const [req,expected] of cases) expect(hasRequestBody(req)).toBe(expected);
   });
 
   test('adds no mutation, demo surface, transport, table or migration 273',() => {

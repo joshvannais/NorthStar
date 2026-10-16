@@ -87,6 +87,33 @@ realPostgres('Mission 27 Part 12A mounted invoice and receivable reporting',() =
     expect(transport).not.toHaveBeenCalled();
   },120000);
 
+  test('every nonempty GET body fails before throttle, source and repository entry',async () => {
+    repositoryRead.mockClear();
+    const bodyCases=[
+      request(fixture.app).get(route).type('json').send({tenantId:fixture.org,
+        providerAccountId:'acct_secret',amountMinorUnits:'100',credential:'sk_secret'}),
+      request(fixture.app).get(route).type('json').send([
+        {customerIdentity:'victim',invoiceIdentity:'invoice_secret'}]),
+      request(fixture.app).get(route).type('json').send({}),
+      request(fixture.app).get(route).type('form').send(
+        {accountId:'acct_secret',amountMinorUnits:'100'}),
+      request(fixture.app).get(route).type('text').send('credential=sk_secret'),
+      request(fixture.app).get(route).type('application/octet-stream')
+        .send(Buffer.from('customerIdentity=victim')),
+    ];
+    for (const bodyRequest of bodyCases) {
+      const response=await bodyRequest.set(fixture.actors.owner.session.headers);
+      expect(response.status).toBe(400);
+      expect(response.headers['cache-control']).toContain('private');
+      expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.headers['x-ratelimit-limit']).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toMatch(
+        new RegExp(`${fixture.org}|victim|acct_secret|sk_secret|invoice_secret|amountMinorUnits`,'i'));
+      expect(repositoryRead).not.toHaveBeenCalled();
+    }
+    expect(transport).not.toHaveBeenCalled();
+  },120000);
+
   test('HEAD and OPTIONS stop before the source with exact GET-only CORS',async () => {
     repositoryRead.mockClear();
     const head=await request(fixture.app).head(route)

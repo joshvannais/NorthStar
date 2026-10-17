@@ -51,6 +51,8 @@ const { createCustomerFinancialProviderLifecycleRouter } =
   require('./routes/customerFinancialProviderLifecycle');
 const { createCustomerFinancialProviderRetentionRouter } =
   require('./routes/customerFinancialProviderRetention');
+const { createCustomerFinancialProviderRecoveryRouter } =
+  require('./routes/customerFinancialProviderRecovery');
 const { createCustomerFinancialProviderEventReceiptRouter } =
   require('./routes/customerFinancialProviderEventReceipt');
 const { createCustomerFinancialProviderEventNormalizationRouter } =
@@ -75,6 +77,8 @@ const { providerLifecycleHealthBoundary } =
   require('./middleware/providerLifecycleHealthBoundary');
 const { providerLifecycleRetentionBoundary } =
   require('./middleware/providerLifecycleRetentionBoundary');
+const { providerLifecycleRecoveryBoundary } =
+  require('./middleware/providerLifecycleRecoveryBoundary');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -173,6 +177,9 @@ app.use(providerLifecycleHealthBoundary);
 // Part 13B owns the complete method/body composition for its exact private
 // retention read before body parsing or any authenticated source access.
 app.use(providerLifecycleRetentionBoundary);
+// Part 13C owns exact provider-recovery method/body composition before body
+// parsing, authentication, throttling or source reads.
+app.use(providerLifecycleRecoveryBoundary);
 app.use(correlationId);
 // The two signed Retell entry points must receive bounded raw bytes before the
 // global JSON parser. The boundary router owns only those exact paths.
@@ -425,6 +432,8 @@ app.use('/api/v1/customer-financial/payment-provider/lifecycle-health',
   createCustomerFinancialProviderLifecycleRouter());
 app.use('/api/v1/customer-financial/payment-provider/lifecycle-retention',
   createCustomerFinancialProviderRetentionRouter());
+app.use('/api/v1/customer-financial/payment-provider/lifecycle-recovery',
+  createCustomerFinancialProviderRecoveryRouter());
 app.use('/api/v1/customer-financial/payment-provider/event-receipt',
   createCustomerFinancialProviderEventReceiptRouter());
 app.use('/api/v1/customer-financial/payment-provider/event-normalization',

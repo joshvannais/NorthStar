@@ -6,6 +6,9 @@
 const { CORS_METHODS: PAYMENT_CASH_CORS_METHODS,
   isPaymentCashReadPath } =
   require('../customerFinancial/paymentCashReportingHttpBoundary');
+const { CORS_METHODS: DOWNSTREAM_READERS_CORS_METHODS,
+  isDownstreamReadersPath } =
+  require('../customerFinancial/downstreamReportingReadersHttpBoundary');
 
 /**
  * CSP directives for the application.
@@ -76,6 +79,7 @@ function corsOptions(req, callback) {
   }
 
   const paymentCashRead = isPaymentCashReadPath(req.path);
+  const downstreamReadersRead = isDownstreamReadersPath(req.path);
   const exactCustomerFinancialRead = [
     '/api/v1/customer-financial/receivables',
     '/api/v1/customer-financial/receivables/',
@@ -85,7 +89,7 @@ function corsOptions(req, callback) {
     '/api/v1/customer-financial/collection-handoff/',
     '/api/v1/customer-financial/reporting/invoice-receivables',
     '/api/v1/customer-financial/reporting/invoice-receivables/',
-  ].includes(req.path) || paymentCashRead ||
+  ].includes(req.path) || paymentCashRead || downstreamReadersRead ||
     /^\/api\/v1\/customer-financial\/editable-estimates\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/accounting-(?:(?:export|reconciliation)-readiness|part11-acceptance)\/?$/i
       .test(req.path);
 
@@ -93,6 +97,7 @@ function corsOptions(req, callback) {
     origin: corsEnabled,
     credentials: true,
     methods: paymentCashRead ? [...PAYMENT_CASH_CORS_METHODS] :
+      downstreamReadersRead ? [...DOWNSTREAM_READERS_CORS_METHODS] :
       exactCustomerFinancialRead ? ['GET'] :
       ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     preflightContinue: exactCustomerFinancialRead,

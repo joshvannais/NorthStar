@@ -62,6 +62,9 @@ const { createCustomerFinancialReportingRouter, rejectCustomerFinancialReporting
 const { createCustomerFinancialPaymentCashReportingRouter,
   rejectCustomerFinancialPaymentCashReportingReadBody } =
   require('./routes/customerFinancialPaymentCashReporting');
+const { createCustomerFinancialDownstreamReportingRouter,
+  rejectCustomerFinancialDownstreamReportingBody } =
+  require('./routes/customerFinancialDownstreamReporting');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -173,6 +176,7 @@ app.use(customerEstimateDeliveryBodyBoundary);
 // before the global JSON parser can parse or reflect malformed/scalar payloads.
 app.use(rejectCustomerFinancialReportingReadBody);
 app.use(rejectCustomerFinancialPaymentCashReportingReadBody);
+app.use(rejectCustomerFinancialDownstreamReportingBody);
 app.use(express.json({
   limit: '1mb',
   verify(req, _res, buffer) {
@@ -413,6 +417,8 @@ app.use('/api/v1/customer-financial/reporting',
   createCustomerFinancialReportingRouter());
 app.use('/api/v1/customer-financial/reporting',
   createCustomerFinancialPaymentCashReportingRouter());
+app.use('/api/v1/customer-financial/reporting',
+  createCustomerFinancialDownstreamReportingRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());
 app.use('/api/v1/forecast/current-backlog', createForecastCurrentBacklogRouter());
 app.use('/api/v1/forecast/demand-to-schedule', createForecastDemandToScheduleRouter());

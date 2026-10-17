@@ -1,6 +1,12 @@
 # Mission 27 Part 12B — payment and cash reporting
 
-Status: implementation candidate. Part 12A is released. This slice adds one
+Status: released at accepted head `1499467407edd1b075ec44b904749962bfdd4bde`,
+tree `477a40f2592c7c8d5d745849555d539fa4c5a887`, normally merged as PR #527 to
+exact main `2fa7a5edcb7719a5b400e1855ac8e48a2ac79c9f`, and released by sole automatic
+deployment `6c39b8cc-100d-4ba4-9ef6-c54490b812d0`, image
+`sha256:6aa408bbcefd45a3751b3147144c0aed0d2ba7fd798c21268d62cab0abf7dc98`,
+with migration 272 latest and no 273 and `/api/health`, `/`, and `/demo/` HTTP
+200. Part 12A is released. This slice adds one
 tenant-private, read-only, value-free reporting boundary. It does not create a
 payment, receipt, bank fact, accounting entry, downstream observation or money
 effect.

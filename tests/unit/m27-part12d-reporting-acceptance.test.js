@@ -7,6 +7,7 @@ const express=require('express');
 const request=require('supertest');
 const workspace=require('../../src/commandCenter/workspace');
 const contract=require('../../src/customerFinancial/reportingPart12Acceptance');
+const part11Contract=require('../../src/customerFinancial/accountingPart11Acceptance');
 const repository=require('../../src/customerFinancial/reportingPart12AcceptanceRepository');
 const providerBoundary=require('../../src/customerFinancial/paymentProviderBoundary');
 const demo=require('../../src/customerFinancial/demoReportingPart12Acceptance');
@@ -24,7 +25,7 @@ const TENANT='44444444-4444-4444-8444-444444444444';
 const USER='55555555-5555-4555-8555-555555555555';
 const SESSION='66666666-6666-4666-8666-666666666666';
 const clone=value=>JSON.parse(JSON.stringify(value));
-let canonical;
+let canonical,demoItem;
 
 beforeAll(()=>{
   const state=workspace.createInitialDemoState(TENANT,new Date('2026-10-15T12:00:00Z'),
@@ -32,7 +33,8 @@ beforeAll(()=>{
   const view=workspace.buildDemoWorkspace({tenantId:TENANT,sessionId:ESTIMATE,state,
     revision:1,simulationCount:0,persisted:true,
     expiresAt:new Date('2026-10-16T12:00:00Z')});
-  canonical=demo.bundle(workspace.demoCanonicalItems(view)[0],1);
+  demoItem=workspace.demoCanonicalItems(view)[0];
+  canonical=demo.bundle(demoItem,1);
 });
 
 function mutateLeaf(target,path) {
@@ -61,13 +63,13 @@ function semanticLeafPaths(value) {
   visit(value,[]); return paths;
 }
 
-function canonicalPart11() {
+function canonicalPart11(value=canonical) {
   return {contractVersion:'m27-accounting-part11-preview-bundle-v1',
-    preview:canonical.preview,part5Acceptance:canonical.part5Acceptance,
-    part6Acceptance:canonical.part6Acceptance,part7Acceptance:canonical.part7Acceptance,
-    part9Acceptance:canonical.part9Acceptance,part10Acceptance:canonical.part10Acceptance,
-    part11SourceContracts:canonical.part11SourceContracts,
-    part11Acceptance:canonical.part11Acceptance};
+    preview:value.preview,part5Acceptance:value.part5Acceptance,
+    part6Acceptance:value.part6Acceptance,part7Acceptance:value.part7Acceptance,
+    part9Acceptance:value.part9Acceptance,part10Acceptance:value.part10Acceptance,
+    part11SourceContracts:value.part11SourceContracts,
+    part11Acceptance:value.part11Acceptance};
 }
 
 function app(read) {
@@ -92,8 +94,7 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
     const sources={part11,invoiceReceivableReporting:{state:'unavailable'},
       paymentCashReporting:{state:'unavailable'},downstreamReportingReaders:{state:'unavailable'}};
     const result={contractVersion:'m27-reporting-part12-preview-bundle-v1'};
-    const derive=jest.spyOn(contract,'derive').mockReturnValue(sources);
-    const unavailable=jest.spyOn(contract,'unavailable').mockReturnValue({state:'incomplete'});
+    const projectSources=jest.fn(value=>value);
     const bundle=jest.spyOn(contract,'bundle').mockReturnValue(result);
     const readPart11=jest.fn().mockResolvedValue(part11);
     const readSources=jest.fn().mockResolvedValue(sources);
@@ -102,16 +103,16 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
       actorAccessRole:'owner'};
     try {
       expect(await repository.readBundle({},source,ESTIMATE,RECEIPT,DIGEST,
-        {readPart11,readSources,readPreview})).toBe(result);
+        {readPart11,readSources,readPreview,projectSources})).toBe(result);
       expect(await repository.readBundle({},source,ESTIMATE,RECEIPT,DIGEST,
-        {readPart11,readSources,readPreview})).toBe(result);
+        {readPart11,readSources,readPreview,projectSources})).toBe(result);
       expect(readPart11).toHaveBeenCalledTimes(2);
       expect(readSources).toHaveBeenCalledTimes(4);
       expect(readPreview).toHaveBeenCalledTimes(4);
-      expect(derive).toHaveBeenCalledTimes(4);
+      expect(projectSources).toHaveBeenCalledTimes(4);
       expect(bundle).toHaveBeenCalledTimes(2);
     } finally {
-      derive.mockRestore();unavailable.mockRestore();bundle.mockRestore();
+      bundle.mockRestore();
     }
   });
 
@@ -155,25 +156,23 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
       const readSources=jest.fn().mockImplementation(async()=>sourceReads.shift());
       const previews=[first.preview,first.preview,second.preview,second.preview];
       const readPreview=jest.fn().mockImplementation(async()=>previews.shift());
-      const derive=jest.spyOn(contract,'derive').mockImplementation((part11,sources)=>
-        ({...sources,part11}));
-      const unavailable=jest.spyOn(contract,'unavailable').mockReturnValue({state:'incomplete'});
+      const projectSources=jest.fn(value=>value);
       const bundle=jest.spyOn(contract,'bundle').mockImplementation((part11,_acceptance,sources)=>
         ({snapshotDigest:providerBoundary.digest({part11,sources})}));
       const source={organizationId:TENANT,actorUserId:USER,authSessionId:SESSION,
         actorAccessRole:'owner'};
       try {
         const v1=await repository.readBundle({},source,ESTIMATE,RECEIPT,DIGEST,
-          {readPart11,readSources,readPreview});
+          {readPart11,readSources,readPreview,projectSources});
         const v2=await repository.readBundle({},source,ESTIMATE,RECEIPT,DIGEST,
-          {readPart11,readSources,readPreview});
+          {readPart11,readSources,readPreview,projectSources});
         expect(v2.snapshotDigest).not.toBe(v1.snapshotDigest);
         expect(v2.snapshotDigest).toBe(providerBoundary.digest({part11:second.part11,
           sources:{...second,part11:second.part11}}));
         expect(readPart11).toHaveBeenCalledTimes(2);
         expect(readSources).toHaveBeenCalledTimes(4);
       } finally {
-        derive.mockRestore();unavailable.mockRestore();bundle.mockRestore();
+        bundle.mockRestore();
       }
     });
 
@@ -195,19 +194,18 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
     const readSources=jest.fn()
       .mockResolvedValueOnce(base).mockResolvedValueOnce(changed);
     const readPreview=jest.fn().mockResolvedValue(preview);
-    const derive=jest.spyOn(contract,'derive').mockImplementation((part11,sources)=>
-      ({...sources,part11}));
+    const projectSources=jest.fn(value=>value);
     const bundle=jest.spyOn(contract,'bundle');
     const source={organizationId:TENANT,actorUserId:USER,authSessionId:SESSION,
       actorAccessRole:'owner'};
     try {
       await expect(repository.readBundle({},source,ESTIMATE,RECEIPT,DIGEST,
-        {readPart11,readSources,readPreview})).rejects.toMatchObject({
+        {readPart11,readSources,readPreview,projectSources})).rejects.toMatchObject({
         code:'CUSTOMER_FINANCIAL_REPORTING_PART12_CHANGED',status:409});
       expect(bundle).not.toHaveBeenCalled();
       expect(readPart11).toHaveBeenCalledTimes(1);
       expect(readSources).toHaveBeenCalledTimes(2);
-    } finally { derive.mockRestore();bundle.mockRestore(); }
+    } finally { bundle.mockRestore(); }
   });
 
   test('keeps concurrent cross-tenant requests isolated without reusable request state',async()=>{
@@ -219,24 +217,22 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
     const readSources=jest.fn(async source=>({tenant:source.organizationId,
       invoiceReceivableReporting:{},paymentCashReporting:{},downstreamReportingReaders:{}}));
     const readPreview=jest.fn().mockResolvedValue(preview);
-    const derive=jest.spyOn(contract,'derive').mockImplementation((part11,sources)=>
-      ({...sources,part11}));
-    const unavailable=jest.spyOn(contract,'unavailable').mockReturnValue({state:'incomplete'});
+    const projectSources=jest.fn(value=>value);
     const bundle=jest.spyOn(contract,'bundle').mockImplementation((part11,_acceptance,sources)=>
       ({part11Tenant:part11.tenant,sourceTenant:sources.tenant}));
     try {
       const [a,b]=await Promise.all([
         repository.readBundle({},sourceA,ESTIMATE,RECEIPT,DIGEST,
-          {readPart11,readSources,readPreview}),
+          {readPart11,readSources,readPreview,projectSources}),
         repository.readBundle({},sourceB,ESTIMATE,RECEIPT,DIGEST,
-          {readPart11,readSources,readPreview}),
+          {readPart11,readSources,readPreview,projectSources}),
       ]);
       expect(a).toEqual({part11Tenant:TENANT,sourceTenant:TENANT});
       expect(b).toEqual({part11Tenant:sourceB.organizationId,sourceTenant:sourceB.organizationId});
       expect(readPart11).toHaveBeenCalledTimes(2);
       expect(readSources).toHaveBeenCalledTimes(4);
     } finally {
-      derive.mockRestore();unavailable.mockRestore();bundle.mockRestore();
+      bundle.mockRestore();
     }
   });
 
@@ -259,6 +255,77 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
     for (const attempt of attempts) expect(()=>contract.derive(attempt())).toThrow();
     valid.part11Acceptance.accountingMutationCount=1;
     expect(()=>contract.derive(valid)).toThrow();
+  });
+
+  test('no exported composition order can reuse a derived source envelope for another Part 11',()=>{
+    expect(Object.keys(contract).sort()).toEqual([
+      'BUNDLE_VERSION','CONTRACT_VERSION','DRILLDOWN_ORDER','REASON','SOURCE_ORDER',
+      'SURFACE_ORDER','bundle','derive','project','projectBundle','sourceWitnesses','unavailable',
+    ]);
+    const part11A=clone(canonicalPart11());
+    const bundleB=demo.bundle(demoItem,2);
+    const part11B=clone(canonicalPart11(bundleB));
+    const invalidB=clone(part11B);invalidB.part11Acceptance.accountingMutationCount=1;
+    expect(JSON.stringify(part11B)).not.toBe(JSON.stringify(part11A));
+    const derivedA=contract.derive(part11A);
+    const derivedB=contract.derive(part11B);
+    const derivedVariants=[
+      ['direct',derivedA],
+      ['clone',clone(derivedA)],
+      ['replay',contract.derive(clone(part11A))],
+      ['different-current-request',derivedB],
+      ['prototype-wrapper',Object.create(derivedA)],
+      ['object-wrapper',{value:derivedA}],
+      ['cross-tenant-alias',{...clone(derivedA),tenantId:TENANT}],
+      ['cross-request-alias',{...clone(derivedA),requestId:'request-b'}],
+      ['mutated-source',(()=>{const value=clone(derivedA);
+        value.invoiceReceivableReporting.reason='forged';return value;})()],
+      ['joint-source-digest-forgery',(()=>{const value=clone(derivedA);
+        value.paymentCashReporting.reason='forged';
+        value.downstreamReportingReaders.sourceWitnesses[1].digest=
+          providerBoundary.digest(value.paymentCashReporting);return value;})()],
+    ];
+    const acceptanceA=clone(canonical.part12Acceptance);
+    const bundleA=clone(canonical);
+    const invoke=(part11,sources,mode='demo')=>[
+      ()=>contract.derive(part11,sources),
+      ()=>contract.unavailable(mode,part11,sources),
+      ()=>contract.project(acceptanceA,mode,part11,sources),
+      ()=>contract.bundle(part11,acceptanceA,sources),
+    ];
+    // This full Cartesian gate proves that each composition projects the exact
+    // Part 11 object supplied to that call. Spying only this nested projector
+    // avoids hundreds of redundant full Parts 5-11 traversals; the real strict
+    // invalid and valid paths immediately below remain unmocked.
+    const strict=jest.spyOn(part11Contract,'projectBundle')
+      .mockImplementation(value=>value);
+    try {
+      for (const mode of ['paid','demo']) {
+        for (const [_name,sources] of derivedVariants) {
+          for (const part11 of [part11A,part11B,invalidB]) {
+            for (const operation of invoke(part11,sources,mode)) {
+              const before=strict.mock.calls.length;
+              expect(operation).toThrow('Reporting Part 12 sources invalid');
+              expect(strict.mock.calls).toHaveLength(before+1);
+              expect(strict.mock.calls.at(-1)[0]).toBe(part11);
+            }
+          }
+          const before=strict.mock.calls.length;
+          expect(()=>contract.projectBundle(bundleA,mode,sources)).toThrow(
+            'Reporting Part 12 sources invalid');
+          expect(strict.mock.calls).toHaveLength(before+1);
+        }
+      }
+    } finally { strict.mockRestore(); }
+    expect(()=>contract.bundle(invalidB,acceptanceA)).toThrow();
+    const invalidBundle=clone(bundleB);
+    invalidBundle.part11Acceptance.accountingMutationCount=1;
+    expect(()=>contract.projectBundle(invalidBundle,'demo')).toThrow();
+    expect(()=>contract.unavailable('demo',part11B,derivedA)).toThrow(
+      'Reporting Part 12 sources invalid');
+    expect(()=>contract.bundle(part11A,acceptanceA,derivedB)).toThrow(
+      'Reporting Part 12 sources invalid');
+    expect(()=>contract.bundle(part11A)).not.toThrow();
   });
 
   test('freezes complete source, surface, drilldown, privacy and no-effect truth',async()=>{
@@ -297,23 +364,27 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
       part11Acceptance:canonical.part11Acceptance});
     const paths=semanticLeafPaths(canonical.part12Acceptance);
     expect(paths.length).toBeGreaterThan(100);
-    for (const path of paths) {
-      const forged=clone(canonical.part12Acceptance); mutateLeaf(forged,path);
-      expect(()=>contract.project(forged,'demo',sources.part11,sources)).toThrow(
-        'Reporting Part 12 acceptance invalid');
-      expect(await ui.invalidPart12(forged,'demo')).toBe(true);
-    }
-    const structural=[
-      value=>value.sourceWitnesses.reverse(),value=>value.surfaces.reverse(),
-      value=>value.drilldowns.reverse(),value=>value.sourceWitnesses.pop(),
-      value=>{value.providerAccountId='acct_secret';},
-    ];
-    for (const mutate of structural) {
-      const forged=clone(canonical.part12Acceptance); mutate(forged);
-      expect(()=>contract.project(forged,'demo',sources.part11,sources)).toThrow();
-      expect(await ui.invalidPart12(forged,'demo')).toBe(true);
-    }
-  });
+    const strict=jest.spyOn(part11Contract,'projectBundle')
+      .mockImplementation(value=>value);
+    try {
+      for (const path of paths) {
+        const forged=clone(canonical.part12Acceptance); mutateLeaf(forged,path);
+        expect(()=>contract.project(forged,'demo',sources.part11)).toThrow(
+          'Reporting Part 12 acceptance invalid');
+        expect(await ui.invalidPart12(forged,'demo')).toBe(true);
+      }
+      const structural=[
+        value=>value.sourceWitnesses.reverse(),value=>value.surfaces.reverse(),
+        value=>value.drilldowns.reverse(),value=>value.sourceWitnesses.pop(),
+        value=>{value.providerAccountId='acct_secret';},
+      ];
+      for (const mutate of structural) {
+        const forged=clone(canonical.part12Acceptance); mutate(forged);
+        expect(()=>contract.project(forged,'demo',sources.part11)).toThrow();
+        expect(await ui.invalidPart12(forged,'demo')).toBe(true);
+      }
+    } finally { strict.mockRestore(); }
+  },600000);
 
   test('binds Part 12 to the exact Part 11 witness and exact immutable source digests',async()=>{
     for (const forge of [

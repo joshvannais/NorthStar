@@ -15,7 +15,9 @@ const SURFACE_ORDER=Object.freeze(['command_center','customer_finance']);
 const DRILLDOWN_ORDER=Object.freeze([
   'invoice_receivables','payment_cash','downstream_readers',
 ]);
-const DERIVED_SOURCES=new WeakSet();
+const RAW_SOURCE_KEYS=Object.freeze([
+  'invoiceReceivableReporting','paymentCashReporting','downstreamReportingReaders',
+]);
 
 function exact(value,keys) {
   return Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&
@@ -47,6 +49,9 @@ function validatedPart11(value) {
 
 function derive(part11Raw,sourcesRaw) {
   const part11=validatedPart11(part11Raw);
+  if (sourcesRaw!==undefined&&!exact(sourcesRaw,RAW_SOURCE_KEYS)) {
+    throw new Error('Reporting Part 12 sources invalid');
+  }
   const invoiceReceivableReporting=invoiceReporting.project(
     sourcesRaw?.invoiceReceivableReporting||invoiceReporting.unavailable());
   const paymentCashReporting=paymentReporting.project(
@@ -57,13 +62,16 @@ function derive(part11Raw,sourcesRaw) {
     }),{invoiceReceivableReporting,paymentCashReporting});
   const derived=Object.freeze({part11,invoiceReceivableReporting,paymentCashReporting,
     downstreamReportingReaders});
-  DERIVED_SOURCES.add(derived);
   return derived;
 }
 
 function validatedSources(part11Raw,sourcesRaw) {
-  return sourcesRaw&&DERIVED_SOURCES.has(sourcesRaw)
-    ? sourcesRaw : derive(part11Raw,sourcesRaw);
+  // Never trust identity or a caller-obtainable derived value. In particular,
+  // derive() returns a four-key object containing its projected Part 11; that
+  // object (and every clone/replay/wrapper of it) is deliberately ineligible
+  // as the three-key raw source envelope accepted here. Every exported
+  // composition call projects its exact Part 11 argument again.
+  return derive(part11Raw,sourcesRaw);
 }
 
 function sourceWitnesses(sources) {
@@ -86,9 +94,8 @@ function sourceWitnesses(sources) {
   ]);
 }
 
-function unavailable(mode,part11Raw,sourcesRaw) {
+function unavailableFromSources(mode,sources) {
   if (!['paid','demo'].includes(mode)) throw new Error('Reporting Part 12 mode invalid');
-  const sources=validatedSources(part11Raw,sourcesRaw);
   const part11=sources.part11;
   const sourceValues={invoiceReceivableReporting:sources.invoiceReceivableReporting,
     paymentCashReporting:sources.paymentCashReporting,
@@ -186,24 +193,30 @@ function unavailable(mode,part11Raw,sourcesRaw) {
   });
 }
 
+function unavailable(mode,part11Raw,sourcesRaw) {
+  return unavailableFromSources(mode,validatedSources(part11Raw,sourcesRaw));
+}
+
 function invoiceReceivableReason(sources) {
   return sources.invoiceReceivableReporting.reason;
 }
 
-function project(raw,mode,part11Raw,sourcesRaw) {
-  const sources=validatedSources(part11Raw,sourcesRaw);
-  const expected=unavailable(mode,part11Raw,sources);
+function projectFromSources(raw,mode,sources) {
+  const expected=unavailableFromSources(mode,sources);
   if (!exact(raw,Object.keys(expected))||JSON.stringify(raw)!==JSON.stringify(expected)) {
     throw new Error('Reporting Part 12 acceptance invalid');
   }
   return expected;
 }
 
-function bundle(part11Raw,acceptance,sourcesRaw) {
-  const mode=part11Raw?.preview?.mode;
+function project(raw,mode,part11Raw,sourcesRaw) {
   const sources=validatedSources(part11Raw,sourcesRaw);
+  return projectFromSources(raw,mode,sources);
+}
+
+function bundleFromSources(acceptance,sources) {
   const part11=sources.part11;
-  const value=project(acceptance,mode,part11,sources);
+  const value=projectFromSources(acceptance,part11.preview.mode,sources);
   if (JSON.stringify(value.previewWitness)!==
       JSON.stringify(part11.part11Acceptance.previewWitness)) {
     throw new Error('Reporting Part 12 preview bundle currentness mismatch');
@@ -216,6 +229,13 @@ function bundle(part11Raw,acceptance,sourcesRaw) {
     part11SourceContracts:part11.part11SourceContracts,
     part11Acceptance:part11.part11Acceptance,part12Acceptance:value,
   });
+}
+
+function bundle(part11Raw,acceptance,sourcesRaw) {
+  const sources=validatedSources(part11Raw,sourcesRaw);
+  const value=acceptance===undefined ?
+    unavailableFromSources(sources.part11.preview.mode,sources):acceptance;
+  return bundleFromSources(value,sources);
 }
 
 function projectBundle(raw,expectedMode,sourcesRaw) {
@@ -231,7 +251,7 @@ function projectBundle(raw,expectedMode,sourcesRaw) {
     part10Acceptance:raw.part10Acceptance,
     part11SourceContracts:raw.part11SourceContracts,part11Acceptance:raw.part11Acceptance};
   const sources=validatedSources(part11,sourcesRaw);
-  const expected=bundle(part11,raw.part12Acceptance,sources);
+  const expected=bundleFromSources(raw.part12Acceptance,sources);
   if (JSON.stringify(raw)!==JSON.stringify(expected)) {
     throw new Error('Reporting Part 12 preview bundle invalid');
   }

@@ -41,6 +41,67 @@ function mutate(value, leaf) {
     typeof current === 'number' ? current + 1 : `${current}_forged`;
   return copy;
 }
+function at(value, path) {
+  return path.reduce((current, key) => current[key], value);
+}
+function replaceAt(value, path, replacement) {
+  const parent = at(value, path.slice(0, -1));
+  parent[path.at(-1)] = replacement;
+  return value;
+}
+function attacked(canonical, change) {
+  const candidate = clone(canonical);
+  change(candidate);
+  return candidate;
+}
+function malformedPlainDataCases(canonical, nestedPath, arrayPath, zeroPath) {
+  const cases = [];
+  cases.push(attacked(canonical, value => {
+    at(value, nestedPath).completed = true;
+    Object.defineProperty(value, 'toJSON', { value: () => clone(canonical) });
+  }));
+  cases.push(attacked(canonical, value => Object.setPrototypeOf(value,
+    { inheritedForgery: true, toJSON: () => clone(canonical) })));
+  cases.push(attacked(canonical, value => Object.setPrototypeOf(at(value, nestedPath),
+    { inheritedForgery: true })));
+  cases.push(attacked(canonical, value => Object.defineProperty(value, 'state', {
+    enumerable: true, get: () => 'unavailable',
+  })));
+  cases.push(attacked(canonical, value => Object.defineProperty(at(value, nestedPath), 'state', {
+    enumerable: true, get: () => 'unavailable',
+  })));
+  cases.push(attacked(canonical, value => Object.defineProperty(value, 'hiddenForgery', {
+    value: 'secret', enumerable: false,
+  })));
+  cases.push(attacked(canonical, value => Object.defineProperty(at(value, nestedPath),
+    'hiddenForgery', { value: 'secret', enumerable: false })));
+  cases.push(attacked(canonical, value => { value[Symbol('forged')] = 'secret'; }));
+  cases.push(attacked(canonical, value => { at(value, nestedPath)[Symbol('forged')] = 'secret'; }));
+  cases.push(attacked(canonical, value => replaceAt(value, nestedPath,
+    Object.assign(Object.create(null), at(value, nestedPath)))));
+  cases.push(attacked(canonical, value => replaceAt(value, nestedPath,
+    new Proxy(at(value, nestedPath), {}))));
+  cases.push(attacked(canonical, value => Object.setPrototypeOf(at(value, arrayPath),
+    Object.create(Array.prototype))));
+  cases.push(attacked(canonical, value => Object.defineProperty(at(value, arrayPath), 'toJSON', {
+    value: () => clone(at(canonical, arrayPath)), enumerable: false,
+  })));
+  cases.push(attacked(canonical, value => Object.defineProperty(at(value, arrayPath), '0', {
+    enumerable: true, get: () => clone(at(canonical, arrayPath)[0]),
+  })));
+  cases.push(attacked(canonical, value => { at(value, arrayPath)[Symbol('forged')] = 'secret'; }));
+  cases.push(attacked(canonical, value => { at(value, arrayPath).extra = 'secret'; }));
+  cases.push(attacked(canonical, value => { delete at(value, arrayPath)[0]; }));
+  cases.push(attacked(canonical, value => replaceAt(value, zeroPath, -0)));
+  cases.push(attacked(canonical, value => replaceAt(value, zeroPath, Number.NaN)));
+  cases.push(attacked(canonical, value => replaceAt(value, zeroPath, Number.POSITIVE_INFINITY)));
+  cases.push(attacked(canonical, value => replaceAt(value, zeroPath, new Number(0))));
+  cases.push(attacked(canonical, value => replaceAt(value, zeroPath, () => 0)));
+  cases.push(attacked(canonical, value => replaceAt(value, zeroPath, 0n)));
+  cases.push(attacked(canonical, value => { value.self = value; }));
+  cases.push(new Proxy(clone(canonical), {}));
+  return cases;
+}
 function appWithSpies(spies = {}) {
   const app = express();
   app.use(cors(corsOptions));
@@ -58,6 +119,53 @@ function appWithSpies(spies = {}) {
 }
 
 describe('Mission 27 Part 13C provider operational recovery readiness', () => {
+  test('rejects every non-plain Part13B and Part13C masquerade before trust or projection', async () => {
+    const recovery = contract.unavailable();
+    const sourceRetention = retention.unavailable();
+    const recoveryCases = malformedPlainDataCases(recovery,
+      ['migrationAndRestart'], ['sources'], ['providerCallCount']);
+    const retentionCases = malformedPlainDataCases(sourceRetention,
+      ['cleanup'], ['sources'], ['cleanup', 'deletedCount']);
+
+    expect(contract.project(clone(recovery), clone(sourceRetention))).toEqual(recovery);
+    expect(contract.unavailable(clone(sourceRetention))).toEqual(recovery);
+    for (const candidate of recoveryCases) {
+      expect(() => contract.project(candidate, clone(sourceRetention)))
+        .toThrow('Provider lifecycle recovery boundary invalid');
+    }
+    for (const candidate of retentionCases) {
+      expect(() => contract.unavailable(candidate))
+        .toThrow('Provider lifecycle recovery boundary invalid');
+      expect(() => contract.project(clone(recovery), candidate))
+        .toThrow('Provider lifecycle recovery boundary invalid');
+    }
+
+    Object.defineProperty(Object.prototype, 'part13cPollution', {
+      value: 'forged', enumerable: true, configurable: true,
+    });
+    try {
+      expect(() => contract.project(clone(recovery), clone(sourceRetention)))
+        .toThrow('Provider lifecycle recovery boundary invalid');
+      expect(() => contract.unavailable(clone(sourceRetention)))
+        .toThrow('Provider lifecycle recovery boundary invalid');
+    } finally {
+      delete Object.prototype.part13cPollution;
+    }
+
+    const masked = clone(sourceRetention);
+    masked.cleanup.completed = true;
+    masked.cleanup.deletedCount = 99;
+    Object.defineProperty(masked, 'toJSON', { value: () => clone(sourceRetention) });
+    const readRetention = jest.fn(async () => masked);
+    await expect(repository.createRepository({ readRetention }).read(source))
+      .rejects.toThrow('Provider lifecycle recovery boundary invalid');
+    expect(readRetention).toHaveBeenCalledTimes(1);
+
+    const exportsBefore = Object.keys(contract).sort();
+    expect(exportsBefore).toEqual(['CONTRACT_VERSION', 'REASON', 'RECOVERY_CAPABILITY',
+      'REQUIREMENTS', 'policy', 'project', 'unavailable'].sort());
+  });
+
   test('projects every exact server-owned semantic leaf and rejects any mutation', () => {
     const value = contract.unavailable();
     expect(contract.project(clone(value))).toEqual(value);

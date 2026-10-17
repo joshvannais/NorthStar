@@ -17,6 +17,13 @@ own projection, so a source correction or concurrency change fails closed.
 There is no cache, identity marker, caller-issued trust token, replayed source
 or older-source fallback.
 
+Every raw Part 13B source and Part 13C projection must also be an ordinary
+JSON-like tree before semantic validation: records have the plain Object
+prototype, arrays use the standard Array prototype, and all values are own
+enumerable data properties. Custom prototypes, `toJSON`, accessors, symbols,
+non-enumerable fields, wrappers, exotic objects, proxies, aliases and cycles
+fail closed before the released Part 13B projector or any Part 13C comparison.
+
 ## Private read boundary
 
 `GET /api/v1/customer-financial/payment-provider/lifecycle-recovery` is the
@@ -61,8 +68,9 @@ provider, receiver, accounting, database and money effect counter is zero.
 
 ## Evidence boundary
 
-Focused tests enumerate every semantic leaf, structural/source/digest witness,
-joint forgery, exact Part 13B/13A reread and concurrency case, owner-only
+Focused tests enumerate every semantic leaf, plain-data/prototype/descriptor
+masquerade, structural/source/digest witness, joint forgery, exact Part 13B/13A
+reread and concurrency case, owner-only
 source, route equivalence and near miss, query/body/framing/method/CORS
 composition, privacy and zero effects. Mounted evidence uses a disposable
 local PostgreSQL 17 database through migration 272 and proves session, role,

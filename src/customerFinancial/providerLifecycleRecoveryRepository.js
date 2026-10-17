@@ -29,7 +29,9 @@ function sourceCurrent(source) {
 function createRepository(options = {}) {
   const readRetention = options.readRetention || lifecycleRetentionRepository.read;
   async function snapshot(source) {
-    return lifecycleRetention.project(await readRetention(source));
+    const raw = await readRetention(source);
+    contract.unavailable(raw);
+    return lifecycleRetention.project(raw);
   }
   async function read(source) {
     if (!sourceCurrent(source)) throw restricted();

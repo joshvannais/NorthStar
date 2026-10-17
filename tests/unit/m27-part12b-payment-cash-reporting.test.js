@@ -9,8 +9,11 @@ const reporting = require('../../src/customerFinancial/paymentCashReporting');
 const repository = require('../../src/customerFinancial/paymentCashReportingRepository');
 const { corsOptions } = require('../../src/middleware/security');
 const { createCustomerFinancialPaymentCashReportingRouter,
-  rejectCustomerFinancialPaymentCashReportingReadBody, isPaymentCashReadPath } =
+  rejectCustomerFinancialPaymentCashReportingReadBody, isPaymentCashReadPath,
+  hasFramedRequestBody } =
   require('../../src/routes/customerFinancialPaymentCashReporting');
+const paymentCashHttp =
+  require('../../src/customerFinancial/paymentCashReportingHttpBoundary');
 
 const ROOT = path.resolve(__dirname,'../..');
 const read = relative => fs.readFileSync(path.join(ROOT,relative),'utf8');
@@ -214,7 +217,7 @@ describe('Mission 27 Part 12B payment and cash reporting',() => {
     nearMisses.forEach(value=>expect(isPaymentCashReadPath(value)).toBe(false));
   });
 
-  test('all body shapes and equivalent paths fail before parser, throttle or read',async () => {
+  test('the complete protected path, method, and body cross-product is owned before parsing',async () => {
     const mounted=unitApp();
     const server=await new Promise((resolve,reject)=>{
       const listener=mounted.app.listen(0,'127.0.0.1',()=>resolve(listener));
@@ -222,50 +225,78 @@ describe('Mission 27 Part 12B payment and cash reporting',() => {
     });
     try {
       const bodyCases=[
-        {body:'"sk_secret_scalar"',headers:{'Content-Type':'application/json'}},
-        {body:'123456789',headers:{'Content-Type':'application/json'}},
-        {body:'true',headers:{'Content-Type':'application/json'}},
-        {body:'null',headers:{'Content-Type':'application/json'}},
-        {body:'{}',headers:{'Content-Type':'application/json'}},
-        {body:'[]',headers:{'Content-Type':'application/json'}},
-        {body:'{"account":"acct_secret"',headers:{'Content-Type':'application/json'}},
-        {body:'account=acct_secret',headers:{'Content-Type':'application/x-www-form-urlencoded'}},
-        {body:'identity=victim',headers:{'Content-Type':'text/plain'}},
-        {body:Buffer.from([0,1,2,3]),headers:{'Content-Type':'application/octet-stream'}},
-        {body:'secret=chunked',headers:{'Content-Type':'text/plain',
+        {name:'empty',body:undefined,headers:{}},
+        {name:'content-length-zero',body:undefined,headers:{'Content-Length':'0'}},
+        {name:'json-string',body:'"sk_secret_scalar"',headers:{'Content-Type':'application/json'}},
+        {name:'json-number',body:'123456789',headers:{'Content-Type':'application/json'}},
+        {name:'json-boolean',body:'true',headers:{'Content-Type':'application/json'}},
+        {name:'json-null',body:'null',headers:{'Content-Type':'application/json'}},
+        {name:'json-object',body:'{"account":"acct_secret"}',headers:{'Content-Type':'application/json'}},
+        {name:'json-array',body:'[{"identity":"victim"}]',headers:{'Content-Type':'application/json'}},
+        {name:'malformed-json',body:'{"account":"acct_secret"',headers:{'Content-Type':'application/json'}},
+        {name:'form',body:'account=acct_secret',headers:{'Content-Type':'application/x-www-form-urlencoded'}},
+        {name:'text',body:'identity=victim',headers:{'Content-Type':'text/plain'}},
+        {name:'binary',body:Buffer.from([0,1,2,3]),headers:{'Content-Type':'application/octet-stream'}},
+        {name:'chunked',body:'secret=chunked',headers:{'Content-Type':'text/plain',
           'Transfer-Encoding':'chunked'}},
       ];
+      const methods=['GET','HEAD','OPTIONS','POST','PUT','PATCH','DELETE','TRACE','PROPFIND'];
       const equivalents=[
         '/api/v1/customer-financial/reporting/payment-cash',
         '/API/v1/customer-financial/reporting/payment-cash',
-        '/api/V1/CUSTOMER-FINANCIAL/REPORTING/PAYMENT-CASH',
-        '/ApI/V1/CuStOmEr-FiNaNcIaL/RePoRtInG/PaYmEnT-CaSh/',
-        '/api/v1/customer-financial/reporting//payment-cash',
+        '/ApI/V1/CuStOmEr-FiNaNcIaL/RePoRtInG/PaYmEnT-CaSh/?view=current',
+        '/api/v1/customer-financial/reporting//payment-cash?credential=ignored-by-path-matcher',
       ];
+      const cases=[];
       for (const pathName of equivalents) {
-        for (const bodyCase of bodyCases) {
-          const headers={...bodyCase.headers};
-          if (!headers['Transfer-Encoding']) {
-            headers['Content-Length']=String(Buffer.byteLength(bodyCase.body));
+        for (const method of methods) {
+          for (const bodyCase of bodyCases) {
+            const headers={...bodyCase.headers};
+            if (bodyCase.body !== undefined && !headers['Transfer-Encoding']) {
+              headers['Content-Length']=String(Buffer.byteLength(bodyCase.body));
+            }
+            cases.push({pathName,method,bodyCase,pathHasQuery:pathName.includes('?'),
+              execute:()=>rawRequest(server,{pathName,method,headers,body:bodyCase.body})});
           }
-          const response=await rawRequest(server,{pathName,headers,body:bodyCase.body});
-          expect(response.status).toBe(400);
-          expect(response.headers['cache-control']).toContain('private');
-          expect(response.headers['cache-control']).toContain('no-store');
-          expect(JSON.parse(response.text)).toEqual({success:false,error:{
-            category:'CUSTOMER_FINANCIAL_PAYMENT_CASH_REPORTING_INVALID',
-            message:'Review the exact current payment and cash facts.'}});
-          expect(response.text).not.toMatch(/secret|victim|acct|123456789|identity/);
         }
       }
-      expect(mounted.readFn).not.toHaveBeenCalled();
-      expect(mounted.throttle).not.toHaveBeenCalled();
-      for (const pathName of equivalents) {
-        const valid=await rawRequest(server,{pathName,headers:{'Content-Length':'0'}});
-        expect(valid.status).toBe(200);
+      const responses=[];
+      for (let offset=0;offset<cases.length;offset += 24) {
+        responses.push(...await Promise.all(cases.slice(offset,offset+24)
+          .map(item=>item.execute())));
       }
-      expect(mounted.readFn).toHaveBeenCalledTimes(equivalents.length);
-      expect(mounted.throttle).toHaveBeenCalledTimes(equivalents.length);
+      let validGetCount=0;
+      for (let index=0;index<cases.length;index += 1) {
+        const {method,bodyCase,pathHasQuery}=cases[index];
+        const response=responses[index];
+        const empty=bodyCase.body === undefined &&
+          (!bodyCase.headers['Transfer-Encoding']) &&
+          (!bodyCase.headers['Content-Length'] || bodyCase.headers['Content-Length'] === '0');
+        if (method === 'GET' && empty && !pathHasQuery) {
+          expect(response.status).toBe(200);
+          validGetCount += 1;
+          continue;
+        }
+        expect(response.status).toBe(method === 'GET' ? 400 : 405);
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+        expect(response.headers.allow).toBeUndefined();
+        if (method === 'HEAD') {
+          expect(response.text).toBe('');
+        } else {
+          expect(JSON.parse(response.text)).toEqual(method === 'GET' ?
+            {success:false,error:{
+            category:'CUSTOMER_FINANCIAL_PAYMENT_CASH_REPORTING_INVALID',
+            message:'Review the exact current payment and cash facts.'}} :
+            {success:false,error:{
+              category:'CUSTOMER_FINANCIAL_PAYMENT_CASH_REPORTING_METHOD_NOT_ALLOWED',
+              message:'Use the exact payment and cash reporting read boundary.'}});
+        }
+        expect(response.text).not.toMatch(/secret|victim|acct|123456789|identity/);
+      }
+      expect(validGetCount).toBe(4);
+      expect(mounted.readFn).toHaveBeenCalledTimes(validGetCount);
+      expect(mounted.throttle).toHaveBeenCalledTimes(validGetCount);
     } finally {
       await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
     }
@@ -329,11 +360,17 @@ describe('Mission 27 Part 12B payment and cash reporting',() => {
         resolve();
       }));
     }
+    expect(paymentCashHttp.CORS_METHODS).toEqual(['GET']);
+    expect(hasFramedRequestBody({rawHeaders:['Content-Length','1','Content-Length','1'],
+      headers:{'content-length':'1'}})).toBe(true);
+    expect(hasFramedRequestBody({rawHeaders:['Content-Length','invalid'],
+      headers:{'content-length':'invalid'}})).toBe(true);
   });
 
   test('adds no mutation, demo route, external transport, table or migration 273',() => {
     const sourceCode=[read('src/customerFinancial/paymentCashReporting.js'),
       read('src/customerFinancial/paymentCashReportingRepository.js'),
+      read('src/customerFinancial/paymentCashReportingHttpBoundary.js'),
       read('src/routes/customerFinancialPaymentCashReporting.js')].join('\n');
     expect(sourceCode).not.toMatch(/INSERT|UPDATE|DELETE|https\.request|fetch\(|axios|stripe\./i);
     expect(read('src/routes/demo.js')).not.toContain('payment-cash');
@@ -341,7 +378,9 @@ describe('Mission 27 Part 12B payment and cash reporting',() => {
     expect(read('src/server.js').indexOf(
       'app.use(rejectCustomerFinancialPaymentCashReportingReadBody)'))
       .toBeLessThan(read('src/server.js').indexOf('app.use(express.json({'));
-    expect(read('src/middleware/security.js')).toContain('payment-cash');
+    expect(read('src/middleware/security.js')).toContain('isPaymentCashReadPath');
+    expect(read('src/customerFinancial/paymentCashReportingHttpBoundary.js'))
+      .toContain("leaf:'payment-cash'");
     const migrations=fs.readdirSync(path.join(ROOT,'migrations'))
       .filter(name=>name.endsWith('.sql')).sort();
     expect(migrations.at(-1)).toBe('272_customer_financial_invoice_draft_preview_v1.sql');

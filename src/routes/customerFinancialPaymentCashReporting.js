@@ -4,21 +4,8 @@ const express = require('express');
 const { requireOnboardedInternal, requireRole } = require('../auth/middleware');
 const { rateLimit } = require('../middleware/rateLimit');
 const repository = require('../customerFinancial/paymentCashReportingRepository');
-
-const READ_ROUTE = Object.freeze({
-  mountSegments:Object.freeze(['api','v1','customer-financial','reporting']),
-  leaf:'payment-cash',
-});
-const escapePattern = value => value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-const mountPattern = READ_ROUTE.mountSegments.map(escapePattern).join('/');
-const leafPattern = escapePattern(READ_ROUTE.leaf);
-const READ_ABSOLUTE_PATH_PATTERN = new RegExp(
-  `^/${mountPattern}/{1,2}${leafPattern}/?$`,'i');
-const READ_RELATIVE_PATH_PATTERN = new RegExp(`^/${leafPattern}/?$`,'i');
-
-function isPaymentCashReadPath(pathname) {
-  return typeof pathname === 'string' && READ_ABSOLUTE_PATH_PATTERN.test(pathname);
-}
+const { READ_METHOD, READ_RELATIVE_PATH_PATTERN, isPaymentCashReadPath } =
+  require('../customerFinancial/paymentCashReportingHttpBoundary');
 
 function source(req) {
   return { organizationId:req.tenantContext.organizationId,
@@ -76,10 +63,18 @@ function fixedInvalid(res) {
   }});
 }
 
+function fixedMethodNotAllowed(res) {
+  setPrivateReadHeaders(res);
+  return res.status(405).json({success:false,error:{
+    category:'CUSTOMER_FINANCIAL_PAYMENT_CASH_REPORTING_METHOD_NOT_ALLOWED',
+    message:'Use the exact payment and cash reporting read boundary.',
+  }});
+}
+
 function rejectCustomerFinancialPaymentCashReportingReadBody(req,res,next) {
-  if (req.method !== 'GET' || !isPaymentCashReadPath(req.path) ||
-      !hasFramedRequestBody(req)) return next();
-  return fixedInvalid(res);
+  if (!isPaymentCashReadPath(req.path)) return next();
+  if (req.method !== READ_METHOD) return fixedMethodNotAllowed(res);
+  return hasFramedRequestBody(req) ? fixedInvalid(res) : next();
 }
 
 function requireExactReadInput(req,res,next) {
@@ -96,11 +91,8 @@ function createCustomerFinancialPaymentCashReportingRouter(options = {}) {
     `m27-reporting-payment-cash:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
   router.use((_req,res,next) => { setPrivateReadHeaders(res); next(); });
   router.all(READ_RELATIVE_PATH_PATTERN,(req,res,next) => {
-    if (req.method === 'GET') return next();
-    return res.status(405).json({success:false,error:{
-      category:'CUSTOMER_FINANCIAL_PAYMENT_CASH_REPORTING_METHOD_NOT_ALLOWED',
-      message:'Use the exact payment and cash reporting read boundary.',
-    }});
+    if (req.method === READ_METHOD) return next();
+    return fixedMethodNotAllowed(res);
   });
   router.get(READ_RELATIVE_PATH_PATTERN,auth,role,requireExactReadInput,throttle,
     async (req,res) => {
@@ -117,4 +109,5 @@ function createCustomerFinancialPaymentCashReportingRouter(options = {}) {
 
 module.exports = { createCustomerFinancialPaymentCashReportingRouter,
   rejectCustomerFinancialPaymentCashReportingReadBody, isPaymentCashReadPath,
-  hasRequestBody, hasFramedRequestBody, requireExactReadInput };
+  hasRequestBody, hasFramedRequestBody, requireExactReadInput,
+  fixedInvalid, fixedMethodNotAllowed };

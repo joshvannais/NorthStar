@@ -144,19 +144,33 @@ realPostgres('Mission 27 Part 12B mounted payment and cash reporting',() => {
     expect(transport).not.toHaveBeenCalled();
   },120000);
 
-  test('HEAD and OPTIONS deny before repository with exact GET-only CORS',async () => {
+  test('every unsupported method owns empty and body-bearing requests before parsing',async () => {
     repositoryRead.mockClear();
-    const head=await request(fixture.app).head(route)
-      .set(fixture.actors.owner.session.headers);
-    const options=await request(fixture.app).options('/API/V1/CUSTOMER-FINANCIAL/REPORTING/PAYMENT-CASH/')
-      .set('Origin','http://localhost:3000')
-      .set('Access-Control-Request-Method','POST')
-      .set(fixture.actors.owner.session.headers);
-    expect(head.status).toBe(405);expect(options.status).toBe(405);
-    expect(head.headers['cache-control']).toContain('no-store');
-    expect(options.headers['cache-control']).toContain('no-store');
-    expect(options.headers.allow).toBeUndefined();
-    expect(options.headers['access-control-allow-methods']).toBe('GET');
+    const methods=['head','options','post','put','patch','delete','trace','propfind'];
+    const paths=[route,'/API/V1/CUSTOMER-FINANCIAL/REPORTING//PAYMENT-CASH/?query=secret'];
+    for (const pathName of paths) {
+      for (const method of methods) {
+        for (const body of [undefined,'"sk_scalar_secret"','{"credential":"sk_malformed"']) {
+          let pending=request(fixture.app)[method](pathName)
+            .set('Origin','http://localhost:3000')
+            .set('Access-Control-Request-Method','POST');
+          if (body !== undefined) pending=pending.type('application/json').send(body);
+          const response=await pending;
+          expect(response.status).toBe(405);
+          expect(response.headers['cache-control']).toContain('private');
+          expect(response.headers['cache-control']).toContain('no-store');
+          expect(response.headers.allow).toBeUndefined();
+          if (method === 'options') {
+            expect(response.headers['access-control-allow-methods']).toBe('GET');
+          }
+          expect(response.text || '').not.toMatch(/sk_scalar_secret|sk_malformed|credential/);
+          if (method !== 'head') expect(response.body).toEqual({success:false,error:{
+            category:'CUSTOMER_FINANCIAL_PAYMENT_CASH_REPORTING_METHOD_NOT_ALLOWED',
+            message:'Use the exact payment and cash reporting read boundary.',
+          }});
+        }
+      }
+    }
     expect(repositoryRead).not.toHaveBeenCalled();expect(transport).not.toHaveBeenCalled();
   },120000);
 

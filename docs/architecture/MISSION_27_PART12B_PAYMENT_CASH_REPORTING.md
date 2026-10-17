@@ -68,11 +68,13 @@ Paid owner/admin sessions may read:
 
 The read is private and `no-store`. It accepts no query or body. A bounded
 pre-parser path matcher follows the actual case-insensitive Express route,
-optional trailing slash and one-or-two slash mount boundary. Any framed body is
-rejected with one fixed nonreflective response before JSON parsing, auth,
-throttle, source or repository access. All non-GET methods fail closed. OPTIONS
-is limited to GET and continues to the route denial instead of an automatic
-widened CORS response.
+optional trailing slash and one-or-two slash mount boundary. An exact GET with
+any framed body is rejected with one fixed nonreflective response. Every other
+method is rejected with one fixed nonreflective method response, with or without
+body bytes. Both decisions happen before JSON parsing, auth, throttle, source or
+repository access. The shared bounded HTTP policy also limits CORS to GET, so
+OPTIONS continues to fixed method denial instead of an automatic widened CORS
+response.
 
 The repository validates the exact tenant, actor, owner/admin role and session
 shape, reads all four released source contracts before projection, reads them

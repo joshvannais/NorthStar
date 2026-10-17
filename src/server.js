@@ -47,6 +47,8 @@ const { createCustomerFinancialPaymentProviderRouter } =
   require('./routes/customerFinancialPaymentProvider');
 const { createCustomerFinancialProviderConnectionRouter } =
   require('./routes/customerFinancialProviderConnection');
+const { createCustomerFinancialProviderLifecycleRouter } =
+  require('./routes/customerFinancialProviderLifecycle');
 const { createCustomerFinancialProviderEventReceiptRouter } =
   require('./routes/customerFinancialProviderEventReceipt');
 const { createCustomerFinancialProviderEventNormalizationRouter } =
@@ -67,6 +69,8 @@ const { createCustomerFinancialDownstreamReportingRouter,
   require('./routes/customerFinancialDownstreamReporting');
 const { reportingPart12AcceptanceBoundary } =
   require('./middleware/reportingPart12AcceptanceBoundary');
+const { providerLifecycleHealthBoundary } =
+  require('./middleware/providerLifecycleHealthBoundary');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -159,6 +163,9 @@ app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
 // non-reflective denial boundary.
 app.use(reportingPart12AcceptanceBoundary);
 app.use(cors(corsOptions));
+// Part 13A owns the complete method/body composition for its exact private
+// read after GET-only CORS has narrowed browser policy and before body parsing.
+app.use(providerLifecycleHealthBoundary);
 app.use(correlationId);
 // The two signed Retell entry points must receive bounded raw bytes before the
 // global JSON parser. The boundary router owns only those exact paths.
@@ -407,6 +414,8 @@ app.use('/api/v1/customer-financial/editable-estimates',
   createCustomerFinancialEditableEstimateRouter());
 app.use('/api/v1/customer-financial/payment-provider/connection',
   createCustomerFinancialProviderConnectionRouter());
+app.use('/api/v1/customer-financial/payment-provider/lifecycle-health',
+  createCustomerFinancialProviderLifecycleRouter());
 app.use('/api/v1/customer-financial/payment-provider/event-receipt',
   createCustomerFinancialProviderEventReceiptRouter());
 app.use('/api/v1/customer-financial/payment-provider/event-normalization',

@@ -160,8 +160,10 @@ describe('Mission 27 Part 10D complete Part 10 acceptance', () => {
     expect(demoRoute).toContain("code: 'demo_collection_part10_method_not_allowed'");
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part10-acceptance'");
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part10-acceptance'");
-    expect(ui).toContain("'/accounting-part11-acceptance?");
-    expect(ui).toContain("'/part11-acceptance'");
+    expect(ui).toContain("'/reporting-part12-acceptance?");
+    expect(ui).toContain("'/part12-acceptance'");
+    expect(ui).not.toContain("'/accounting-part11-acceptance?");
+    expect(ui).not.toContain("'/part11-acceptance'");
     expect(ui).not.toContain("'/collection-part10-acceptance?");
     expect(ui).not.toContain("'/part10-acceptance'");
     expect(ui).toContain('function invalidPart10(value, expectedMode)');

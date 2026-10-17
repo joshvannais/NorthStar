@@ -65,6 +65,8 @@ const { createCustomerFinancialPaymentCashReportingRouter,
 const { createCustomerFinancialDownstreamReportingRouter,
   rejectCustomerFinancialDownstreamReportingBody } =
   require('./routes/customerFinancialDownstreamReporting');
+const { reportingPart12AcceptanceBoundary } =
+  require('./middleware/reportingPart12AcceptanceBoundary');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -152,6 +154,10 @@ const PORT = config.port || 3000;
 app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
 
 // Middleware
+// Part 12D owns its exact GET-only paid/demo acceptance paths before CORS and
+// body parsing so unsupported methods and framed bodies share one private,
+// non-reflective denial boundary.
+app.use(reportingPart12AcceptanceBoundary);
 app.use(cors(corsOptions));
 app.use(correlationId);
 // The two signed Retell entry points must receive bounded raw bytes before the

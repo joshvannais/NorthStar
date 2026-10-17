@@ -65,6 +65,13 @@
       '.invoice-part11-sources li,.invoice-part11-boundaries li{overflow-wrap:anywhere}' +
       '@media(max-width:680px){.invoice-part11-gates,.invoice-part11-sources,.invoice-part11-boundaries{grid-template-columns:1fr}}' +
       '@media(forced-colors:active){.invoice-part11-acceptance{border:2px solid CanvasText}}';
+    style.textContent += '.invoice-part12-acceptance{border:1px solid var(--border-color,#d6d7db);border-radius:12px;padding:1rem;background:var(--surface-subtle,#f7f5ef);margin-top:1rem}' +
+      '.invoice-part12-gates{display:grid;grid-template-columns:minmax(9rem,auto) minmax(0,1fr);gap:.35rem .8rem}' +
+      '.invoice-part12-gates dt{font-weight:700}.invoice-part12-gates dd{margin:0;overflow-wrap:anywhere}' +
+      '.invoice-part12-sources,.invoice-part12-drilldowns,.invoice-part12-boundaries{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem 1.2rem;padding-left:1.2rem}' +
+      '.invoice-part12-sources li,.invoice-part12-drilldowns li,.invoice-part12-boundaries li{overflow-wrap:anywhere}' +
+      '@media(max-width:680px){.invoice-part12-gates,.invoice-part12-sources,.invoice-part12-drilldowns,.invoice-part12-boundaries{grid-template-columns:1fr}}' +
+      '@media(forced-colors:active){.invoice-part12-acceptance{border:2px solid CanvasText}}';
     document.head.appendChild(style);
   }
   function exactObject(value, keys) {
@@ -699,12 +706,67 @@
         part10Witness.reason===part10Acceptance.reason && part10Witness.digest===digest;
     }).catch(function(){return false;});
   }
+  var PART12_DYNAMIC_MARKER='__EXACT_CURRENT_VALUE__';
+  var PART12_SOURCE_DIGESTS=Object.freeze([
+    '0f51c0015195e5031fa8fd014d9958f86e504cc89c21f6487828adc6a42a54b4',
+    '34dcc5811f94ea35c5d5fc7266698f781558f8cde0682b4630fea9c1818304e2',
+    '0aa1a18404e13670c9247231f32fa849d114a9bf0022538de58eae14a208afa1',
+  ]);
+  var PART12_SEMANTIC_DIGEST='19fa94e22180860c0a1a0a4ab85ec8541f853e8437a1a8015b587416069f86a4';
+  function part12SemanticProjection(value,expectedMode) {
+    if (!value||typeof value!=='object'||Array.isArray(value)||
+        value.mode!==expectedMode||value.fictional!==(expectedMode==='demo')) return null;
+    var witness=value.previewWitness, part11Witness=value.part11Witness;
+    if (!exactObject(witness,['contractVersion','mode','draftRevision','draftDigest','previewDigest']) ||
+        witness.contractVersion!=='m27-invoice-part5-preview-witness-v1' ||
+        witness.mode!==expectedMode || !Number.isSafeInteger(witness.draftRevision) ||
+        witness.draftRevision<0 || !/^[0-9a-f]{64}$/.test(witness.draftDigest||'') ||
+        !/^[0-9a-f]{64}$/.test(witness.previewDigest||'') ||
+        !exactObject(part11Witness,['contractVersion','state','reason','digest']) ||
+        part11Witness.contractVersion!=='m27-accounting-part11-acceptance-v1' ||
+        part11Witness.state!=='unavailable' ||
+        part11Witness.reason!=='part11_accounting_evidence_unavailable' ||
+        !/^[0-9a-f]{64}$/.test(part11Witness.digest||'')) return null;
+    if (!Array.isArray(value.sourceWitnesses)||value.sourceWitnesses.length!==3 ||
+        value.sourceWitnesses.some(function(source,index){
+          return source.digest!==PART12_SOURCE_DIGESTS[index];
+        })) return null;
+    var projected=JSON.parse(JSON.stringify(value));
+    projected.mode=PART12_DYNAMIC_MARKER;
+    projected.fictional=PART12_DYNAMIC_MARKER;
+    projected.previewWitness.mode=PART12_DYNAMIC_MARKER;
+    projected.previewWitness.draftRevision=PART12_DYNAMIC_MARKER;
+    projected.previewWitness.draftDigest=PART12_DYNAMIC_MARKER;
+    projected.previewWitness.previewDigest=PART12_DYNAMIC_MARKER;
+    projected.part11Witness.digest=PART12_DYNAMIC_MARKER;
+    return projected;
+  }
+  function invalidPart12(value,expectedMode) {
+    var projected=part12SemanticProjection(value,expectedMode);
+    if (!projected) return Promise.resolve(true);
+    return digestObject(projected).then(function(digest){
+      return digest!==PART12_SEMANTIC_DIGEST;
+    }).catch(function(){return true;});
+  }
+  function samePart12Witness(preview,acceptance,part11Acceptance) {
+    var identity=preview&&preview.draftIdentity, witness=acceptance&&acceptance.previewWitness;
+    var part11Witness=acceptance&&acceptance.part11Witness;
+    if (!identity||!witness||!part11Witness||!part11Acceptance) return Promise.resolve(false);
+    return digestObject(part11Acceptance).then(function(digest){
+      return identity.revision===witness.draftRevision &&
+        identity.draftDigest===witness.draftDigest && preview.previewDigest===witness.previewDigest &&
+        part11Witness.contractVersion===part11Acceptance.contractVersion &&
+        part11Witness.state===part11Acceptance.state &&
+        part11Witness.reason===part11Acceptance.reason && part11Witness.digest===digest;
+    }).catch(function(){return false;});
+  }
   function mount(review, host) {
     if (!review || !host || !review.pins || !review.pins.estimateId) return null;
     var estimateId = String(review.pins.estimateId);
     var resumeMutationRecovery = shouldResumeMutationRecovery(activeDisclosureMount, host, estimateId);
     injectStyles(); var mountToken = ++mountGeneration, requestToken = 0, data = null,
       part5 = null, part6 = null, part7 = null, part9 = null, part10 = null, part11 = null,
+      part12 = null,
       context = null;
     var desiredOpenState = resumeMutationRecovery, keyboardActivationState = null,
       mutationRecoveryActive = resumeMutationRecovery;
@@ -717,7 +779,7 @@
     function active(token) { return token === requestToken && mountToken === mountGeneration && section.isConnected; }
     function clearAndStatus(text, alert) {
       data = null; part5 = null; part6 = null; part7 = null; part9 = null; part10 = null;
-      part11 = null; context = null; body.replaceChildren();
+      part11 = null; part12 = null; context = null; body.replaceChildren();
       var status = node('p', text, body, 'invoice-draft-preview-status');
       status.setAttribute('role', alert ? 'alert' : 'status'); status.setAttribute('aria-live', 'polite');
       status.tabIndex = -1; status.focus(); return status;
@@ -856,15 +918,16 @@
         part9Witness.state === part9Acceptance.state && part9Witness.reason === part9Acceptance.reason;
     }
     function invalidBundle(value) {
-      return !value || value.contractVersion !== 'm27-accounting-part11-preview-bundle-v1' ||
-        Object.keys(value).length !== 9 || !Object.prototype.hasOwnProperty.call(value, 'preview') ||
+      return !value || value.contractVersion !== 'm27-reporting-part12-preview-bundle-v1' ||
+        Object.keys(value).length !== 10 || !Object.prototype.hasOwnProperty.call(value, 'preview') ||
         !Object.prototype.hasOwnProperty.call(value, 'part5Acceptance') ||
         !Object.prototype.hasOwnProperty.call(value, 'part6Acceptance') ||
         !Object.prototype.hasOwnProperty.call(value, 'part7Acceptance') ||
         !Object.prototype.hasOwnProperty.call(value, 'part9Acceptance') ||
         !Object.prototype.hasOwnProperty.call(value, 'part10Acceptance') ||
         !Object.prototype.hasOwnProperty.call(value, 'part11SourceContracts') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part11Acceptance');
+        !Object.prototype.hasOwnProperty.call(value, 'part11Acceptance') ||
+        !Object.prototype.hasOwnProperty.call(value, 'part12Acceptance');
     }
     function workflowHeading(text) {
       body.replaceChildren(); var card = node('section', undefined, body, 'invoice-draft-workflow-step');
@@ -1331,6 +1394,61 @@
         'founder visual approval remain unaccepted.',card,
         value.fictional?'invoice-draft-preview-demo':'invoice-draft-preview-boundary');
     }
+    function renderPart12(value) {
+      var card=node('section',undefined,body,'invoice-part12-acceptance');
+      var headingId='invoicePart12AcceptanceHeading-'+String(mountToken);
+      card.setAttribute('aria-labelledby',headingId);
+      var heading=node('h5','Financial reporting and downstream evidence',card,
+        'invoice-part10-acceptance-heading'); heading.id=headingId;
+      node('p','NorthStar rechecked the complete Part 12 reporting boundary. Invoice, receivable, '+
+        'payment, cash, learning, forecast, and platform facts remain unavailable until exact '+
+        'current source and complete coverage evidence exists. Missing evidence is never shown as zero.',
+      card,'invoice-draft-preview-boundary');
+      var gates=node('dl',undefined,card,'invoice-part12-gates');
+      [['Coverage',value.state+' · '+value.reason],
+        ['Command Center',value.surfaces[0].state+' · no legacy-zero fallback'],
+        ['Customer finance',value.surfaces[1].state+' · no legacy-zero fallback'],
+        ['Independent audit',value.acceptance.independentWholeHeadAuditAccepted?'accepted':'not accepted']]
+        .forEach(function(entry){node('dt',entry[0],gates);node('dd',entry[1],gates);});
+      node('h6','Exact Part 12 source boundaries',card,'invoice-part7-subheading');
+      var sources=node('ul',undefined,card,'invoice-part12-sources');
+      value.sourceWitnesses.forEach(function(source){
+        node('li',source.part+' · '+source.state+' · '+source.reason,sources);
+      });
+      node('h6','Purpose-limited drilldowns',card,'invoice-part7-subheading');
+      var drilldowns=node('ul',undefined,card,'invoice-part12-drilldowns');
+      value.drilldowns.forEach(function(drilldown){
+        node('li',drilldown.drilldown.replace(/_/g,' ')+' · '+drilldown.state+' · '+
+          drilldown.availableFactCount+' of '+drilldown.requiredFactCount+' facts available',drilldowns);
+      });
+      node('h6','Reporting and downstream controls',card,'invoice-part7-subheading');
+      var boundaries=node('ul',undefined,card,'invoice-part12-boundaries');
+      [
+        'Complete coverage required · '+String(value.reportingContract.completeCoverageRequired),
+        'Missing, unknown, or unavailable may become zero · '+
+          String(value.reportingContract.missingUnknownOrUnavailableMayBecomeZero),
+        'Browser-derived values allowed · '+String(value.reportingContract.browserDerivedValuesAllowed),
+        'Legacy-zero fallback allowed · '+String(value.reportingContract.legacyZeroFallbackAllowed),
+        'Mission 25 accepted observations only · '+
+          String(value.downstreamBoundary.mission25ExactAcceptedObservationsOnly),
+        'Mission 26 source-complete history and accepted calibration required · '+
+          String(value.downstreamBoundary.mission26SourceCompleteHistoryAndAcceptedCalibrationRequired),
+        'Mission 33 may inspect tenant detail · '+
+          String(value.downstreamBoundary.mission33MayInspectTenantDetail),
+        'Cross-tenant training allowed · '+String(value.downstreamBoundary.crossTenantTrainingAllowed),
+      ].forEach(function(text){node('li',text,boundaries);});
+      node('p',(value.fictional?'Fictional demo boundary. ':'')+
+        'Report rows '+value.reportRowCount+' · drilldown rows '+value.drilldownRowCount+
+        ' · browser-derived values '+value.browserDerivedValueCount+' · legacy-zero fallbacks '+
+        value.legacyZeroFallbackCount+' · learning observations '+value.learningObservationCount+
+        ' · forecasts '+value.forecastCount+' · platform facts '+value.platformFactCount+
+        ' · provider calls '+value.providerCallCount+' · receiver mutations '+
+        value.receiverMutationCount+' · accounting mutations '+value.accountingMutationCount+
+        ' · live-money movements '+value.liveMoneyMovementCount+
+        '. Source-complete production evidence, accepted calibration, production performance, '+
+        'first-customer live-money validation, independent audit, and founder visual approval remain unaccepted.',
+        card,value.fictional?'invoice-draft-preview-demo':'invoice-draft-preview-boundary');
+    }
     async function render(bundle, token) {
       var value = bundle && bundle.preview, acceptance = bundle && bundle.part5Acceptance;
       var deliveryAcceptance = bundle && bundle.part6Acceptance;
@@ -1339,6 +1457,7 @@
       var part10Acceptance = bundle && bundle.part10Acceptance;
       var part11SourceContracts = bundle && bundle.part11SourceContracts;
       var part11Acceptance = bundle && bundle.part11Acceptance;
+      var part12Acceptance = bundle && bundle.part12Acceptance;
       var invalidSynchronous = invalidBundle(bundle) || invalid(value) ||
           (review.simulated && !matchesDemoWorkspaceRevision(value, expectedDemoRevision)) ||
           invalidPart5(acceptance) ||
@@ -1351,16 +1470,19 @@
           invalidPart10(part10Acceptance, review.simulated ? 'demo' : 'paid') ||
           !samePart10Witness(value, part10Acceptance, part9Acceptance) ||
           invalidPart11(part11Acceptance, review.simulated ? 'demo' : 'paid');
-      var digestResults=invalidSynchronous ? [true,false] : await Promise.all([
+      var digestResults=invalidSynchronous ? [true,false,true,false] : await Promise.all([
         invalidPart11SourceWitnesses(part11Acceptance,part11SourceContracts,part10Acceptance),
         samePart11Witness(value,part11Acceptance,part10Acceptance),
+        invalidPart12(part12Acceptance,review.simulated?'demo':'paid'),
+        samePart12Witness(value,part12Acceptance,part11Acceptance),
       ]);
       if (token!==undefined && !active(token)) return;
-      if (invalidSynchronous || digestResults[0] || !digestResults[1]) return rejected({ status: 409,
+      if (invalidSynchronous || digestResults[0] || !digestResults[1] ||
+          digestResults[2] || !digestResults[3]) return rejected({ status: 409,
         message: 'The exact invoice draft changed. Reload its current evidence.' });
       data = value; part5 = acceptance; part6 = deliveryAcceptance;
       part7 = paymentAcceptance; part9 = part9Acceptance; part10 = part10Acceptance;
-      part11 = part11Acceptance;
+      part11 = part11Acceptance; part12 = part12Acceptance;
       body.replaceChildren(); var preview = value.documentPreview, totals = value.reconciliation;
       var heading = node('h4', preview.label, body, 'invoice-draft-preview-heading'); heading.tabIndex = -1;
       if (value.fictional) node('p', 'Fictional demo · no customer, provider, invoice, receivable, or money action', body,
@@ -1389,6 +1511,7 @@
       renderPart9(part9Acceptance);
       renderPart10(part10Acceptance);
       renderPart11(part11Acceptance);
+      renderPart12(part12Acceptance);
       var actions = node('div', undefined, body, 'invoice-draft-preview-actions');
       var reload = node('button','Reload current preview',actions,'btn btn-secondary'); reload.type='button'; reload.onclick=load;
       if (!value.fictional && context?.draft) { var edit = node('button','Edit current invoice draft',actions,'btn btn-secondary');
@@ -1435,18 +1558,18 @@
         if (tax.state === 'ready_to_record') { renderTax(tax, capability, receipt, draft); return null; }
         if (tax.state !== 'recorded_policy_unavailable') throw { status: 409 };
         context = { capability: capability, receipt: receipt, draft: draft, tax: tax };
-        return request(base + '/accounting-part11-acceptance?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
+        return request(base + '/reporting-part12-acceptance?handoffReceiptId=' + encodeURIComponent(receipt.receiptId) +
           '&handoffReceiptDigest=' + encodeURIComponent(receipt.receiptDigest));
       });
     }
     function load() {
       var token = ++requestToken; clearAndStatus('Loading the exact current invoice draft…', false);
       var demoBase = '/api/demo/customer-financial/invoice-drafts/' + encodeURIComponent(review.pins.estimateId);
-      var promise = review.simulated ? request(demoBase + '/part11-acceptance') : loadPaid(token);
+      var promise = review.simulated ? request(demoBase + '/part12-acceptance') : loadPaid(token);
       return promise.then(function (value) { if (value && active(token)) return render(value,token); })
         .catch(function (error) { if (active(token)) rejected(error); });
     }
-    function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; part10 = null; part11 = null; context = null; body.replaceChildren(); }
+    function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; part10 = null; part11 = null; part12 = null; context = null; body.replaceChildren(); }
     function toggleDisclosure() {
       var opening = !desiredOpenState; desiredOpenState = opening; section.open = opening;
       if (opening) load(); else clearCollapsed();
@@ -1511,6 +1634,7 @@
     invalidPart9: invalidPart9, invalidPart10: invalidPart10, invalidPart11: invalidPart11,
     invalidPart11SourceWitnesses: invalidPart11SourceWitnesses,
     samePart11Witness: samePart11Witness,
+    invalidPart12: invalidPart12, samePart12Witness: samePart12Witness,
     matchesDemoWorkspaceRevision: matchesDemoWorkspaceRevision,
     recoverAfterSuccessfulMutation: recoverAfterSuccessfulMutation,
     canPreserveMountedDisclosure: canPreserveMountedDisclosure,

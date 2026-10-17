@@ -18,6 +18,9 @@ const { CORS_METHODS: PROVIDER_LIFECYCLE_CORS_METHODS,
 const { CORS_METHODS: PROVIDER_RETENTION_CORS_METHODS,
   isProviderLifecycleRetentionPath } =
   require('../customerFinancial/providerLifecycleRetentionHttpBoundary');
+const { CORS_METHODS: PROVIDER_RECOVERY_CORS_METHODS,
+  isProviderLifecycleRecoveryPath } =
+  require('../customerFinancial/providerLifecycleRecoveryHttpBoundary');
 
 /**
  * CSP directives for the application.
@@ -92,6 +95,7 @@ function corsOptions(req, callback) {
   const part12AcceptanceRead = isReportingPart12AcceptancePath(req.path);
   const providerLifecycleRead = isProviderLifecycleHealthPath(req.path);
   const providerRetentionRead = isProviderLifecycleRetentionPath(req.path);
+  const providerRecoveryRead = isProviderLifecycleRecoveryPath(req.path);
   const exactCustomerFinancialRead = [
     '/api/v1/customer-financial/receivables',
     '/api/v1/customer-financial/receivables/',
@@ -102,7 +106,7 @@ function corsOptions(req, callback) {
     '/api/v1/customer-financial/reporting/invoice-receivables',
     '/api/v1/customer-financial/reporting/invoice-receivables/',
   ].includes(req.path) || paymentCashRead || downstreamReadersRead || part12AcceptanceRead ||
-    providerLifecycleRead || providerRetentionRead ||
+    providerLifecycleRead || providerRetentionRead || providerRecoveryRead ||
     /^\/api\/v1\/customer-financial\/editable-estimates\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/accounting-(?:(?:export|reconciliation)-readiness|part11-acceptance)\/?$/i
       .test(req.path);
 
@@ -114,6 +118,7 @@ function corsOptions(req, callback) {
       part12AcceptanceRead ? [...PART12_ACCEPTANCE_CORS_METHODS] :
       providerLifecycleRead ? [...PROVIDER_LIFECYCLE_CORS_METHODS] :
       providerRetentionRead ? [...PROVIDER_RETENTION_CORS_METHODS] :
+      providerRecoveryRead ? [...PROVIDER_RECOVERY_CORS_METHODS] :
       exactCustomerFinancialRead ? ['GET'] :
       ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     preflightContinue: exactCustomerFinancialRead,

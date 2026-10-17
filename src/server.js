@@ -59,6 +59,9 @@ const { createCustomerFinancialCollectionHandoffRouter } =
   require('./routes/customerFinancialCollectionHandoff');
 const { createCustomerFinancialReportingRouter, rejectCustomerFinancialReportingReadBody } =
   require('./routes/customerFinancialReporting');
+const { createCustomerFinancialPaymentCashReportingRouter,
+  rejectCustomerFinancialPaymentCashReportingReadBody } =
+  require('./routes/customerFinancialPaymentCashReporting');
 const { createForecastTransitionCohortsRouter } =
   require('./routes/forecastTransitionCohorts');
 const { createForecastCurrentBacklogRouter } =
@@ -166,9 +169,10 @@ app.use(estimateDecisionBodyBoundary);
 app.use(executionBodyBoundary);
 app.use(equipmentBodyBoundary);
 app.use(customerEstimateDeliveryBodyBoundary);
-// The exact Part 12A read accepts no request body. Reject framed bytes before
-// the global JSON parser can parse or reflect malformed/scalar payloads.
+// The exact Part 12 reporting reads accept no request body. Reject framed bytes
+// before the global JSON parser can parse or reflect malformed/scalar payloads.
 app.use(rejectCustomerFinancialReportingReadBody);
+app.use(rejectCustomerFinancialPaymentCashReportingReadBody);
 app.use(express.json({
   limit: '1mb',
   verify(req, _res, buffer) {
@@ -407,6 +411,8 @@ app.use('/api/v1/customer-financial/collection-handoff',
   createCustomerFinancialCollectionHandoffRouter());
 app.use('/api/v1/customer-financial/reporting',
   createCustomerFinancialReportingRouter());
+app.use('/api/v1/customer-financial/reporting',
+  createCustomerFinancialPaymentCashReportingRouter());
 app.use('/api/v1/forecast/transition-cohorts', createForecastTransitionCohortsRouter());
 app.use('/api/v1/forecast/current-backlog', createForecastCurrentBacklogRouter());
 app.use('/api/v1/forecast/demand-to-schedule', createForecastDemandToScheduleRouter());

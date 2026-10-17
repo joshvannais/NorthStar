@@ -7,8 +7,6 @@ const invoiceRepository=require('./invoiceReceivableReportingRepository');
 const paymentRepository=require('./paymentCashReportingRepository');
 const readersRepository=require('./downstreamReportingReadersRepository');
 const contract=require('./reportingPart12Acceptance');
-const CACHE_LIMIT=64;
-const cache=new Map();
 
 function changed() {
   return Object.assign(new Error(
@@ -30,56 +28,31 @@ async function defaultReadSources(source) {
   return {invoiceReceivableReporting,paymentCashReporting,downstreamReportingReaders};
 }
 
-function cacheKey(source,estimateId,receiptId,receiptDigest) {
-  // Every lookup still executes the current private preview read first, so
-  // tenant/session/role authorization is never delegated to this cache. The
-  // cached payload is actor-free and identical for owner and administrator.
-  return [source.organizationId,estimateId,receiptId,receiptDigest].join(':');
-}
-
-function remember(key,previewDigest,bundle) {
-  cache.delete(key);cache.set(key,{previewDigest,bundle});
-  while(cache.size>CACHE_LIMIT) cache.delete(cache.keys().next().value);
-}
-
 async function readBundle(pool,source,estimateId,receiptId,receiptDigest,options={}) {
   const readPart11=options.readPart11||part11Repository.readBundle;
   const readSources=options.readSources||defaultReadSources;
   const readPreview=options.readPreview||previewRepository.read;
-  const key=cacheKey(source,estimateId,receiptId,receiptDigest);
   const initialPreview=await readPreview(pool,source,estimateId,receiptId,receiptDigest);
-  const initialDigest=providerBoundary.digest(initialPreview);
-  const cached=cache.get(key);
-  if(cached&&cached.previewDigest===initialDigest) {
-    const confirmed=await readPreview(pool,source,estimateId,receiptId,receiptDigest);
-    if(providerBoundary.digest(confirmed)===initialDigest) return cached.bundle;
-    cache.delete(key);
-    throw changed();
-  }
-  // Part 11 and both Part 12 source snapshots are independent read-only
-  // witnesses. Starting them together preserves the two-snapshot comparison
-  // while avoiding a cold request that exceeds WebKit's network ceiling.
-  const [part11Raw,beforeSources,afterSources]=await Promise.all([
-    readPart11(pool,source,estimateId,receiptId,receiptDigest),
-    readSources(source),readSources(source),
+  // Part 11 is itself an atomic released bundle whose repository revalidates
+  // its complete Part 10 source before and after projection. Read that exact
+  // bundle on every request, then strictly project it with independently read
+  // Parts 12A-C sources before and after the outer projection. Nothing is
+  // cached or trusted by identity: the same untrusted Part 11 value traverses
+  // the full validator twice, and any Part 12 source disagreement fails the
+  // whole request. Keeping the nested Part 11 read singular also avoids both
+  // pool exhaustion and the mounted WebKit/session ceiling.
+  const [part11Raw,beforeSources]=await Promise.all([
+    readPart11(pool,source,estimateId,receiptId,receiptDigest),readSources(source),
   ]);
-  // The default Part 11 repository returns an already constructed and fully
-  // validated in-process bundle. Preserve that provenance in a WeakSet so the
-  // Part 12 composition does not repeat its expensive semantic projection.
-  // Injected test/read implementations remain untrusted and are projected by
-  // contract.derive before they can participate in a witness.
-  const part11Input=readPart11===part11Repository.readBundle
-    ? contract.serverPart11Bundle(part11Raw) : part11Raw;
-  const before=contract.derive(part11Input,beforeSources);
-  const part11=before.part11;
-  const after=contract.derive(part11,afterSources);
+  const before=contract.derive(part11Raw,beforeSources);
+  const afterSources=await readSources(source);
+  const after=contract.derive(part11Raw,afterSources);
   const afterPreview=await readPreview(pool,source,estimateId,receiptId,receiptDigest);
   if (providerBoundary.digest(before)!==providerBoundary.digest(after) ||
-      providerBoundary.digest(part11.preview)!==providerBoundary.digest(initialPreview) ||
-      providerBoundary.digest(part11.preview)!==providerBoundary.digest(afterPreview)) throw changed();
+      providerBoundary.digest(after.part11.preview)!==providerBoundary.digest(initialPreview) ||
+      providerBoundary.digest(after.part11.preview)!==providerBoundary.digest(afterPreview)) throw changed();
   try {
     const value=contract.bundle(after.part11,contract.unavailable('paid',after.part11,after),after);
-    remember(key,providerBoundary.digest(afterPreview),value);
     return value;
   } catch (_error) { throw changed(); }
 }

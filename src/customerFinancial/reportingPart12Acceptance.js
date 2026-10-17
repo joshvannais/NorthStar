@@ -2,6 +2,7 @@
 
 const providerBoundary=require('./paymentProviderBoundary');
 const part11Contract=require('./accountingPart11Acceptance');
+const part10Contract=require('./collectionPart10Acceptance');
 const invoiceReporting=require('./invoiceReceivableReporting');
 const paymentReporting=require('./paymentCashReporting');
 const downstreamReaders=require('./downstreamReportingReaders');
@@ -15,31 +16,33 @@ const DRILLDOWN_ORDER=Object.freeze([
   'invoice_receivables','payment_cash','downstream_readers',
 ]);
 const DERIVED_SOURCES=new WeakSet();
-const SERVER_PART11_BUNDLES=new WeakSet();
 
 function exact(value,keys) {
   return Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&
     Object.keys(value).length===keys.length&&Object.keys(value).every(key=>keys.includes(key)));
 }
 
-function serverPart11Bundle(value) {
-  // This marker is applied only by the Part 12 repository after the exact
-  // in-process Part 11 repository has constructed and validated the bundle.
-  // It is module-private provenance, never a caller-authored field.
-  if (!value||typeof value!=='object'||Array.isArray(value)||
-      value.contractVersion!==part11Contract.BUNDLE_VERSION||
-      !['paid','demo'].includes(value.preview?.mode)) {
-    throw new Error('Reporting Part 12 Part 11 source invalid');
-  }
-  SERVER_PART11_BUNDLES.add(value);
-  return value;
-}
-
 function validatedPart11(value) {
-  if (value&&SERVER_PART11_BUNDLES.has(value)) return value;
-  const projected=part11Contract.projectBundle(value,value?.preview?.mode);
-  SERVER_PART11_BUNDLES.add(projected);
-  return projected;
+  // Supplying the already returned Part 11 source objects avoids deriving a
+  // second set of canonical unavailable objects, but does not grant trust:
+  // projectBundle still validates the complete Part 10 lineage, every Part
+  // 11A-C semantic field, their exact order/digests, and the Part 11
+  // acceptance contract. Nothing outside this strict projection can mark or
+  // bless an object, and clones, wrappers, mutations, replays and injected
+  // readers all take this same path.
+  const part10={
+    contractVersion:part10Contract.BUNDLE_VERSION,
+    preview:value?.preview,
+    part5Acceptance:value?.part5Acceptance,
+    part6Acceptance:value?.part6Acceptance,
+    part7Acceptance:value?.part7Acceptance,
+    part9Acceptance:value?.part9Acceptance,
+    part10Acceptance:value?.part10Acceptance,
+  };
+  const sources={part10,source:value?.part11SourceContracts?.part11A,
+    readiness:value?.part11SourceContracts?.part11B,
+    reconciliation:value?.part11SourceContracts?.part11C};
+  return part11Contract.projectBundle(value,value?.preview?.mode,sources);
 }
 
 function derive(part11Raw,sourcesRaw) {
@@ -239,4 +242,4 @@ function projectBundle(raw,expectedMode,sourcesRaw) {
 }
 
 module.exports={CONTRACT_VERSION,BUNDLE_VERSION,REASON,SOURCE_ORDER,SURFACE_ORDER,
-  DRILLDOWN_ORDER,serverPart11Bundle,derive,sourceWitnesses,unavailable,project,bundle,projectBundle};
+  DRILLDOWN_ORDER,derive,sourceWitnesses,unavailable,project,bundle,projectBundle};

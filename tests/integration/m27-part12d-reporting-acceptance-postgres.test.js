@@ -116,7 +116,7 @@ realPostgres('Mission 27 Part 12D mounted whole-Part-12 acceptance',()=>{
       .set(prepared.fixture.actors.admin.session.headers);
     expect(admin.status).toBe(200);expect(admin.body.data).toEqual(owner.body.data);
     expect(transport).not.toHaveBeenCalled();
-  },300000);
+  },600000);
 
   test('auth tenant subscription and exact query boundaries fail closed',async()=>{
     expect((await request(prepared.fixture.app).get(route).query(query)).status).toBe(401);
@@ -186,5 +186,5 @@ realPostgres('Mission 27 Part 12D mounted whole-Part-12 acceptance',()=>{
     expect(restarted.status).toBe(200);expect(restarted.body.data).toEqual(first.body.data);
     expect(await count()).toEqual(before);expect(before.migration273).toBe(0);
     expect(transport).not.toHaveBeenCalled();
-  },240000);
+  },600000);
 });

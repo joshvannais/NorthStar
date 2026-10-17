@@ -58,6 +58,8 @@ const accountingReconciliationReadinessRepository =
   require('../customerFinancial/accountingReconciliationReadinessRepository');
 const accountingPart11AcceptanceRepository =
   require('../customerFinancial/accountingPart11AcceptanceRepository');
+const reportingPart12AcceptanceRepository =
+  require('../customerFinancial/reportingPart12AcceptanceRepository');
 
 const PART8D_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PART8D_DIGEST = /^[0-9a-f]{64}$/i;
@@ -152,6 +154,8 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     accountingReconciliationReadinessRepository.read;
   const accountingPart11AcceptanceRead = options.accountingPart11AcceptanceRead ||
     accountingPart11AcceptanceRepository.readBundle;
+  const reportingPart12AcceptanceRead = options.reportingPart12AcceptanceRead ||
+    reportingPart12AcceptanceRepository.readBundle;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
@@ -684,6 +688,31 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         poolProvider(),source(req),req.params.estimateId,req.query.handoffReceiptId,
         req.query.handoffReceiptDigest) });
       } catch (error) { return failure(res,error); }
+    });
+  router.all('/:estimateId/reporting-part12-acceptance', (req,res,next) => {
+      if (req.method === 'GET') return next();
+      res.set('Allow','GET');
+      return res.status(405).json({ success:false, error:{
+        category:'CUSTOMER_FINANCIAL_REPORTING_PART12_METHOD_NOT_ALLOWED',
+        message:'Use the exact Part 12 reporting acceptance read boundary.',
+      } });
+    });
+  router.get('/:estimateId/reporting-part12-acceptance', auth, role, throttle,
+    async (req,res) => {
+      res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+      const keys=Object.keys(req.query);
+      if (keys.length!==2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') ||
+          typeof req.query.handoffReceiptId!=='string' ||
+          typeof req.query.handoffReceiptDigest!=='string' ||
+          !PART8D_UUID.test(req.query.handoffReceiptId) ||
+          !PART8D_DIGEST.test(req.query.handoffReceiptDigest)) return failure(res,{
+        status:400,code:'CUSTOMER_FINANCIAL_REPORTING_PART12_INVALID',
+        message:'Select one exact current Part 12 reporting journey.' });
+      try { return res.json({success:true,data:await reportingPart12AcceptanceRead(
+        poolProvider(),source(req),req.params.estimateId,req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest)}); }
+      catch (error) { return failure(res,error); }
     });
   router.post('/:estimateId/invoice-draft/workflow-capability', auth, role, throttle, async (req,res) => {
     const csrfToken = req.get('X-CSRF-Token');

@@ -351,8 +351,10 @@ describe('Mission 27 Part 11D complete Part 11 acceptance',()=>{
     expect(paid).not.toContain("router.post('/:estimateId/accounting-part11-acceptance'");
     expect(demoRoute).toContain("router.all('/customer-financial/invoice-drafts/:estimateId/part11-acceptance'");
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part11-acceptance'");
-    expect(client).toContain("'/accounting-part11-acceptance?");
-    expect(client).toContain("'/part11-acceptance'");
+    expect(client).toContain("'/reporting-part12-acceptance?");
+    expect(client).toContain("'/part12-acceptance'");
+    expect(client).not.toContain("'/accounting-part11-acceptance?");
+    expect(client).not.toContain("'/part11-acceptance'");
     expect(client).not.toContain("'/collection-part10-acceptance?");
     const route=`/api/v1/customer-financial/editable-estimates/${ESTIMATE}/accounting-part11-acceptance`;
     const resolveOptions=requestPath=>new Promise((resolve,reject)=>corsOptions({

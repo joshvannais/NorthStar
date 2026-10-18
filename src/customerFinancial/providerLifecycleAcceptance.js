@@ -13,7 +13,7 @@ function invalidBoundary() {
 // This check deliberately precedes every upstream Part13 import. Ambient
 // prototype pollution must fail before a default builder, digest, serializer,
 // or projection from a sealed earlier slice can execute.
-assertCanonicalAmbientPrototypes(invalidBoundary);
+assertCanonicalAmbientPrototypes();
 
 const providerBoundary = require('./paymentProviderBoundary');
 const lifecycleRecovery = require('./providerLifecycleRecovery');
@@ -32,7 +32,7 @@ function requirement([name, reason]) {
 }
 
 function policy() {
-  assertCanonicalAmbientPrototypes(invalidBoundary);
+  assertCanonicalAmbientPrototypes();
   const launch = providerBoundary.validateLaunchPolicy();
   const performance = launch.performance;
   const security = launch.professionalReviews?.security;
@@ -72,7 +72,7 @@ function policy() {
 }
 
 function unavailable(recoveryRaw) {
-  assertCanonicalAmbientPrototypes(invalidBoundary);
+  assertCanonicalAmbientPrototypes();
   if (recoveryRaw === undefined) recoveryRaw = lifecycleRecovery.unavailable();
   assertStrictPlainData(recoveryRaw, invalidBoundary);
   const recovery = lifecycleRecovery.project(recoveryRaw);
@@ -175,7 +175,7 @@ function unavailable(recoveryRaw) {
 }
 
 function project(raw, recoveryRaw) {
-  assertCanonicalAmbientPrototypes(invalidBoundary);
+  assertCanonicalAmbientPrototypes();
   if (recoveryRaw === undefined) recoveryRaw = lifecycleRecovery.unavailable();
   assertStrictPlainData(raw, invalidBoundary);
   const expected = unavailable(recoveryRaw);

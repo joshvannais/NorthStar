@@ -116,19 +116,19 @@ function defaultInvalid() {
   return new Error('Provider lifecycle acceptance boundary invalid');
 }
 
-function assertCanonicalAmbientPrototypes(invalid = defaultInvalid) {
+function assertCanonicalAmbientPrototypes() {
   const allowedHarnessSymbol = acceptedJestHarnessSymbol();
   if (!pristine.matchesCanonicalPrototype(
     HOST_OBJECT_PROTOTYPE, false, allowedHarnessSymbol) ||
       !pristine.matchesCanonicalPrototype(
         HOST_ARRAY_PROTOTYPE, true, allowedHarnessSymbol)) {
-    throw invalid();
+    throw defaultInvalid();
   }
 }
 
 function assertStrictPlainData(value, invalid = defaultInvalid,
     maximumDepth = 32, maximumNodes = 8192) {
-  assertCanonicalAmbientPrototypes(invalid);
+  assertCanonicalAmbientPrototypes();
   const visited = new Set();
   let nodes = 0;
 
@@ -204,7 +204,7 @@ function sameStrictPlainData(left, right) {
 }
 
 function exactPlainRecord(value, orderedKeys, invalid = defaultInvalid) {
-  assertCanonicalAmbientPrototypes(invalid);
+  assertCanonicalAmbientPrototypes();
   assertStrictPlainData(value, invalid);
   const keys = pristine.ownKeys(value);
   if (keys.length !== orderedKeys.length) throw invalid();
@@ -223,9 +223,31 @@ function exactPlainRecord(value, orderedKeys, invalid = defaultInvalid) {
   return record;
 }
 
-module.exports = {
-  assertCanonicalAmbientPrototypes,
-  assertStrictPlainData,
-  sameStrictPlainData,
-  exactPlainRecord,
-};
+// The clean-realm schema remains inside this closure. Consumers receive only
+// immutable callable capabilities on a null-prototype object. The Module's
+// exports slot is also sealed so an earlier importer cannot replace the API
+// before the Part 13D contract captures it from the CommonJS cache.
+const publicApi = Object.create(null);
+const publicDescriptors = Object.create(null);
+for (const [name, capability] of [
+  ['assertCanonicalAmbientPrototypes', assertCanonicalAmbientPrototypes],
+  ['assertStrictPlainData', assertStrictPlainData],
+  ['sameStrictPlainData', sameStrictPlainData],
+  ['exactPlainRecord', exactPlainRecord],
+]) {
+  Object.freeze(capability);
+  const descriptor = Object.create(null);
+  descriptor.value = capability;
+  descriptor.enumerable = true;
+  descriptor.writable = false;
+  descriptor.configurable = false;
+  publicDescriptors[name] = descriptor;
+}
+Object.defineProperties(publicApi, publicDescriptors);
+Object.preventExtensions(publicApi);
+const exportsDescriptor = Object.create(null);
+exportsDescriptor.value = publicApi;
+exportsDescriptor.enumerable = true;
+exportsDescriptor.writable = false;
+exportsDescriptor.configurable = false;
+Object.defineProperty(module, 'exports', exportsDescriptor);

@@ -121,6 +121,110 @@ function appWithSpies(spies = {}) {
 }
 
 describe('Mission 27 Part 13D provider lifecycle acceptance', () => {
+  test('seals the helper capability before alternate imports can replace its guard', () => {
+    const helperPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptancePlainData');
+    const contractPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptance');
+    const repositoryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptanceRepository');
+    const recoveryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecovery');
+    const recoveryRepositoryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecoveryRepository');
+    const boundaryPath = require.resolve(
+      '../../src/customerFinancial/paymentProviderBoundary');
+    const reproduction = String.raw`
+      'use strict';
+      const [helperPath, contractPath, repositoryPath, recoveryPath,
+        recoveryRepositoryPath, boundaryPath, targetKind, descriptorKind] =
+        process.argv.slice(1);
+      let helper = require(helperPath);
+      const expectedKeys = ['assertCanonicalAmbientPrototypes', 'assertStrictPlainData',
+        'sameStrictPlainData', 'exactPlainRecord'];
+      let mutationFailures = 0;
+      let mutationAttempts = 0;
+      function mustFail(operation) {
+        mutationAttempts += 1;
+        try { operation(); }
+        catch (_error) { mutationFailures += 1; }
+      }
+      function verifyAndAttack(value) {
+        if (Object.getPrototypeOf(value) !== null || Object.isExtensible(value) ||
+            !Object.isFrozen(value) || Object.keys(value).join('|') !== expectedKeys.join('|')) {
+          throw new Error('helper export shape invalid');
+        }
+        for (const key of expectedKeys) {
+          const original = value[key];
+          const descriptor = Object.getOwnPropertyDescriptor(value, key);
+          if (!descriptor || descriptor.writable || descriptor.configurable ||
+              !descriptor.enumerable || typeof original !== 'function' ||
+              !Object.isFrozen(original)) throw new Error('capability descriptor invalid');
+          mustFail(() => { value[key] = () => null; });
+          mustFail(() => { delete value[key]; });
+          mustFail(() => Object.defineProperty(value, key, { value: () => null }));
+          mustFail(() => Object.assign(value, { [key]: () => null }));
+          mustFail(() => Object.setPrototypeOf(original, Object.create(null)));
+          mustFail(() => Object.defineProperty(original, 'apply', { value: () => null }));
+          const alias = original;
+          if (alias !== value[key]) throw new Error('destructured capability drift');
+        }
+        mustFail(() => Object.setPrototypeOf(value, {}));
+        mustFail(() => Object.defineProperty(value, 'guard', { value: () => null }));
+        const wrapper = new Proxy(value, { get() { return () => null; } });
+        mustFail(() => { require.cache[helperPath].exports = wrapper; });
+        mustFail(() => Object.defineProperty(require.cache[helperPath], 'exports', {
+          value: wrapper,
+        }));
+        mustFail(() => { delete require.cache[helperPath].exports; });
+        if (require(helperPath) !== value) throw new Error('CommonJS export replaced');
+      }
+      verifyAndAttack(helper);
+      delete require.cache[helperPath];
+      helper = require(helperPath);
+      verifyAndAttack(helper);
+
+      let hookCalls = 0;
+      const targets = targetKind === 'joint'
+        ? [Object.prototype, Array.prototype]
+        : [targetKind === 'array' ? Array.prototype : Object.prototype];
+      for (const target of targets) {
+        const descriptor = descriptorKind === 'accessor'
+          ? { configurable: true, get() { hookCalls += 1; return () => null; } }
+          : { configurable: true, value() { hookCalls += 1; return null; } };
+        Object.defineProperty(target, 'toJSON', descriptor);
+      }
+      let contractRejected = false;
+      let repositoryRejected = false;
+      try { require(contractPath); }
+      catch (error) { contractRejected = /boundary invalid/.test(error.message); }
+      try { require(repositoryPath); }
+      catch (error) { repositoryRejected = /boundary invalid/.test(error.message); }
+      const upstreamLoaded = Boolean(require.cache[recoveryPath] ||
+        require.cache[recoveryRepositoryPath] || require.cache[boundaryPath]);
+      const callsBeforeCleanup = hookCalls;
+      for (const target of targets) delete target.toJSON;
+      process.stdout.write(JSON.stringify({
+        contractRejected, repositoryRejected, upstreamLoaded, callsBeforeCleanup,
+        mutationsAllFailed: mutationFailures === mutationAttempts,
+        mutationAttempts,
+      }));
+    `;
+    for (const targetKind of ['object', 'array', 'joint']) {
+      for (const descriptorKind of ['data', 'accessor']) {
+        const result = spawnSync(process.execPath, ['-e', reproduction, helperPath,
+          contractPath, repositoryPath, recoveryPath, recoveryRepositoryPath, boundaryPath,
+          targetKind, descriptorKind], { encoding: 'utf8' });
+        expect({ status: result.status, stderr: result.stderr })
+          .toEqual({ status: 0, stderr: '' });
+        expect(JSON.parse(result.stdout)).toEqual({
+          contractRejected: true, repositoryRejected: true, upstreamLoaded: false,
+          callsBeforeCleanup: 0, mutationsAllFailed: true, mutationAttempts: 58,
+        });
+      }
+    }
+  });
+
   test('rejects Object and Array prototype pollution installed before module load', () => {
     const contractPath = require.resolve(
       '../../src/customerFinancial/providerLifecycleAcceptance');

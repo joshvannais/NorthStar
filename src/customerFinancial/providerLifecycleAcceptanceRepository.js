@@ -27,7 +27,7 @@ function stale() {
 function sourceCurrent(source) {
   let exact;
   try {
-    assertCanonicalAmbientPrototypes(restricted);
+    assertCanonicalAmbientPrototypes();
     exact = exactPlainRecord(source,
       ['organizationId', 'actorUserId', 'actorAccessRole', 'authSessionId'], restricted);
   } catch (_error) { return false; }

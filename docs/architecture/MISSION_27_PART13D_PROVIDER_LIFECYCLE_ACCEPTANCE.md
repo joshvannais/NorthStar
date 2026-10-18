@@ -23,10 +23,15 @@ the accepted shape. Part 13D checks that clean schema before importing any
 upstream Part 13 builder and as the first instruction of every contract and
 repository entry point. Eager default construction is forbidden, so inherited
 data or accessor `toJSON` hooks fail without running serialization, digest,
-projection or source-read code. Tenant, actor and session source identities must be exact
-primitive strings; descriptors are validated recursively before any field is
-read, so accessors, proxies and conversion hooks are never invoked. There is no
-cache, identity marker, caller-issued trust token or older-source fallback.
+projection or source-read code. The clean schema stays private behind a frozen,
+non-extensible null-prototype CommonJS capability whose callable properties and
+module export slot are non-writable and non-configurable. An earlier importer,
+cache alias, destructured reference, wrapper or prototype mutation therefore
+cannot replace the guard before the contract loads. Tenant, actor and session
+source identities must be exact primitive strings; descriptors are validated
+recursively before any field is read, so accessors, proxies and conversion
+hooks are never invoked. There is no cache, identity marker, caller-issued trust
+token or older-source fallback.
 
 ## Private read boundary
 
@@ -67,8 +72,9 @@ counter is zero.
 Front-loaded tests enumerate every semantic leaf, structural/source/digest
 witness, missing/reordered/renamed/duplicated/joint forgery, non-plain data
 masquerade, pre-load and later prototype pollution, inherited data/accessor
-`toJSON` and replaced canonical prototype methods, coercion-capable source,
-exact Part 13C reread and concurrent-drift case. HTTP evidence
+`toJSON`, alternate-import/cache mutation attempts, replaced canonical
+prototype methods, coercion-capable source, exact Part 13C reread and
+concurrent-drift case. HTTP evidence
 covers owner/session/subscription, path equivalence and near misses, query,
 body/framing, method/CORS, privacy and zero effects. Mounted evidence uses a
 disposable local PostgreSQL 17 database through migration 272, proves restart

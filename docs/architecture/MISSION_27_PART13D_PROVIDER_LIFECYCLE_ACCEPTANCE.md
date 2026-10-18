@@ -19,15 +19,16 @@ Array prototypes and own enumerable data properties. Custom prototypes,
 cycles and exotic values fail before semantic or digest comparison. Prototype
 shape is checked against clean-realm canonical descriptors, so Object or Array
 prototype pollution installed before or after module loading cannot redefine
-the accepted shape. Part 13D checks that clean schema before importing any
-upstream Part 13 builder and as the first instruction of every contract and
-repository entry point. Eager default construction is forbidden, so inherited
-data or accessor `toJSON` hooks fail without running serialization, digest,
-projection or source-read code. The clean schema stays private behind a frozen,
-non-extensible null-prototype CommonJS capability whose callable properties and
-module export slot are non-writable and non-configurable. An earlier importer,
-cache alias, destructured reference, wrapper or prototype mutation therefore
-cannot replace the guard before the contract loads. Tenant, actor and session
+the accepted shape. The Part 13D contract and repository each bootstrap their
+own private clean-realm guard before importing any upstream Part 13 builder and
+invoke it as the first instruction of every public entry point. Eager default
+construction is forbidden, so inherited data or accessor `toJSON` hooks fail
+without running serialization, digest, projection or source-read code. Part
+13D never treats a replaceable CommonJS helper record as a trust root: deleting,
+replacing or reinserting that whole record cannot change either consumer's
+private guard. The compatibility helper and Part 13D's frozen public values are
+built only with captured clean-realm intrinsics, so hostile ambient `Object`
+static methods cannot forge capabilities during bootstrap. Tenant, actor and session
 source identities must be exact primitive strings; descriptors are validated
 recursively before any field is read, so accessors, proxies and conversion
 hooks are never invoked. There is no cache, identity marker, caller-issued trust
@@ -72,9 +73,11 @@ counter is zero.
 Front-loaded tests enumerate every semantic leaf, structural/source/digest
 witness, missing/reordered/renamed/duplicated/joint forgery, non-plain data
 masquerade, pre-load and later prototype pollution, inherited data/accessor
-`toJSON`, alternate-import/cache mutation attempts, replaced canonical
-prototype methods, coercion-capable source, exact Part 13C reread and
-concurrent-drift case. HTTP evidence
+`toJSON`, alternate import and whole-module-record replacement, hostile ambient
+`Object` bootstrap methods, replaced canonical prototype methods,
+coercion-capable source, exact Part 13C reread and concurrent-drift case. The
+bootstrap cases prove zero inherited hooks, serialization, upstream loads and
+source reads before rejection. HTTP evidence
 covers owner/session/subscription, path equivalence and near misses, query,
 body/framing, method/CORS, privacy and zero effects. Mounted evidence uses a
 disposable local PostgreSQL 17 database through migration 272, proves restart

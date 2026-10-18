@@ -225,6 +225,215 @@ describe('Mission 27 Part 13D provider lifecycle acceptance', () => {
     }
   });
 
+  test('rejects before forged helper records or host Object statics can bootstrap trust', () => {
+    const helperPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptancePlainData');
+    const contractPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptance');
+    const repositoryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptanceRepository');
+    const recoveryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecovery');
+    const recoveryRepositoryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecoveryRepository');
+    const boundaryPath = require.resolve(
+      '../../src/customerFinancial/paymentProviderBoundary');
+    const reproduction = String.raw`
+      'use strict';
+      const [family, entryKind, helperPath, contractPath, repositoryPath, recoveryPath,
+        recoveryRepositoryPath, boundaryPath, targetKind, descriptorKind, staticKind] =
+        process.argv.slice(1);
+      const entryPath = entryKind === 'repository' ? repositoryPath : contractPath;
+      const clean = {
+        defineProperty: Object.defineProperty,
+        getOwnPropertyDescriptor: Object.getOwnPropertyDescriptor,
+        getPrototypeOf: Object.getPrototypeOf,
+        isFrozen: Object.isFrozen,
+        isExtensible: Object.isExtensible,
+        keys: Object.keys,
+        stringify: JSON.stringify,
+      };
+      const staticNames = ['create', 'freeze', 'defineProperties',
+        'preventExtensions', 'defineProperty'];
+      const originalStatics = {};
+      for (const name of staticNames) {
+        originalStatics[name] = clean.getOwnPropertyDescriptor(Object, name);
+      }
+      let helper;
+      if (family === 'forged-record') {
+        helper = require(helperPath);
+        delete require.cache[helperPath];
+        require.cache[helperPath] = {
+          id: helperPath, filename: helperPath, loaded: true, children: [], paths: [],
+          exports: {
+            assertCanonicalAmbientPrototypes() {},
+            assertStrictPlainData() {},
+            sameStrictPlainData() { return true; },
+            exactPlainRecord(value) { return value; },
+          },
+        };
+      } else {
+        const names = staticKind === 'joint' ? staticNames : [staticKind];
+        for (const name of names) {
+          clean.defineProperty(Object, name, {
+            ...originalStatics[name],
+            value(...args) {
+              const target = args[0];
+              if (name === 'create') return {};
+              if (name === 'defineProperties' && target) {
+                target.assertCanonicalAmbientPrototypes = () => null;
+                target.assertStrictPlainData = () => null;
+                target.sameStrictPlainData = () => true;
+                target.exactPlainRecord = value => value;
+              }
+              return target;
+            },
+          });
+        }
+        helper = require(helperPath);
+        const expectedKeys = ['assertCanonicalAmbientPrototypes', 'assertStrictPlainData',
+          'sameStrictPlainData', 'exactPlainRecord'];
+        if (clean.getPrototypeOf(helper) !== null || clean.isExtensible(helper) ||
+            !clean.isFrozen(helper) || clean.keys(helper).join('|') !== expectedKeys.join('|')) {
+          throw new Error('helper bootstrap used host Object statics');
+        }
+      }
+
+      let hookCalls = 0;
+      let serializationCalls = 0;
+      let sourceReads = 0;
+      const targets = targetKind === 'joint'
+        ? [Object.prototype, Array.prototype]
+        : [targetKind === 'array' ? Array.prototype : Object.prototype];
+      for (const target of targets) {
+        const descriptor = descriptorKind === 'accessor'
+          ? { configurable: true, get() { hookCalls += 1; return () => null; } }
+          : { configurable: true, value() { hookCalls += 1; return null; } };
+        clean.defineProperty(target, 'toJSON', descriptor);
+      }
+      JSON.stringify = function countedStringify(...args) {
+        serializationCalls += 1;
+        return clean.stringify.apply(this, args);
+      };
+      let rejected = false;
+      try { require(entryPath); }
+      catch (error) { rejected = /boundary invalid/.test(error.message); }
+      const upstreamLoaded = Boolean(require.cache[recoveryPath] ||
+        require.cache[recoveryRepositoryPath] || require.cache[boundaryPath] ||
+        (entryKind === 'repository' && require.cache[contractPath]));
+      const result = { rejected, upstreamLoaded, hookCalls, serializationCalls, sourceReads };
+      JSON.stringify = clean.stringify;
+      for (const target of targets) delete target.toJSON;
+      for (const name of staticNames) {
+        clean.defineProperty(Object, name, originalStatics[name]);
+      }
+      process.stdout.write(clean.stringify(result));
+    `;
+    const pollutionCases = [];
+    for (const targetKind of ['object', 'array', 'joint']) {
+      for (const descriptorKind of ['data', 'accessor']) {
+        pollutionCases.push([targetKind, descriptorKind]);
+      }
+    }
+    const staticCases = [
+      ...['create', 'freeze', 'defineProperties', 'preventExtensions', 'defineProperty']
+        .map(staticKind => ['array', 'data', staticKind]),
+      ...pollutionCases.map(([targetKind, descriptorKind]) =>
+        [targetKind, descriptorKind, 'joint']),
+    ];
+    for (const entryKind of ['contract', 'repository']) {
+      for (const [targetKind, descriptorKind] of pollutionCases) {
+        const result = spawnSync(process.execPath, ['-e', reproduction, 'forged-record',
+          entryKind, helperPath, contractPath, repositoryPath, recoveryPath,
+          recoveryRepositoryPath, boundaryPath, targetKind, descriptorKind, 'none'],
+        { encoding: 'utf8' });
+        expect({ status: result.status, stderr: result.stderr })
+          .toEqual({ status: 0, stderr: '' });
+        expect(JSON.parse(result.stdout)).toEqual({
+          rejected: true, upstreamLoaded: false, hookCalls: 0,
+          serializationCalls: 0, sourceReads: 0,
+        });
+      }
+      for (const [targetKind, descriptorKind, staticKind] of staticCases) {
+        const result = spawnSync(process.execPath, ['-e', reproduction, 'host-statics',
+          entryKind, helperPath, contractPath, repositoryPath, recoveryPath,
+          recoveryRepositoryPath, boundaryPath, targetKind, descriptorKind, staticKind],
+        { encoding: 'utf8' });
+        expect({ status: result.status, stderr: result.stderr })
+          .toEqual({ status: 0, stderr: '' });
+        expect(JSON.parse(result.stdout)).toEqual({
+          rejected: true, upstreamLoaded: false, hookCalls: 0,
+          serializationCalls: 0, sourceReads: 0,
+        });
+      }
+    }
+  });
+
+  test('guards loaded contract and repository entries after helper record replacement', () => {
+    const helperPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptancePlainData');
+    const contractPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptance');
+    const repositoryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptanceRepository');
+    const reproduction = String.raw`
+      'use strict';
+      const [entryKind, helperPath, contractPath, repositoryPath] = process.argv.slice(1);
+      const entryPath = entryKind === 'repository' ? repositoryPath : contractPath;
+      const entry = require(entryPath);
+      require(helperPath);
+      delete require.cache[helperPath];
+      require.cache[helperPath] = {
+        id: helperPath, filename: helperPath, loaded: true, children: [], paths: [],
+        exports: {
+          assertCanonicalAmbientPrototypes() {}, assertStrictPlainData() {},
+          sameStrictPlainData() { return true; }, exactPlainRecord(value) { return value; },
+        },
+      };
+      const originalStringify = JSON.stringify;
+      const originalDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toJSON');
+      let hookCalls = 0;
+      let serializationCalls = 0;
+      let sourceReads = 0;
+      Object.defineProperty(Array.prototype, 'toJSON', {
+        configurable: true, get() { hookCalls += 1; return () => null; },
+      });
+      JSON.stringify = function countedStringify(...args) {
+        serializationCalls += 1;
+        return originalStringify.apply(this, args);
+      };
+      let rejected = false;
+      (async () => {
+        try {
+          if (entryKind === 'repository') {
+            const guarded = entry.createRepository({
+              readRecovery: async () => { sourceReads += 1; return {}; },
+            });
+            await guarded.read({
+              organizationId: '11111111-1111-4111-8111-111111111111',
+              actorUserId: '22222222-2222-4222-8222-222222222222',
+              actorAccessRole: 'owner',
+              authSessionId: '33333333-3333-4333-8333-333333333333',
+            });
+          } else entry.unavailable();
+        } catch (error) { rejected = /boundary invalid/.test(error.message); }
+        const result = { rejected, hookCalls, serializationCalls, sourceReads };
+        JSON.stringify = originalStringify;
+        if (originalDescriptor) Object.defineProperty(Array.prototype, 'toJSON', originalDescriptor);
+        else delete Array.prototype.toJSON;
+        process.stdout.write(originalStringify(result));
+      })().catch(error => { process.stderr.write(error.stack); process.exitCode = 1; });
+    `;
+    for (const entryKind of ['contract', 'repository']) {
+      const result = spawnSync(process.execPath, ['-e', reproduction, entryKind,
+        helperPath, contractPath, repositoryPath], { encoding: 'utf8' });
+      expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+      expect(JSON.parse(result.stdout)).toEqual({
+        rejected: true, hookCalls: 0, serializationCalls: 0, sourceReads: 0,
+      });
+    }
+  });
+
   test('rejects Object and Array prototype pollution installed before module load', () => {
     const contractPath = require.resolve(
       '../../src/customerFinancial/providerLifecycleAcceptance');

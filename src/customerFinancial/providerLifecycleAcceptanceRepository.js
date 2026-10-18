@@ -1,9 +1,135 @@
 'use strict';
 
-const {
-  assertCanonicalAmbientPrototypes,
-  exactPlainRecord,
-} = require('./providerLifecycleAcceptancePlainData');
+const vm = require('node:vm');
+const { types: utilTypes } = require('node:util');
+
+// The repository owns its guard and source validator. Neither comes from a
+// replaceable CommonJS module record, and every inspection intrinsic comes from
+// the fresh realm rather than mutable host Object static methods.
+const privateSource = vm.runInNewContext(`(() => {
+  const ownKeys = Reflect.ownKeys;
+  const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  const getPrototypeOf = Object.getPrototypeOf;
+  const arrayIsArray = Array.isArray;
+  const objectIs = Object.is;
+  const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+  const functionSource = value => Function.prototype.toString.call(value);
+  const hostObjectPrototype = getPrototypeOf(hostObjectSample);
+  const hostArrayPrototype = getPrototypeOf(hostArraySample);
+  const jestHarnessSymbol = Symbol.for('$$jest-protect-from-deletion');
+  const sourceKeys = Object.freeze([
+    'organizationId', 'actorUserId', 'actorAccessRole', 'authSessionId',
+  ]);
+
+  function sameFunction(actual, expected) {
+    if (typeof actual !== 'function' || isProxy(actual)) return false;
+    try { return functionSource(actual) === functionSource(expected); }
+    catch (_error) { return false; }
+  }
+  function sameFunctionOrUndefined(actual, expected) {
+    return expected === undefined ? actual === undefined : sameFunction(actual, expected);
+  }
+  function sameValue(actual, expected, depth, seen, allowedHarnessSymbol) {
+    if (objectIs(actual, expected)) return true;
+    if (typeof expected === 'function') return sameFunction(actual, expected);
+    if (expected === null || typeof expected !== 'object' ||
+        actual === null || typeof actual !== 'object' || isProxy(actual) || depth > 8) {
+      return false;
+    }
+    return sameObjectShape(actual, expected, depth + 1, seen, allowedHarnessSymbol);
+  }
+  function sameDescriptor(actual, expected, depth, seen, allowedHarnessSymbol) {
+    if (!actual || !expected || actual.enumerable !== expected.enumerable ||
+        actual.configurable !== expected.configurable) return false;
+    const actualData = hasOwn(actual, 'value');
+    const expectedData = hasOwn(expected, 'value');
+    if (actualData !== expectedData) return false;
+    if (actualData) {
+      return actual.writable === expected.writable &&
+        sameValue(actual.value, expected.value, depth, seen, allowedHarnessSymbol);
+    }
+    return sameFunctionOrUndefined(actual.get, expected.get) &&
+      sameFunctionOrUndefined(actual.set, expected.set);
+  }
+  function sameObjectShape(actual, expected, depth, seen, allowedHarnessSymbol) {
+    if (isProxy(actual) || seen.has(actual)) return false;
+    seen.add(actual);
+    let actualKeys = ownKeys(actual);
+    const expectedKeys = ownKeys(expected);
+    if (expected === Object.prototype && allowedHarnessSymbol !== null) {
+      const withoutHarnessMarker = [];
+      for (let index = 0; index < actualKeys.length; index += 1) {
+        if (actualKeys[index] !== allowedHarnessSymbol) withoutHarnessMarker.push(actualKeys[index]);
+      }
+      actualKeys = withoutHarnessMarker;
+    }
+    if (actualKeys.length !== expectedKeys.length) return false;
+    for (let index = 0; index < expectedKeys.length; index += 1) {
+      if (actualKeys[index] !== expectedKeys[index] ||
+          !sameDescriptor(getOwnPropertyDescriptor(actual, actualKeys[index]),
+            getOwnPropertyDescriptor(expected, expectedKeys[index]), depth, seen,
+            allowedHarnessSymbol)) return false;
+    }
+    const actualPrototype = getPrototypeOf(actual);
+    const expectedPrototype = getPrototypeOf(expected);
+    if (actualPrototype === null || expectedPrototype === null) {
+      return actualPrototype === null && expectedPrototype === null;
+    }
+    return sameObjectShape(actualPrototype, expectedPrototype, depth + 1, seen,
+      allowedHarnessSymbol);
+  }
+  function acceptedJestHarnessSymbol() {
+    if (!isTest || !hasJestWorker) return null;
+    const descriptor = getOwnPropertyDescriptor(hostObjectPrototype, jestHarnessSymbol);
+    if (!descriptor || descriptor.enumerable || !descriptor.configurable ||
+        !descriptor.writable || !hasOwn(descriptor, 'value') ||
+        isProxy(descriptor.value) || !arrayIsArray(descriptor.value)) return null;
+    const markerKeys = ownKeys(descriptor.value);
+    const length = getOwnPropertyDescriptor(descriptor.value, 'length');
+    if (markerKeys.length !== 1 || markerKeys[0] !== 'length' || !length ||
+        length.value !== 0) return null;
+    return jestHarnessSymbol;
+  }
+  function invalid() {
+    return new Error('Provider lifecycle acceptance boundary invalid');
+  }
+  function assertCanonicalAmbientPrototypes() {
+    const allowedHarnessSymbol = acceptedJestHarnessSymbol();
+    if (!sameObjectShape(hostObjectPrototype, Object.prototype, 0, new Set(),
+      allowedHarnessSymbol) ||
+        !sameObjectShape(hostArrayPrototype, Array.prototype, 0, new Set(),
+          allowedHarnessSymbol)) throw invalid();
+  }
+  function exactSourceRecord(value) {
+    assertCanonicalAmbientPrototypes();
+    if (value === null || typeof value !== 'object' || isProxy(value) ||
+        arrayIsArray(value) || getPrototypeOf(value) !== hostObjectPrototype ||
+        !sameObjectShape(hostObjectPrototype, Object.prototype, 0, new Set(),
+          acceptedJestHarnessSymbol()) || getOwnPropertyDescriptor(value, 'toJSON')) throw invalid();
+    const keys = ownKeys(value);
+    if (keys.length !== sourceKeys.length) throw invalid();
+    const record = Object.create(null);
+    for (let index = 0; index < sourceKeys.length; index += 1) {
+      let recognized = false;
+      for (let allowed = 0; allowed < sourceKeys.length; allowed += 1) {
+        if (keys[index] === sourceKeys[allowed]) { recognized = true; break; }
+      }
+      if (typeof keys[index] !== 'string' || !recognized) throw invalid();
+      const key = sourceKeys[index];
+      const descriptor = getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !descriptor.enumerable || !hasOwn(descriptor, 'value') ||
+          typeof descriptor.value !== 'string') throw invalid();
+      record[key] = descriptor.value;
+    }
+    return record;
+  }
+  assertCanonicalAmbientPrototypes();
+  return Object.freeze({ assertCanonicalAmbientPrototypes, exactSourceRecord,
+    freeze: Object.freeze });
+})()`, { __proto__: null, hostObjectSample: {}, hostArraySample: [],
+  isProxy: utilTypes.isProxy, isTest: process.env.NODE_ENV === 'test',
+  hasJestWorker: !!process.env.JEST_WORKER_ID });
+const { assertCanonicalAmbientPrototypes, exactSourceRecord, freeze } = privateSource;
 
 // Reject pre-load pollution before importing any sealed upstream builder.
 assertCanonicalAmbientPrototypes();
@@ -15,21 +141,22 @@ const lifecycleRecoveryRepository = require('./providerLifecycleRecoveryReposito
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function restricted() {
-  return Object.assign(new Error('Provider lifecycle acceptance access is restricted.'), {
-    code: 'CUSTOMER_FINANCIAL_PROVIDER_ACCEPTANCE_RESTRICTED', status: 403,
-  });
+  const error = new Error('Provider lifecycle acceptance access is restricted.');
+  error.code = 'CUSTOMER_FINANCIAL_PROVIDER_ACCEPTANCE_RESTRICTED';
+  error.status = 403;
+  return error;
 }
 function stale() {
-  return Object.assign(new Error('Refresh the current provider lifecycle acceptance evidence.'), {
-    code: 'CUSTOMER_FINANCIAL_PROVIDER_ACCEPTANCE_STALE', status: 409,
-  });
+  const error = new Error('Refresh the current provider lifecycle acceptance evidence.');
+  error.code = 'CUSTOMER_FINANCIAL_PROVIDER_ACCEPTANCE_STALE';
+  error.status = 409;
+  return error;
 }
 function sourceCurrent(source) {
   let exact;
   try {
     assertCanonicalAmbientPrototypes();
-    exact = exactPlainRecord(source,
-      ['organizationId', 'actorUserId', 'actorAccessRole', 'authSessionId'], restricted);
+    exact = exactSourceRecord(source);
   } catch (_error) { return false; }
   return typeof exact.organizationId === 'string' &&
     typeof exact.actorUserId === 'string' &&
@@ -58,7 +185,7 @@ function createRepository(options) {
     if (JSON.stringify(before) !== JSON.stringify(after)) throw stale();
     return contract.project(value, after);
   }
-  return Object.freeze({ read });
+  return freeze({ read });
 }
 const production = createRepository();
-module.exports = { sourceCurrent, createRepository, read: production.read };
+module.exports = freeze({ sourceCurrent, createRepository, read: production.read });

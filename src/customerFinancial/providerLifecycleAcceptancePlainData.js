@@ -82,6 +82,11 @@ const pristine = vm.runInNewContext(`(() => {
     ownKeys,
     getOwnPropertyDescriptor,
     getPrototypeOf,
+    create: Object.create,
+    freeze: Object.freeze,
+    defineProperties: Object.defineProperties,
+    preventExtensions: Object.preventExtensions,
+    defineProperty: Object.defineProperty,
     arrayIsArray,
     numberIsFinite,
     objectIs,
@@ -125,6 +130,9 @@ function assertCanonicalAmbientPrototypes() {
     throw defaultInvalid();
   }
 }
+
+// Reject polluted prototypes before executing any host-realm construction.
+assertCanonicalAmbientPrototypes();
 
 function assertStrictPlainData(value, invalid = defaultInvalid,
     maximumDepth = 32, maximumNodes = 8192) {
@@ -208,7 +216,7 @@ function exactPlainRecord(value, orderedKeys, invalid = defaultInvalid) {
   assertStrictPlainData(value, invalid);
   const keys = pristine.ownKeys(value);
   if (keys.length !== orderedKeys.length) throw invalid();
-  const record = Object.create(null);
+  const record = pristine.create(null);
   for (let index = 0; index < orderedKeys.length; index += 1) {
     const key = orderedKeys[index];
     let recognized = false;
@@ -227,27 +235,27 @@ function exactPlainRecord(value, orderedKeys, invalid = defaultInvalid) {
 // immutable callable capabilities on a null-prototype object. The Module's
 // exports slot is also sealed so an earlier importer cannot replace the API
 // before the Part 13D contract captures it from the CommonJS cache.
-const publicApi = Object.create(null);
-const publicDescriptors = Object.create(null);
+const publicApi = pristine.create(null);
+const publicDescriptors = pristine.create(null);
 for (const [name, capability] of [
   ['assertCanonicalAmbientPrototypes', assertCanonicalAmbientPrototypes],
   ['assertStrictPlainData', assertStrictPlainData],
   ['sameStrictPlainData', sameStrictPlainData],
   ['exactPlainRecord', exactPlainRecord],
 ]) {
-  Object.freeze(capability);
-  const descriptor = Object.create(null);
+  pristine.freeze(capability);
+  const descriptor = pristine.create(null);
   descriptor.value = capability;
   descriptor.enumerable = true;
   descriptor.writable = false;
   descriptor.configurable = false;
   publicDescriptors[name] = descriptor;
 }
-Object.defineProperties(publicApi, publicDescriptors);
-Object.preventExtensions(publicApi);
-const exportsDescriptor = Object.create(null);
+pristine.defineProperties(publicApi, publicDescriptors);
+pristine.preventExtensions(publicApi);
+const exportsDescriptor = pristine.create(null);
 exportsDescriptor.value = publicApi;
 exportsDescriptor.enumerable = true;
 exportsDescriptor.writable = false;
 exportsDescriptor.configurable = false;
-Object.defineProperty(module, 'exports', exportsDescriptor);
+pristine.defineProperty(module, 'exports', exportsDescriptor);

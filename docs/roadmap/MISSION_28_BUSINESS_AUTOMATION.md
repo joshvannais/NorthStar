@@ -1,0 +1,205 @@
+# Mission 28 Business Automation — Canonical Delivery Plan
+
+Status: **founder-approved and frozen for serialized implementation. Part 1A is the current documentation and static-contract implementation candidate; independent whole-head audit is pending. Parts 1B–14G remain planned.**
+
+Approved source: `MISSION_28_PROPOSED_PART_SLICE_PLAN.md`, SHA-256 `DDBA5CA7523A1684330E136313F4416584D142A63167310EEABEC1EBFBB010B4`. The approved mission body below is preserved verbatim from `## Mission objective` onward, apart from normalized line endings and the final blank line; implementation-state records live in the separate acceptance ledger.
+
+## Mission objective
+
+Mission 28 gives each NorthStar business a trustworthy, tenant-private way to automate approved communication, reminders, collections, and internal follow-up from exact current NorthStar facts. Automation remains under owner control: every policy is explicit, bounded, explainable, pausable, reversible where the underlying action permits it, and protected by a global stop mechanism. An event, prediction, learned recommendation, elapsed clock, or provider callback never creates action authority by itself.
+
+The complete proposed structure is **14 serialized parts and 66 slices**. Counts become frozen planning boundaries only after founder approval. Any later change requires a written authority or acceptance reason, affected gates, and a revised total before implementation continues.
+
+## Controlling mission boundaries
+
+| Authority | Mission 28 may consume | Mission 28 must not take over |
+| --- | --- | --- |
+| Mission 20 | Current business identity, communication identity, locations, workforce, fixed roles, contact preferences, and accepted operating policy | Business-profile ownership, workforce administration, or invented legal/communication policy |
+| Mission 21 | Reviewed provider-agnostic knowledge and exact version references | Knowledge publication, unreviewed advice, or silent policy generation |
+| Mission 22 | Current appointments, assignments, dispatch state, timing, and customer-response handoff contracts | Scheduling, assignment, dispatch, routing, or automatic rescheduling |
+| Mission 23 | Current work state, field events, completion/reopening evidence, and accepted customer-update facts | Work execution, completion, evidence editing, or operational truth |
+| Mission 24 | Exact current estimate, proposal, quote, commercial revision, customer acceptance, expiry, and customer-safe document | Pricing, estimate calculation, commercial approval, or scope revision |
+| Mission 25 | Accepted tenant-private observations, learned recommendations, evidence quality, and graduated-trust status | Learning, source ingestion, calibration, or treating advice as permission |
+| Mission 26 | Current facts, alerts, predictions, uncertainty, and reviewed action handoff | Forecasting, KPI definition, or turning a prediction into a fact or action |
+| Mission 27 | Exact current invoice, balance, due/aging, payment, receipt, refund, dispute, settlement, and collection-workflow facts | Invoice/payment truth, charging, refunds, fees, write-offs, accounting, or earned-revenue policy |
+| Mission 29 | Later enterprise governance, custom roles, thresholds, SSO/MFA policy, and organization-scale administration | Pulling forward Mission 29's enterprise administration; Mission 28 implements only the fixed minimum capabilities needed to operate safely |
+| Missions 30–33 | Later reviewed handoffs where explicitly compatible | OS-wide integration, public guided simulation, calculator ownership, or platform administration |
+
+Mission 28 owns automation policy, evaluation, approval, scheduling, execution coordination, outbound communication evidence, suppression, recovery, and the owner-facing Automation Center. It may create its own internal automation tasks, approvals, run records, and delivery evidence. It may not mutate an upstream business fact merely because it communicated about that fact.
+
+## Non-negotiable mission invariants
+
+1. **Owner control is durable authority.** Each consequential action is covered by an exact current per-run approval or a versioned standing policy with explicit action, source class, audience, channel, timing, limits, and stop conditions.
+2. **No source fact grants action authority.** A lead, appointment, completion, overdue invoice, prediction, or learned recommendation may make a policy eligible; it cannot activate, widen, or execute the policy.
+3. **Currentness is checked twice.** The engine pins exact source versions during evaluation and revalidates every relevant source, policy, recipient, consent, limit, and suppression immediately before the external or consequential effect.
+4. **Intent, execution, and evidence stay separate.** Eligibility, planned action, queued run, provider attempt, accepted delivery, acknowledgement, reply, failure, and business outcome are distinct append-only facts.
+5. **Uncertainty fails closed.** Missing authority, unknown consent, ambiguous recipient, stale source, mixed tenant, unsupported channel, unknown provider outcome, exceeded limit, or conflicting state never becomes permission, success, zero, or a harmless default.
+6. **Retries do not duplicate effects.** Every action has stable tenant-scoped idempotency, a bounded retry policy, explicit uncertain-outcome handling, and reconciliation before another provider attempt.
+7. **Human activity wins.** A current reply, manual send, owner action, changed source, dispute, opt-out, pause, or cancellation suppresses or rebuilds affected pending automation rather than racing it.
+8. **AI may prepare; it may not self-authorize.** Generated wording is a bounded draft based on approved facts and templates. It cannot invent claims, alter documents or amounts, widen recipients, bypass approval, or infer consent.
+9. **Demo cannot escape.** Demo policies, recipients, queues, links, providers, callbacks, and evidence are physically and logically isolated, use fictional content, and can never create a paid-tenant or real outbound effect.
+10. **Provider-neutral design is mandatory.** Channel adapters remain replaceable. Provider identifiers, credentials, payloads, or status labels never become business authority.
+11. **Privacy is minimized throughout.** Logs, metrics, queues, idempotency keys, traces, screenshots, exports, and callbacks exclude message bodies, document contents, secrets, public tokens, and unnecessary customer data.
+12. **Mission completion requires product proof.** Static contracts and APIs are insufficient. Accepted paid and isolated-demo journeys must prove owner control, currentness, suppression, failure, recovery, accessibility, and accurate state through mounted production modules.
+
+## Part 1 — mission authority, inventory, risk model, and acceptance contract
+
+| Slice | Scope |
+| --- | --- |
+| A | Ratify Mission 28 ownership, exclusions, terminology, dependencies, fourteen-part order, and the boundary between an upstream fact, an automation decision, an external effect, and evidence of that effect. |
+| B | Inventory and classify every existing cron job, worker, queue, event listener, notification, email/SMS path, native share handoff, reminder, retry, collection label, webhook, template, provider adapter, demo action, and manual quick-send surface. Quarantine legacy, simulated, account-subscription, unsupported, or ambiguous paths before reuse. |
+| C | Freeze the action and risk catalog: internal read/digest/task, owner approval request, customer communication, secure document delivery, financial reminder, collection escalation, and explicitly unsupported upstream mutation or money movement. Define abuse, privacy, confused-deputy, spam, harassment, replay, cross-tenant, stale-source, prompt/content injection, provider, and denial-of-service threats. |
+| D | Freeze the first-supported launch matrix and acceptance ledger: source classes, action families, roles/capabilities, channels, recipient classes, countries/regions, consent bases, quiet hours, languages, providers/modes, limits, retention, legal/provider review, rollout flags, demo behavior, performance bounds, unavailable states, migration rules, audit independence, and release sequence. |
+
+Part 1 exits only when every current automation-like surface has a disposition, every first-launch action has an owner and risk class, and unsupported combinations fail closed in executable contract tests. Professional legal, privacy, provider, and regulatory review remains a named launch dependency rather than an inferred product claim.
+
+## Part 2 — canonical automation policy, run, and evidence model
+
+| Slice | Scope |
+| --- | --- |
+| A | Canonical tenant-private policy definition with stable identity, append-only versions, exact trigger/action grammar, source classes, recipients, channels, schedules, limits, approvals, suppressions, expiry, rollout state, and canonical digest. |
+| B | Separate immutable records for eligibility evaluation, proposed action, approval, scheduled run, action unit, provider attempt, provider acknowledgement, delivery state, reply/opt-out, internal task, suppression, cancellation, reconciliation, and terminal outcome. |
+| C | Policy lifecycle for draft, validate, preview, activate, pause, resume, supersede, expire, retire, emergency stop, and bounded rollback. Historical runs remain bound to the exact policy and source snapshot that created them. |
+| D | PostgreSQL authority, tenant RLS, exact timestamps/time zones, trusted-clock contract, deterministic canonicalization, digest/currentness rules, bounded fields, indexes, retention classes, additive migration/restart behavior, and zero legacy adoption without reviewed conversion. |
+
+## Part 3 — owner control, capabilities, limits, and approvals
+
+| Slice | Scope |
+| --- | --- |
+| A | Fixed capability matrix independent of display role names for viewing automation, drafting policies, approving a run, activating or changing standing authority, pausing, retrying, exporting evidence, managing channel availability, and operating the tenant-wide stop control. |
+| B | Exact distinction between per-run approval and standing authorization. Both pin actor, session, recent-authentication state where required, policy/source/preview digests, intended recipients/effects, reason, expiry, and idempotency; neither can be reused after a material change. |
+| C | Owner-defined frequency, recipient, channel, time-window, quiet-hour, action-count, invoice-value, aging-stage, campaign, daily/weekly volume, and provider-spend limits with fail-closed enforcement. Minimum mandatory constraints cannot be weakened by a tenant policy. |
+| D | Pause, revoke, kill, drain, cancel, resume, dual-control where required, self-approval restrictions, break-glass evidence, and safe degraded defaults. Preserve the boundary that custom roles, enterprise threshold administration, SSO, and organization-scale governance remain Mission 29. |
+
+## Part 4 — trigger ingestion, exact source binding, and correction propagation
+
+| Slice | Scope |
+| --- | --- |
+| A | Closed trigger catalog over accepted facts from Missions 20–27, including lead/contact state, quote lifecycle, appointment/dispatch state, work progress/completion, invoice/due/payment/collection state, and advisory Mission 25/26 handoffs. Each trigger names grain, source authority, event time, observation time, currentness, and allowed action families. |
+| B | Durable tenant-scoped ingestion and source snapshot that binds exact record identity, version/revision, canonical/source digest, actor or authenticated event provenance, availability, and correction lineage without copying upstream business authority into Mission 28. |
+| C | Evaluation-time and immediately-pre-effect revalidation. Policy, sources, recipient, consent, channel, limits, prior effects, and suppressions must form one coherent current decision; mixed before/after snapshots and check-then-act races fail closed. |
+| D | Deterministic handling of duplicate, replayed, late, reordered, corrected, tombstoned, reopened, reversed, replaced, and concurrently changing facts. Coalescing and precedence are explicit; cross-request, cross-tenant, stale-cache, alias, clone, and replay reuse cannot grant eligibility. |
+
+## Part 5 — rule evaluation, collision control, preview, and dry run
+
+| Slice | Scope |
+| --- | --- |
+| A | Bounded declarative rule grammar with typed conditions, supported comparisons, explicit unavailable/unknown values, approved action templates, no arbitrary code, no hidden provider logic, and no missing-as-zero behavior. |
+| B | Deterministic evaluator with exact policy/source/output digest, reason codes, evidence quality, next evaluation time, and explainable eligible, ineligible, suppressed, unavailable, expired, or approval-required result. |
+| C | Owner-readable preview stating what will happen, why, on which exact source, to whom, through which channel, with which document/message version, at what local time, under which limits, and what will stop it. Preview never creates the effect. |
+| D | Collision and suppression engine for overlapping policies, recent manual activity, duplicate content, active conversations, opt-outs, provider uncertainty, source changes, higher-priority actions, and global/tenant/customer/document pauses. Dry-run and historical backtest use tenant-private accepted evidence, create no external effects, and cannot be presented as provider or outcome proof. |
+
+## Part 6 — durable scheduling, execution, idempotency, and recovery
+
+| Slice | Scope |
+| --- | --- |
+| A | Transactional outbox from an accepted current decision to bounded action units, with atomic policy/source/run identity and no queue publication before the authoritative transaction commits. |
+| B | Durable scheduler using tenant time zone, explicit local schedule, UTC instant, daylight-saving gaps/folds, business calendars, quiet hours, holidays, expiration, and trusted-clock semantics. |
+| C | Tenant-scoped leases, fencing, concurrency, ordering, fan-out bounds, idempotency receipts, and provider request identity that prevent double effects across workers, processes, restarts, deploys, regions, and uncertain acknowledgements. |
+| D | Per-action retry and backoff with retryable/terminal classification, `Retry-After` bounds, jitter, attempt ceiling, provider timeout handling, reconciliation before resend, and a permanent stop for unknown or unsafe outcomes. |
+| E | Cancel, pause, revoke, supersede, drain, resume, expire, dead-letter, owner-reviewed retry, and bulk-stop behavior with exact treatment of queued, leased, in-flight, uncertain, and completed actions. |
+| F | Restart, migration, worker crash, database outage, provider outage, partial callback, deployment, and restore/reconciliation procedures with zero orphaned authority, bounded residue, complete run history, and an explicit disaster-restore evidence gap until separately exercised. |
+
+## Part 7 — sender, recipient, content, channel, and reply safety
+
+| Slice | Scope |
+| --- | --- |
+| A | Exact sender identity and recipient authority from current accepted business/customer/contact records; distinguish customer, authorized billing contact, lead, staff member, and unsupported recipient. No fuzzy match, free-form widening, or cross-customer reuse. |
+| B | Versioned communication permission, channel preference, consent or other reviewed basis, opt-in/opt-out, do-not-contact, quiet hours, age/jurisdiction restrictions where applicable, and suppression. Unknown or conflicting permission blocks execution. |
+| C | Approved templates with bounded variables, customer-safe projection, locale/language/version, preview, escaping, link/attachment selection, and adversarial stored-text handling. AI-assisted wording remains a labeled draft and cannot invent offers, threats, deadlines, amounts, legal claims, or authority. |
+| D | Provider-neutral email and SMS delivery plus supported native app/share/composer handoff. Opening a native composer is recorded as a handoff, never as sent or delivered. Channel capability, fallback, cost, attachment, and recipient-prefill limitations are truthful. |
+| E | High-entropy scoped links and customer-safe attachments with exact document version, expiry, revocation, rate limits, no-store/private behavior, no token/referrer/log leakage, and no third-party content that exposes customer access. |
+| F | Bounces, blocks, complaints, delivery receipts, opens where lawfully and reliably supported, replies, customer questions, opt-outs, undeliverable contacts, and provider status corrections. Provider metadata is minimized, and a callback cannot bypass tenant/source/action validation. |
+
+## Part 8 — approved document sending and revision-aware delivery
+
+| Slice | Scope |
+| --- | --- |
+| A | Mission 24 estimate, proposal, and quote sending from one exact current approved customer-safe version, with recipient/document/message/channel preview, explicit approval or standing authority, expiration, customer response, and no price or scope mutation. |
+| B | Mission 27 invoice, receipt, credit note, replacement, refund/dispute notice, and other supported financial-document delivery from one exact issued/current customer-safe version, with no charge, refund, write-off, accounting, or balance mutation. |
+| C | Manual quick-send, native handoff, and policy-driven delivery share one version/currentness/idempotency contract. Revisions preserve every earlier sent snapshot and require a new preview and approval or matching standing policy before resend. |
+| D | Delivery/view acknowledgement, duplicate prevention, revoke/resend/recovery, customer question/revision request, inaccurate-recipient correction, and exact status presentation. NorthStar never claims delivery from queueing, provider acceptance, or composer opening alone. |
+
+## Part 9 — lead, estimate, and customer follow-up automation
+
+| Slice | Scope |
+| --- | --- |
+| A | Owner-controlled acknowledgement and internal alert for a supported current inquiry or lead, using only accepted contact facts and business availability; no invented response-time promise, estimate, price, or booking. |
+| B | Bounded contact-attempt and response-follow-up cadence with channel permission, frequency/quiet-hour limits, manual-activity collision handling, reply/opt-out suppression, and a clear owner worklist when automation stops. |
+| C | Estimate/quote delivery follow-up for exact current sent/expiring/expired/accepted/declined/question/revision states. It may invite the supported customer action but cannot extend terms, change price/scope, fabricate urgency, or treat silence as acceptance. |
+| D | Customer re-engagement and service follow-up only where the Part 1 launch matrix, reviewed communication basis, current customer relationship, policy, and suppression rules permit it. Marketing-like, referral, review-request, or long-dormant outreach remains unavailable until explicitly supported and reviewed. |
+
+## Part 10 — appointment, dispatch, work, and completion communications
+
+| Slice | Scope |
+| --- | --- |
+| A | Confirmation and reminder communication from one exact current Mission 22 appointment, with local time/time zone, location-safe wording, assigned contact, change/cancellation currentness, and no scheduling mutation. |
+| B | Supported dispatch, on-the-way, delay, arrival-window, or cancellation communication from exact Mission 22 state and policy. Automation cannot infer travel/arrival, expose private worker data, or change route, assignment, or appointment. |
+| C | Supported work-started, progress, blocked, ready-for-review, completed, reopened, or aftercare communication from exact Mission 23 customer-safe evidence. Internal notes, staff details, cost/margin, uncertain completion, and unsupported predictions stay private. |
+| D | Customer confirmations, questions, reschedule/cancel requests, access updates, and completion concerns create bounded response evidence or owner/staff tasks through accepted handoffs. They do not directly rewrite Mission 22 or Mission 23 authority. Source corrections immediately cancel, stale, or rebuild affected pending communications. |
+
+## Part 11 — invoice reminders and human-controlled collections automation
+
+| Slice | Scope |
+| --- | --- |
+| A | Collection eligibility from one exact current Mission 27 issued invoice and separate balance, due/aging, delivery, dispute/refund, settlement, and accounting states. Drafts, unknown delivery, stale balances, void/replaced documents, and unsupported customer states are ineligible. |
+| B | Owner-controlled pre-due, due, and overdue reminder policies with explicit cadence, local time, recipient, channel, wording, grace periods, frequency ceiling, approval class, and stop conditions. Aging is evidence, not permission. |
+| C | Every reminder pins the exact current invoice/document, currency, amount due, secure payment destination, and customer-safe balance explanation. It cannot add a fee, change terms, initiate a charge, choose a payment method, or imply settled/earned/accounted status. |
+| D | Immediate suppression or rebuild on full/partial payment, pending or uncertain payment, payment failure, refund, dispute, reversal, credit, void, replacement, reopening, customer question, correction, promised payment, manual contact, opt-out, or owner pause. |
+| E | Graduated owner worklist and escalation for supported late stages, including approval request, call/manual task, final supported notice, and pause/review. External collection agencies, legal threats, credit reporting, liens, repossession, financing, unsupported fees, write-offs, and legal conclusions remain unavailable without separate authority and professional review. |
+| F | Attempt, delivery, reply, promise, suppression, owner intervention, and Mission 27 collection-outcome reconciliation with exact lineage. Communication evidence never becomes payment, cash, revenue, accounting, or successful collection by inference. |
+
+## Part 12 — internal action center and advisory handoffs
+
+| Slice | Scope |
+| --- | --- |
+| A | Tenant-private owner/staff tasks, alerts, approval requests, failure work, and follow-up queues created from exact current sources with capability/record-scope visibility, assignee, due window, reason, priority, source link, and completion evidence. |
+| B | Mission 25 recommendations and Mission 26 facts/predictions may create a supported attention item or approval request only through an accepted handoff and current policy. Evidence quality, uncertainty, horizon, and unavailable state remain visible; no learned or predicted action executes itself. |
+| C | Deduplication, grouping, priority, digest, snooze, dismiss, assign/reassign, escalate, expire, reopen, and source-correction behavior that prevents alert storms and preserves unresolved consequential work. |
+| D | Owner-facing explanation and drilldown from action to policy, source, decision, limits, prior attempts, current state, and next safe choice. Internal actions cannot bypass the separate external-send, schedule, work, estimate, financial, or enterprise authority required for that choice. |
+
+## Part 13 — channel adapters, callbacks, observability, privacy, and lifecycle
+
+| Slice | Scope |
+| --- | --- |
+| A | Provider-neutral adapter contract and capability discovery for supported outbound channels, callbacks, attachments, templates, limits, modes, costs, and status meanings. Every adapter starts disabled and unsupported capabilities stay unavailable. |
+| B | Connection and credential boundary with tenant-bound provider/account identity, secret isolation, least privilege, livemode/testmode separation, connect/disconnect/revoke state, credential rotation, and no credential or private payload in browser, logs, evidence, or demo. Provider/account provisioning may remain an upstream integration dependency. |
+| C | Authenticated callbacks and status reconciliation with signature/version/clock/replay protection, raw-evidence minimization, tenant/action binding, correction handling, and explicit distinction among accepted, sent, delivered, opened, replied, failed, complained, and unknown. |
+| D | Provider outage, quota, throttling, template rejection, credential failure, degraded capability, circuit breaker, bounded fallback, and channel/provider switching. No fallback widens consent, changes content silently, or creates duplicates across providers. |
+| E | Privacy-safe metrics and traces, immutable action audit, retention and deletion, legal/audit hold, customer erasure, tenant offboarding, policy/source revocation, export, cleanup, incident evidence, and recovery. Platform-wide cross-tenant analytics remain Mission 33 and require separate privacy authority. |
+
+## Part 14 — Automation Center, isolated demo, complete validation, and release
+
+| Slice | Scope |
+| --- | --- |
+| A | Paid Automation Center with concise status, policy templates and custom bounded setup, preview, approval inbox, active/paused/failed runs, customer/document timeline, owner work, limits, channel availability, stop controls, explanations, and progressive drilldown. No hidden automation or implementation jargon in primary flows. |
+| B | Complete loading, empty, unavailable, stale, conflict, validation, approval, queued, in-flight, uncertain, suppressed, failed, paused, stopped, expired, completed, corrected, and recovery states with fail-closed clearing of sensitive or obsolete data. |
+| C | Isolated paid-application demo parity using the same policy, evaluation, scheduler, suppression, rendering, and recovery engines with coherent fictional sources, virtualized controlled time where needed, deterministic provider simulation, reset, zero real recipients/providers/money, and no adoption into paid authority. Mission 31's later public guided simulation remains separate. |
+| D | Exhaustive semantic and structural contract matrices across policies, sources, versions, digests, currentness, roles/capabilities, sessions, tenants, recipients, consent, paths, queries, bodies, framing, methods, CORS, templates, callbacks, idempotency, concurrency, corrections, retries, restarts, privacy, and zero unintended effects. |
+| E | Fresh disposable PostgreSQL validation through every migration; mounted production modules; real session/CSRF/routes/database; queue/worker/restart/provider-fixture behavior; high-volume and degraded-path measurements without claiming production performance or an SLA. |
+| F | Genuine paid and isolated-demo Chrome plus Playwright WebKit desktop/mobile acceptance for every rendered workflow: keyboard/focus, screen-reader semantics, responsive layouts, light/dark, direct/reload/back-forward/deep links, delayed/stale/error/recovery, reset, source changes, stop controls, and zero request/response interception or shortcuts. Physical Safari/devices and manual assistive-technology review remain unavailable unless actually performed. |
+| G | Fresh independent whole-head audit reporting all P0–P3 findings, same-writer corrections and complete re-audit, exact clean frozen identity, one normal PR/merge, sole automatic deployment, startup/migration/health/root/demo verification, and post-deploy passive acceptance. Any live provider, real recipient, private-production, or live-money canary requires a separate explicit authorization with exact tenant, recipient, content, channel, provider, limit, stop, rollback, observation, privacy, and cleanup plan. Founder page-by-page visual approval remains a separate later verdict. |
+
+## Complete acceptance standard
+
+Mission 28 is complete only when all 66 slices are accepted in order and the released product proves all of the following:
+
+- An owner can understand, preview, approve, activate, limit, pause, stop, inspect, recover, and retire every supported automation.
+- Every effect is derived from exact current tenant-private authority and covered by exact current action authority.
+- Corrections, replies, opt-outs, manual work, payments, disputes, schedule/work changes, policy changes, provider uncertainty, and global stops propagate before another unsafe effect.
+- Supported document sending, lead/estimate follow-up, appointment/work communication, invoice reminders, collections escalation, and internal action handling operate through one consistent engine without blurring their source authorities.
+- Delivery and outcome labels reflect evidence exactly; queued or provider-accepted work is never called delivered, answered, paid, collected, successful, or reconciled without the matching accepted fact.
+- Paid and demo behavior share production logic while demo remains incapable of external or paid-tenant effects.
+- No implementation claims unsupported legal compliance, provider availability, physical-device coverage, disaster restoration, production performance/SLA, private-production evidence, or live-money validation.
+
+## Explicitly unavailable until separately evidenced or authorized
+
+- Production provider accounts, credentials, sending domains/numbers, verified sender registrations, real callbacks, deliverability reputation, and provider-specific templates.
+- Professional legal, privacy, communications-consent, collections, debt, consumer-protection, tax, accounting, and security review.
+- External collection agencies, legal demands, credit reporting, liens, repossession, financing, automatic fees, write-offs, automatic charges, refunds, or other money movement.
+- Private-production tenant/customer data, real recipients, real outbound messages, live provider mutation, and first-paying-customer live-money validation.
+- Hosted CI/load evidence, exercised disaster restore, production performance/SLA, physical Safari/devices, manual assistive-technology review, and founder visual approval.
+
+## Implementation order and release discipline
+
+Implementation starts only after Mission 27 terminal release acceptance and an exact deployed-main/tree baseline is recorded. Work proceeds Part 1 through Part 14 in slice order using one writer and one independent auditor serially. Each slice begins with source and dependency reconciliation, smallest genuine missing behavior, explicit unavailable evidence, and front-loaded adversarial matrices. Expensive PostgreSQL and browser gates run only after semantic, structural, source, currentness, privacy, and no-effect gates are green. Each accepted release uses one reviewed branch, one normal merge, one automatic deployment, and read-only release verification before the next slice starts.

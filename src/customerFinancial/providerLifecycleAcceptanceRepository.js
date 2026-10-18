@@ -1,12 +1,83 @@
 'use strict';
 
-const vm = require('node:vm');
-const { types: utilTypes } = require('node:util');
+function bootstrapInvalid() {
+  throw new Error('Provider lifecycle acceptance boundary invalid');
+}
+
+function captureRealmRuntime() {
+  const functionToString = Function.prototype.toString;
+  const reflectApply = Reflect.apply;
+  const descriptorOf = Reflect.getOwnPropertyDescriptor;
+  function sourceOf(value) { return reflectApply(functionToString, value, []); }
+  function contains(haystack, needle) {
+    if (typeof haystack !== 'string' || typeof needle !== 'string' ||
+        needle.length === 0 || needle.length > haystack.length) return false;
+    for (let start = 0; start <= haystack.length - needle.length; start += 1) {
+      let equal = true;
+      for (let index = 0; index < needle.length; index += 1) {
+        if (haystack[start + index] !== needle[index]) { equal = false; break; }
+      }
+      if (equal) return true;
+    }
+    return false;
+  }
+  try {
+    if (sourceOf(functionToString) !== 'function toString() { [native code] }' ||
+        sourceOf(reflectApply) !== 'function apply() { [native code] }' ||
+        sourceOf(descriptorOf) !==
+          'function getOwnPropertyDescriptor() { [native code] }') bootstrapInvalid();
+    const binding = process.binding;
+    const bindingSource = sourceOf(binding);
+    const natives = binding('natives');
+    const realmDescriptor = descriptorOf(natives, 'internal/bootstrap/realm');
+    const vmSourceDescriptor = descriptorOf(natives, 'vm');
+    if (!realmDescriptor || typeof realmDescriptor.value !== 'string' ||
+        !vmSourceDescriptor || typeof vmSourceDescriptor.value !== 'string' ||
+        !contains(realmDescriptor.value, bindingSource)) bootstrapInvalid();
+    const vmModule = require('node:vm');
+    if (require('vm') !== vmModule) bootstrapInvalid();
+    const runDescriptor = descriptorOf(vmModule, 'runInNewContext');
+    if (!runDescriptor || runDescriptor.enumerable !== true ||
+        runDescriptor.writable !== true || runDescriptor.configurable !== true ||
+        typeof runDescriptor.value !== 'function' ||
+        !contains(vmSourceDescriptor.value, sourceOf(runDescriptor.value))) bootstrapInvalid();
+    const runInNewContext = runDescriptor.value;
+    const token = Symbol('m27-part13d-clean-realm');
+    if (runInNewContext('token', { __proto__: null, token }) !== token ||
+        runInNewContext(
+          'Object.prototype !== hostObjectPrototype && ' +
+          'Array.prototype !== hostArrayPrototype && ' +
+          'Object.getPrototypeOf(Object.prototype) === null',
+          { __proto__: null, hostObjectPrototype: Object.prototype,
+            hostArrayPrototype: Array.prototype }) !== true) bootstrapInvalid();
+    const utilModule = require('node:util');
+    if (require('util') !== utilModule) bootstrapInvalid();
+    const typesDescriptor = descriptorOf(utilModule, 'types');
+    const isProxyDescriptor = typesDescriptor &&
+      descriptorOf(typesDescriptor.value, 'isProxy');
+    const proxyDescriptor = descriptorOf(globalThis, 'Proxy');
+    if (!typesDescriptor || typeof typesDescriptor.value !== 'object' ||
+        !isProxyDescriptor || typeof isProxyDescriptor.value !== 'function' ||
+        !proxyDescriptor || typeof proxyDescriptor.value !== 'function' ||
+        !contains(sourceOf(isProxyDescriptor.value), '[native code]') ||
+        !contains(sourceOf(proxyDescriptor.value), '[native code]')) bootstrapInvalid();
+    const ordinary = {};
+    const proxy = new proxyDescriptor.value(ordinary, {});
+    if (isProxyDescriptor.value(ordinary) !== false ||
+        isProxyDescriptor.value(proxy) !== true) bootstrapInvalid();
+    return { runInNewContext, isProxy: isProxyDescriptor.value };
+  } catch (error) {
+    if (error && error.message === 'Provider lifecycle acceptance boundary invalid') throw error;
+    bootstrapInvalid();
+  }
+}
+
+const realmRuntime = captureRealmRuntime();
 
 // The repository owns its guard and source validator. Neither comes from a
 // replaceable CommonJS module record, and every inspection intrinsic comes from
 // the fresh realm rather than mutable host Object static methods.
-const privateSource = vm.runInNewContext(`(() => {
+const privateSource = realmRuntime.runInNewContext(`(() => {
   const ownKeys = Reflect.ownKeys;
   const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
   const getPrototypeOf = Object.getPrototypeOf;
@@ -127,7 +198,7 @@ const privateSource = vm.runInNewContext(`(() => {
   return Object.freeze({ assertCanonicalAmbientPrototypes, exactSourceRecord,
     freeze: Object.freeze });
 })()`, { __proto__: null, hostObjectSample: {}, hostArraySample: [],
-  isProxy: utilTypes.isProxy, isTest: process.env.NODE_ENV === 'test',
+  isProxy: realmRuntime.isProxy, isTest: process.env.NODE_ENV === 'test',
   hasJestWorker: !!process.env.JEST_WORKER_ID });
 const { assertCanonicalAmbientPrototypes, exactSourceRecord, freeze } = privateSource;
 

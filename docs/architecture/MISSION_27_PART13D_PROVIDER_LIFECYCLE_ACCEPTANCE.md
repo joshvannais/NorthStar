@@ -24,11 +24,16 @@ own private clean-realm guard before importing any upstream Part 13 builder and
 invoke it as the first instruction of every public entry point. Eager default
 construction is forbidden, so inherited data or accessor `toJSON` hooks fail
 without running serialization, digest, projection or source-read code. Part
-13D never treats a replaceable CommonJS helper record as a trust root: deleting,
-replacing or reinserting that whole record cannot change either consumer's
-private guard. The compatibility helper and Part 13D's frozen public values are
-built only with captured clean-realm intrinsics, so hostile ambient `Object`
-static methods cannot forge capabilities during bootstrap. Tenant, actor and session
+13D never treats a replaceable CommonJS helper record or mutable `node:vm`
+export as a trust root. Before using a realm constructor it binds the candidate
+implementation to Node's process-owned native-source registry, checks the
+`vm`/`node:vm` aliases and property descriptor, and executes identity and
+fresh-realm canaries. Replaced data or accessor exports therefore fail before
+their code runs. Deleting, replacing or reinserting the helper record cannot
+change either consumer's private guard. The compatibility helper and Part
+13D's frozen public values are built only with captured clean-realm intrinsics,
+so hostile ambient `Object` static methods cannot forge capabilities during
+bootstrap. Tenant, actor and session
 source identities must be exact primitive strings; descriptors are validated
 recursively before any field is read, so accessors, proxies and conversion
 hooks are never invoked. There is no cache, identity marker, caller-issued trust
@@ -74,10 +79,11 @@ Front-loaded tests enumerate every semantic leaf, structural/source/digest
 witness, missing/reordered/renamed/duplicated/joint forgery, non-plain data
 masquerade, pre-load and later prototype pollution, inherited data/accessor
 `toJSON`, alternate import and whole-module-record replacement, hostile ambient
-`Object` bootstrap methods, replaced canonical prototype methods,
-coercion-capable source, exact Part 13C reread and concurrent-drift case. The
-bootstrap cases prove zero inherited hooks, serialization, upstream loads and
-source reads before rejection. HTTP evidence
+`Object` bootstrap methods, `vm`/`node:vm`/process-builtin realm-constructor
+assignment, data/accessor definition and delete/reinsertion, replaced canonical
+prototype methods, coercion-capable source, exact Part 13C reread and
+concurrent-drift case. The bootstrap cases prove zero inherited hooks,
+serialization, upstream loads and source reads before rejection. HTTP evidence
 covers owner/session/subscription, path equivalence and near misses, query,
 body/framing, method/CORS, privacy and zero effects. Mounted evidence uses a
 disposable local PostgreSQL 17 database through migration 272, proves restart

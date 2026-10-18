@@ -19,7 +19,11 @@ Array prototypes and own enumerable data properties. Custom prototypes,
 cycles and exotic values fail before semantic or digest comparison. Prototype
 shape is checked against clean-realm canonical descriptors, so Object or Array
 prototype pollution installed before or after module loading cannot redefine
-the accepted shape. Tenant, actor and session source identities must be exact
+the accepted shape. Part 13D checks that clean schema before importing any
+upstream Part 13 builder and as the first instruction of every contract and
+repository entry point. Eager default construction is forbidden, so inherited
+data or accessor `toJSON` hooks fail without running serialization, digest,
+projection or source-read code. Tenant, actor and session source identities must be exact
 primitive strings; descriptors are validated recursively before any field is
 read, so accessors, proxies and conversion hooks are never invoked. There is no
 cache, identity marker, caller-issued trust token or older-source fallback.
@@ -62,7 +66,8 @@ counter is zero.
 
 Front-loaded tests enumerate every semantic leaf, structural/source/digest
 witness, missing/reordered/renamed/duplicated/joint forgery, non-plain data
-masquerade, pre-load and later prototype pollution, coercion-capable source,
+masquerade, pre-load and later prototype pollution, inherited data/accessor
+`toJSON` and replaced canonical prototype methods, coercion-capable source,
 exact Part 13C reread and concurrent-drift case. HTTP evidence
 covers owner/session/subscription, path equivalence and near misses, query,
 body/framing, method/CORS, privacy and zero effects. Mounted evidence uses a

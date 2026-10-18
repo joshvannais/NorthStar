@@ -112,14 +112,23 @@ function acceptedJestHarnessSymbol() {
   return pristine.jestHarnessSymbol;
 }
 
-const JEST_HARNESS_SYMBOL = acceptedJestHarnessSymbol();
-
 function defaultInvalid() {
   return new Error('Provider lifecycle acceptance boundary invalid');
 }
 
+function assertCanonicalAmbientPrototypes(invalid = defaultInvalid) {
+  const allowedHarnessSymbol = acceptedJestHarnessSymbol();
+  if (!pristine.matchesCanonicalPrototype(
+    HOST_OBJECT_PROTOTYPE, false, allowedHarnessSymbol) ||
+      !pristine.matchesCanonicalPrototype(
+        HOST_ARRAY_PROTOTYPE, true, allowedHarnessSymbol)) {
+    throw invalid();
+  }
+}
+
 function assertStrictPlainData(value, invalid = defaultInvalid,
     maximumDepth = 32, maximumNodes = 8192) {
+  assertCanonicalAmbientPrototypes(invalid);
   const visited = new Set();
   let nodes = 0;
 
@@ -139,7 +148,8 @@ function assertStrictPlainData(value, invalid = defaultInvalid,
     const prototype = pristine.getPrototypeOf(current);
     const expectedPrototype = isArray ? HOST_ARRAY_PROTOTYPE : HOST_OBJECT_PROTOTYPE;
     if (prototype !== expectedPrototype ||
-        !pristine.matchesCanonicalPrototype(prototype, isArray, JEST_HARNESS_SYMBOL) ||
+        !pristine.matchesCanonicalPrototype(
+          prototype, isArray, acceptedJestHarnessSymbol()) ||
         pristine.getOwnPropertyDescriptor(current, 'toJSON')) reject();
 
     const ownKeys = pristine.ownKeys(current);
@@ -173,6 +183,8 @@ function assertStrictPlainData(value, invalid = defaultInvalid,
 }
 
 function sameStrictPlainData(left, right) {
+  try { assertCanonicalAmbientPrototypes(); }
+  catch (_error) { return false; }
   if (pristine.objectIs(left, right)) return true;
   if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object' ||
       pristine.arrayIsArray(left) !== pristine.arrayIsArray(right)) return false;
@@ -192,6 +204,7 @@ function sameStrictPlainData(left, right) {
 }
 
 function exactPlainRecord(value, orderedKeys, invalid = defaultInvalid) {
+  assertCanonicalAmbientPrototypes(invalid);
   assertStrictPlainData(value, invalid);
   const keys = pristine.ownKeys(value);
   if (keys.length !== orderedKeys.length) throw invalid();
@@ -210,4 +223,9 @@ function exactPlainRecord(value, orderedKeys, invalid = defaultInvalid) {
   return record;
 }
 
-module.exports = { assertStrictPlainData, sameStrictPlainData, exactPlainRecord };
+module.exports = {
+  assertCanonicalAmbientPrototypes,
+  assertStrictPlainData,
+  sameStrictPlainData,
+  exactPlainRecord,
+};

@@ -1,9 +1,22 @@
 'use strict';
 
+const {
+  assertCanonicalAmbientPrototypes,
+  assertStrictPlainData,
+  sameStrictPlainData,
+} = require('./providerLifecycleAcceptancePlainData');
+
+function invalidBoundary() {
+  return new Error('Provider lifecycle acceptance boundary invalid');
+}
+
+// This check deliberately precedes every upstream Part13 import. Ambient
+// prototype pollution must fail before a default builder, digest, serializer,
+// or projection from a sealed earlier slice can execute.
+assertCanonicalAmbientPrototypes(invalidBoundary);
+
 const providerBoundary = require('./paymentProviderBoundary');
 const lifecycleRecovery = require('./providerLifecycleRecovery');
-const { assertStrictPlainData, sameStrictPlainData } =
-  require('./providerLifecycleAcceptancePlainData');
 
 const CONTRACT_VERSION = 'm27-provider-lifecycle-acceptance-v1';
 const REASON = 'provider_lifecycle_acceptance_unavailable';
@@ -14,15 +27,12 @@ const REQUIREMENTS = Object.freeze([
   ['tested_disaster_recovery_restore', 'disaster_restore_proof_unavailable'],
   ['independent_whole_part13_acceptance', 'independent_part13_acceptance_unavailable'],
 ]);
-function invalidBoundary() {
-  return new Error('Provider lifecycle acceptance boundary invalid');
-}
-
 function requirement([name, reason]) {
   return Object.freeze({ requirement: name, state: 'unavailable', reason });
 }
 
 function policy() {
+  assertCanonicalAmbientPrototypes(invalidBoundary);
   const launch = providerBoundary.validateLaunchPolicy();
   const performance = launch.performance;
   const security = launch.professionalReviews?.security;
@@ -61,7 +71,9 @@ function policy() {
   return launch;
 }
 
-function unavailable(recoveryRaw = lifecycleRecovery.unavailable()) {
+function unavailable(recoveryRaw) {
+  assertCanonicalAmbientPrototypes(invalidBoundary);
+  if (recoveryRaw === undefined) recoveryRaw = lifecycleRecovery.unavailable();
   assertStrictPlainData(recoveryRaw, invalidBoundary);
   const recovery = lifecycleRecovery.project(recoveryRaw);
   assertStrictPlainData(recovery, invalidBoundary);
@@ -162,7 +174,9 @@ function unavailable(recoveryRaw = lifecycleRecovery.unavailable()) {
   });
 }
 
-function project(raw, recoveryRaw = lifecycleRecovery.unavailable()) {
+function project(raw, recoveryRaw) {
+  assertCanonicalAmbientPrototypes(invalidBoundary);
+  if (recoveryRaw === undefined) recoveryRaw = lifecycleRecovery.unavailable();
   assertStrictPlainData(raw, invalidBoundary);
   const expected = unavailable(recoveryRaw);
   assertStrictPlainData(expected, invalidBoundary);

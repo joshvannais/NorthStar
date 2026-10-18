@@ -1,9 +1,16 @@
 'use strict';
 
+const {
+  assertCanonicalAmbientPrototypes,
+  exactPlainRecord,
+} = require('./providerLifecycleAcceptancePlainData');
+
+// Reject pre-load pollution before importing any sealed upstream builder.
+assertCanonicalAmbientPrototypes();
+
 const contract = require('./providerLifecycleAcceptance');
 const lifecycleRecovery = require('./providerLifecycleRecovery');
 const lifecycleRecoveryRepository = require('./providerLifecycleRecoveryRepository');
-const { exactPlainRecord } = require('./providerLifecycleAcceptancePlainData');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -20,6 +27,7 @@ function stale() {
 function sourceCurrent(source) {
   let exact;
   try {
+    assertCanonicalAmbientPrototypes(restricted);
     exact = exactPlainRecord(source,
       ['organizationId', 'actorUserId', 'actorAccessRole', 'authSessionId'], restricted);
   } catch (_error) { return false; }
@@ -30,14 +38,18 @@ function sourceCurrent(source) {
     UUID.test(exact.organizationId) && UUID.test(exact.actorUserId) &&
     UUID.test(exact.authSessionId) && exact.actorAccessRole === 'owner';
 }
-function createRepository(options = {}) {
+function createRepository(options) {
+  assertCanonicalAmbientPrototypes();
+  if (options === undefined) options = {};
   const readRecovery = options.readRecovery || lifecycleRecoveryRepository.read;
   async function snapshot(source) {
+    assertCanonicalAmbientPrototypes();
     const raw = await readRecovery(source);
     contract.unavailable(raw);
     return lifecycleRecovery.project(raw);
   }
   async function read(source) {
+    assertCanonicalAmbientPrototypes();
     if (!sourceCurrent(source)) throw restricted();
     const before = await snapshot(source);
     const value = contract.unavailable(before);

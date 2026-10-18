@@ -147,25 +147,140 @@ describe('Mission 27 Part 13D provider lifecycle acceptance', () => {
       Object.defineProperty(target, symbol, {
         value: 'forged', enumerable: true, configurable: true,
       });
-      const dirty = require(contractPath);
-      let unavailableRejected = false;
-      let projectRejected = false;
-      try { dirty.unavailable(recovery.unavailable()); }
-      catch (error) { unavailableRejected = /boundary invalid/.test(error.message); }
-      try { dirty.project(canonical, recovery.unavailable()); }
-      catch (error) { projectRejected = /boundary invalid/.test(error.message); }
+      let requireRejected = false;
+      try { require(contractPath); }
+      catch (error) { requireRejected = /boundary invalid/.test(error.message); }
       delete target.__m27Part13dPreloadData__;
       delete target.__m27Part13dPreloadAccessor__;
       delete target[symbol];
-      process.stdout.write(JSON.stringify({ unavailableRejected, projectRejected, getterCalls }));
+      process.stdout.write(JSON.stringify({ requireRejected, getterCalls }));
     `;
     for (const kind of ['object', 'array']) {
       const result = spawnSync(process.execPath,
         ['-e', reproduction, contractPath, recoveryPath, plainDataPath, kind],
         { encoding: 'utf8' });
       expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+      expect(JSON.parse(result.stdout)).toEqual({ requireRejected: true, getterCalls: 0 });
+    }
+  });
+
+  test('rejects inherited toJSON before Part13D imports, defaults, digests or reads', () => {
+    const contractPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptance');
+    const repositoryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptanceRepository');
+    const recoveryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecovery');
+    const boundaryPath = require.resolve(
+      '../../src/customerFinancial/paymentProviderBoundary');
+    const reproduction = String.raw`
+      const [entryPath, recoveryPath, boundaryPath, targetKind, descriptorKind] =
+        process.argv.slice(1);
+      let hookCalls = 0;
+      const targets = targetKind === 'joint'
+        ? [Object.prototype, Array.prototype]
+        : [targetKind === 'array' ? Array.prototype : Object.prototype];
+      for (const target of targets) {
+        const descriptor = descriptorKind === 'accessor'
+          ? { configurable: true, get() { hookCalls += 1; return () => null; } }
+          : { configurable: true, value() { hookCalls += 1; return null; } };
+        Object.defineProperty(target, 'toJSON', descriptor);
+      }
+      let rejected = false;
+      try { require(entryPath); }
+      catch (error) { rejected = /boundary invalid/.test(error.message); }
+      const upstreamLoaded = Boolean(require.cache[recoveryPath] || require.cache[boundaryPath]);
+      const callsBeforeCleanup = hookCalls;
+      for (const target of targets) delete target.toJSON;
+      process.stdout.write(JSON.stringify({ rejected, upstreamLoaded, callsBeforeCleanup }));
+    `;
+    for (const entryPath of [contractPath, repositoryPath]) {
+      for (const targetKind of ['object', 'array', 'joint']) {
+        for (const descriptorKind of ['data', 'accessor']) {
+          const result = spawnSync(process.execPath, ['-e', reproduction, entryPath,
+            recoveryPath, boundaryPath, targetKind, descriptorKind], { encoding: 'utf8' });
+          expect({ status: result.status, stderr: result.stderr })
+            .toEqual({ status: 0, stderr: '' });
+          expect(JSON.parse(result.stdout)).toEqual({
+            rejected: true, upstreamLoaded: false, callsBeforeCleanup: 0,
+          });
+        }
+      }
+    }
+  });
+
+  test('rejects replaced canonical prototype methods before loading upstream modules', () => {
+    const contractPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptance');
+    const recoveryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecovery');
+    const boundaryPath = require.resolve(
+      '../../src/customerFinancial/paymentProviderBoundary');
+    const reproduction = String.raw`
+      const [contractPath, recoveryPath, boundaryPath, kind] = process.argv.slice(1);
+      const target = kind === 'array' ? Array.prototype : Object.prototype;
+      const key = kind === 'array' ? 'map' : 'toString';
+      const original = Object.getOwnPropertyDescriptor(target, key);
+      let replacementCalls = 0;
+      Object.defineProperty(target, key, {
+        ...original, value: function replacement() { replacementCalls += 1; return null; },
+      });
+      let rejected = false;
+      try { require(contractPath); }
+      catch (error) { rejected = /boundary invalid/.test(error.message); }
+      const upstreamLoaded = Boolean(require.cache[recoveryPath] || require.cache[boundaryPath]);
+      const callsBeforeCleanup = replacementCalls;
+      Object.defineProperty(target, key, original);
+      process.stdout.write(JSON.stringify({ rejected, upstreamLoaded, callsBeforeCleanup }));
+    `;
+    for (const kind of ['object', 'array']) {
+      const result = spawnSync(process.execPath, ['-e', reproduction, contractPath,
+        recoveryPath, boundaryPath, kind], { encoding: 'utf8' });
+      expect({ status: result.status, stderr: result.stderr })
+        .toEqual({ status: 0, stderr: '' });
       expect(JSON.parse(result.stdout)).toEqual({
-        unavailableRejected: true, projectRejected: true, getterCalls: 0,
+        rejected: true, upstreamLoaded: false, callsBeforeCleanup: 0,
+      });
+    }
+  });
+
+  test('guards every loaded Part13D entry before inherited toJSON can execute', async () => {
+    const acceptance = contract.unavailable();
+    const readRecovery = jest.fn(async () => recovery.unavailable());
+    const cleanRepository = repository.createRepository({ readRecovery });
+    const cases = [
+      [Object.prototype, 'data'], [Object.prototype, 'accessor'],
+      [Array.prototype, 'data'], [Array.prototype, 'accessor'],
+    ];
+    for (const [target, descriptorKind] of cases) {
+      let hookCalls = 0;
+      const descriptor = descriptorKind === 'accessor'
+        ? { configurable: true, get() { hookCalls += 1; return () => null; } }
+        : { configurable: true, value() { hookCalls += 1; return null; } };
+      Object.defineProperty(target, 'toJSON', descriptor);
+      const outcomes = {};
+      try {
+        for (const [name, operation] of [
+          ['policy', () => contract.policy()],
+          ['unavailable', () => contract.unavailable()],
+          ['project', () => contract.project(acceptance)],
+          ['createRepository', () => repository.createRepository({ readRecovery })],
+        ]) {
+          try { operation(); outcomes[name] = false; }
+          catch (error) { outcomes[name] = /boundary invalid/.test(error.message); }
+        }
+        outcomes.sourceCurrent = repository.sourceCurrent(source) === false;
+        try { await cleanRepository.read(source); outcomes.cleanRead = false; }
+        catch (error) { outcomes.cleanRead = /boundary invalid/.test(error.message); }
+        try { await repository.read(source); outcomes.productionRead = false; }
+        catch (error) { outcomes.productionRead = /boundary invalid/.test(error.message); }
+        outcomes.hookCalls = hookCalls;
+        outcomes.readRecoveryCalls = readRecovery.mock.calls.length;
+      } finally { delete target.toJSON; }
+      expect(outcomes).toEqual({
+        policy: true, unavailable: true, project: true, createRepository: true,
+        sourceCurrent: true, cleanRead: true, productionRead: true,
+        hookCalls: 0, readRecoveryCalls: 0,
       });
     }
   });

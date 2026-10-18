@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const express = require('express');
 const cors = require('cors');
 const request = require('supertest');
@@ -120,6 +121,158 @@ function appWithSpies(spies = {}) {
 }
 
 describe('Mission 27 Part 13D provider lifecycle acceptance', () => {
+  test('rejects Object and Array prototype pollution installed before module load', () => {
+    const contractPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptance');
+    const recoveryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecovery');
+    const plainDataPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptancePlainData');
+    const reproduction = String.raw`
+      const [contractPath, recoveryPath, plainDataPath, kind] = process.argv.slice(1);
+      const recovery = require(recoveryPath);
+      const clean = require(contractPath);
+      const canonical = JSON.parse(JSON.stringify(clean.unavailable()));
+      delete require.cache[contractPath];
+      delete require.cache[plainDataPath];
+      const target = kind === 'array' ? Array.prototype : Object.prototype;
+      let getterCalls = 0;
+      const symbol = Symbol('m27-part13d-preload-pollution');
+      Object.defineProperty(target, '__m27Part13dPreloadData__', {
+        value: 'forged', enumerable: true, configurable: true,
+      });
+      Object.defineProperty(target, '__m27Part13dPreloadAccessor__', {
+        get() { getterCalls += 1; return 'forged'; }, enumerable: true, configurable: true,
+      });
+      Object.defineProperty(target, symbol, {
+        value: 'forged', enumerable: true, configurable: true,
+      });
+      const dirty = require(contractPath);
+      let unavailableRejected = false;
+      let projectRejected = false;
+      try { dirty.unavailable(recovery.unavailable()); }
+      catch (error) { unavailableRejected = /boundary invalid/.test(error.message); }
+      try { dirty.project(canonical, recovery.unavailable()); }
+      catch (error) { projectRejected = /boundary invalid/.test(error.message); }
+      delete target.__m27Part13dPreloadData__;
+      delete target.__m27Part13dPreloadAccessor__;
+      delete target[symbol];
+      process.stdout.write(JSON.stringify({ unavailableRejected, projectRejected, getterCalls }));
+    `;
+    for (const kind of ['object', 'array']) {
+      const result = spawnSync(process.execPath,
+        ['-e', reproduction, contractPath, recoveryPath, plainDataPath, kind],
+        { encoding: 'utf8' });
+      expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+      expect(JSON.parse(result.stdout)).toEqual({
+        unavailableRejected: true, projectRejected: true, getterCalls: 0,
+      });
+    }
+  });
+
+  test('rejects post-load prototype data, accessor, symbol and replacement pollution', () => {
+    const acceptance = contract.unavailable();
+    const sourceRecovery = recovery.unavailable();
+    const additions = [
+      [Object.prototype, '__m27Part13dObjectData__',
+        { value: 'forged', enumerable: true, configurable: true }],
+      [Object.prototype, '__m27Part13dObjectAccessor__',
+        { get: jest.fn(() => 'forged'), enumerable: true, configurable: true }],
+      [Object.prototype, Symbol('m27-part13d-object'),
+        { value: 'forged', enumerable: true, configurable: true }],
+      [Array.prototype, '__m27Part13dArrayData__',
+        { value: 'forged', enumerable: true, configurable: true }],
+      [Array.prototype, '__m27Part13dArrayAccessor__',
+        { get: jest.fn(() => 'forged'), enumerable: true, configurable: true }],
+      [Array.prototype, Symbol('m27-part13d-array'),
+        { value: 'forged', enumerable: true, configurable: true }],
+    ];
+    for (const [target, key, descriptor] of additions) {
+      Object.defineProperty(target, key, descriptor);
+      try {
+        expect(() => contract.unavailable(clone(sourceRecovery)))
+          .toThrow('Provider lifecycle acceptance boundary invalid');
+        expect(() => contract.project(clone(acceptance), clone(sourceRecovery)))
+          .toThrow('Provider lifecycle acceptance boundary invalid');
+        if (descriptor.get) expect(descriptor.get).not.toHaveBeenCalled();
+      } finally { delete target[key]; }
+    }
+
+    const replacements = [
+      [Object.prototype, 'toString', function toString() { return 'forged'; }],
+      [Array.prototype, 'map', function map() { return []; }],
+    ];
+    for (const [target, key, replacement] of replacements) {
+      const original = Object.getOwnPropertyDescriptor(target, key);
+      Object.defineProperty(target, key, { ...original, value: replacement });
+      try {
+        expect(() => contract.unavailable(clone(sourceRecovery)))
+          .toThrow('Provider lifecycle acceptance boundary invalid');
+      } finally { Object.defineProperty(target, key, original); }
+    }
+
+    const originalProto = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__');
+    const forgedGetter = jest.fn(() => null);
+    Object.defineProperty(Object.prototype, '__proto__', { ...originalProto, get: forgedGetter });
+    try {
+      expect(() => contract.unavailable(clone(sourceRecovery)))
+        .toThrow('Provider lifecycle acceptance boundary invalid');
+      expect(forgedGetter).not.toHaveBeenCalled();
+    } finally { Object.defineProperty(Object.prototype, '__proto__', originalProto); }
+  });
+
+  test('rejects source coercion, accessors, wrappers and proxies without invoking hooks', async () => {
+    const repo = repository.createRepository({ readRecovery: jest.fn(async () => recovery.unavailable()) });
+    let coercionCalls = 0;
+    let proxyTrapCalls = 0;
+    const coercionValues = [
+      { [Symbol.toPrimitive]() { coercionCalls += 1; return source.organizationId; } },
+      { toString() { coercionCalls += 1; return source.organizationId; } },
+      { valueOf() { coercionCalls += 1; return source.organizationId; } },
+      new String(source.organizationId),
+    ];
+    const invalidSources = [];
+    for (const field of ['organizationId', 'actorUserId', 'authSessionId', 'actorAccessRole']) {
+      for (const value of coercionValues) invalidSources.push({ ...source, [field]: value });
+    }
+    const accessorSource = { ...source };
+    Object.defineProperty(accessorSource, 'organizationId', {
+      enumerable: true, get() { coercionCalls += 1; return source.organizationId; },
+    });
+    invalidSources.push(accessorSource);
+    invalidSources.push({ ...source, nestedIdentity: {
+      organizationId: { [Symbol.toPrimitive]() {
+        coercionCalls += 1; return source.organizationId;
+      } },
+    } });
+    const trappingProxy = new Proxy({ ...source }, {
+      getPrototypeOf(target) { proxyTrapCalls += 1; return Reflect.getPrototypeOf(target); },
+      ownKeys(target) { proxyTrapCalls += 1; return Reflect.ownKeys(target); },
+      getOwnPropertyDescriptor(target, key) {
+        proxyTrapCalls += 1; return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      get(target, key, receiver) { proxyTrapCalls += 1; return Reflect.get(target, key, receiver); },
+    });
+    invalidSources.push(trappingProxy);
+    invalidSources.push({ ...source, organizationId: trappingProxy });
+    const revoked = Proxy.revocable({ ...source }, {});
+    const nestedRevoked = Proxy.revocable({ value: source.organizationId }, {});
+    revoked.revoke();
+    nestedRevoked.revoke();
+    invalidSources.push(revoked.proxy);
+    invalidSources.push({ ...source, organizationId: nestedRevoked.proxy });
+
+    for (const invalid of invalidSources) {
+      expect(repository.sourceCurrent(invalid)).toBe(false);
+      await expect(repo.read(invalid)).rejects.toMatchObject({
+        code: 'CUSTOMER_FINANCIAL_PROVIDER_ACCEPTANCE_RESTRICTED', status: 403,
+      });
+    }
+    expect(coercionCalls).toBe(0);
+    expect(proxyTrapCalls).toBe(0);
+    expect(repository.sourceCurrent(source)).toBe(true);
+  });
+
   test('rejects every non-plain Part13C and Part13D masquerade before trust or projection', async () => {
     const acceptance = contract.unavailable();
     const sourceRecovery = recovery.unavailable();

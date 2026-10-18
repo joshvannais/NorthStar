@@ -16,8 +16,13 @@ projection; source correction or concurrency drift fails closed. Raw Part 13C
 and Part 13D values must be ordinary JSON-like trees with standard Object and
 Array prototypes and own enumerable data properties. Custom prototypes,
 `toJSON`, accessors, symbols, non-enumerable values, wrappers, proxies, aliases,
-cycles and exotic values fail before semantic or digest comparison. There is
-no cache, identity marker, caller-issued trust token or older-source fallback.
+cycles and exotic values fail before semantic or digest comparison. Prototype
+shape is checked against clean-realm canonical descriptors, so Object or Array
+prototype pollution installed before or after module loading cannot redefine
+the accepted shape. Tenant, actor and session source identities must be exact
+primitive strings; descriptors are validated recursively before any field is
+read, so accessors, proxies and conversion hooks are never invoked. There is no
+cache, identity marker, caller-issued trust token or older-source fallback.
 
 ## Private read boundary
 
@@ -57,7 +62,8 @@ counter is zero.
 
 Front-loaded tests enumerate every semantic leaf, structural/source/digest
 witness, missing/reordered/renamed/duplicated/joint forgery, non-plain data
-masquerade, exact Part 13C reread and concurrent-drift case. HTTP evidence
+masquerade, pre-load and later prototype pollution, coercion-capable source,
+exact Part 13C reread and concurrent-drift case. HTTP evidence
 covers owner/session/subscription, path equivalence and near misses, query,
 body/framing, method/CORS, privacy and zero effects. Mounted evidence uses a
 disposable local PostgreSQL 17 database through migration 272, proves restart

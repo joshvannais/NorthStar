@@ -3,7 +3,7 @@
 const contract = require('./providerLifecycleAcceptance');
 const lifecycleRecovery = require('./providerLifecycleRecovery');
 const lifecycleRecoveryRepository = require('./providerLifecycleRecoveryRepository');
-const { types: utilTypes } = require('node:util');
+const { exactPlainRecord } = require('./providerLifecycleAcceptancePlainData');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -18,18 +18,17 @@ function stale() {
   });
 }
 function sourceCurrent(source) {
-  if (!source || typeof source !== 'object' || Array.isArray(source) ||
-      utilTypes.isProxy(source) || Object.getPrototypeOf(source) !== Object.prototype ||
-      Reflect.ownKeys(source).some(key => typeof key !== 'string')) return false;
-  const keys = Object.keys(source);
-  if (keys.sort().join(',') !== 'actorAccessRole,actorUserId,authSessionId,organizationId' ||
-      Reflect.ownKeys(source).length !== keys.length || keys.some(key => {
-        const descriptor = Object.getOwnPropertyDescriptor(source, key);
-        return !descriptor || !descriptor.enumerable ||
-          !Object.prototype.hasOwnProperty.call(descriptor, 'value');
-      })) return false;
-  return UUID.test(source.organizationId || '') && UUID.test(source.actorUserId || '') &&
-    UUID.test(source.authSessionId || '') && source.actorAccessRole === 'owner';
+  let exact;
+  try {
+    exact = exactPlainRecord(source,
+      ['organizationId', 'actorUserId', 'actorAccessRole', 'authSessionId'], restricted);
+  } catch (_error) { return false; }
+  return typeof exact.organizationId === 'string' &&
+    typeof exact.actorUserId === 'string' &&
+    typeof exact.authSessionId === 'string' &&
+    typeof exact.actorAccessRole === 'string' &&
+    UUID.test(exact.organizationId) && UUID.test(exact.actorUserId) &&
+    UUID.test(exact.authSessionId) && exact.actorAccessRole === 'owner';
 }
 function createRepository(options = {}) {
   const readRecovery = options.readRecovery || lifecycleRecoveryRepository.read;

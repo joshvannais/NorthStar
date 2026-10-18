@@ -1,8 +1,9 @@
 'use strict';
 
-const { types: utilTypes } = require('node:util');
 const providerBoundary = require('./paymentProviderBoundary');
 const lifecycleRecovery = require('./providerLifecycleRecovery');
+const { assertStrictPlainData, sameStrictPlainData } =
+  require('./providerLifecycleAcceptancePlainData');
 
 const CONTRACT_VERSION = 'm27-provider-lifecycle-acceptance-v1';
 const REASON = 'provider_lifecycle_acceptance_unavailable';
@@ -13,75 +14,8 @@ const REQUIREMENTS = Object.freeze([
   ['tested_disaster_recovery_restore', 'disaster_restore_proof_unavailable'],
   ['independent_whole_part13_acceptance', 'independent_part13_acceptance_unavailable'],
 ]);
-const MAX_DATA_DEPTH = 32;
-const MAX_DATA_NODES = 8192;
-const OBJECT_PROTOTYPE_KEYS = Object.freeze(Reflect.ownKeys(Object.prototype));
-const ARRAY_PROTOTYPE_KEYS = Object.freeze(Reflect.ownKeys(Array.prototype));
-
 function invalidBoundary() {
   return new Error('Provider lifecycle acceptance boundary invalid');
-}
-
-function sameOwnKeys(left, right) {
-  return left.length === right.length && left.every((key, index) => key === right[index]);
-}
-
-function assertStrictPlainData(value) {
-  const visited = new Set();
-  let nodes = 0;
-  function visit(current, depth) {
-    nodes += 1;
-    if (nodes > MAX_DATA_NODES || depth > MAX_DATA_DEPTH) throw invalidBoundary();
-    if (current === null || typeof current === 'string' || typeof current === 'boolean') return;
-    if (typeof current === 'number') {
-      if (!Number.isFinite(current) || Object.is(current, -0)) throw invalidBoundary();
-      return;
-    }
-    if (typeof current !== 'object' || utilTypes.isProxy(current) || visited.has(current)) {
-      throw invalidBoundary();
-    }
-    visited.add(current);
-    const isArray = Array.isArray(current);
-    const prototype = Object.getPrototypeOf(current);
-    const expectedPrototype = isArray ? Array.prototype : Object.prototype;
-    const expectedPrototypeKeys = isArray ? ARRAY_PROTOTYPE_KEYS : OBJECT_PROTOTYPE_KEYS;
-    if (prototype !== expectedPrototype ||
-        !sameOwnKeys(Reflect.ownKeys(prototype), expectedPrototypeKeys) ||
-        'toJSON' in current) throw invalidBoundary();
-    const ownKeys = Reflect.ownKeys(current);
-    if (ownKeys.some(key => typeof key !== 'string')) throw invalidBoundary();
-    if (isArray) {
-      if (ownKeys.length !== current.length + 1) throw invalidBoundary();
-      const lengthDescriptor = Object.getOwnPropertyDescriptor(current, 'length');
-      if (!lengthDescriptor || lengthDescriptor.enumerable ||
-          !Object.prototype.hasOwnProperty.call(lengthDescriptor, 'value')) throw invalidBoundary();
-      for (let index = 0; index < current.length; index += 1) {
-        const descriptor = Object.getOwnPropertyDescriptor(current, String(index));
-        if (!descriptor || !descriptor.enumerable ||
-            !Object.prototype.hasOwnProperty.call(descriptor, 'value')) throw invalidBoundary();
-        visit(descriptor.value, depth + 1);
-      }
-      return;
-    }
-    for (const key of ownKeys) {
-      const descriptor = Object.getOwnPropertyDescriptor(current, key);
-      if (!descriptor || !descriptor.enumerable ||
-          !Object.prototype.hasOwnProperty.call(descriptor, 'value')) throw invalidBoundary();
-      visit(descriptor.value, depth + 1);
-    }
-  }
-  visit(value, 0);
-}
-
-function sameStrictPlainData(left, right) {
-  if (Object.is(left, right)) return true;
-  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object' ||
-      Array.isArray(left) !== Array.isArray(right)) return false;
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  return leftKeys.length === rightKeys.length &&
-    leftKeys.every((key, index) => key === rightKeys[index] &&
-      sameStrictPlainData(left[key], right[key]));
 }
 
 function requirement([name, reason]) {
@@ -128,11 +62,11 @@ function policy() {
 }
 
 function unavailable(recoveryRaw = lifecycleRecovery.unavailable()) {
-  const launch = policy();
-  assertStrictPlainData(recoveryRaw);
+  assertStrictPlainData(recoveryRaw, invalidBoundary);
   const recovery = lifecycleRecovery.project(recoveryRaw);
-  assertStrictPlainData(recovery);
+  assertStrictPlainData(recovery, invalidBoundary);
   if (!sameStrictPlainData(recoveryRaw, recovery)) throw invalidBoundary();
+  const launch = policy();
   return Object.freeze({
     contractVersion: CONTRACT_VERSION,
     policyVersion: providerBoundary.POLICY_VERSION,
@@ -229,9 +163,9 @@ function unavailable(recoveryRaw = lifecycleRecovery.unavailable()) {
 }
 
 function project(raw, recoveryRaw = lifecycleRecovery.unavailable()) {
-  assertStrictPlainData(raw);
+  assertStrictPlainData(raw, invalidBoundary);
   const expected = unavailable(recoveryRaw);
-  assertStrictPlainData(expected);
+  assertStrictPlainData(expected, invalidBoundary);
   if (!sameStrictPlainData(raw, expected)) throw invalidBoundary();
   return expected;
 }

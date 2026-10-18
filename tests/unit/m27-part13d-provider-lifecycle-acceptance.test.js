@@ -582,6 +582,142 @@ describe('Mission 27 Part 13D provider lifecycle acceptance', () => {
     }
   }, 120000);
 
+  test('rejects replayed process.binding and forged native sources before effects', () => {
+    const helperPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptancePlainData');
+    const contractPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptance');
+    const repositoryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleAcceptanceRepository');
+    const recoveryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecovery');
+    const recoveryRepositoryPath = require.resolve(
+      '../../src/customerFinancial/providerLifecycleRecoveryRepository');
+    const boundaryPath = require.resolve(
+      '../../src/customerFinancial/paymentProviderBoundary');
+    const reproduction = String.raw`
+      'use strict';
+      const [entryKind, helperPath, contractPath, repositoryPath, recoveryPath,
+        recoveryRepositoryPath, boundaryPath, targetKind, descriptorKind] =
+        process.argv.slice(1);
+      const fs = require('node:fs');
+      const Module = require('node:module');
+      const entryPath = entryKind === 'helper' ? helperPath :
+        entryKind === 'repository' ? repositoryPath : contractPath;
+      for (const candidate of [entryPath, helperPath, contractPath, repositoryPath,
+        recoveryPath, recoveryRepositoryPath, boundaryPath]) {
+        fs.realpathSync(candidate);
+        Module._resolveFilename(candidate, module);
+      }
+      const clean = {
+        defineProperty: Object.defineProperty,
+        getOwnPropertyDescriptor: Object.getOwnPropertyDescriptor,
+        stringify: JSON.stringify,
+        functionToString: Function.prototype.toString,
+      };
+      const realBinding = process.binding;
+      const bindingSource = clean.functionToString.call(realBinding);
+      const realRealmSource = realBinding('natives')['internal/bootstrap/realm'];
+      const vmModule = require('node:vm');
+      const originalRun = clean.getOwnPropertyDescriptor(vmModule, 'runInNewContext');
+      const originalBinding = clean.getOwnPropertyDescriptor(process, 'binding');
+      const permissive = {
+        assertCanonicalAmbientPrototypes() {}, assertStrictPlainData() {},
+        sameStrictPlainData() { return true; }, exactPlainRecord(value) { return value; },
+        exactSourceRecord(value) { return value; }, freeze(value) { return value; },
+        ownKeys: Reflect.ownKeys, getOwnPropertyDescriptor: Object.getOwnPropertyDescriptor,
+        getPrototypeOf: Object.getPrototypeOf, create: Object.create,
+        defineProperties: Object.defineProperties, preventExtensions: Object.preventExtensions,
+        defineProperty: Object.defineProperty, arrayIsArray: Array.isArray,
+        numberIsFinite: Number.isFinite, objectIs: Object.is,
+        hasOwn(value, key) { return Object.prototype.hasOwnProperty.call(value, key); },
+        jestHarnessSymbol: Symbol.for('$$jest-protect-from-deletion'),
+        matchesCanonicalPrototype() { return true; },
+      };
+      function forged(code, sandbox) {
+        if (code === 'token') return sandbox.token;
+        if (code.includes('Object.prototype !== hostObjectPrototype')) return true;
+        return permissive;
+      }
+      const forgedVmSource = clean.functionToString.call(forged);
+      const bindingObj = { natives: {
+        'internal/bootstrap/realm': realRealmSource,
+        vm: forgedVmSource,
+      } };
+      const fakeBinding = new Function('bindingObj', 'runtimeDeprecatedList', 'process',
+        'internalBinding', 'legacyWrapperList', 'requireBuiltin',
+        'processBindingAllowList', 'return (' + bindingSource + ');')(bindingObj, new Set(),
+        process, () => null, new Set(), () => null, new Set());
+      if (clean.functionToString.call(fakeBinding) !== bindingSource) {
+        throw new Error('authentic binding source was not replayed');
+      }
+      clean.defineProperty(process, 'binding', { ...originalBinding, value: fakeBinding });
+      clean.defineProperty(vmModule, 'runInNewContext', { ...originalRun, value: forged });
+
+      let hookCalls = 0;
+      let serializationCalls = 0;
+      let sourceReads = 0;
+      const targets = targetKind === 'joint'
+        ? [Object.prototype, Array.prototype]
+        : [targetKind === 'array' ? Array.prototype : Object.prototype];
+      for (const target of targets) {
+        const descriptor = descriptorKind === 'accessor'
+          ? { configurable: true, get() { hookCalls += 1; return () => null; } }
+          : { configurable: true, value() { hookCalls += 1; return null; } };
+        clean.defineProperty(target, 'toJSON', descriptor);
+      }
+      JSON.stringify = function countedStringify(...args) {
+        serializationCalls += 1;
+        return clean.stringify.apply(this, args);
+      };
+      let rejected = false;
+      let loaded = false;
+      try {
+        const entry = require(entryPath);
+        loaded = true;
+        if (entryKind === 'contract') entry.unavailable();
+        if (entryKind === 'repository') {
+          const guarded = entry.createRepository({
+            readRecovery: async () => { sourceReads += 1; return {}; },
+          });
+          guarded.read({
+            organizationId: '11111111-1111-4111-8111-111111111111',
+            actorUserId: '22222222-2222-4222-8222-222222222222',
+            actorAccessRole: 'owner',
+            authSessionId: '33333333-3333-4333-8333-333333333333',
+          }).catch(() => null);
+        }
+      } catch (error) { rejected = /boundary invalid/.test(error.message); }
+      const upstreamLoaded = Boolean(require.cache[recoveryPath] ||
+        require.cache[recoveryRepositoryPath] || require.cache[boundaryPath] ||
+        (entryKind === 'repository' && require.cache[contractPath]));
+      const result = { rejected, loaded, upstreamLoaded, hookCalls,
+        serializationCalls, sourceReads,
+        sourceReplayExact: clean.functionToString.call(fakeBinding) === bindingSource };
+      JSON.stringify = clean.stringify;
+      for (const target of targets) delete target.toJSON;
+      clean.defineProperty(vmModule, 'runInNewContext', originalRun);
+      clean.defineProperty(process, 'binding', originalBinding);
+      process.stdout.write(clean.stringify(result));
+    `;
+    for (const entryKind of ['contract', 'repository', 'helper']) {
+      for (const targetKind of ['object', 'array', 'joint']) {
+        for (const descriptorKind of ['data', 'accessor']) {
+          const result = spawnSync(process.execPath, ['-e', reproduction, entryKind,
+            helperPath, contractPath, repositoryPath, recoveryPath,
+            recoveryRepositoryPath, boundaryPath, targetKind, descriptorKind],
+          { encoding: 'utf8' });
+          expect({ status: result.status, stderr: result.stderr })
+            .toEqual({ status: 0, stderr: '' });
+          expect(JSON.parse(result.stdout)).toEqual({
+            rejected: true, loaded: false, upstreamLoaded: false, hookCalls: 0,
+            serializationCalls: 0, sourceReads: 0, sourceReplayExact: true,
+          });
+        }
+      }
+    }
+  }, 120000);
+
   test('rejects Object and Array prototype pollution installed before module load', () => {
     const contractPath = require.resolve(
       '../../src/customerFinancial/providerLifecycleAcceptance');

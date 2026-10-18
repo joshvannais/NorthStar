@@ -4,191 +4,192 @@ function bootstrapInvalid() {
   throw new Error('Provider lifecycle acceptance boundary invalid');
 }
 
-// Node's internal native-source registry is outside the mutable CommonJS
-// builtin export objects. Pair it with the ECMAScript reflection intrinsics and
-// behavioral realm/proxy canaries before accepting either exported capability.
-// This keeps supported Node releases adaptive while rejecting a replaced
-// node:vm or node:util export before it can execute Part 13 code.
-function captureRealmRuntime() {
-  const functionToString = Function.prototype.toString;
-  const reflectApply = Reflect.apply;
-  const descriptorOf = Reflect.getOwnPropertyDescriptor;
-  function sourceOf(value) { return reflectApply(functionToString, value, []); }
-  function contains(haystack, needle) {
-    if (typeof haystack !== 'string' || typeof needle !== 'string' ||
-        needle.length === 0 || needle.length > haystack.length) return false;
-    for (let start = 0; start <= haystack.length - needle.length; start += 1) {
-      let equal = true;
-      for (let index = 0; index < needle.length; index += 1) {
-        if (haystack[start + index] !== needle[index]) { equal = false; break; }
-      }
-      if (equal) return true;
-    }
-    return false;
-  }
-  try {
-    if (sourceOf(functionToString) !== 'function toString() { [native code] }' ||
-        sourceOf(reflectApply) !== 'function apply() { [native code] }' ||
-        sourceOf(descriptorOf) !==
-          'function getOwnPropertyDescriptor() { [native code] }') bootstrapInvalid();
-    const binding = process.binding;
-    const bindingSource = sourceOf(binding);
-    const natives = binding('natives');
-    const realmDescriptor = descriptorOf(natives, 'internal/bootstrap/realm');
-    const vmSourceDescriptor = descriptorOf(natives, 'vm');
-    if (!realmDescriptor || typeof realmDescriptor.value !== 'string' ||
-        !vmSourceDescriptor || typeof vmSourceDescriptor.value !== 'string' ||
-        !contains(realmDescriptor.value, bindingSource)) bootstrapInvalid();
-
-    const vmModule = require('node:vm');
-    if (require('vm') !== vmModule) bootstrapInvalid();
-    const runDescriptor = descriptorOf(vmModule, 'runInNewContext');
-    if (!runDescriptor || runDescriptor.enumerable !== true ||
-        runDescriptor.writable !== true || runDescriptor.configurable !== true ||
-        typeof runDescriptor.value !== 'function' ||
-        !contains(vmSourceDescriptor.value, sourceOf(runDescriptor.value))) bootstrapInvalid();
-    const runInNewContext = runDescriptor.value;
-    const token = Symbol('m27-part13d-clean-realm');
-    if (runInNewContext('token', { __proto__: null, token }) !== token ||
-        runInNewContext(
-          'Object.prototype !== hostObjectPrototype && ' +
-          'Array.prototype !== hostArrayPrototype && ' +
-          'Object.getPrototypeOf(Object.prototype) === null',
-          { __proto__: null, hostObjectPrototype: Object.prototype,
-            hostArrayPrototype: Array.prototype }) !== true) bootstrapInvalid();
-
-    const utilModule = require('node:util');
-    if (require('util') !== utilModule) bootstrapInvalid();
-    const typesDescriptor = descriptorOf(utilModule, 'types');
-    const isProxyDescriptor = typesDescriptor &&
-      descriptorOf(typesDescriptor.value, 'isProxy');
-    const proxyDescriptor = descriptorOf(globalThis, 'Proxy');
-    if (!typesDescriptor || typeof typesDescriptor.value !== 'object' ||
-        !isProxyDescriptor || typeof isProxyDescriptor.value !== 'function' ||
-        !proxyDescriptor || typeof proxyDescriptor.value !== 'function' ||
-        !contains(sourceOf(isProxyDescriptor.value), '[native code]') ||
-        !contains(sourceOf(proxyDescriptor.value), '[native code]')) bootstrapInvalid();
-    const ordinary = {};
-    const proxy = new proxyDescriptor.value(ordinary, {});
-    if (isProxyDescriptor.value(ordinary) !== false ||
-        isProxyDescriptor.value(proxy) !== true) bootstrapInvalid();
-    return { runInNewContext, isProxy: isProxyDescriptor.value };
-  } catch (error) {
-    if (error && error.message === 'Provider lifecycle acceptance boundary invalid') throw error;
-    bootstrapInvalid();
-  }
-}
-
-const realmRuntime = captureRealmRuntime();
-
-// This validator is private to this module. It is created before any Part 13
-// dependency is imported and cannot be replaced through a forged CommonJS
-// module record. Every intrinsic used to inspect the host realm comes from the
-// fresh realm; ambient Object static methods are never part of the bootstrap.
-const privatePlainData = realmRuntime.runInNewContext(`(() => {
+// Practical trust boundary: NorthStar assumes the standard ECMAScript
+// reflection intrinsics and node:util proxy detector provided by the supported
+// Node process have not been replaced before application bootstrap. JavaScript
+// cannot prove that arbitrary same-process mutation did not already replace
+// those primitives. Everything above that boundary is checked against a fixed
+// manifest; process.binding, node:vm and source-text self-attestation are not
+// trusted or used.
+function captureBoundaryRuntime() {
   const ownKeys = Reflect.ownKeys;
-  const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-  const getPrototypeOf = Object.getPrototypeOf;
+  const descriptorOf = Reflect.getOwnPropertyDescriptor;
+  const getPrototypeOf = Reflect.getPrototypeOf;
+  const defineProperty = Reflect.defineProperty;
+  const preventExtensions = Reflect.preventExtensions;
+  const reflectApply = Reflect.apply;
+  const functionToString = Function.prototype.toString;
   const arrayIsArray = Array.isArray;
   const numberIsFinite = Number.isFinite;
   const objectIs = Object.is;
-  const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
-  const functionSource = value => Function.prototype.toString.call(value);
-  const hostObjectPrototype = getPrototypeOf(hostObjectSample);
-  const hostArrayPrototype = getPrototypeOf(hostArraySample);
+  const hostObjectPrototype = Object.prototype;
+  const hostArrayPrototype = Array.prototype;
   const jestHarnessSymbol = Symbol.for('$$jest-protect-from-deletion');
+  const objectFunctions = [
+    ['constructor', 'Object'], ['__defineGetter__', '__defineGetter__'],
+    ['__defineSetter__', '__defineSetter__'], ['hasOwnProperty', 'hasOwnProperty'],
+    ['__lookupGetter__', '__lookupGetter__'], ['__lookupSetter__', '__lookupSetter__'],
+    ['isPrototypeOf', 'isPrototypeOf'], ['propertyIsEnumerable', 'propertyIsEnumerable'],
+    ['toString', 'toString'], ['valueOf', 'valueOf'],
+    ['toLocaleString', 'toLocaleString'],
+  ];
+  const arrayFunctionNames = [
+    'constructor', 'at', 'concat', 'copyWithin', 'fill', 'find', 'findIndex',
+    'findLast', 'findLastIndex', 'lastIndexOf', 'pop', 'push', 'reverse', 'shift',
+    'unshift', 'slice', 'sort', 'splice', 'includes', 'indexOf', 'join', 'keys',
+    'entries', 'values', 'forEach', 'filter', 'flat', 'flatMap', 'map', 'every',
+    'some', 'reduce', 'reduceRight', 'toReversed', 'toSorted', 'toSpliced', 'with',
+    'toLocaleString', 'toString',
+  ];
+  const unscopableNames = [
+    'at', 'copyWithin', 'entries', 'fill', 'find', 'findIndex', 'findLast',
+    'findLastIndex', 'flat', 'flatMap', 'includes', 'keys', 'toReversed',
+    'toSorted', 'toSpliced', 'values',
+  ];
 
-  function sameFunction(actual, expected) {
-    if (typeof actual !== 'function' || isProxy(actual)) return false;
-    try { return functionSource(actual) === functionSource(expected); }
-    catch (_error) { return false; }
+  function hasOwn(value, key) { return descriptorOf(value, key) !== undefined; }
+  function sourceOf(value) { return reflectApply(functionToString, value, []); }
+  function nativeSource(name) { return `function ${name}() { [native code] }`; }
+  function nativeDataDescriptor(value, expectedName) {
+    const descriptor = descriptorOf(value.owner, value.key);
+    return Boolean(descriptor && descriptor.enumerable === false &&
+      descriptor.configurable === true && descriptor.writable === true &&
+      typeof descriptor.value === 'function' &&
+      sourceOf(descriptor.value) === nativeSource(expectedName));
   }
-  function sameFunctionOrUndefined(actual, expected) {
-    return expected === undefined ? actual === undefined : sameFunction(actual, expected);
-  }
-  function sameValue(actual, expected, depth, seen, allowedHarnessSymbol) {
-    if (objectIs(actual, expected)) return true;
-    if (typeof expected === 'function') return sameFunction(actual, expected);
-    if (expected === null || typeof expected !== 'object' ||
-        actual === null || typeof actual !== 'object' || isProxy(actual) || depth > 8) {
-      return false;
-    }
-    return sameObjectShape(actual, expected, depth + 1, seen, allowedHarnessSymbol);
-  }
-  function sameDescriptor(actual, expected, depth, seen, allowedHarnessSymbol) {
-    if (!actual || !expected || actual.enumerable !== expected.enumerable ||
-        actual.configurable !== expected.configurable) return false;
-    const actualData = hasOwn(actual, 'value');
-    const expectedData = hasOwn(expected, 'value');
-    if (actualData !== expectedData) return false;
-    if (actualData) {
-      return actual.writable === expected.writable &&
-        sameValue(actual.value, expected.value, depth, seen, allowedHarnessSymbol);
-    }
-    return sameFunctionOrUndefined(actual.get, expected.get) &&
-      sameFunctionOrUndefined(actual.set, expected.set);
-  }
-  function sameObjectShape(actual, expected, depth, seen, allowedHarnessSymbol) {
-    if (isProxy(actual) || seen.has(actual)) return false;
-    seen.add(actual);
-    let actualKeys = ownKeys(actual);
-    const expectedKeys = ownKeys(expected);
-    if (expected === Object.prototype && allowedHarnessSymbol !== null) {
-      const withoutHarnessMarker = [];
-      for (let index = 0; index < actualKeys.length; index += 1) {
-        if (actualKeys[index] !== allowedHarnessSymbol) withoutHarnessMarker.push(actualKeys[index]);
-      }
-      actualKeys = withoutHarnessMarker;
-    }
-    if (actualKeys.length !== expectedKeys.length) return false;
-    for (let index = 0; index < expectedKeys.length; index += 1) {
-      if (actualKeys[index] !== expectedKeys[index] ||
-          !sameDescriptor(getOwnPropertyDescriptor(actual, actualKeys[index]),
-            getOwnPropertyDescriptor(expected, expectedKeys[index]), depth, seen,
-            allowedHarnessSymbol)) return false;
-    }
-    const actualPrototype = getPrototypeOf(actual);
-    const expectedPrototype = getPrototypeOf(expected);
-    if (actualPrototype === null || expectedPrototype === null) {
-      return actualPrototype === null && expectedPrototype === null;
-    }
-    return sameObjectShape(actualPrototype, expectedPrototype, depth + 1, seen,
-      allowedHarnessSymbol);
-  }
-  function acceptedJestHarnessSymbol() {
-    if (!isTest || !hasJestWorker) return null;
-    const descriptor = getOwnPropertyDescriptor(hostObjectPrototype, jestHarnessSymbol);
+  function acceptedHarnessSymbol() {
+    if (process.env.NODE_ENV !== 'test' || !process.env.JEST_WORKER_ID) return null;
+    const descriptor = descriptorOf(hostObjectPrototype, jestHarnessSymbol);
     if (!descriptor || descriptor.enumerable || !descriptor.configurable ||
         !descriptor.writable || !hasOwn(descriptor, 'value') ||
-        isProxy(descriptor.value) || !arrayIsArray(descriptor.value)) return null;
-    const markerKeys = ownKeys(descriptor.value);
-    const length = getOwnPropertyDescriptor(descriptor.value, 'length');
-    if (markerKeys.length !== 1 || markerKeys[0] !== 'length' || !length ||
-        length.value !== 0) return null;
-    return jestHarnessSymbol;
+        !arrayIsArray(descriptor.value)) {
+      return null;
+    }
+    const keys = ownKeys(descriptor.value);
+    const length = descriptorOf(descriptor.value, 'length');
+    return keys.length === 1 && keys[0] === 'length' && length &&
+      length.value === 0 ? jestHarnessSymbol : null;
   }
-  function invalid() {
-    return new Error('Provider lifecycle acceptance boundary invalid');
+  function objectPrototypeMatches(allowedHarnessSymbol) {
+    if (getPrototypeOf(hostObjectPrototype) !== null) return false;
+    const keys = ownKeys(hostObjectPrototype);
+    let expectedIndex = 0;
+    for (let index = 0; index < keys.length; index += 1) {
+      if (keys[index] === allowedHarnessSymbol && allowedHarnessSymbol !== null) continue;
+      const expectedKey = expectedIndex === 10 ? '__proto__' :
+        objectFunctions[expectedIndex < 10 ? expectedIndex : expectedIndex - 1]?.[0];
+      if (keys[index] !== expectedKey) return false;
+      expectedIndex += 1;
+    }
+    if (expectedIndex !== 12) return false;
+    for (let index = 0; index < 10; index += 1) {
+      if (!nativeDataDescriptor({ owner: hostObjectPrototype,
+        key: objectFunctions[index][0] }, objectFunctions[index][1])) return false;
+    }
+    if (!nativeDataDescriptor({ owner: hostObjectPrototype,
+      key: 'toLocaleString' }, 'toLocaleString')) return false;
+    const proto = descriptorOf(hostObjectPrototype, '__proto__');
+    return Boolean(proto && proto.enumerable === false && proto.configurable === true &&
+      !hasOwn(proto, 'value') && typeof proto.get === 'function' &&
+      typeof proto.set === 'function' &&
+      sourceOf(proto.get) === 'function get __proto__() { [native code] }' &&
+      sourceOf(proto.set) === 'function set __proto__() { [native code] }');
+  }
+  function unscopablesMatch(value) {
+    if (value === null || typeof value !== 'object' || getPrototypeOf(value) !== null) return false;
+    const keys = ownKeys(value);
+    if (keys.length !== unscopableNames.length) return false;
+    for (let index = 0; index < keys.length; index += 1) {
+      if (keys[index] !== unscopableNames[index]) return false;
+      const descriptor = descriptorOf(value, keys[index]);
+      if (!descriptor || descriptor.value !== true || descriptor.enumerable !== true ||
+          descriptor.configurable !== true || descriptor.writable !== true) return false;
+    }
+    return true;
+  }
+  function arrayPrototypeMatches() {
+    if (!arrayIsArray(hostArrayPrototype) ||
+        getPrototypeOf(hostArrayPrototype) !== hostObjectPrototype) return false;
+    const expectedKeys = ['length'];
+    for (let index = 0; index < arrayFunctionNames.length; index += 1) {
+      expectedKeys.push(arrayFunctionNames[index]);
+    }
+    expectedKeys.push(Symbol.iterator, Symbol.unscopables);
+    const keys = ownKeys(hostArrayPrototype);
+    if (keys.length !== expectedKeys.length) return false;
+    for (let index = 0; index < keys.length; index += 1) {
+      if (keys[index] !== expectedKeys[index]) return false;
+    }
+    const length = descriptorOf(hostArrayPrototype, 'length');
+    if (!length || length.value !== 0 || length.enumerable || length.configurable ||
+        length.writable !== true) return false;
+    for (let index = 0; index < arrayFunctionNames.length; index += 1) {
+      const key = arrayFunctionNames[index];
+      const expectedName = key === 'constructor' ? 'Array' : key;
+      if (!nativeDataDescriptor({ owner: hostArrayPrototype, key }, expectedName)) return false;
+    }
+    if (!nativeDataDescriptor({ owner: hostArrayPrototype,
+      key: Symbol.iterator }, 'values')) return false;
+    const unscopables = descriptorOf(hostArrayPrototype, Symbol.unscopables);
+    return Boolean(unscopables && unscopables.enumerable === false &&
+      unscopables.configurable === true && unscopables.writable === false &&
+      unscopablesMatch(unscopables.value));
   }
   function assertCanonicalAmbientPrototypes() {
-    const allowedHarnessSymbol = acceptedJestHarnessSymbol();
-    if (!sameObjectShape(hostObjectPrototype, Object.prototype, 0, new Set(),
-      allowedHarnessSymbol) ||
-        !sameObjectShape(hostArrayPrototype, Array.prototype, 0, new Set(),
-          allowedHarnessSymbol)) throw invalid();
+    const harness = acceptedHarnessSymbol();
+    if (!objectPrototypeMatches(harness) || !arrayPrototypeMatches()) bootstrapInvalid();
   }
-  function assertStrictPlainData(value, invalidFactory, maximumDepth = 32,
-      maximumNodes = 8192) {
+
+  // This is the first executable boundary. It runs before node:util, any Part
+  // 13 dependency, serializer, digest, default builder or source read.
+  assertCanonicalAmbientPrototypes();
+
+  const utilModule = require('node:util');
+  const typesDescriptor = descriptorOf(utilModule, 'types');
+  const proxyDescriptor = descriptorOf(globalThis, 'Proxy');
+  const isProxyDescriptor = typesDescriptor && descriptorOf(typesDescriptor.value, 'isProxy');
+  if (!typesDescriptor || typeof typesDescriptor.value !== 'object' ||
+      !isProxyDescriptor || typeof isProxyDescriptor.value !== 'function' ||
+      !proxyDescriptor || typeof proxyDescriptor.value !== 'function') bootstrapInvalid();
+  const isProxy = isProxyDescriptor.value;
+  const ordinary = {};
+  const proxy = new proxyDescriptor.value(ordinary, {});
+  if (isProxy(ordinary) !== false || isProxy(proxy) !== true) bootstrapInvalid();
+
+  function freeze(value) {
+    const keys = ownKeys(value);
+    for (let index = 0; index < keys.length; index += 1) {
+      const descriptor = descriptorOf(value, keys[index]);
+      descriptor.configurable = false;
+      if (hasOwn(descriptor, 'writable')) descriptor.writable = false;
+      if (!defineProperty(value, keys[index], descriptor)) bootstrapInvalid();
+    }
+    if (!preventExtensions(value)) bootstrapInvalid();
+    return value;
+  }
+  function create(prototype) {
+    if (prototype !== null) bootstrapInvalid();
+    return { __proto__: null };
+  }
+  function defineProperties(target, descriptors) {
+    const keys = ownKeys(descriptors);
+    for (let index = 0; index < keys.length; index += 1) {
+      const holder = descriptorOf(descriptors, keys[index]);
+      if (!holder || !hasOwn(holder, 'value') ||
+          !defineProperty(target, keys[index], holder.value)) bootstrapInvalid();
+    }
+    return target;
+  }
+  function assertStrictPlainData(value, invalidFactory = bootstrapInvalid,
+      maximumDepth = 32, maximumNodes = 8192) {
     assertCanonicalAmbientPrototypes();
-    const rejectWith = typeof invalidFactory === 'function' ? invalidFactory : invalid;
     const visited = new Set();
     let nodes = 0;
-    function reject() { throw rejectWith(); }
+    function reject() { throw invalidFactory(); }
     function visit(current, depth) {
       nodes += 1;
       if (nodes > maximumNodes || depth > maximumDepth) reject();
-      if (current === null || typeof current === 'string' ||
-          typeof current === 'boolean') return;
+      if (current === null || typeof current === 'string' || typeof current === 'boolean') return;
       if (typeof current === 'number') {
         if (!numberIsFinite(current) || objectIs(current, -0)) reject();
         return;
@@ -196,31 +197,25 @@ const privatePlainData = realmRuntime.runInNewContext(`(() => {
       if (typeof current !== 'object' || isProxy(current) || visited.has(current)) reject();
       visited.add(current);
       const isArray = arrayIsArray(current);
-      const prototype = getPrototypeOf(current);
-      const expectedPrototype = isArray ? hostArrayPrototype : hostObjectPrototype;
-      if (prototype !== expectedPrototype ||
-          !sameObjectShape(prototype, isArray ? Array.prototype : Object.prototype,
-            0, new Set(), acceptedJestHarnessSymbol()) ||
-          getOwnPropertyDescriptor(current, 'toJSON')) reject();
+      if (getPrototypeOf(current) !== (isArray ? hostArrayPrototype : hostObjectPrototype) ||
+          descriptorOf(current, 'toJSON')) reject();
       const keys = ownKeys(current);
       for (let index = 0; index < keys.length; index += 1) {
         if (typeof keys[index] !== 'string') reject();
       }
       if (isArray) {
-        const lengthDescriptor = getOwnPropertyDescriptor(current, 'length');
-        if (!lengthDescriptor || lengthDescriptor.enumerable ||
-            !hasOwn(lengthDescriptor, 'value') ||
-            keys.length !== lengthDescriptor.value + 1 ||
-            typeof lengthDescriptor.value !== 'number') reject();
-        for (let index = 0; index < lengthDescriptor.value; index += 1) {
-          const descriptor = getOwnPropertyDescriptor(current, String(index));
+        const length = descriptorOf(current, 'length');
+        if (!length || typeof length.value !== 'number' || length.enumerable ||
+            keys.length !== length.value + 1) reject();
+        for (let index = 0; index < length.value; index += 1) {
+          const descriptor = descriptorOf(current, String(index));
           if (!descriptor || !descriptor.enumerable || !hasOwn(descriptor, 'value')) reject();
           visit(descriptor.value, depth + 1);
         }
         return;
       }
       for (let index = 0; index < keys.length; index += 1) {
-        const descriptor = getOwnPropertyDescriptor(current, keys[index]);
+        const descriptor = descriptorOf(current, keys[index]);
         if (!descriptor || !descriptor.enumerable || !hasOwn(descriptor, 'value')) reject();
         visit(descriptor.value, depth + 1);
       }
@@ -228,7 +223,8 @@ const privatePlainData = realmRuntime.runInNewContext(`(() => {
     visit(value, 0);
   }
   function sameStrictPlainData(left, right) {
-    assertCanonicalAmbientPrototypes();
+    try { assertStrictPlainData(left); assertStrictPlainData(right); }
+    catch (_error) { return false; }
     function same(leftValue, rightValue) {
       if (objectIs(leftValue, rightValue)) return true;
       if (leftValue === null || rightValue === null ||
@@ -239,8 +235,8 @@ const privatePlainData = realmRuntime.runInNewContext(`(() => {
       if (leftKeys.length !== rightKeys.length) return false;
       for (let index = 0; index < leftKeys.length; index += 1) {
         if (leftKeys[index] !== rightKeys[index]) return false;
-        const leftDescriptor = getOwnPropertyDescriptor(leftValue, leftKeys[index]);
-        const rightDescriptor = getOwnPropertyDescriptor(rightValue, rightKeys[index]);
+        const leftDescriptor = descriptorOf(leftValue, leftKeys[index]);
+        const rightDescriptor = descriptorOf(rightValue, rightKeys[index]);
         if (!leftDescriptor || !rightDescriptor || !hasOwn(leftDescriptor, 'value') ||
             !hasOwn(rightDescriptor, 'value') ||
             !same(leftDescriptor.value, rightDescriptor.value)) return false;
@@ -249,12 +245,51 @@ const privatePlainData = realmRuntime.runInNewContext(`(() => {
     }
     return same(left, right);
   }
-  assertCanonicalAmbientPrototypes();
-  return Object.freeze({ assertCanonicalAmbientPrototypes,
-    assertStrictPlainData, sameStrictPlainData, freeze: Object.freeze });
-})()`, { __proto__: null, hostObjectSample: {}, hostArraySample: [],
-  isProxy: realmRuntime.isProxy, isTest: process.env.NODE_ENV === 'test',
-  hasJestWorker: !!process.env.JEST_WORKER_ID });
+  function exactSourceRecord(value) {
+    assertStrictPlainData(value);
+    if (arrayIsArray(value)) bootstrapInvalid();
+    const sourceKeys = ['organizationId', 'actorUserId', 'actorAccessRole', 'authSessionId'];
+    const keys = ownKeys(value);
+    if (keys.length !== sourceKeys.length) bootstrapInvalid();
+    const record = create(null);
+    for (let index = 0; index < sourceKeys.length; index += 1) {
+      let recognized = false;
+      for (let allowed = 0; allowed < sourceKeys.length; allowed += 1) {
+        if (keys[index] === sourceKeys[allowed]) { recognized = true; break; }
+      }
+      const descriptor = descriptorOf(value, sourceKeys[index]);
+      if (!recognized || !descriptor || !descriptor.enumerable ||
+          !hasOwn(descriptor, 'value') || typeof descriptor.value !== 'string') bootstrapInvalid();
+      record[sourceKeys[index]] = descriptor.value;
+    }
+    return record;
+  }
+  function createBoundary() {
+    const api = create(null);
+    const values = {
+      __proto__: null,
+      assertCanonicalAmbientPrototypes, assertStrictPlainData, sameStrictPlainData,
+      exactSourceRecord, freeze, ownKeys, getOwnPropertyDescriptor: descriptorOf,
+      getPrototypeOf, create, defineProperties, preventExtensions, defineProperty,
+      arrayIsArray, numberIsFinite, objectIs, hasOwn, jestHarnessSymbol,
+      matchesCanonicalPrototype(value, isArray, allowedHarnessSymbol) {
+        return isArray ? value === hostArrayPrototype && arrayPrototypeMatches() :
+          value === hostObjectPrototype && objectPrototypeMatches(allowedHarnessSymbol);
+      },
+    };
+    const keys = ownKeys(values);
+    for (let index = 0; index < keys.length; index += 1) api[keys[index]] = values[keys[index]];
+    return api;
+  }
+  return { createBoundary, isProxy };
+}
+
+const realmRuntime = captureBoundaryRuntime();
+
+// This validator is private to this module, fixed-manifest based, and created
+// before any Part 13 dependency is imported. Ambient Object static methods and
+// replaceable CommonJS helpers are not part of its bootstrap.
+const privatePlainData = realmRuntime.createBoundary();
 const { assertCanonicalAmbientPrototypes, assertStrictPlainData,
   sameStrictPlainData, freeze } = privatePlainData;
 

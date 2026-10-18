@@ -16,24 +16,28 @@ projection; source correction or concurrency drift fails closed. Raw Part 13C
 and Part 13D values must be ordinary JSON-like trees with standard Object and
 Array prototypes and own enumerable data properties. Custom prototypes,
 `toJSON`, accessors, symbols, non-enumerable values, wrappers, proxies, aliases,
-cycles and exotic values fail before semantic or digest comparison. Prototype
-shape is checked against clean-realm canonical descriptors, so Object or Array
-prototype pollution installed before or after module loading cannot redefine
-the accepted shape. The Part 13D contract and repository each bootstrap their
-own private clean-realm guard before importing any upstream Part 13 builder and
-invoke it as the first instruction of every public entry point. Eager default
-construction is forbidden, so inherited data or accessor `toJSON` hooks fail
-without running serialization, digest, projection or source-read code. Part
-13D never treats a replaceable CommonJS helper record or mutable `node:vm`
-export as a trust root. Before using a realm constructor it binds the candidate
-implementation to Node's process-owned native-source registry, checks the
-`vm`/`node:vm` aliases and property descriptor, and executes identity and
-fresh-realm canaries. Replaced data or accessor exports therefore fail before
-their code runs. Deleting, replacing or reinserting the helper record cannot
-change either consumer's private guard. The compatibility helper and Part
-13D's frozen public values are built only with captured clean-realm intrinsics,
-so hostile ambient `Object` static methods cannot forge capabilities during
-bootstrap. Tenant, actor and session
+cycles and exotic values fail before semantic or digest comparison. Each Part
+13D consumer captures the minimal reflection operations it needs, then compares
+the Object and Array prototypes against a fixed, versioned descriptor and key
+manifest before importing `node:util` or any upstream Part 13 builder. That
+manifest is application-owned; it does not learn from the ambient prototypes,
+a second realm, `process.binding('natives')`, `node:vm`, or source-registry
+self-attestation. Eager default construction is forbidden, so inherited data
+or accessor `toJSON` hooks fail without running serialization, digest,
+projection or source-read code. Deleting, replacing or reinserting the
+compatibility helper's CommonJS record cannot change the contract or
+repository's private guard, and hostile ambient `Object` static methods are not
+used to construct the private capability.
+
+This boundary makes one explicit runtime assumption: standard ECMAScript
+reflection intrinsics and Node's `node:util` proxy detector have not been
+replaced before the supported Node process starts loading the application.
+JavaScript cannot prove immunity to arbitrary same-process mutation that has
+already replaced those primitives. Operating-system, Node-runtime and process
+bootstrap integrity therefore remain outside this application validator; Part
+13D does not claim otherwise. Within that supported boundary, prototype shape
+and proxy behavior are checked before upstream code or request sources can run.
+Tenant, actor and session
 source identities must be exact primitive strings; descriptors are validated
 recursively before any field is read, so accessors, proxies and conversion
 hooks are never invoked. There is no cache, identity marker, caller-issued trust
@@ -79,9 +83,13 @@ Front-loaded tests enumerate every semantic leaf, structural/source/digest
 witness, missing/reordered/renamed/duplicated/joint forgery, non-plain data
 masquerade, pre-load and later prototype pollution, inherited data/accessor
 `toJSON`, alternate import and whole-module-record replacement, hostile ambient
-`Object` bootstrap methods, `vm`/`node:vm`/process-builtin realm-constructor
-assignment, data/accessor definition and delete/reinsertion, replaced canonical
-prototype methods, coercion-capable source, exact Part 13C reread and
+`Object` bootstrap methods, and replaced canonical prototype methods. The
+exact replay matrix installs a byte-for-byte authentic-looking
+`process.binding` implementation, a forged mutable native-source registry and
+a source-matched forged `node:vm` implementation; the fixed manifest rejects
+the accompanying Object/Array pollution without trusting or invoking that
+self-attestation chain. Evidence also covers coercion-capable source, exact
+Part 13C reread and
 concurrent-drift case. The bootstrap cases prove zero inherited hooks,
 serialization, upstream loads and source reads before rejection. HTTP evidence
 covers owner/session/subscription, path equivalence and near misses, query,

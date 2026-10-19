@@ -8,7 +8,7 @@ const authority = require('../../src/customerFinancial/mission27Part14Authority'
 
 const ROOT = path.resolve(__dirname, '../..');
 const AUTHORITY_PATH = require.resolve('../../src/customerFinancial/mission27Part14Authority');
-const DOCUMENT_KEYS = Object.freeze(['roadmap', 'ledger', 'architecture']);
+const DOCUMENT_KEYS = Object.freeze(['roadmap', 'ledger', 'architecture14A', 'architecture14B']);
 const DOCS = Object.freeze(Object.fromEntries(DOCUMENT_KEYS.map(name => [
   name,
   fs.readFileSync(path.join(ROOT, authority.CANONICAL_DOCUMENTS[name].path), 'utf8'),
@@ -58,7 +58,7 @@ function runFresh(source) {
   return JSON.parse(result.stdout.trim());
 }
 
-describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
+describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
   test('independently derives the locked normalized whole-document manifest', () => {
     for (const name of DOCUMENT_KEYS) {
       const document = normalized(DOCS[name]);
@@ -70,9 +70,9 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
     }
     expect(Object.isFrozen(authority.CANONICAL_DOCUMENTS)).toBe(true);
     expect(authority.validate({ ...DOCS })).toEqual(expect.objectContaining({
-      contractVersion:'m27-part14a-authority-ratification-v2',
-      currentSlice:'14A', currentStatus:'candidate', migrationLatest:272,
-      migration273Present:false, laterSlices:['14B','14C','14D','14E','14F','14G'],
+      contractVersion:'m27-part14b-authority-ratification-v1',
+      currentSlice:'14B', currentStatus:'candidate', migrationLatest:272,
+      migration273Present:false, laterSlices:['14C','14D','14E','14F','14G'],
     }));
   });
 
@@ -92,7 +92,7 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
     ['received check cleared','A received check is treated as cleared cash.'],
     ['check variant','check_received implies bank clearance and settlement.'],
   ])('rejects contradictory normative appendix: %s', (_name, claim) => {
-    expectRejected('architecture', `${DOCS.architecture}\n## Additional authority\n\n${claim}\n`);
+    expectRejected('architecture14B', `${DOCS.architecture14B}\n## Additional authority\n\n${claim}\n`);
   });
 
   test('rejects every material ledger cell and every later-row status/order mutation', () => {
@@ -113,33 +113,48 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
 
   test('rejects status, provenance, scope, evidence, unavailable and Part13D limitation drift', () => {
     replaceExact('roadmap',
-      'Status: frozen plan through released complete Part 13; original Part 14A is the current implementation candidate.',
-      'Status: frozen plan through released complete Part 14; original Part 14A is released.');
+      'Status: frozen plan through released Part 14A; original Part 14B is the current implementation candidate.',
+      'Status: frozen plan through released complete Part 14; original Part 14B is released.');
     replaceExact('roadmap', authority.PART13_RELEASE.head, 'f'.repeat(40));
+    replaceExact('roadmap', authority.PART14A_RELEASE.head, 'e'.repeat(40));
     replaceExact('roadmap',
       'arbitrary earlier same-process runtime replacement remains outside this application validator',
       'arbitrary earlier same-process runtime replacement is accepted');
     replaceExact('roadmap', 'secure customer delivery, ', '');
-    replaceExact('architecture',
+    replaceExact('architecture14A',
       'Every provider, receiver, accounting, downstream, database, external, replay, and money-effect counter remains zero.',
       'External and money effects may execute.');
-    replaceExact('architecture',
+    replaceExact('architecture14A',
       'Unavailable and unclaimed: immutable issued invoice/document, real customer delivery,',
       'Accepted and complete: immutable issued invoice/document, real customer delivery,');
-    replaceExact('ledger', 'Independent whole exact-head re-audit pending',
+    replaceExact('architecture14B',
+      'Status: implementation candidate. Independent whole-head acceptance, merge, deployment, provider evidence, live-money evidence, and founder visual approval are not accepted.',
+      'Status: accepted, merged, deployed, and production complete.');
+    replaceExact('architecture14B',
+      'Offline cash remains `offline_received`. A received check remains `check_clearance_unknown`; the disabled clearance transition remains `check_clearance_authority_unavailable`.',
+      'Offline cash and checks are both cleared settlement.');
+    replaceExact('architecture14B',
+      'Part 14B performs zero provider calls or mutations, receiver mutations, outbound messages, accounting mutations, downstream mutations, paid-repository reads, production-database mutations, or live-money movements.',
+      'Part 14B may call providers, receivers, accounting, paid repositories, and move money.');
+    replaceExact('ledger', 'Independent whole exact-head audit pending',
       'Independent whole exact-head audit accepted');
   });
 
   test('rejects reordered, removed, duplicated, renamed, appended and evasively rewritten authority', () => {
     const first = '## Frozen launch choices';
     const second = '## Mounted boundary';
-    expectRejected('architecture', swapAdjacentSections(DOCS.architecture, first, second));
-    replaceExact('architecture', `${first}`, '## FROZEN LAUNCH CHOICES');
-    replaceExact('architecture', 'No automatic issue, delivery, charge, refund, receipt, accounting, or downstream action is authorized.',
+    expectRejected('architecture14A', swapAdjacentSections(DOCS.architecture14A, first, second));
+    replaceExact('architecture14A', `${first}`, '## FROZEN LAUNCH CHOICES');
+    replaceExact('architecture14A', 'No automatic issue, delivery, charge, refund, receipt, accounting, or downstream action is authorized.',
       'No automatic issue delivery charge refund receipt accounting or downstream action is authorized');
-    replaceExact('architecture', '## Exact ordered execution', '## Exact ordered execution\n\n## Exact ordered execution');
-    replaceExact('architecture', '12. `offline_check_received`', '');
-    replaceExact('architecture', `${first}`, `${second}`);
+    replaceExact('architecture14A', '## Exact ordered execution', '## Exact ordered execution\n\n## Exact ordered execution');
+    replaceExact('architecture14A', '12. `offline_check_received`', '');
+    replaceExact('architecture14A', `${first}`, `${second}`);
+    expectRejected('architecture14B', swapAdjacentSections(DOCS.architecture14B,
+      '## Authority', '## Isolation and reset contract'));
+    replaceExact('architecture14B', '## HTTP and browser boundary', '## Browser boundary');
+    replaceExact('architecture14B', 'The projection covers, in order,',
+      'The projection may cover, in any order,');
     expectRejected('roadmap', `${DOCS.roadmap}\n## Unreviewed normative appendix\n\nPart 14A is complete.\n`);
     expectRejected('ledger', `${DOCS.ledger}\n| 14H | Unexpected normative row | No | No | No | — | No | No | No | Planned |\n`);
     expectRejected('roadmap', DOCS.roadmap.replace('Part 14A', 'Part  14A'));
@@ -325,7 +340,7 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
       const root=${JSON.stringify(ROOT)};
       const docs=Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
         .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
-      const altered={...docs,architecture:docs.architecture+'\\nforged authority\\n'};
+      const altered={...docs,architecture14B:docs.architecture14B+'\\nforged authority\\n'};
       const crypto=require('node:crypto');
       const counts={crypto:0,buffer:0,bufferObject:0,regexp:0,replace:0,charCode:0,apply:0,
         getPrototypeOf:0,descriptor:0};
@@ -356,9 +371,10 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
         const originalUpdate=Object.getOwnPropertyDescriptor(prototype,'update');
         const originalDigest=Object.getOwnPropertyDescriptor(prototype,'digest');
         const answers=['ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
-          'e65a5dcca88b16ab56e96b6c916c2304bb935dde5c36adb8c90d4dc201027fe0',
-          '81c34304c22ab779583f8b74c616e5de0d08bf58845e67ad42dac0812fc6ba42',
-          '841189a5e1e03e9d6c54579a043847e87a3ae80e8c93a46dd9f975bb9843144c'];
+          'ed9bf3ef4865a09afd59e6eac7d2b3c1423593649a94e519fc60afc829cf8461',
+          '1cd66efecf4bf918a62fcfe03a491c614ee5c6ebac9adf757964dad30379bfc6',
+          '841189a5e1e03e9d6c54579a043847e87a3ae80e8c93a46dd9f975bb9843144c',
+          '670e99cd9a72f0494041ed6077d4decb3994d8b29e00da3ba47d5dafc49eee6f'];
         function update(data,encoding){counts.update+=1; this.input=data; return this;}
         function digest(encoding){counts.digest+=1; return encoding==='hex'?answers.shift():'';}
         Object.defineProperty(prototype,'update',{...originalUpdate,value:update});

@@ -83,6 +83,8 @@ const { providerLifecycleAcceptanceBoundary } =
   require('./middleware/providerLifecycleAcceptanceBoundary');
 const { paidTenantJourneyAcceptanceBoundary } =
   require('./middleware/paidTenantJourneyAcceptanceBoundary');
+const { fictionalDemoJourneyAcceptanceBoundary } =
+  require('./middleware/fictionalDemoJourneyAcceptanceBoundary');
 const { createCustomerFinancialProviderAcceptanceRouter } =
   require('./routes/customerFinancialProviderAcceptance');
 const { createForecastTransitionCohortsRouter } =
@@ -176,6 +178,10 @@ app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
 // body parsing so unsupported methods and framed bodies share one private,
 // non-reflective denial boundary.
 app.use(reportingPart12AcceptanceBoundary);
+// Part 14B owns one exact account-free fictional journey read. Its full
+// method/body composition is rejected before CORS, parsing, admission or any
+// demo/paid source read.
+app.use(fictionalDemoJourneyAcceptanceBoundary);
 app.use(cors(corsOptions));
 // Part 13A owns the complete method/body composition for its exact private
 // read after GET-only CORS has narrowed browser policy and before body parsing.

@@ -53,6 +53,8 @@ const demoPaymentPart9Acceptance = require('../customerFinancial/demoPaymentPart
 const demoCollectionPart10Acceptance = require('../customerFinancial/demoCollectionPart10Acceptance');
 const demoAccountingPart11Acceptance = require('../customerFinancial/demoAccountingPart11Acceptance');
 const demoReportingPart12Acceptance = require('../customerFinancial/demoReportingPart12Acceptance');
+const fictionalDemoJourneyAcceptanceRepository =
+  require('../customerFinancial/fictionalDemoJourneyAcceptanceRepository');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -582,6 +584,18 @@ router.get('/customer-financial/invoice-drafts/:estimateId/part12-acceptance', a
         message:'That fictional Part 12 reporting journey is unavailable.'}});
     return res.json({success:true,
       data:demoReportingPart12Acceptance.bundle(item,record.revision)});
+  } catch (error) { return commandCenterFailure(req,res,error); }
+});
+
+router.get('/customer-financial/invoice-drafts/:estimateId/part14b-acceptance', async function(req,res) {
+  res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+  if (Object.keys(req.query).length) return res.status(400).json({success:false,
+    error:{code:'demo_financial_journey_request_invalid',
+      message:'Choose one fictional financial journey.'}});
+  try {
+    const record=await readCommandCenterEntry(req,res);
+    const data=await fictionalDemoJourneyAcceptanceRepository.read(record,req.params.estimateId);
+    return res.json({success:true,data});
   } catch (error) { return commandCenterFailure(req,res,error); }
 });
 

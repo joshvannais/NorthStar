@@ -27,6 +27,9 @@ const { CORS_METHODS: PROVIDER_ACCEPTANCE_CORS_METHODS,
 const { CORS_METHODS: PAID_JOURNEY_CORS_METHODS,
   isPaidTenantJourneyAcceptancePath } =
   require('../customerFinancial/paidTenantJourneyAcceptanceHttpBoundary');
+const { CORS_METHODS: FICTIONAL_DEMO_JOURNEY_CORS_METHODS,
+  isFictionalDemoJourneyAcceptancePath } =
+  require('../customerFinancial/fictionalDemoJourneyAcceptanceHttpBoundary');
 
 /**
  * CSP directives for the application.
@@ -104,6 +107,7 @@ function corsOptions(req, callback) {
   const providerRecoveryRead = isProviderLifecycleRecoveryPath(req.path);
   const providerAcceptanceRead = isProviderLifecycleAcceptancePath(req.path);
   const paidJourneyRead = isPaidTenantJourneyAcceptancePath(req.path);
+  const fictionalDemoJourneyRead = isFictionalDemoJourneyAcceptancePath(req.path);
   const exactCustomerFinancialRead = [
     '/api/v1/customer-financial/receivables',
     '/api/v1/customer-financial/receivables/',
@@ -115,7 +119,7 @@ function corsOptions(req, callback) {
     '/api/v1/customer-financial/reporting/invoice-receivables/',
   ].includes(req.path) || paymentCashRead || downstreamReadersRead || part12AcceptanceRead ||
     providerLifecycleRead || providerRetentionRead || providerRecoveryRead ||
-    providerAcceptanceRead || paidJourneyRead ||
+    providerAcceptanceRead || paidJourneyRead || fictionalDemoJourneyRead ||
     /^\/api\/v1\/customer-financial\/editable-estimates\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/accounting-(?:(?:export|reconciliation)-readiness|part11-acceptance)\/?$/i
       .test(req.path);
 
@@ -130,6 +134,7 @@ function corsOptions(req, callback) {
       providerRecoveryRead ? [...PROVIDER_RECOVERY_CORS_METHODS] :
       providerAcceptanceRead ? [...PROVIDER_ACCEPTANCE_CORS_METHODS] :
       paidJourneyRead ? [...PAID_JOURNEY_CORS_METHODS] :
+      fictionalDemoJourneyRead ? [...FICTIONAL_DEMO_JOURNEY_CORS_METHODS] :
       exactCustomerFinancialRead ? ['GET'] :
       ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     preflightContinue: exactCustomerFinancialRead,

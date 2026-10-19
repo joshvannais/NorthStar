@@ -1,0 +1,34 @@
+# Mission 27 Part 14B — resettable fictional demo financial journey
+
+Status: implementation candidate. Independent whole-head acceptance, merge, deployment, provider evidence, live-money evidence, and founder visual approval are not accepted.
+
+## Authority
+
+Part 14B mounts one account-free fictional journey over the released demo Part 12 bundle and the same Parts 5–12 production contracts used by the paid customer-financial surface. It does not create a second invoice, payment, receivable, collection, accounting, or reporting engine. The browser receives the exact released Part 12 bundle together with a strict Part 14B projection.
+
+The projection covers, in order, exact-current approved estimate selection, billable handoff, invoice draft review, fictional issue and delivery, disabled provider session, fictional provider event and settlement evidence, fictional receipt, correction/refund/dispute, receivable and collection projection, accounting handoff, downstream reporting, offline cash received, and offline check received with clearance unknown. Every state is synthetic evidence only. A fictional stage never supplies human, provider, bank, customer, accounting, or production truth.
+
+## Isolation and reset contract
+
+- One opaque demo cookie identifies one PostgreSQL-backed demo session, tenant namespace, seed, generation, revision, and current record set.
+- The Part 14B route is account-free and demo-only. It imports no paid repository and cannot fall through to a paid route.
+- The repository resolves the requested estimate only from that exact current demo session, snapshots the complete session/record/item source before and after one strict released Part 12 projection, and rejects any source drift. Injected dynamic source readers are independently reread before and after projection.
+- Returned identities are digest-bound. Raw tenant, session, provider-account, credential, customer, recipient, or bank identity is not exposed by the Part 14B projection.
+- Reset requires the exact current revision and a scoped idempotency key. A successful reset increments revision and generation, restores the canonical three-graph seed, removes user-created demo mutations, clears the simulation count, and reissues the deterministic baseline only inside the same demo session.
+- Duplicate reset replays the first result. Stale, reordered, cross-session, guessed-record, malformed, or concurrent requests fail closed.
+- Offline cash remains `offline_received`. A received check remains `check_clearance_unknown`; the disabled clearance transition remains `check_clearance_authority_unavailable`.
+- Partial and multi-invoice provider payments remain disabled. Provider mode stays test-only and the tenant live flag remains off.
+
+## HTTP and browser boundary
+
+`GET /api/demo/customer-financial/invoice-drafts/:estimateId/part14b-acceptance` is the only Part 14B read. The exact case-insensitive path with the router-compatible optional trailing slash is GET-only. Unsupported methods are rejected with a fixed private/no-store 405 and `Allow: GET` before CORS, parsing, session lookup, or repository entry. A framed GET body is rejected with a fixed private/no-store 400 before parsing. Query data is rejected before repository entry.
+
+The invoice disclosure validates the complete Part 12 contract first, then the complete ordered Part 14B contract and its Part 12 digest before rendering. Missing, reordered, renamed, leaked, malformed, contradictory, noncurrent, or nonzero-effect fields clear the complete invoice/Parts 5–12/Part 14B DOM and state before recovery. Paid rendering continues to use the paid Part 12 endpoint. Demo reset invalidates the mounted revision and remounts only the new current fictional record.
+
+## Explicit zero-effect boundary
+
+Part 14B performs zero provider calls or mutations, receiver mutations, outbound messages, accounting mutations, downstream mutations, paid-repository reads, production-database mutations, or live-money movements. It creates no issued invoice, customer token, delivery receipt, provider event, settlement, bank clearance, accounting acknowledgement, or external record.
+
+## Acceptance boundary
+
+Focused contract, repository, HTTP, PostgreSQL, and mounted browser evidence may establish the local resettable fictional journey and paid/demo isolation. It cannot establish an immutable production invoice, real recipient delivery, provider sandbox account or callback, bank settlement or check clearance, accounting receiver acceptance, production performance, physical-device evidence, first-paying-customer live-money validation, independent whole-head acceptance, or founder visual approval. Part 14E retains the mission-wide five-layout visual matrix.

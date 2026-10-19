@@ -1254,34 +1254,41 @@ class DemoCommandCenterRepository {
   }
 }
 
-// Build the only Part 14B authority before exposing the ordinary repository
-// class. The public class remains available for the previously released demo
-// operations, but it no longer exposes the Part 14B delivery implementation.
-// The hidden receiver owns fixed copies of every overridable method used by
-// its private read/delivery path and a fixed production pool provider.
+// Part 14B is composed only while this module is a synchronous child of the
+// canonical application root. Direct repository imports expose the ordinary
+// demo repository only. They can never obtain the mounted Part 14B operation.
+// The application root consumes the one-use bootstrap value before any route
+// module is loaded; this module then replaces its cache export with the final
+// public API, which intentionally contains no Part 14B capability.
 const canonicalJourneyImplementation =
   DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney;
 delete DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney;
-const canonicalJourneyClock = Object.freeze(() => new Date());
-canonicalFictionalJourneyRepository = new DemoCommandCenterRepository(
-  productionPoolProvider, { clock: canonicalJourneyClock }
-);
-for (const name of ['pool','token','issue','normalizePersistedRow']) {
-  const descriptor = Object.getOwnPropertyDescriptor(DemoCommandCenterRepository.prototype, name);
-  Object.defineProperty(canonicalFictionalJourneyRepository, name, {
-    value: descriptor.value, enumerable: false, writable: false, configurable: false,
+const canonicalServerPath = require.resolve('../server');
+const canonicalServerParent = module.parent && module.parent === require.cache[canonicalServerPath] &&
+  module.parent.loaded === false;
+let deliverFictionalDemoJourney = null;
+if (canonicalServerParent) {
+  const canonicalJourneyClock = Object.freeze(() => new Date());
+  canonicalFictionalJourneyRepository = new DemoCommandCenterRepository(
+    productionPoolProvider, { clock: canonicalJourneyClock }
+  );
+  for (const name of ['pool','token','issue','normalizePersistedRow']) {
+    const descriptor = Object.getOwnPropertyDescriptor(DemoCommandCenterRepository.prototype, name);
+    Object.defineProperty(canonicalFictionalJourneyRepository, name, {
+      value: descriptor.value, enumerable: false, writable: false, configurable: false,
+    });
+  }
+  Object.defineProperties(canonicalFictionalJourneyRepository, {
+    poolProvider: { value: productionPoolProvider, enumerable: false,
+      writable: false, configurable: false },
+    clock: { value: canonicalJourneyClock, enumerable: false,
+      writable: false, configurable: false },
+  });
+  Object.freeze(canonicalFictionalJourneyRepository);
+  deliverFictionalDemoJourney = Object.freeze(async function deliverMountedJourney(req, res) {
+    return safeApply(canonicalJourneyImplementation, canonicalFictionalJourneyRepository, [req, res]);
   });
 }
-Object.defineProperties(canonicalFictionalJourneyRepository, {
-  poolProvider: { value: productionPoolProvider, enumerable: false,
-    writable: false, configurable: false },
-  clock: { value: canonicalJourneyClock, enumerable: false,
-    writable: false, configurable: false },
-});
-Object.freeze(canonicalFictionalJourneyRepository);
-const deliverFictionalDemoJourney = Object.freeze(async function deliverMountedJourney(req, res) {
-  return safeApply(canonicalJourneyImplementation, canonicalFictionalJourneyRepository, [req, res]);
-});
 
 class DemoCommandCenterHousekeepingWorker {
   constructor(options = {}) {
@@ -1358,7 +1365,6 @@ const demoRepositoryApi = {
   MAX_SOURCE_CREATIONS_PER_MINUTE,
   SIMULATION_COOLDOWN_MS,
   TOKEN_LIFETIME_MS,
-  deliverFictionalDemoJourney,
   issueToken,
   normalizeToken,
   nextWorkspaceSeed,
@@ -1370,6 +1376,27 @@ const demoRepositoryApi = {
 };
 Object.setPrototypeOf(demoRepositoryApi, null);
 Object.freeze(demoRepositoryApi);
-Object.defineProperty(module, 'exports', {
-  value: demoRepositoryApi, enumerable: true, writable: false, configurable: false,
-});
+
+function finalizePublicApi() {
+  Object.defineProperty(module, 'exports', {
+    value: demoRepositoryApi, enumerable: true, writable: false, configurable: false,
+  });
+}
+
+if (canonicalServerParent && deliverFictionalDemoJourney) {
+  let consumed = false;
+  const bootstrap = Object.create(null);
+  Object.defineProperty(bootstrap, 'consumeFictionalDemoJourney', {
+    enumerable: true, writable: false, configurable: false,
+    value: function consumeFictionalDemoJourney() {
+      if (consumed) throw new Error('The fictional demo journey bootstrap was already consumed.');
+      consumed = true;
+      finalizePublicApi();
+      return deliverFictionalDemoJourney;
+    },
+  });
+  Object.freeze(bootstrap);
+  module.exports = bootstrap;
+} else {
+  finalizePublicApi();
+}

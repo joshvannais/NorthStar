@@ -71,6 +71,9 @@ async function createDatabaseFixture(options = {}) {
   process.env.DATABASE_URL = roleUrl(options.singleRoleMigrations ? roles.owner : roles.runtime);
   if (options.singleRoleMigrations) delete process.env.MIGRATION_DATABASE_URL;
   else process.env.MIGRATION_DATABASE_URL = roleUrl(roles.owner);
+  // The canonical server is the Part 14B composition root. It must capture
+  // the genuine database and demo modules before test code obtains them.
+  const server = require('../../src/server');
   const db = require('../../src/db');
   const org = crypto.randomUUID(), otherOrg = crypto.randomUUID();
   const actors = {}, profiles = {};
@@ -246,7 +249,7 @@ async function createDatabaseFixture(options = {}) {
         userId: actor.actorUserId, membershipId: actor.actorUserId, role: actor.actorAccessRole });
       Object.assign(actor, { authSessionId: session.sessionId, csrfToken: session.csrfToken, session });
     }
-    fixture.app = require('../../src/server').app; // no start(), outbox workers or provider transport
+    fixture.app = server.app; // no start(), outbox workers or provider transport
     return fixture;
   } catch (error) { await fixture.cleanup(); throw error; }
 }

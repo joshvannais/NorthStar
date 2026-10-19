@@ -1,3 +1,48 @@
+'use strict';
+
+// Part 14B's database and route authority is composed at the first executable
+// application boundary. No route or repository export carries that authority.
+// If an application module was placed in the CommonJS cache before this root,
+// startup fails before a request, source read or database call can occur.
+const canonicalModule = process.getBuiltinModule('module');
+const canonicalFunctionSource = Function.prototype.toString;
+const canonicalApply = Reflect.apply;
+const loadSource = typeof canonicalModule?._load === 'function' ?
+  canonicalApply(canonicalFunctionSource, canonicalModule._load, []) : '';
+if (!loadSource.startsWith('function(request, parent, isMain')) {
+  throw new Error('The canonical application module loader is unavailable.');
+}
+const part14BProtectedModulePaths = Object.freeze([
+  require.resolve('./db'),
+  require.resolve('./commandCenter/demoRepository'),
+  require.resolve('./routes/demo'),
+  require.resolve('./routes/api'),
+]);
+if (part14BProtectedModulePaths.some(filename =>
+  Object.prototype.hasOwnProperty.call(canonicalModule._cache, filename))) {
+  throw new Error('The fictional demo journey application composition is unavailable.');
+}
+const part14BRepositoryBootstrap = require('./commandCenter/demoRepository');
+const part14BConsumeDescriptor = Object.getOwnPropertyDescriptor(
+  part14BRepositoryBootstrap, 'consumeFictionalDemoJourney'
+);
+if (Object.getPrototypeOf(part14BRepositoryBootstrap) !== null ||
+    !Object.isFrozen(part14BRepositoryBootstrap) ||
+    Reflect.ownKeys(part14BRepositoryBootstrap).length !== 1 ||
+    !part14BConsumeDescriptor || typeof part14BConsumeDescriptor.value !== 'function' ||
+    part14BConsumeDescriptor.writable !== false || part14BConsumeDescriptor.configurable !== false) {
+  throw new Error('The fictional demo journey application bootstrap is unavailable.');
+}
+const deliverFictionalDemoJourney = part14BConsumeDescriptor.value();
+const finalizedDemoRepositoryApi = require.cache[part14BProtectedModulePaths[1]]?.exports;
+if (typeof deliverFictionalDemoJourney !== 'function' ||
+    !finalizedDemoRepositoryApi || Object.getPrototypeOf(finalizedDemoRepositoryApi) !== null ||
+    !Object.isFrozen(finalizedDemoRepositoryApi) ||
+    Object.prototype.hasOwnProperty.call(finalizedDemoRepositoryApi, 'deliverFictionalDemoJourney') ||
+    Object.prototype.hasOwnProperty.call(finalizedDemoRepositoryApi, 'consumeFictionalDemoJourney')) {
+  throw new Error('The fictional demo journey application authority is unavailable.');
+}
+
 /**
  * Northstar Solutions — AI Office Manager Platform
  * 
@@ -513,6 +558,32 @@ app.use('/api/v1/integrations', createIntegrationStatusRouter());
 app.use('/api/v1/support', createSupportRouter());
 app.use('/api/v1/field-executions', createFieldExecutionsRouter());
 app.use('/api/v1', createLegacyAuthorityRetirementRouter());
+
+// The Part 14B handler is registered by the canonical application root from
+// its private startup capture. routes/demo and demoRepository expose no
+// operation, factory, token, pool or callback that can grant this authority.
+app.get('/api/demo/customer-financial/invoice-drafts/:estimateId/part14b-acceptance',
+  async function mountedFictionalDemoJourney(req, res) {
+    res.set('Cache-Control', 'private, no-store');
+    res.vary('Cookie');
+    try {
+      await deliverFictionalDemoJourney(req, res);
+      return undefined;
+    } catch (error) {
+      if (res.headersSent || res.writableEnded || res.destroyed) return undefined;
+      const known = error && Number.isInteger(error.status) && typeof error.code === 'string';
+      const status = known ? error.status : 503;
+      return res.status(status).json({
+        success: false,
+        requestId: req.requestId || req.correlationId || 'unavailable',
+        error: {
+          code: known ? String(error.code).toLowerCase() : 'demo_command_center_unavailable',
+          message: known && status < 500 ? error.message :
+            'The isolated account-free demo is temporarily unavailable.',
+        },
+      });
+    }
+  });
 
 // Canonical /api lead adapters precede the file-era router. The compatibility
 // router authenticates only paths it owns, so public webhooks still fall through.

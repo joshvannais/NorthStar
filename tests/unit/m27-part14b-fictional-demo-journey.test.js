@@ -109,7 +109,7 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
     expect(getterCalls).toBe(0);
   });
 
-  test('exports one immutable production operation and no constructible Part14B authority',async()=>{
+  test('exports no repository operation or constructible Part14B authority',()=>{
     expect(Object.getPrototypeOf(repository)).toBeNull();
     expect(Object.isFrozen(repository)).toBe(true);
     expect(Reflect.ownKeys(repository)).toEqual([]);
@@ -117,10 +117,10 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
       'withCurrentReadAuthority','token','transaction']) expect(repository[alias]).toBeUndefined();
     const modulePath=require.resolve('../../src/commandCenter/demoRepository');
     const api=require(modulePath);
-    const {DemoCommandCenterRepository,deliverFictionalDemoJourney}=api;
+    const {DemoCommandCenterRepository}=api;
     expect(Object.getPrototypeOf(api)).toBeNull();expect(Object.isFrozen(api)).toBe(true);
-    expect(Object.getOwnPropertyDescriptor(api,'deliverFictionalDemoJourney')).toMatchObject({
-      value:deliverFictionalDemoJourney,enumerable:true,writable:false,configurable:false});
+    expect(api.deliverFictionalDemoJourney).toBeUndefined();
+    expect(api.consumeFictionalDemoJourney).toBeUndefined();
     expect(DemoCommandCenterRepository.prototype.withCurrentReadAuthority).toBeUndefined();
     expect(DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney).toBeUndefined();
     let poolReads=0;
@@ -134,7 +134,6 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
     }
     expect(poolReads).toBe(0);
     expect(()=>{api.deliverFictionalDemoJourney=()=>{};}).toThrow();
-    expect(()=>delete api.deliverFictionalDemoJourney).toThrow();
     expect(()=>Object.defineProperty(api,'deliverFictionalDemoJourney',{value:()=>{}})).toThrow();
     expect(()=>Object.setPrototypeOf(api,{})).toThrow();
     const moduleRecord=require.cache[modulePath];
@@ -142,15 +141,6 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
       value:api,writable:false,configurable:false});
     expect(()=>{moduleRecord.exports={};}).toThrow();
     expect(()=>Object.defineProperty(moduleRecord,'exports',{value:{}})).toThrow();
-    const injected=new DemoCommandCenterRepository(()=>{poolReads+=1;return {};});
-    Object.defineProperty(injected,'deliverFictionalDemoJourney',{
-      value:deliverFictionalDemoJourney,writable:true,configurable:true});
-    await expect(injected.deliverFictionalDemoJourney({method:'POST'},{}))
-      .rejects.toMatchObject({status:503,code:'DEMO_COMMAND_CENTER_UNAVAILABLE'});
-    await expect(deliverFictionalDemoJourney.call(injected,{method:'POST'},{}))
-      .rejects.toMatchObject({status:503,code:'DEMO_COMMAND_CENTER_UNAVAILABLE'});
-    await expect(deliverFictionalDemoJourney.bind(injected)({method:'POST'},{}))
-      .rejects.toMatchObject({status:503,code:'DEMO_COMMAND_CENTER_UNAVAILABLE'});
     expect(poolReads).toBe(0);
   });
 

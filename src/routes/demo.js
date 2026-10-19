@@ -27,17 +27,6 @@ const {
   DemoCommandCenterError,
   DemoCommandCenterRepository,
 } = demoRepositoryApi;
-const fictionalJourneyDeliveryDescriptor = Object.getOwnPropertyDescriptor(
-  demoRepositoryApi, 'deliverFictionalDemoJourney'
-);
-if (Object.getPrototypeOf(demoRepositoryApi) !== null || !Object.isFrozen(demoRepositoryApi) ||
-    !fictionalJourneyDeliveryDescriptor ||
-    typeof fictionalJourneyDeliveryDescriptor.value !== 'function' ||
-    fictionalJourneyDeliveryDescriptor.writable !== false ||
-    fictionalJourneyDeliveryDescriptor.configurable !== false) {
-  throw new Error('The fictional demo journey route authority is unavailable.');
-}
-const deliverFictionalDemoJourney = fictionalJourneyDeliveryDescriptor.value;
 const {
   buildDemoWorkspace,
   demoCanonicalItems,
@@ -595,20 +584,6 @@ router.get('/customer-financial/invoice-drafts/:estimateId/part12-acceptance', a
     return res.json({success:true,
       data:demoReportingPart12Acceptance.bundle(item,record.revision)});
   } catch (error) { return commandCenterFailure(req,res,error); }
-});
-
-router.get('/customer-financial/invoice-drafts/:estimateId/part14b-acceptance', async function(req,res) {
-  res.set('Cache-Control','private, no-store'); res.vary('Cookie');
-  try {
-    await deliverFictionalDemoJourney(req,res);
-    return undefined;
-  } catch (error) {
-    // A client can disconnect after headers/body have started but before the
-    // supported completion event. The repository has already rolled back and
-    // released its transaction in that case; never attempt a second response.
-    if (res.headersSent || res.writableEnded || res.destroyed) return undefined;
-    return commandCenterFailure(req,res,error);
-  }
 });
 
 router.post('/customer-financial/billing-identities/:customerId/actions',

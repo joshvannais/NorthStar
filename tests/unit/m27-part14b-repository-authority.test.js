@@ -3,73 +3,135 @@
 const childProcess=require('node:child_process');
 const path=require('node:path');
 
-describe('Mission 27 Part 14B canonical repository authority',()=>{
-  test('fresh construction, subclassing, rebinding and export mutation cannot grant Part14B DB authority',()=>{
-    const repositoryPath=path.resolve(__dirname,'../../src/commandCenter/demoRepository.js');
-    const routePath=path.resolve(__dirname,'../../src/routes/demo.js');
+const ROOT=path.resolve(__dirname,'../..');
+const paths={
+  server:path.join(ROOT,'src/server.js'),
+  db:path.join(ROOT,'src/db.js'),
+  repository:path.join(ROOT,'src/commandCenter/demoRepository.js'),
+  route:path.join(ROOT,'src/routes/demo.js'),
+  api:path.join(ROOT,'src/routes/api.js'),
+};
+
+function fresh(script,args=[]){
+  return JSON.parse(childProcess.execFileSync(process.execPath,['-e',script,...args],{
+    cwd:ROOT,encoding:'utf8',env:{...process.env,NODE_ENV:'test'},timeout:120000,
+  }));
+}
+
+describe('Mission 27 Part 14B canonical application authority',()=>{
+  test.each([
+    ['db',['db']],['repository',['repository']],['route',['route']],['api',['api']],
+    ['db+repository+route+api',['db','repository','route','api']],
+  ])('pre-import %s cache substitution fails before authority or effects',(_name,targets)=>{
     const script=String.raw`
 'use strict';
-const repositoryPath=process.argv[1],routePath=process.argv[2];
-const api=require(repositoryPath);
-const Repository=api.DemoCommandCenterRepository;
-let injectedProviderCalls=0,injectedPoolCalls=0;
-const injectedProvider=()=>{injectedProviderCalls+=1;return {query(){injectedPoolCalls+=1;},connect(){injectedPoolCalls+=1;}};};
-class Subclass extends Repository { pool(){injectedPoolCalls+=1;return injectedProvider();} }
-class ReturningSubclass extends Repository { constructor(){super(injectedProvider);return Object.create(Repository.prototype);} }
-const values=[new Repository(),new Repository(injectedProvider),new Subclass(),
-  new ReturningSubclass(),Object.create(Repository.prototype),
-  new Proxy(new Repository(injectedProvider),{})];
-const noConstructedOperation=values.every(value=>value.deliverFictionalDemoJourney===undefined);
-const prototypeOperation=Repository.prototype.deliverFictionalDemoJourney;
-const descriptor=Object.getOwnPropertyDescriptor(api,'deliverFictionalDemoJourney');
-const entry=require.cache[repositoryPath];
-const exportDescriptor=Object.getOwnPropertyDescriptor(entry,'exports');
-const mutationResults=[];
-for(const mutate of [
-  ()=>{api.deliverFictionalDemoJourney=()=>{};},
-  ()=>{delete api.deliverFictionalDemoJourney;},
-  ()=>Object.defineProperty(api,'deliverFictionalDemoJourney',{value:()=>{}}),
-  ()=>Object.assign(api,{deliverFictionalDemoJourney:()=>{}}),
-  ()=>Object.setPrototypeOf(api,{}),
-  ()=>{entry.exports={};},
-  ()=>Object.defineProperty(entry,'exports',{value:{}}),
-]) { try{mutate();mutationResults.push('changed');}catch(_){mutationResults.push('rejected');} }
-const router=require(routePath);
-const routeCapturedOriginal=api.deliverFictionalDemoJourney===descriptor.value;
-let forgedRouteCalls=0;
-require.cache[repositoryPath]={id:repositoryPath,filename:repositoryPath,loaded:true,
-  exports:Object.freeze(Object.assign(Object.create(null),{
-    deliverFictionalDemoJourney(){forgedRouteCalls+=1;throw new Error('forged route authority');}
-  })),children:[],paths:[]};
-const routeLayer=router.stack.find(layer=>layer.route?.path===
-  '/customer-financial/invoice-drafts/:estimateId/part14b-acceptance');
-const mountedHandler=routeLayer.route.stack[0].handle;
-let mountedStatus=null;
-const mountedResponse={headersSent:false,writableEnded:false,destroyed:false,
-  set(){return this;},vary(){return this;},status(value){mountedStatus=value;return this;},json(){return this;}};
-const request={method:'POST'};
-Promise.all([
-  api.deliverFictionalDemoJourney.call(values[1],request,{}).then(()=>false,error=>error?.status===503),
-  api.deliverFictionalDemoJourney.bind(values[2])(request,{}).then(()=>false,error=>error?.status===503),
-  mountedHandler(request,mountedResponse).then(()=>mountedStatus===503),
-]).then(aliasRejected=>{
-  process.stdout.write(JSON.stringify({noConstructedOperation,prototypeOperationType:typeof prototypeOperation,
-    apiNull:Object.getPrototypeOf(api)===null,apiFrozen:Object.isFrozen(api),
-    descriptor:{writable:descriptor.writable,configurable:descriptor.configurable,
-      enumerable:descriptor.enumerable,type:typeof descriptor.value},
-    exportDescriptor:{writable:exportDescriptor.writable,configurable:exportDescriptor.configurable},
-    mutationResults,routeCapturedOriginal,aliasRejected,forgedRouteCalls,
-    injectedProviderCalls,injectedPoolCalls}));
-},error=>{process.stderr.write(String(error?.stack||error));process.exit(1);});
-`;
-    const result=JSON.parse(childProcess.execFileSync(process.execPath,
-      ['-e',script,repositoryPath,routePath],{cwd:path.resolve(__dirname,'../..'),encoding:'utf8'}));
-    expect(result).toEqual({
-      noConstructedOperation:true,prototypeOperationType:'undefined',apiNull:true,apiFrozen:true,
-      descriptor:{writable:false,configurable:false,enumerable:true,type:'function'},
-      exportDescriptor:{writable:false,configurable:false},
-      mutationResults:Array(7).fill('rejected'),routeCapturedOriginal:true,
-      aliasRejected:[true,true,true],forgedRouteCalls:0,injectedProviderCalls:0,injectedPoolCalls:0,
-    });
+const values=JSON.parse(process.argv[1]),targets=JSON.parse(process.argv[2]);
+let forgedOperation=0,injectedPoolProvider=0,injectedPoolQuery=0,sourceReads=0,upstream=0;
+const forged={
+ db:{getPool(){injectedPoolProvider+=1;return {query(){injectedPoolQuery+=1;},connect(){injectedPoolQuery+=1;}};}},
+ repository:Object.freeze(Object.assign(Object.create(null),{
+   deliverFictionalDemoJourney(){forgedOperation+=1;},
+   DemoCommandCenterRepository:class ForgedRepository{constructor(){sourceReads+=1;}},
+   DemoCommandCenterHousekeepingWorker:class ForgedWorker{constructor(){upstream+=1;}},
+ })),
+ route:Object.freeze({stack:[]}),api:Object.freeze({stack:[]}),
+};
+for(const target of targets)require.cache[values[target]]={id:values[target],filename:values[target],
+ loaded:true,exports:forged[target],children:[],paths:[]};
+let loaded=false,error=null;
+try{require(values.server);loaded=true;}catch(value){error=value&&value.message;}
+process.stdout.write(JSON.stringify({loaded,error,forgedOperation,injectedPoolProvider,
+ injectedPoolQuery,sourceReads,upstream}));`;
+    const result=fresh(script,[JSON.stringify(paths),JSON.stringify(targets)]);
+    expect(result).toEqual({loaded:false,
+      error:'The fictional demo journey application composition is unavailable.',
+      forgedOperation:0,injectedPoolProvider:0,injectedPoolQuery:0,sourceReads:0,upstream:0});
+  });
+
+  test('a pre-import Module._load wrapper is rejected before application imports',()=>{
+    const script=String.raw`
+'use strict';
+const server=process.argv[1],Module=require('node:module'),real=Module._load;
+let forgedLoads=0;
+Module._load=function forgedLoad(request,parent,isMain,options){forgedLoads+=1;
+ return real.call(this,request,parent,isMain,options);};
+let loaded=false,error=null;
+try{require(server);loaded=true;}catch(value){error=value&&value.message;}
+process.stdout.write(JSON.stringify({loaded,error,forgedLoads}));`;
+    const result=fresh(script,[paths.server]);
+    expect(result.loaded).toBe(false);
+    expect(result.error).toBe('The canonical application module loader is unavailable.');
+    expect(result.forgedLoads).toBe(1);
+  });
+
+  test('direct repository and route imports expose no Part14B operation',()=>{
+    const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),repo=require(values.repository),route=require(values.route);
+const routePaths=route.stack.filter(layer=>layer.route).map(layer=>layer.route.path);
+const Repository=repo.DemoCommandCenterRepository;let injected=0;
+class Derived extends Repository{pool(){injected+=1;return {query(){injected+=1;}};}}
+const instances=[new Repository(),new Repository(()=>{injected+=1;return {};}),new Derived(),
+ Object.create(Repository.prototype),new Proxy(new Repository(()=>{injected+=1;return {};}),{})];
+process.stdout.write(JSON.stringify({repoNull:Object.getPrototypeOf(repo)===null,
+ repoFrozen:Object.isFrozen(repo),repoKeys:Reflect.ownKeys(repo).filter(key=>String(key).includes('Fictional')),
+ hasDelivery:Object.prototype.hasOwnProperty.call(repo,'deliverFictionalDemoJourney'),
+ hasBootstrap:Object.prototype.hasOwnProperty.call(repo,'consumeFictionalDemoJourney'),
+ prototypeDelivery:typeof Repository.prototype.deliverFictionalDemoJourney,
+ instanceDelivery:instances.map(value=>typeof value.deliverFictionalDemoJourney),
+ routeHasPart14B:routePaths.includes('/customer-financial/invoice-drafts/:estimateId/part14b-acceptance'),injected}));`;
+    const result=fresh(script,[JSON.stringify(paths)]);
+    expect(result).toEqual({repoNull:true,repoFrozen:true,repoKeys:[],hasDelivery:false,
+      hasBootstrap:false,prototypeDelivery:'undefined',instanceDelivery:Array(5).fill('undefined'),
+      routeHasPart14B:false,injected:0});
+  });
+
+  test('the two exact auditor pre-import exploits cannot reach a Part14B capability',()=>{
+    const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]);let provider=0,query=0,forgedOperation=0;
+require.cache[values.db]={id:values.db,filename:values.db,loaded:true,exports:{
+ getPool(){provider+=1;return {query(){query+=1;},connect(){query+=1;}};}
+},children:[],paths:[]};
+const api=require(values.repository);
+const directType=typeof api.deliverFictionalDemoJourney;
+const forged=Object.create(null);
+for(const key of Reflect.ownKeys(api))Object.defineProperty(forged,key,
+ Object.getOwnPropertyDescriptor(api,key));
+Object.defineProperty(forged,'deliverFictionalDemoJourney',{enumerable:true,writable:false,
+ configurable:false,value(){forgedOperation+=1;}});Object.freeze(forged);
+require.cache[values.repository]={id:values.repository,filename:values.repository,loaded:true,
+ exports:forged,children:[],paths:[]};delete require.cache[values.route];
+const router=require(values.route),routeCount=router.stack.filter(layer=>layer.route&&layer.route.path===
+ '/customer-financial/invoice-drafts/:estimateId/part14b-acceptance').length;
+process.stdout.write(JSON.stringify({directType,provider,query,forgedOperation,routeCount}));`;
+    expect(fresh(script,[JSON.stringify(paths)])).toEqual({directType:'undefined',provider:0,query:0,
+      forgedOperation:0,routeCount:0});
+  });
+
+  test('clean canonical startup mounts one private handler and later cache replacement cannot redirect it',()=>{
+    const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),server=require(values.server),repo=require(values.repository);
+const routes=server.app._router.stack.filter(layer=>layer.route&&layer.route.path===
+ '/api/demo/customer-financial/invoice-drafts/:estimateId/part14b-acceptance');
+const handler=routes[0].route.stack[0].handle;let forgedOperation=0,status=null,body=null;
+require.cache[values.repository]={id:values.repository,filename:values.repository,loaded:true,
+ exports:Object.freeze(Object.assign(Object.create(null),{
+  deliverFictionalDemoJourney(){forgedOperation+=1;}
+ })),children:[],paths:[]};
+const req={method:'POST',params:{estimateId:'11111111-1111-4111-8111-111111111111'},headers:{},
+ requestId:'test'};
+const res={headersSent:false,writableEnded:false,destroyed:false,set(){return this;},vary(){return this;},
+ status(value){status=value;return this;},json(value){body=value;return this;}};
+handler(req,res).then(()=>process.stdout.write(JSON.stringify({routeCount:routes.length,
+ repoNull:Object.getPrototypeOf(repo)===null,repoFrozen:Object.isFrozen(repo),
+ exportedOperation:typeof repo.deliverFictionalDemoJourney,
+ exportedBootstrap:typeof repo.consumeFictionalDemoJourney,forgedOperation,status,body})),
+ error=>{console.error(error&&error.stack||error);process.exit(1);});`;
+    const result=fresh(script,[JSON.stringify(paths)]);
+    expect(result).toMatchObject({routeCount:1,repoNull:true,repoFrozen:true,
+      exportedOperation:'undefined',exportedBootstrap:'undefined',forgedOperation:0,status:503,
+      body:{success:false,error:{code:'demo_command_center_unavailable'}}});
   });
 });

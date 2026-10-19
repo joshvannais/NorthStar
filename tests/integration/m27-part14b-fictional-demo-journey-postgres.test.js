@@ -8,8 +8,8 @@ const request=require('supertest');
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
 const contract=require('../../src/customerFinancial/fictionalDemoJourneyAcceptance');
 const detachedRepository=require('../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
-const {DemoCommandCenterRepository}=require('../../src/commandCenter/demoRepository');
 const {DEFAULT_SELECTION}=require('../../src/commandCenter/scenarioSpace');
+let DemoCommandCenterRepository;
 
 const realPostgres=process.env.M19_PG_ADMIN_URL?describe:describe.skip;
 const HOST='northstar.test'; const ORIGIN='http://northstar.test';
@@ -45,6 +45,7 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       exports:new Proxy({}, {get(){forgedDetachedCalls+=1;return ()=>{forgedDetachedCalls+=1;};}}),
       children:[],paths:[]};
     try { fixture=await createDatabaseFixture();
+      ({DemoCommandCenterRepository}=require('../../src/commandCenter/demoRepository'));
       journeyDbEntrySpy=jest.spyOn(fixture.db.getPool(),'connect'); }
     finally { require.cache[compatibilityPath]=realCompatibilityEntry; }
   },180000);

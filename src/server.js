@@ -7,47 +7,64 @@
 // cache view and must never participate in this decision.
 const part14BRequireCache = require.cache;
 const part14BModuleConstructor = module.constructor;
-const part14BCacheDescriptor = part14BModuleConstructor &&
-  Object.getOwnPropertyDescriptor(part14BModuleConstructor, '_cache');
-const part14BLoadDescriptor = part14BModuleConstructor &&
-  Object.getOwnPropertyDescriptor(part14BModuleConstructor, '_load');
-const part14BLoadSource = part14BLoadDescriptor && typeof part14BLoadDescriptor.value === 'function' ?
-  Function.prototype.toString.call(part14BLoadDescriptor.value) : '';
-if (!part14BRequireCache || part14BRequireCache[__filename] !== module ||
-    !part14BCacheDescriptor || part14BCacheDescriptor.get || part14BCacheDescriptor.set ||
-    part14BCacheDescriptor.value !== part14BRequireCache ||
-    !part14BLoadDescriptor || part14BLoadDescriptor.get || part14BLoadDescriptor.set ||
-    !part14BLoadSource.startsWith('function(request, parent, isMain')) {
-  throw new Error('The fictional demo journey application composition is unavailable.');
-}
-const part14BProtectedModulePaths = Object.freeze([
-  require.resolve('./db'),
-  require.resolve('./commandCenter/demoRepository'),
-  require.resolve('./routes/demo'),
-  require.resolve('./routes/api'),
-]);
-if (part14BProtectedModulePaths.some(filename =>
-  Object.prototype.hasOwnProperty.call(part14BRequireCache, filename))) {
+const part14BModuleLoader = part14BModuleConstructor && part14BModuleConstructor._load;
+const part14BDatabasePath = require.resolve('./db');
+const part14BRepositoryPath = require.resolve('./commandCenter/demoRepository');
+const part14BDemoRoutePath = require.resolve('./routes/demo');
+const part14BApiRoutePath = require.resolve('./routes/api');
+// These checks intentionally use only language operators and the local
+// CommonJS closure. In particular, `in` detects data, accessor,
+// non-enumerable and inherited entries without reading an entry value and
+// cannot be redirected by replacing Object/Reflect/Function/Array helpers.
+if (!part14BRequireCache || !(__filename in part14BRequireCache) ||
+    !part14BModuleConstructor || part14BModuleConstructor._cache !== part14BRequireCache ||
+    typeof part14BModuleLoader !== 'function' || part14BModuleLoader.name !== '' ||
+    part14BModuleLoader.length !== 3 ||
+    part14BDatabasePath in part14BRequireCache ||
+    part14BRepositoryPath in part14BRequireCache ||
+    part14BDemoRoutePath in part14BRequireCache ||
+    part14BApiRoutePath in part14BRequireCache) {
   throw new Error('The fictional demo journey application composition is unavailable.');
 }
 const part14BRepositoryBootstrap = require('./commandCenter/demoRepository');
-const part14BConsumeDescriptor = Object.getOwnPropertyDescriptor(
-  part14BRepositoryBootstrap, 'consumeFictionalDemoJourney'
-);
-if (Object.getPrototypeOf(part14BRepositoryBootstrap) !== null ||
-    !Object.isFrozen(part14BRepositoryBootstrap) ||
-    Reflect.ownKeys(part14BRepositoryBootstrap).length !== 1 ||
-    !part14BConsumeDescriptor || typeof part14BConsumeDescriptor.value !== 'function' ||
-    part14BConsumeDescriptor.writable !== false || part14BConsumeDescriptor.configurable !== false) {
+if (!part14BRepositoryBootstrap ||
+    typeof part14BRepositoryBootstrap.consumeFictionalDemoJourney !== 'function') {
   throw new Error('The fictional demo journey application bootstrap is unavailable.');
 }
-const deliverFictionalDemoJourney = part14BConsumeDescriptor.value();
-const finalizedDemoRepositoryApi = require.cache[part14BProtectedModulePaths[1]]?.exports;
+const consumeFictionalDemoJourney =
+  part14BRepositoryBootstrap.consumeFictionalDemoJourney;
+let part14BBootstrapExtensionBlocked = false;
+let part14BBootstrapReplacementBlocked = false;
+try { part14BRepositoryBootstrap.part14BMutationProbe = true; } catch {
+  part14BBootstrapExtensionBlocked = true;
+}
+try { part14BRepositoryBootstrap.consumeFictionalDemoJourney = null; } catch {
+  part14BBootstrapReplacementBlocked = true;
+}
+if (!part14BBootstrapExtensionBlocked || !part14BBootstrapReplacementBlocked ||
+    'part14BMutationProbe' in part14BRepositoryBootstrap ||
+    part14BRepositoryBootstrap.consumeFictionalDemoJourney !== consumeFictionalDemoJourney) {
+  throw new Error('The fictional demo journey application bootstrap is unavailable.');
+}
+const deliverFictionalDemoJourney = consumeFictionalDemoJourney();
+const finalizedDemoRepositoryModule = part14BRequireCache[part14BRepositoryPath];
+const finalizedDemoRepositoryApi = finalizedDemoRepositoryModule &&
+  finalizedDemoRepositoryModule.exports;
+let part14BApiExtensionBlocked = false;
+let part14BExportsReplacementBlocked = false;
+try { finalizedDemoRepositoryApi.part14BMutationProbe = true; } catch {
+  part14BApiExtensionBlocked = true;
+}
+try { finalizedDemoRepositoryModule.exports = part14BRepositoryBootstrap; } catch {
+  part14BExportsReplacementBlocked = true;
+}
 if (typeof deliverFictionalDemoJourney !== 'function' ||
-    !finalizedDemoRepositoryApi || Object.getPrototypeOf(finalizedDemoRepositoryApi) !== null ||
-    !Object.isFrozen(finalizedDemoRepositoryApi) ||
-    Object.prototype.hasOwnProperty.call(finalizedDemoRepositoryApi, 'deliverFictionalDemoJourney') ||
-    Object.prototype.hasOwnProperty.call(finalizedDemoRepositoryApi, 'consumeFictionalDemoJourney')) {
+    !finalizedDemoRepositoryApi ||
+    !part14BApiExtensionBlocked || !part14BExportsReplacementBlocked ||
+    'part14BMutationProbe' in finalizedDemoRepositoryApi ||
+    finalizedDemoRepositoryModule.exports !== finalizedDemoRepositoryApi ||
+    'deliverFictionalDemoJourney' in finalizedDemoRepositoryApi ||
+    'consumeFictionalDemoJourney' in finalizedDemoRepositoryApi) {
   throw new Error('The fictional demo journey application authority is unavailable.');
 }
 

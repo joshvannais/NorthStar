@@ -49,6 +49,113 @@ process.stdout.write(JSON.stringify({loaded,error,forgedOperation,injectedPoolPr
       forgedOperation:0,injectedPoolProvider:0,injectedPoolQuery:0,sourceReads:0,upstream:0});
   });
 
+  test('the exact ambient hasOwnProperty cache-hiding exploit fails without invoking the hook',()=>{
+    const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),realDb=require(values.db);
+let injectedPoolProvider=0,injectedPoolQuery=0,hiddenCacheChecks=0,handlerCalls=0;
+require.cache[values.db]={id:values.db,filename:values.db,loaded:true,exports:{...realDb,
+ getPool(){injectedPoolProvider+=1;return {query(){injectedPoolQuery+=1;},
+  connect(){injectedPoolQuery+=1;}};}},children:[],paths:[]};
+const protectedPaths=new Set([values.db,values.repository,values.route,values.api]);
+const original=Object.prototype.hasOwnProperty;
+Object.prototype.hasOwnProperty=function(key){
+ if(this===require.cache&&protectedPaths.has(key)){hiddenCacheChecks+=1;
+   if(hiddenCacheChecks===4)Object.prototype.hasOwnProperty=original;return false;}
+ return Reflect.apply(original,this,[key]);
+};
+let loaded=false,error=null;
+try{require(values.server);loaded=true;}catch(value){error=value&&value.message;}
+process.stdout.write(JSON.stringify({loaded,error,hiddenCacheChecks,handlerCalls,
+ injectedPoolProvider,injectedPoolQuery}));`;
+    expect(fresh(script,[JSON.stringify(paths)])).toEqual({loaded:false,
+      error:'The fictional demo journey application composition is unavailable.',
+      hiddenCacheChecks:0,handlerCalls:0,injectedPoolProvider:0,injectedPoolQuery:0});
+  });
+
+  test.each([
+    'Object.hasOwn','Object.getOwnPropertyDescriptor','Object.getPrototypeOf','Object.keys',
+    'Object.entries','Reflect.ownKeys','Reflect.getOwnPropertyDescriptor','Reflect.get',
+    'Reflect.has','Function.call','Function.apply','Function.bind','Array.some','Array.includes',
+    'Array.iterator','process.getBuiltinModule',
+  ])('ambient helper replacement %s cannot influence the protected-cache decision',variant=>{
+    const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),variant=process.argv[2],Module=require('node:module');
+const realDb=require(values.db),cache=require.cache;let hooks=0,provider=0,query=0;
+cache[values.db]={id:values.db,filename:values.db,loaded:true,exports:{...realDb,
+ getPool(){provider+=1;return {query(){query+=1;},connect(){query+=1;}};}},children:[],paths:[]};
+const relevant=(target,key)=>target===cache||target===Module||key===values.db||
+ key===values.repository||key===values.route||key===values.api;
+if(variant==='Object.hasOwn'){const real=Object.hasOwn;Object.hasOwn=function(target,key){
+ if(relevant(target,key))hooks+=1;return false;};}
+else if(variant==='Object.getOwnPropertyDescriptor'){const real=Object.getOwnPropertyDescriptor;
+ Object.getOwnPropertyDescriptor=function(target,key){if(relevant(target,key))hooks+=1;
+  return real(target,key);};}
+else if(variant==='Object.getPrototypeOf'){const real=Object.getPrototypeOf;
+ Object.getPrototypeOf=function(target){if(relevant(target))hooks+=1;return real(target);};}
+else if(variant==='Object.keys'){const real=Object.keys;Object.keys=function(target){
+ if(relevant(target))hooks+=1;return real(target);};}
+else if(variant==='Object.entries'){const real=Object.entries;Object.entries=function(target){
+ if(relevant(target))hooks+=1;return real(target);};}
+else if(variant==='Reflect.ownKeys'){const real=Reflect.ownKeys;Reflect.ownKeys=function(target){
+ if(relevant(target))hooks+=1;return real(target);};}
+else if(variant==='Reflect.getOwnPropertyDescriptor'){const real=Reflect.getOwnPropertyDescriptor;
+ Reflect.getOwnPropertyDescriptor=function(target,key){if(relevant(target,key))hooks+=1;
+  return real(target,key);};}
+else if(variant==='Reflect.get'){const real=Reflect.get;Reflect.get=function(target,key,receiver){
+ if(relevant(target,key))hooks+=1;return real(target,key,receiver);};}
+else if(variant==='Reflect.has'){const real=Reflect.has;Reflect.has=function(target,key){
+ if(relevant(target,key))hooks+=1;return false;};}
+else if(variant==='Function.call'){const real=Function.prototype.call,hasOwn=Object.prototype.hasOwnProperty;
+ Function.prototype.call=function(...args){if(this===hasOwn&&args[0]===cache)hooks+=1;
+  return Reflect.apply(real,this,args);};}
+else if(variant==='Function.apply'){const real=Function.prototype.apply,hasOwn=Object.prototype.hasOwnProperty;
+ Function.prototype.apply=function(thisArg,args){if(this===hasOwn&&thisArg===cache)hooks+=1;
+  return Reflect.apply(real,this,[thisArg,args]);};}
+else if(variant==='Function.bind'){const real=Function.prototype.bind,hasOwn=Object.prototype.hasOwnProperty;
+ Function.prototype.bind=function(...args){if(this===hasOwn&&args[0]===cache)hooks+=1;
+  return Reflect.apply(real,this,args);};}
+else if(variant==='Array.some'){Array.prototype.some=function(){hooks+=1;throw new Error('ARRAY_SOME');};}
+else if(variant==='Array.includes'){Array.prototype.includes=function(){hooks+=1;throw new Error('ARRAY_INCLUDES');};}
+else if(variant==='Array.iterator'){Array.prototype[Symbol.iterator]=function(){hooks+=1;
+ throw new Error('ARRAY_ITERATOR');};}
+else if(variant==='process.getBuiltinModule'){process.getBuiltinModule=new Proxy(function(){hooks+=1;},
+ {apply(){hooks+=1;throw new Error('PROCESS_HELPER');},get(){hooks+=1;throw new Error('PROCESS_HELPER');}});}
+let loaded=false,error=null;
+try{require(values.server);loaded=true;}catch(value){error=value&&value.message;}
+process.stdout.write(JSON.stringify({loaded,error,hooks,provider,query}));`;
+    expect(fresh(script,[JSON.stringify(paths),variant])).toEqual({loaded:false,
+      error:'The fictional demo journey application composition is unavailable.',hooks:0,
+      provider:0,query:0});
+  });
+
+  test.each(['non-enumerable','accessor','inherited','inherited-accessor'])(
+    '%s protected cache entries fail closed without invoking entry accessors',variant=>{
+      const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),variant=process.argv[2],cache=require.cache;
+let getterCalls=0;
+const entry={id:values.db,filename:values.db,loaded:true,exports:{getPool(){throw new Error('FORGED');}},
+ children:[],paths:[]};
+if(variant==='non-enumerable')Object.defineProperty(cache,values.db,{configurable:true,
+ enumerable:false,writable:true,value:entry});
+else if(variant==='accessor')Object.defineProperty(cache,values.db,{configurable:true,
+ enumerable:false,get(){getterCalls+=1;return entry;}});
+else {const inherited=Object.create(null);
+ if(variant==='inherited')Object.defineProperty(inherited,values.db,{configurable:true,
+  enumerable:true,writable:true,value:entry});
+ else Object.defineProperty(inherited,values.db,{configurable:true,enumerable:false,
+  get(){getterCalls+=1;return entry;}});
+ Object.setPrototypeOf(cache,inherited);}
+let loaded=false,error=null;
+try{require(values.server);loaded=true;}catch(value){error=value&&value.message;}
+process.stdout.write(JSON.stringify({loaded,error,getterCalls}));`;
+      expect(fresh(script,[JSON.stringify(paths),variant])).toEqual({loaded:false,
+        error:'The fictional demo journey application composition is unavailable.',getterCalls:0});
+    }
+  );
+
   test('a pre-import Module._load wrapper is rejected before application imports',()=>{
     const script=String.raw`
 'use strict';

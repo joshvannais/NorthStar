@@ -11,6 +11,28 @@ for(const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','POLA
   'SMTP_HOST','SMTP_USER','SMTP_PASS']) delete process.env[key];
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
 const {resolveBrowserRuntime}=require('../helpers/playwright-runtime');
+const journeyRepository=require('../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
+const realJourneyRead=journeyRepository.read;
+const realJourneySerialize=journeyRepository.serializeResponse;
+let journeyFault=null,serializationBarrier=null,activeSerializationRelease=null;
+journeyRepository.read=async function(){
+  const value=await realJourneyRead.apply(this,arguments);
+  if(!journeyFault)return value;
+  journeyFault=null;const changed=JSON.parse(JSON.stringify(value));
+  changed.journeyAcceptance.sourceWitness.credential='sk_poison';
+  changed.journeyAcceptance.journeyBinding.providerAccountId='acct_poison';
+  changed.journeyAcceptance.lifecycle.stages[0].recipientEmail='victim@example.com';
+  changed.journeyAcceptance.reset.customerId='paid-customer';
+  return changed;
+};
+journeyRepository.serializeResponse=async function(data){
+  const serialized=await realJourneySerialize(data);
+  if(serializationBarrier){const barrier=serializationBarrier;serializationBarrier=null;
+    activeSerializationRelease=barrier.releaseResolve;
+    barrier.enteredResolve();
+    try {await barrier.release;} finally {activeSerializationRelease=null;}}
+  return serialized;
+};
 function arg(name){const value=process.argv.find(item=>item.startsWith(`--${name}=`));
   assert.ok(value,`Missing --${name}`);return value.slice(name.length+3);}
 const engine=arg('browser'),output=path.resolve(arg('output')),layoutName=arg('layout');
@@ -82,17 +104,37 @@ try{
   await page.goto(origin+'/demo',{waitUntil:'networkidle'});let current=await workspace(page);const old=current.graphs[0];
   let root=await openInvoice(page,old.ids.customer);await audit(page,root);
   await root.screenshot({path:path.join(output,`${engine}-${layoutName}-journey.png`)});
+  const storageBefore=await page.evaluate(()=>JSON.stringify({...localStorage}));
+  journeyFault='combined';
+  await root.getByRole('button',{name:'Reload current preview',exact:true}).click({timeout:600000});
+  await root.locator('[role=alert]').waitFor({timeout:600000});
+  for(const selector of ['table','.invoice-draft-preview-document','.invoice-part5-acceptance',
+    '.invoice-part6-acceptance','.invoice-part7-acceptance','.invoice-part9-acceptance',
+    '.invoice-part10-acceptance','.invoice-part11-acceptance','.invoice-part12-acceptance',
+    '.invoice-part14b-acceptance']) assert.equal(await root.locator(selector).count(),0);
+  assert.doesNotMatch(await root.innerText(),/sk_poison|acct_poison|victim@example|paid-customer/);
+  assert.equal(await page.evaluate(()=>JSON.stringify({...localStorage})),storageBefore);
+  ledger.poisonRejectedAndCleared=true;
   const summary=root.locator(':scope > summary');await summary.focus();await page.keyboard.press('Enter');
   await root.locator('.invoice-part14b-acceptance').waitFor({state:'detached',timeout:10000});
   for(const selector of ['table','.invoice-part5-acceptance','.invoice-part6-acceptance','.invoice-part7-acceptance',
     '.invoice-part9-acceptance','.invoice-part10-acceptance','.invoice-part11-acceptance','.invoice-part12-acceptance'])
     assert.equal(await root.locator(selector).count(),0);
   await summary.focus();await page.keyboard.press('Enter');await root.getByText('Complete fictional financial journey',{exact:true}).waitFor({timeout:600000});
+  let enteredResolve,releaseResolve;const entered=new Promise(resolve=>{enteredResolve=resolve;});
+  const release=new Promise(resolve=>{releaseResolve=resolve;});
+  serializationBarrier={enteredResolve,release,releaseResolve};
+  const reloadClick=root.getByRole('button',{name:'Reload current preview',exact:true})
+    .click({timeout:600000});
+  await Promise.race([entered,new Promise((_,reject)=>setTimeout(
+    ()=>reject(new Error('Mounted serialization barrier not reached')),600000))]);
   await page.locator('#cdCustomerDrawer').getByRole('button',{name:'Close customer details',exact:true}).click();
   await page.locator('#demoReset').click();
   const resetResponse=page.waitForResponse(r=>r.url().endsWith('/api/demo/command-center/reset')&&r.request().method()==='POST');
   const resetNavigation=page.waitForNavigation({waitUntil:'networkidle'}).catch(error=>error);
   await page.getByRole('button',{name:'Reset And Start Over',exact:true}).click();
+  await page.waitForTimeout(100);releaseResolve();
+  await reloadClick;
   const resetResult=await resetResponse;ledger.resetStatus=resetResult.status();
   assert.equal(resetResult.status(),200);
   const navigationResult=await resetNavigation;if(navigationResult instanceof Error)throw navigationResult;
@@ -107,15 +149,17 @@ try{
   assert.deepEqual(errors,[]);assert.equal(consoleErrors.length,1,JSON.stringify(consoleErrors));
   assert.match(consoleErrors[0],/Failed to load resource: the server responded with a status of 404/);
   ledger.expectedResetIsolationConsole404=1;assert.deepEqual(external,[]);
-  assert.equal(ledger.paidRouteCalls,0);assert.equal(ledger.requests.filter(r=>r.path.includes('part14b')).length,4);
-  assert.ok(ledger.responses.filter(r=>r.path.includes('part14b')&&r.status===200).length>=2);
+  ledger.concurrentResetSerialized=true;
+  assert.equal(ledger.paidRouteCalls,0);assert.equal(ledger.requests.filter(r=>r.path.includes('part14b')).length,6);
+  assert.equal(ledger.responses.filter(r=>r.path.includes('part14b')&&r.status===200).length,5);
   ledger.pass=true;
 }catch(error){ledger.failure=error.stack;process.exitCode=1;if(page&&!page.isClosed()){
   ledger.failureState=await page.evaluate(()=>{const root=document.querySelector('#cdEstimateHub > .invoice-draft-preview');
     return root?{open:root.open,text:root.textContent?.slice(-2000),body:root.querySelector('.invoice-draft-preview-body')?.innerText}:null;
   }).catch(()=>null);
   await page.screenshot({fullPage:true,path:path.join(output,'failure.png')}).catch(()=>{});}
-}finally{fs.writeFileSync(path.join(output,'ledger.json'),JSON.stringify(ledger,null,2));
+}finally{if(activeSerializationRelease)activeSerializationRelease();
+  fs.writeFileSync(path.join(output,'ledger.json'),JSON.stringify(ledger,null,2));
   if(context)await context.close();if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));
   if(fixture)await fixture.cleanup();}
-})().catch(error=>{console.error(error);process.exitCode=1;});
+})().then(()=>process.exit(process.exitCode||0)).catch(error=>{console.error(error);process.exit(1);});

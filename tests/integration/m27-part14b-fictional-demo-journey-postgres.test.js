@@ -3,10 +3,12 @@
 jest.setTimeout(900000);
 
 const crypto=require('node:crypto');
+const http=require('node:http');
 const request=require('supertest');
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
 const contract=require('../../src/customerFinancial/fictionalDemoJourneyAcceptance');
 const repository=require('../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
+const {DemoCommandCenterRepository}=require('../../src/commandCenter/demoRepository');
 const {DEFAULT_SELECTION}=require('../../src/commandCenter/scenarioSpace');
 
 const realPostgres=process.env.M19_PG_ADMIN_URL?describe:describe.skip;
@@ -27,13 +29,15 @@ function mutation(pending,cookieValue,intent,key){return pending.set('Host',HOST
   .set('Idempotency-Key',key).set('X-NorthStar-Demo-Intent',intent);}
 
 realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
-  let fixture,transport,readSpy;
+  let fixture,transport,readSpy,sessionReadSpy,currentReadSpy;
   beforeAll(async()=>{
     for(const key of ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','OPENAI_API_KEY','RETELL_API_KEY',
       'TWILIO_AUTH_TOKEN','RESEND_API_KEY','SMTP_HOST','SMTP_USER','SMTP_PASS']) delete process.env[key];
     transport=jest.spyOn(require('https'),'request').mockImplementation(()=>{
       throw new Error('External transport forbidden in Part 14B');});
     readSpy=jest.spyOn(repository,'read');
+    sessionReadSpy=jest.spyOn(DemoCommandCenterRepository.prototype,'read');
+    currentReadSpy=jest.spyOn(DemoCommandCenterRepository.prototype,'withCurrentReadAuthority');
     fixture=await createDatabaseFixture();
   },180000);
   afterAll(async()=>{try{if(fixture)await fixture.cleanup();}finally{jest.restoreAllMocks();}},180000);
@@ -75,9 +79,11 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
     const resetKey=crypto.randomUUID();
     const resetRequest=()=>mutation(request(fixture.app).post('/api/demo/command-center/reset'),
       savedCookie,'reset',resetKey).send({expectedRevision:2});
-    const reset=await resetRequest();const replay=await resetRequest();
-    expect(reset.status).toBe(200);expect(replay.status).toBe(200);
-    expect(reset.body.replayed).toBe(false);expect(replay.body.replayed).toBe(true);
+    const concurrent=await Promise.all([resetRequest(),resetRequest()]);
+    expect(concurrent.map(value=>value.status)).toEqual([200,200]);
+    expect(concurrent.map(value=>value.body.replayed).sort()).toEqual([false,true]);
+    const reset=concurrent.find(value=>!value.body.replayed);
+    const replay=concurrent.find(value=>value.body.replayed);
     expect(replay.body.data).toEqual(reset.body.data);
     expect(reset.body.data.graphs).toHaveLength(3);expect(reset.body.data.session.simulationCount).toBe(0);
     const resetEstimate=reset.body.data.graphs[0].ids.estimate;
@@ -127,5 +133,126 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       .toBe(404);
     expect(readSpy).toHaveBeenCalledTimes(1);
     expect(transport).not.toHaveBeenCalled();
+  });
+
+  test('serializes the final Part14B projection and response against reset on the exact session',async()=>{
+    const entry=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
+    const savedCookie=cookie(entry),estimate=entry.body.data.graphs[0].ids.estimate;
+    const independent=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
+    const independentCookie=cookie(independent);
+    const simulated=await mutation(request(fixture.app)
+      .post('/api/demo/command-center/simulations/leads'),savedCookie,'simulate-lead',crypto.randomUUID())
+      .send({expectedRevision:entry.body.data.integrity.revision,
+        scenario:{...DEFAULT_SELECTION,service:'roofing'}});
+    expect(simulated.status).toBe(201);expect(simulated.body.data.integrity.revision).toBe(2);
+    const originalSerialize=repository.serializeResponse;
+    let enteredResolve,releaseResolve;
+    const entered=new Promise(resolve=>{enteredResolve=resolve;});
+    const release=new Promise(resolve=>{releaseResolve=resolve;});
+    const serializer=jest.spyOn(repository,'serializeResponse').mockImplementationOnce(async data=>{
+      const serialized=await originalSerialize(data);enteredResolve();await release;return serialized;
+    });
+    try {
+      const settlementOrder=[];
+      const pendingRead=request(fixture.app).get(route(estimate)).set('Host',HOST)
+        .set('Cookie',savedCookie).then(value=>{settlementOrder.push('read');return value;});
+      await Promise.race([entered,new Promise((_,reject)=>setTimeout(
+        ()=>reject(new Error('Part14B serialization barrier was not reached')),180000))]);
+      const independentReset=await Promise.race([
+        mutation(request(fixture.app).post('/api/demo/command-center/reset'),
+          independentCookie,'reset',crypto.randomUUID()).send({expectedRevision:1}),
+        new Promise((_,reject)=>setTimeout(
+          ()=>reject(new Error('Independent demo reset was blocked by another session read')),5000))
+      ]);
+      expect(independentReset.status).toBe(200);
+      expect(independentReset.body.data.integrity.revision).toBe(2);
+      let resetSettled=false;
+      const pendingReset=mutation(request(fixture.app).post('/api/demo/command-center/reset'),
+        savedCookie,'reset',crypto.randomUUID()).send({expectedRevision:2})
+        .then(value=>{resetSettled=true;settlementOrder.push('reset');return value;});
+      let waiting=false;
+      for(let attempt=0;attempt<100&&!waiting;attempt+=1){
+        const row=await fixture.ownerPool.query(
+          "SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted) waiting");
+        waiting=row.rows[0].waiting;if(!waiting)await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      expect(waiting).toBe(true);expect(resetSettled).toBe(false);
+      releaseResolve();
+      const lockedRead=await pendingRead;const reset=await pendingReset;
+      expect(settlementOrder).toEqual(['read','reset']);
+      expect(lockedRead.status).toBe(200);
+      expect(lockedRead.body.data.journeyAcceptance.reset.currentWorkspaceRevision).toBe(2);
+      expect(reset.status).toBe(200);expect(reset.body.data.integrity.revision).toBe(3);
+      const stale=await request(fixture.app).get(route(estimate)).set('Host',HOST)
+        .set('Cookie',savedCookie);
+      expect(stale.status).toBe(404);
+      const currentEstimate=reset.body.data.graphs[0].ids.estimate;
+      const current=await request(fixture.app).get(route(currentEstimate)).set('Host',HOST)
+        .set('Cookie',savedCookie);
+      expect(current.status).toBe(200);
+      expect(current.body.data.journeyAcceptance.reset.currentWorkspaceRevision).toBe(3);
+      const failedReset=await mutation(request(fixture.app).post('/api/demo/command-center/reset'),
+        savedCookie,'reset',crypto.randomUUID()).send({expectedRevision:2});
+      expect(failedReset.status).toBe(409);
+      const afterFailedReset=await fixture.ownerPool.query(
+        'SELECT revision FROM demo_command_center_sessions WHERE token_hash=$1',
+        [tokenHash(savedCookie)]);
+      expect(afterFailedReset.rows).toHaveLength(1);
+      expect(Number(afterFailedReset.rows[0].revision)).toBe(3);
+      expect(transport).not.toHaveBeenCalled();
+    } finally {serializer.mockRestore();releaseResolve();}
+  });
+
+  test('rejects every Express-matched malformed identifier and composed request before session entry',async()=>{
+    const entry=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
+    const savedCookie=cookie(entry),valid=entry.body.data.graphs[0].ids.estimate;
+    readSpy.mockClear();sessionReadSpy.mockClear();currentReadSpy.mockClear();
+    const base='/api/demo/customer-financial/invoice-drafts/';
+    const suffix='/part14b-acceptance';
+    for(const segment of ['not-a-uuid','x'.repeat(2048),'caf%C3%A9','%2F','%252F','%E0%A4%A']) {
+      const response=await request(fixture.app).get(base+segment+suffix+'?secret=sk_query&secret=again')
+        .set('Host',HOST).set('Cookie',savedCookie);
+      expect({segment,status:response.status}).toEqual({segment,status:400});
+      expect(response.headers['cache-control']).toContain('private');
+      expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.headers['x-request-id']).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toMatch(/sk_query|not-a-uuid|café/);
+    }
+    for(const path of [base+valid+suffix,base+'not-a-uuid'+suffix]) {
+      const content=await request(fixture.app).get(path).set('Host',HOST).set('Cookie',savedCookie)
+        .set('Content-Type','application/json');
+      expect(content.status).toBe(400);expect(content.headers['x-request-id']).toBeUndefined();
+      const method=await request(fixture.app).options(path).set('Host',HOST).set('Cookie',savedCookie)
+        .set('Origin',ORIGIN).set('Content-Type','application/json').send('"sk_method"');
+      expect(method.status).toBe(405);expect(method.headers.allow).toBe('GET');
+      expect(method.headers['access-control-allow-methods']).toBeUndefined();
+      expect(method.headers['x-request-id']).toBeUndefined();
+    }
+    const server=await new Promise((resolve,reject)=>{
+      const mounted=fixture.app.listen(0,'127.0.0.1',()=>resolve(mounted));
+      mounted.once('error',reject);
+    });
+    try {
+      const raw=path=>new Promise((resolve,reject)=>{
+        const pending=http.request({host:'127.0.0.1',port:server.address().port,
+          method:'GET',path,headers:{Host:HOST,Cookie:savedCookie}},response=>{
+          let body='';response.setEncoding('utf8');response.on('data',chunk=>{body+=chunk;});
+          response.on('end',()=>resolve({status:response.statusCode,headers:response.headers,body}));
+        });
+        pending.once('error',reject);pending.end();
+      });
+      for(const segment of ['..','%2e','%2E%2E','%2f','%5c']) {
+        const response=await raw(base+segment+suffix+'?secret=sk_raw');
+        expect({segment,status:response.status}).toEqual({segment,status:400});
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+        expect(response.headers['x-request-id']).toBeUndefined();
+        expect(response.body).not.toMatch(/sk_raw/);
+      }
+      const empty=await raw(base+'/'+suffix.slice(1)+'?secret=sk_raw');
+      expect(empty.status).toBe(404);
+    } finally {await new Promise(resolve=>server.close(resolve));}
+    expect(readSpy).not.toHaveBeenCalled();expect(sessionReadSpy).not.toHaveBeenCalled();
+    expect(currentReadSpy).not.toHaveBeenCalled();expect(transport).not.toHaveBeenCalled();
   });
 });

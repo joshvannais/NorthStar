@@ -67,6 +67,11 @@ const MAX_SOURCE_CREATIONS_PER_MINUTE = 30;
 const DEFAULT_HOUSEKEEPING_INTERVAL_MS = 60 * 1000;
 const DEFAULT_HOUSEKEEPING_MAX_BATCHES = 10;
 const TOKEN = /^[A-Za-z0-9_-]{43}\.[0-9]{10}$/;
+// Serializes the Part 14B current-read transaction with every mutation for the
+// same opaque demo token. The row lock is authoritative once a persisted row
+// exists; this transaction-scoped key also closes the first-read/first-write
+// race before that row exists.
+const CURRENT_READ_LOCK_SEED = '27001402';
 
 async function boundTransaction(client) {
   await client.query("SET LOCAL lock_timeout='2000ms'");
@@ -504,6 +509,84 @@ class DemoCommandCenterRepository {
     }
   }
 
+  async withCurrentReadAuthority(token, projectAndSerialize, deliverSerialized) {
+    if (typeof projectAndSerialize !== 'function' || typeof deliverSerialized !== 'function') {
+      fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
+    }
+    const admitted = await this.read(token);
+    const client = await this.pool().connect();
+    let open = false;
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+      open = true;
+      await boundTransaction(client);
+      await client.query(
+        'SELECT pg_advisory_xact_lock_shared(hashtextextended($1::text,$2::bigint))',
+        [token.tokenHash, CURRENT_READ_LOCK_SEED]
+      );
+      const selected = await client.query(
+        `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
+                last_simulated_at, expires_at, clock_timestamp() now
+           FROM demo_command_center_sessions
+          WHERE token_hash = $1
+          FOR SHARE`,
+        [token.tokenHash]
+      );
+      const row = selected.rows[0] || null;
+      if (row) assertRowAuthority(row, token);
+      else if (admitted.persisted) {
+        fail(409, 'DEMO_STATE_CHANGED', 'This demo changed. Refresh before reviewing its work.');
+      }
+      const now = date(row ? row.now :
+        (await client.query('SELECT clock_timestamp() now')).rows[0].now);
+      const record = row ? recordFromRow(row, token, true) : admitted;
+      if (date(record.expiresAt) <= now || date(token.expiresAt) <= now) {
+        fail(410, 'DEMO_SESSION_EXPIRED', 'This demo session expired. Refresh to start again.');
+      }
+      const authorityDigest = sha256({
+        tenantId: record.tenantId, sessionId: record.sessionId, state: record.state,
+        revision: record.revision, simulationCount: record.simulationCount,
+        mutationCount: record.mutationCount, persisted: record.persisted,
+      });
+      // The callback performs the complete Part 14B source projection and the
+      // final JSON serialization while this exact session authority remains
+      // locked against reset or any other demo mutation.
+      const output = await projectAndSerialize(record);
+      const final = await client.query(
+        `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
+                last_simulated_at, expires_at
+           FROM demo_command_center_sessions
+          WHERE token_hash = $1
+          FOR SHARE`,
+        [token.tokenHash]
+      );
+      const finalRow = final.rows[0] || null;
+      if (finalRow) assertRowAuthority(finalRow, token);
+      const current = finalRow ? recordFromRow(finalRow, token, true) : admitted;
+      if (Boolean(finalRow) !== Boolean(row) || sha256({
+        tenantId: current.tenantId, sessionId: current.sessionId, state: current.state,
+        revision: current.revision, simulationCount: current.simulationCount,
+        mutationCount: current.mutationCount, persisted: current.persisted,
+      }) !== authorityDigest) {
+        fail(409, 'DEMO_STATE_CHANGED', 'This demo changed. Refresh before reviewing its work.');
+      }
+      // The HTTP response is completed while the session lock is still held.
+      // This prevents a reset from advancing to N+1 before the revision-N
+      // response has left the supported route boundary.
+      const delivered = await deliverSerialized(output);
+      await client.query('COMMIT');
+      open = false;
+      return delivered;
+    } catch (error) {
+      if (open) {
+        try { await client.query('ROLLBACK'); } catch (_) {}
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async normalizePersistedRow(client, row, token, now) {
     assertRowAuthority(row, token);
     const repairedState = repairKnownDemoCalculationDefects(row.state);
@@ -713,6 +796,10 @@ class DemoCommandCenterRepository {
       await client.query(input.operation==='proposal_adopt'?'BEGIN ISOLATION LEVEL SERIALIZABLE':'BEGIN');
       open = true;
       await boundTransaction(client);
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1::text,$2::bigint))',
+        [token.tokenHash, CURRENT_READ_LOCK_SEED]
+      );
       let now = date(this.clock());
       let locked = await client.query(
         `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,

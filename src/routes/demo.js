@@ -118,6 +118,39 @@ async function readCommandCenterEntry(req, res) {
   }
 }
 
+async function withCurrentCommandCenterEntry(req, res, projectAndSerialize, deliverSerialized) {
+  const token = commandCenterToken(req, res);
+  try {
+    return await commandCenterRepository.withCurrentReadAuthority(
+      token, projectAndSerialize, deliverSerialized
+    );
+  } catch (error) {
+    if (!error || !RENEWABLE_DEMO_ENTRY_ERRORS.has(error.code)) throw error;
+    const replacement = commandCenterRepository.issue();
+    setCommandCenterCookie(res, replacement);
+    return commandCenterRepository.withCurrentReadAuthority(
+      replacement, projectAndSerialize, deliverSerialized
+    );
+  }
+}
+
+function deliverLockedJson(res, serialized) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    function cleanup() { res.removeListener('finish', finished); res.removeListener('close', closed); }
+    function finished() { if (settled) return; settled = true; cleanup(); resolve(undefined); }
+    function closed() {
+      if (settled) return;
+      settled = true; cleanup();
+      if (res.writableFinished) resolve(undefined);
+      else reject(new Error('Part 14B response closed before completion'));
+    }
+    res.once('finish', finished); res.once('close', closed);
+    try { res.type('application/json').send(serialized); }
+    catch (error) { settled = true; cleanup(); reject(error); }
+  });
+}
+
 function demoWorkspace(record) {
   return buildDemoWorkspace({
     tenantId: record.tenantId,
@@ -589,13 +622,12 @@ router.get('/customer-financial/invoice-drafts/:estimateId/part12-acceptance', a
 
 router.get('/customer-financial/invoice-drafts/:estimateId/part14b-acceptance', async function(req,res) {
   res.set('Cache-Control','private, no-store'); res.vary('Cookie');
-  if (Object.keys(req.query).length) return res.status(400).json({success:false,
-    error:{code:'demo_financial_journey_request_invalid',
-      message:'Choose one fictional financial journey.'}});
   try {
-    const record=await readCommandCenterEntry(req,res);
-    const data=await fictionalDemoJourneyAcceptanceRepository.read(record,req.params.estimateId);
-    return res.json({success:true,data});
+    await withCurrentCommandCenterEntry(req,res,async function(record) {
+      const data=await fictionalDemoJourneyAcceptanceRepository.read(record,req.params.estimateId);
+      return fictionalDemoJourneyAcceptanceRepository.serializeResponse(data);
+    },serialized=>deliverLockedJson(res,serialized));
+    return undefined;
   } catch (error) { return commandCenterFailure(req,res,error); }
 });
 

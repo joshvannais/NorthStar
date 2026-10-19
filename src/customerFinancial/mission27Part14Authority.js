@@ -411,8 +411,8 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   ledger: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
-    normalizedSha256: '1cd66efecf4bf918a62fcfe03a491c614ee5c6ebac9adf757964dad30379bfc6',
-    normalizedUtf8Bytes: 91226,
+    normalizedSha256: 'f03f0d90665ac52aaff76185a38fb046025bb0065bb9c254eb3a758ea9b2f79b',
+    normalizedUtf8Bytes: 91669,
     normalizedLineCount: 138,
   }),
   architecture14A: OBJECT_FREEZE({
@@ -423,8 +423,8 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   architecture14B: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14B_RESETTABLE_FICTIONAL_DEMO_JOURNEY.md',
-    normalizedSha256: '670e99cd9a72f0494041ed6077d4decb3994d8b29e00da3ba47d5dafc49eee6f',
-    normalizedUtf8Bytes: 4737,
+    normalizedSha256: '0ee54e4eda266f433d24bc4f1b6f4f4a883d9a6426d1765ad65353bd6ff4fa3f',
+    normalizedUtf8Bytes: 5905,
     normalizedLineCount: 35,
   }),
 });

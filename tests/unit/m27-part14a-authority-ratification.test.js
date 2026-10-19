@@ -136,7 +136,7 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
     replaceExact('architecture14B',
       'Part 14B performs zero provider calls or mutations, receiver mutations, outbound messages, accounting mutations, downstream mutations, paid-repository reads, production-database mutations, or live-money movements.',
       'Part 14B may call providers, receivers, accounting, paid repositories, and move money.');
-    replaceExact('ledger', 'Independent whole exact-head audit pending',
+    replaceExact('ledger', 'Independent whole exact-head re-audit pending after three audit corrections',
       'Independent whole exact-head audit accepted');
   });
 

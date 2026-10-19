@@ -7,6 +7,8 @@ const providerBoundary=require('../../src/customerFinancial/paymentProviderBound
 const demoPart12=require('../../src/customerFinancial/demoReportingPart12Acceptance');
 const contract=require('../../src/customerFinancial/fictionalDemoJourneyAcceptance');
 const repository=require('../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
+const httpBoundary=require('../../src/customerFinancial/fictionalDemoJourneyAcceptanceHttpBoundary');
+const earlyBoundary=require('../../src/middleware/fictionalDemoJourneyAcceptanceBoundary');
 const ui=require('../../public/js/customer-financial-invoice-preview');
 
 const TENANT='11111111-1111-4111-8111-111111111111';
@@ -67,7 +69,7 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
   });
 
   test('browser accepts the canonical complete contract and rejects reordered, leaked or contradictory values',async()=>{
-    expect(await ui.invalidPart14B(canonical.journeyAcceptance,part12,1)).toBe(false);
+    expect(await ui.invalidPart14B(clone(canonical.journeyAcceptance),part12,1)).toBe(false);
     const mutations=[
       value=>value.lifecycle.stages.reverse(),
       value=>{value.lifecycle.stages[14].state='check_cleared';},
@@ -79,6 +81,32 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
     ];
     for(const mutate of mutations){const value=clone(canonical.journeyAcceptance);mutate(value);
       expect(await ui.invalidPart14B(value,part12,1)).toBe(true);}
+  });
+
+  test('browser recursively rejects every poisoned Part14B node without reading accessors',async()=>{
+    const mutations=[
+      value=>{value.sourceWitness.extra='sk_secret';},
+      value=>{value.journeyBinding.tenantScopeDigest='acct_forged';},
+      value=>{value.launchMatrix.providerMethod='bank';},
+      value=>{value.lifecycle.extra={recipientEmail:'victim@example.com'};},
+      value=>{value.lifecycle.stages[8].sourceReason='customer@example.com';},
+      value=>{value.reset.endpoint='/api/v1/private';},
+      value=>{value.isolation.credentialOrSecretAllowed=true;},
+      value=>{value.acceptance.productionJourneyAccepted=true;},
+      value=>{value.providerAccountId='acct_forged';},
+      value=>{Object.defineProperty(value.lifecycle.stages[0],'toJSON',{
+        value(){return {};},enumerable:false});},
+      value=>{Object.setPrototypeOf(value.reset,{credential:'sk_proto'});},
+      value=>{value.lifecycle.stages[0][Symbol('credential')]='sk_symbol';},
+    ];
+    for(const mutate of mutations){const value=clone(canonical.journeyAcceptance);mutate(value);
+      expect(await ui.invalidPart14B(value,part12,1)).toBe(true);}
+    let getterCalls=0;
+    const accessor=clone(canonical.journeyAcceptance);
+    Object.defineProperty(accessor.sourceWitness,'digest',{enumerable:true,configurable:true,
+      get(){getterCalls+=1;return canonical.journeyAcceptance.sourceWitness.digest;}});
+    expect(await ui.invalidPart14B(accessor,part12,1)).toBe(true);
+    expect(getterCalls).toBe(0);
   });
 
   test('repository rereads exact source and fails closed on drift, cross-record and demo mutation state',async()=>{
@@ -103,5 +131,43 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
       await expect(repository.read(record,'33333333-3333-4333-8333-333333333333',{readBundle}))
         .rejects.toMatchObject({code:'DEMO_FINANCIAL_JOURNEY_UNAVAILABLE',status:404});
     } finally {bundleSpy.mockRestore();projectSpy.mockRestore();}
+  });
+
+  test('pre-parser boundary covers every Express parameter shape before session or source entry',()=>{
+    const base='/api/demo/customer-financial/invoice-drafts/';
+    const suffix='/part14b-acceptance';
+    for(const segment of [item.ids.estimate,item.ids.estimate.toUpperCase(),'not-a-uuid','.'.repeat(2),
+      'x'.repeat(4096),'caf%C3%A9','%2F','%252F','%E0%A4%A','..','\\paid-id']) {
+      expect(httpBoundary.isFictionalDemoJourneyAcceptancePath(base+segment+suffix)).toBe(true);
+    }
+    for(const near of [base+suffix,base+'/'+suffix,base+item.ids.estimate+'//part14b-acceptance',
+      '/api/demo/customer-financial/invoice-drafts/'+item.ids.estimate+'/part14b-acceptance/extra']) {
+      expect(httpBoundary.isFictionalDemoJourneyAcceptancePath(near)).toBe(false);
+    }
+    function invoke(overrides={}) {
+      const headers={};let status=null,body=null,next=0;
+      const req={path:base+'not-a-uuid'+suffix,method:'GET',originalUrl:base+'not-a-uuid'+suffix,
+        rawHeaders:[],headers:{},...overrides};
+      const res={set(name,value){headers[name.toLowerCase()]=value;return this;},
+        vary(value){headers.vary=value;return this;},removeHeader(name){delete headers[name.toLowerCase()];},
+        status(value){status=value;return this;},json(value){body=value;return this;}};
+      earlyBoundary.fictionalDemoJourneyAcceptanceBoundary(req,res,()=>{next+=1;});
+      return {headers,status,body,next};
+    }
+    for(const testCase of [
+      {},
+      {path:base+item.ids.estimate+suffix,originalUrl:base+item.ids.estimate+suffix+'?secret=x'},
+      {path:base+item.ids.estimate+suffix,originalUrl:base+item.ids.estimate+suffix,
+        rawHeaders:['Content-Type','application/json'],headers:{'content-type':'application/json'}},
+      {path:base+item.ids.estimate+suffix,originalUrl:base+item.ids.estimate+suffix,
+        rawHeaders:['Content-Length','12'],headers:{'content-length':'12'}},
+    ]) {
+      const result=invoke(testCase);expect(result.status).toBe(400);expect(result.next).toBe(0);
+      expect(result.headers['cache-control']).toBe('private, no-store');
+      expect(result.headers['x-request-id']).toBeUndefined();
+      expect(JSON.stringify(result.body)).not.toMatch(/secret|not-a-uuid|4096/);
+    }
+    const method=invoke({method:'OPTIONS'});expect(method.status).toBe(405);
+    expect(method.headers.allow).toBe('GET');expect(method.next).toBe(0);
   });
 });

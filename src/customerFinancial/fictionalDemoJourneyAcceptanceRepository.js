@@ -85,4 +85,8 @@ async function read(record, estimateId, options = {}) {
   }
 }
 
-module.exports = { BASELINE_KEYS, recordContext, read };
+async function serializeResponse(data) {
+  return JSON.stringify({ success: true, data });
+}
+
+module.exports = { BASELINE_KEYS, recordContext, read, serializeResponse };

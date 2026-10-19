@@ -330,9 +330,9 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
       migration273Present:false, laterSlices:['14C','14D','14E','14F','14G'],
     }));
     const mutations = [
-      ['self accepted','ledger','Independent whole exact-head audit pending','Part 14B accepted'],
-      ['self audited','ledger','Independent whole exact-head audit pending','Part 14B independently audited'],
-      ['deployed','ledger','| Independent whole exact-head audit pending | — | No |','| Audit accepted | `forged` | Deployed |'],
+      ['self accepted','ledger','Independent whole exact-head re-audit pending after three audit corrections','Part 14B accepted'],
+      ['self audited','ledger','Independent whole exact-head re-audit pending after three audit corrections','Part 14B independently audited'],
+      ['deployed','ledger','| Independent whole exact-head re-audit pending after three audit corrections | — | No |','| Audit accepted | `forged` | Deployed |'],
       ['later slice','ledger','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | Complete'],
       ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
       ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],

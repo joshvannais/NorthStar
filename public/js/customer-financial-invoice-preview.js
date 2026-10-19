@@ -125,12 +125,83 @@
     'fictional_receivable_current','fictional_handoff_current','fictional_reporting_current',
     'offline_received','check_clearance_unknown'
   ]);
+  var PART14B_STAGE_SOURCES=Object.freeze([
+    ['m27-invoice-draft-preview-v1','current',null],
+    ['m27-invoice-draft-preview-v1','current',null],
+    ['m27-invoice-part5-acceptance-v1','unavailable','invoice_issue_authority_unavailable'],
+    ['m27-invoice-issue-readiness-v1','unavailable','final_invoice_approval_unavailable'],
+    ['m27-invoice-delivery-readiness-v1','unavailable','issued_invoice_unavailable'],
+    ['m27-payment-part7-acceptance-v1','unavailable','provider_sandbox_evidence_unavailable'],
+    ['m27-payment-part9-acceptance-v1','unavailable','part9_financial_evidence_unavailable'],
+    ['m27-payment-part9-acceptance-v1','unavailable','part9_financial_evidence_unavailable'],
+    ['m27-payment-part9-acceptance-v1','unavailable','source_authority_unavailable'],
+    ['m27-payment-part9-acceptance-v1','unavailable','source_authority_unavailable'],
+    ['m27-collection-part10-acceptance-v1','unavailable','part10_collection_evidence_unavailable'],
+    ['m27-accounting-part11-acceptance-v1','unavailable','part11_accounting_evidence_unavailable'],
+    ['m27-reporting-part12-acceptance-v1','incomplete','part12_reporting_evidence_incomplete'],
+    ['m27-payment-part9-acceptance-v1','unavailable','source_authority_unavailable'],
+    ['m27-payment-part9-acceptance-v1','unavailable','source_authority_unavailable']
+  ]);
+  var PART14B_GET_PROTOTYPE=Object.getPrototypeOf;
+  var PART14B_GET_DESCRIPTOR=Object.getOwnPropertyDescriptor;
+  var PART14B_OWN_KEYS=Reflect.ownKeys;
+  var PART14B_HAS_OWN=Object.prototype.hasOwnProperty;
+  var PART14B_OBJECT_PROTOTYPE=Object.prototype;
+  var PART14B_ARRAY_PROTOTYPE=Array.prototype;
+  function copyPart14BData(value,depth) {
+    if (depth>64) throw new Error('Part 14B data shape invalid');
+    if (value===null||typeof value==='string'||typeof value==='boolean') return value;
+    if (typeof value==='number') {
+      if (!Number.isFinite(value)||Object.is(value,-0)) throw new Error('Part 14B data shape invalid');
+      return value;
+    }
+    if (!value||typeof value!=='object') throw new Error('Part 14B data shape invalid');
+    var array=Array.isArray(value),prototype;
+    try { prototype=PART14B_GET_PROTOTYPE(value); } catch (_) {
+      throw new Error('Part 14B data shape invalid');
+    }
+    if (prototype!==(array?PART14B_ARRAY_PROTOTYPE:PART14B_OBJECT_PROTOTYPE)||
+        PART14B_GET_DESCRIPTOR(value,'toJSON')||
+        PART14B_GET_DESCRIPTOR(prototype,'toJSON')) throw new Error('Part 14B data shape invalid');
+    var keys;
+    try { keys=PART14B_OWN_KEYS(value); } catch (_) {
+      throw new Error('Part 14B data shape invalid');
+    }
+    if (keys.some(function(key){return typeof key!=='string';})) {
+      throw new Error('Part 14B data shape invalid');
+    }
+    if (array) {
+      var length=PART14B_GET_DESCRIPTOR(value,'length');
+      if (!length||length.enumerable||length.configurable||length.writable!==true||
+          length.value!==value.length||keys.length!==value.length+1) {
+        throw new Error('Part 14B data shape invalid');
+      }
+      var list=[];
+      for (var index=0;index<value.length;index+=1) {
+        if (keys[index]!==String(index)) throw new Error('Part 14B data shape invalid');
+        var item=PART14B_GET_DESCRIPTOR(value,String(index));
+        if (!item||!item.enumerable||!item.configurable||item.writable!==true||
+            !PART14B_HAS_OWN.call(item,'value')) throw new Error('Part 14B data shape invalid');
+        list.push(copyPart14BData(item.value,depth+1));
+      }
+      if (keys[keys.length-1]!=='length') throw new Error('Part 14B data shape invalid');
+      return list;
+    }
+    var result={};
+    keys.forEach(function(key){
+      var descriptor=PART14B_GET_DESCRIPTOR(value,key);
+      if (!descriptor||!descriptor.enumerable||!descriptor.configurable||descriptor.writable!==true||
+          !PART14B_HAS_OWN.call(descriptor,'value')) throw new Error('Part 14B data shape invalid');
+      result[key]=copyPart14BData(descriptor.value,depth+1);
+    });
+    return result;
+  }
   function exactOrdered(value,keys) {
     if (!value||typeof value!=='object'||Array.isArray(value)) return false;
     var actual=Object.keys(value);
     return actual.length===keys.length&&actual.every(function(key,index){return key===keys[index];});
   }
-  function invalidPart14B(value,part12Bundle,expectedRevision) {
+  function projectPart14B(value,part12Bundle,expectedRevision) {
     var topKeys=['contractVersion','policyVersion','policyDigest','state','reason','mode','fictional',
       'syntheticEvidenceOnly','label','sourceWitness','journeyBinding','launchMatrix','lifecycle','reset',
       'isolation','acceptance','exactCurrentnessRevalidatedBeforeAndAfterProjection','sourceReadCount',
@@ -154,22 +225,52 @@
       'realisticFictionalLifecycleStatesPresent','checkReceivedRemainsDistinctFromClearance',
       'providerSandboxEvidenceAccepted','livePaymentEvidenceAccepted','productionJourneyAccepted',
       'independentWholeHeadAuditAccepted','founderVisualApprovalAccepted'];
-    if (!exactOrdered(value,topKeys)||value.contractVersion!=='m27-fictional-demo-journey-acceptance-v1'||
+    var sourceWitnessKeys=['contractVersion','digest'];
+    var journeyBindingKeys=['tenantScopeDigest','sessionScopeDigest','recordScopeDigest',
+      'workspaceRevision','workspaceGeneration','workspaceSeedDigest','workspaceStateDigest',
+      'draftRevision','draftDigest','previewDigest','currency','journeyBindingDigest',
+      'rawTenantSessionOrRecordIdentityReturned'];
+    var launchKeys=['rolloutStage','liveCapabilityEnabled','providerMode','providerMethod',
+      'partialProviderPaymentsEnabled','multiInvoiceProviderPaymentsEnabled',
+      'offlineCashReceiptEnabled','offlineCheckReceiptEnabled','checkClearedTransitionEnabled',
+      'checkClearanceState'];
+    var lifecycleKeys=['stages','requiredStageCount','currentStageCount','skippedStageCount',
+      'duplicateStageCount','exactOrderedSourceContractsRevalidated',
+      'realisticFictionalStatesProjected','humanReviewRepresentedAsFictionalEvidenceOnly',
+      'providerSessionEventAndSettlementRepresentedAsFictionalEvidenceOnly',
+      'productionFinancialTruthCreated'];
+    var resetKeys=['supported','endpoint','currentGeneration','currentWorkspaceRevision',
+      'canonicalBaseline','currentMutationKeyCount','currentSimulationCount',
+      'exactExpectedRevisionRequired','idempotencyKeyRequired','sameSessionOnly',
+      'duplicateResetReplays','resetRestoresCanonicalBaseline','resetRemovesUserCreatedDemoMutations',
+      'resetMayReadOrMutatePaidData'];
+    try { value=copyPart14BData(value,0); } catch (_) { return Promise.resolve(null); }
+    if (!part12Bundle||!exactOrdered(value,topKeys)||!exactOrdered(value.sourceWitness,sourceWitnessKeys)||
+        !exactOrdered(value.journeyBinding,journeyBindingKeys)||
+        !exactOrdered(value.launchMatrix,launchKeys)||!exactOrdered(value.lifecycle,lifecycleKeys)||
+        !exactOrdered(value.reset,resetKeys)||
+        value.contractVersion!=='m27-fictional-demo-journey-acceptance-v1'||
         value.policyVersion!=='mission27.launch.v1'||
-        !/^[0-9a-f]{64}$/.test(value.policyDigest||'')||
+        value.policyDigest!=='d24c8c83f6076cedbcf916d5a9f95240fdd4aa72758c930ea511336fa5b3c56a'||
         value.state!=='current_fictional_demo'||value.reason!==null||value.mode!=='demo'||
         value.fictional!==true||value.syntheticEvidenceOnly!==true||
         value.label!=='Fictional financial lifecycle — no real customer, provider, bank, or money effect'||
-        value.sourceWitness?.contractVersion!=='m27-reporting-part12-preview-bundle-v1'||
-        !/^[0-9a-f]{64}$/.test(value.sourceWitness?.digest||'')||
-        !value.journeyBinding||value.journeyBinding.workspaceRevision!==expectedRevision||
+        value.sourceWitness.contractVersion!=='m27-reporting-part12-preview-bundle-v1'||
+        !/^[0-9a-f]{64}$/.test(value.sourceWitness.digest)||
+        value.journeyBinding.workspaceRevision!==expectedRevision||
+        !Number.isSafeInteger(value.journeyBinding.workspaceGeneration)||
+        value.journeyBinding.workspaceGeneration<1||
         value.journeyBinding.draftRevision!==part12Bundle?.preview?.draftIdentity?.revision||
         value.journeyBinding.draftDigest!==part12Bundle?.preview?.draftIdentity?.draftDigest||
         value.journeyBinding.previewDigest!==part12Bundle?.preview?.previewDigest||
         value.journeyBinding.currency!=='USD'||
         value.journeyBinding.rawTenantSessionOrRecordIdentityReturned!==false||
-        !/^[0-9a-f]{64}$/.test(value.journeyBinding.journeyBindingDigest||'')||
-        value.launchMatrix?.rolloutStage!=='disabled'||
+        ['tenantScopeDigest','sessionScopeDigest','recordScopeDigest','workspaceSeedDigest',
+          'workspaceStateDigest','draftDigest','previewDigest','journeyBindingDigest']
+          .some(function(key){return !/^[0-9a-f]{64}$/.test(value.journeyBinding[key]);})||
+        new Set([value.journeyBinding.tenantScopeDigest,value.journeyBinding.sessionScopeDigest,
+          value.journeyBinding.recordScopeDigest]).size!==3||
+        value.launchMatrix.rolloutStage!=='disabled'||
         value.launchMatrix.liveCapabilityEnabled!==false||value.launchMatrix.providerMode!=='test'||
         value.launchMatrix.providerMethod!=='card'||
         value.launchMatrix.partialProviderPaymentsEnabled!==false||
@@ -178,7 +279,7 @@
         value.launchMatrix.offlineCheckReceiptEnabled!==true||
         value.launchMatrix.checkClearedTransitionEnabled!==false||
         value.launchMatrix.checkClearanceState!=='check_clearance_authority_unavailable'||
-        !Array.isArray(value.lifecycle?.stages)||value.lifecycle.stages.length!==15||
+        !Array.isArray(value.lifecycle.stages)||value.lifecycle.stages.length!==15||
         value.lifecycle.requiredStageCount!==15||value.lifecycle.currentStageCount!==15||
         value.lifecycle.skippedStageCount!==0||value.lifecycle.duplicateStageCount!==0||
         value.lifecycle.exactOrderedSourceContractsRevalidated!==true||
@@ -188,18 +289,19 @@
         value.lifecycle.productionFinancialTruthCreated!==false||
         value.lifecycle.stages.some(function(stage,index){return !exactOrdered(stage,stageKeys)||
           stage.name!==PART14B_STAGE_NAMES[index]||stage.state!==PART14B_STAGE_STATES[index]||
-          typeof stage.sourceContractVersion!=='string'||!stage.sourceContractVersion||
-          typeof stage.sourceState!=='string'||
-          (stage.sourceReason!==null&&typeof stage.sourceReason!=='string')||
+          stage.sourceContractVersion!==PART14B_STAGE_SOURCES[index][0]||
+          stage.sourceState!==PART14B_STAGE_SOURCES[index][1]||
+          stage.sourceReason!==PART14B_STAGE_SOURCES[index][2]||
           !/^[0-9a-f]{64}$/.test(stage.sourceDigest||'')||
           stage.journeyBindingDigest!==value.journeyBinding.journeyBindingDigest||
           stage.fictional!==true||stage.syntheticEvidenceOnly!==true||stage.current!==true||
           stage.humanAuthorityFabricated!==false||stage.providerOrBankTruthFabricated!==false||
           stage.productionEffectExecuted!==false||stage.durableExternalEffectCreated!==false;})||
-        value.reset?.supported!==true||value.reset.endpoint!=='/api/demo/command-center/reset'||
+        value.reset.supported!==true||value.reset.endpoint!=='/api/demo/command-center/reset'||
         value.reset.currentWorkspaceRevision!==expectedRevision||
         !Number.isSafeInteger(value.reset.currentGeneration)||value.reset.currentGeneration<1||
         typeof value.reset.canonicalBaseline!=='boolean'||
+        value.reset.currentGeneration!==value.journeyBinding.workspaceGeneration||
         !Number.isSafeInteger(value.reset.currentMutationKeyCount)||value.reset.currentMutationKeyCount<0||
         !Number.isSafeInteger(value.reset.currentSimulationCount)||value.reset.currentSimulationCount<0||
         value.reset.exactExpectedRevisionRequired!==true||value.reset.idempotencyKeyRequired!==true||
@@ -207,11 +309,13 @@
         value.reset.resetRestoresCanonicalBaseline!==true||
         value.reset.resetRemovesUserCreatedDemoMutations!==true||
         value.reset.resetMayReadOrMutatePaidData!==false||
+        value.reset.canonicalBaseline!==(value.reset.currentMutationKeyCount===0&&
+          value.reset.currentSimulationCount===0)||
         !exactOrdered(value.isolation,isolationKeys)||Object.keys(value.isolation).some(function(key){
           var expectedTrue=['accountFreeDemoNamespaceOnly','exactTenantSessionRecordAndSourceRequired'].includes(key);
           return value.isolation[key]!==expectedTrue;})||
         !exactOrdered(value.acceptance,acceptanceKeys)||
-        value.acceptance?.completeResettableFictionalJourneyProjected!==true||
+        value.acceptance.completeResettableFictionalJourneyProjected!==true||
         value.acceptance.exactPart12ProductionContractsRevalidated!==true||
         value.acceptance.strictPaidDemoIsolationPreserved!==true||
         value.acceptance.realisticFictionalLifecycleStatesPresent!==true||
@@ -223,11 +327,38 @@
         value.acceptance.founderVisualApprovalAccepted!==false||
         value.exactCurrentnessRevalidatedBeforeAndAfterProjection!==true||
         zeroKeys.some(function(key){return value[key]!==(key==='sourceReadCount'?2:0);})) {
-      return Promise.resolve(true);
+      return Promise.resolve(null);
     }
-    return digestObject(part12Bundle).then(function(digest){
-      return digest!==value.sourceWitness.digest;
-    }).catch(function(){return true;});
+    var binding={tenantScopeDigest:value.journeyBinding.tenantScopeDigest,
+      sessionScopeDigest:value.journeyBinding.sessionScopeDigest,
+      recordScopeDigest:value.journeyBinding.recordScopeDigest,
+      workspaceRevision:value.journeyBinding.workspaceRevision,
+      workspaceGeneration:value.journeyBinding.workspaceGeneration,
+      workspaceSeedDigest:value.journeyBinding.workspaceSeedDigest,
+      workspaceStateDigest:value.journeyBinding.workspaceStateDigest,
+      draftRevision:value.journeyBinding.draftRevision,
+      draftDigest:value.journeyBinding.draftDigest,previewDigest:value.journeyBinding.previewDigest,
+      currency:value.journeyBinding.currency};
+    var stageSources=[part12Bundle.preview,part12Bundle.preview,part12Bundle.part5Acceptance,
+      part12Bundle.part5Acceptance.issueReadiness,part12Bundle.part6Acceptance.delivery,
+      part12Bundle.part7Acceptance,part12Bundle.part9Acceptance,part12Bundle.part9Acceptance,
+      part12Bundle.part9Acceptance.customerReceipt,part12Bundle.part9Acceptance.correctionRecovery,
+      part12Bundle.part10Acceptance,part12Bundle.part11Acceptance,part12Bundle.part12Acceptance,
+      part12Bundle.part9Acceptance,part12Bundle.part9Acceptance];
+    return Promise.all([digestObject(part12Bundle),digestObject(binding)].concat(
+      stageSources.map(digestObject))).then(function(digests){
+      if (digests[0]!==value.sourceWitness.digest||
+          digests[1]!==value.journeyBinding.journeyBindingDigest||
+          value.lifecycle.stages.some(function(stage,index){return stage.sourceDigest!==digests[index+2];})) {
+        return null;
+      }
+      return value;
+    }).catch(function(){return null;});
+  }
+  function invalidPart14B(value,part12Bundle,expectedRevision) {
+    return projectPart14B(value,part12Bundle,expectedRevision).then(function(projected){
+      return !projected;
+    });
   }
   var PART11_SOURCE_DIGEST_MARKER='__EXACT_UPSTREAM_DIGEST__';
   var PART11_SOURCE_SEMANTIC_DIGESTS=Object.freeze([
@@ -1640,17 +1771,18 @@
           invalidPart11(part11Acceptance, review.simulated ? 'demo' : 'paid');
       if (review.simulated && (!lifecycleBundle||!exactOrdered(lifecycleBundle,
         ['contractVersion','part12Bundle','journeyAcceptance']))) invalidSynchronous=true;
-      var digestResults=invalidSynchronous ? [true,false,true,false,true] : await Promise.all([
+      var digestResults=invalidSynchronous ? [true,false,true,false,null] : await Promise.all([
         invalidPart11SourceWitnesses(part11Acceptance,part11SourceContracts,part10Acceptance),
         samePart11Witness(value,part11Acceptance,part10Acceptance),
         invalidPart12(part12Acceptance,review.simulated?'demo':'paid'),
         samePart12Witness(value,part12Acceptance,part11Acceptance),
-        review.simulated?invalidPart14B(part14bAcceptance,bundle,expectedDemoRevision):false,
+        review.simulated?projectPart14B(part14bAcceptance,bundle,expectedDemoRevision):null,
       ]);
       if (token!==undefined && !active(token)) return;
       if (invalidSynchronous || digestResults[0] || !digestResults[1] ||
-          digestResults[2] || !digestResults[3] || digestResults[4]) return rejected({ status: 409,
+          digestResults[2] || !digestResults[3] || review.simulated&&!digestResults[4]) return rejected({ status: 409,
         message: 'The exact invoice draft changed. Reload its current evidence.' });
+      if (review.simulated) part14bAcceptance=digestResults[4];
       data = value; part5 = acceptance; part6 = deliveryAcceptance;
       part7 = paymentAcceptance; part9 = part9Acceptance; part10 = part10Acceptance;
       part11 = part11Acceptance; part12 = part12Acceptance; part14b = part14bAcceptance;
@@ -1807,7 +1939,7 @@
     invalidPart11SourceWitnesses: invalidPart11SourceWitnesses,
     samePart11Witness: samePart11Witness,
     invalidPart12: invalidPart12, samePart12Witness: samePart12Witness,
-    invalidPart14B: invalidPart14B,
+    invalidPart14B: invalidPart14B, projectPart14B: projectPart14B,
     matchesDemoWorkspaceRevision: matchesDemoWorkspaceRevision,
     recoverAfterSuccessfulMutation: recoverAfterSuccessfulMutation,
     canPreserveMountedDisclosure: canPreserveMountedDisclosure,

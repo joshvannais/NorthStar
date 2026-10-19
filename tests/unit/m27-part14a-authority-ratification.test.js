@@ -261,7 +261,8 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
       `Object.getPrototypeOf=()=>Object.prototype;`,
       `Object.getOwnPropertyDescriptor=()=>({value:()=>false,enumerable:true,writable:true,configurable:true});`,
       `Object.freeze=value=>value;`,
-      `String.prototype.replace=function(){return this;};`,
+      `String.prototype.charCodeAt=function(){return 65;};`,
+      `require('node:crypto').createHash=()=>{throw new Error('hostile createHash');};`,
     ];
     for (const setup of cases) {
       const result = runFresh(`
@@ -316,6 +317,143 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
     expect(result).toEqual({capturedPass:true,pollutedRejected:true});
   });
 
+  test('normalization and hashing never dispatch through post-import ambient hooks', () => {
+    const result = runFresh(`
+      'use strict';
+      const fs=require('node:fs'); const path=require('node:path');
+      const authority=require(${JSON.stringify(AUTHORITY_PATH)});
+      const root=${JSON.stringify(ROOT)};
+      const docs=Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
+        .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
+      const altered={...docs,architecture:docs.architecture+'\\nforged authority\\n'};
+      const crypto=require('node:crypto');
+      const counts={crypto:0,buffer:0,bufferObject:0,regexp:0,replace:0,charCode:0,apply:0,
+        getPrototypeOf:0,descriptor:0};
+      crypto.createHash=()=>{counts.crypto+=1; throw new Error('ambient crypto');};
+      Buffer.byteLength=()=>{counts.buffer+=1; throw new Error('ambient buffer');};
+      global.Buffer=new Proxy(function(){},{get(){counts.bufferObject+=1;
+        throw new Error('ambient Buffer object');}});
+      RegExp.prototype[Symbol.replace]=()=>{counts.regexp+=1; throw new Error('ambient regexp');};
+      String.prototype.replace=()=>{counts.replace+=1; throw new Error('ambient replace');};
+      String.prototype.charCodeAt=()=>{counts.charCode+=1; throw new Error('ambient charCodeAt');};
+      Reflect.apply=()=>{counts.apply+=1; throw new Error('ambient apply');};
+      Object.getPrototypeOf=()=>{counts.getPrototypeOf+=1; throw new Error('ambient prototype');};
+      Object.getOwnPropertyDescriptor=()=>{counts.descriptor+=1; throw new Error('ambient descriptor');};
+      let canonical=false; let alteredRejected=false;
+      try { canonical=authority.validate(docs).currentStatus==='candidate'; } catch(_error) {}
+      try { authority.validate(altered); } catch(_error) { alteredRejected=true; }
+      process.stdout.write(JSON.stringify({canonical,alteredRejected,counts}));
+    `);
+    expect(result).toEqual({canonical:true, alteredRejected:true, counts:{
+      crypto:0, buffer:0, bufferObject:0, regexp:0, replace:0, charCode:0, apply:0,
+      getPrototypeOf:0, descriptor:0,
+    }});
+  });
+
+  test('hash prototype replacement fails closed without invoking hostile methods', () => {
+    const result = runFresh(`
+      'use strict';
+      const fs=require('node:fs'); const path=require('node:path');
+      const crypto=require('node:crypto');
+      const authority=require(${JSON.stringify(AUTHORITY_PATH)});
+      const root=${JSON.stringify(ROOT)};
+      const docs=Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
+        .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
+      const altered={...docs,ledger:docs.ledger+'\\nforged authority\\n'};
+      const prototype=Object.getPrototypeOf(crypto.createHash('sha256'));
+      const counts={update:0,digest:0};
+      Object.defineProperty(prototype,'update',{enumerable:true,writable:true,configurable:true,
+        value(){counts.update+=1; throw new Error('hostile update');}});
+      Object.defineProperty(prototype,'digest',{enumerable:true,writable:true,configurable:true,
+        value(){counts.digest+=1; throw new Error('hostile digest');}});
+      let rejected=false;
+      try { authority.validate(altered); } catch(_error) { rejected=true; }
+      process.stdout.write(JSON.stringify({rejected,counts}));
+    `);
+    expect(result).toEqual({rejected:true, counts:{update:0,digest:0}});
+
+    const prototypeResult = runFresh(`
+      'use strict';
+      const fs=require('node:fs'); const path=require('node:path');
+      const crypto=require('node:crypto');
+      const authority=require(${JSON.stringify(AUTHORITY_PATH)});
+      const root=${JSON.stringify(ROOT)};
+      const docs=Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
+        .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
+      const altered={...docs,ledger:docs.ledger+'\\nforged authority\\n'};
+      const prototype=Object.getPrototypeOf(crypto.createHash('sha256'));
+      let inheritedHooks=0;
+      Object.setPrototypeOf(prototype,new Proxy(Object.create(null),{
+        get(){inheritedHooks+=1; throw new Error('hostile hash prototype');}}));
+      let rejected=false;
+      try { authority.validate(altered); } catch(_error) { rejected=true; }
+      process.stdout.write(JSON.stringify({rejected,inheritedHooks}));
+    `);
+    expect(prototypeResult).toEqual({rejected:true,inheritedHooks:0});
+  });
+
+  test('seals the original API and keeps initialized consumers bound across cache replacement', () => {
+    const productionFiles = [];
+    const visit = directory => {
+      for (const entry of fs.readdirSync(directory, {withFileTypes:true})) {
+        const file = path.join(directory, entry.name);
+        if (entry.isDirectory()) visit(file);
+        else if (entry.isFile() && /\\.js$/.test(entry.name) && file !== AUTHORITY_PATH &&
+            fs.readFileSync(file, 'utf8').includes('mission27Part14Authority')) {
+          productionFiles.push(path.relative(ROOT, file));
+        }
+      }
+    };
+    visit(path.join(ROOT, 'src'));
+    expect(productionFiles).toEqual([]);
+
+    const result = runFresh(`
+      'use strict';
+      const fs=require('node:fs'); const path=require('node:path');
+      const Module=require('node:module');
+      const modulePath=${JSON.stringify(AUTHORITY_PATH)}; const root=${JSON.stringify(ROOT)};
+      const original=require(modulePath); const capturedValidate=original.validate;
+      const originalRecord=require.cache[modulePath];
+      const docs=Object.fromEntries(Object.entries(original.CANONICAL_DOCUMENTS)
+        .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
+      const altered={...docs,roadmap:docs.roadmap+'\\nforged authority\\n'};
+      const descriptor=Object.getOwnPropertyDescriptor(originalRecord,'exports');
+      const attempts={assign:false,delete:false,define:false,apiAssign:false};
+      try { originalRecord.exports={validate:()=>({currentStatus:'forged'})}; }
+      catch(_error) { attempts.assign=true; }
+      try { delete originalRecord.exports; } catch(_error) { attempts.delete=true; }
+      try { Object.defineProperty(originalRecord,'exports',{value:{}}); }
+      catch(_error) { attempts.define=true; }
+      try { original.validate=()=>({currentStatus:'forged'}); }
+      catch(_error) { attempts.apiAssign=true; }
+      delete require.cache[modulePath];
+      const reloaded=require(modulePath);
+      const reloadCanonical=reloaded.validate(docs).currentStatus==='candidate';
+      delete require.cache[modulePath];
+      let forgedCalls=0; const forged=new Module(modulePath);
+      forged.filename=modulePath; forged.loaded=true;
+      forged.exports={validate(){forgedCalls+=1; return {currentStatus:'forged'};}};
+      require.cache[modulePath]=forged;
+      const directHostile=require(modulePath).validate(altered).currentStatus;
+      let capturedRejected=false;
+      try { capturedValidate(altered); } catch(_error) { capturedRejected=true; }
+      const capturedCanonical=capturedValidate(docs).currentStatus==='candidate';
+      process.stdout.write(JSON.stringify({
+        nullPrototype:Object.getPrototypeOf(original)===null,
+        frozen:Object.isFrozen(original), extensible:Object.isExtensible(original),
+        descriptor:{writable:descriptor.writable,configurable:descriptor.configurable},
+        attempts,reloadCanonical,directHostile,forgedCalls,capturedRejected,capturedCanonical,
+      }));
+    `);
+    expect(result).toEqual({
+      nullPrototype:true, frozen:true, extensible:false,
+      descriptor:{writable:false,configurable:false},
+      attempts:{assign:true,delete:true,define:true,apiAssign:true},
+      reloadCanonical:true, directHostile:'forged', forgedCalls:1,
+      capturedRejected:true, capturedCanonical:true,
+    });
+  });
+
   test('returns one deeply immutable authority state', () => {
     const first = authority.validate({ ...DOCS });
     const second = authority.validate({ ...DOCS });
@@ -324,5 +462,6 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
     expect(Object.isFrozen(first.laterSlices)).toBe(true);
     expect(authority.PART14_SCOPES.every(Object.isFrozen)).toBe(true);
     expect(authority.LATER_LEDGER_ROWS.every(Object.isFrozen)).toBe(true);
+    expect(Object.getPrototypeOf(authority)).toBeNull();
   });
 });

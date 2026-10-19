@@ -24,12 +24,13 @@ const OBJECT_GET_PROTOTYPE_OF = requireNative(
 const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR = requireNative(
   Object.getOwnPropertyDescriptor, 'function getOwnPropertyDescriptor() { [native code] }');
 const OBJECT_FREEZE = requireNative(Object.freeze, 'function freeze() { [native code] }');
-const STRING_REPLACE = requireNative(
-  String.prototype.replace, 'function replace() { [native code] }');
-const STRING_INDEX_OF = requireNative(
-  String.prototype.indexOf, 'function indexOf() { [native code] }');
-const STRING_SPLIT = requireNative(
-  String.prototype.split, 'function split() { [native code] }');
+const OBJECT_CREATE = requireNative(Object.create, 'function create() { [native code] }');
+const OBJECT_DEFINE_PROPERTY = requireNative(
+  Object.defineProperty, 'function defineProperty() { [native code] }');
+const OBJECT_DEFINE_PROPERTIES = requireNative(
+  Object.defineProperties, 'function defineProperties() { [native code] }');
+const STRING_CHAR_CODE_AT = requireNative(
+  String.prototype.charCodeAt, 'function charCodeAt() { [native code] }');
 const OBJECT_PROTOTYPE = Object.prototype;
 const initialPrototypeKeys = REFLECT_OWN_KEYS(OBJECT_PROTOTYPE);
 const copiedPrototypeKeys = [];
@@ -49,7 +50,71 @@ if (isProxyDescriptor.enumerable !== true || isProxyDescriptor.writable !== true
     isProxyDescriptor.configurable !== true || IS_PROXY({}) !== false ||
     IS_PROXY(new Proxy({}, {})) !== true) throw bootstrapInvalid();
 
-const crypto = require('node:crypto');
+// Capture the standard Node hashing implementation without retaining its mutable
+// module object. The supported bootstrap contract is the same ordinary native
+// Node startup required above. Two independently created hashes must expose the
+// same concrete prototype and method identities and pass a known-answer test.
+// Every later hash validates that those prototype descriptors are still exact,
+// then calls only the private captured functions through private Reflect.apply.
+const HASH_CAPABILITIES = (() => {
+  const cryptoModule = require('node:crypto');
+  const createDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(cryptoModule, 'createHash');
+  const createHash = createDescriptor?.value;
+  const createSource = typeof createHash === 'function' ?
+    FUNCTION_TO_STRING.call(createHash) : '';
+  if (createSource !==
+      'function createHash(algorithm, options) {\n  return new Hash(algorithm, options);\n}' &&
+      createSource !==
+      'function createHash(algorithm, options) {\r\n  return new Hash(algorithm, options);\r\n}') {
+    throw bootstrapInvalid();
+  }
+  if (createDescriptor.enumerable !== true || createDescriptor.writable !== true ||
+      createDescriptor.configurable !== true) throw bootstrapInvalid();
+
+  const first = REFLECT_APPLY(createHash, undefined, ['sha256']);
+  const second = REFLECT_APPLY(createHash, undefined, ['sha256']);
+  if (IS_PROXY(first) || IS_PROXY(second)) throw bootstrapInvalid();
+  const instancePrototype = OBJECT_GET_PROTOTYPE_OF(first);
+  if (instancePrototype === null || OBJECT_GET_PROTOTYPE_OF(second) !== instancePrototype) {
+    throw bootstrapInvalid();
+  }
+  const methodPrototype = instancePrototype;
+  const parentPrototype = OBJECT_GET_PROTOTYPE_OF(instancePrototype);
+  if (parentPrototype === null) throw bootstrapInvalid();
+  const updateDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(methodPrototype, 'update');
+  const digestDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(methodPrototype, 'digest');
+  if (!updateDescriptor || !digestDescriptor ||
+      typeof updateDescriptor.value !== 'function' || typeof digestDescriptor.value !== 'function' ||
+      updateDescriptor.enumerable !== true || updateDescriptor.writable !== true ||
+      updateDescriptor.configurable !== true || digestDescriptor.enumerable !== true ||
+      digestDescriptor.writable !== true || digestDescriptor.configurable !== true ||
+      updateDescriptor.get !== undefined || updateDescriptor.set !== undefined ||
+      digestDescriptor.get !== undefined || digestDescriptor.set !== undefined) {
+    throw bootstrapInvalid();
+  }
+  const update = updateDescriptor.value;
+  const digest = digestDescriptor.value;
+  if (OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+    OBJECT_GET_PROTOTYPE_OF(second), 'update')?.value !== update ||
+      OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+        OBJECT_GET_PROTOTYPE_OF(second), 'digest')?.value !== digest) {
+    throw bootstrapInvalid();
+  }
+  if (REFLECT_APPLY(update, first, ['abc', 'utf8']) !== first ||
+      REFLECT_APPLY(digest, first, ['hex']) !==
+        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad') {
+    throw bootstrapInvalid();
+  }
+  return OBJECT_FREEZE({
+    createHash, instancePrototype, methodPrototype, parentPrototype, update, digest,
+    updateEnumerable:updateDescriptor.enumerable,
+    updateWritable:updateDescriptor.writable,
+    updateConfigurable:updateDescriptor.configurable,
+    digestEnumerable:digestDescriptor.enumerable,
+    digestWritable:digestDescriptor.writable,
+    digestConfigurable:digestDescriptor.configurable,
+  });
+})();
 
 const PART14_SCOPES = OBJECT_FREEZE([
   ['A', 'Complete paid-tenant production path with live capability disabled: exact launch-approved billable handoff, human invoice review/issue, secure customer delivery, deterministic in-process provider simulation, simulated settlement evidence, receipt, correction/refund, receivable update, accounting handoff, and downstream evidence. When partial or multi-invoice provider payment is launch-enabled, this path also proves exact authorized initiation, allocation, concurrency/currentness refusal, balance projection, and receipt. When offline recording is launch-enabled, it proves reviewed cash receipt and check-received-with-clearance-unknown through balance, customer receipt, accounting handoff, and reporting without implying provider or bank settlement. Actual provider-sandbox account evidence belongs to the Provider-sandbox accepted verdict.'],
@@ -126,20 +191,72 @@ function assertCanonicalObjectPrototype() {
 }
 
 function normalizeDocument(value) {
-  const normalized = REFLECT_APPLY(STRING_REPLACE, value, [/\r\n/g, '\n']);
-  if (REFLECT_APPLY(STRING_INDEX_OF, normalized, ['\r']) !== -1 ||
-      REFLECT_APPLY(STRING_INDEX_OF, normalized, ['\0']) !== -1) throw invalid();
-  return normalized;
+  let normalized = '';
+  let utf8Bytes = 0;
+  let lineCount = 1;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = REFLECT_APPLY(STRING_CHAR_CODE_AT, value, [index]);
+    if (code === 0) throw invalid();
+    if (code === 13) {
+      if (index + 1 >= value.length ||
+          REFLECT_APPLY(STRING_CHAR_CODE_AT, value, [index + 1]) !== 10) throw invalid();
+      normalized += '\n';
+      utf8Bytes += 1;
+      lineCount += 1;
+      index += 1;
+      continue;
+    }
+    normalized += value[index];
+    if (code === 10) lineCount += 1;
+    if (code <= 0x7f) utf8Bytes += 1;
+    else if (code <= 0x7ff) utf8Bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const next = REFLECT_APPLY(STRING_CHAR_CODE_AT, value, [index + 1]);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        normalized += value[index + 1];
+        utf8Bytes += 4;
+        index += 1;
+      } else utf8Bytes += 3;
+    } else utf8Bytes += 3;
+  }
+  return {normalized, utf8Bytes, lineCount};
+}
+
+function documentDigest(value) {
+  const capabilities = HASH_CAPABILITIES;
+  if (OBJECT_GET_PROTOTYPE_OF(capabilities.instancePrototype) !==
+      capabilities.parentPrototype) throw invalid();
+  const updateDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+    capabilities.methodPrototype, 'update');
+  const digestDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+    capabilities.methodPrototype, 'digest');
+  if (!updateDescriptor || updateDescriptor.value !== capabilities.update ||
+      updateDescriptor.enumerable !== capabilities.updateEnumerable ||
+      updateDescriptor.writable !== capabilities.updateWritable ||
+      updateDescriptor.configurable !== capabilities.updateConfigurable ||
+      updateDescriptor.get !== undefined || updateDescriptor.set !== undefined ||
+      !digestDescriptor || digestDescriptor.value !== capabilities.digest ||
+      digestDescriptor.enumerable !== capabilities.digestEnumerable ||
+      digestDescriptor.writable !== capabilities.digestWritable ||
+      digestDescriptor.configurable !== capabilities.digestConfigurable ||
+      digestDescriptor.get !== undefined || digestDescriptor.set !== undefined) throw invalid();
+  const hash = REFLECT_APPLY(capabilities.createHash, undefined, ['sha256']);
+  if (IS_PROXY(hash) || OBJECT_GET_PROTOTYPE_OF(hash) !== capabilities.instancePrototype) {
+    throw invalid();
+  }
+  if (REFLECT_APPLY(capabilities.update, hash, [value, 'utf8']) !== hash) throw invalid();
+  const digest = REFLECT_APPLY(capabilities.digest, hash, ['hex']);
+  if (typeof digest !== 'string' || digest.length !== 64) throw invalid();
+  return digest;
 }
 
 function validateDocument(name, value) {
   const expected = CANONICAL_DOCUMENTS[name];
-  const normalized = normalizeDocument(value);
-  const digest = crypto.createHash('sha256').update(normalized, 'utf8').digest('hex');
+  const result = normalizeDocument(value);
+  const digest = documentDigest(result.normalized);
   if (digest !== expected.normalizedSha256 ||
-      Buffer.byteLength(normalized, 'utf8') !== expected.normalizedUtf8Bytes ||
-      REFLECT_APPLY(STRING_SPLIT, normalized, ['\n']).length !==
-        expected.normalizedLineCount) throw invalid();
+      result.utf8Bytes !== expected.normalizedUtf8Bytes ||
+      result.lineCount !== expected.normalizedLineCount) throw invalid();
 }
 
 function readCanonicalInput(input) {
@@ -183,6 +300,22 @@ function validate(input) {
   return VALIDATED_AUTHORITY;
 }
 
-module.exports = OBJECT_FREEZE({
-  PART14_SCOPES, PART13_RELEASE, LATER_LEDGER_ROWS, CANONICAL_DOCUMENTS, validate,
+// Repository inventory has no production runtime importer for this ratification
+// package: it is an executable release-authority gate. Supported gate consumers
+// capture this finalized API once at their own module initialization. Sealing the
+// original Module.exports slot prevents replacement through the original cache
+// record. Whole require.cache replacement can affect a later hostile direct
+// require, so it is deliberately outside the supported consumer contract and is
+// tested without claiming global CommonJS cache immutability.
+const API = OBJECT_CREATE(null);
+OBJECT_DEFINE_PROPERTIES(API, {
+  PART14_SCOPES:{value:PART14_SCOPES, enumerable:true, writable:false, configurable:false},
+  PART13_RELEASE:{value:PART13_RELEASE, enumerable:true, writable:false, configurable:false},
+  LATER_LEDGER_ROWS:{value:LATER_LEDGER_ROWS, enumerable:true, writable:false, configurable:false},
+  CANONICAL_DOCUMENTS:{value:CANONICAL_DOCUMENTS, enumerable:true, writable:false, configurable:false},
+  validate:{value:validate, enumerable:true, writable:false, configurable:false},
+});
+OBJECT_FREEZE(API);
+OBJECT_DEFINE_PROPERTY(module, 'exports', {
+  value:API, enumerable:true, writable:false, configurable:false,
 });

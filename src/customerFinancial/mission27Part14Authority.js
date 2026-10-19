@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('node:crypto');
+
 const PART14_SCOPES = Object.freeze([
   ['A', 'Complete paid-tenant production path with live capability disabled: exact launch-approved billable handoff, human invoice review/issue, secure customer delivery, deterministic in-process provider simulation, simulated settlement evidence, receipt, correction/refund, receivable update, accounting handoff, and downstream evidence. When partial or multi-invoice provider payment is launch-enabled, this path also proves exact authorized initiation, allocation, concurrency/currentness refusal, balance projection, and receipt. When offline recording is launch-enabled, it proves reviewed cash receipt and check-received-with-clearance-unknown through balance, customer receipt, accounting handoff, and reporting without implying provider or bank settlement. Actual provider-sandbox account evidence belongs to the Provider-sandbox accepted verdict.'],
   ['B', 'Complete resettable fictional demo path with realistic lifecycle states and strict isolation from paid data, credentials, providers, and money.'],
@@ -26,116 +28,57 @@ const LATER_LEDGER_ROWS = Object.freeze([
   ['14G','Backup, reviewed merge, sole deploy, health, named verdict, ledger, founder verdict','No','No','No','—','No','No','No','Planned'],
 ]);
 
-const FORBIDDEN = Object.freeze([
-  /part 14a (?:is )?(?:accepted|released|deployed|independently audited)/i,
-  /part 14[bcdefg] (?:is )?(?:complete|accepted|released|deployed)/i,
-  /automatic (?:sms|charge|refund|accounting) (?:is )?authorized/i,
-  /external effect (?:is )?authorized/i,
-  /live payment (?:is )?accepted/i,
-  /provider sandbox (?:is )?accepted/i,
-  /offline check (?:is )?cleared/i,
-  /check clearance (?:is )?(?:accepted|available|proven)/i,
-]);
+// These hashes ratify the complete normalized documents rather than a finite set
+// of required/forbidden phrases. Any normative drift is rejected until a later
+// reviewed slice deliberately updates both its canonical document and this
+// manifest. Only platform line endings are normalized; whitespace, case,
+// punctuation, section/row order, and the terminal newline remain authoritative.
+const CANONICAL_DOCUMENTS = Object.freeze({
+  roadmap: Object.freeze({
+    path: 'docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md',
+    normalizedSha256: 'e65a5dcca88b16ab56e96b6c916c2304bb935dde5c36adb8c90d4dc201027fe0',
+    normalizedUtf8Bytes: 66669,
+    normalizedLineCount: 349,
+  }),
+  ledger: Object.freeze({
+    path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
+    normalizedSha256: '81c34304c22ab779583f8b74c616e5de0d08bf58845e67ad42dac0812fc6ba42',
+    normalizedUtf8Bytes: 89744,
+    normalizedLineCount: 138,
+  }),
+  architecture: Object.freeze({
+    path: 'docs/architecture/MISSION_27_PART14A_PAID_PROVIDER_DISABLED_JOURNEY.md',
+    normalizedSha256: '841189a5e1e03e9d6c54579a043847e87a3ae80e8c93a46dd9f975bb9843144c',
+    normalizedUtf8Bytes: 6338,
+    normalizedLineCount: 59,
+  }),
+});
 
 function invalid() { return new Error('Mission 27 Part 14 authority ratification invalid'); }
 
-function rows(markdown) {
-  const result = new Map();
-  for (const line of markdown.split(/\r?\n/)) {
-    if (!/^\| (?:13D|14[A-G]) \|/.test(line)) continue;
-    const fields = line.slice(1, -1).split('|').map(value => value.trim());
-    if (result.has(fields[0])) throw invalid();
-    result.set(fields[0], fields);
-  }
-  return result;
+function normalizeDocument(value) {
+  if (typeof value !== 'string' || value.includes('\0')) throw invalid();
+  return value.replace(/\r\n?/g, '\n');
 }
 
-function validateRoadmap(roadmap) {
-  if (typeof roadmap !== 'string' ||
-      !roadmap.startsWith('# Mission 27 — Customer financial lifecycle') ||
-      !roadmap.includes('Status: frozen plan through released complete Part 13; original Part 14A is the current implementation candidate.') ||
-      !roadmap.includes(PART13_RELEASE.head) || !roadmap.includes(PART13_RELEASE.tree) ||
-      !roadmap.includes(PART13_RELEASE.main) || !roadmap.includes(PART13_RELEASE.pr) ||
-      !roadmap.includes(PART13_RELEASE.deployment) ||
-      !roadmap.includes('founder-authorized fallback whole exact-head audit') ||
-      !roadmap.includes('arbitrary earlier same-process runtime replacement remains outside this application validator') ||
-      !roadmap.includes('Live-money validation was not run and remains deferred until the first real paying customer.')) {
-    throw invalid();
-  }
-  const section = roadmap.split('## Part 14 — mission acceptance and release')[1]
-    ?.split('## Named acceptance verdicts')[0];
-  if (!section) throw invalid();
-  const actual = [...section.matchAll(/^\| ([A-G]) \| (.*) \|$/gm)]
-    .map(match => [match[1], match[2]]);
-  if (JSON.stringify(actual) !== JSON.stringify(PART14_SCOPES)) throw invalid();
-  if (!roadmap.includes('| 14 | Complete paid/demo journeys, migration proof, accessibility, independent audit, and release | 7 | Part 14A current |')) throw invalid();
-}
-
-function validateLedger(ledger) {
-  if (typeof ledger !== 'string' || !ledger.startsWith('# Mission 27 acceptance ledger') ||
-      !ledger.includes('Current implementation candidate: original Part 14A') ||
-      !ledger.includes('Live-money validation was not run and remains deferred until the first real paying customer.')) throw invalid();
-  const actual = rows(ledger);
-  if (actual.size !== 8) throw invalid();
-  const part13 = actual.get('13D');
-  if (!part13 || part13.length !== 10 || part13[4] !==
-      'Founder-authorized fallback whole exact-head audit accepted with no P0–P3. Practical trust boundary: supported Node startup with standard reflection intrinsics and `node:util` proxy detection; arbitrary earlier same-process runtime replacement remains outside this application validator.' ||
-      part13[5] !== `\`${PART13_RELEASE.head}\` / tree \`${PART13_RELEASE.tree}\`` ||
-      !part13[6].includes(PART13_RELEASE.pr) || !part13[6].includes(PART13_RELEASE.main) ||
-      !part13[6].includes(PART13_RELEASE.deployment) || !part13[6].includes('migration 272') ||
-      part13[9] !== 'Released') throw invalid();
-  const part14 = actual.get('14A');
-  if (!part14 || part14.length !== 10 ||
-      part14[1] !== '[Complete paid-tenant provider-disabled journey, including exact offline cash/check semantics](../architecture/MISSION_27_PART14A_PAID_PROVIDER_DISABLED_JOURNEY.md)' ||
-      !part14[2].startsWith('**Candidate, provider-disabled and production-incomplete**') ||
-      !part14[2].includes('exact released production contracts') ||
-      !part14[2].includes('complete production journey remains false') ||
-      !part14[3].startsWith('Corrected writer evidence:') ||
-      part14[4] !== 'Independent whole exact-head re-audit pending' || part14[5] !== '—' ||
-      part14[6] !== 'No' || !part14[7].includes('first-paying-customer live-money validation unavailable') ||
-      !part14[7].includes('zero external mutation') ||
-      part14[8] !== 'N/A — Part 14A adds no rendered/public/customer/demo surface; Part 14E owns the visual matrix and founder visual verdict remains separate' ||
-      part14[9] !== 'Current implementation candidate') throw invalid();
-  for (const expected of LATER_LEDGER_ROWS) {
-    if (JSON.stringify(actual.get(expected[0])) !== JSON.stringify(expected)) throw invalid();
-  }
-}
-
-function validateArchitecture(architecture) {
-  if (typeof architecture !== 'string') throw invalid();
-  const required = [
-    'incomplete_provider_disabled', 'required_production_stage_evidence_unavailable',
-    'm27-production-contract-journey-execution-v1',
-    'completeProductionJourney: false', 'check_clearance_authority_unavailable',
-    'Partial provider payment | Disabled', 'Multi-invoice provider payment | Disabled',
-    'Offline cash | Enabled', 'Offline check | Enabled',
-    'No automatic issue, delivery, charge, refund, receipt, accounting, or downstream action is authorized.',
-    'Browser/demo evidence is not applicable',
-  ];
-  if (required.some(value => !architecture.includes(value))) throw invalid();
-  const ordered = architecture.split(/\r?\n/).filter(line => /^\d+\. `/.test(line))
-    .map(line => line.match(/^\d+\. `([^`]+)`/)[1]);
-  const expected = [
-    'launch_approved_billable_handoff','human_invoice_review_and_issue',
-    'secure_customer_delivery','deterministic_provider_payment',
-    'simulated_settlement_evidence','customer_receipt','correction_and_refund',
-    'receivable_update','accounting_handoff','downstream_evidence',
-    'offline_cash_receipt','offline_check_received',
-  ];
-  if (JSON.stringify(ordered) !== JSON.stringify(expected)) throw invalid();
+function validateDocument(name, value) {
+  const expected = CANONICAL_DOCUMENTS[name];
+  const normalized = normalizeDocument(value);
+  const digest = crypto.createHash('sha256').update(normalized, 'utf8').digest('hex');
+  if (digest !== expected.normalizedSha256 ||
+      Buffer.byteLength(normalized, 'utf8') !== expected.normalizedUtf8Bytes ||
+      normalized.split('\n').length !== expected.normalizedLineCount) throw invalid();
 }
 
 function validate(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
+      Object.getPrototypeOf(input) !== Object.prototype ||
       Object.keys(input).length !== 3 ||
       !Object.hasOwn(input, 'roadmap') || !Object.hasOwn(input, 'ledger') ||
       !Object.hasOwn(input, 'architecture')) throw invalid();
-  validateRoadmap(input.roadmap); validateLedger(input.ledger);
-  validateArchitecture(input.architecture);
-  const joined = `${input.roadmap}\n${input.ledger}\n${input.architecture}`;
-  if (FORBIDDEN.some(pattern => pattern.test(joined))) throw invalid();
+  for (const name of Object.keys(CANONICAL_DOCUMENTS)) validateDocument(name, input[name]);
   return Object.freeze({
-    contractVersion: 'm27-part14a-authority-ratification-v1',
+    contractVersion: 'm27-part14a-authority-ratification-v2',
     releasedPart13Head: PART13_RELEASE.head,
     currentSlice: '14A', currentStatus: 'candidate',
     laterSlices: Object.freeze(['14B','14C','14D','14E','14F','14G']),
@@ -143,4 +86,6 @@ function validate(input) {
   });
 }
 
-module.exports = Object.freeze({ PART14_SCOPES, PART13_RELEASE, LATER_LEDGER_ROWS, validate });
+module.exports = Object.freeze({
+  PART14_SCOPES, PART13_RELEASE, LATER_LEDGER_ROWS, CANONICAL_DOCUMENTS, validate,
+});

@@ -98,38 +98,59 @@ realPostgres('Mission 27 Part 14A mounted paid provider-disabled journey',()=>{
     expect(owner.headers.vary).toContain('Cookie');
     expect(owner.body.data).toMatchObject({
       contractVersion:'m27-paid-provider-disabled-journey-v1',
-      state:'complete_provider_disabled',reason:'live_capability_disabled',value:null,
+      state:'incomplete_provider_disabled',
+      reason:'required_production_stage_evidence_unavailable',value:null,
       mode:'paid',fictional:false,
       launchMatrix:{rolloutStage:'disabled',liveCapabilityEnabled:false,
         providerMode:'test',providerMethod:'card',partialProviderPaymentsEnabled:false,
         multiInvoiceProviderPaymentsEnabled:false,offlineCashReceiptEnabled:true,
         offlineCheckReceiptEnabled:true,checkClearedTransitionEnabled:false,
         checkClearanceUnavailableState:'check_clearance_authority_unavailable'},
-      fixture:{fixtureVersion:'m27-local-synthetic-provider-fixture-v1',deterministic:true,
-        inProcess:true,providerAccountUsed:false,credentialUsed:false,
-        externalTransportUsed:false,liveMoneyUsed:false,
-        offline:{cashReceiptState:'offline_received',
-          checkReceiptState:'check_clearance_unknown',
-          checkClearedState:'check_clearance_authority_unavailable',
-          providerOrBankSettlementClaimed:false}},
-      separation:{fixtureEvidenceIsFinancialTruth:false,
-        fixtureEvidenceMayCreateProviderOrBankSettlement:false,
-        fixtureEvidenceMayCreateInvoicePaymentRefundReceiptOrAccountingRecord:false},
-      acceptance:{exactPaidProductionModulesMounted:true,
-        completeOrderedLocalSyntheticTracePresent:true,
+      execution:{deterministic:true,inProcess:true,
+        explicitSyntheticProviderDisabledProvenance:true,requiredStageCount:12,
+        contractValidationStageCount:12,skippedStageCount:0,duplicateStageCount:0,
+        repositoryReadCounts:{part9:4,part10:2,part11:1,part12Sources:2,part12:1},
+        completeContractValidationTrace:true,completeProductionJourney:false,
+        providerAccountUsed:false,credentialUsed:false,
+        externalTransportUsed:false,liveMoneyUsed:false},
+      separation:{contractExecutionIsFinancialTruth:false,
+        syntheticProviderEvidenceMayCreateProviderOrBankSettlement:false,
+        contractExecutionMayCreateInvoicePaymentRefundReceiptOrAccountingRecord:false},
+      acceptance:{exactPaidProductionContractsExecuted:true,
+        completeOrderedContractValidationTracePresent:true,
+        completeProductionJourneyAccepted:false,
         providerDisabledBoundaryPreserved:true,
         providerSandboxEvidenceAccepted:false,livePaymentEvidenceAccepted:false},
       providerCallCount:0,providerMutationCount:0,receiverMutationCount:0,
       accountingMutationCount:0,downstreamMutationCount:0,
       databaseMutationCount:0,liveMoneyMovementCount:0});
-    expect(owner.body.data.fixture.stages.map(value=>value.stage)).toEqual([...contract.STAGE_ORDER]);
+    expect(owner.body.data.execution.stages.map(value=>value.stage)).toEqual([...contract.STAGE_ORDER]);
+    expect(owner.body.data.execution.stages.every(value=>value.contractValidationExecuted&&
+      !value.productionEffectExecuted&&!value.durableEffectCreated&&!value.externalEffectCreated))
+      .toBe(true);
+    expect(owner.body.data.offlineBranches).toEqual(expect.arrayContaining([
+      expect.objectContaining({method:'cash',intendedAcceptedState:'offline_received',
+        productionState:'unavailable',acceptedReceiptCreated:false,
+        providerOrBankSettlementClaimed:false}),
+      expect.objectContaining({method:'check',intendedAcceptedState:'check_clearance_unknown',
+        productionState:'unavailable',
+        checkClearanceState:'check_clearance_authority_unavailable',
+        providerOrBankSettlementClaimed:false}),
+    ]));
     expect(owner.body.data.sourceWitnesses.every(value=>
       /^[0-9a-f]{64}$/.test(value.digest))).toBe(true);
     expect(JSON.stringify(owner.body.data)).not.toMatch(
       /acct_victim|evt_victim|pi_victim|sk_test|customer@example|123 main/i);
     const admin=await request(prepared.fixture.app).get(route).query(query)
       .set(prepared.fixture.actors.admin.session.headers);
-    expect(admin.status).toBe(200);expect(admin.body.data).toEqual(owner.body.data);
+    expect(admin.status).toBe(200);
+    expect(admin.body.data.journeyBinding.recordScopeDigest)
+      .toBe(owner.body.data.journeyBinding.recordScopeDigest);
+    expect(admin.body.data.journeyBinding.requestAuthorizationDigest)
+      .not.toBe(owner.body.data.journeyBinding.requestAuthorizationDigest);
+    expect(admin.body.data.execution.stages.map(value=>value.stage))
+      .toEqual(owner.body.data.execution.stages.map(value=>value.stage));
+    expect(admin.body.data.offlineBranches.map(value=>value.method)).toEqual(['cash','check']);
     expect(transport).not.toHaveBeenCalled();
   },600000);
 

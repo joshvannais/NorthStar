@@ -148,6 +148,10 @@
   var PART14B_HAS_OWN=Object.prototype.hasOwnProperty;
   var PART14B_OBJECT_PROTOTYPE=Object.prototype;
   var PART14B_ARRAY_PROTOTYPE=Array.prototype;
+  var PART14B_IS_PROXY=null;
+  if (typeof require==='function') {
+    try { PART14B_IS_PROXY=require('node:util').types.isProxy; } catch (_) {}
+  }
   function copyPart14BData(value,depth) {
     if (depth>64) throw new Error('Part 14B data shape invalid');
     if (value===null||typeof value==='string'||typeof value==='boolean') return value;
@@ -155,7 +159,9 @@
       if (!Number.isFinite(value)||Object.is(value,-0)) throw new Error('Part 14B data shape invalid');
       return value;
     }
-    if (!value||typeof value!=='object') throw new Error('Part 14B data shape invalid');
+    if (!value||typeof value!=='object'||PART14B_IS_PROXY&&PART14B_IS_PROXY(value)) {
+      throw new Error('Part 14B data shape invalid');
+    }
     var array=Array.isArray(value),prototype;
     try { prototype=PART14B_GET_PROTOTYPE(value); } catch (_) {
       throw new Error('Part 14B data shape invalid');
@@ -173,11 +179,11 @@
     if (array) {
       var length=PART14B_GET_DESCRIPTOR(value,'length');
       if (!length||length.enumerable||length.configurable||length.writable!==true||
-          length.value!==value.length||keys.length!==value.length+1) {
+          !Number.isSafeInteger(length.value)||length.value<0||keys.length!==length.value+1) {
         throw new Error('Part 14B data shape invalid');
       }
       var list=[];
-      for (var index=0;index<value.length;index+=1) {
+      for (var index=0;index<length.value;index+=1) {
         if (keys[index]!==String(index)) throw new Error('Part 14B data shape invalid');
         var item=PART14B_GET_DESCRIPTOR(value,String(index));
         if (!item||!item.enumerable||!item.configurable||item.writable!==true||
@@ -195,6 +201,9 @@
       result[key]=copyPart14BData(descriptor.value,depth+1);
     });
     return result;
+  }
+  function copyFictionalDemoEnvelope(value) {
+    try { return copyPart14BData(value,0); } catch (_) { return null; }
   }
   function exactOrdered(value,keys) {
     if (!value||typeof value!=='object'||Array.isArray(value)) return false;
@@ -1048,7 +1057,8 @@
       clearAndStatus('The invoice draft changed. Reload its exact current evidence.', true);
     }
     activeDemoMount = review.simulated ? { expectedRevision: expectedDemoRevision,
-      section: section, invalidate: invalidateDemoMount } : null;
+      section: section, invalidate: invalidateDemoMount,
+      validate: function(value){return render(value,requestToken);} } : null;
     function invalid(value) {
       return !value || value.contractVersion !== 'm27-invoice-draft-preview-v1' ||
         value.state !== 'current' || value.sourceCurrent !== true ||
@@ -1178,15 +1188,9 @@
     }
     function invalidBundle(value) {
       return !value || value.contractVersion !== 'm27-reporting-part12-preview-bundle-v1' ||
-        Object.keys(value).length !== 10 || !Object.prototype.hasOwnProperty.call(value, 'preview') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part5Acceptance') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part6Acceptance') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part7Acceptance') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part9Acceptance') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part10Acceptance') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part11SourceContracts') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part11Acceptance') ||
-        !Object.prototype.hasOwnProperty.call(value, 'part12Acceptance');
+        !exactOrdered(value,['contractVersion','preview','part5Acceptance','part6Acceptance',
+          'part7Acceptance','part9Acceptance','part10Acceptance','part11SourceContracts',
+          'part11Acceptance','part12Acceptance']);
     }
     function workflowHeading(text) {
       body.replaceChildren(); var card = node('section', undefined, body, 'invoice-draft-workflow-step');
@@ -1744,6 +1748,15 @@
       ].forEach(function(text){node('li',text,boundaries);});
     }
     async function render(bundle, token) {
+      // A network response is untrusted as one complete value. Sanitize the
+      // entire Parts 5-12/14B graph descriptor-first before reading even its
+      // outer contractVersion. All later validators receive only the detached
+      // data-only copy, so an accessor/toJSON/prototype poison cannot execute
+      // while old financial state is still retained.
+      if (review.simulated) {
+        bundle=copyFictionalDemoEnvelope(bundle);
+        if (!bundle) return rejected({status:409});
+      }
       var lifecycleBundle=review.simulated&&bundle&&bundle.contractVersion===
         'm27-fictional-demo-journey-bundle-v1'?bundle:null;
       var financialBundle=lifecycleBundle?lifecycleBundle.part12Bundle:bundle;
@@ -1821,6 +1834,7 @@
       if (!value.fictional && context?.draft) { var edit = node('button','Edit current invoice draft',actions,'btn btn-secondary');
         edit.type='button'; edit.onclick=function(){renderDraft(context.draft,context.capability,context.receipt);}; }
       heading.focus();
+      return true;
     }
     function rejected(error) {
       requestToken += 1; clearAndStatus(error && error.status === 403 ?
@@ -1830,6 +1844,7 @@
             'Invoice draft preview is temporarily unavailable. Retry from this estimate.', true);
       var actions = node('div', undefined, body, 'invoice-draft-preview-actions');
       var retry = node('button','Retry invoice preview',actions,'btn btn-secondary'); retry.type='button'; retry.onclick=load;
+      return false;
     }
     function loadPaid(token) {
       var receipt; var capability; var draft;
@@ -1934,12 +1949,20 @@
     activeDemoMount = null;
     activeDisclosureMount = null;
   }
+  function validateActiveFictionalDemoEnvelope(value) {
+    if (!activeDemoMount || !activeDemoMount.section.isConnected ||
+        typeof activeDemoMount.validate!=='function') return Promise.resolve(false);
+    try { return Promise.resolve(activeDemoMount.validate(value)); }
+    catch (_) { activeDemoMount.invalidate(); return Promise.resolve(false); }
+  }
   return { mount: mount, clear: clear, money: money, invalidPart7: invalidPart7,
     invalidPart9: invalidPart9, invalidPart10: invalidPart10, invalidPart11: invalidPart11,
     invalidPart11SourceWitnesses: invalidPart11SourceWitnesses,
     samePart11Witness: samePart11Witness,
     invalidPart12: invalidPart12, samePart12Witness: samePart12Witness,
     invalidPart14B: invalidPart14B, projectPart14B: projectPart14B,
+    copyFictionalDemoEnvelope: copyFictionalDemoEnvelope,
+    validateActiveFictionalDemoEnvelope: validateActiveFictionalDemoEnvelope,
     matchesDemoWorkspaceRevision: matchesDemoWorkspaceRevision,
     recoverAfterSuccessfulMutation: recoverAfterSuccessfulMutation,
     canPreserveMountedDisclosure: canPreserveMountedDisclosure,

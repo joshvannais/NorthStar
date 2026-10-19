@@ -52,6 +52,14 @@ const treeBusinessProfiles = require('./demoTreeBusinessProfiles');
 const demoLearningJourney = require('../learning/demoLearningJourney');
 const demoForecastJourney = require('../forecasting/forecastDemoJourney');
 const demoBillingIdentityJourney = require('../customerFinancial/demoBillingIdentityJourney');
+const config = require('../config');
+const paymentProviderBoundary = require('../customerFinancial/paymentProviderBoundary');
+const demoReportingPart12Acceptance = require('../customerFinancial/demoReportingPart12Acceptance');
+const fictionalDemoJourneyAcceptance = require('../customerFinancial/fictionalDemoJourneyAcceptance');
+const readFictionalJourneySource = demoReportingPart12Acceptance.bundle;
+const buildFictionalJourney = fictionalDemoJourneyAcceptance.bundle;
+const productionPoolProvider = db.getPool.bind(db);
+const fictionalJourneyAuthorities = new WeakSet();
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SIMULATION_COOLDOWN_MS = 750;
@@ -67,6 +75,14 @@ const MAX_SOURCE_CREATIONS_PER_MINUTE = 30;
 const DEFAULT_HOUSEKEEPING_INTERVAL_MS = 60 * 1000;
 const DEFAULT_HOUSEKEEPING_MAX_BATCHES = 10;
 const TOKEN = /^[A-Za-z0-9_-]{43}\.[0-9]{10}$/;
+const JOURNEY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DEMO_COOKIE = 'northstar_demo_workspace';
+const JOURNEY_BASELINE_KEYS = Object.freeze(['createdAt','equipmentBasis','equipmentReadinessBasis',
+  'generation','graphs','operationsSchedulingBasis','schedulingWorkforce','schemaVersion','seed',
+  'taxPreparationBasis','travelExamples','workspace']);
+const RENEWABLE_JOURNEY_ERRORS = new Set([
+  'DEMO_SESSION_EXPIRED','DEMO_STATE_CHANGED','DEMO_STATE_INVALID',
+]);
 // Serializes the Part 14B current-read transaction with every mutation for the
 // same opaque demo token. The row lock is authoritative once a persisted row
 // exists; this transaction-scoped key also closes the first-read/first-write
@@ -76,6 +92,113 @@ const CURRENT_READ_LOCK_SEED = '27001402';
 async function boundTransaction(client) {
   await client.query("SET LOCAL lock_timeout='2000ms'");
   await client.query("SET LOCAL statement_timeout='5000ms'");
+}
+
+function journeyUnavailable() {
+  return Object.assign(new Error('That fictional financial journey is unavailable.'), {
+    code: 'DEMO_FINANCIAL_JOURNEY_UNAVAILABLE', status: 404,
+  });
+}
+
+function journeyChanged(cause) {
+  const error = Object.assign(new Error(
+    'The fictional financial journey changed. Reload its current evidence.'), {
+    code: 'DEMO_FINANCIAL_JOURNEY_CHANGED', status: 409,
+  });
+  if (cause) Object.defineProperty(error, 'cause', { value: cause });
+  return error;
+}
+
+function journeyContext(record, estimateId) {
+  if (!record || typeof record !== 'object' || !JOURNEY_UUID.test(record.tenantId) ||
+      !JOURNEY_UUID.test(record.sessionId) || !JOURNEY_UUID.test(estimateId) ||
+      !Number.isSafeInteger(record.revision) || record.revision < 1 ||
+      !Number.isSafeInteger(record.simulationCount) || record.simulationCount < 0 ||
+      !record.state || typeof record.state !== 'object' || Array.isArray(record.state) ||
+      !Number.isSafeInteger(record.state.generation) || record.state.generation < 1 ||
+      !/^[0-9a-f]{64}$/.test(record.state.seed || '')) throw journeyUnavailable();
+  const keys = Object.keys(record.state);
+  const currentMutationKeyCount = keys.filter(key => !JOURNEY_BASELINE_KEYS.includes(key)).length;
+  const canonicalBaseline = currentMutationKeyCount === 0 && record.simulationCount === 0 &&
+    Array.isArray(record.state.graphs) && record.state.graphs.length === 3;
+  return {
+    tenantId: record.tenantId, sessionId: record.sessionId, estimateId,
+    workspaceRevision: record.revision, workspaceGeneration: record.state.generation,
+    workspaceSeedDigest: record.state.seed,
+    workspaceStateDigest: paymentProviderBoundary.digest(record.state), canonicalBaseline,
+    currentMutationKeyCount, simulationCount: record.simulationCount,
+  };
+}
+
+async function projectFictionalFinancialJourney(record, estimateId) {
+  try {
+    const context = journeyContext(record, estimateId);
+    const workspace = buildDemoWorkspace({ tenantId: record.tenantId,
+      sessionId: record.sessionId, state: record.state, revision: record.revision,
+      simulationCount: record.simulationCount, persisted: Boolean(record.persisted),
+      expiresAt: record.expiresAt });
+    const item = demoCanonicalItems(workspace)
+      .find(candidate => candidate.ids.estimate === estimateId);
+    if (!item) throw journeyUnavailable();
+    const sourceSnapshot = paymentProviderBoundary.digest({ context, item });
+    const before = await readFictionalJourneySource(item, record.revision);
+    const afterContext = journeyContext(record, estimateId);
+    const afterWorkspace = buildDemoWorkspace({ tenantId: record.tenantId,
+      sessionId: record.sessionId, state: record.state, revision: record.revision,
+      simulationCount: record.simulationCount, persisted: Boolean(record.persisted),
+      expiresAt: record.expiresAt });
+    const afterItem = demoCanonicalItems(afterWorkspace)
+      .find(candidate => candidate.ids.estimate === estimateId);
+    if (!afterItem || sourceSnapshot !== paymentProviderBoundary.digest({
+      context: afterContext, item: afterItem,
+    })) throw journeyChanged();
+    // The raw production source is read independently before and after the
+    // complete Parts 5-12 projection.  The second read is the exact rebuilt
+    // workspace item/context snapshot above; deriving the entire Parts 5-12
+    // acceptance graph a second time here made the supported WebKit request
+    // exceed its bounded response window without adding currentness evidence.
+    // The final locked database reread below independently closes any reset or
+    // mutation race.  Build Part 14B once from the strictly projected Part 12
+    // result; that builder revalidates the complete supplied graph.
+    return buildFictionalJourney(before, afterContext);
+  } catch (error) {
+    if (error?.code === 'DEMO_FINANCIAL_JOURNEY_UNAVAILABLE' ||
+        error?.code === 'DEMO_FINANCIAL_JOURNEY_CHANGED') throw error;
+    throw journeyChanged(error);
+  }
+}
+
+function demoCookieValue(req) {
+  const source = typeof req?.headers?.cookie === 'string' ? req.headers.cookie.split(';') : [];
+  for (const part of source) {
+    const separator = part.indexOf('=');
+    if (separator < 0 || part.slice(0, separator).trim() !== DEMO_COOKIE) continue;
+    try { return decodeURIComponent(part.slice(separator + 1).trim()); } catch (_) { return ''; }
+  }
+  return '';
+}
+
+function setJourneyCookie(res, token) {
+  res.cookie(DEMO_COOKIE, token.token, { httpOnly: true, sameSite: 'lax',
+    secure: config.auth.secureCookies, path: '/',
+    maxAge: Math.max(1, token.expiresAt.getTime() - Date.now()) });
+}
+
+function deliverFictionalJourney(res, serialized) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    function cleanup() { res.removeListener('finish', finished); res.removeListener('close', closed); }
+    function finished() { if (settled) return; settled = true; cleanup(); resolve(undefined); }
+    function closed() {
+      if (settled) return;
+      settled = true; cleanup();
+      if (res.writableFinished) resolve(undefined);
+      else reject(new Error('Part 14B response closed before completion'));
+    }
+    res.once('finish', finished); res.once('close', closed);
+    try { res.type('application/json').send(serialized); }
+    catch (error) { settled = true; cleanup(); reject(error); }
+  });
 }
 
 class DemoCommandCenterError extends Error {
@@ -433,7 +556,8 @@ function recordFromRow(row, token, persisted) {
 
 class DemoCommandCenterRepository {
   constructor(poolProvider = () => db.getPool(), options = {}) {
-    this.poolProvider = poolProvider;
+    const productionAuthority = arguments.length === 0;
+    this.poolProvider = productionAuthority ? productionPoolProvider : poolProvider;
     this.clock = typeof options.clock === 'function' ? options.clock : () => new Date();
     this.maxActiveSessions = boundedOption(
       options.maxActiveSessions, 1, MAX_ACTIVE_SESSIONS, MAX_ACTIVE_SESSIONS
@@ -446,6 +570,7 @@ class DemoCommandCenterRepository {
       options.maxSourceCreationsPerMinute, 1, MAX_SOURCE_CREATIONS_PER_MINUTE,
       MAX_SOURCE_CREATIONS_PER_MINUTE
     );
+    if (productionAuthority) fictionalJourneyAuthorities.add(this);
   }
 
   pool() {
@@ -464,7 +589,7 @@ class DemoCommandCenterRepository {
     return issueToken(this.clock());
   }
 
-  async read(token) {
+  async #read(token) {
     const now = date(this.clock());
     const initial = await this.pool().query(
       `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
@@ -509,11 +634,36 @@ class DemoCommandCenterRepository {
     }
   }
 
-  async withCurrentReadAuthority(token, projectAndSerialize, deliverSerialized) {
-    if (typeof projectAndSerialize !== 'function' || typeof deliverSerialized !== 'function') {
+  async read(token) {
+    return this.#read(token);
+  }
+
+  async deliverFictionalDemoJourney(req, res) {
+    // The mounted router's zero-argument repository is the only holder of this
+    // capability. Test/custom repositories, proxy wrappers, detached methods,
+    // and caller-supplied pool or clock providers fail before request or source
+    // access; they cannot manufacture a database-current Part 14B response.
+    if (!fictionalJourneyAuthorities.has(this)) {
+      fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE',
+        'The isolated demo is temporarily unavailable.');
+    }
+    if (!req || !res || req.method !== 'GET' || !JOURNEY_UUID.test(req.params?.estimateId || '')) {
       fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE', 'The isolated demo is temporarily unavailable.');
     }
-    const admitted = await this.read(token);
+    let token = this.token(demoCookieValue(req));
+    if (!token) { token = this.issue(); setJourneyCookie(res, token); }
+    try {
+      return await this.#deliverFictionalDemoJourney(token, req.params.estimateId, res);
+    } catch (error) {
+      if (!error || !RENEWABLE_JOURNEY_ERRORS.has(error.code)) throw error;
+      const replacement = this.issue();
+      setJourneyCookie(res, replacement);
+      return this.#deliverFictionalDemoJourney(replacement, req.params.estimateId, res);
+    }
+  }
+
+  async #deliverFictionalDemoJourney(token, estimateId, res) {
+    const admitted = await this.#read(token);
     const client = await this.pool().connect();
     let open = false;
     try {
@@ -548,10 +698,10 @@ class DemoCommandCenterRepository {
         revision: record.revision, simulationCount: record.simulationCount,
         mutationCount: record.mutationCount, persisted: record.persisted,
       });
-      // The callback performs the complete Part 14B source projection and the
-      // final JSON serialization while this exact session authority remains
-      // locked against reset or any other demo mutation.
-      const output = await projectAndSerialize(record);
+      // All source reads, projection, and serialization are module-private.
+      // No caller can obtain or reuse the detached record or a lock witness.
+      const output = await projectFictionalFinancialJourney(record, estimateId);
+      const serialized = JSON.stringify({ success: true, data: output });
       const final = await client.query(
         `SELECT id, tenant_id, token_hash, state, revision, simulation_count, mutation_count,
                 last_simulated_at, expires_at
@@ -573,7 +723,7 @@ class DemoCommandCenterRepository {
       // The HTTP response is completed while the session lock is still held.
       // This prevents a reset from advancing to N+1 before the revision-N
       // response has left the supported route boundary.
-      const delivered = await deliverSerialized(output);
+      const delivered = await deliverFictionalJourney(res, serialized);
       await client.query('COMMIT');
       open = false;
       return delivered;

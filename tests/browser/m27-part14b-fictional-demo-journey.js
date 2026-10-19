@@ -11,28 +11,8 @@ for(const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','POLA
   'SMTP_HOST','SMTP_USER','SMTP_PASS']) delete process.env[key];
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
 const {resolveBrowserRuntime}=require('../helpers/playwright-runtime');
-const journeyRepository=require('../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
-const realJourneyRead=journeyRepository.read;
-const realJourneySerialize=journeyRepository.serializeResponse;
-let journeyFault=null,serializationBarrier=null,activeSerializationRelease=null;
-journeyRepository.read=async function(){
-  const value=await realJourneyRead.apply(this,arguments);
-  if(!journeyFault)return value;
-  journeyFault=null;const changed=JSON.parse(JSON.stringify(value));
-  changed.journeyAcceptance.sourceWitness.credential='sk_poison';
-  changed.journeyAcceptance.journeyBinding.providerAccountId='acct_poison';
-  changed.journeyAcceptance.lifecycle.stages[0].recipientEmail='victim@example.com';
-  changed.journeyAcceptance.reset.customerId='paid-customer';
-  return changed;
-};
-journeyRepository.serializeResponse=async function(data){
-  const serialized=await realJourneySerialize(data);
-  if(serializationBarrier){const barrier=serializationBarrier;serializationBarrier=null;
-    activeSerializationRelease=barrier.releaseResolve;
-    barrier.enteredResolve();
-    try {await barrier.release;} finally {activeSerializationRelease=null;}}
-  return serialized;
-};
+let serializationBarrier=null,activeSerializationRelease=null;
+let responsePrototype=null,realResponseSend=null;
 function arg(name){const value=process.argv.find(item=>item.startsWith(`--${name}=`));
   assert.ok(value,`Missing --${name}`);return value.slice(name.length+3);}
 const engine=arg('browser'),output=path.resolve(arg('output')),layoutName=arg('layout');
@@ -89,7 +69,18 @@ async function audit(page,root){
   requestInterceptions:0,responseInterceptions:0,paidRouteCalls:0,providerCalls:0,receiverMutations:0,
   liveMoneyEvidence:'not-run-deferred-first-paying-customer',requests:[],responses:[]};
 try{
-  fixture=await createDatabaseFixture();server=await listen(fixture.app);const origin=`http://127.0.0.1:${server.address().port}`;
+  fixture=await createDatabaseFixture();responsePrototype=fixture.app.response;
+  realResponseSend=responsePrototype.send;responsePrototype.send=function(){
+    const args=arguments;
+    if(serializationBarrier&&this.req?.url?.includes('/part14b-acceptance')){
+      const barrier=serializationBarrier;serializationBarrier=null;
+      activeSerializationRelease=barrier.releaseResolve;barrier.enteredResolve();
+      barrier.release.then(()=>realResponseSend.apply(this,args)).finally(()=>{activeSerializationRelease=null;});
+      return this;
+    }
+    return realResponseSend.apply(this,args);
+  };
+  server=await listen(fixture.app);const origin=`http://127.0.0.1:${server.address().port}`;
   const runtime=resolveBrowserRuntime(engine);browser=await runtime.browserType.launch({headless:true,executablePath:runtime.executablePath});
   context=await browser.newContext({viewport:{width:layout.width,height:layout.height},colorScheme:layout.colorScheme,reducedMotion:'reduce'});
   await context.addInitScript(theme=>localStorage.setItem('northstar-theme',theme),layout.colorScheme);
@@ -104,16 +95,50 @@ try{
   await page.goto(origin+'/demo',{waitUntil:'networkidle'});let current=await workspace(page);const old=current.graphs[0];
   let root=await openInvoice(page,old.ids.customer);await audit(page,root);
   await root.screenshot({path:path.join(output,`${engine}-${layoutName}-journey.png`)});
-  const storageBefore=await page.evaluate(()=>JSON.stringify({...localStorage}));
-  journeyFault='combined';
-  await root.getByRole('button',{name:'Reload current preview',exact:true}).click({timeout:600000});
+  const storageBefore=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));
+  const poison=await page.evaluate(async estimate=>{
+    const response=await fetch('/api/demo/customer-financial/invoice-drafts/'+
+      encodeURIComponent(estimate)+'/part14b-acceptance',{cache:'no-store'});
+    const body=await response.json();if(!response.ok||!body.success)throw new Error('canonical poison source unavailable');
+    const api=window.NorthStarCustomerFinancialInvoicePreview;
+    const paths=[['part12Bundle','preview'],['part12Bundle','part5Acceptance'],
+      ['part12Bundle','part6Acceptance'],['part12Bundle','part7Acceptance'],
+      ['part12Bundle','part9Acceptance'],['part12Bundle','part10Acceptance'],
+      ['part12Bundle','part11SourceContracts','part11A'],['part12Bundle','part11Acceptance'],
+      ['part12Bundle','part12Acceptance'],['journeyAcceptance']];
+    let getterCalls=0,accepted=0;
+    for(const path of paths){const value=structuredClone(body.data);let target=value;
+      for(const key of path)target=target[key];Object.defineProperty(target,'contractVersion',{
+        enumerable:true,configurable:true,get(){getterCalls+=1;return 'forged';}});
+      if(await api.validateActiveFictionalDemoEnvelope(value))accepted+=1;}
+    const mutations=[
+      value=>{value.part12Bundle.preview.providerAccountId='acct_poison';},
+      value=>{value.part12Bundle.part5Acceptance.secret='sk_poison';},
+      value=>{value.part12Bundle.part6Acceptance.recipientEmail='victim@example.com';},
+      value=>{value.part12Bundle.part7Acceptance.customerToken='tok_private';},
+      value=>{value.part12Bundle.part9Acceptance.paymentCard='4242424242424242';},
+      value=>{value.part12Bundle.part10Acceptance.customerAddress='private';},
+      value=>{value.part12Bundle.part11SourceContracts.part11A.credential='private';},
+      value=>{value.part12Bundle.part11Acceptance.accountingCredential='private';},
+      value=>{value.part12Bundle.part12Acceptance.privateTenantId='paid-tenant';},
+      value=>{value.journeyAcceptance.journeyBinding.providerAccountId='acct_poison';},
+      value=>{Object.defineProperty(value.part12Bundle.part12Acceptance,'toJSON',{
+        enumerable:false,value(){getterCalls+=1;return {};}});},
+      value=>{value.part12Bundle.part5Acceptance[Symbol('secret')]='sk_symbol';},
+      value=>{Object.setPrototypeOf(value.part12Bundle.part6Acceptance,{recipientEmail:'victim@example.com'});},
+    ];
+    for(const mutate of mutations){const value=structuredClone(body.data);mutate(value);
+      if(await api.validateActiveFictionalDemoEnvelope(value))accepted+=1;}
+    return {getterCalls,accepted,cases:paths.length+mutations.length};
+  },old.ids.estimate);
+  assert.deepEqual(poison,{getterCalls:0,accepted:0,cases:23});
   await root.locator('[role=alert]').waitFor({timeout:600000});
   for(const selector of ['table','.invoice-draft-preview-document','.invoice-part5-acceptance',
     '.invoice-part6-acceptance','.invoice-part7-acceptance','.invoice-part9-acceptance',
     '.invoice-part10-acceptance','.invoice-part11-acceptance','.invoice-part12-acceptance',
     '.invoice-part14b-acceptance']) assert.equal(await root.locator(selector).count(),0);
   assert.doesNotMatch(await root.innerText(),/sk_poison|acct_poison|victim@example|paid-customer/);
-  assert.equal(await page.evaluate(()=>JSON.stringify({...localStorage})),storageBefore);
+  assert.equal(await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}})),storageBefore);
   ledger.poisonRejectedAndCleared=true;
   const summary=root.locator(':scope > summary');await summary.focus();await page.keyboard.press('Enter');
   await root.locator('.invoice-part14b-acceptance').waitFor({state:'detached',timeout:10000});
@@ -159,6 +184,7 @@ try{
   }).catch(()=>null);
   await page.screenshot({fullPage:true,path:path.join(output,'failure.png')}).catch(()=>{});}
 }finally{if(activeSerializationRelease)activeSerializationRelease();
+  if(responsePrototype&&realResponseSend)responsePrototype.send=realResponseSend;
   fs.writeFileSync(path.join(output,'ledger.json'),JSON.stringify(ledger,null,2));
   if(context)await context.close();if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));
   if(fixture)await fixture.cleanup();}

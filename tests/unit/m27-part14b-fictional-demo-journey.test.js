@@ -109,28 +109,66 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
     expect(getterCalls).toBe(0);
   });
 
-  test('repository rereads exact source and fails closed on drift, cross-record and demo mutation state',async()=>{
-    const record={tenantId:TENANT,sessionId:SESSION,state:{...state,userCreatedMutation:{value:true}},
-      revision:2,simulationCount:1,persisted:true,expiresAt:new Date('2026-10-20T12:00:00Z')};
-    const current={contractVersion:'source',value:'current'};
-    const changed={contractVersion:'source',value:'changed'};
-    const bundleSpy=jest.spyOn(contract,'bundle').mockImplementation((source,ctx)=>({source,ctx}));
-    const projectSpy=jest.spyOn(contract,'project').mockImplementation((raw,source,ctx)=>{
-      if(providerBoundary.digest(raw.source)!==providerBoundary.digest(source)) throw new Error('changed');
-      return {raw,ctx};
+  test('exports no detached-record projection, loader, token, transaction or serialization capability',()=>{
+    expect(Object.getPrototypeOf(repository)).toBeNull();
+    expect(Object.isFrozen(repository)).toBe(true);
+    expect(Reflect.ownKeys(repository)).toEqual([]);
+    for(const alias of ['read','recordContext','serializeResponse','bundle','project','load',
+      'withCurrentReadAuthority','token','transaction']) expect(repository[alias]).toBeUndefined();
+    const {DemoCommandCenterRepository}=require('../../src/commandCenter/demoRepository');
+    expect(DemoCommandCenterRepository.prototype.withCurrentReadAuthority).toBeUndefined();
+    expect(typeof DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney).toBe('function');
+    let requestReads=0,poolReads=0;
+    const injected=new DemoCommandCenterRepository(()=>{poolReads+=1;return {};});
+    const requestValue=new Proxy({}, {get(){requestReads+=1;return undefined;}});
+    return expect(injected.deliverFictionalDemoJourney(requestValue,{}))
+      .rejects.toMatchObject({status:503,code:'DEMO_COMMAND_CENTER_UNAVAILABLE'})
+      .then(()=>{expect(requestReads).toBe(0);expect(poolReads).toBe(0);
+        const wrapped=new Proxy(injected,{});
+        return expect(DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney
+          .call(wrapped,requestValue,{})).rejects.toMatchObject({status:503});})
+      .then(()=>{expect(requestReads).toBe(0);expect(poolReads).toBe(0);});
+  });
+
+  test('browser data-only gate rejects poison in every embedded part before invoking accessors',async()=>{
+    expect(ui.copyFictionalDemoEnvelope(clone(canonical))).toEqual(canonical);
+    const paths=[
+      ['part12Bundle','preview'],['part12Bundle','part5Acceptance'],
+      ['part12Bundle','part6Acceptance'],['part12Bundle','part7Acceptance'],
+      ['part12Bundle','part9Acceptance'],['part12Bundle','part10Acceptance'],
+      ['part12Bundle','part11SourceContracts'],['part12Bundle','part11Acceptance'],
+      ['part12Bundle','part12Acceptance'],['journeyAcceptance'],
+    ];
+    for(const path of paths){
+      const value=clone(canonical);let target=value;
+      for(const key of path) target=target[key];
+      if(Array.isArray(target)) target=target[0];
+      let getterCalls=0;
+      Object.defineProperty(target,'contractVersion',{enumerable:true,configurable:true,
+        get(){getterCalls+=1;return 'forged';}});
+      expect(ui.copyFictionalDemoEnvelope(value)).toBeNull();
+      expect(getterCalls).toBe(0);
+    }
+    let proxyCalls=0;
+    const proxied=new Proxy(clone(canonical),{
+      getPrototypeOf(){proxyCalls+=1;return Object.prototype;},
+      ownKeys(){proxyCalls+=1;return [];},
+      getOwnPropertyDescriptor(){proxyCalls+=1;return undefined;},
+      get(){proxyCalls+=1;return undefined;},
     });
-    try{
-      const readBundle=jest.fn().mockResolvedValue(current);
-      const value=await repository.read(record,item.ids.estimate,{readBundle});
-      expect(readBundle).toHaveBeenCalledTimes(2);
-      expect(value.ctx).toMatchObject({tenantId:TENANT,sessionId:SESSION,workspaceRevision:2,
-        canonicalBaseline:false,currentMutationKeyCount:1,simulationCount:1});
-      const drifting=jest.fn().mockResolvedValueOnce(current).mockResolvedValueOnce(changed);
-      await expect(repository.read(record,item.ids.estimate,{readBundle:drifting}))
-        .rejects.toMatchObject({code:'DEMO_FINANCIAL_JOURNEY_CHANGED',status:409});
-      await expect(repository.read(record,'33333333-3333-4333-8333-333333333333',{readBundle}))
-        .rejects.toMatchObject({code:'DEMO_FINANCIAL_JOURNEY_UNAVAILABLE',status:404});
-    } finally {bundleSpy.mockRestore();projectSpy.mockRestore();}
+    expect(ui.copyFictionalDemoEnvelope(proxied)).toBeNull();
+    expect(proxyCalls).toBe(0);
+    for(const mutate of [
+      value=>{value.part12Bundle.preview.providerAccountId='acct_forged';},
+      value=>{value.part12Bundle.part5Acceptance.secret='sk_secret';},
+      value=>{value.part12Bundle.part6Acceptance.recipientEmail='victim@example.com';},
+      value=>{value.part12Bundle.part7Acceptance.customerToken='tok_private';},
+      value=>{value.part12Bundle.part9Acceptance.paymentCard='4242424242424242';},
+      value=>{value.part12Bundle.part10Acceptance.customerAddress='private';},
+      value=>{value.part12Bundle.part11Acceptance.accountingCredential='private';},
+      value=>{value.part12Bundle.part12Acceptance.privateTenantId=TENANT;},
+    ]) { const value=clone(canonical);mutate(value);
+      expect(await ui.projectPart14B(value.journeyAcceptance,value.part12Bundle,1)).toBeNull(); }
   });
 
   test('pre-parser boundary covers every Express parameter shape before session or source entry',()=>{

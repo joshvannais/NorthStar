@@ -7,7 +7,7 @@ const http=require('node:http');
 const request=require('supertest');
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
 const contract=require('../../src/customerFinancial/fictionalDemoJourneyAcceptance');
-const repository=require('../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
+const detachedRepository=require('../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
 const {DemoCommandCenterRepository}=require('../../src/commandCenter/demoRepository');
 const {DEFAULT_SELECTION}=require('../../src/commandCenter/scenarioSpace');
 
@@ -27,18 +27,26 @@ function route(estimate){return `/api/demo/customer-financial/invoice-drafts/${e
 function mutation(pending,cookieValue,intent,key){return pending.set('Host',HOST).set('Origin',ORIGIN)
   .set('Sec-Fetch-Site','same-origin').set('Cookie',cookieValue)
   .set('Idempotency-Key',key).set('X-NorthStar-Demo-Intent',intent);}
+function deadline(message,ms){return new Promise((_,reject)=>{
+  const timer=setTimeout(()=>reject(new Error(message)),ms);timer.unref?.();
+});}
 
 realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
-  let fixture,transport,readSpy,sessionReadSpy,currentReadSpy;
+  let fixture,transport,journeyReadSpy,forgedDetachedCalls=0;
   beforeAll(async()=>{
     for(const key of ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','OPENAI_API_KEY','RETELL_API_KEY',
       'TWILIO_AUTH_TOKEN','RESEND_API_KEY','SMTP_HOST','SMTP_USER','SMTP_PASS']) delete process.env[key];
     transport=jest.spyOn(require('https'),'request').mockImplementation(()=>{
       throw new Error('External transport forbidden in Part 14B');});
-    readSpy=jest.spyOn(repository,'read');
-    sessionReadSpy=jest.spyOn(DemoCommandCenterRepository.prototype,'read');
-    currentReadSpy=jest.spyOn(DemoCommandCenterRepository.prototype,'withCurrentReadAuthority');
-    fixture=await createDatabaseFixture();
+    journeyReadSpy=jest.spyOn(DemoCommandCenterRepository.prototype,'deliverFictionalDemoJourney');
+    const compatibilityPath=require.resolve(
+      '../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
+    const realCompatibilityEntry=require.cache[compatibilityPath];
+    require.cache[compatibilityPath]={id:compatibilityPath,filename:compatibilityPath,loaded:true,
+      exports:new Proxy({}, {get(){forgedDetachedCalls+=1;return ()=>{forgedDetachedCalls+=1;};}}),
+      children:[],paths:[]};
+    try { fixture=await createDatabaseFixture(); }
+    finally { require.cache[compatibilityPath]=realCompatibilityEntry; }
   },180000);
   afterAll(async()=>{try{if(fixture)await fixture.cleanup();}finally{jest.restoreAllMocks();}},180000);
 
@@ -99,17 +107,18 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       'paidRepositoryReadCount','productionDatabaseMutationCount','liveMoneyMovementCount'])
       expect(recovered.body.data.journeyAcceptance[key]).toBe(0);
     expect(await protectedCounts(fixture.ownerPool)).toEqual(before);
+    expect(forgedDetachedCalls).toBe(0);
     expect(transport).not.toHaveBeenCalled();
   });
 
   test('method body query CORS privacy and cross-session boundaries fail before source entry',async()=>{
     const entry=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
     const savedCookie=cookie(entry),estimate=entry.body.data.graphs[0].ids.estimate,target=route(estimate);
-    readSpy.mockClear();
+    journeyReadSpy.mockClear();
     const widened=await request(fixture.app).get(target).query({tenantId:'victim',accountId:'acct_victim',
       amountMinorUnits:'100',credential:'sk_secret'}).set('Host',HOST).set('Cookie',savedCookie);
     expect(widened.status).toBe(400);expect(JSON.stringify(widened.body)).not.toMatch(/victim|acct_|100|sk_secret/);
-    expect(readSpy).not.toHaveBeenCalled();
+    expect(journeyReadSpy).not.toHaveBeenCalled();
     for(const body of ['"sk_scalar_secret"','{"credential":"sk_malformed"',
       JSON.stringify({accountId:'acct_victim',amountMinorUnits:100})]){
       const response=await request(fixture.app).get(target).type('application/json').send(body)
@@ -127,11 +136,11 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       expect(response.headers['cache-control']).toContain('private');
       expect(JSON.stringify(response.body||{})).not.toMatch(/sk_method_secret/);
     }
-    expect(readSpy).not.toHaveBeenCalled();
+    expect(journeyReadSpy).not.toHaveBeenCalled();
     const second=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
     expect((await request(fixture.app).get(target).set('Host',HOST).set('Cookie',cookie(second))).status)
       .toBe(404);
-    expect(readSpy).toHaveBeenCalledTimes(1);
+    expect(journeyReadSpy).toHaveBeenCalledTimes(1);
     expect(transport).not.toHaveBeenCalled();
   });
 
@@ -145,19 +154,35 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       .send({expectedRevision:entry.body.data.integrity.revision,
         scenario:{...DEFAULT_SELECTION,service:'roofing'}});
     expect(simulated.status).toBe(201);expect(simulated.body.data.integrity.revision).toBe(2);
-    const originalSerialize=repository.serializeResponse;
-    let enteredResolve,releaseResolve;
+    let enteredResolve,releaseResolve,abortEnteredResolve;
     const entered=new Promise(resolve=>{enteredResolve=resolve;});
     const release=new Promise(resolve=>{releaseResolve=resolve;});
-    const serializer=jest.spyOn(repository,'serializeResponse').mockImplementationOnce(async data=>{
-      const serialized=await originalSerialize(data);enteredResolve();await release;return serialized;
-    });
+    const abortEntered=new Promise(resolve=>{abortEnteredResolve=resolve;});
+    const originalSend=fixture.app.response.send;
+    let responseBarrierMode='hold';
+    const responseBarrier=jest.spyOn(fixture.app.response,'send').mockImplementation(
+      function(...args){
+        if(responseBarrierMode==='hold'&&this.req?.url?.includes('/part14b-acceptance')){
+          responseBarrierMode=null;
+          enteredResolve();release.then(()=>originalSend.apply(this,args));return this;
+        }
+        if(responseBarrierMode==='abort'&&this.req?.url?.includes('/part14b-acceptance')){
+          responseBarrierMode=null;
+          this.type('application/json');this.write('{"success":');
+          abortEnteredResolve();setImmediate(()=>this.socket?.destroy());return this;
+        }
+        return originalSend.apply(this,args);
+      });
     try {
       const settlementOrder=[];
+      let barrierObserved=false;
       const pendingRead=request(fixture.app).get(route(estimate)).set('Host',HOST)
-        .set('Cookie',savedCookie).then(value=>{settlementOrder.push('read');return value;});
-      await Promise.race([entered,new Promise((_,reject)=>setTimeout(
-        ()=>reject(new Error('Part14B serialization barrier was not reached')),180000))]);
+        .set('X-Part14B-Response-Barrier','hold')
+        .set('Cookie',savedCookie).then(value=>{if(!barrierObserved)throw new Error(
+          `Part14B response completed before barrier: ${value.status} ${JSON.stringify(value.body)}`);
+          settlementOrder.push('read');return value;});
+      await Promise.race([entered.then(()=>{barrierObserved=true;}),pendingRead,
+        deadline('Part14B serialization barrier was not reached',600000)]);
       const independentReset=await Promise.race([
         mutation(request(fixture.app).post('/api/demo/command-center/reset'),
           independentCookie,'reset',crypto.randomUUID()).send({expectedRevision:1}),
@@ -199,14 +224,44 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
         [tokenHash(savedCookie)]);
       expect(afterFailedReset.rows).toHaveLength(1);
       expect(Number(afterFailedReset.rows[0].revision)).toBe(3);
+      responseBarrierMode='abort';
+      const mounted=await new Promise((resolve,reject)=>{
+        const server=fixture.app.listen(0,'127.0.0.1',()=>resolve(server));server.once('error',reject);
+      });
+      try {
+        const aborted=new Promise(resolve=>{
+          let settled=false;const finish=value=>{if(!settled){settled=true;resolve(value);}};
+          const pending=http.request({host:'127.0.0.1',port:mounted.address().port,method:'GET',
+            path:route(currentEstimate),headers:{Host:HOST,Cookie:savedCookie}},response=>{
+            response.resume();response.once('end',()=>finish(false));
+            response.once('aborted',()=>finish(true));response.once('error',()=>finish(true));
+            response.once('close',()=>{if(!response.complete)finish(true);});
+          });
+          pending.once('error',()=>finish(true));pending.end();
+        });
+        await Promise.race([abortEntered,
+          deadline('Part14B abort barrier was not reached',600000)]);
+        expect(await aborted).toBe(true);
+      } finally {
+        mounted.closeAllConnections?.();
+        await new Promise(resolve=>mounted.close(resolve));
+      }
+      const afterAbort=await Promise.race([
+        mutation(request(fixture.app).post('/api/demo/command-center/reset'),savedCookie,
+          'reset',crypto.randomUUID()).send({expectedRevision:3}),
+        new Promise((_,reject)=>setTimeout(
+          ()=>reject(new Error('Aborted Part14B response leaked its session lock')),10000)),
+      ]);
+      expect(afterAbort.status).toBe(200);
+      expect(afterAbort.body.data.integrity.revision).toBe(4);
       expect(transport).not.toHaveBeenCalled();
-    } finally {serializer.mockRestore();releaseResolve();}
+    } finally {responseBarrier.mockRestore();releaseResolve();}
   });
 
   test('rejects every Express-matched malformed identifier and composed request before session entry',async()=>{
     const entry=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
     const savedCookie=cookie(entry),valid=entry.body.data.graphs[0].ids.estimate;
-    readSpy.mockClear();sessionReadSpy.mockClear();currentReadSpy.mockClear();
+    journeyReadSpy.mockClear();
     const base='/api/demo/customer-financial/invoice-drafts/';
     const suffix='/part14b-acceptance';
     for(const segment of ['not-a-uuid','x'.repeat(2048),'caf%C3%A9','%2F','%252F','%E0%A4%A']) {
@@ -252,7 +307,22 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       const empty=await raw(base+'/'+suffix.slice(1)+'?secret=sk_raw');
       expect(empty.status).toBe(404);
     } finally {await new Promise(resolve=>server.close(resolve));}
-    expect(readSpy).not.toHaveBeenCalled();expect(sessionReadSpy).not.toHaveBeenCalled();
-    expect(currentReadSpy).not.toHaveBeenCalled();expect(transport).not.toHaveBeenCalled();
+    expect(journeyReadSpy).not.toHaveBeenCalled();expect(transport).not.toHaveBeenCalled();
+  });
+
+  test('exposes no detached record, token, transaction, loader, or reusable lock capability',async()=>{
+    expect(Object.isFrozen(detachedRepository)).toBe(true);
+    expect(Object.getPrototypeOf(detachedRepository)).toBeNull();
+    expect(Reflect.ownKeys(detachedRepository)).toEqual([]);
+    expect(DemoCommandCenterRepository.prototype.withCurrentReadAuthority).toBeUndefined();
+    const aliases=['read','recordContext','serializeResponse','bundle','project','load','token','transaction'];
+    for(const name of aliases) expect(detachedRepository[name]).toBeUndefined();
+    const before=await protectedCounts(fixture.ownerPool);
+    const detached={tenantId:crypto.randomUUID(),sessionId:crypto.randomUUID(),revision:1,
+      simulationCount:0,state:{generation:1,seed:'0'.repeat(64)}};
+    for(const name of aliases) expect(()=>detachedRepository[name]?.(detached,crypto.randomUUID()))
+      .not.toThrow();
+    expect(await protectedCounts(fixture.ownerPool)).toEqual(before);
+    expect(transport).not.toHaveBeenCalled();
   });
 });

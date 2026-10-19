@@ -123,10 +123,8 @@ function stage(name, state, source, sourceState, sourceReason, bindingDigest,
     productionEffectExecuted: false, durableExternalEffectCreated: false });
 }
 
-function candidate(part12Raw, contextRaw) {
-  assertPlainData(part12Raw);
+function projectedCandidate(part12, contextRaw) {
   const context = validateContext(contextRaw);
-  const part12 = part12Contract.projectBundle(part12Raw, 'demo');
   const preview = part12.preview;
   if (preview.mode !== 'demo' || preview.fictional !== true ||
       preview.state !== 'current' || preview.draftIdentity.estimateId !== context.estimateId ||
@@ -265,10 +263,15 @@ function candidate(part12Raw, contextRaw) {
   });
 }
 
+function candidate(part12Raw, contextRaw) {
+  assertPlainData(part12Raw);
+  return projectedCandidate(part12Contract.projectBundle(part12Raw, 'demo'), contextRaw);
+}
+
 function bundle(part12Raw, contextRaw) {
   const part12 = part12Contract.projectBundle(part12Raw, 'demo');
   return freeze({ contractVersion: ENVELOPE_VERSION, part12Bundle: part12,
-    journeyAcceptance: candidate(part12, contextRaw) });
+    journeyAcceptance: projectedCandidate(part12, contextRaw) });
 }
 
 function project(raw, part12Raw, contextRaw) {

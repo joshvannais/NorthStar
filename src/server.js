@@ -81,6 +81,8 @@ const { providerLifecycleRecoveryBoundary } =
   require('./middleware/providerLifecycleRecoveryBoundary');
 const { providerLifecycleAcceptanceBoundary } =
   require('./middleware/providerLifecycleAcceptanceBoundary');
+const { paidTenantJourneyAcceptanceBoundary } =
+  require('./middleware/paidTenantJourneyAcceptanceBoundary');
 const { createCustomerFinancialProviderAcceptanceRouter } =
   require('./routes/customerFinancialProviderAcceptance');
 const { createForecastTransitionCohortsRouter } =
@@ -187,6 +189,9 @@ app.use(providerLifecycleRecoveryBoundary);
 // Part 13D owns exact provider-lifecycle acceptance method/body composition
 // before parsing, authentication, throttling or source reads.
 app.use(providerLifecycleAcceptanceBoundary);
+// Part 14A composes its exact paid provider-disabled acceptance read before
+// parsing so scalar, malformed and framed bodies can never reach auth/source.
+app.use(paidTenantJourneyAcceptanceBoundary);
 app.use(correlationId);
 // The two signed Retell entry points must receive bounded raw bytes before the
 // global JSON parser. The boundary router owns only those exact paths.

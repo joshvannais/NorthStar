@@ -2,15 +2,23 @@
 
 // Part 14B's database and route authority is composed at the first executable
 // application boundary. No route or repository export carries that authority.
-// If an application module was placed in the CommonJS cache before this root,
-// startup fails before a request, source read or database call can occur.
-const canonicalModule = process.getBuiltinModule('module');
-const canonicalFunctionSource = Function.prototype.toString;
-const canonicalApply = Reflect.apply;
-const loadSource = typeof canonicalModule?._load === 'function' ?
-  canonicalApply(canonicalFunctionSource, canonicalModule._load, []) : '';
-if (!loadSource.startsWith('function(request, parent, isMain')) {
-  throw new Error('The canonical application module loader is unavailable.');
+// The decision is deliberately bound to this module's own CommonJS require
+// closure and cache. A process/global/builtin accessor could expose a second
+// cache view and must never participate in this decision.
+const part14BRequireCache = require.cache;
+const part14BModuleConstructor = module.constructor;
+const part14BCacheDescriptor = part14BModuleConstructor &&
+  Object.getOwnPropertyDescriptor(part14BModuleConstructor, '_cache');
+const part14BLoadDescriptor = part14BModuleConstructor &&
+  Object.getOwnPropertyDescriptor(part14BModuleConstructor, '_load');
+const part14BLoadSource = part14BLoadDescriptor && typeof part14BLoadDescriptor.value === 'function' ?
+  Function.prototype.toString.call(part14BLoadDescriptor.value) : '';
+if (!part14BRequireCache || part14BRequireCache[__filename] !== module ||
+    !part14BCacheDescriptor || part14BCacheDescriptor.get || part14BCacheDescriptor.set ||
+    part14BCacheDescriptor.value !== part14BRequireCache ||
+    !part14BLoadDescriptor || part14BLoadDescriptor.get || part14BLoadDescriptor.set ||
+    !part14BLoadSource.startsWith('function(request, parent, isMain')) {
+  throw new Error('The fictional demo journey application composition is unavailable.');
 }
 const part14BProtectedModulePaths = Object.freeze([
   require.resolve('./db'),
@@ -19,7 +27,7 @@ const part14BProtectedModulePaths = Object.freeze([
   require.resolve('./routes/api'),
 ]);
 if (part14BProtectedModulePaths.some(filename =>
-  Object.prototype.hasOwnProperty.call(canonicalModule._cache, filename))) {
+  Object.prototype.hasOwnProperty.call(part14BRequireCache, filename))) {
   throw new Error('The fictional demo journey application composition is unavailable.');
 }
 const part14BRepositoryBootstrap = require('./commandCenter/demoRepository');

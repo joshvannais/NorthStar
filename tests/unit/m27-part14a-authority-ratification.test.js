@@ -350,6 +350,132 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
     }});
   });
 
+  test('authenticates update and digest before descriptor-identical hostile methods can run', () => {
+    const cases = [
+      `
+        const originalUpdate=Object.getOwnPropertyDescriptor(prototype,'update');
+        const originalDigest=Object.getOwnPropertyDescriptor(prototype,'digest');
+        const answers=['ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+          'e65a5dcca88b16ab56e96b6c916c2304bb935dde5c36adb8c90d4dc201027fe0',
+          '81c34304c22ab779583f8b74c616e5de0d08bf58845e67ad42dac0812fc6ba42',
+          '841189a5e1e03e9d6c54579a043847e87a3ae80e8c93a46dd9f975bb9843144c'];
+        function update(data,encoding){counts.update+=1; this.input=data; return this;}
+        function digest(encoding){counts.digest+=1; return encoding==='hex'?answers.shift():'';}
+        Object.defineProperty(prototype,'update',{...originalUpdate,value:update});
+        Object.defineProperty(prototype,'digest',{...originalDigest,value:digest});
+      `,
+      `
+        const originalUpdate=Object.getOwnPropertyDescriptor(prototype,'update');
+        function update(data,encoding){counts.update+=1; return this;}
+        Object.defineProperty(prototype,'update',{...originalUpdate,value:update});
+      `,
+      `
+        const originalDigest=Object.getOwnPropertyDescriptor(prototype,'digest');
+        function digest(encoding){counts.digest+=1; return 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';}
+        Object.defineProperty(prototype,'digest',{...originalDigest,value:digest});
+      `,
+    ];
+    for (const setup of cases) {
+      const result = runFresh(`
+        'use strict';
+        const crypto=require('node:crypto');
+        const prototype=Object.getPrototypeOf(crypto.createHash('sha256'));
+        const counts={update:0,digest:0};
+        ${setup}
+        let loaded=true; let message='';
+        try { require(${JSON.stringify(AUTHORITY_PATH)}); } catch(error) {
+          loaded=false; message=error.message;
+        }
+        process.stdout.write(JSON.stringify({loaded,message,counts}));
+      `);
+      expect(result).toEqual({loaded:false,
+        message:'Mission 27 Part 14 authority bootstrap invalid',
+        counts:{update:0,digest:0}});
+    }
+  });
+
+  test('rejects proxy, wrapper, accessor and altered-prototype hash methods without hooks', () => {
+    const cases = [
+      `
+        const original=Object.getOwnPropertyDescriptor(prototype,'update');
+        const proxy=new Proxy(original.value,{get(target,key,receiver){counts.get+=1;
+          return Reflect.get(target,key,receiver);},apply(target,self,args){counts.update+=1;
+          return Reflect.apply(target,self,args);}});
+        Object.defineProperty(prototype,'update',{...original,value:proxy});
+      `,
+      `
+        const original=Object.getOwnPropertyDescriptor(prototype,'digest');
+        const wrapped=original.value.bind(null);
+        Object.defineProperties(wrapped,{name:{value:'digest',configurable:true},
+          length:{value:1,configurable:true}});
+        Object.defineProperty(prototype,'digest',{...original,value:wrapped});
+      `,
+      `
+        const original=Object.getOwnPropertyDescriptor(prototype,'update');
+        function wrapped(data,encoding){counts.update+=1; return Reflect.apply(original.value,this,[data,encoding]);}
+        Object.defineProperties(wrapped,{name:{value:'update',configurable:true},
+          length:{value:2,configurable:true}});
+        Object.defineProperty(prototype,'update',{...original,value:wrapped});
+      `,
+      `
+        Object.defineProperty(prototype,'digest',{enumerable:true,configurable:true,
+          get(){counts.get+=1; return function digest(){counts.digest+=1;};}});
+      `,
+      `
+        Object.setPrototypeOf(prototype,new Proxy(Object.getPrototypeOf(prototype),{
+          get(target,key,receiver){counts.get+=1; return Reflect.get(target,key,receiver);}}));
+      `,
+    ];
+    for (const setup of cases) {
+      const result = runFresh(`
+        'use strict';
+        const crypto=require('node:crypto');
+        const prototype=Object.getPrototypeOf(crypto.createHash('sha256'));
+        const counts={update:0,digest:0,get:0};
+        ${setup}
+        let loaded=true; let message='';
+        try { require(${JSON.stringify(AUTHORITY_PATH)}); } catch(error) {
+          loaded=false; message=error.message;
+        }
+        process.stdout.write(JSON.stringify({loaded,message,counts}));
+      `);
+      expect(result).toEqual({loaded:false,
+        message:'Mission 27 Part 14 authority bootstrap invalid',
+        counts:{update:0,digest:0,get:0}});
+    }
+  });
+
+  test('fails closed without dispatch through post-import Function toString and rejects a pre-import spoof', () => {
+    const afterImport = runFresh(`
+      'use strict';
+      const fs=require('node:fs'); const path=require('node:path');
+      const authority=require(${JSON.stringify(AUTHORITY_PATH)});
+      const root=${JSON.stringify(ROOT)};
+      const docs=Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
+        .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
+      let calls=0;
+      Function.prototype.toString=function toString(){calls+=1; return 'forged';};
+      let canonical=false; try { canonical=authority.validate(docs).currentStatus==='candidate'; }
+      catch(_error) {}
+      process.stdout.write(JSON.stringify({canonical,calls}));
+    `);
+    expect(afterImport).toEqual({canonical:false,calls:0});
+
+    const beforeImport = runFresh(`
+      'use strict';
+      let calls=0;
+      Function.prototype.toString=function toString(){calls+=1; return 'forged';};
+      let loaded=true; let message='';
+      try { require(${JSON.stringify(AUTHORITY_PATH)}); } catch(error) {
+        loaded=false; message=error.message;
+      }
+      process.stdout.write(JSON.stringify({loaded,message,calls}));
+    `);
+    expect(beforeImport.loaded).toBe(false);
+    expect(beforeImport.message).toBe('Mission 27 Part 14 authority bootstrap invalid');
+    expect(beforeImport.calls).toBeGreaterThan(0);
+  });
+
   test('hash prototype replacement fails closed without invoking hostile methods', () => {
     const result = runFresh(`
       'use strict';

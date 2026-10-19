@@ -6,8 +6,29 @@ function bootstrapInvalid() {
   return new Error('Mission 27 Part 14 authority bootstrap invalid');
 }
 
+// The first bootstrap step assumes the standard Node reflection intrinsics are
+// intact. That is the declared supported process boundary; arbitrary earlier
+// same-process replacement is not claimed. Authenticate the two roots against
+// their native identities, then perform every later source read with the private
+// captured Reflect.apply rather than mutable Function.prototype.call.
+const REFLECT_APPLY = Reflect.apply;
+if (typeof FUNCTION_TO_STRING !== 'function' || FUNCTION_TO_STRING.name !== 'toString' ||
+    FUNCTION_TO_STRING.length !== 0 ||
+    typeof REFLECT_APPLY !== 'function' || REFLECT_APPLY.name !== 'apply' ||
+    REFLECT_APPLY.length !== 3 ||
+    REFLECT_APPLY(FUNCTION_TO_STRING, FUNCTION_TO_STRING, []) !==
+      'function toString() { [native code] }' ||
+    REFLECT_APPLY(FUNCTION_TO_STRING, REFLECT_APPLY, []) !==
+      'function apply() { [native code] }') {
+  throw bootstrapInvalid();
+}
+
+function functionSource(fn) {
+  return REFLECT_APPLY(FUNCTION_TO_STRING, fn, []);
+}
+
 function requireNative(fn, source) {
-  if (typeof fn !== 'function' || FUNCTION_TO_STRING.call(fn) !== source) {
+  if (typeof fn !== 'function' || functionSource(fn) !== source) {
     throw bootstrapInvalid();
   }
   return fn;
@@ -17,7 +38,6 @@ function requireNative(fn, source) {
 // reflection and util proxy-detection intrinsics intact when this module loads.
 // Capture them before any caller input exists; later ambient replacement cannot
 // change the private capabilities used by validate().
-const REFLECT_APPLY = requireNative(Reflect.apply, 'function apply() { [native code] }');
 const REFLECT_OWN_KEYS = requireNative(Reflect.ownKeys, 'function ownKeys() { [native code] }');
 const OBJECT_GET_PROTOTYPE_OF = requireNative(
   Object.getPrototypeOf, 'function getPrototypeOf() { [native code] }');
@@ -31,6 +51,7 @@ const OBJECT_DEFINE_PROPERTIES = requireNative(
   Object.defineProperties, 'function defineProperties() { [native code] }');
 const STRING_CHAR_CODE_AT = requireNative(
   String.prototype.charCodeAt, 'function charCodeAt() { [native code] }');
+const FUNCTION_PROTOTYPE = Function.prototype;
 const OBJECT_PROTOTYPE = Object.prototype;
 const initialPrototypeKeys = REFLECT_OWN_KEYS(OBJECT_PROTOTYPE);
 const copiedPrototypeKeys = [];
@@ -50,6 +71,210 @@ if (isProxyDescriptor.enumerable !== true || isProxyDescriptor.writable !== true
     isProxyDescriptor.configurable !== true || IS_PROXY({}) !== false ||
     IS_PROXY(new Proxy({}, {})) !== true) throw bootstrapInvalid();
 
+const functionToStringDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+  FUNCTION_PROTOTYPE, 'toString');
+if (!functionToStringDescriptor || functionToStringDescriptor.value !== FUNCTION_TO_STRING ||
+    functionToStringDescriptor.enumerable !== false ||
+    functionToStringDescriptor.writable !== true ||
+    functionToStringDescriptor.configurable !== true || IS_PROXY(FUNCTION_TO_STRING) ||
+    OBJECT_GET_PROTOTYPE_OF(FUNCTION_TO_STRING) !== FUNCTION_PROTOTYPE) {
+  throw bootstrapInvalid();
+}
+
+const nodeVersion = process.versions && process.versions.node;
+if (typeof nodeVersion !== 'string' || nodeVersion[0] !== '2' ||
+    (nodeVersion[1] !== '2' && nodeVersion[1] !== '4') || nodeVersion[2] !== '.') {
+  throw bootstrapInvalid();
+}
+
+function canonicalFunctionSource(fn) {
+  const source = functionSource(fn);
+  let normalized = '';
+  for (let index = 0; index < source.length; index += 1) {
+    const code = REFLECT_APPLY(STRING_CHAR_CODE_AT, source, [index]);
+    if (code === 13) {
+      if (index + 1 >= source.length ||
+          REFLECT_APPLY(STRING_CHAR_CODE_AT, source, [index + 1]) !== 10) {
+        throw bootstrapInvalid();
+      }
+      normalized += '\n';
+      index += 1;
+    } else normalized += source[index];
+  }
+  return normalized;
+}
+
+const CREATE_HASH_SOURCE = 'function createHash(algorithm, options) {\n' +
+  '  return new Hash(algorithm, options);\n}';
+const HASH_UPDATE_SOURCE = 'function update(data, encoding) {\n' +
+  '  const state = this[kState];\n' +
+  '  if (state[kFinalized])\n' +
+  '    throw new ERR_CRYPTO_HASH_FINALIZED();\n\n' +
+  "  if (typeof data === 'string') {\n" +
+  '    validateEncoding(data, encoding);\n' +
+  '  } else if (!isArrayBufferView(data)) {\n' +
+  '    throw new ERR_INVALID_ARG_TYPE(\n' +
+  "      'data', ['string', 'Buffer', 'TypedArray', 'DataView'], data);\n" +
+  '  }\n\n' +
+  '  if (!this[kHandle].update(data, encoding))\n' +
+  '    throw new ERR_CRYPTO_HASH_UPDATE_FAILED();\n' +
+  '  return this;\n}';
+const HASH_DIGEST_SOURCE = 'function digest(outputEncoding) {\n' +
+  '  const state = this[kState];\n' +
+  '  if (state[kFinalized])\n' +
+  '    throw new ERR_CRYPTO_HASH_FINALIZED();\n\n' +
+  '  // Explicit conversion of truthy values for backward compatibility.\n' +
+  '  const ret = this[kHandle].digest(outputEncoding && `${outputEncoding}`);\n' +
+  '  state[kFinalized] = true;\n' +
+  '  return ret;\n}';
+
+function exactFunctionPrototype(functionPrototype) {
+  if (typeof functionPrototype !== 'function' || IS_PROXY(functionPrototype) ||
+      canonicalFunctionSource(functionPrototype) !== 'function () { [native code] }') return false;
+  const keys = REFLECT_OWN_KEYS(functionPrototype);
+  const names = ['length', 'name', 'arguments', 'caller', 'constructor', 'apply', 'bind',
+    'call', 'toString'];
+  if (keys.length !== 10 || typeof keys[9] !== 'symbol') return false;
+  for (let index = 0; index < names.length; index += 1) {
+    if (keys[index] !== names[index]) return false;
+  }
+  const lengths = [0, '', null, null, 1, 2, 1, 1, 0];
+  for (let index = 0; index < names.length; index += 1) {
+    const descriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(functionPrototype, names[index]);
+    if (!descriptor || descriptor.enumerable !== false || descriptor.configurable !== true) {
+      return false;
+    }
+    if (index < 2) {
+      if (descriptor.value !== lengths[index] || descriptor.writable !== false ||
+          descriptor.get !== undefined || descriptor.set !== undefined) return false;
+    } else if (index < 4) {
+      if (descriptor.value !== undefined || typeof descriptor.get !== 'function' ||
+          typeof descriptor.set !== 'function' || IS_PROXY(descriptor.get) ||
+          IS_PROXY(descriptor.set) ||
+          canonicalFunctionSource(descriptor.get) !== 'function () { [native code] }' ||
+          canonicalFunctionSource(descriptor.set) !== 'function () { [native code] }') return false;
+    } else {
+      if (typeof descriptor.value !== 'function' || descriptor.writable !== true ||
+          descriptor.get !== undefined || descriptor.set !== undefined ||
+          IS_PROXY(descriptor.value) || descriptor.value.length !== lengths[index] ||
+          canonicalFunctionSource(descriptor.value) !==
+            `function ${names[index] === 'constructor' ? 'Function' : names[index]}() { [native code] }`) {
+        return false;
+      }
+    }
+  }
+  const hasInstanceDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(functionPrototype, keys[9]);
+  return Boolean(hasInstanceDescriptor && typeof hasInstanceDescriptor.value === 'function' &&
+    !IS_PROXY(hasInstanceDescriptor.value) &&
+    hasInstanceDescriptor.value.name === '[Symbol.hasInstance]' &&
+    hasInstanceDescriptor.value.length === 1 && hasInstanceDescriptor.writable === false &&
+    hasInstanceDescriptor.enumerable === false && hasInstanceDescriptor.configurable === false &&
+    hasInstanceDescriptor.get === undefined && hasInstanceDescriptor.set === undefined &&
+    canonicalFunctionSource(hasInstanceDescriptor.value) ===
+      'function [Symbol.hasInstance]() { [native code] }');
+}
+
+function exactFunctionShape(fn, name, length, expectedSource, expectedFunctionPrototype) {
+  if (typeof fn !== 'function' || IS_PROXY(fn) ||
+      OBJECT_GET_PROTOTYPE_OF(fn) !== expectedFunctionPrototype ||
+      canonicalFunctionSource(fn) !== expectedSource) return false;
+  const keys = REFLECT_OWN_KEYS(fn);
+  if (keys.length !== 3 || keys[0] !== 'length' || keys[1] !== 'name' ||
+      keys[2] !== 'prototype') return false;
+  const lengthDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(fn, 'length');
+  const nameDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(fn, 'name');
+  const prototypeDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(fn, 'prototype');
+  if (!lengthDescriptor || lengthDescriptor.value !== length ||
+      lengthDescriptor.writable !== false || lengthDescriptor.enumerable !== false ||
+      lengthDescriptor.configurable !== true || !nameDescriptor ||
+      nameDescriptor.value !== name || nameDescriptor.writable !== false ||
+      nameDescriptor.enumerable !== false || nameDescriptor.configurable !== true ||
+      !prototypeDescriptor || prototypeDescriptor.writable !== true ||
+      prototypeDescriptor.enumerable !== false || prototypeDescriptor.configurable !== false ||
+      prototypeDescriptor.get !== undefined || prototypeDescriptor.set !== undefined) return false;
+  const functionPrototypeObject = prototypeDescriptor.value;
+  if (functionPrototypeObject === null || typeof functionPrototypeObject !== 'object' ||
+      IS_PROXY(functionPrototypeObject) ||
+      OBJECT_GET_PROTOTYPE_OF(functionPrototypeObject) !==
+        OBJECT_GET_PROTOTYPE_OF(expectedFunctionPrototype)) return false;
+  const prototypeKeys = REFLECT_OWN_KEYS(functionPrototypeObject);
+  if (prototypeKeys.length !== 1 || prototypeKeys[0] !== 'constructor') return false;
+  const constructorDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+    functionPrototypeObject, 'constructor');
+  return Boolean(constructorDescriptor && constructorDescriptor.value === fn &&
+    constructorDescriptor.writable === true && constructorDescriptor.enumerable === false &&
+    constructorDescriptor.configurable === true && constructorDescriptor.get === undefined &&
+    constructorDescriptor.set === undefined);
+}
+
+function exactHashPrototype(hashPrototype, expectedFunctionPrototype) {
+  if (hashPrototype === null || typeof hashPrototype !== 'object' || IS_PROXY(hashPrototype)) {
+    return false;
+  }
+  const keys = REFLECT_OWN_KEYS(hashPrototype);
+  const names = ['constructor', 'copy', '_transform', '_flush', 'update', 'digest'];
+  const functionNames = ['Hash', 'copy', '_transform', '_flush', 'update', 'digest'];
+  const lengths = [2, 1, 3, 1, 2, 1];
+  for (let index = 0; index < names.length; index += 1) {
+    if (keys[index] !== names[index]) return false;
+    const descriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(hashPrototype, names[index]);
+    if (!descriptor || typeof descriptor.value !== 'function' ||
+        IS_PROXY(descriptor.value) ||
+        descriptor.writable !== true || descriptor.enumerable !== (index !== 0) ||
+        descriptor.configurable !== true || descriptor.get !== undefined ||
+        descriptor.set !== undefined || descriptor.value.name !== functionNames[index] ||
+        descriptor.value.length !== lengths[index] ||
+        (index !== 0 &&
+          OBJECT_GET_PROTOTYPE_OF(descriptor.value) !== expectedFunctionPrototype)) return false;
+  }
+  if (keys.length !== names.length) return false;
+  const parent = OBJECT_GET_PROTOTYPE_OF(hashPrototype);
+  if (parent === null || typeof parent !== 'object' || IS_PROXY(parent)) return false;
+  const parentKeys = REFLECT_OWN_KEYS(parent);
+  if (parentKeys.length !== 3 || parentKeys[0] !== 'constructor' ||
+      parentKeys[1] !== '_readableState' || parentKeys[2] !== '_writableState') return false;
+  const parentConstructor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(parent, 'constructor');
+  if (!parentConstructor || typeof parentConstructor.value !== 'function' ||
+      IS_PROXY(parentConstructor.value) ||
+      parentConstructor.value.name !== 'LazyTransform' || parentConstructor.value.length !== 1 ||
+      parentConstructor.writable !== true || parentConstructor.enumerable !== false ||
+      parentConstructor.configurable !== true ||
+      canonicalFunctionSource(parentConstructor.value) !==
+        'function LazyTransform(options) {\n  this._options = options;\n}') return false;
+  const hashConstructor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(hashPrototype, 'constructor');
+  if (!hashConstructor ||
+      OBJECT_GET_PROTOTYPE_OF(hashConstructor.value) !== parentConstructor.value) return false;
+  for (const key of ['_readableState', '_writableState']) {
+    const descriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(parent, key);
+    if (!descriptor || typeof descriptor.get !== 'function' ||
+        typeof descriptor.set !== 'function' || descriptor.enumerable !== true ||
+        descriptor.configurable !== true || descriptor.value !== undefined ||
+        IS_PROXY(descriptor.get) || IS_PROXY(descriptor.set)) return false;
+  }
+  return true;
+}
+
+function exactHashObject(hash, hashPrototype, expectedKeys, expectedStatePrototype) {
+  if (hash === null || typeof hash !== 'object' || IS_PROXY(hash) ||
+      OBJECT_GET_PROTOTYPE_OF(hash) !== hashPrototype) return false;
+  const keys = REFLECT_OWN_KEYS(hash);
+  if (keys.length !== 3 || keys[0] !== '_options' || typeof keys[1] !== 'symbol' ||
+      typeof keys[2] !== 'symbol' || keys[1] === keys[2] ||
+      (expectedKeys && (keys[1] !== expectedKeys[1] || keys[2] !== expectedKeys[2]))) return false;
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(hash, keys[index]);
+    if (!descriptor || descriptor.writable !== true || descriptor.enumerable !== true ||
+        descriptor.configurable !== true || descriptor.get !== undefined ||
+        descriptor.set !== undefined) return false;
+    if (index === 0 && descriptor.value !== undefined) return false;
+    if (index > 0 && (descriptor.value === null || typeof descriptor.value !== 'object' ||
+        IS_PROXY(descriptor.value))) return false;
+  }
+  const stateDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(hash, keys[2]);
+  return Boolean(stateDescriptor &&
+    OBJECT_GET_PROTOTYPE_OF(stateDescriptor.value) === expectedStatePrototype);
+}
+
 // Capture the standard Node hashing implementation without retaining its mutable
 // module object. The supported bootstrap contract is the same ordinary native
 // Node startup required above. Two independently created hashes must expose the
@@ -60,12 +285,11 @@ const HASH_CAPABILITIES = (() => {
   const cryptoModule = require('node:crypto');
   const createDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(cryptoModule, 'createHash');
   const createHash = createDescriptor?.value;
-  const createSource = typeof createHash === 'function' ?
-    FUNCTION_TO_STRING.call(createHash) : '';
-  if (createSource !==
-      'function createHash(algorithm, options) {\n  return new Hash(algorithm, options);\n}' &&
-      createSource !==
-      'function createHash(algorithm, options) {\r\n  return new Hash(algorithm, options);\r\n}') {
+  const cryptoFunctionPrototype = typeof createHash === 'function' ?
+    OBJECT_GET_PROTOTYPE_OF(createHash) : null;
+  if (typeof createHash !== 'function' || IS_PROXY(createHash) ||
+      !exactFunctionPrototype(cryptoFunctionPrototype) ||
+      canonicalFunctionSource(createHash) !== CREATE_HASH_SOURCE) {
     throw bootstrapInvalid();
   }
   if (createDescriptor.enumerable !== true || createDescriptor.writable !== true ||
@@ -73,11 +297,23 @@ const HASH_CAPABILITIES = (() => {
 
   const first = REFLECT_APPLY(createHash, undefined, ['sha256']);
   const second = REFLECT_APPLY(createHash, undefined, ['sha256']);
-  if (IS_PROXY(first) || IS_PROXY(second)) throw bootstrapInvalid();
   const instancePrototype = OBJECT_GET_PROTOTYPE_OF(first);
   if (instancePrototype === null || OBJECT_GET_PROTOTYPE_OF(second) !== instancePrototype) {
     throw bootstrapInvalid();
   }
+  if (!exactHashPrototype(instancePrototype, cryptoFunctionPrototype)) throw bootstrapInvalid();
+  const firstKeys = REFLECT_OWN_KEYS(first);
+  const firstState = firstKeys.length === 3 ?
+    OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(first, firstKeys[2])?.value : null;
+  const statePrototype = firstState !== null && typeof firstState === 'object' &&
+    !IS_PROXY(firstState) ? OBJECT_GET_PROTOTYPE_OF(firstState) : null;
+  if (statePrototype === null || IS_PROXY(statePrototype) ||
+      OBJECT_GET_PROTOTYPE_OF(statePrototype) !== null ||
+      !exactHashObject(first, instancePrototype, firstKeys, statePrototype) ||
+      !exactHashObject(second, instancePrototype, firstKeys, statePrototype)) {
+    throw bootstrapInvalid();
+  }
+  const hashKeys = OBJECT_FREEZE([firstKeys[0], firstKeys[1], firstKeys[2]]);
   const methodPrototype = instancePrototype;
   const parentPrototype = OBJECT_GET_PROTOTYPE_OF(instancePrototype);
   if (parentPrototype === null) throw bootstrapInvalid();
@@ -94,6 +330,10 @@ const HASH_CAPABILITIES = (() => {
   }
   const update = updateDescriptor.value;
   const digest = digestDescriptor.value;
+  if (!exactFunctionShape(update, 'update', 2, HASH_UPDATE_SOURCE, cryptoFunctionPrototype) ||
+      !exactFunctionShape(digest, 'digest', 1, HASH_DIGEST_SOURCE, cryptoFunctionPrototype)) {
+    throw bootstrapInvalid();
+  }
   if (OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
     OBJECT_GET_PROTOTYPE_OF(second), 'update')?.value !== update ||
       OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
@@ -106,7 +346,8 @@ const HASH_CAPABILITIES = (() => {
     throw bootstrapInvalid();
   }
   return OBJECT_FREEZE({
-    createHash, instancePrototype, methodPrototype, parentPrototype, update, digest,
+    createHash, cryptoFunctionPrototype, instancePrototype, methodPrototype, parentPrototype,
+    hashKeys, statePrototype, update, digest,
     updateEnumerable:updateDescriptor.enumerable,
     updateWritable:updateDescriptor.writable,
     updateConfigurable:updateDescriptor.configurable,
@@ -224,7 +465,9 @@ function normalizeDocument(value) {
 
 function documentDigest(value) {
   const capabilities = HASH_CAPABILITIES;
-  if (OBJECT_GET_PROTOTYPE_OF(capabilities.instancePrototype) !==
+  if (!exactFunctionPrototype(capabilities.cryptoFunctionPrototype) ||
+      !exactHashPrototype(capabilities.instancePrototype, capabilities.cryptoFunctionPrototype) ||
+      OBJECT_GET_PROTOTYPE_OF(capabilities.instancePrototype) !==
       capabilities.parentPrototype) throw invalid();
   const updateDescriptor = OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
     capabilities.methodPrototype, 'update');
@@ -241,7 +484,8 @@ function documentDigest(value) {
       digestDescriptor.configurable !== capabilities.digestConfigurable ||
       digestDescriptor.get !== undefined || digestDescriptor.set !== undefined) throw invalid();
   const hash = REFLECT_APPLY(capabilities.createHash, undefined, ['sha256']);
-  if (IS_PROXY(hash) || OBJECT_GET_PROTOTYPE_OF(hash) !== capabilities.instancePrototype) {
+  if (!exactHashObject(hash, capabilities.instancePrototype, capabilities.hashKeys,
+    capabilities.statePrototype)) {
     throw invalid();
   }
   if (REFLECT_APPLY(capabilities.update, hash, [value, 'utf8']) !== hash) throw invalid();

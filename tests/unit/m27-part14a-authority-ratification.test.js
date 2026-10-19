@@ -1,11 +1,13 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const authority = require('../../src/customerFinancial/mission27Part14Authority');
 
 const ROOT = path.resolve(__dirname, '../..');
+const AUTHORITY_PATH = require.resolve('../../src/customerFinancial/mission27Part14Authority');
 const DOCUMENT_KEYS = Object.freeze(['roadmap', 'ledger', 'architecture']);
 const DOCS = Object.freeze(Object.fromEntries(DOCUMENT_KEYS.map(name => [
   name,
@@ -47,6 +49,13 @@ function swapAdjacentSections(document, firstHeading, secondHeading) {
   expect(afterSecond).toBeGreaterThan(second);
   return document.slice(0, first) + document.slice(second, afterSecond) + '\n' +
     document.slice(first, second) + document.slice(afterSecond + 1);
+}
+function runFresh(source) {
+  const result = spawnSync(process.execPath, ['-e', source], {
+    cwd:ROOT, encoding:'utf8', windowsHide:true,
+  });
+  expect(result.status).toBe(0);
+  return JSON.parse(result.stdout.trim());
 }
 
 describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
@@ -148,5 +157,169 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
     }
     expect(() => authority.validate({ ...DOCS, extra:'authority' })).toThrow();
     expect(() => authority.validate(Object.assign(Object.create(null), DOCS))).toThrow();
+  });
+
+  test('rejects lone carriage returns while exact LF and CRLF documents pass', () => {
+    const lf = Object.fromEntries(DOCUMENT_KEYS.map(name => [name, normalized(DOCS[name])]));
+    const crlf = Object.fromEntries(DOCUMENT_KEYS.map(name => [
+      name, normalized(DOCS[name]).replace(/\n/g, '\r\n'),
+    ]));
+    expect(authority.validate(lf).currentStatus).toBe('candidate');
+    expect(authority.validate(crlf).currentStatus).toBe('candidate');
+    for (const name of DOCUMENT_KEYS) {
+      expectRejected(name, normalized(DOCS[name]).replace('\n', '\r'));
+      expectRejected(name, normalized(DOCS[name]).replace('\n', '\r\r\n'));
+    }
+  });
+
+  test('rejects accessors, proxies and coercible values before invoking caller hooks', () => {
+    let getters = 0;
+    const accessor = { ...DOCS };
+    Object.defineProperty(accessor, 'roadmap', {
+      enumerable:true, configurable:true, get() { getters += 1; return DOCS.roadmap; },
+    });
+    expect(() => authority.validate(accessor)).toThrow();
+    expect(getters).toBe(0);
+
+    let proxyTraps = 0;
+    const proxy = new Proxy({ ...DOCS }, {
+      getPrototypeOf() { proxyTraps += 1; return Object.prototype; },
+      ownKeys() { proxyTraps += 1; return DOCUMENT_KEYS; },
+      getOwnPropertyDescriptor(target, key) {
+        proxyTraps += 1; return Object.getOwnPropertyDescriptor(target, key);
+      },
+      get(target, key) { proxyTraps += 1; return target[key]; },
+    });
+    expect(() => authority.validate(proxy)).toThrow();
+    expect(proxyTraps).toBe(0);
+    const revoked = Proxy.revocable({ ...DOCS }, {});
+    revoked.revoke();
+    expect(() => authority.validate(revoked.proxy)).toThrow();
+
+    let conversions = 0;
+    const coercible = {
+      toString() { conversions += 1; return DOCS.roadmap; },
+      valueOf() { conversions += 1; return DOCS.roadmap; },
+      [Symbol.toPrimitive]() { conversions += 1; return DOCS.roadmap; },
+    };
+    expect(() => authority.validate({ ...DOCS, roadmap:coercible })).toThrow();
+    expect(conversions).toBe(0);
+
+    let nestedTraps = 0;
+    const wrapped = new Proxy(new String(DOCS.roadmap), {
+      get() { nestedTraps += 1; throw new Error('must not read'); },
+      getPrototypeOf() { nestedTraps += 1; throw new Error('must not inspect'); },
+    });
+    expect(() => authority.validate({ ...DOCS, roadmap:wrapped })).toThrow();
+    expect(nestedTraps).toBe(0);
+  });
+
+  test('requires the exact ordinary descriptor and key contract', () => {
+    const inherited = Object.create({ inheritedAuthority:'forged' });
+    Object.defineProperties(inherited, Object.fromEntries(DOCUMENT_KEYS.map(name => [name, {
+      value:DOCS[name], enumerable:true, writable:true, configurable:true,
+    }])));
+    expect(() => authority.validate(inherited)).toThrow();
+    expect(() => authority.validate(Object.assign(Object.create(null), DOCS))).toThrow();
+    expect(() => authority.validate(DOCUMENT_KEYS.map(name => DOCS[name]))).toThrow();
+    expect(() => authority.validate(() => DOCS)).toThrow();
+
+    const hidden = { ...DOCS };
+    hidden[Symbol('hidden authority')] = 'forged';
+    expect(() => authority.validate(hidden)).toThrow();
+    const extra = { ...DOCS, unexpected:'forged' };
+    expect(() => authority.validate(extra)).toThrow();
+    const missing = { roadmap:DOCS.roadmap, ledger:DOCS.ledger };
+    expect(() => authority.validate(missing)).toThrow();
+
+    for (const attribute of ['enumerable','writable','configurable']) {
+      const changed = { ...DOCS };
+      Object.defineProperty(changed, 'roadmap', {
+        value:DOCS.roadmap, enumerable:true, writable:true, configurable:true,
+        [attribute]:false,
+      });
+      expect(() => authority.validate(changed)).toThrow();
+    }
+    expect(() => authority.validate({ ...DOCS, roadmap:new String(DOCS.roadmap) })).toThrow();
+  });
+
+  test('uses private captured intrinsics after supported import and rejects hostile pre-import replacements', () => {
+    const clean = runFresh(`
+      require('node:util/types');
+      const fs=require('node:fs'); const path=require('node:path');
+      const authority=require(${JSON.stringify(AUTHORITY_PATH)});
+      const root=${JSON.stringify(ROOT)};
+      const docs=Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
+        .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
+      process.stdout.write(JSON.stringify({status:authority.validate(docs).currentStatus}));
+    `);
+    expect(clean).toEqual({status:'candidate'});
+
+    const cases = [
+      `require('node:util/types').isProxy=()=>false;`,
+      `Reflect.ownKeys=()=>['roadmap','ledger','architecture'];`,
+      `Object.getPrototypeOf=()=>Object.prototype;`,
+      `Object.getOwnPropertyDescriptor=()=>({value:()=>false,enumerable:true,writable:true,configurable:true});`,
+      `String.prototype.replace=function(){return this;};`,
+    ];
+    for (const setup of cases) {
+      const result = runFresh(`
+        ${setup}
+        let loaded=true; let message='';
+        try { require(${JSON.stringify(AUTHORITY_PATH)}); } catch(error) {
+          loaded=false; message=error.message;
+        }
+        process.stdout.write(JSON.stringify({loaded,message}));
+      `);
+      expect(result.loaded).toBe(false);
+      expect(result.message).toBe('Mission 27 Part 14 authority bootstrap invalid');
+    }
+
+    const cacheReset = runFresh(`
+      const modulePath=${JSON.stringify(AUTHORITY_PATH)};
+      require(modulePath); delete require.cache[require.resolve(modulePath)];
+      require('node:util/types').isProxy=()=>false;
+      let loaded=true; try { require(modulePath); } catch(_error) { loaded=false; }
+      process.stdout.write(JSON.stringify({loaded}));
+    `);
+    expect(cacheReset).toEqual({loaded:false});
+  });
+
+  test('captured intrinsics resist later ambient replacement and prototype pollution fails closed', () => {
+    const result = runFresh(`
+      const fs=require('node:fs'); const path=require('node:path');
+      const authority=require(${JSON.stringify(AUTHORITY_PATH)});
+      const root=${JSON.stringify(ROOT)};
+      const docs=Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
+        .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
+      const original={ownKeys:Reflect.ownKeys,getPrototypeOf:Object.getPrototypeOf,
+        descriptor:Object.getOwnPropertyDescriptor,isProxy:require('node:util/types').isProxy};
+      let capturedPass=false; let pollutedRejected=false;
+      try {
+        Reflect.ownKeys=()=>{throw new Error('ambient ownKeys');};
+        Object.getPrototypeOf=()=>{throw new Error('ambient prototype');};
+        Object.getOwnPropertyDescriptor=()=>{throw new Error('ambient descriptor');};
+        require('node:util/types').isProxy=()=>{throw new Error('ambient proxy');};
+        capturedPass=authority.validate(docs).currentStatus==='candidate';
+      } finally {
+        Reflect.ownKeys=original.ownKeys; Object.getPrototypeOf=original.getPrototypeOf;
+        Object.getOwnPropertyDescriptor=original.descriptor;
+        require('node:util/types').isProxy=original.isProxy;
+      }
+      Object.defineProperty(Object.prototype,'inheritedAuthority',{
+        value:'forged',enumerable:true,writable:true,configurable:true});
+      try { authority.validate(docs); } catch(_error) { pollutedRejected=true; }
+      delete Object.prototype.inheritedAuthority;
+      process.stdout.write(JSON.stringify({capturedPass,pollutedRejected}));
+    `);
+    expect(result).toEqual({capturedPass:true,pollutedRejected:true});
+  });
+
+  test('returns one deeply immutable authority state', () => {
+    const first = authority.validate({ ...DOCS });
+    const second = authority.validate({ ...DOCS });
+    expect(first).toBe(second);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first.laterSlices)).toBe(true);
   });
 });

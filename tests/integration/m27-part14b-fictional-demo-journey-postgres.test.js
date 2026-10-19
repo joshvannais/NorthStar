@@ -32,20 +32,20 @@ function deadline(message,ms){return new Promise((_,reject)=>{
 });}
 
 realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
-  let fixture,transport,journeyReadSpy,forgedDetachedCalls=0;
+  let fixture,transport,journeyDbEntrySpy,forgedDetachedCalls=0;
   beforeAll(async()=>{
     for(const key of ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','OPENAI_API_KEY','RETELL_API_KEY',
       'TWILIO_AUTH_TOKEN','RESEND_API_KEY','SMTP_HOST','SMTP_USER','SMTP_PASS']) delete process.env[key];
     transport=jest.spyOn(require('https'),'request').mockImplementation(()=>{
       throw new Error('External transport forbidden in Part 14B');});
-    journeyReadSpy=jest.spyOn(DemoCommandCenterRepository.prototype,'deliverFictionalDemoJourney');
     const compatibilityPath=require.resolve(
       '../../src/customerFinancial/fictionalDemoJourneyAcceptanceRepository');
     const realCompatibilityEntry=require.cache[compatibilityPath];
     require.cache[compatibilityPath]={id:compatibilityPath,filename:compatibilityPath,loaded:true,
       exports:new Proxy({}, {get(){forgedDetachedCalls+=1;return ()=>{forgedDetachedCalls+=1;};}}),
       children:[],paths:[]};
-    try { fixture=await createDatabaseFixture(); }
+    try { fixture=await createDatabaseFixture();
+      journeyDbEntrySpy=jest.spyOn(fixture.db.getPool(),'connect'); }
     finally { require.cache[compatibilityPath]=realCompatibilityEntry; }
   },180000);
   afterAll(async()=>{try{if(fixture)await fixture.cleanup();}finally{jest.restoreAllMocks();}},180000);
@@ -114,11 +114,11 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
   test('method body query CORS privacy and cross-session boundaries fail before source entry',async()=>{
     const entry=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
     const savedCookie=cookie(entry),estimate=entry.body.data.graphs[0].ids.estimate,target=route(estimate);
-    journeyReadSpy.mockClear();
+    journeyDbEntrySpy.mockClear();
     const widened=await request(fixture.app).get(target).query({tenantId:'victim',accountId:'acct_victim',
       amountMinorUnits:'100',credential:'sk_secret'}).set('Host',HOST).set('Cookie',savedCookie);
     expect(widened.status).toBe(400);expect(JSON.stringify(widened.body)).not.toMatch(/victim|acct_|100|sk_secret/);
-    expect(journeyReadSpy).not.toHaveBeenCalled();
+    expect(journeyDbEntrySpy).not.toHaveBeenCalled();
     for(const body of ['"sk_scalar_secret"','{"credential":"sk_malformed"',
       JSON.stringify({accountId:'acct_victim',amountMinorUnits:100})]){
       const response=await request(fixture.app).get(target).type('application/json').send(body)
@@ -136,11 +136,11 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       expect(response.headers['cache-control']).toContain('private');
       expect(JSON.stringify(response.body||{})).not.toMatch(/sk_method_secret/);
     }
-    expect(journeyReadSpy).not.toHaveBeenCalled();
+    expect(journeyDbEntrySpy).not.toHaveBeenCalled();
     const second=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
     expect((await request(fixture.app).get(target).set('Host',HOST).set('Cookie',cookie(second))).status)
       .toBe(404);
-    expect(journeyReadSpy).toHaveBeenCalledTimes(1);
+    expect(journeyDbEntrySpy).toHaveBeenCalled();
     expect(transport).not.toHaveBeenCalled();
   });
 
@@ -261,7 +261,7 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
   test('rejects every Express-matched malformed identifier and composed request before session entry',async()=>{
     const entry=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
     const savedCookie=cookie(entry),valid=entry.body.data.graphs[0].ids.estimate;
-    journeyReadSpy.mockClear();
+    journeyDbEntrySpy.mockClear();
     const base='/api/demo/customer-financial/invoice-drafts/';
     const suffix='/part14b-acceptance';
     for(const segment of ['not-a-uuid','x'.repeat(2048),'caf%C3%A9','%2F','%252F','%E0%A4%A']) {
@@ -272,6 +272,7 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       expect(response.headers['cache-control']).toContain('no-store');
       expect(response.headers['x-request-id']).toBeUndefined();
       expect(JSON.stringify(response.body)).not.toMatch(/sk_query|not-a-uuid|café/);
+      expect(journeyDbEntrySpy).not.toHaveBeenCalled();
     }
     for(const path of [base+valid+suffix,base+'not-a-uuid'+suffix]) {
       const content=await request(fixture.app).get(path).set('Host',HOST).set('Cookie',savedCookie)
@@ -282,6 +283,7 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       expect(method.status).toBe(405);expect(method.headers.allow).toBe('GET');
       expect(method.headers['access-control-allow-methods']).toBeUndefined();
       expect(method.headers['x-request-id']).toBeUndefined();
+      expect(journeyDbEntrySpy).not.toHaveBeenCalled();
     }
     const server=await new Promise((resolve,reject)=>{
       const mounted=fixture.app.listen(0,'127.0.0.1',()=>resolve(mounted));
@@ -303,11 +305,13 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
         expect(response.headers['cache-control']).toContain('no-store');
         expect(response.headers['x-request-id']).toBeUndefined();
         expect(response.body).not.toMatch(/sk_raw/);
+        expect(journeyDbEntrySpy).not.toHaveBeenCalled();
       }
+      expect(journeyDbEntrySpy).not.toHaveBeenCalled();
       const empty=await raw(base+'/'+suffix.slice(1)+'?secret=sk_raw');
       expect(empty.status).toBe(404);
     } finally {await new Promise(resolve=>server.close(resolve));}
-    expect(journeyReadSpy).not.toHaveBeenCalled();expect(transport).not.toHaveBeenCalled();
+    expect(transport).not.toHaveBeenCalled();
   });
 
   test('exposes no detached record, token, transaction, loader, or reusable lock capability',async()=>{
@@ -315,6 +319,7 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
     expect(Object.getPrototypeOf(detachedRepository)).toBeNull();
     expect(Reflect.ownKeys(detachedRepository)).toEqual([]);
     expect(DemoCommandCenterRepository.prototype.withCurrentReadAuthority).toBeUndefined();
+    expect(DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney).toBeUndefined();
     const aliases=['read','recordContext','serializeResponse','bundle','project','load','token','transaction'];
     for(const name of aliases) expect(detachedRepository[name]).toBeUndefined();
     const before=await protectedCounts(fixture.ownerPool);

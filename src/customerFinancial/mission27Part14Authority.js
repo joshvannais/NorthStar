@@ -423,8 +423,8 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   architecture14B: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14B_RESETTABLE_FICTIONAL_DEMO_JOURNEY.md',
-    normalizedSha256: '45db217d49ce556adb47ba9dc4a6dbc020734c2bfe5e6f23258dc05b2c24823e',
-    normalizedUtf8Bytes: 6697,
+    normalizedSha256: '30434c1b1ddd49471dc9dcf9beea0006bcfed833454c946d6fbad22d4064cd9e',
+    normalizedUtf8Bytes: 6939,
     normalizedLineCount: 35,
   }),
 });

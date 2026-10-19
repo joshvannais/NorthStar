@@ -59,7 +59,8 @@ const fictionalDemoJourneyAcceptance = require('../customerFinancial/fictionalDe
 const readFictionalJourneySource = demoReportingPart12Acceptance.bundle;
 const buildFictionalJourney = fictionalDemoJourneyAcceptance.bundle;
 const productionPoolProvider = db.getPool.bind(db);
-const fictionalJourneyAuthorities = new WeakSet();
+const safeApply = Reflect.apply;
+let canonicalFictionalJourneyRepository = null;
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SIMULATION_COOLDOWN_MS = 750;
@@ -556,8 +557,7 @@ function recordFromRow(row, token, persisted) {
 
 class DemoCommandCenterRepository {
   constructor(poolProvider = () => db.getPool(), options = {}) {
-    const productionAuthority = arguments.length === 0;
-    this.poolProvider = productionAuthority ? productionPoolProvider : poolProvider;
+    this.poolProvider = poolProvider;
     this.clock = typeof options.clock === 'function' ? options.clock : () => new Date();
     this.maxActiveSessions = boundedOption(
       options.maxActiveSessions, 1, MAX_ACTIVE_SESSIONS, MAX_ACTIVE_SESSIONS
@@ -570,7 +570,6 @@ class DemoCommandCenterRepository {
       options.maxSourceCreationsPerMinute, 1, MAX_SOURCE_CREATIONS_PER_MINUTE,
       MAX_SOURCE_CREATIONS_PER_MINUTE
     );
-    if (productionAuthority) fictionalJourneyAuthorities.add(this);
   }
 
   pool() {
@@ -639,11 +638,11 @@ class DemoCommandCenterRepository {
   }
 
   async deliverFictionalDemoJourney(req, res) {
-    // The mounted router's zero-argument repository is the only holder of this
-    // capability. Test/custom repositories, proxy wrappers, detached methods,
-    // and caller-supplied pool or clock providers fail before request or source
-    // access; they cannot manufacture a database-current Part 14B response.
-    if (!fictionalJourneyAuthorities.has(this)) {
+    // This implementation is captured and removed from the public prototype
+    // before the module is exported. Only the hidden, frozen production
+    // repository can be its receiver. Constructed repositories, subclasses,
+    // clones, wrappers and rebound aliases cannot acquire this identity.
+    if (this !== canonicalFictionalJourneyRepository) {
       fail(503, 'DEMO_COMMAND_CENTER_UNAVAILABLE',
         'The isolated demo is temporarily unavailable.');
     }
@@ -1255,6 +1254,35 @@ class DemoCommandCenterRepository {
   }
 }
 
+// Build the only Part 14B authority before exposing the ordinary repository
+// class. The public class remains available for the previously released demo
+// operations, but it no longer exposes the Part 14B delivery implementation.
+// The hidden receiver owns fixed copies of every overridable method used by
+// its private read/delivery path and a fixed production pool provider.
+const canonicalJourneyImplementation =
+  DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney;
+delete DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney;
+const canonicalJourneyClock = Object.freeze(() => new Date());
+canonicalFictionalJourneyRepository = new DemoCommandCenterRepository(
+  productionPoolProvider, { clock: canonicalJourneyClock }
+);
+for (const name of ['pool','token','issue','normalizePersistedRow']) {
+  const descriptor = Object.getOwnPropertyDescriptor(DemoCommandCenterRepository.prototype, name);
+  Object.defineProperty(canonicalFictionalJourneyRepository, name, {
+    value: descriptor.value, enumerable: false, writable: false, configurable: false,
+  });
+}
+Object.defineProperties(canonicalFictionalJourneyRepository, {
+  poolProvider: { value: productionPoolProvider, enumerable: false,
+    writable: false, configurable: false },
+  clock: { value: canonicalJourneyClock, enumerable: false,
+    writable: false, configurable: false },
+});
+Object.freeze(canonicalFictionalJourneyRepository);
+const deliverFictionalDemoJourney = Object.freeze(async function deliverMountedJourney(req, res) {
+  return safeApply(canonicalJourneyImplementation, canonicalFictionalJourneyRepository, [req, res]);
+});
+
 class DemoCommandCenterHousekeepingWorker {
   constructor(options = {}) {
     this.repository = options.repository || new DemoCommandCenterRepository();
@@ -1315,7 +1343,7 @@ class DemoCommandCenterHousekeepingWorker {
   }
 }
 
-module.exports = {
+const demoRepositoryApi = {
   ADMISSION_HISTORY_MS,
   DEFAULT_HOUSEKEEPING_INTERVAL_MS,
   DEFAULT_HOUSEKEEPING_MAX_BATCHES,
@@ -1330,6 +1358,7 @@ module.exports = {
   MAX_SOURCE_CREATIONS_PER_MINUTE,
   SIMULATION_COOLDOWN_MS,
   TOKEN_LIFETIME_MS,
+  deliverFictionalDemoJourney,
   issueToken,
   normalizeToken,
   nextWorkspaceSeed,
@@ -1339,3 +1368,8 @@ module.exports = {
   repairKnownTreeServiceIdentity,
   workspaceSeedForToken,
 };
+Object.setPrototypeOf(demoRepositoryApi, null);
+Object.freeze(demoRepositoryApi);
+Object.defineProperty(module, 'exports', {
+  value: demoRepositoryApi, enumerable: true, writable: false, configurable: false,
+});

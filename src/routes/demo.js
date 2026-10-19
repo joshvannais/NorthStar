@@ -22,10 +22,22 @@ const config = require('../config');
 const db = require('../db');
 const { getProvisionedDemoOrganization } = require('../services/organizationAuthority');
 const { readDemoLifecycle } = require('../services/demoVoiceLifecycle');
+const demoRepositoryApi = require('../commandCenter/demoRepository');
 const {
   DemoCommandCenterError,
   DemoCommandCenterRepository,
-} = require('../commandCenter/demoRepository');
+} = demoRepositoryApi;
+const fictionalJourneyDeliveryDescriptor = Object.getOwnPropertyDescriptor(
+  demoRepositoryApi, 'deliverFictionalDemoJourney'
+);
+if (Object.getPrototypeOf(demoRepositoryApi) !== null || !Object.isFrozen(demoRepositoryApi) ||
+    !fictionalJourneyDeliveryDescriptor ||
+    typeof fictionalJourneyDeliveryDescriptor.value !== 'function' ||
+    fictionalJourneyDeliveryDescriptor.writable !== false ||
+    fictionalJourneyDeliveryDescriptor.configurable !== false) {
+  throw new Error('The fictional demo journey route authority is unavailable.');
+}
+const deliverFictionalDemoJourney = fictionalJourneyDeliveryDescriptor.value;
 const {
   buildDemoWorkspace,
   demoCanonicalItems,
@@ -588,7 +600,7 @@ router.get('/customer-financial/invoice-drafts/:estimateId/part12-acceptance', a
 router.get('/customer-financial/invoice-drafts/:estimateId/part14b-acceptance', async function(req,res) {
   res.set('Cache-Control','private, no-store'); res.vary('Cookie');
   try {
-    await commandCenterRepository.deliverFictionalDemoJourney(req,res);
+    await deliverFictionalDemoJourney(req,res);
     return undefined;
   } catch (error) {
     // A client can disconnect after headers/body have started but before the

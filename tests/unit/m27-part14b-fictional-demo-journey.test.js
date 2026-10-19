@@ -109,25 +109,49 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
     expect(getterCalls).toBe(0);
   });
 
-  test('exports no detached-record projection, loader, token, transaction or serialization capability',()=>{
+  test('exports one immutable production operation and no constructible Part14B authority',async()=>{
     expect(Object.getPrototypeOf(repository)).toBeNull();
     expect(Object.isFrozen(repository)).toBe(true);
     expect(Reflect.ownKeys(repository)).toEqual([]);
     for(const alias of ['read','recordContext','serializeResponse','bundle','project','load',
       'withCurrentReadAuthority','token','transaction']) expect(repository[alias]).toBeUndefined();
-    const {DemoCommandCenterRepository}=require('../../src/commandCenter/demoRepository');
+    const modulePath=require.resolve('../../src/commandCenter/demoRepository');
+    const api=require(modulePath);
+    const {DemoCommandCenterRepository,deliverFictionalDemoJourney}=api;
+    expect(Object.getPrototypeOf(api)).toBeNull();expect(Object.isFrozen(api)).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(api,'deliverFictionalDemoJourney')).toMatchObject({
+      value:deliverFictionalDemoJourney,enumerable:true,writable:false,configurable:false});
     expect(DemoCommandCenterRepository.prototype.withCurrentReadAuthority).toBeUndefined();
-    expect(typeof DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney).toBe('function');
-    let requestReads=0,poolReads=0;
+    expect(DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney).toBeUndefined();
+    let poolReads=0;
+    class Derived extends DemoCommandCenterRepository {}
+    for(const value of [new DemoCommandCenterRepository(),
+      new DemoCommandCenterRepository(()=>{poolReads+=1;return {};}),new Derived(),
+      Object.create(DemoCommandCenterRepository.prototype),
+      new Proxy(new DemoCommandCenterRepository(()=>{poolReads+=1;return {};}),{})]) {
+      expect(value.deliverFictionalDemoJourney).toBeUndefined();
+      expect(value.withCurrentReadAuthority).toBeUndefined();
+    }
+    expect(poolReads).toBe(0);
+    expect(()=>{api.deliverFictionalDemoJourney=()=>{};}).toThrow();
+    expect(()=>delete api.deliverFictionalDemoJourney).toThrow();
+    expect(()=>Object.defineProperty(api,'deliverFictionalDemoJourney',{value:()=>{}})).toThrow();
+    expect(()=>Object.setPrototypeOf(api,{})).toThrow();
+    const moduleRecord=require.cache[modulePath];
+    expect(Object.getOwnPropertyDescriptor(moduleRecord,'exports')).toMatchObject({
+      value:api,writable:false,configurable:false});
+    expect(()=>{moduleRecord.exports={};}).toThrow();
+    expect(()=>Object.defineProperty(moduleRecord,'exports',{value:{}})).toThrow();
     const injected=new DemoCommandCenterRepository(()=>{poolReads+=1;return {};});
-    const requestValue=new Proxy({}, {get(){requestReads+=1;return undefined;}});
-    return expect(injected.deliverFictionalDemoJourney(requestValue,{}))
-      .rejects.toMatchObject({status:503,code:'DEMO_COMMAND_CENTER_UNAVAILABLE'})
-      .then(()=>{expect(requestReads).toBe(0);expect(poolReads).toBe(0);
-        const wrapped=new Proxy(injected,{});
-        return expect(DemoCommandCenterRepository.prototype.deliverFictionalDemoJourney
-          .call(wrapped,requestValue,{})).rejects.toMatchObject({status:503});})
-      .then(()=>{expect(requestReads).toBe(0);expect(poolReads).toBe(0);});
+    Object.defineProperty(injected,'deliverFictionalDemoJourney',{
+      value:deliverFictionalDemoJourney,writable:true,configurable:true});
+    await expect(injected.deliverFictionalDemoJourney({method:'POST'},{}))
+      .rejects.toMatchObject({status:503,code:'DEMO_COMMAND_CENTER_UNAVAILABLE'});
+    await expect(deliverFictionalDemoJourney.call(injected,{method:'POST'},{}))
+      .rejects.toMatchObject({status:503,code:'DEMO_COMMAND_CENTER_UNAVAILABLE'});
+    await expect(deliverFictionalDemoJourney.bind(injected)({method:'POST'},{}))
+      .rejects.toMatchObject({status:503,code:'DEMO_COMMAND_CENTER_UNAVAILABLE'});
+    expect(poolReads).toBe(0);
   });
 
   test('browser data-only gate rejects poison in every embedded part before invoking accessors',async()=>{

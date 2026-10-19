@@ -2,20 +2,40 @@
 
 // Part 14B's database and route authority is composed at the first executable
 // application boundary. No route or repository export carries that authority.
-// The decision is deliberately bound to this module's own CommonJS require
-// closure and cache. A process/global/builtin accessor could expose a second
-// cache view and must never participate in this decision.
-const part14BRequireCache = require.cache;
+// Node's native proxy predicate is exercised before any cache lookup: language
+// operators and descriptor helpers dispatch through Proxy traps and therefore
+// cannot safely establish the cache provenance they are meant to inspect.
 const part14BModuleConstructor = module.constructor;
 const part14BModuleLoader = part14BModuleConstructor && part14BModuleConstructor._load;
+if (!part14BModuleConstructor || typeof part14BModuleLoader !== 'function' ||
+    part14BModuleLoader.name !== '' || part14BModuleLoader.length !== 3) {
+  throw new Error('The fictional demo journey application composition is unavailable.');
+}
+const part14BProxyTypes = require('node:util/types');
+const part14BIsProxy = part14BProxyTypes && part14BProxyTypes.isProxy;
+const part14BProxyProbe = new Proxy({}, {});
+const part14BRevocableProbe = Proxy.revocable({}, {});
+part14BRevocableProbe.revoke();
+const part14BRequireCache = require.cache;
+if (typeof part14BIsProxy !== 'function' || part14BIsProxy.length !== 0 ||
+    part14BIsProxy.name !== '' || part14BIsProxy(part14BIsProxy) ||
+    part14BIsProxy(part14BProxyTypes) || !part14BIsProxy(part14BProxyProbe) ||
+    !part14BIsProxy(part14BRevocableProbe.proxy) ||
+    part14BIsProxy({}) || part14BIsProxy(module) ||
+    part14BIsProxy(part14BRequireCache)) {
+  throw new Error('The fictional demo journey application composition is unavailable.');
+}
+if (!part14BModuleConstructor || part14BIsProxy(part14BModuleConstructor)) {
+  throw new Error('The fictional demo journey application composition is unavailable.');
+}
 const part14BDatabasePath = require.resolve('./db');
 const part14BRepositoryPath = require.resolve('./commandCenter/demoRepository');
 const part14BDemoRoutePath = require.resolve('./routes/demo');
 const part14BApiRoutePath = require.resolve('./routes/api');
-// These checks intentionally use only language operators and the local
-// CommonJS closure. In particular, `in` detects data, accessor,
-// non-enumerable and inherited entries without reading an entry value and
-// cannot be redirected by replacing Object/Reflect/Function/Array helpers.
+// Once the native predicate has established that the local cache is an
+// ordinary object, `in` detects data, accessor, non-enumerable and inherited
+// entries without reading an entry value. Process/global cache selectors never
+// participate in this decision.
 if (!part14BRequireCache || !(__filename in part14BRequireCache) ||
     !part14BModuleConstructor || part14BModuleConstructor._cache !== part14BRequireCache ||
     typeof part14BModuleLoader !== 'function' || part14BModuleLoader.name !== '' ||
@@ -27,8 +47,9 @@ if (!part14BRequireCache || !(__filename in part14BRequireCache) ||
   throw new Error('The fictional demo journey application composition is unavailable.');
 }
 const part14BRepositoryBootstrap = require('./commandCenter/demoRepository');
-if (!part14BRepositoryBootstrap ||
-    typeof part14BRepositoryBootstrap.consumeFictionalDemoJourney !== 'function') {
+if (!part14BRepositoryBootstrap || part14BIsProxy(part14BRepositoryBootstrap) ||
+    typeof part14BRepositoryBootstrap.consumeFictionalDemoJourney !== 'function' ||
+    part14BIsProxy(part14BRepositoryBootstrap.consumeFictionalDemoJourney)) {
   throw new Error('The fictional demo journey application bootstrap is unavailable.');
 }
 const consumeFictionalDemoJourney =
@@ -59,7 +80,9 @@ try { finalizedDemoRepositoryModule.exports = part14BRepositoryBootstrap; } catc
   part14BExportsReplacementBlocked = true;
 }
 if (typeof deliverFictionalDemoJourney !== 'function' ||
-    !finalizedDemoRepositoryApi ||
+    part14BIsProxy(deliverFictionalDemoJourney) ||
+    !finalizedDemoRepositoryModule || part14BIsProxy(finalizedDemoRepositoryModule) ||
+    !finalizedDemoRepositoryApi || part14BIsProxy(finalizedDemoRepositoryApi) ||
     !part14BApiExtensionBlocked || !part14BExportsReplacementBlocked ||
     'part14BMutationProbe' in finalizedDemoRepositoryApi ||
     finalizedDemoRepositoryModule.exports !== finalizedDemoRepositoryApi ||

@@ -73,6 +73,71 @@ process.stdout.write(JSON.stringify({loaded,error,hiddenCacheChecks,handlerCalls
       hiddenCacheChecks:0,handlerCalls:0,injectedPoolProvider:0,injectedPoolQuery:0});
   });
 
+  test.each(['hiding','transparent','nested','descriptor-traps'])(
+    'a %s Proxy over the native cache fails before protected cache traps or effects',variant=>{
+      const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),variant=process.argv[2],Module=require('node:module');
+const realDb=require(values.db),nativeCache=Module._cache;
+let provider=0,query=0,has=0,get=0,descriptor=0,protectedDescriptor=0,prototype=0,ownKeys=0;
+nativeCache[values.db]={id:values.db,filename:values.db,loaded:true,exports:{...realDb,
+ getPool(){provider+=1;return {query(){query+=1;},connect(){query+=1;}};}},children:[],paths:[]};
+const protectedPaths=new Set([values.db,values.repository,values.route,values.api]);
+const handler={
+ has(target,key){has+=1;return variant==='hiding'&&protectedPaths.has(key)?false:key in target;},
+ get(target,key,receiver){get+=1;return Reflect.get(target,key,receiver);},
+ getOwnPropertyDescriptor(target,key){descriptor+=1;if(protectedPaths.has(key))protectedDescriptor+=1;
+  return Reflect.getOwnPropertyDescriptor(target,key);},
+ getPrototypeOf(target){prototype+=1;return Reflect.getPrototypeOf(target);},
+ ownKeys(target){ownKeys+=1;return Reflect.ownKeys(target);},
+};
+let proxy=new Proxy(nativeCache,handler);if(variant==='nested')proxy=new Proxy(proxy,handler);
+Module._cache=proxy;
+let loaded=false,error=null;try{require(values.server);loaded=true;}catch(value){error=value&&value.message;}
+const protectedTrapCount=has;
+process.stdout.write(JSON.stringify({loaded,error,provider,query,protectedTrapCount,get,
+ descriptor,protectedDescriptor,prototype,ownKeys}));`;
+      const result=fresh(script,[JSON.stringify(paths),variant]);
+      expect(result).toMatchObject({loaded:false,
+        error:'The fictional demo journey application composition is unavailable.',provider:0,
+        query:0,protectedTrapCount:0,protectedDescriptor:0,prototype:0,ownKeys:0});
+      // Node performs the one unavoidable lookup of server.js before its first
+      // line can reject the proxied cache; Part14B performs no cache trap.
+      expect(result.get).toBe(variant==='nested'?2:1);
+    }
+  );
+
+  test('a revoked native-cache Proxy fails in the loader before authority or effects',()=>{
+    const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),Module=require('node:module');let provider=0,query=0;
+const revoked=Proxy.revocable(Module._cache,{});Module._cache=revoked.proxy;revoked.revoke();
+let loaded=false,error=null;try{require(values.server);loaded=true;}catch(value){error=value&&value.message;}
+process.stdout.write(JSON.stringify({loaded,error,provider,query}));`;
+    const result=fresh(script,[JSON.stringify(paths)]);
+    expect(result.loaded).toBe(false);expect(result.provider).toBe(0);expect(result.query).toBe(0);
+    expect(result.error).toMatch(/revoked|proxy/i);
+  });
+
+  test.each(['always-false','always-true','proxy-wrapper'])(
+    'a replaced native isProxy view (%s) cannot grant authority',variant=>{
+      const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),variant=process.argv[2],types=require('node:util/types');
+const real=types.isProxy;let detectorCalls=0,provider=0,query=0;
+if(variant==='always-false')types.isProxy=function(){detectorCalls+=1;return false;};
+else if(variant==='always-true')types.isProxy=function(){detectorCalls+=1;return true;};
+else types.isProxy=new Proxy(real,{apply(target,self,args){detectorCalls+=1;
+ return Reflect.apply(target,self,args);}});
+let loaded=false,error=null;try{require(values.server);loaded=true;}catch(value){error=value&&value.message;}
+process.stdout.write(JSON.stringify({loaded,error,detectorCalls,provider,query}));`;
+      const result=fresh(script,[JSON.stringify(paths),variant]);
+      expect(result).toMatchObject({loaded:false,
+        error:'The fictional demo journey application composition is unavailable.',provider:0,query:0});
+      expect(result.detectorCalls).toBeGreaterThan(0);
+    }
+  );
+
   test.each([
     'Object.hasOwn','Object.getOwnPropertyDescriptor','Object.getPrototypeOf','Object.keys',
     'Object.entries','Reflect.ownKeys','Reflect.getOwnPropertyDescriptor','Reflect.get',

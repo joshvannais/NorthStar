@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "description": "AI-powered virtual receptionist for home-service contractors",
   "main": "src/server.js",
+  "engines": {
+    "node": "22.23.3"
+  },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "start": "sh scripts/start-production.sh",
+    "dev": "node --watch src/developmentChild.js",
     "test": "jest --config jest.config.js",
     "build:retell-web": "esbuild src/browser/retellWebEntry.mjs --bundle --format=esm --platform=browser --minify --drop:console --legal-comments=external --outfile=public/js/vendor/retell-web-client.mjs",
     "test:integration": "jest --config jest.config.js tests/integration/",

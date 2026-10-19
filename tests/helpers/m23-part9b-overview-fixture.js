@@ -77,6 +77,8 @@ async function createDatabaseFixture(options = {}) {
   hostProcess.env.DATABASE_URL = process.env.DATABASE_URL;
   hostProcess.env.NODE_ENV = 'test';
   hostProcess.env.AUTH_ACCESS_SECRET = process.env.AUTH_ACCESS_SECRET;
+  hostProcess.env.JEST_WORKER_ID = String(process.env.JEST_WORKER_ID || 'fixture');
+  hostProcess.env.NORTHSTAR_PART14B_TEST_ADAPTER = 'jest-mounted-v1';
   if (process.env.MIGRATION_DATABASE_URL) {
     hostProcess.env.MIGRATION_DATABASE_URL = process.env.MIGRATION_DATABASE_URL;
   } else delete hostProcess.env.MIGRATION_DATABASE_URL;
@@ -107,6 +109,7 @@ async function createDatabaseFixture(options = {}) {
       delete process.env.DATABASE_URL; delete process.env.MIGRATION_DATABASE_URL;
       delete hostProcess.env.DATABASE_URL; delete hostProcess.env.MIGRATION_DATABASE_URL;
       delete hostProcess.env.AUTH_ACCESS_SECRET;
+      delete hostProcess.env.NORTHSTAR_PART14B_TEST_ADAPTER;
     },
     async createExecution(options = {}) {
       sequence += 1;

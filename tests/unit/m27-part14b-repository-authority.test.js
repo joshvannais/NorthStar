@@ -14,8 +14,11 @@ const paths={
 };
 
 function fresh(script,args=[]){
+  const env={...process.env,NODE_ENV:'test'};
+  delete env.JEST_WORKER_ID;
+  delete env.NORTHSTAR_PART14B_TEST_ADAPTER;
   return JSON.parse(childProcess.execFileSync(process.execPath,['-e',script,...args],{
-    cwd:ROOT,encoding:'utf8',env:{...process.env,NODE_ENV:'test'},timeout:120000,
+    cwd:ROOT,encoding:'utf8',env,timeout:120000,
   }));
 }
 
@@ -120,7 +123,7 @@ process.stdout.write(JSON.stringify({loaded,error,provider,query}));`;
   });
 
   test.each(['always-false','always-true','proxy-wrapper'])(
-    'a replaced native isProxy view (%s) cannot grant authority',variant=>{
+    'a replaced native isProxy view (%s) is never consulted by the unsupported direct path',variant=>{
       const script=String.raw`
 'use strict';
 const values=JSON.parse(process.argv[1]),variant=process.argv[2],types=require('node:util/types');
@@ -134,9 +137,33 @@ process.stdout.write(JSON.stringify({loaded,error,detectorCalls,provider,query})
       const result=fresh(script,[JSON.stringify(paths),variant]);
       expect(result).toMatchObject({loaded:false,
         error:'The fictional demo journey application composition is unavailable.',provider:0,query:0});
-      expect(result.detectorCalls).toBeGreaterThan(0);
+      expect(result.detectorCalls).toBe(0);
     }
   );
+
+  test('the exact adaptive isProxy/cache Proxy exploit is outside the clean launcher and fails first',()=>{
+    const script=String.raw`
+'use strict';
+const values=JSON.parse(process.argv[1]),Module=require('node:module'),types=require('node:util/types');
+const realDetector=types.isProxy,nativeCache=Module._cache,realDb=require(values.db);
+let detectorCalls=0,has=0,get=0,provider=0,query=0;
+nativeCache[values.db]={id:values.db,filename:values.db,loaded:true,exports:{...realDb,
+ getPool(){provider+=1;return {query(){query+=1;},connect(){query+=1;}};}},children:[],paths:[]};
+const protectedPaths=new Set([values.db,values.repository,values.route,values.api]);
+const cacheProxy=new Proxy(nativeCache,{has(target,key){has+=1;return protectedPaths.has(key)?false:key in target;},
+ get(target,key,receiver){get+=1;return Reflect.get(target,key,receiver);}});
+Module._cache=cacheProxy;
+types.isProxy=function(value){detectorCalls+=1;return value===cacheProxy?false:realDetector(value);};
+let loaded=false,error=null;try{require(values.server);loaded=true;}catch(value){error=value&&value.message;}
+process.stdout.write(JSON.stringify({loaded,error,detectorCalls,has,get,provider,query}));`;
+    const result=fresh(script,[JSON.stringify(paths)]);
+    expect(result).toMatchObject({loaded:false,
+      error:'The fictional demo journey application composition is unavailable.',
+      detectorCalls:0,has:0,provider:0,query:0});
+    // Node itself performs the one entry lookup needed to load server.js. No
+    // application or protected-cache traversal follows.
+    expect(result.get).toBe(1);
+  });
 
   test.each([
     'Object.hasOwn','Object.getOwnPropertyDescriptor','Object.getPrototypeOf','Object.keys',
@@ -334,10 +361,11 @@ process.stdout.write(JSON.stringify({directType,provider,query,forgedOperation,r
       forgedOperation:0,routeCount:0});
   });
 
-  test('clean canonical startup mounts one private handler and later cache replacement cannot redirect it',()=>{
+  test('the isolated Jest adapter mounts one private handler and later cache replacement cannot redirect it',()=>{
     const script=String.raw`
 'use strict';
-const values=JSON.parse(process.argv[1]);require(values.sealed);
+const values=JSON.parse(process.argv[1]);process.env.NODE_ENV='test';process.env.JEST_WORKER_ID='fixture';
+process.env.NORTHSTAR_PART14B_TEST_ADAPTER='jest-mounted-v1';require(values.sealed);
 const server=require(values.server),repo=require(values.repository);
 const routes=server.app._router.stack.filter(layer=>layer.route&&layer.route.path===
  '/api/demo/customer-financial/invoice-drafts/:estimateId/part14b-acceptance');

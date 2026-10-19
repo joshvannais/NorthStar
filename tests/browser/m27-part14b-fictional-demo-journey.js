@@ -6,16 +6,21 @@ const crypto=require('node:crypto');
 process.chdir(path.resolve(__dirname,'../..'));
 process.env.NODE_ENV='test';
 process.env.AUTH_ACCESS_SECRET='m27-part14b-mounted-browser-disposable-only';
-for(const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','POLARIS_OPENAI_ENABLED',
+const externallyMounted=process.argv.some(value=>value.startsWith('--origin='));
+for(const key of [(externallyMounted?null:'DATABASE_URL'),(externallyMounted?null:'MIGRATION_DATABASE_URL'),
+  'OPENAI_API_KEY','POLARIS_OPENAI_ENABLED',
   'RETELL_API_KEY','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','TWILIO_AUTH_TOKEN','RESEND_API_KEY',
-  'SMTP_HOST','SMTP_USER','SMTP_PASS']) delete process.env[key];
+  'SMTP_HOST','SMTP_USER','SMTP_PASS']) if(key)delete process.env[key];
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
 const {resolveBrowserRuntime}=require('../helpers/playwright-runtime');
 let serializationBarrier=null,activeSerializationRelease=null;
 let responsePrototype=null,realResponseSend=null;
 function arg(name){const value=process.argv.find(item=>item.startsWith(`--${name}=`));
   assert.ok(value,`Missing --${name}`);return value.slice(name.length+3);}
+function optionalArg(name){const value=process.argv.find(item=>item.startsWith(`--${name}=`));
+  return value?value.slice(name.length+3):null;}
 const engine=arg('browser'),output=path.resolve(arg('output')),layoutName=arg('layout');
+const externalOrigin=optionalArg('origin');
 const layouts={
   'mobile-dark':{width:390,height:844,colorScheme:'dark'},
   'desktop-light':{width:1440,height:900,colorScheme:'light'},
@@ -65,24 +70,32 @@ async function audit(page,root){
   });
   assert.ok(result.overflow<=1,JSON.stringify(result));assert.equal(result.unnamed,0);assert.equal(result.theme,layout.colorScheme);
 }
-(async()=>{let fixture,server,browser,context,page;const ledger={engine,layout:layoutName,mockedResponses:0,
+(async()=>{let fixture,server,browser,context,page,externalPool,externalLock;const ledger={engine,layout:layoutName,mockedResponses:0,
   requestInterceptions:0,responseInterceptions:0,paidRouteCalls:0,providerCalls:0,receiverMutations:0,
   liveMoneyEvidence:'not-run-deferred-first-paying-customer',requests:[],responses:[]};
 try{
-  fixture=await createDatabaseFixture();responsePrototype=fixture.app.response;
-  realResponseSend=responsePrototype.send;responsePrototype.send=function(){
-    const args=arguments;
-    if(serializationBarrier&&this.req?.url?.includes('/part14b-acceptance')){
-      const barrier=serializationBarrier;serializationBarrier=null;
-      activeSerializationRelease=barrier.releaseResolve;barrier.enteredResolve();
-      barrier.release.then(()=>realResponseSend.apply(this,args)).finally(()=>{activeSerializationRelease=null;});
-      return this;
-    }
-    return realResponseSend.apply(this,args);
-  };
-  server=await listen(fixture.app);const origin=`http://127.0.0.1:${server.address().port}`;
+  let origin=externalOrigin;
+  if(externalOrigin){
+    assert.match(externalOrigin,/^https?:\/\/(?:127\.0\.0\.1|localhost):[0-9]+$/);
+    assert.ok(process.env.DATABASE_URL);externalPool=new (require('pg').Pool)({connectionString:process.env.DATABASE_URL,max:2});
+    ledger.canonicalLauncher=true;ledger.transportSecurity=externalOrigin.startsWith('https://')?'local_tls_terminator':'local_http';
+  }else{
+    fixture=await createDatabaseFixture();responsePrototype=fixture.app.response;
+    realResponseSend=responsePrototype.send;responsePrototype.send=function(){
+      const args=arguments;
+      if(serializationBarrier&&this.req?.url?.includes('/part14b-acceptance')){
+        const barrier=serializationBarrier;serializationBarrier=null;
+        activeSerializationRelease=barrier.releaseResolve;barrier.enteredResolve();
+        barrier.release.then(()=>realResponseSend.apply(this,args)).finally(()=>{activeSerializationRelease=null;});
+        return this;
+      }
+      return realResponseSend.apply(this,args);
+    };
+    server=await listen(fixture.app);origin=`http://127.0.0.1:${server.address().port}`;
+  }
   const runtime=resolveBrowserRuntime(engine);browser=await runtime.browserType.launch({headless:true,executablePath:runtime.executablePath});
-  context=await browser.newContext({viewport:{width:layout.width,height:layout.height},colorScheme:layout.colorScheme,reducedMotion:'reduce'});
+  context=await browser.newContext({viewport:{width:layout.width,height:layout.height},colorScheme:layout.colorScheme,
+    reducedMotion:'reduce',ignoreHTTPSErrors:Boolean(externalOrigin&&externalOrigin.startsWith('https://'))});
   await context.addInitScript(theme=>localStorage.setItem('northstar-theme',theme),layout.colorScheme);
   page=await context.newPage();const errors=[];const consoleErrors=[];const external=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
@@ -146,20 +159,40 @@ try{
     '.invoice-part9-acceptance','.invoice-part10-acceptance','.invoice-part11-acceptance','.invoice-part12-acceptance'])
     assert.equal(await root.locator(selector).count(),0);
   await summary.focus();await page.keyboard.press('Enter');await root.getByText('Complete fictional financial journey',{exact:true}).waitFor({timeout:600000});
-  let enteredResolve,releaseResolve;const entered=new Promise(resolve=>{enteredResolve=resolve;});
-  const release=new Promise(resolve=>{releaseResolve=resolve;});
-  serializationBarrier={enteredResolve,release,releaseResolve};
-  const reloadClick=root.getByRole('button',{name:'Reload current preview',exact:true})
-    .click({timeout:600000});
-  await Promise.race([entered,new Promise((_,reject)=>setTimeout(
-    ()=>reject(new Error('Mounted serialization barrier not reached')),600000))]);
+  let reloadClick;
+  if(externalOrigin){
+    const cookie=(await context.cookies(origin)).find(value=>value.name==='northstar_demo_workspace');
+    assert.ok(cookie?.value);const tokenHash=crypto.createHash('sha256')
+      .update(decodeURIComponent(cookie.value)).digest('hex');
+    externalLock=await externalPool.connect();await externalLock.query('BEGIN');
+    await externalLock.query(
+      'SELECT pg_advisory_xact_lock_shared(hashtextextended($1::text,$2::bigint))',
+      [tokenHash,'27001402']);
+    const reloaded=page.waitForResponse(response=>response.url().includes('/part14b-acceptance')&&
+      response.request().method()==='GET'&&response.status()===200,{timeout:600000});
+    reloadClick=root.getByRole('button',{name:'Reload current preview',exact:true}).click({timeout:600000});
+    await reloaded;await reloadClick;
+  }else{
+    let enteredResolve,releaseResolve;const entered=new Promise(resolve=>{enteredResolve=resolve;});
+    const release=new Promise(resolve=>{releaseResolve=resolve;});
+    serializationBarrier={enteredResolve,release,releaseResolve};
+    reloadClick=root.getByRole('button',{name:'Reload current preview',exact:true})
+      .click({timeout:600000});
+    await Promise.race([entered,new Promise((_,reject)=>setTimeout(
+      ()=>reject(new Error('Mounted serialization barrier not reached')),600000))]);
+  }
   await page.locator('#cdCustomerDrawer').getByRole('button',{name:'Close customer details',exact:true}).click();
   await page.locator('#demoReset').click();
   const resetResponse=page.waitForResponse(r=>r.url().endsWith('/api/demo/command-center/reset')&&r.request().method()==='POST');
   const resetNavigation=page.waitForNavigation({waitUntil:'networkidle'}).catch(error=>error);
   await page.getByRole('button',{name:'Reset And Start Over',exact:true}).click();
-  await page.waitForTimeout(100);releaseResolve();
-  await reloadClick;
+  if(externalOrigin){
+    const blocked=await Promise.race([resetResponse.then(()=>false),page.waitForTimeout(300).then(()=>true)]);
+    assert.equal(blocked,true);await externalLock.query('COMMIT');externalLock.release();externalLock=null;
+  }else{
+    await page.waitForTimeout(100);activeSerializationRelease();activeSerializationRelease=null;
+    await reloadClick;
+  }
   const resetResult=await resetResponse;ledger.resetStatus=resetResult.status();
   assert.equal(resetResult.status(),200);
   const navigationResult=await resetNavigation;if(navigationResult instanceof Error)throw navigationResult;
@@ -184,6 +217,8 @@ try{
   }).catch(()=>null);
   await page.screenshot({fullPage:true,path:path.join(output,'failure.png')}).catch(()=>{});}
 }finally{if(activeSerializationRelease)activeSerializationRelease();
+  if(externalLock){await externalLock.query('ROLLBACK').catch(()=>{});externalLock.release();}
+  if(externalPool)await externalPool.end();
   if(responsePrototype&&realResponseSend)responsePrototype.send=realResponseSend;
   fs.writeFileSync(path.join(output,'ledger.json'),JSON.stringify(ledger,null,2));
   if(context)await context.close();if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));

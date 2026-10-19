@@ -1,55 +1,35 @@
 'use strict';
 
-// Part 14B's database and route authority is composed at the first executable
-// application boundary. No route or repository export carries that authority.
-// Node's native proxy predicate is exercised before any cache lookup: language
-// operators and descriptor helpers dispatch through Proxy traps and therefore
-// cannot safely establish the cache provenance they are meant to inspect.
-const part14BModuleConstructor = module.constructor;
-const part14BModuleLoader = part14BModuleConstructor && part14BModuleConstructor._load;
-if (!part14BModuleConstructor || typeof part14BModuleLoader !== 'function' ||
-    part14BModuleLoader.name !== '' || part14BModuleLoader.length !== 3) {
+// The production Part 14B authority is established outside this application
+// realm. scripts/start-production.sh starts the source-controlled launcher,
+// which creates a fresh Node child and passes a one-use OS pipe proof to
+// productionChild.js before this module or any application dependency loads.
+//
+// A direct require, `node src/server.js`, NODE_OPTIONS preload, or a forged
+// CommonJS cache therefore cannot become the production composition root. The
+// narrow Jest adapter is explicitly test-only and is removed from the launcher's
+// allowlisted production environment.
+const part14BParentFilename = module.parent && module.parent.filename;
+const part14BSeparator = __dirname.indexOf('\\') === -1 ? '/' : '\\';
+const part14BProductionParent = __dirname + part14BSeparator + 'productionChild.js';
+const part14BDevelopmentParent = __dirname + part14BSeparator + 'developmentChild.js';
+const part14BProductionLaunch = part14BParentFilename === part14BProductionParent &&
+  process.env.NORTHSTAR_CANONICAL_CHILD === 'verified-os-pipe-v1';
+const part14BTestAdapter = process.env.NODE_ENV === 'test' &&
+  typeof process.env.JEST_WORKER_ID === 'string' && process.env.JEST_WORKER_ID.length > 0 &&
+  process.env.NORTHSTAR_PART14B_TEST_ADAPTER === 'jest-mounted-v1';
+const part14BDevelopmentLaunch = part14BParentFilename === part14BDevelopmentParent &&
+  process.env.NODE_ENV === 'development' &&
+  process.env.NORTHSTAR_DEVELOPMENT_CHILD === 'explicit-local-v1';
+delete process.env.NORTHSTAR_CANONICAL_CHILD;
+delete process.env.NORTHSTAR_DEVELOPMENT_CHILD;
+if (!part14BProductionLaunch && !part14BTestAdapter && !part14BDevelopmentLaunch) {
   throw new Error('The fictional demo journey application composition is unavailable.');
 }
-const part14BProxyTypes = require('node:util/types');
-const part14BIsProxy = part14BProxyTypes && part14BProxyTypes.isProxy;
-const part14BProxyProbe = new Proxy({}, {});
-const part14BRevocableProbe = Proxy.revocable({}, {});
-part14BRevocableProbe.revoke();
-const part14BRequireCache = require.cache;
-if (typeof part14BIsProxy !== 'function' || part14BIsProxy.length !== 0 ||
-    part14BIsProxy.name !== '' || part14BIsProxy(part14BIsProxy) ||
-    part14BIsProxy(part14BProxyTypes) || !part14BIsProxy(part14BProxyProbe) ||
-    !part14BIsProxy(part14BRevocableProbe.proxy) ||
-    part14BIsProxy({}) || part14BIsProxy(module) ||
-    part14BIsProxy(part14BRequireCache)) {
-  throw new Error('The fictional demo journey application composition is unavailable.');
-}
-if (!part14BModuleConstructor || part14BIsProxy(part14BModuleConstructor)) {
-  throw new Error('The fictional demo journey application composition is unavailable.');
-}
-const part14BDatabasePath = require.resolve('./db');
-const part14BRepositoryPath = require.resolve('./commandCenter/demoRepository');
-const part14BDemoRoutePath = require.resolve('./routes/demo');
-const part14BApiRoutePath = require.resolve('./routes/api');
-// Once the native predicate has established that the local cache is an
-// ordinary object, `in` detects data, accessor, non-enumerable and inherited
-// entries without reading an entry value. Process/global cache selectors never
-// participate in this decision.
-if (!part14BRequireCache || !(__filename in part14BRequireCache) ||
-    !part14BModuleConstructor || part14BModuleConstructor._cache !== part14BRequireCache ||
-    typeof part14BModuleLoader !== 'function' || part14BModuleLoader.name !== '' ||
-    part14BModuleLoader.length !== 3 ||
-    part14BDatabasePath in part14BRequireCache ||
-    part14BRepositoryPath in part14BRequireCache ||
-    part14BDemoRoutePath in part14BRequireCache ||
-    part14BApiRoutePath in part14BRequireCache) {
-  throw new Error('The fictional demo journey application composition is unavailable.');
-}
+
 const part14BRepositoryBootstrap = require('./commandCenter/demoRepository');
-if (!part14BRepositoryBootstrap || part14BIsProxy(part14BRepositoryBootstrap) ||
-    typeof part14BRepositoryBootstrap.consumeFictionalDemoJourney !== 'function' ||
-    part14BIsProxy(part14BRepositoryBootstrap.consumeFictionalDemoJourney)) {
+if (!part14BRepositoryBootstrap ||
+    typeof part14BRepositoryBootstrap.consumeFictionalDemoJourney !== 'function') {
   throw new Error('The fictional demo journey application bootstrap is unavailable.');
 }
 const consumeFictionalDemoJourney =
@@ -68,7 +48,8 @@ if (!part14BBootstrapExtensionBlocked || !part14BBootstrapReplacementBlocked ||
   throw new Error('The fictional demo journey application bootstrap is unavailable.');
 }
 const deliverFictionalDemoJourney = consumeFictionalDemoJourney();
-const finalizedDemoRepositoryModule = part14BRequireCache[part14BRepositoryPath];
+const part14BRepositoryPath = require.resolve('./commandCenter/demoRepository');
+const finalizedDemoRepositoryModule = require.cache[part14BRepositoryPath];
 const finalizedDemoRepositoryApi = finalizedDemoRepositoryModule &&
   finalizedDemoRepositoryModule.exports;
 let part14BApiExtensionBlocked = false;
@@ -80,9 +61,7 @@ try { finalizedDemoRepositoryModule.exports = part14BRepositoryBootstrap; } catc
   part14BExportsReplacementBlocked = true;
 }
 if (typeof deliverFictionalDemoJourney !== 'function' ||
-    part14BIsProxy(deliverFictionalDemoJourney) ||
-    !finalizedDemoRepositoryModule || part14BIsProxy(finalizedDemoRepositoryModule) ||
-    !finalizedDemoRepositoryApi || part14BIsProxy(finalizedDemoRepositoryApi) ||
+    !finalizedDemoRepositoryModule || !finalizedDemoRepositoryApi ||
     !part14BApiExtensionBlocked || !part14BExportsReplacementBlocked ||
     'part14BMutationProbe' in finalizedDemoRepositoryApi ||
     finalizedDemoRepositoryModule.exports !== finalizedDemoRepositoryApi ||

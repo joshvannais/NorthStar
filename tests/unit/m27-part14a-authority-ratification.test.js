@@ -260,6 +260,7 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
       `Reflect.ownKeys=()=>['roadmap','ledger','architecture'];`,
       `Object.getPrototypeOf=()=>Object.prototype;`,
       `Object.getOwnPropertyDescriptor=()=>({value:()=>false,enumerable:true,writable:true,configurable:true});`,
+      `Object.freeze=value=>value;`,
       `String.prototype.replace=function(){return this;};`,
     ];
     for (const setup of cases) {
@@ -321,5 +322,7 @@ describe('Mission 27 Part 14A complete canonical authority allowlist', () => {
     expect(first).toBe(second);
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.laterSlices)).toBe(true);
+    expect(authority.PART14_SCOPES.every(Object.isFrozen)).toBe(true);
+    expect(authority.LATER_LEDGER_ROWS.every(Object.isFrozen)).toBe(true);
   });
 });

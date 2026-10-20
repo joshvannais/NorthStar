@@ -44,8 +44,7 @@ check_runtime_identity() {
         saw_no_new_privs=1 ;;
     esac
   done < /proc/self/status
-  [ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" =
-    11111111 ]
+  [ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" = 11111111 ]
 }
 
 check_runtime_identity || fail

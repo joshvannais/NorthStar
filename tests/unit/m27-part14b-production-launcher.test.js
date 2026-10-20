@@ -54,6 +54,40 @@ const PRIVILEGED_BASE_PATHS = Object.freeze([
   '/usr/bin/newgrp', '/usr/bin/passwd', '/usr/bin/su', '/usr/bin/umount',
   '/usr/bin/chage', '/usr/bin/expiry', '/usr/sbin/unix_chkpwd',
 ]);
+const RUNTIME_IDENTITY_PREDICATE =
+  '[ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" = 11111111 ]';
+
+function runtimeIdentityFunction(source) {
+  const start = source.indexOf('check_runtime_identity() {');
+  const end = source.indexOf('\n}\n', start);
+  if (start < 0 || end < 0) throw new Error('Runtime identity function is unavailable.');
+  return source.slice(start, end + 3);
+}
+
+function dashRuntimeAvailable() {
+  if (process.platform === 'linux') {
+    return typeof process.getuid === 'function' && process.getuid() === 0 &&
+      fs.existsSync('/bin/dash') && fs.existsSync('/usr/bin/setpriv');
+  }
+  return process.platform === 'win32' && process.env.M27_WSL_DASH_EXECUTION === '1' &&
+    fs.existsSync('C:\\Windows\\System32\\wsl.exe');
+}
+
+function runRuntimeIdentityUnderDash(source, expectSuccess) {
+  const functionSource = runtimeIdentityFunction(source);
+  const script = expectSuccess
+    ? `${functionSource}\ncheck_runtime_identity\nprintf 'runtime-identity-ok\\n'\n`
+    : `${functionSource}\nif check_runtime_identity; then exit 91; fi\nexit 78\n`;
+  const args = ['--reuid=1000', '--regid=1000', '--groups=1000', '--no-new-privs',
+    '--', '/bin/dash', '-c', script];
+  if (process.platform === 'win32') {
+    return childProcess.spawnSync('C:\\Windows\\System32\\wsl.exe',
+      ['--user', 'root', '-e', '/usr/bin/setpriv', ...args],
+      { encoding: 'utf8', timeout: 120000 });
+  }
+  return childProcess.spawnSync('/usr/bin/setpriv', args,
+    { encoding: 'utf8', timeout: 120000 });
+}
 
 function exactRuntimePlan(overrides = {}) {
   const inputs = {
@@ -187,6 +221,7 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes('[ "$node_path" != \'/usr/local/bin/node\' ]') ||
       !inputs.start.includes("NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY='official-docker-node-22.23.3-v1'") ||
       !inputs.start.includes('check_runtime_identity || fail') ||
+      !inputs.start.includes(RUNTIME_IDENTITY_PREDICATE) ||
       !inputs.start.includes("[ \"$2\" = 1000 ]") ||
       !inputs.start.includes("[ \"$2\" = 0000000000000000 ]") ||
       !inputs.start.includes("[ \"${NORTHSTAR_DATA_DIR-}\" != '/var/lib/northstar/data' ]") ||
@@ -467,6 +502,12 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       '/var/lib/northstar/data', '/app/runtime-data') })],
     ['missing capability gate', input => ({ start: input.start.replace(
       'check_runtime_identity || fail', ': # identity gate removed') })],
+    ['split runtime identity comparison', input => ({ start: input.start.replace(
+      RUNTIME_IDENTITY_PREDICATE,
+      RUNTIME_IDENTITY_PREDICATE.replace(' = 11111111 ]', ' =\\n    11111111 ]')) })],
+    ['continued runtime identity comparison', input => ({ start: input.start.replace(
+      RUNTIME_IDENTITY_PREDICATE,
+      RUNTIME_IDENTITY_PREDICATE.replace(' = 11111111 ]', ' = \\\\\n    11111111 ]')) })],
     ['PATH-selected application runtime', input => ({ start: input.start.replace(
       'PATH=$node_bin', 'PATH=/tmp:$node_bin') })],
     ['missing setid clearing', input => ({ dockerfile: input.dockerfile.replace(
@@ -567,6 +608,21 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(source).toContain(
       'for removed_helper in /usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap');
   });
+
+  (dashRuntimeAvailable() ? test : test.skip)(
+    'Debian dash executes the canonical runtime identity predicate as one command', () => {
+      const source = fs.readFileSync(productionStart, 'utf8');
+      const canonical = runRuntimeIdentityUnderDash(source, true);
+      expect({ status: canonical.status, stdout: canonical.stdout, stderr: canonical.stderr })
+        .toEqual({ status: 0, stdout: 'runtime-identity-ok\n', stderr: '' });
+
+      const split = source.replace(RUNTIME_IDENTITY_PREDICATE,
+        RUNTIME_IDENTITY_PREDICATE.replace(' = 11111111 ]', ' =\n    11111111 ]'));
+      const rejected = runRuntimeIdentityUnderDash(split, false);
+      expect(rejected.status).toBe(78);
+      expect(rejected.stderr).toMatch(/\[: missing \]|11111111: not found/);
+      expect(rejected.stdout).toBe('');
+    });
 
   test.each([
     ['/usr/bin injected setuid', '/usr/bin/injected-setuid', 0o4755, []],

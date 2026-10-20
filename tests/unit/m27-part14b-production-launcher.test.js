@@ -28,6 +28,10 @@ const PINNED_NODE_SHA256 = Object.freeze({
   amd64: 'fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48',
   arm64: 'd09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d',
 });
+const PINNED_NODE_ELF_HEADER = Object.freeze({
+  amd64: '7f454c4602010103000000000000000002003e00',
+  arm64: '7f454c460201010300000000000000000200b700',
+});
 const PINNED_TOOL_IDENTITY = Object.freeze({
   amd64: Object.freeze({
     setpriv: Object.freeze({ size: 80192,
@@ -172,6 +176,10 @@ function exactRuntimePlan(overrides = {}) {
         throw new Error(`Missing ${arch} ${tool} identity binding.`);
       }
     }
+  }
+  if (!inputs.prepare.includes('[ "$8" != \'03\' ]') ||
+      !inputs.start.includes('[ "$8" != \'03\' ]')) {
+    throw new Error('Missing pinned Linux ELF OSABI binding.');
   }
   if (!inputs.prepare.includes('/usr/bin/dpkg --print-architecture') ||
       !inputs.prepare.includes('/usr/bin/sha256sum -c -') ||
@@ -408,6 +416,20 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(fs.readFileSync(localStart, 'utf8')).toContain(LOCAL_NODE_SHA256);
   });
 
+  test.each(Object.entries(PINNED_NODE_ELF_HEADER))(
+    'the official %s executable header binds Linux OSABI before execution', (arch, hex) => {
+      const header = Buffer.from(hex, 'hex');
+      expect(header.length).toBe(20);
+      expect(header.subarray(0, 7).toString('hex')).toBe('7f454c46020101');
+      expect(header[7]).toBe(0x03);
+      expect(header[8]).toBe(0x00);
+      expect(header.readUInt16LE(18)).toBe(arch === 'amd64' ? 0x3e : 0xb7);
+      const prepareSource = fs.readFileSync(productionPrepare, 'utf8');
+      const startSource = fs.readFileSync(productionStart, 'utf8');
+      expect(prepareSource).toContain('[ "$8" != \'03\' ]');
+      expect(startSource).toContain('[ "$8" != \'03\' ]');
+    });
+
   test.each([
     ['Nixpacks 22.14 fallback', input => ({ railway: input.railway +
       '\nNIXPACKS_NODE_VERSION = "22.14.0"\n' })],
@@ -417,6 +439,10 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       PINNED_DOCKER_INDEX, '0'.repeat(64)) })],
     ['wrong executable digest', input => ({ dockerfile: input.dockerfile.replace(
       PINNED_NODE_SHA256.amd64, '1'.repeat(64)) })],
+    ['build-time System V OSABI substitution', input => ({ prepare: input.prepare.replace(
+      '[ "$8" != \'03\' ]', '[ "$8" != \'00\' ]') })],
+    ['runtime System V OSABI substitution', input => ({ start: input.start.replace(
+      '[ "$8" != \'03\' ]', '[ "$8" != \'00\' ]') })],
     ['unsupported architecture fallback', input => ({ dockerfile: input.dockerfile.replace(
       "*) echo 'Unsupported NorthStar production architecture.' >&2; exit 78 ;;",
       "*) expected='" + PINNED_NODE_SHA256.amd64 + "' ;;") })],

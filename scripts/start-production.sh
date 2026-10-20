@@ -330,6 +330,7 @@ if [ "$canonical_path" != "$node_path" ] ||
 fi
 printf '%s  %s\n' "$node_sha256" "$node_path" |
   /usr/bin/sha256sum -c - >/dev/null || fail
+# Both pinned Node 22.23.3 Linux artifacts declare ELFOSABI_LINUX (03).
 set -- $(/usr/bin/od -An -tx1 -N20 -- "$node_path")
 case "$runtime_arch" in
   x64) elf_machine='3e' ;;
@@ -338,7 +339,7 @@ case "$runtime_arch" in
 esac
 if [ "$#" -ne 20 ] || [ "$1" != '7f' ] || [ "$2" != '45' ] ||
    [ "$3" != '4c' ] || [ "$4" != '46' ] || [ "$5" != '02' ] ||
-   [ "$6" != '01' ] || [ "$8" != '00' ] || [ "${19}" != "$elf_machine" ] ||
+   [ "$6" != '01' ] || [ "$8" != '03' ] || [ "${19}" != "$elf_machine" ] ||
    [ "${20}" != '00' ]; then
   fail
 fi

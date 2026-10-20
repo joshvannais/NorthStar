@@ -113,7 +113,7 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
 
   test('rejects status, provenance, scope, evidence, unavailable and Part13D limitation drift', () => {
     replaceExact('roadmap',
-      'Status: frozen plan through released Part 14A; original Part 14B is the current implementation candidate.',
+      'Status: frozen plan through released Part 14A; original Part 14B was accepted and merged, and its source-only release correction is the current implementation candidate.',
       'Status: frozen plan through released complete Part 14; original Part 14B is released.');
     replaceExact('roadmap', authority.PART13_RELEASE.head, 'f'.repeat(40));
     replaceExact('roadmap', authority.PART14A_RELEASE.head, 'e'.repeat(40));
@@ -128,16 +128,16 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
       'Unavailable and unclaimed: immutable issued invoice/document, real customer delivery,',
       'Accepted and complete: immutable issued invoice/document, real customer delivery,');
     replaceExact('architecture14B',
-      'Status: implementation candidate. Independent whole-head acceptance, merge, deployment, provider evidence, live-money evidence, and founder visual approval are not accepted.',
-      'Status: accepted, merged, deployed, and production complete.');
+      'Status: accepted at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`, tree `2c11c575f6d0a5171981be681fd5978d8f4bbd35`, and normally merged as PR #535 to exact main `667befdbf06a26cd3416bce5f6d25ab124287c9e`; sole automatic Railway deployment `89601f06-30bd-41bc-85ff-3fc8e96772a5` failed during the pinned amd64 Docker build before application startup or health verification, so Part 14B remains release-incomplete and its source-only release correction is current. Provider evidence, live-money evidence, and founder visual approval are not accepted.',
+      'Status: released, deployed, and production complete.');
     replaceExact('architecture14B',
       'Offline cash remains `offline_received`. A received check remains `check_clearance_unknown`; the disabled clearance transition remains `check_clearance_authority_unavailable`.',
       'Offline cash and checks are both cleared settlement.');
     replaceExact('architecture14B',
       'Part 14B performs zero provider calls or mutations, receiver mutations, outbound messages, accounting mutations, downstream mutations, paid-repository reads, production-database mutations, or live-money movements.',
       'Part 14B may call providers, receivers, accounting, paid repositories, and move money.');
-    replaceExact('ledger', 'Independent whole exact-head re-audit pending after five audit findings and corrections',
-      'Independent whole exact-head audit accepted');
+    replaceExact('ledger', 'Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`',
+      'Accepted, released, deployed, and production complete');
   });
 
   test('rejects reordered, removed, duplicated, renamed, appended and evasively rewritten authority', () => {
@@ -158,7 +158,7 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
     expectRejected('roadmap', `${DOCS.roadmap}\n## Unreviewed normative appendix\n\nPart 14A is complete.\n`);
     expectRejected('ledger', `${DOCS.ledger}\n| 14H | Unexpected normative row | No | No | No | — | No | No | No | Planned |\n`);
     expectRejected('roadmap', DOCS.roadmap.replace('Part 14A', 'Part  14A'));
-    expectRejected('ledger', DOCS.ledger.replace('Current implementation candidate', 'current implementation candidate'));
+    expectRejected('ledger', DOCS.ledger.replace('source-only release correction', 'source only release correction'));
   });
 
   test('allows platform line-ending normalization only and rejects non-string or widened inputs', () => {

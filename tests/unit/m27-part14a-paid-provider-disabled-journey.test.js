@@ -330,9 +330,9 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
       migration273Present:false, laterSlices:['14C','14D','14E','14F','14G'],
     }));
     const mutations = [
-      ['self accepted','ledger','Independent whole exact-head re-audit pending after five audit findings and corrections','Part 14B accepted'],
-      ['self audited','ledger','Independent whole exact-head re-audit pending after five audit findings and corrections','Part 14B independently audited'],
-      ['deployed','ledger','| Independent whole exact-head re-audit pending after five audit findings and corrections | — | No |','| Audit accepted | `forged` | Deployed |'],
+      ['false release','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B accepted and released'],
+      ['false production complete','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B production complete'],
+      ['deployed','ledger','sole automatic Railway deployment `89601f06-30bd-41bc-85ff-3fc8e96772a5` FAILED during the pinned amd64 Docker build before startup or health verification; release correction pending','deployment `forged` succeeded; Part 14B released'],
       ['later slice','ledger','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | Complete'],
       ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
       ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],
@@ -349,6 +349,7 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
     ];
     for (const [_name, key, from, to] of mutations) {
       const altered = { ...docs, [key]:docs[key].replace(from, to) };
+      expect(altered[key]).not.toBe(docs[key]);
       expect(() => authority.validate(altered)).toThrow(
         'Mission 27 Part 14 authority ratification invalid');
     }

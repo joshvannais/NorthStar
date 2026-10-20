@@ -73,13 +73,18 @@ function dashRuntimeAvailable() {
     fs.existsSync('C:\\Windows\\System32\\wsl.exe');
 }
 
-function runRuntimeIdentityUnderDash(source, expectSuccess) {
-  const functionSource = runtimeIdentityFunction(source);
+function runRuntimeIdentityUnderDash(source, expectSuccess, supplementaryGroups = '1000') {
+  // The production Docker checkout is LF-only. Normalize the Windows Git
+  // checkout so this execution gate exercises the same Debian dash bytes.
+  const functionSource = runtimeIdentityFunction(source).replace(/\r\n/g, '\n');
   const script = expectSuccess
     ? `${functionSource}\ncheck_runtime_identity\nprintf 'runtime-identity-ok\\n'\n`
     : `${functionSource}\nif check_runtime_identity; then exit 91; fi\nexit 78\n`;
-  const args = ['--reuid=1000', '--regid=1000', '--groups=1000', '--no-new-privs',
-    '--', '/bin/dash', '-c', script];
+  const groupArgs = supplementaryGroups === null
+    ? ['--clear-groups']
+    : [`--groups=${supplementaryGroups}`];
+  const args = ['--reuid=1000', '--regid=1000', ...groupArgs, '--no-new-privs', '--',
+    '/bin/dash', '-c', script];
   if (process.platform === 'win32') {
     return childProcess.spawnSync('C:\\Windows\\System32\\wsl.exe',
       ['--user', 'root', '-e', '/usr/bin/setpriv', ...args],
@@ -222,6 +227,8 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes("NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY='official-docker-node-22.23.3-v1'") ||
       !inputs.start.includes('check_runtime_identity || fail') ||
       !inputs.start.includes(RUNTIME_IDENTITY_PREDICATE) ||
+      !inputs.start.includes('if [ "$#" -eq 1 ]; then') ||
+      !inputs.start.includes('elif [ "$#" -eq 2 ] && [ "$2" = 1000 ]; then') ||
       !inputs.start.includes("[ \"$2\" = 1000 ]") ||
       !inputs.start.includes("[ \"$2\" = 0000000000000000 ]") ||
       !inputs.start.includes("[ \"${NORTHSTAR_DATA_DIR-}\" != '/var/lib/northstar/data' ]") ||
@@ -508,6 +515,11 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     ['continued runtime identity comparison', input => ({ start: input.start.replace(
       RUNTIME_IDENTITY_PREDICATE,
       RUNTIME_IDENTITY_PREDICATE.replace(' = 11111111 ]', ' = \\\\\n    11111111 ]')) })],
+    ['supplementary group clearing denied', input => ({ start: input.start.replace(
+      'if [ "$#" -eq 1 ]; then', 'if false; then') })],
+    ['unexpected supplementary groups allowed', input => ({ start: input.start.replace(
+      'elif [ "$#" -eq 2 ] && [ "$2" = 1000 ]; then',
+      'elif [ "$#" -ge 2 ]; then') })],
     ['PATH-selected application runtime', input => ({ start: input.start.replace(
       'PATH=$node_bin', 'PATH=/tmp:$node_bin') })],
     ['missing setid clearing', input => ({ dockerfile: input.dockerfile.replace(
@@ -610,11 +622,22 @@ describe('Mission 27 Part 14B production launcher contract', () => {
   });
 
   (dashRuntimeAvailable() ? test : test.skip)(
-    'Debian dash executes the canonical runtime identity predicate as one command', () => {
+    'Debian dash accepts cleared or exact-primary supplementary groups and rejects others', () => {
       const source = fs.readFileSync(productionStart, 'utf8');
+      const cleared = runRuntimeIdentityUnderDash(source, true, null);
+      expect({ status: cleared.status, stdout: cleared.stdout, stderr: cleared.stderr })
+        .toEqual({ status: 0, stdout: 'runtime-identity-ok\n', stderr: '' });
+
       const canonical = runRuntimeIdentityUnderDash(source, true);
       expect({ status: canonical.status, stdout: canonical.stdout, stderr: canonical.stderr })
         .toEqual({ status: 0, stdout: 'runtime-identity-ok\n', stderr: '' });
+
+      for (const invalidGroups of ['1001', '1000,1001']) {
+        const rejectedGroups = runRuntimeIdentityUnderDash(source, false, invalidGroups);
+        expect({ status: rejectedGroups.status, stdout: rejectedGroups.stdout,
+          stderr: rejectedGroups.stderr })
+          .toEqual({ status: 78, stdout: '', stderr: '' });
+      }
 
       const split = source.replace(RUNTIME_IDENTITY_PREDICATE,
         RUNTIME_IDENTITY_PREDICATE.replace(' = 11111111 ]', ' =\n    11111111 ]'));

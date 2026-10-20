@@ -56,12 +56,53 @@ const PRIVILEGED_BASE_PATHS = Object.freeze([
 ]);
 const RUNTIME_IDENTITY_PREDICATE =
   '[ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" = 11111111 ]';
+const STARTUP_CHECKS = Object.freeze(Array.from({ length: 19 },
+  (_value, index) => `NS14B-${String(index).padStart(2, '0')}`));
 
 function runtimeIdentityFunction(source) {
   const start = source.indexOf('check_runtime_identity() {');
   const end = source.indexOf('\n}\n', start);
   if (start < 0 || end < 0) throw new Error('Runtime identity function is unavailable.');
   return source.slice(start, end + 3);
+}
+
+function startupDiagnosticFunction(source) {
+  const start = source.indexOf("FAILURE='NorthStar production startup rejected the Node runtime.'");
+  const end = source.indexOf('\n\ncheck_runtime_identity() {', start);
+  if (start < 0 || end < 0) throw new Error('Startup diagnostic function is unavailable.');
+  return source.slice(start, end + 1);
+}
+
+function runStartupDiagnosticUnderDash(source, check) {
+  const functionSource = startupDiagnosticFunction(source).replace(/\r\n/g, '\n');
+  const script = `${functionSource}\nstartup_check='${check}'\nfail\n`;
+  if (process.platform === 'win32') {
+    return childProcess.spawnSync('C:\\Windows\\System32\\wsl.exe',
+      ['-e', '/bin/dash', '-c', script], { encoding: 'utf8', timeout: 120000 });
+  }
+  return childProcess.spawnSync('/bin/dash', ['-c', script],
+    { encoding: 'utf8', timeout: 120000 });
+}
+
+function runManifestChecksumFailureUnderDash(source, check, manifestVariable) {
+  const functionSource = startupDiagnosticFunction(source).replace(/\r\n/g, '\n');
+  const verificationPattern = new RegExp(
+    `^/usr/bin/sha256sum -c "\\$${manifestVariable}" >/dev/null 2>&1 \\|\\| fail$`, 'm');
+  const verification = source.replace(/\r\n/g, '\n').match(verificationPattern);
+  if (!verification) throw new Error(`Missing bounded ${manifestVariable} verifier.`);
+  const script = `${functionSource}\n` +
+    `temporary=$(/usr/bin/mktemp -d) || exit 97\n` +
+    `trap '/bin/rm -rf "$temporary"' EXIT\n` +
+    `${manifestVariable}="$temporary/checksums"\n` +
+    `/usr/bin/printf '%064d  /private/customer@example.test/provider-token-secret\\n' 0 > ` +
+    `"$${manifestVariable}"\n` +
+    `startup_check='${check}'\n${verification[0]}\n`;
+  if (process.platform === 'win32') {
+    return childProcess.spawnSync('C:\\Windows\\System32\\wsl.exe',
+      ['-e', '/bin/dash', '-c', script], { encoding: 'utf8', timeout: 120000 });
+  }
+  return childProcess.spawnSync('/bin/dash', ['-c', script],
+    { encoding: 'utf8', timeout: 120000 });
 }
 
 function dashRuntimeAvailable() {
@@ -244,6 +285,16 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes('PATH=$node_bin') || inputs.start.includes('PATH=/tmp') ||
       /\/nix\/store|command -v|\bwhich\b/.test(inputs.prepare + inputs.start)) {
     throw new Error('Unexpected runtime verification boundary.');
+  }
+  const diagnosticAssignments = Array.from(inputs.start.matchAll(
+    /^startup_check='(NS14B-\d\d)'$/gm), match => match[1]);
+  const checksumVerifications = Array.from(inputs.start.matchAll(
+    /\/usr\/bin\/sha256sum -c (?:"\$[a-z_]+"|-) >\/dev\/null 2>&1 \|\| fail/g));
+  if (JSON.stringify(diagnosticAssignments) !== JSON.stringify(STARTUP_CHECKS) ||
+      !inputs.start.includes('echo "$FAILURE Check $startup_check." >&2') ||
+      !inputs.start.includes("*) startup_check='NS14B-00' ;;") ||
+      checksumVerifications.length !== 4) {
+    throw new Error('Unexpected startup diagnostic boundary.');
   }
   return true;
 }
@@ -520,6 +571,11 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     ['unexpected supplementary groups allowed', input => ({ start: input.start.replace(
       'elif [ "$#" -eq 2 ] && [ "$2" = 1000 ]; then',
       'elif [ "$#" -ge 2 ]; then') })],
+    ['startup diagnostic widened to caller text', input => ({ start: input.start.replace(
+      'echo "$FAILURE Check $startup_check." >&2',
+      'echo "$FAILURE Check ${STARTUP_DETAIL-}." >&2') })],
+    ['checksum verifier exposes utility stderr', input => ({ start: input.start.replace(
+      '>/dev/null 2>&1 || fail', '>/dev/null || fail') })],
     ['PATH-selected application runtime', input => ({ start: input.start.replace(
       'PATH=$node_bin', 'PATH=/tmp:$node_bin') })],
     ['missing setid clearing', input => ({ dockerfile: input.dockerfile.replace(
@@ -645,6 +701,38 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       expect(rejected.status).toBe(78);
       expect(rejected.stderr).toMatch(/\[: missing \]|11111111: not found/);
       expect(rejected.stdout).toBe('');
+    });
+
+  (dashRuntimeAvailable() ? test : test.skip)(
+    'Debian dash emits only an allowlisted startup check identifier', () => {
+      const source = fs.readFileSync(productionStart, 'utf8');
+      for (const check of STARTUP_CHECKS) {
+        const result = runStartupDiagnosticUnderDash(source, check);
+        expect({ status: result.status, stdout: result.stdout, stderr: result.stderr })
+          .toEqual({ status: 78, stdout: '',
+            stderr: `NorthStar production startup rejected the Node runtime. Check ${check}.\n` });
+      }
+      const rejected = runStartupDiagnosticUnderDash(source,
+        'secret=customer@example.test provider-token=private');
+      expect({ status: rejected.status, stdout: rejected.stdout, stderr: rejected.stderr })
+        .toEqual({ status: 78, stdout: '',
+          stderr: 'NorthStar production startup rejected the Node runtime. Check NS14B-00.\n' });
+      expect(rejected.stderr).not.toMatch(/customer|provider|private|secret|@/i);
+    });
+
+  (dashRuntimeAvailable() ? test : test.skip)(
+    'Debian dash suppresses hostile checksum utility output before the bounded stage failure', () => {
+      const source = fs.readFileSync(productionStart, 'utf8');
+      for (const [check, manifestVariable] of [
+        ['NS14B-11', 'privilege_sha_manifest'],
+        ['NS14B-12', 'executable_sha_manifest'],
+      ]) {
+        const result = runManifestChecksumFailureUnderDash(source, check, manifestVariable);
+        expect({ status: result.status, stdout: result.stdout, stderr: result.stderr })
+          .toEqual({ status: 78, stdout: '',
+            stderr: `NorthStar production startup rejected the Node runtime. Check ${check}.\n` });
+        expect(result.stderr).not.toMatch(/customer|provider|private|secret|@|sha256sum/i);
+      }
     });
 
   test.each([

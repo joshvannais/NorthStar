@@ -7,9 +7,19 @@ set -eu
 FAILURE='NorthStar production startup rejected the Node runtime.'
 CANONICAL_ROOT='/app'
 CANONICAL_SCRIPT='/app/scripts/start-production.sh'
+startup_check='NS14B-00'
 
 fail() {
-  echo "$FAILURE" >&2
+  # Check identifiers are fixed source literals. They identify only the public
+  # startup gate that rejected; no environment value, path selected by a
+  # caller, credential, digest, database fact, or stack trace is emitted.
+  case "$startup_check" in
+    NS14B-00|NS14B-01|NS14B-02|NS14B-03|NS14B-04|NS14B-05|NS14B-06|\
+    NS14B-07|NS14B-08|NS14B-09|NS14B-10|NS14B-11|NS14B-12|NS14B-13|\
+    NS14B-14|NS14B-15|NS14B-16|NS14B-17|NS14B-18) ;;
+    *) startup_check='NS14B-00' ;;
+  esac
+  echo "$FAILURE Check $startup_check." >&2
   exit 78
 }
 
@@ -59,8 +69,10 @@ check_runtime_identity() {
   [ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" = 11111111 ]
 }
 
+startup_check='NS14B-01'
 check_runtime_identity || fail
 
+startup_check='NS14B-02'
 if [ -n "${LD_PRELOAD-}" ] || [ -n "${LD_LIBRARY_PATH-}" ]; then
   fail
 fi
@@ -69,6 +81,7 @@ fi
 # script or the documented relative spelling while already in physical /app.
 # Caller-controlled PWD, INIT_CWD, CDPATH, npm variables, and alternate trees
 # never select a repository root.
+startup_check='NS14B-03'
 if [ "$0" = "$CANONICAL_SCRIPT" ]; then
   :
 elif [ "$0" = 'scripts/start-production.sh' ] &&
@@ -77,11 +90,13 @@ elif [ "$0" = 'scripts/start-production.sh' ] &&
 else
   fail
 fi
+startup_check='NS14B-04'
 if [ ! -x /usr/bin/dpkg ] || [ ! -x /usr/bin/readlink ] ||
    [ ! -x /usr/bin/sha256sum ] || [ ! -x /usr/bin/stat ] ||
    [ ! -x /usr/bin/od ]; then
   fail
 fi
+startup_check='NS14B-05'
 if [ "$(/usr/bin/readlink -f -- "$CANONICAL_ROOT")" != "$CANONICAL_ROOT" ] ||
    [ "$(/usr/bin/readlink -f -- "$CANONICAL_SCRIPT")" != "$CANONICAL_SCRIPT" ] ||
    [ -L "$CANONICAL_ROOT" ] || [ -L "$CANONICAL_ROOT/scripts" ] ||
@@ -92,33 +107,30 @@ if [ "$(/usr/bin/readlink -f -- "$CANONICAL_ROOT")" != "$CANONICAL_ROOT" ] ||
   fail
 fi
 
+startup_check='NS14B-06'
 if [ "${NODE_OPTIONS+x}" = x ] && [ -n "${NODE_OPTIONS}" ]; then
-  echo "NorthStar production startup rejected NODE_OPTIONS." >&2
-  exit 78
+  fail
 fi
 if [ "${NODE_PATH+x}" = x ] && [ -n "${NODE_PATH}" ]; then
-  echo "NorthStar production startup rejected NODE_PATH." >&2
-  exit 78
+  fail
 fi
 if [ "${NPM_CONFIG_NODE_OPTIONS+x}" = x ] && [ -n "${NPM_CONFIG_NODE_OPTIONS}" ]; then
-  echo "NorthStar production startup rejected npm node options." >&2
-  exit 78
+  fail
 fi
 if [ "${npm_config_node_options+x}" = x ] && [ -n "${npm_config_node_options}" ]; then
-  echo "NorthStar production startup rejected npm node options." >&2
-  exit 78
+  fail
 fi
 
 # Local/test executable selection is deliberately a different command. None
 # of its inputs are accepted by the Railway/Docker production boundary.
+startup_check='NS14B-07'
 if [ -n "${NODE_BINARY-}" ] || [ -n "${NORTHSTAR_NODE_BINARY-}" ] ||
    [ -n "${NORTHSTAR_LOCAL_NODE_BINARY-}" ] ||
    [ -n "${NORTHSTAR_LOCAL_NODE_SHA256-}" ] ||
    [ -n "${NORTHSTAR_NODE_RUNTIME_MODE-}" ] ||
    [ -n "${NORTHSTAR_PRODUCTION_NODE_PATH-}" ] ||
    [ -n "${NORTHSTAR_NIX_STORE_ROOT-}" ]; then
-  echo "$FAILURE" >&2
-  exit 78
+  fail
 fi
 
 runtime_directory="$CANONICAL_ROOT/.northstar-runtime"
@@ -129,6 +141,7 @@ privilege_manifest="$runtime_directory/privilege-inventory"
 privilege_sha_manifest="$runtime_directory/privilege-inventory.sha256"
 executable_manifest="$runtime_directory/executable-inventory"
 executable_sha_manifest="$runtime_directory/executable-inventory.sha256"
+startup_check='NS14B-08'
 if [ ! -f "$manifest" ] || [ -L "$manifest" ] ||
    [ ! -f "$sha_manifest" ] || [ -L "$sha_manifest" ] ||
    [ ! -f "$arch_manifest" ] || [ -L "$arch_manifest" ] ||
@@ -136,9 +149,9 @@ if [ ! -f "$manifest" ] || [ -L "$manifest" ] ||
    [ ! -f "$privilege_sha_manifest" ] || [ -L "$privilege_sha_manifest" ] ||
    [ ! -f "$executable_manifest" ] || [ -L "$executable_manifest" ] ||
    [ ! -f "$executable_sha_manifest" ] || [ -L "$executable_sha_manifest" ]; then
-  echo "$FAILURE Missing authenticated Docker runtime manifest." >&2
-  exit 78
+  fail
 fi
+startup_check='NS14B-09'
 if [ "$(/usr/bin/readlink -f -- "$runtime_directory")" != "$runtime_directory" ] ||
    [ "$(/usr/bin/readlink -f -- "$manifest")" != "$manifest" ] ||
    [ "$(/usr/bin/readlink -f -- "$sha_manifest")" != "$sha_manifest" ] ||
@@ -174,6 +187,7 @@ runtime_arch=$(read_single_line "$arch_manifest")
 if [ "$node_path" != '/usr/local/bin/node' ]; then
   fail
 fi
+startup_check='NS14B-10'
 if [ "${HOME-}" != '/var/lib/northstar/home' ] ||
    [ "${NORTHSTAR_DATA_DIR-}" != '/var/lib/northstar/data' ] ||
    [ "${TMPDIR-}" != '/var/lib/northstar/tmp' ] ||
@@ -188,7 +202,8 @@ for writable_directory in "$HOME" "$NORTHSTAR_DATA_DIR" "$TMPDIR"; do
     fail
   fi
 done
-/usr/bin/sha256sum -c "$privilege_sha_manifest" >/dev/null || fail
+startup_check='NS14B-11'
+/usr/bin/sha256sum -c "$privilege_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$privilege_manifest"
 for expected_privilege_line in northstar-privilege-inventory-v2 setid=none filecap=none \
   runtime_uid=1000 runtime_gid=1000 removed_helper=/usr/sbin/capsh \
@@ -218,7 +233,8 @@ case "$runtime_arch:$node_sha256" in
   *) fail ;;
 esac
 
-/usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null || fail
+startup_check='NS14B-12'
+/usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$executable_manifest"
 for expected_executable_line in northstar-executable-inventory-v1 \
   setpriv_path=/usr/bin/setpriv "setpriv_sha256=$setpriv_sha" \
@@ -284,8 +300,9 @@ check_executable_identity() {
     fail
   fi
   /usr/bin/printf '%s  %s\n' "$executable_sha" "$executable_path" |
-    /usr/bin/sha256sum -c - >/dev/null || fail
+    /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
 }
+startup_check='NS14B-13'
 check_executable_identity /usr/bin/setpriv \
   "$runtime_directory/setpriv.identity" "$setpriv_sha" "$setpriv_size"
 check_executable_identity /usr/sbin/getcap \
@@ -294,6 +311,7 @@ for removed_helper in /usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap; do
   [ ! -e "$removed_helper" ] && [ ! -L "$removed_helper" ] || fail
 done
 
+startup_check='NS14B-14'
 for privilege_root in /usr "$CANONICAL_ROOT" /var/lib/northstar /tmp /home; do
   [ -e "$privilege_root" ] || continue
   unexpected_setid=$(/usr/bin/find "$privilege_root" -xdev -type f \
@@ -303,6 +321,7 @@ done
 unexpected_filecap=$(/usr/sbin/getcap -r /usr "$CANONICAL_ROOT" /var/lib/northstar \
   /tmp /home 2>/dev/null) || fail
 [ -z "$unexpected_filecap" ] || fail
+startup_check='NS14B-15'
 platform=$(/usr/bin/dpkg --print-architecture) || fail
 case "$platform:$runtime_arch:$node_sha256" in
   amd64:x64:fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48) ;;
@@ -330,8 +349,7 @@ fi
 LC_ALL=C
 export LC_ALL
 canonical_path=$(/usr/bin/readlink -f -- "$node_path") || {
-  echo "$FAILURE" >&2
-  exit 78
+  fail
 }
 if [ "$canonical_path" != "$node_path" ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$node_path")" != '0:0:555' ] ||
@@ -340,7 +358,7 @@ if [ "$canonical_path" != "$node_path" ] ||
   fail
 fi
 printf '%s  %s\n' "$node_sha256" "$node_path" |
-  /usr/bin/sha256sum -c - >/dev/null || fail
+  /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
 # Both pinned Node 22.23.3 Linux artifacts declare ELFOSABI_LINUX (03).
 set -- $(/usr/bin/od -An -tx1 -N20 -- "$node_path")
 case "$runtime_arch" in
@@ -368,6 +386,7 @@ export NORTHSTAR_AUTHENTICATED_NODE_SHA256 NORTHSTAR_CANONICAL_ROOT
 launcher="$CANONICAL_ROOT/scripts/production-launcher.js"
 child="$CANONICAL_ROOT/src/productionChild.js"
 server="$CANONICAL_ROOT/src/server.js"
+startup_check='NS14B-16'
 for resource in "$launcher" "$child" "$server" \
   "$CANONICAL_ROOT/package.json" "$CANONICAL_ROOT/package-lock.json" \
   "$CANONICAL_ROOT/Dockerfile" "$CANONICAL_ROOT/railway.toml" \
@@ -385,6 +404,7 @@ check_executable_identity /usr/bin/setpriv \
   "$runtime_directory/setpriv.identity" "$setpriv_sha" "$setpriv_size"
 check_executable_identity /usr/sbin/getcap \
   "$runtime_directory/getcap.identity" "$getcap_sha" "$getcap_size"
+startup_check='NS14B-17'
 for protected_directory in "$CANONICAL_ROOT" "$CANONICAL_ROOT/scripts" \
   "$CANONICAL_ROOT/src" "$CANONICAL_ROOT/node_modules" "$runtime_directory" \
   "$node_root" "$node_bin" /usr/local/lib /usr/local/lib/node_modules /usr/lib; do
@@ -405,4 +425,5 @@ unsafe_app_entry=$(/usr/bin/find "$CANONICAL_ROOT" -xdev \
 CDPATH=''
 export CDPATH
 cd "$CANONICAL_ROOT" || fail
-exec "$node_path" "$launcher"
+startup_check='NS14B-18'
+exec "$node_path" "$launcher" || fail

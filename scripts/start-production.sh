@@ -30,7 +30,19 @@ check_runtime_identity() {
       Gid:*) set -- $status_line; [ "$#" -eq 5 ] &&
         [ "$2" = 1000 ] && [ "$3" = 1000 ] && [ "$4" = 1000 ] &&
         [ "$5" = 1000 ] || return 1; saw_gid=1 ;;
-      Groups:*) set -- $status_line; [ "$#" -eq 2 ] && [ "$2" = 1000 ] || return 1;
+      Groups:*)
+        set -- $status_line
+        # A numeric OCI USER may start with supplementary groups cleared or
+        # with its primary group repeated as the sole supplementary group.
+        # Both preserve the exact GID 1000 boundary above; any other or
+        # additional supplementary group fails closed.
+        if [ "$#" -eq 1 ]; then
+          :
+        elif [ "$#" -eq 2 ] && [ "$2" = 1000 ]; then
+          :
+        else
+          return 1
+        fi
         saw_groups=1 ;;
       CapInh:*) set -- $status_line; [ "$2" = 0000000000000000 ] || return 1;
         saw_cap_inh=1 ;;

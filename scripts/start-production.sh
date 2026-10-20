@@ -203,7 +203,7 @@ for writable_directory in "$HOME" "$NORTHSTAR_DATA_DIR" "$TMPDIR"; do
   fi
 done
 startup_check='NS14B-11'
-/usr/bin/sha256sum -c "$privilege_sha_manifest" >/dev/null || fail
+/usr/bin/sha256sum -c "$privilege_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$privilege_manifest"
 for expected_privilege_line in northstar-privilege-inventory-v2 setid=none filecap=none \
   runtime_uid=1000 runtime_gid=1000 removed_helper=/usr/sbin/capsh \
@@ -234,7 +234,7 @@ case "$runtime_arch:$node_sha256" in
 esac
 
 startup_check='NS14B-12'
-/usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null || fail
+/usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$executable_manifest"
 for expected_executable_line in northstar-executable-inventory-v1 \
   setpriv_path=/usr/bin/setpriv "setpriv_sha256=$setpriv_sha" \
@@ -300,7 +300,7 @@ check_executable_identity() {
     fail
   fi
   /usr/bin/printf '%s  %s\n' "$executable_sha" "$executable_path" |
-    /usr/bin/sha256sum -c - >/dev/null || fail
+    /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
 }
 startup_check='NS14B-13'
 check_executable_identity /usr/bin/setpriv \
@@ -358,7 +358,7 @@ if [ "$canonical_path" != "$node_path" ] ||
   fail
 fi
 printf '%s  %s\n' "$node_sha256" "$node_path" |
-  /usr/bin/sha256sum -c - >/dev/null || fail
+  /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
 # Both pinned Node 22.23.3 Linux artifacts declare ELFOSABI_LINUX (03).
 set -- $(/usr/bin/od -An -tx1 -N20 -- "$node_path")
 case "$runtime_arch" in

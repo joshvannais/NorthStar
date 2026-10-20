@@ -84,6 +84,27 @@ function runStartupDiagnosticUnderDash(source, check) {
     { encoding: 'utf8', timeout: 120000 });
 }
 
+function runManifestChecksumFailureUnderDash(source, check, manifestVariable) {
+  const functionSource = startupDiagnosticFunction(source).replace(/\r\n/g, '\n');
+  const verificationPattern = new RegExp(
+    `^/usr/bin/sha256sum -c "\\$${manifestVariable}" >/dev/null 2>&1 \\|\\| fail$`, 'm');
+  const verification = source.replace(/\r\n/g, '\n').match(verificationPattern);
+  if (!verification) throw new Error(`Missing bounded ${manifestVariable} verifier.`);
+  const script = `${functionSource}\n` +
+    `temporary=$(/usr/bin/mktemp -d) || exit 97\n` +
+    `trap '/bin/rm -rf "$temporary"' EXIT\n` +
+    `${manifestVariable}="$temporary/checksums"\n` +
+    `/usr/bin/printf '%064d  /private/customer@example.test/provider-token-secret\\n' 0 > ` +
+    `"$${manifestVariable}"\n` +
+    `startup_check='${check}'\n${verification[0]}\n`;
+  if (process.platform === 'win32') {
+    return childProcess.spawnSync('C:\\Windows\\System32\\wsl.exe',
+      ['-e', '/bin/dash', '-c', script], { encoding: 'utf8', timeout: 120000 });
+  }
+  return childProcess.spawnSync('/bin/dash', ['-c', script],
+    { encoding: 'utf8', timeout: 120000 });
+}
+
 function dashRuntimeAvailable() {
   if (process.platform === 'linux') {
     return typeof process.getuid === 'function' && process.getuid() === 0 &&
@@ -267,9 +288,12 @@ function exactRuntimePlan(overrides = {}) {
   }
   const diagnosticAssignments = Array.from(inputs.start.matchAll(
     /^startup_check='(NS14B-\d\d)'$/gm), match => match[1]);
+  const checksumVerifications = Array.from(inputs.start.matchAll(
+    /\/usr\/bin\/sha256sum -c (?:"\$[a-z_]+"|-) >\/dev\/null 2>&1 \|\| fail/g));
   if (JSON.stringify(diagnosticAssignments) !== JSON.stringify(STARTUP_CHECKS) ||
       !inputs.start.includes('echo "$FAILURE Check $startup_check." >&2') ||
-      !inputs.start.includes("*) startup_check='NS14B-00' ;;")) {
+      !inputs.start.includes("*) startup_check='NS14B-00' ;;") ||
+      checksumVerifications.length !== 4) {
     throw new Error('Unexpected startup diagnostic boundary.');
   }
   return true;
@@ -550,6 +574,8 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     ['startup diagnostic widened to caller text', input => ({ start: input.start.replace(
       'echo "$FAILURE Check $startup_check." >&2',
       'echo "$FAILURE Check ${STARTUP_DETAIL-}." >&2') })],
+    ['checksum verifier exposes utility stderr', input => ({ start: input.start.replace(
+      '>/dev/null 2>&1 || fail', '>/dev/null || fail') })],
     ['PATH-selected application runtime', input => ({ start: input.start.replace(
       'PATH=$node_bin', 'PATH=/tmp:$node_bin') })],
     ['missing setid clearing', input => ({ dockerfile: input.dockerfile.replace(
@@ -692,6 +718,21 @@ describe('Mission 27 Part 14B production launcher contract', () => {
         .toEqual({ status: 78, stdout: '',
           stderr: 'NorthStar production startup rejected the Node runtime. Check NS14B-00.\n' });
       expect(rejected.stderr).not.toMatch(/customer|provider|private|secret|@/i);
+    });
+
+  (dashRuntimeAvailable() ? test : test.skip)(
+    'Debian dash suppresses hostile checksum utility output before the bounded stage failure', () => {
+      const source = fs.readFileSync(productionStart, 'utf8');
+      for (const [check, manifestVariable] of [
+        ['NS14B-11', 'privilege_sha_manifest'],
+        ['NS14B-12', 'executable_sha_manifest'],
+      ]) {
+        const result = runManifestChecksumFailureUnderDash(source, check, manifestVariable);
+        expect({ status: result.status, stdout: result.stdout, stderr: result.stderr })
+          .toEqual({ status: 78, stdout: '',
+            stderr: `NorthStar production startup rejected the Node runtime. Check ${check}.\n` });
+        expect(result.stderr).not.toMatch(/customer|provider|private|secret|@|sha256sum/i);
+      }
     });
 
   test.each([

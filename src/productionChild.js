@@ -6,6 +6,7 @@ if (require.main !== module) {
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const path = require('node:path');
 
 const EXPECTED_NODE = 'v22.23.3';
 const FAILURE = 'The NorthStar production child is unavailable.';
@@ -14,11 +15,22 @@ const expectedParent = process.env.NORTHSTAR_CANONICAL_LAUNCH_PARENT;
 const runtimeAuthority = process.env.NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY;
 const authenticatedPath = process.env.NORTHSTAR_AUTHENTICATED_NODE_PATH;
 const authenticatedSha256 = process.env.NORTHSTAR_AUTHENTICATED_NODE_SHA256;
+const canonicalRoot = process.env.NORTHSTAR_CANONICAL_ROOT;
+const expectedRoot = runtimeAuthority === 'nix-store-22.23.3-v1' ? '/app' :
+  path.resolve(__dirname, '..');
+const expectedChild = path.join(expectedRoot, 'src', 'productionChild.js');
+const expectedServer = path.join(expectedRoot, 'src', 'server.js');
 const executableRealpath = fs.realpathSync.native(process.execPath);
 const executableStat = fs.statSync(executableRealpath);
 if (process.version !== EXPECTED_NODE || process.execArgv.length !== 0 ||
     process.argv.length !== 2 ||
-    process.argv[1] !== __filename || process.env.NODE_ENV !== 'production' ||
+    process.argv[1] !== expectedChild || __filename !== expectedChild ||
+    fs.realpathSync.native(__filename) !== expectedChild ||
+    fs.lstatSync(expectedChild).isSymbolicLink() ||
+    canonicalRoot !== expectedRoot ||
+    fs.realpathSync.native(expectedServer) !== expectedServer ||
+    fs.lstatSync(expectedServer).isSymbolicLink() ||
+    process.env.NODE_ENV !== 'production' ||
     process.env.NORTHSTAR_CANONICAL_LAUNCH !== 'os-pipe-v1' ||
     !/^[0-9a-f]{64}$/.test(expectedDigest || '') ||
     expectedParent !== String(process.ppid) || process.send || process.channel ||
@@ -84,8 +96,9 @@ function readProof() {
   delete process.env.NORTHSTAR_AUTHENTICATED_NODE_DEVICE;
   delete process.env.NORTHSTAR_AUTHENTICATED_NODE_INODE;
   delete process.env.NORTHSTAR_AUTHENTICATED_NODE_SIZE;
+  delete process.env.NORTHSTAR_CANONICAL_ROOT;
   process.env.NORTHSTAR_CANONICAL_CHILD = 'verified-os-pipe-v1';
-  const server = require('./server');
+  const server = require(expectedServer);
   console.log('[Bootstrap] Canonical production composition ready.');
   await server.start();
 })().catch(error => {

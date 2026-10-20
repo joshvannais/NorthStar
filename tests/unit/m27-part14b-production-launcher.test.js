@@ -28,6 +28,7 @@ function authenticatedRuntimeEnvironment() {
     NORTHSTAR_AUTHENTICATED_NODE_DEVICE: String(stat.dev),
     NORTHSTAR_AUTHENTICATED_NODE_INODE: String(stat.ino),
     NORTHSTAR_AUTHENTICATED_NODE_SIZE: String(stat.size),
+    NORTHSTAR_CANONICAL_ROOT: ROOT,
   };
 }
 
@@ -75,7 +76,7 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
     expect(pkg.engines).toEqual({ node: '22.23.3' });
     expect(lock.packages[''].engines).toEqual({ node: '22.23.3' });
-    expect(pkg.scripts.start).toBe('/bin/sh scripts/start-production.sh');
+    expect(pkg.scripts.start).toBe('/bin/sh /app/scripts/start-production.sh');
     expect(pkg.scripts['start:verified-local']).toBe(
       'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ' +
       '-NoProfile -ExecutionPolicy Bypass -File scripts/start-verified-local.ps1');
@@ -83,17 +84,22 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(fs.readFileSync(path.join(ROOT, '.node-version'), 'utf8')).toBe('22.23.3\n');
     expect(fs.readFileSync(path.join(ROOT, 'nixpacks.toml'), 'utf8')).toBe(
       '[variables]\nNIXPACKS_NODE_VERSION = "22.23.3"\n\n' +
-      '[phases.build]\ncmds = ["/bin/sh scripts/prepare-production-node.sh"]\n\n' +
-      '[start]\ncmd = "/bin/sh scripts/start-production.sh"\n');
+      '[phases.build]\ncmds = ["/bin/sh /app/scripts/prepare-production-node.sh"]\n\n' +
+      '[start]\ncmd = "/bin/sh /app/scripts/start-production.sh"\n');
     const startSource = fs.readFileSync(productionStart, 'utf8');
     const prepareSource = fs.readFileSync(productionPrepare, 'utf8');
     expect(startSource).toContain('/nix/store/*-nodejs-22.23.3/bin/node');
-    expect(startSource).toContain('exec "$node_path" scripts/production-launcher.js');
+    expect(startSource).toContain("CANONICAL_ROOT='/app'");
+    expect(startSource).toContain('manifest="$CANONICAL_ROOT/.northstar-runtime/node-path"');
+    expect(startSource).toContain('launcher="$CANONICAL_ROOT/scripts/production-launcher.js"');
+    expect(startSource).toContain('exec "$node_path" "$launcher"');
     expect(startSource).toContain('/usr/bin/readlink -f -- "$node_path"');
     expect(startSource).toContain('/usr/bin/stat -c \'%u:%a\' -- "$node_path"');
     expect(startSource).toContain('/usr/bin/od -An -tx1 -N20 -- "$node_path"');
     expect(startSource).not.toMatch(/(?:exec|command -v|which)\s+node(?:\s|$)/);
-    expect(prepareSource).toContain("printf '%s\\n' \"$node_path\" > .northstar-runtime/node-path");
+    expect(prepareSource).toContain("CANONICAL_ROOT='/app'");
+    expect(prepareSource).toContain('manifest="$runtime_directory/node-path"');
+    expect(prepareSource).toContain("printf '%s\\n' \"$node_path\" > \"$manifest\"");
     expect(fs.readFileSync(localStart, 'utf8')).toContain(LOCAL_NODE_SHA256);
   });
 
@@ -149,7 +155,7 @@ process.stdout.write(JSON.stringify({loaded,error,has,get,detector,provider,quer
         return;
       }
       expect(result.status).toBe(78);
-      expect(result.stderr).toContain('rejected NODE_OPTIONS');
+      expect(result.stderr).toMatch(/rejected (?:NODE_OPTIONS|the Node runtime)/);
       expect(fs.existsSync(marker)).toBe(false);
     } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
   });
@@ -178,6 +184,43 @@ process.stdout.write(JSON.stringify({loaded,error,has,get,detector,provider,quer
       expect(result.status).toBe(78);
       expect(result.stderr).toContain('rejected the Node runtime');
       expect(fs.existsSync(marker)).toBe(false);
+    } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+  });
+
+  test('alternate cwd, copied, linked, and caller-selected roots cannot replace the launcher', () => {
+    if (process.platform !== 'win32') return;
+    const shell = 'C:\\Program Files\\Git\\usr\\bin\\sh.exe';
+    if (!fs.existsSync(shell)) return;
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'm27 alternate root '));
+    try {
+      const marker = path.join(temporary, 'attacker-launcher-ran');
+      fs.mkdirSync(path.join(temporary, '.northstar-runtime'), { recursive: true });
+      fs.mkdirSync(path.join(temporary, 'scripts'), { recursive: true });
+      fs.writeFileSync(path.join(temporary, '.northstar-runtime', 'node-path'),
+        '/nix/store/00000000000000000000000000000000-nodejs-22.23.3/bin/node\n');
+      fs.writeFileSync(path.join(temporary, 'scripts', 'production-launcher.js'),
+        `require('node:fs').writeFileSync(${JSON.stringify(marker)},'ran')`);
+      const copied = path.join(temporary, 'copied-start-production.sh');
+      const linked = path.join(temporary, 'linked-start-production.sh');
+      fs.copyFileSync(productionStart, copied);
+      fs.linkSync(productionStart, linked);
+      const candidates = [productionStart, copied, linked];
+      try {
+        const symlink = path.join(temporary, 'symlink-start-production.sh');
+        fs.symlinkSync(productionStart, symlink, 'file'); candidates.push(symlink);
+      } catch (_) { /* Windows may deny unprivileged symlink creation. */ }
+      for (const entry of candidates) {
+        const result = childProcess.spawnSync(shell, [entry], {
+          cwd: temporary, encoding: 'utf8', env: cleanEnvironment({
+            PWD: '/app', OLDPWD: '/app', CDPATH: temporary, INIT_CWD: temporary,
+            npm_config_prefix: temporary,
+          }),
+        });
+        if (result.status === 3221225794 && /NtCreateDirectoryObject/.test(result.stderr)) continue;
+        expect(result.status).toBe(78);
+        expect(result.stderr).toContain('rejected the Node runtime');
+        expect(fs.existsSync(marker)).toBe(false);
+      }
     } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
   });
 });

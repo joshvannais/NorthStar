@@ -11,7 +11,7 @@ const runtimeAuthority = process.env.NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY;
 const authenticatedPath = process.env.NORTHSTAR_AUTHENTICATED_NODE_PATH;
 const authenticatedSha256 = process.env.NORTHSTAR_AUTHENTICATED_NODE_SHA256;
 if (process.version !== EXPECTED_NODE || process.execArgv.length !== 0 ||
-    process.argv.length !== 2 || process.argv[1] !== __filename ||
+    process.argv.length !== 2 ||
     typeof authenticatedPath !== 'string' || authenticatedPath.length === 0 ||
     !['nix-store-22.23.3-v1', 'official-win-x64-22.23.3-v1'].includes(runtimeAuthority)) {
   throw new Error(`${FAILURE} Expected an authenticated ${EXPECTED_NODE} executable.`);
@@ -23,11 +23,17 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const PROOF_BYTES = 32;
+const canonicalRoot = runtimeAuthority === 'nix-store-22.23.3-v1' ? '/app' :
+  path.resolve(__dirname, '..');
+const expectedLauncher = path.join(canonicalRoot, 'scripts', 'production-launcher.js');
+const actualLauncher = fs.realpathSync.native(__filename);
 const executableRealpath = fs.realpathSync.native(process.execPath);
 const expectedRealpath = fs.realpathSync.native(authenticatedPath);
 const executableStat = fs.statSync(executableRealpath);
 const executableLstat = fs.lstatSync(authenticatedPath);
-if (executableRealpath !== expectedRealpath || executableLstat.isSymbolicLink() ||
+if (process.argv[1] !== expectedLauncher || actualLauncher !== expectedLauncher ||
+    fs.lstatSync(expectedLauncher).isSymbolicLink() ||
+    executableRealpath !== expectedRealpath || executableLstat.isSymbolicLink() ||
     !executableStat.isFile()) {
   throw new Error(`${FAILURE} Authenticated executable identity mismatch.`);
 }
@@ -102,6 +108,7 @@ if (authenticatedSha256) {
 childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_DEVICE = String(executableStat.dev);
 childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_INODE = String(executableStat.ino);
 childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_SIZE = String(executableStat.size);
+childEnvironment.NORTHSTAR_CANONICAL_ROOT = canonicalRoot;
 
 const proof = crypto.randomBytes(PROOF_BYTES);
 const proofDigest = crypto.createHash('sha256').update(proof).digest('hex');
@@ -109,9 +116,13 @@ childEnvironment.NORTHSTAR_CANONICAL_LAUNCH = 'os-pipe-v1';
 childEnvironment.NORTHSTAR_CANONICAL_LAUNCH_DIGEST = proofDigest;
 childEnvironment.NORTHSTAR_CANONICAL_LAUNCH_PARENT = String(process.pid);
 
-const childEntry = path.resolve(__dirname, '../src/productionChild.js');
+const childEntry = path.join(canonicalRoot, 'src', 'productionChild.js');
+if (fs.realpathSync.native(childEntry) !== childEntry ||
+    fs.lstatSync(childEntry).isSymbolicLink()) {
+  throw new Error(`${FAILURE} Invalid production child path.`);
+}
 const child = spawn(executableRealpath, [childEntry], {
-  cwd: path.resolve(__dirname, '..'),
+  cwd: canonicalRoot,
   env: childEnvironment,
   stdio: ['inherit', 'inherit', 'inherit', 'pipe'],
   windowsHide: true,

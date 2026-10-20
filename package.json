@@ -7,7 +7,7 @@
     "node": "22.23.3"
   },
   "scripts": {
-    "start": "/bin/sh scripts/start-production.sh",
+    "start": "/bin/sh /app/scripts/start-production.sh",
     "start:verified-local": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-verified-local.ps1",
     "dev": "node --watch src/developmentChild.js",
     "test": "jest --config jest.config.js",

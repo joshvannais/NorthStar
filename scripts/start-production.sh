@@ -5,6 +5,39 @@ set -eu
 # resolves through PATH: shell builtins and fixed root-owned utilities bind the
 # deployed process to the exact immutable Nix-store Node selected at build time.
 FAILURE='NorthStar production startup rejected the Node runtime.'
+CANONICAL_ROOT='/app'
+CANONICAL_SCRIPT='/app/scripts/start-production.sh'
+
+fail() {
+  echo "$FAILURE" >&2
+  exit 78
+}
+
+# Nixpacks copies the source tree to /app. Accept only the physical canonical
+# script or the documented relative spelling while already in physical /app.
+# Caller-controlled PWD, INIT_CWD, CDPATH, npm variables, and alternate trees
+# never select a repository root.
+if [ "$0" = "$CANONICAL_SCRIPT" ]; then
+  :
+elif [ "$0" = 'scripts/start-production.sh' ] &&
+     [ "$(/bin/pwd -P)" = "$CANONICAL_ROOT" ]; then
+  :
+else
+  fail
+fi
+if [ ! -x /usr/bin/readlink ] || [ ! -x /usr/bin/stat ] ||
+   [ ! -x /usr/bin/od ]; then
+  fail
+fi
+if [ "$(/usr/bin/readlink -f -- "$CANONICAL_ROOT")" != "$CANONICAL_ROOT" ] ||
+   [ "$(/usr/bin/readlink -f -- "$CANONICAL_SCRIPT")" != "$CANONICAL_SCRIPT" ] ||
+   [ -L "$CANONICAL_ROOT" ] || [ -L "$CANONICAL_ROOT/scripts" ] ||
+   [ -L "$CANONICAL_SCRIPT" ] ||
+   [ "$(/usr/bin/stat -c '%u:%a' -- "$CANONICAL_ROOT")" != '0:755' ] ||
+   [ "$(/usr/bin/stat -c '%u:%a' -- "$CANONICAL_ROOT/scripts")" != '0:755' ] ||
+   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$CANONICAL_SCRIPT")" != '0:644:1' ]; then
+  fail
+fi
 
 if [ "${NODE_OPTIONS+x}" = x ] && [ -n "${NODE_OPTIONS}" ]; then
   echo "NorthStar production startup rejected NODE_OPTIONS." >&2
@@ -35,10 +68,17 @@ if [ -n "${NODE_BINARY-}" ] || [ -n "${NORTHSTAR_NODE_BINARY-}" ] ||
   exit 78
 fi
 
-manifest='.northstar-runtime/node-path'
+manifest="$CANONICAL_ROOT/.northstar-runtime/node-path"
 if [ ! -f "$manifest" ] || [ -L "$manifest" ]; then
   echo "$FAILURE Missing authenticated Nixpacks runtime manifest." >&2
   exit 78
+fi
+if [ "$(/usr/bin/readlink -f -- "$CANONICAL_ROOT/.northstar-runtime")" !=
+     "$CANONICAL_ROOT/.northstar-runtime" ] ||
+   [ "$(/usr/bin/readlink -f -- "$manifest")" != "$manifest" ] ||
+   [ "$(/usr/bin/stat -c '%u:%a' -- "$CANONICAL_ROOT/.northstar-runtime")" != '0:755' ] ||
+   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$manifest")" != '0:644:1' ]; then
+  fail
 fi
 exec 3< "$manifest"
 IFS= read -r node_path <&3 || {
@@ -77,11 +117,6 @@ fi
 # Railway's Nixpacks image supplies these root-owned Ubuntu base utilities at
 # fixed paths. They are never resolved through inherited PATH. The immutable
 # Nix derivation must be canonical, root-owned, and mode 0555 before Node runs.
-if [ ! -x /usr/bin/readlink ] || [ ! -x /usr/bin/stat ] ||
-   [ ! -x /usr/bin/od ]; then
-  echo "$FAILURE" >&2
-  exit 78
-fi
 LC_ALL=C
 export LC_ALL
 canonical_path=$(/usr/bin/readlink -f -- "$node_path") || {
@@ -109,5 +144,23 @@ PATH=$node_bin
 export PATH
 NORTHSTAR_AUTHENTICATED_NODE_PATH=$node_path
 NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY='nix-store-22.23.3-v1'
+NORTHSTAR_CANONICAL_ROOT=$CANONICAL_ROOT
 export NORTHSTAR_AUTHENTICATED_NODE_PATH NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY
-exec "$node_path" scripts/production-launcher.js
+export NORTHSTAR_CANONICAL_ROOT
+launcher="$CANONICAL_ROOT/scripts/production-launcher.js"
+child="$CANONICAL_ROOT/src/productionChild.js"
+server="$CANONICAL_ROOT/src/server.js"
+for resource in "$launcher" "$child" "$server" \
+  "$CANONICAL_ROOT/package.json" "$CANONICAL_ROOT/package-lock.json" \
+  "$CANONICAL_ROOT/nixpacks.toml"
+do
+  if [ ! -f "$resource" ] || [ -L "$resource" ] ||
+     [ "$(/usr/bin/readlink -f -- "$resource")" != "$resource" ] ||
+     [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$resource")" != '0:644:1' ]; then
+    fail
+  fi
+done
+CDPATH=''
+export CDPATH
+cd "$CANONICAL_ROOT" || fail
+exec "$node_path" "$launcher"

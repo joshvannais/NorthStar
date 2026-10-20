@@ -2,7 +2,7 @@
 NIXPACKS_NODE_VERSION = "22.23.3"
 
 [phases.build]
-cmds = ["/bin/sh scripts/prepare-production-node.sh"]
+cmds = ["/bin/sh /app/scripts/prepare-production-node.sh"]
 
 [start]
-cmd = "/bin/sh scripts/start-production.sh"
+cmd = "/bin/sh /app/scripts/start-production.sh"

@@ -5,17 +5,57 @@ if (require.main !== module) {
   throw new Error('The NorthStar production launcher is not importable.');
 }
 
+const EXPECTED_NODE = 'v22.23.3';
+const FAILURE = 'The NorthStar production launcher is unavailable.';
+const runtimeAuthority = process.env.NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY;
+const authenticatedPath = process.env.NORTHSTAR_AUTHENTICATED_NODE_PATH;
+const authenticatedSha256 = process.env.NORTHSTAR_AUTHENTICATED_NODE_SHA256;
+if (process.version !== EXPECTED_NODE || process.execArgv.length !== 0 ||
+    process.argv.length !== 2 || process.argv[1] !== __filename ||
+    typeof authenticatedPath !== 'string' || authenticatedPath.length === 0 ||
+    !['nix-store-22.23.3-v1', 'official-win-x64-22.23.3-v1'].includes(runtimeAuthority)) {
+  throw new Error(`${FAILURE} Expected an authenticated ${EXPECTED_NODE} executable.`);
+}
+
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-const EXPECTED_NODE = 'v22.23.3';
 const PROOF_BYTES = 32;
-const FAILURE = 'The NorthStar production launcher is unavailable.';
+const executableRealpath = fs.realpathSync.native(process.execPath);
+const expectedRealpath = fs.realpathSync.native(authenticatedPath);
+const executableStat = fs.statSync(executableRealpath);
+const executableLstat = fs.lstatSync(authenticatedPath);
+if (executableRealpath !== expectedRealpath || executableLstat.isSymbolicLink() ||
+    !executableStat.isFile()) {
+  throw new Error(`${FAILURE} Authenticated executable identity mismatch.`);
+}
 
-if (process.version !== EXPECTED_NODE || process.execArgv.length !== 0 ||
-    process.argv.length !== 2 || process.argv[1] !== __filename) {
-  throw new Error(`${FAILURE} Expected ${EXPECTED_NODE} with no inherited Node flags.`);
+if (runtimeAuthority === 'nix-store-22.23.3-v1') {
+  const storePattern = /^\/nix\/store\/[a-z0-9]{32}-nodejs-22\.23\.3\/bin\/node$/;
+  const storeDirectory = path.dirname(path.dirname(expectedRealpath));
+  const binDirectory = path.dirname(expectedRealpath);
+  const storeStat = fs.statSync(storeDirectory);
+  const binStat = fs.statSync(binDirectory);
+  if (process.platform !== 'linux' || process.arch !== 'x64' ||
+      !storePattern.test(expectedRealpath) || executableStat.uid !== 0 ||
+      storeStat.uid !== 0 || binStat.uid !== 0 ||
+      (executableStat.mode & 0o222) !== 0 || (storeStat.mode & 0o222) !== 0 ||
+      (binStat.mode & 0o222) !== 0 || fs.lstatSync(storeDirectory).isSymbolicLink() ||
+      fs.lstatSync(binDirectory).isSymbolicLink() || authenticatedSha256) {
+    throw new Error(`${FAILURE} Invalid immutable Nix-store executable.`);
+  }
+} else {
+  if (process.platform !== 'win32' || process.arch !== 'x64' ||
+      !/^[0-9a-f]{64}$/.test(authenticatedSha256 || '')) {
+    throw new Error(`${FAILURE} Invalid verified local executable.`);
+  }
+  const actualSha256 = crypto.createHash('sha256')
+    .update(fs.readFileSync(executableRealpath)).digest('hex');
+  if (actualSha256 !== authenticatedSha256) {
+    throw new Error(`${FAILURE} Verified local executable digest mismatch.`);
+  }
 }
 
 for (const key of ['NODE_OPTIONS', 'NODE_PATH', 'NPM_CONFIG_NODE_OPTIONS',
@@ -53,6 +93,15 @@ for (const key of allowedEnvironment) {
   if (typeof process.env[key] === 'string') childEnvironment[key] = process.env[key];
 }
 childEnvironment.NODE_ENV = 'production';
+childEnvironment.PATH = path.dirname(executableRealpath);
+childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_PATH = executableRealpath;
+childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY = runtimeAuthority;
+if (authenticatedSha256) {
+  childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_SHA256 = authenticatedSha256;
+}
+childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_DEVICE = String(executableStat.dev);
+childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_INODE = String(executableStat.ino);
+childEnvironment.NORTHSTAR_AUTHENTICATED_NODE_SIZE = String(executableStat.size);
 
 const proof = crypto.randomBytes(PROOF_BYTES);
 const proofDigest = crypto.createHash('sha256').update(proof).digest('hex');
@@ -61,7 +110,7 @@ childEnvironment.NORTHSTAR_CANONICAL_LAUNCH_DIGEST = proofDigest;
 childEnvironment.NORTHSTAR_CANONICAL_LAUNCH_PARENT = String(process.pid);
 
 const childEntry = path.resolve(__dirname, '../src/productionChild.js');
-const child = spawn(process.execPath, [childEntry], {
+const child = spawn(executableRealpath, [childEntry], {
   cwd: path.resolve(__dirname, '..'),
   env: childEnvironment,
   stdio: ['inherit', 'inherit', 'inherit', 'pipe'],

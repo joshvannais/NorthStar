@@ -8,18 +8,39 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '../..');
 const launcher = path.join(ROOT, 'scripts/production-launcher.js');
+const productionStart = path.join(ROOT, 'scripts/start-production.sh');
+const productionPrepare = path.join(ROOT, 'scripts/prepare-production-node.sh');
+const localStart = path.join(ROOT, 'scripts/start-verified-local.ps1');
+const systemPowerShell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 const childEntry = path.join(ROOT, 'src/productionChild.js');
 const server = path.join(ROOT, 'src/server.js');
+const LOCAL_NODE_SHA256 = '9c9245166b4a8e182e0b797da9c20136117ff24368eaff1fec8343a123c8db0e';
 const node22 = process.env.M27_NODE22_EXECUTABLE ||
   (process.version === 'v22.23.3' ? process.execPath : null);
 const canonicalRuntime = node22 && fs.existsSync(node22) ? describe : describe.skip;
 
+function authenticatedRuntimeEnvironment() {
+  const stat = fs.statSync(node22);
+  return {
+    NORTHSTAR_AUTHENTICATED_NODE_PATH: fs.realpathSync.native(node22),
+    NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY: 'official-win-x64-22.23.3-v1',
+    NORTHSTAR_AUTHENTICATED_NODE_SHA256: LOCAL_NODE_SHA256,
+    NORTHSTAR_AUTHENTICATED_NODE_DEVICE: String(stat.dev),
+    NORTHSTAR_AUTHENTICATED_NODE_INODE: String(stat.ino),
+    NORTHSTAR_AUTHENTICATED_NODE_SIZE: String(stat.size),
+  };
+}
+
 function cleanEnvironment(overrides = {}) {
-  const env = { ...process.env, ...overrides };
+  const env = { ...process.env };
   for (const key of ['NODE_OPTIONS', 'NODE_PATH', 'NPM_CONFIG_NODE_OPTIONS',
     'npm_config_node_options', 'NODE_V8_COVERAGE', 'JEST_WORKER_ID',
     'NORTHSTAR_PART14B_TEST_ADAPTER']) delete env[key];
   env.AUTH_ACCESS_SECRET = 'launcher-test-secret-that-is-longer-than-thirty-two-characters';
+  delete env.RAILWAY_ENVIRONMENT; delete env.RAILWAY_ENVIRONMENT_ID;
+  delete env.RAILWAY_PROJECT_ID; delete env.RAILWAY_SERVICE_ID;
+  delete env.RAILWAY_STATIC_URL; delete env.NIXPACKS_NODE_VERSION;
+  Object.assign(env, overrides);
   return env;
 }
 
@@ -31,6 +52,7 @@ function spawnChildWithProof({ digest, payload, environment = {} }) {
         NODE_ENV: 'production', NORTHSTAR_CANONICAL_LAUNCH: 'os-pipe-v1',
         NORTHSTAR_CANONICAL_LAUNCH_DIGEST: digest,
         NORTHSTAR_CANONICAL_LAUNCH_PARENT: String(process.pid),
+        ...authenticatedRuntimeEnvironment(),
         ...environment,
       }),
       stdio: ['ignore', 'pipe', 'pipe', 'pipe'], windowsHide: true,
@@ -53,12 +75,26 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
     expect(pkg.engines).toEqual({ node: '22.23.3' });
     expect(lock.packages[''].engines).toEqual({ node: '22.23.3' });
-    expect(pkg.scripts.start).toBe('sh scripts/start-production.sh');
+    expect(pkg.scripts.start).toBe('/bin/sh scripts/start-production.sh');
+    expect(pkg.scripts['start:verified-local']).toBe(
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ' +
+      '-NoProfile -ExecutionPolicy Bypass -File scripts/start-verified-local.ps1');
     expect(pkg.scripts.dev).toBe('node --watch src/developmentChild.js');
     expect(fs.readFileSync(path.join(ROOT, '.node-version'), 'utf8')).toBe('22.23.3\n');
     expect(fs.readFileSync(path.join(ROOT, 'nixpacks.toml'), 'utf8')).toBe(
-      '[variables]\nNIXPACKS_NODE_VERSION = "22.23.3"\n\n[start]\n' +
-      'cmd = "sh scripts/start-production.sh"\n');
+      '[variables]\nNIXPACKS_NODE_VERSION = "22.23.3"\n\n' +
+      '[phases.build]\ncmds = ["/bin/sh scripts/prepare-production-node.sh"]\n\n' +
+      '[start]\ncmd = "/bin/sh scripts/start-production.sh"\n');
+    const startSource = fs.readFileSync(productionStart, 'utf8');
+    const prepareSource = fs.readFileSync(productionPrepare, 'utf8');
+    expect(startSource).toContain('/nix/store/*-nodejs-22.23.3/bin/node');
+    expect(startSource).toContain('exec "$node_path" scripts/production-launcher.js');
+    expect(startSource).toContain('/usr/bin/readlink -f -- "$node_path"');
+    expect(startSource).toContain('/usr/bin/stat -c \'%u:%a\' -- "$node_path"');
+    expect(startSource).toContain('/usr/bin/od -An -tx1 -N20 -- "$node_path"');
+    expect(startSource).not.toMatch(/(?:exec|command -v|which)\s+node(?:\s|$)/);
+    expect(prepareSource).toContain("printf '%s\\n' \"$node_path\" > .northstar-runtime/node-path");
+    expect(fs.readFileSync(localStart, 'utf8')).toContain(LOCAL_NODE_SHA256);
   });
 
   test.each([launcher, childEntry])('%s is executable-only and exposes no import capability', entry => {
@@ -117,16 +153,89 @@ process.stdout.write(JSON.stringify({loaded,error,has,get,detector,provider,quer
       expect(fs.existsSync(marker)).toBe(false);
     } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
   });
+
+  test('the POSIX boundary never dispatches a PATH-shadowed Node or utility', () => {
+    if (process.platform !== 'win32') return;
+    const shell = 'C:\\Program Files\\Git\\usr\\bin\\sh.exe';
+    if (!fs.existsSync(shell)) return;
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'm27-path-shadow-'));
+    try {
+      const marker = path.join(temporary, 'substitute-ran');
+      const fake = `#!/bin/sh\nprintf ran > ${JSON.stringify(marker.replace(/\\/g, '/'))}\nexit 90\n`;
+      for (const name of ['node', 'readlink', 'realpath', 'stat', 'sha256sum']) {
+        const entry = path.join(temporary, name);
+        fs.writeFileSync(entry, fake, { mode: 0o755 });
+        fs.chmodSync(entry, 0o755);
+      }
+      const result = childProcess.spawnSync(shell, ['scripts/start-production.sh'], {
+        cwd: ROOT, encoding: 'utf8', env: cleanEnvironment({
+          PATH: `${temporary};${process.env.PATH || ''}`,
+        }),
+      });
+      if (result.status === 3221225794 && /NtCreateDirectoryObject/.test(result.stderr)) {
+        expect(fs.existsSync(marker)).toBe(false); return;
+      }
+      expect(result.status).toBe(78);
+      expect(result.stderr).toContain('rejected the Node runtime');
+      expect(fs.existsSync(marker)).toBe(false);
+    } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+  });
 });
 
 canonicalRuntime('Mission 27 Part 14B pinned Node 22.23.3 launcher evidence', () => {
-  test('clean launcher creates a genuine composition before the expected missing-DB stop', () => {
+  test('direct launcher invocation without an authenticated executable fails closed', () => {
     const result = childProcess.spawnSync(node22, [launcher], {
       cwd: ROOT, encoding: 'utf8', env: cleanEnvironment(), timeout: 120000,
     });
     expect(result.status).toBe(1);
+    expect(result.stdout).not.toContain('Canonical production composition ready.');
+    expect(result.stderr).toContain('authenticated v22.23.3 executable');
+  });
+
+  test('pinned local boundary creates a genuine composition before the expected missing-DB stop', () => {
+    const result = childProcess.spawnSync(systemPowerShell, [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', localStart,
+      '-NodeBinary', node22,
+    ], {
+      cwd: ROOT, encoding: 'utf8', env: cleanEnvironment({ DATABASE_URL: '' }),
+      timeout: 120000,
+    });
+    expect(result.status).toBe(1);
     expect(result.stdout).toContain('[Bootstrap] Canonical production composition ready.');
     expect(result.stderr).toContain('PostgreSQL startup authority is unavailable');
+  });
+
+  test('pinned local boundary rejects a substitute before executing it', () => {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'm27-local-substitute-'));
+    try {
+      const substitute = path.join(temporary, 'node.exe');
+      const marker = path.join(temporary, 'ran');
+      fs.writeFileSync(substitute, `not a node executable ${marker}`);
+      const result = childProcess.spawnSync(systemPowerShell, [
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', localStart,
+        '-NodeBinary', substitute,
+      ], { cwd: ROOT, encoding: 'utf8', env: cleanEnvironment(), timeout: 120000 });
+      expect(result.status).not.toBe(0);
+      expect(`${result.stdout}${result.stderr}`).toContain('rejected the Node runtime');
+      expect(fs.existsSync(marker)).toBe(false);
+    } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+  });
+
+  test.each([
+    { name: 'relative path', node: 'node.exe', environment: {} },
+    { name: 'Railway marker', node: node22,
+      environment: { RAILWAY_ENVIRONMENT_ID: 'production-environment' } },
+    { name: 'Nixpacks marker', node: node22,
+      environment: { NIXPACKS_NODE_VERSION: '22.23.3' } },
+  ])('pinned local boundary rejects $name before Node execution', scenario => {
+    const result = childProcess.spawnSync(systemPowerShell, [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', localStart,
+      '-NodeBinary', scenario.node,
+    ], { cwd: ROOT, encoding: 'utf8',
+      env: cleanEnvironment(scenario.environment), timeout: 120000 });
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).not.toContain('Canonical production composition ready.');
+    expect(`${result.stdout}${result.stderr}`).toContain('rejected the Node runtime');
   });
 
   test.each(['missing-pipe', 'wrong-digest', 'duplicate-proof', 'wrong-parent', 'extra-argv'])(
@@ -139,6 +248,7 @@ canonicalRuntime('Mission 27 Part 14B pinned Node 22.23.3 launcher evidence', ()
             NODE_ENV: 'production', NORTHSTAR_CANONICAL_LAUNCH: 'os-pipe-v1',
             NORTHSTAR_CANONICAL_LAUNCH_DIGEST: digest,
             NORTHSTAR_CANONICAL_LAUNCH_PARENT: String(process.pid),
+            ...authenticatedRuntimeEnvironment(),
           }),
         });
         expect(result.status).toBe(1); expect(result.stderr).toContain('production child is unavailable');

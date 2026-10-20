@@ -113,7 +113,7 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
 
   test('rejects status, provenance, scope, evidence, unavailable and Part13D limitation drift', () => {
     replaceExact('roadmap',
-      'Status: frozen plan through released Part 14A; original Part 14B was accepted and merged, and its source-only release correction is the current implementation candidate.',
+      'Status: frozen plan through released Part 14A; original Part 14B was accepted and merged, and its second source-only release correction is the current implementation candidate.',
       'Status: frozen plan through released complete Part 14; original Part 14B is released.');
     replaceExact('roadmap', authority.PART13_RELEASE.head, 'f'.repeat(40));
     replaceExact('roadmap', authority.PART14A_RELEASE.head, 'e'.repeat(40));
@@ -128,7 +128,7 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
       'Unavailable and unclaimed: immutable issued invoice/document, real customer delivery,',
       'Accepted and complete: immutable issued invoice/document, real customer delivery,');
     replaceExact('architecture14B',
-      'Status: accepted at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`, tree `2c11c575f6d0a5171981be681fd5978d8f4bbd35`, and normally merged as PR #535 to exact main `667befdbf06a26cd3416bce5f6d25ab124287c9e`; sole automatic Railway deployment `89601f06-30bd-41bc-85ff-3fc8e96772a5` failed during the pinned amd64 Docker build before application startup or health verification, so Part 14B remains release-incomplete and its source-only release correction is current. Provider evidence, live-money evidence, and founder visual approval are not accepted.',
+      'Status: accepted at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`, tree `2c11c575f6d0a5171981be681fd5978d8f4bbd35`, and normally merged as PR #535 to exact main `667befdbf06a26cd3416bce5f6d25ab124287c9e`. Its first source-only release correction at head `380d059ecd6805b28c5b93e1be31f2c151da7658`, tree `689db31fd041dcecd20ca0a4d3d6bc0976e2ab61`, was normally merged as PR #536 to exact main `14443062ecde40b3bca90a6ca0276b870b362311`; sole automatic Railway deployment `e4601c19-713e-49f3-9bba-3b185a8c924a` passed the pinned amd64 Docker build and entered deployment, then failed before health verification because Debian dash split the runtime-identity comparison across two physical commands. Part 14B remains release-incomplete and its second source-only release correction is current. Provider evidence, live-money evidence, and founder visual approval are not accepted.',
       'Status: released, deployed, and production complete.');
     replaceExact('architecture14B',
       'Offline cash remains `offline_received`. A received check remains `check_clearance_unknown`; the disabled clearance transition remains `check_clearance_authority_unavailable`.',

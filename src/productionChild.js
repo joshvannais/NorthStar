@@ -16,7 +16,7 @@ const runtimeAuthority = process.env.NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY;
 const authenticatedPath = process.env.NORTHSTAR_AUTHENTICATED_NODE_PATH;
 const authenticatedSha256 = process.env.NORTHSTAR_AUTHENTICATED_NODE_SHA256;
 const canonicalRoot = process.env.NORTHSTAR_CANONICAL_ROOT;
-const expectedRoot = runtimeAuthority === 'nix-store-22.23.3-v1' ? '/app' :
+const expectedRoot = runtimeAuthority === 'official-docker-node-22.23.3-v1' ? '/app' :
   path.resolve(__dirname, '..');
 const expectedChild = path.join(expectedRoot, 'src', 'productionChild.js');
 const expectedServer = path.join(expectedRoot, 'src', 'server.js');
@@ -34,7 +34,8 @@ if (process.version !== EXPECTED_NODE || process.execArgv.length !== 0 ||
     process.env.NORTHSTAR_CANONICAL_LAUNCH !== 'os-pipe-v1' ||
     !/^[0-9a-f]{64}$/.test(expectedDigest || '') ||
     expectedParent !== String(process.ppid) || process.send || process.channel ||
-    !['nix-store-22.23.3-v1', 'official-win-x64-22.23.3-v1'].includes(runtimeAuthority) ||
+    !['official-docker-node-22.23.3-v1',
+      'official-win-x64-22.23.3-v1'].includes(runtimeAuthority) ||
     typeof authenticatedPath !== 'string' ||
     fs.realpathSync.native(authenticatedPath) !== executableRealpath ||
     fs.lstatSync(authenticatedPath).isSymbolicLink() ||
@@ -43,11 +44,18 @@ if (process.version !== EXPECTED_NODE || process.execArgv.length !== 0 ||
     process.env.NORTHSTAR_AUTHENTICATED_NODE_SIZE !== String(executableStat.size)) {
   throw new Error(FAILURE);
 }
-if (runtimeAuthority === 'nix-store-22.23.3-v1') {
-  if (process.platform !== 'linux' || process.arch !== 'x64' ||
-      !/^\/nix\/store\/[a-z0-9]{32}-nodejs-22\.23\.3\/bin\/node$/.test(executableRealpath) ||
+if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
+  const expectedDigests = Object.freeze({
+    x64: 'fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48',
+    arm64: 'd09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d',
+  });
+  if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch) ||
+      executableRealpath !== '/usr/local/bin/node' ||
       executableStat.uid !== 0 || (executableStat.mode & 0o222) !== 0 ||
-      authenticatedSha256) throw new Error(FAILURE);
+      authenticatedSha256 !== expectedDigests[process.arch]) throw new Error(FAILURE);
+  const actualSha256 = crypto.createHash('sha256')
+    .update(fs.readFileSync(executableRealpath)).digest('hex');
+  if (actualSha256 !== authenticatedSha256) throw new Error(FAILURE);
 } else {
   if (process.platform !== 'win32' || process.arch !== 'x64' ||
       !/^[0-9a-f]{64}$/.test(authenticatedSha256 || '')) throw new Error(FAILURE);

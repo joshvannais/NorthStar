@@ -3,7 +3,7 @@ set -eu
 
 # This shell boundary runs before any Node executable is selected. It never
 # resolves through PATH: shell builtins and fixed root-owned utilities bind the
-# deployed process to the exact immutable Nix-store Node selected at build time.
+# deployed process to the exact Official Image Node selected at build time.
 FAILURE='NorthStar production startup rejected the Node runtime.'
 CANONICAL_ROOT='/app'
 CANONICAL_SCRIPT='/app/scripts/start-production.sh'
@@ -13,7 +13,7 @@ fail() {
   exit 78
 }
 
-# Nixpacks copies the source tree to /app. Accept only the physical canonical
+# The Railway Docker build copies the source tree to /app. Accept only the physical canonical
 # script or the documented relative spelling while already in physical /app.
 # Caller-controlled PWD, INIT_CWD, CDPATH, npm variables, and alternate trees
 # never select a repository root.
@@ -25,7 +25,8 @@ elif [ "$0" = 'scripts/start-production.sh' ] &&
 else
   fail
 fi
-if [ ! -x /usr/bin/readlink ] || [ ! -x /usr/bin/stat ] ||
+if [ ! -x /usr/bin/dpkg ] || [ ! -x /usr/bin/readlink ] ||
+   [ ! -x /usr/bin/sha256sum ] || [ ! -x /usr/bin/stat ] ||
    [ ! -x /usr/bin/od ]; then
   fail
 fi
@@ -57,7 +58,7 @@ if [ "${npm_config_node_options+x}" = x ] && [ -n "${npm_config_node_options}" ]
 fi
 
 # Local/test executable selection is deliberately a different command. None
-# of its inputs are accepted by the Railway/Nixpacks production boundary.
+# of its inputs are accepted by the Railway/Docker production boundary.
 if [ -n "${NODE_BINARY-}" ] || [ -n "${NORTHSTAR_NODE_BINARY-}" ] ||
    [ -n "${NORTHSTAR_LOCAL_NODE_BINARY-}" ] ||
    [ -n "${NORTHSTAR_LOCAL_NODE_SHA256-}" ] ||
@@ -68,55 +69,67 @@ if [ -n "${NODE_BINARY-}" ] || [ -n "${NORTHSTAR_NODE_BINARY-}" ] ||
   exit 78
 fi
 
-manifest="$CANONICAL_ROOT/.northstar-runtime/node-path"
-if [ ! -f "$manifest" ] || [ -L "$manifest" ]; then
-  echo "$FAILURE Missing authenticated Nixpacks runtime manifest." >&2
+runtime_directory="$CANONICAL_ROOT/.northstar-runtime"
+manifest="$runtime_directory/node-path"
+sha_manifest="$runtime_directory/node-sha256"
+arch_manifest="$runtime_directory/node-arch"
+if [ ! -f "$manifest" ] || [ -L "$manifest" ] ||
+   [ ! -f "$sha_manifest" ] || [ -L "$sha_manifest" ] ||
+   [ ! -f "$arch_manifest" ] || [ -L "$arch_manifest" ]; then
+  echo "$FAILURE Missing authenticated Docker runtime manifest." >&2
   exit 78
 fi
-if [ "$(/usr/bin/readlink -f -- "$CANONICAL_ROOT/.northstar-runtime")" !=
-     "$CANONICAL_ROOT/.northstar-runtime" ] ||
+if [ "$(/usr/bin/readlink -f -- "$runtime_directory")" != "$runtime_directory" ] ||
    [ "$(/usr/bin/readlink -f -- "$manifest")" != "$manifest" ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$CANONICAL_ROOT/.northstar-runtime")" != '0:755' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$manifest")" != '0:644:1' ]; then
+   [ "$(/usr/bin/readlink -f -- "$sha_manifest")" != "$sha_manifest" ] ||
+   [ "$(/usr/bin/readlink -f -- "$arch_manifest")" != "$arch_manifest" ] ||
+   [ "$(/usr/bin/stat -c '%u:%a' -- "$runtime_directory")" != '0:755' ] ||
+   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$manifest")" != '0:644:1' ] ||
+   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$sha_manifest")" != '0:644:1' ] ||
+   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$arch_manifest")" != '0:644:1' ]; then
   fail
 fi
-exec 3< "$manifest"
-IFS= read -r node_path <&3 || {
-  echo "$FAILURE" >&2
-  exit 78
+read_single_line() {
+  file=$1
+  exec 3< "$file"
+  IFS= read -r value <&3 || fail
+  if IFS= read -r extra_line <&3; then
+    exec 3<&-
+    fail
+  fi
+  exec 3<&-
+  printf '%s' "$value"
 }
-if IFS= read -r extra_line <&3; then
-  echo "$FAILURE" >&2
-  exit 78
+node_path=$(read_single_line "$manifest")
+node_sha256=$(read_single_line "$sha_manifest")
+runtime_arch=$(read_single_line "$arch_manifest")
+if [ "$node_path" != '/usr/local/bin/node' ]; then
+  fail
 fi
-exec 3<&-
-
-case "$node_path" in
-  /nix/store/*-nodejs-22.23.3/bin/node) ;;
-  *) echo "$FAILURE" >&2; exit 78 ;;
+platform=$(/usr/bin/dpkg --print-architecture) || fail
+case "$platform:$runtime_arch:$node_sha256" in
+  amd64:x64:fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48) ;;
+  arm64:arm64:d09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d) ;;
+  *) fail ;;
 esac
 
-# The manifest is build-derived, but it is not trusted by itself. Cross-check
-# it against the one and only exact immutable Nix-store runtime and reject
-# symlinks before executing it. The launcher's first code verifies uid/mode.
-set -- /nix/store/*-nodejs-22.23.3/bin/node
-if [ "$#" -ne 1 ] || [ "$1" != "$node_path" ] ||
-   [ ! -f "$node_path" ] || [ ! -x "$node_path" ] ||
+# Build-generated manifests are never trusted alone. Verify the exact official
+# executable digest, path, ownership, mode, ELF architecture, and directories
+# before the first Node instruction runs.
+if [ ! -f "$node_path" ] || [ ! -x "$node_path" ] ||
    [ -L "$node_path" ]; then
-  echo "$FAILURE" >&2
-  exit 78
+  fail
 fi
 node_bin=${node_path%/node}
-node_store=${node_bin%/bin}
-if [ ! -d "$node_bin" ] || [ ! -d "$node_store" ] ||
-   [ -L "$node_bin" ] || [ -L "$node_store" ]; then
-  echo "$FAILURE" >&2
-  exit 78
+node_root=${node_bin%/bin}
+if [ ! -d "$node_bin" ] || [ ! -d "$node_root" ] ||
+   [ -L "$node_bin" ] || [ -L "$node_root" ]; then
+  fail
 fi
 
-# Railway's Nixpacks image supplies these root-owned Ubuntu base utilities at
-# fixed paths. They are never resolved through inherited PATH. The immutable
-# Nix derivation must be canonical, root-owned, and mode 0555 before Node runs.
+# The pinned Docker Official Image supplies these root-owned Debian utilities
+# at fixed paths. They are never resolved through inherited PATH. The selected
+# Node executable must be canonical, root-owned, and mode 0555 before it runs.
 LC_ALL=C
 export LC_ALL
 canonical_path=$(/usr/bin/readlink -f -- "$node_path") || {
@@ -125,34 +138,41 @@ canonical_path=$(/usr/bin/readlink -f -- "$node_path") || {
 }
 if [ "$canonical_path" != "$node_path" ] ||
    [ "$(/usr/bin/stat -c '%u:%a' -- "$node_path")" != '0:555' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$node_bin")" != '0:555' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$node_store")" != '0:555' ]; then
-  echo "$FAILURE" >&2
-  exit 78
+   [ "$(/usr/bin/stat -c '%u:%a' -- "$node_bin")" != '0:755' ] ||
+   [ "$(/usr/bin/stat -c '%u:%a' -- "$node_root")" != '0:755' ]; then
+  fail
 fi
+printf '%s  %s\n' "$node_sha256" "$node_path" |
+  /usr/bin/sha256sum -c - >/dev/null || fail
 set -- $(/usr/bin/od -An -tx1 -N20 -- "$node_path")
+case "$runtime_arch" in
+  x64) elf_machine='3e' ;;
+  arm64) elf_machine='b7' ;;
+  *) fail ;;
+esac
 if [ "$#" -ne 20 ] || [ "$1" != '7f' ] || [ "$2" != '45' ] ||
    [ "$3" != '4c' ] || [ "$4" != '46' ] || [ "$5" != '02' ] ||
-   [ "$6" != '01' ] || [ "$8" != '00' ] || [ "${19}" != '3e' ] ||
+   [ "$6" != '01' ] || [ "$8" != '00' ] || [ "${19}" != "$elf_machine" ] ||
    [ "${20}" != '00' ]; then
-  echo "$FAILURE" >&2
-  exit 78
+  fail
 fi
 
 unset NODE_OPTIONS NODE_PATH NPM_CONFIG_NODE_OPTIONS npm_config_node_options
 PATH=$node_bin
 export PATH
 NORTHSTAR_AUTHENTICATED_NODE_PATH=$node_path
-NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY='nix-store-22.23.3-v1'
+NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY='official-docker-node-22.23.3-v1'
+NORTHSTAR_AUTHENTICATED_NODE_SHA256=$node_sha256
 NORTHSTAR_CANONICAL_ROOT=$CANONICAL_ROOT
 export NORTHSTAR_AUTHENTICATED_NODE_PATH NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY
-export NORTHSTAR_CANONICAL_ROOT
+export NORTHSTAR_AUTHENTICATED_NODE_SHA256 NORTHSTAR_CANONICAL_ROOT
 launcher="$CANONICAL_ROOT/scripts/production-launcher.js"
 child="$CANONICAL_ROOT/src/productionChild.js"
 server="$CANONICAL_ROOT/src/server.js"
 for resource in "$launcher" "$child" "$server" \
   "$CANONICAL_ROOT/package.json" "$CANONICAL_ROOT/package-lock.json" \
-  "$CANONICAL_ROOT/nixpacks.toml"
+  "$CANONICAL_ROOT/Dockerfile" "$CANONICAL_ROOT/railway.toml" \
+  "$CANONICAL_ROOT/scripts/node-v22.23.3-runtime-manifest.txt"
 do
   if [ ! -f "$resource" ] || [ -L "$resource" ] ||
      [ "$(/usr/bin/readlink -f -- "$resource")" != "$resource" ] ||

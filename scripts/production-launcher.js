@@ -13,7 +13,8 @@ const authenticatedSha256 = process.env.NORTHSTAR_AUTHENTICATED_NODE_SHA256;
 if (process.version !== EXPECTED_NODE || process.execArgv.length !== 0 ||
     process.argv.length !== 2 ||
     typeof authenticatedPath !== 'string' || authenticatedPath.length === 0 ||
-    !['nix-store-22.23.3-v1', 'official-win-x64-22.23.3-v1'].includes(runtimeAuthority)) {
+    !['official-docker-node-22.23.3-v1',
+      'official-win-x64-22.23.3-v1'].includes(runtimeAuthority)) {
   throw new Error(`${FAILURE} Expected an authenticated ${EXPECTED_NODE} executable.`);
 }
 
@@ -23,7 +24,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const PROOF_BYTES = 32;
-const canonicalRoot = runtimeAuthority === 'nix-store-22.23.3-v1' ? '/app' :
+const canonicalRoot = runtimeAuthority === 'official-docker-node-22.23.3-v1' ? '/app' :
   path.resolve(__dirname, '..');
 const expectedLauncher = path.join(canonicalRoot, 'scripts', 'production-launcher.js');
 const actualLauncher = fs.realpathSync.native(__filename);
@@ -38,19 +39,26 @@ if (process.argv[1] !== expectedLauncher || actualLauncher !== expectedLauncher 
   throw new Error(`${FAILURE} Authenticated executable identity mismatch.`);
 }
 
-if (runtimeAuthority === 'nix-store-22.23.3-v1') {
-  const storePattern = /^\/nix\/store\/[a-z0-9]{32}-nodejs-22\.23\.3\/bin\/node$/;
-  const storeDirectory = path.dirname(path.dirname(expectedRealpath));
+if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
+  const expectedDigests = Object.freeze({
+    x64: 'fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48',
+    arm64: 'd09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d',
+  });
+  const nodeRoot = path.dirname(path.dirname(expectedRealpath));
   const binDirectory = path.dirname(expectedRealpath);
-  const storeStat = fs.statSync(storeDirectory);
+  const rootStat = fs.statSync(nodeRoot);
   const binStat = fs.statSync(binDirectory);
-  if (process.platform !== 'linux' || process.arch !== 'x64' ||
-      !storePattern.test(expectedRealpath) || executableStat.uid !== 0 ||
-      storeStat.uid !== 0 || binStat.uid !== 0 ||
-      (executableStat.mode & 0o222) !== 0 || (storeStat.mode & 0o222) !== 0 ||
-      (binStat.mode & 0o222) !== 0 || fs.lstatSync(storeDirectory).isSymbolicLink() ||
-      fs.lstatSync(binDirectory).isSymbolicLink() || authenticatedSha256) {
-    throw new Error(`${FAILURE} Invalid immutable Nix-store executable.`);
+  const actualSha256 = crypto.createHash('sha256')
+    .update(fs.readFileSync(executableRealpath)).digest('hex');
+  if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch) ||
+      expectedRealpath !== '/usr/local/bin/node' || executableStat.uid !== 0 ||
+      rootStat.uid !== 0 || binStat.uid !== 0 ||
+      authenticatedSha256 !== expectedDigests[process.arch] ||
+      actualSha256 !== authenticatedSha256 ||
+      (executableStat.mode & 0o222) !== 0 || (rootStat.mode & 0o022) !== 0 ||
+      (binStat.mode & 0o022) !== 0 || fs.lstatSync(nodeRoot).isSymbolicLink() ||
+      fs.lstatSync(binDirectory).isSymbolicLink()) {
+    throw new Error(`${FAILURE} Invalid immutable Docker executable.`);
   }
 } else {
   if (process.platform !== 'win32' || process.arch !== 'x64' ||

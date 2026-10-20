@@ -10,6 +10,10 @@ const ROOT = path.resolve(__dirname, '../..');
 const launcher = path.join(ROOT, 'scripts/production-launcher.js');
 const productionStart = path.join(ROOT, 'scripts/start-production.sh');
 const productionPrepare = path.join(ROOT, 'scripts/prepare-production-node.sh');
+const runtimeManifestPath = path.join(ROOT, 'scripts/node-v22.23.3-runtime-manifest.txt');
+const dockerfilePath = path.join(ROOT, 'Dockerfile');
+const railwayConfigPath = path.join(ROOT, 'railway.toml');
+const dockerIgnorePath = path.join(ROOT, '.dockerignore');
 const localStart = path.join(ROOT, 'scripts/start-verified-local.ps1');
 const systemPowerShell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 const childEntry = path.join(ROOT, 'src/productionChild.js');
@@ -18,6 +22,83 @@ const LOCAL_NODE_SHA256 = '9c9245166b4a8e182e0b797da9c20136117ff24368eaff1fec834
 const node22 = process.env.M27_NODE22_EXECUTABLE ||
   (process.version === 'v22.23.3' ? process.execPath : null);
 const canonicalRuntime = node22 && fs.existsSync(node22) ? describe : describe.skip;
+const PINNED_DOCKER_INDEX =
+  'c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392';
+const PINNED_NODE_SHA256 = Object.freeze({
+  amd64: 'fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48',
+  arm64: 'd09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d',
+});
+
+function exactRuntimePlan(overrides = {}) {
+  const inputs = {
+    dockerfile: fs.readFileSync(dockerfilePath, 'utf8'),
+    railway: fs.readFileSync(railwayConfigPath, 'utf8'),
+    ignore: fs.readFileSync(dockerIgnorePath, 'utf8'),
+    manifest: fs.readFileSync(runtimeManifestPath, 'utf8'),
+    prepare: fs.readFileSync(productionPrepare, 'utf8'),
+    start: fs.readFileSync(productionStart, 'utf8'),
+    ...overrides,
+  };
+  const expectedRailway = '[build]\nbuilder = "DOCKERFILE"\n' +
+    'dockerfilePath = "Dockerfile"\n\n[deploy]\n' +
+    'startCommand = "/bin/sh /app/scripts/start-production.sh"\n';
+  if (inputs.railway !== expectedRailway || /NIXPACKS|RAILPACK/.test(inputs.railway)) {
+    throw new Error('Unexpected Railway builder plan.');
+  }
+  const manifestLines = inputs.manifest.trimEnd().split('\n');
+  const expectedManifestLines = [
+    'node-version=22.23.3',
+    'npm-version=10.9.9',
+    'official-shasums-url=https://nodejs.org/dist/v22.23.3/SHASUMS256.txt',
+    'official-shasums-sha256=4fe99a2ba9d552a6f51c13ed68fb11104cfa5df601aec616be689253a8139e7a',
+    'linux-x64-archive-sha256=df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de',
+    `linux-x64-node-sha256=${PINNED_NODE_SHA256.amd64}`,
+    'linux-arm64-archive-sha256=a44aeb94849a299b22df10b9e622ec2f605c2183501bc40590705131de7c740f',
+    `linux-arm64-node-sha256=${PINNED_NODE_SHA256.arm64}`,
+    `docker-index-sha256=${PINNED_DOCKER_INDEX}`,
+    'docker-linux-amd64-manifest-sha256=efd0ab5780c2d9ab1f0f869571a00d5edb17793bff4cce4a2792e3eb0ffc7562',
+    'docker-linux-arm64-manifest-sha256=b20fe038d9592822dd534600a1ddf467e985178aa3fed60ec441a056c2cc45bd',
+    'docker-source-revision=81f419144a1251854c6d9afb09eaa39928e724e8',
+  ];
+  if (JSON.stringify(manifestLines) !== JSON.stringify(expectedManifestLines)) {
+    throw new Error('Unexpected Node runtime provenance manifest.');
+  }
+  const expectedFrom = `FROM node:22.23.3-bookworm-slim@sha256:${PINNED_DOCKER_INDEX} AS pinned-node`;
+  if (inputs.dockerfile.split('\n').filter(line => line === expectedFrom).length !== 1 ||
+      inputs.dockerfile.split('\n').filter(line => /^FROM /.test(line) &&
+        !/^FROM pinned-node /.test(line)).length !== 1 ||
+      /\b(?:curl|wget|tar|NIXPACKS_NODE_VERSION)\b/.test(inputs.dockerfile) ||
+      !inputs.dockerfile.includes('ARG TARGETARCH') ||
+      !inputs.dockerfile.includes(`amd64) expected='${PINNED_NODE_SHA256.amd64}'`) ||
+      !inputs.dockerfile.includes(`arm64) expected='${PINNED_NODE_SHA256.arm64}'`) ||
+      !inputs.dockerfile.includes(
+        "*) echo 'Unsupported NorthStar production architecture.' >&2; exit 78 ;;") ||
+      !inputs.dockerfile.includes('| /usr/bin/sha256sum -c -') ||
+      !inputs.dockerfile.includes('ci --omit=dev --ignore-scripts --no-audit --no-fund') ||
+      !inputs.dockerfile.includes('NORTHSTAR_TARGETARCH="$TARGETARCH"') ||
+      /(?:^|[ ;])(?:node|npm|sha256sum)(?:[ ;]|$)/m.test(inputs.dockerfile)) {
+    throw new Error('Unexpected Docker runtime plan.');
+  }
+  if (!inputs.ignore.includes('.northstar-runtime/*') ||
+      !inputs.ignore.includes('!.northstar-runtime/.gitignore') ||
+      !inputs.ignore.includes('node_modules/**')) {
+    throw new Error('Workspace runtime artifacts are not excluded.');
+  }
+  for (const [arch, digest] of Object.entries(PINNED_NODE_SHA256)) {
+    if (!inputs.prepare.includes(digest) || !inputs.start.includes(digest)) {
+      throw new Error(`Missing ${arch} executable binding.`);
+    }
+  }
+  if (!inputs.prepare.includes('/usr/bin/dpkg --print-architecture') ||
+      !inputs.prepare.includes('/usr/bin/sha256sum -c -') ||
+      !inputs.prepare.includes('/bin/chmod 0555 "$NODE_PATH"') ||
+      !inputs.start.includes('[ "$node_path" != \'/usr/local/bin/node\' ]') ||
+      !inputs.start.includes("NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY='official-docker-node-22.23.3-v1'") ||
+      /\/nix\/store|command -v|\bwhich\b/.test(inputs.prepare + inputs.start)) {
+    throw new Error('Unexpected runtime verification boundary.');
+  }
+  return true;
+}
 
 function authenticatedRuntimeEnvironment() {
   const stat = fs.statSync(node22);
@@ -71,7 +152,7 @@ function spawnChildWithProof({ digest, payload, environment = {} }) {
 }
 
 describe('Mission 27 Part 14B production launcher contract', () => {
-  test('source pins Node 22.23.3 and the deployed Nixpacks start command', () => {
+  test('source pins Node 22.23.3 and the deployed Docker start command', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
     expect(pkg.engines).toEqual({ node: '22.23.3' });
@@ -82,15 +163,14 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       '-NoProfile -ExecutionPolicy Bypass -File scripts/start-verified-local.ps1');
     expect(pkg.scripts.dev).toBe('node --watch src/developmentChild.js');
     expect(fs.readFileSync(path.join(ROOT, '.node-version'), 'utf8')).toBe('22.23.3\n');
-    expect(fs.readFileSync(path.join(ROOT, 'nixpacks.toml'), 'utf8')).toBe(
-      '[variables]\nNIXPACKS_NODE_VERSION = "22.23.3"\n\n' +
-      '[phases.build]\ncmds = ["/bin/sh /app/scripts/prepare-production-node.sh"]\n\n' +
-      '[start]\ncmd = "/bin/sh /app/scripts/start-production.sh"\n');
+    expect(fs.existsSync(path.join(ROOT, 'nixpacks.toml'))).toBe(false);
+    expect(exactRuntimePlan()).toBe(true);
     const startSource = fs.readFileSync(productionStart, 'utf8');
     const prepareSource = fs.readFileSync(productionPrepare, 'utf8');
-    expect(startSource).toContain('/nix/store/*-nodejs-22.23.3/bin/node');
+    expect(startSource).toContain('[ "$node_path" != \'/usr/local/bin/node\' ]');
     expect(startSource).toContain("CANONICAL_ROOT='/app'");
-    expect(startSource).toContain('manifest="$CANONICAL_ROOT/.northstar-runtime/node-path"');
+    expect(startSource).toContain('runtime_directory="$CANONICAL_ROOT/.northstar-runtime"');
+    expect(startSource).toContain('manifest="$runtime_directory/node-path"');
     expect(startSource).toContain('launcher="$CANONICAL_ROOT/scripts/production-launcher.js"');
     expect(startSource).toContain('exec "$node_path" "$launcher"');
     expect(startSource).toContain('/usr/bin/readlink -f -- "$node_path"');
@@ -98,9 +178,44 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(startSource).toContain('/usr/bin/od -An -tx1 -N20 -- "$node_path"');
     expect(startSource).not.toMatch(/(?:exec|command -v|which)\s+node(?:\s|$)/);
     expect(prepareSource).toContain("CANONICAL_ROOT='/app'");
-    expect(prepareSource).toContain('manifest="$runtime_directory/node-path"');
-    expect(prepareSource).toContain("printf '%s\\n' \"$node_path\" > \"$manifest\"");
+    expect(prepareSource).toContain('"$runtime_directory/node-path"');
+    expect(prepareSource).toContain(
+      "printf '%s\\n' \"$NODE_PATH\" > \"$runtime_directory/node-path\"");
     expect(fs.readFileSync(localStart, 'utf8')).toContain(LOCAL_NODE_SHA256);
+  });
+
+  test.each([
+    ['Nixpacks 22.14 fallback', input => ({ railway: input.railway +
+      '\nNIXPACKS_NODE_VERSION = "22.14.0"\n' })],
+    ['mutable Docker tag', input => ({ dockerfile: input.dockerfile.replace(
+      `@sha256:${PINNED_DOCKER_INDEX}`, '') })],
+    ['wrong image digest', input => ({ dockerfile: input.dockerfile.replace(
+      PINNED_DOCKER_INDEX, '0'.repeat(64)) })],
+    ['wrong executable digest', input => ({ dockerfile: input.dockerfile.replace(
+      PINNED_NODE_SHA256.amd64, '1'.repeat(64)) })],
+    ['unsupported architecture fallback', input => ({ dockerfile: input.dockerfile.replace(
+      "*) echo 'Unsupported NorthStar production architecture.' >&2; exit 78 ;;",
+      "*) expected='" + PINNED_NODE_SHA256.amd64 + "' ;;") })],
+    ['in-build network download', input => ({ dockerfile: input.dockerfile +
+      '\nRUN curl -L https://mirror.invalid/node.tar.xz | tar -xJ\n' })],
+    ['PATH-selected digest tool', input => ({ dockerfile: input.dockerfile.replace(
+      '/usr/bin/sha256sum -c -', 'sha256sum -c -') })],
+    ['workspace runtime override', input => ({ ignore: input.ignore.replace(
+      '.northstar-runtime/*\n', '') })],
+    ['multiple external base images', input => ({ dockerfile: input.dockerfile +
+      '\nFROM node:22.14.0\n' })],
+    ['writable runtime contract', input => ({ prepare: input.prepare.replace(
+      '/bin/chmod 0555 "$NODE_PATH"', '/bin/chmod 0777 "$NODE_PATH"') })],
+  ])('offline production plan rejects %s', (_name, mutate) => {
+    const input = {
+      dockerfile: fs.readFileSync(dockerfilePath, 'utf8'),
+      railway: fs.readFileSync(railwayConfigPath, 'utf8'),
+      ignore: fs.readFileSync(dockerIgnorePath, 'utf8'),
+      manifest: fs.readFileSync(runtimeManifestPath, 'utf8'),
+      prepare: fs.readFileSync(productionPrepare, 'utf8'),
+      start: fs.readFileSync(productionStart, 'utf8'),
+    };
+    expect(() => exactRuntimePlan(mutate(input))).toThrow();
   });
 
   test.each([launcher, childEntry])('%s is executable-only and exposes no import capability', entry => {
@@ -203,8 +318,10 @@ process.stdout.write(JSON.stringify({loaded,error,has,get,detector,provider,quer
       const copied = path.join(temporary, 'copied-start-production.sh');
       const linked = path.join(temporary, 'linked-start-production.sh');
       fs.copyFileSync(productionStart, copied);
-      fs.linkSync(productionStart, linked);
-      const candidates = [productionStart, copied, linked];
+      const candidates = [productionStart, copied];
+      try {
+        fs.linkSync(productionStart, linked); candidates.push(linked);
+      } catch (_) { /* The managed sandbox may deny hard links. */ }
       try {
         const symlink = path.join(temporary, 'symlink-start-production.sh');
         fs.symlinkSync(productionStart, symlink, 'file'); candidates.push(symlink);

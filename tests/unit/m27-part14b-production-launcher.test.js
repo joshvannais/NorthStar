@@ -28,6 +28,11 @@ const PINNED_NODE_SHA256 = Object.freeze({
   amd64: 'fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48',
   arm64: 'd09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d',
 });
+const PRIVILEGED_BASE_PATHS = Object.freeze([
+  '/usr/bin/chfn', '/usr/bin/chsh', '/usr/bin/gpasswd', '/usr/bin/mount',
+  '/usr/bin/newgrp', '/usr/bin/passwd', '/usr/bin/su', '/usr/bin/umount',
+  '/usr/bin/chage', '/usr/bin/expiry', '/usr/sbin/unix_chkpwd',
+]);
 
 function exactRuntimePlan(overrides = {}) {
   const inputs = {
@@ -41,7 +46,8 @@ function exactRuntimePlan(overrides = {}) {
   };
   const expectedRailway = '[build]\nbuilder = "DOCKERFILE"\n' +
     'dockerfilePath = "Dockerfile"\n\n[deploy]\n' +
-    'startCommand = "/bin/sh /app/scripts/start-production.sh"\n';
+    'startCommand = "/usr/bin/setpriv --no-new-privs -- ' +
+    '/bin/sh /app/scripts/start-production.sh"\n';
   if (inputs.railway !== expectedRailway || /NIXPACKS|RAILPACK/.test(inputs.railway)) {
     throw new Error('Unexpected Railway builder plan.');
   }
@@ -87,10 +93,30 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.dockerfile.includes('/bin/mkdir -p /var/lib/northstar/data ' +
         '/var/lib/northstar/tmp /var/lib/northstar/home') ||
       !inputs.dockerfile.includes('TMPDIR=/var/lib/northstar/tmp') ||
+      !inputs.dockerfile.includes(
+        'libcap2=1:2.66-4+deb12u3+b1 libcap2-bin=1:2.66-4+deb12u3+b1') ||
+      !inputs.dockerfile.includes(
+        "/usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' +") ||
+      !inputs.dockerfile.includes('/sbin/getcap -r / 2>/dev/null') ||
+      !inputs.dockerfile.includes('/sbin/setcap -r "$capability_path"') ||
+      !inputs.dockerfile.includes('/bin/rm -f "$capability_inventory" /sbin/setcap') ||
+      !inputs.dockerfile.includes("'northstar-privilege-inventory-v1'") ||
+      !PRIVILEGED_BASE_PATHS.every(value => inputs.dockerfile.includes(value)) ||
       !inputs.dockerfile.includes('USER 1000:1000') ||
+      !inputs.dockerfile.includes(
+        'CMD ["/usr/bin/setpriv", "--no-new-privs", "--", ' +
+        '"/bin/sh", "/app/scripts/start-production.sh"]') ||
       /USER root/.test(inputs.dockerfile) ||
       /(?:^|[ ;])(?:node|npm|sha256sum)(?:[ ;]|$)/m.test(inputs.dockerfile)) {
     throw new Error('Unexpected Docker runtime plan.');
+  }
+  const privilegeScan = inputs.dockerfile.indexOf(
+    'test -z "$(/usr/bin/find / -xdev -type f -perm /6000 -print -quit)"');
+  const runtimeUser = inputs.dockerfile.indexOf('USER 1000:1000');
+  if (privilegeScan < 0 || privilegeScan <= inputs.dockerfile.lastIndexOf('COPY ') ||
+      runtimeUser <= privilegeScan ||
+      /\n(?:ADD|COPY|RUN) /.test(inputs.dockerfile.slice(privilegeScan, runtimeUser))) {
+    throw new Error('Privilege scan is not the final image mutation.');
   }
   if (!inputs.ignore.includes('.northstar-runtime/*') ||
       !inputs.ignore.includes('!.northstar-runtime/.gitignore') ||
@@ -112,6 +138,9 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes("[ \"$2\" = 0000000000000000 ]") ||
       !inputs.start.includes("[ \"${NORTHSTAR_DATA_DIR-}\" != '/var/lib/northstar/data' ]") ||
       !inputs.start.includes("! -uid 0 -o ! -gid 0 -o -perm /022") ||
+      !inputs.start.includes('[ "$2" = 1 ]') ||
+      !inputs.start.includes('/sbin/getcap -r /usr "$CANONICAL_ROOT"') ||
+      !inputs.start.includes('/usr/bin/sha256sum -c "$privilege_sha_manifest"') ||
       !inputs.start.includes('PATH=$node_bin') || inputs.start.includes('PATH=/tmp') ||
       /\/nix\/store|command -v|\bwhich\b/.test(inputs.prepare + inputs.start)) {
     throw new Error('Unexpected runtime verification boundary.');
@@ -119,10 +148,11 @@ function exactRuntimePlan(overrides = {}) {
   return true;
 }
 
-function createRootBuiltRuntimeSimulation() {
+function createRootBuiltRuntimeSimulation(architecture = 'amd64') {
   const entries = new Map();
-  function add(pathname, type, mode, uid = 0, gid = 0, digest = pathname) {
-    entries.set(pathname, { type, mode, uid, gid, digest });
+  function add(pathname, type, mode, uid = 0, gid = 0, digest = pathname,
+    capabilities = []) {
+    entries.set(pathname, { type, mode, uid, gid, digest, capabilities });
   }
   for (const pathname of ['/app', '/app/scripts', '/app/src', '/app/node_modules',
     '/app/node_modules/express', '/app/.northstar-runtime', '/usr/local',
@@ -135,14 +165,58 @@ function createRootBuiltRuntimeSimulation() {
     '/app/Dockerfile', '/app/railway.toml',
     '/app/scripts/node-v22.23.3-runtime-manifest.txt',
     '/app/.northstar-runtime/node-path', '/app/.northstar-runtime/node-sha256',
-    '/app/.northstar-runtime/node-arch', '/app/node_modules/express/index.js']) {
+    '/app/.northstar-runtime/node-arch', '/app/.northstar-runtime/privilege-inventory',
+    '/app/.northstar-runtime/privilege-inventory.sha256', '/app/node_modules/express/index.js',
+    '/usr/bin/setpriv', '/sbin/getcap']) {
     add(pathname, 'file', pathname === '/usr/local/bin/node' ? 0o555 : 0o444);
   }
+  for (const pathname of PRIVILEGED_BASE_PATHS) {
+    add(pathname, 'file', pathname.includes('chage') || pathname.includes('expiry') ||
+      pathname.includes('unix_chkpwd') ? 0o2755 : 0o4755, 0, 0,
+    `${architecture}:${pathname}`);
+  }
+  add('/app/node_modules/injected-setuid', 'file', 0o4755);
+  add('/usr/local/bin/injected-setgid', 'file', 0o2755);
+  add('/var/lib/northstar/tmp/injected-filecap', 'file', 0o700, 1000, 1000,
+    'cap-injected', ['cap_dac_override=ep']);
+  const hardlink = { type: 'file', mode: 0o4755, uid: 0, gid: 0,
+    digest: 'hardlink-setuid', capabilities: [] };
+  entries.set('/app/node_modules/injected-hardlink', hardlink);
+  entries.set('/usr/bin/injected-hardlink', hardlink);
   for (const pathname of ['/var/lib/northstar', '/var/lib/northstar/data',
     '/var/lib/northstar/tmp', '/var/lib/northstar/home']) {
     add(pathname, 'directory', 0o700, 1000, 1000);
   }
   return entries;
+}
+
+function hardenRootBuiltRuntime(entries) {
+  for (const pathname of PRIVILEGED_BASE_PATHS) entries.delete(pathname);
+  for (const entry of new Set(entries.values())) {
+    if (entry.type !== 'file') continue;
+    entry.mode &= ~0o6000;
+    entry.capabilities = [];
+  }
+  return entries;
+}
+
+function privilegeInventory(entries) {
+  const setid = [], filecaps = [];
+  for (const [pathname, entry] of entries) {
+    if (entry.type !== 'file') continue;
+    if (entry.mode & 0o6000) setid.push(pathname);
+    if (entry.capabilities.length) filecaps.push(pathname);
+  }
+  return { setid: setid.sort(), filecaps: filecaps.sort() };
+}
+
+function runtimePrivilegeBoundaryAccepts(entries) {
+  const protectedRoots = ['/usr/', '/app/', '/var/lib/northstar/', '/tmp/', '/home/'];
+  for (const [pathname, entry] of entries) {
+    if (entry.type !== 'file' || !protectedRoots.some(root => pathname.startsWith(root))) continue;
+    if ((entry.mode & 0o6000) !== 0 || entry.capabilities.length !== 0) return false;
+  }
+  return true;
 }
 
 function permissionBits(entry, actor) {
@@ -222,7 +296,8 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
     expect(pkg.engines).toEqual({ node: '22.23.3' });
     expect(lock.packages[''].engines).toEqual({ node: '22.23.3' });
-    expect(pkg.scripts.start).toBe('/bin/sh /app/scripts/start-production.sh');
+    expect(pkg.scripts.start).toBe(
+      '/usr/bin/setpriv --no-new-privs -- /bin/sh /app/scripts/start-production.sh');
     expect(pkg.scripts['start:verified-local']).toBe(
       'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe ' +
       '-NoProfile -ExecutionPolicy Bypass -File scripts/start-verified-local.ps1');
@@ -238,6 +313,8 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(startSource).toContain('manifest="$runtime_directory/node-path"');
     expect(startSource).toContain('launcher="$CANONICAL_ROOT/scripts/production-launcher.js"');
     expect(startSource).toContain('exec "$node_path" "$launcher"');
+    expect(startSource).toContain('[ "$2" = 1 ]');
+    expect(startSource).toContain('/sbin/getcap -r /usr "$CANONICAL_ROOT"');
     expect(startSource).toContain('/usr/bin/readlink -f -- "$node_path"');
     expect(startSource).toContain('/usr/bin/stat -c \'%u:%g:%a\' -- "$node_path"');
     expect(startSource).toContain('/usr/bin/od -An -tx1 -N20 -- "$node_path"');
@@ -284,6 +361,17 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       'check_runtime_identity || fail', ': # identity gate removed') })],
     ['PATH-selected application runtime', input => ({ start: input.start.replace(
       'PATH=$node_bin', 'PATH=/tmp:$node_bin') })],
+    ['missing setid clearing', input => ({ dockerfile: input.dockerfile.replace(
+      "/usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' +",
+      ': # setid clearing removed') })],
+    ['missing file capability clearing', input => ({ dockerfile: input.dockerfile.replace(
+      '/sbin/setcap -r "$capability_path"', ': # capability clearing removed') })],
+    ['copy after privilege scan', input => ({ dockerfile: input.dockerfile.replace(
+      'USER 1000:1000', 'COPY package.json /usr/bin/late-copy\nUSER 1000:1000') })],
+    ['runtime without no-new-privileges', input => ({ railway: input.railway.replace(
+      '/usr/bin/setpriv --no-new-privs -- ', '') })],
+    ['startup without runtime privilege scan', input => ({ start: input.start.replace(
+      '/sbin/getcap -r /usr "$CANONICAL_ROOT"', ': # getcap scan removed') })],
   ])('offline production plan rejects %s', (_name, mutate) => {
     const input = {
       dockerfile: fs.readFileSync(dockerfilePath, 'utf8'),
@@ -296,8 +384,62 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(() => exactRuntimePlan(mutate(input))).toThrow();
   });
 
+  test.each(['amd64', 'arm64'])(
+    'exact %s OCI privilege inventory is empty after the final hardening mutation', architecture => {
+      const entries = createRootBuiltRuntimeSimulation(architecture);
+      const before = privilegeInventory(entries);
+      expect(before.setid).toEqual(expect.arrayContaining(PRIVILEGED_BASE_PATHS));
+      expect(before.filecaps).toEqual([
+        '/var/lib/northstar/tmp/injected-filecap',
+      ]);
+      hardenRootBuiltRuntime(entries);
+      expect(privilegeInventory(entries)).toEqual({ setid: [], filecaps: [] });
+      expect(runtimePrivilegeBoundaryAccepts(entries)).toBe(true);
+      for (const pathname of PRIVILEGED_BASE_PATHS) expect(entries.has(pathname)).toBe(false);
+    });
+
+  test.each([
+    ['/usr/bin injected setuid', '/usr/bin/injected-setuid', 0o4755, []],
+    ['/usr/sbin injected setgid', '/usr/sbin/injected-setgid', 0o2755, []],
+    ['/app injected setuid', '/app/injected-setuid', 0o4755, []],
+    ['/usr/local injected setgid', '/usr/local/injected-setgid', 0o2755, []],
+    ['node_modules injected setuid', '/app/node_modules/injected-late', 0o4755, []],
+    ['writable directory injected setgid', '/var/lib/northstar/tmp/injected-late', 0o2755, []],
+    ['Node file capability', '/usr/local/bin/node', 0o555, ['cap_setuid=ep']],
+    ['launcher file capability', '/app/scripts/production-launcher.js', 0o444,
+      ['cap_dac_override=ep']],
+    ['interpreter file capability', '/usr/bin/dash', 0o555, ['cap_setgid=ep']],
+  ])('runtime privilege boundary rejects %s', (_name, pathname, mode, capabilities) => {
+    const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation());
+    const current = entries.get(pathname);
+    entries.set(pathname, current ? { ...current, mode, capabilities: [...capabilities] } : {
+      type: 'file', mode, uid: 0, gid: 0, digest: `late:${pathname}`,
+      capabilities: [...capabilities],
+    });
+    expect(runtimePrivilegeBoundaryAccepts(entries)).toBe(false);
+  });
+
+  test('hardlinks, symlinks, and late overlays cannot hide a privileged regular file', () => {
+    const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation());
+    const privileged = { type: 'file', mode: 0o4755, uid: 0, gid: 0,
+      digest: 'late-shared-inode', capabilities: [] };
+    entries.set('/usr/bin/late-hardlink', privileged);
+    entries.set('/app/node_modules/late-hardlink', privileged);
+    entries.set('/tmp/late-link', { type: 'symlink', mode: 0o777, uid: 1000, gid: 1000,
+      digest: '/usr/bin/late-target', capabilities: [] });
+    entries.set('/usr/bin/late-target', { ...privileged, digest: 'late-target-inode' });
+    entries.set('/app/overlay-copy', { type: 'file', mode: 0o755, uid: 0, gid: 0,
+      digest: 'late-overlay', capabilities: ['cap_setfcap=ep'] });
+    expect(runtimePrivilegeBoundaryAccepts(entries)).toBe(false);
+    expect(privilegeInventory(entries)).toEqual({
+      setid: ['/app/node_modules/late-hardlink', '/usr/bin/late-hardlink',
+        '/usr/bin/late-target'],
+      filecaps: ['/app/overlay-copy'],
+    });
+  });
+
   test('root-built runtime denies same-container persistence to uid 1000', () => {
-    const entries = createRootBuiltRuntimeSimulation();
+    const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation());
     const actor = { uid: 1000, gid: 1000, groups: [1000], capabilities: [] };
     const authorityEntries = [...entries.entries()]
       .filter(([, entry]) => entry.uid === 0).map(([pathname]) => pathname);

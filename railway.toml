@@ -3,4 +3,4 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "/bin/sh /app/scripts/start-production.sh"
+startCommand = "/usr/bin/setpriv --no-new-privs -- /bin/sh /app/scripts/start-production.sh"

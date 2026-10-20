@@ -28,6 +28,10 @@ RUN case "$TARGETARCH" in \
 FROM pinned-node AS runtime
 ARG TARGETARCH
 WORKDIR /app
+RUN /usr/bin/apt-get update \
+    && /usr/bin/apt-get install -y --no-install-recommends \
+         libcap2=1:2.66-4+deb12u3+b1 libcap2-bin=1:2.66-4+deb12u3+b1 \
+    && /bin/rm -rf /var/lib/apt/lists/*
 COPY --chown=0:0 . /app
 COPY --from=dependencies --chown=0:0 /app/node_modules /app/node_modules
 RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-node.sh \
@@ -44,7 +48,31 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
     && /usr/bin/find /app -xdev -type f -exec /bin/chmod 0444 '{}' + \
     && /usr/bin/find /usr/local -xdev -type d -exec /bin/chmod go-w '{}' + \
     && /usr/bin/find /usr/local -xdev -type f -exec /bin/chmod go-w '{}' + \
-    && /bin/chmod 0555 /usr/local/bin/node
+    && /bin/chmod 0555 /usr/local/bin/node \
+    && /bin/rm -f /usr/bin/chfn /usr/bin/chsh /usr/bin/gpasswd /usr/bin/mount \
+         /usr/bin/newgrp /usr/bin/passwd /usr/bin/su /usr/bin/umount \
+         /usr/bin/chage /usr/bin/expiry /usr/sbin/unix_chkpwd \
+    && /usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' + \
+    && capability_inventory=/tmp/northstar-file-capabilities \
+    && /sbin/getcap -r / 2>/dev/null > "$capability_inventory" \
+    && while IFS= read -r capability_entry; do \
+         test -z "$capability_entry" && continue; \
+         capability_path=${capability_entry% *}; \
+         test "$capability_path" != "$capability_entry" || exit 78; \
+         /sbin/setcap -r "$capability_path"; \
+       done < "$capability_inventory" \
+    && /bin/rm -f "$capability_inventory" /sbin/setcap \
+    && test -z "$(/usr/bin/find / -xdev -type f -perm /6000 -print -quit)" \
+    && test -z "$(/sbin/getcap -r / 2>/dev/null)" \
+    && /usr/bin/printf '%s\n' 'northstar-privilege-inventory-v1' \
+         'setid=none' 'filecap=none' 'runtime_uid=1000' 'runtime_gid=1000' \
+         > /app/.northstar-runtime/privilege-inventory \
+    && /usr/bin/sha256sum /app/.northstar-runtime/privilege-inventory \
+         > /app/.northstar-runtime/privilege-inventory.sha256 \
+    && /bin/chown 0:0 /app/.northstar-runtime/privilege-inventory \
+         /app/.northstar-runtime/privilege-inventory.sha256 \
+    && /bin/chmod 0444 /app/.northstar-runtime/privilege-inventory \
+         /app/.northstar-runtime/privilege-inventory.sha256
 
 ENV HOME=/var/lib/northstar/home \
     NORTHSTAR_DATA_DIR=/var/lib/northstar/data \
@@ -53,4 +81,4 @@ ENV HOME=/var/lib/northstar/home \
     TEMP=/var/lib/northstar/tmp
 
 USER 1000:1000
-CMD ["/bin/sh", "/app/scripts/start-production.sh"]
+CMD ["/usr/bin/setpriv", "--no-new-privs", "--", "/bin/sh", "/app/scripts/start-production.sh"]

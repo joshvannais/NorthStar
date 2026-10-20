@@ -21,6 +21,7 @@ check_runtime_identity() {
   saw_cap_prm=0
   saw_cap_eff=0
   saw_cap_amb=0
+  saw_no_new_privs=0
   while IFS= read -r status_line; do
     case "$status_line" in
       Uid:*) set -- $status_line; [ "$#" -eq 5 ] &&
@@ -39,10 +40,12 @@ check_runtime_identity() {
         saw_cap_eff=1 ;;
       CapAmb:*) set -- $status_line; [ "$2" = 0000000000000000 ] || return 1;
         saw_cap_amb=1 ;;
+      NoNewPrivs:*) set -- $status_line; [ "$2" = 1 ] || return 1;
+        saw_no_new_privs=1 ;;
     esac
   done < /proc/self/status
-  [ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb" =
-    1111111 ]
+  [ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" =
+    11111111 ]
 }
 
 check_runtime_identity || fail
@@ -107,9 +110,13 @@ runtime_directory="$CANONICAL_ROOT/.northstar-runtime"
 manifest="$runtime_directory/node-path"
 sha_manifest="$runtime_directory/node-sha256"
 arch_manifest="$runtime_directory/node-arch"
+privilege_manifest="$runtime_directory/privilege-inventory"
+privilege_sha_manifest="$runtime_directory/privilege-inventory.sha256"
 if [ ! -f "$manifest" ] || [ -L "$manifest" ] ||
    [ ! -f "$sha_manifest" ] || [ -L "$sha_manifest" ] ||
-   [ ! -f "$arch_manifest" ] || [ -L "$arch_manifest" ]; then
+   [ ! -f "$arch_manifest" ] || [ -L "$arch_manifest" ] ||
+   [ ! -f "$privilege_manifest" ] || [ -L "$privilege_manifest" ] ||
+   [ ! -f "$privilege_sha_manifest" ] || [ -L "$privilege_sha_manifest" ]; then
   echo "$FAILURE Missing authenticated Docker runtime manifest." >&2
   exit 78
 fi
@@ -117,10 +124,14 @@ if [ "$(/usr/bin/readlink -f -- "$runtime_directory")" != "$runtime_directory" ]
    [ "$(/usr/bin/readlink -f -- "$manifest")" != "$manifest" ] ||
    [ "$(/usr/bin/readlink -f -- "$sha_manifest")" != "$sha_manifest" ] ||
    [ "$(/usr/bin/readlink -f -- "$arch_manifest")" != "$arch_manifest" ] ||
+   [ "$(/usr/bin/readlink -f -- "$privilege_manifest")" != "$privilege_manifest" ] ||
+   [ "$(/usr/bin/readlink -f -- "$privilege_sha_manifest")" != "$privilege_sha_manifest" ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$runtime_directory")" != '0:0:555' ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$manifest")" != '0:0:444:1' ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$sha_manifest")" != '0:0:444:1' ] ||
-   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$arch_manifest")" != '0:0:444:1' ]; then
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$arch_manifest")" != '0:0:444:1' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$privilege_manifest")" != '0:0:444:1' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$privilege_sha_manifest")" != '0:0:444:1' ]; then
   fail
 fi
 read_single_line() {
@@ -154,6 +165,28 @@ for writable_directory in "$HOME" "$NORTHSTAR_DATA_DIR" "$TMPDIR"; do
     fail
   fi
 done
+/usr/bin/sha256sum -c "$privilege_sha_manifest" >/dev/null || fail
+exec 3< "$privilege_manifest"
+for expected_privilege_line in northstar-privilege-inventory-v1 setid=none filecap=none \
+  runtime_uid=1000 runtime_gid=1000; do
+  IFS= read -r privilege_line <&3 || fail
+  [ "$privilege_line" = "$expected_privilege_line" ] || fail
+done
+if IFS= read -r privilege_line <&3; then
+  exec 3<&-
+  fail
+fi
+exec 3<&-
+
+for privilege_root in /usr "$CANONICAL_ROOT" /var/lib/northstar /tmp /home; do
+  [ -e "$privilege_root" ] || continue
+  unexpected_setid=$(/usr/bin/find "$privilege_root" -xdev -type f \
+    -perm /6000 -print -quit) || fail
+  [ -z "$unexpected_setid" ] || fail
+done
+unexpected_filecap=$(/sbin/getcap -r /usr "$CANONICAL_ROOT" /var/lib/northstar \
+  /tmp /home 2>/dev/null) || fail
+[ -z "$unexpected_filecap" ] || fail
 platform=$(/usr/bin/dpkg --print-architecture) || fail
 case "$platform:$runtime_arch:$node_sha256" in
   amd64:x64:fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48) ;;
@@ -221,7 +254,8 @@ server="$CANONICAL_ROOT/src/server.js"
 for resource in "$launcher" "$child" "$server" \
   "$CANONICAL_ROOT/package.json" "$CANONICAL_ROOT/package-lock.json" \
   "$CANONICAL_ROOT/Dockerfile" "$CANONICAL_ROOT/railway.toml" \
-  "$CANONICAL_ROOT/scripts/node-v22.23.3-runtime-manifest.txt"
+  "$CANONICAL_ROOT/scripts/node-v22.23.3-runtime-manifest.txt" \
+  "$privilege_manifest" "$privilege_sha_manifest" /usr/bin/setpriv /sbin/getcap
 do
   if [ ! -f "$resource" ] || [ -L "$resource" ] ||
      [ "$(/usr/bin/readlink -f -- "$resource")" != "$resource" ] ||

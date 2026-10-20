@@ -69,6 +69,7 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
       !/^Groups:\s+1000\s*$/m.test(status) ||
       !/^CapInh:\s+0{16}$/m.test(status) || !/^CapPrm:\s+0{16}$/m.test(status) ||
       !/^CapEff:\s+0{16}$/m.test(status) || !/^CapAmb:\s+0{16}$/m.test(status) ||
+      !/^NoNewPrivs:\s+1$/m.test(status) ||
       process.cwd() !== '/app' || process.env.PATH !== '/usr/local/bin' ||
       process.env.HOME !== '/var/lib/northstar/home' ||
       process.env.NORTHSTAR_DATA_DIR !== '/var/lib/northstar/data' ||
@@ -85,7 +86,9 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
     '/app/package-lock.json', '/app/Dockerfile', '/app/railway.toml',
     '/app/scripts/node-v22.23.3-runtime-manifest.txt',
     '/app/.northstar-runtime/node-path', '/app/.northstar-runtime/node-sha256',
-    '/app/.northstar-runtime/node-arch'];
+    '/app/.northstar-runtime/node-arch',
+    '/app/.northstar-runtime/privilege-inventory',
+    '/app/.northstar-runtime/privilege-inventory.sha256', '/usr/bin/setpriv', '/sbin/getcap'];
   for (const entry of [...protectedDirectories, ...protectedFiles]) {
     const info = fs.statSync(entry);
     if (info.uid !== 0 || info.gid !== 0 || (info.mode & 0o022) !== 0 ||

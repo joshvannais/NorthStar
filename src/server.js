@@ -1,3 +1,75 @@
+'use strict';
+
+// The production Part 14B authority is established outside this application
+// realm. scripts/start-production.sh starts the source-controlled launcher,
+// which creates a fresh Node child and passes a one-use OS pipe proof to
+// productionChild.js before this module or any application dependency loads.
+//
+// A direct require, `node src/server.js`, NODE_OPTIONS preload, or a forged
+// CommonJS cache therefore cannot become the production composition root. The
+// narrow Jest adapter is explicitly test-only and is removed from the launcher's
+// allowlisted production environment.
+const part14BParentFilename = module.parent && module.parent.filename;
+const part14BSeparator = __dirname.indexOf('\\') === -1 ? '/' : '\\';
+const part14BProductionParent = __dirname + part14BSeparator + 'productionChild.js';
+const part14BDevelopmentParent = __dirname + part14BSeparator + 'developmentChild.js';
+const part14BProductionLaunch = part14BParentFilename === part14BProductionParent &&
+  process.env.NORTHSTAR_CANONICAL_CHILD === 'verified-os-pipe-v1';
+const part14BTestAdapter = process.env.NODE_ENV === 'test' &&
+  typeof process.env.JEST_WORKER_ID === 'string' && process.env.JEST_WORKER_ID.length > 0 &&
+  process.env.NORTHSTAR_PART14B_TEST_ADAPTER === 'jest-mounted-v1';
+const part14BDevelopmentLaunch = part14BParentFilename === part14BDevelopmentParent &&
+  process.env.NODE_ENV === 'development' &&
+  process.env.NORTHSTAR_DEVELOPMENT_CHILD === 'explicit-local-v1';
+delete process.env.NORTHSTAR_CANONICAL_CHILD;
+delete process.env.NORTHSTAR_DEVELOPMENT_CHILD;
+if (!part14BProductionLaunch && !part14BTestAdapter && !part14BDevelopmentLaunch) {
+  throw new Error('The fictional demo journey application composition is unavailable.');
+}
+
+const part14BRepositoryBootstrap = require('./commandCenter/demoRepository');
+if (!part14BRepositoryBootstrap ||
+    typeof part14BRepositoryBootstrap.consumeFictionalDemoJourney !== 'function') {
+  throw new Error('The fictional demo journey application bootstrap is unavailable.');
+}
+const consumeFictionalDemoJourney =
+  part14BRepositoryBootstrap.consumeFictionalDemoJourney;
+let part14BBootstrapExtensionBlocked = false;
+let part14BBootstrapReplacementBlocked = false;
+try { part14BRepositoryBootstrap.part14BMutationProbe = true; } catch {
+  part14BBootstrapExtensionBlocked = true;
+}
+try { part14BRepositoryBootstrap.consumeFictionalDemoJourney = null; } catch {
+  part14BBootstrapReplacementBlocked = true;
+}
+if (!part14BBootstrapExtensionBlocked || !part14BBootstrapReplacementBlocked ||
+    'part14BMutationProbe' in part14BRepositoryBootstrap ||
+    part14BRepositoryBootstrap.consumeFictionalDemoJourney !== consumeFictionalDemoJourney) {
+  throw new Error('The fictional demo journey application bootstrap is unavailable.');
+}
+const deliverFictionalDemoJourney = consumeFictionalDemoJourney();
+const part14BRepositoryPath = require.resolve('./commandCenter/demoRepository');
+const finalizedDemoRepositoryModule = require.cache[part14BRepositoryPath];
+const finalizedDemoRepositoryApi = finalizedDemoRepositoryModule &&
+  finalizedDemoRepositoryModule.exports;
+let part14BApiExtensionBlocked = false;
+let part14BExportsReplacementBlocked = false;
+try { finalizedDemoRepositoryApi.part14BMutationProbe = true; } catch {
+  part14BApiExtensionBlocked = true;
+}
+try { finalizedDemoRepositoryModule.exports = part14BRepositoryBootstrap; } catch {
+  part14BExportsReplacementBlocked = true;
+}
+if (typeof deliverFictionalDemoJourney !== 'function' ||
+    !finalizedDemoRepositoryModule || !finalizedDemoRepositoryApi ||
+    !part14BApiExtensionBlocked || !part14BExportsReplacementBlocked ||
+    'part14BMutationProbe' in finalizedDemoRepositoryApi ||
+    finalizedDemoRepositoryModule.exports !== finalizedDemoRepositoryApi ||
+    'deliverFictionalDemoJourney' in finalizedDemoRepositoryApi ||
+    'consumeFictionalDemoJourney' in finalizedDemoRepositoryApi) {
+  throw new Error('The fictional demo journey application authority is unavailable.');
+}
+
 /**
  * Northstar Solutions — AI Office Manager Platform
  * 
@@ -83,6 +155,8 @@ const { providerLifecycleAcceptanceBoundary } =
   require('./middleware/providerLifecycleAcceptanceBoundary');
 const { paidTenantJourneyAcceptanceBoundary } =
   require('./middleware/paidTenantJourneyAcceptanceBoundary');
+const { fictionalDemoJourneyAcceptanceBoundary } =
+  require('./middleware/fictionalDemoJourneyAcceptanceBoundary');
 const { createCustomerFinancialProviderAcceptanceRouter } =
   require('./routes/customerFinancialProviderAcceptance');
 const { createForecastTransitionCohortsRouter } =
@@ -176,6 +250,10 @@ app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
 // body parsing so unsupported methods and framed bodies share one private,
 // non-reflective denial boundary.
 app.use(reportingPart12AcceptanceBoundary);
+// Part 14B owns one exact account-free fictional journey read. Its full
+// method/body composition is rejected before CORS, parsing, admission or any
+// demo/paid source read.
+app.use(fictionalDemoJourneyAcceptanceBoundary);
 app.use(cors(corsOptions));
 // Part 13A owns the complete method/body composition for its exact private
 // read after GET-only CORS has narrowed browser policy and before body parsing.
@@ -507,6 +585,32 @@ app.use('/api/v1/integrations', createIntegrationStatusRouter());
 app.use('/api/v1/support', createSupportRouter());
 app.use('/api/v1/field-executions', createFieldExecutionsRouter());
 app.use('/api/v1', createLegacyAuthorityRetirementRouter());
+
+// The Part 14B handler is registered by the canonical application root from
+// its private startup capture. routes/demo and demoRepository expose no
+// operation, factory, token, pool or callback that can grant this authority.
+app.get('/api/demo/customer-financial/invoice-drafts/:estimateId/part14b-acceptance',
+  async function mountedFictionalDemoJourney(req, res) {
+    res.set('Cache-Control', 'private, no-store');
+    res.vary('Cookie');
+    try {
+      await deliverFictionalDemoJourney(req, res);
+      return undefined;
+    } catch (error) {
+      if (res.headersSent || res.writableEnded || res.destroyed) return undefined;
+      const known = error && Number.isInteger(error.status) && typeof error.code === 'string';
+      const status = known ? error.status : 503;
+      return res.status(status).json({
+        success: false,
+        requestId: req.requestId || req.correlationId || 'unavailable',
+        error: {
+          code: known ? String(error.code).toLowerCase() : 'demo_command_center_unavailable',
+          message: known && status < 500 ? error.message :
+            'The isolated account-free demo is temporarily unavailable.',
+        },
+      });
+    }
+  });
 
 // Canonical /api lead adapters precede the file-era router. The compatibility
 // router authenticates only paths it owns, so public webhooks still fall through.

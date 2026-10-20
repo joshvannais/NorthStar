@@ -1,0 +1,6 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/usr/bin/setpriv --no-new-privs -- /bin/sh /app/scripts/start-production.sh"

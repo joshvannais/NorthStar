@@ -323,34 +323,29 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
   });
 
   test('ratifies complete canonical roadmap ledger and architecture and rejects contradictions', () => {
-    const docs = {
-      roadmap:fs.readFileSync(path.join(ROOT,
-        'docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md'),'utf8'),
-      ledger:fs.readFileSync(path.join(ROOT,'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md'),'utf8'),
-      architecture:fs.readFileSync(path.join(ROOT,
-        'docs/architecture/MISSION_27_PART14A_PAID_PROVIDER_DISABLED_JOURNEY.md'),'utf8'),
-    };
+    const docs = Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
+      .map(([name,entry])=>[name,fs.readFileSync(path.join(ROOT,entry.path),'utf8')]));
     expect(authority.validate(docs)).toEqual(expect.objectContaining({
-      currentSlice:'14A', currentStatus:'candidate', migrationLatest:272,
-      migration273Present:false, laterSlices:['14B','14C','14D','14E','14F','14G'],
+      currentSlice:'14B', currentStatus:'candidate', migrationLatest:272,
+      migration273Present:false, laterSlices:['14C','14D','14E','14F','14G'],
     }));
     const mutations = [
-      ['self accepted','ledger','Independent whole exact-head re-audit pending','Part 14A accepted'],
-      ['self audited','ledger','Independent whole exact-head re-audit pending','Part 14A independently audited'],
-      ['deployed','ledger','| — | No |','| `forged` | Deployed |'],
-      ['later slice','ledger','| 14B | Complete resettable isolated fictional demo journey | No','| 14B | Complete resettable isolated fictional demo journey | Complete'],
-      ['automatic SMS','architecture','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
-      ['automatic charge','architecture','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],
-      ['automatic refund','architecture','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic refund authorized.'],
-      ['accounting','architecture','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic accounting authorized.'],
-      ['external','architecture','Founder visual approval remains separate.','Founder visual approval remains separate. External effect authorized.'],
-      ['provider','architecture','Founder visual approval remains separate.','Founder visual approval remains separate. Provider sandbox accepted.'],
-      ['clearance','architecture','Founder visual approval remains separate.','Founder visual approval remains separate. Offline check cleared.'],
+      ['self accepted','ledger','Independent whole exact-head re-audit pending after five audit findings and corrections','Part 14B accepted'],
+      ['self audited','ledger','Independent whole exact-head re-audit pending after five audit findings and corrections','Part 14B independently audited'],
+      ['deployed','ledger','| Independent whole exact-head re-audit pending after five audit findings and corrections | — | No |','| Audit accepted | `forged` | Deployed |'],
+      ['later slice','ledger','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | Complete'],
+      ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
+      ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],
+      ['automatic refund','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic refund authorized.'],
+      ['accounting','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic accounting authorized.'],
+      ['external','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. External effect authorized.'],
+      ['provider','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Provider sandbox accepted.'],
+      ['clearance','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Offline check cleared.'],
       ['scope omitted','roadmap','secure customer delivery, ',''],
-      ['order','architecture','1. `launch_approved_billable_handoff`','1. `customer_receipt`'],
+      ['order','architecture14A','1. `launch_approved_billable_handoff`','1. `customer_receipt`'],
       ['identity','roadmap',authority.PART13_RELEASE.head,'f'.repeat(40)],
-      ['currentness','ledger','complete production journey remains false','complete production journey remains true'],
-      ['contradictory append','architecture','Founder visual approval remains separate.','Founder visual approval remains separate. Live payment accepted.'],
+      ['currentness','architecture14A','complete production journey remains false','complete production journey remains true'],
+      ['contradictory append','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Live payment accepted.'],
     ];
     for (const [_name, key, from, to] of mutations) {
       const altered = { ...docs, [key]:docs[key].replace(from, to) };

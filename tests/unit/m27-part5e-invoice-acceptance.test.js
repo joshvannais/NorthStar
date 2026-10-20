@@ -105,7 +105,8 @@ describe('Mission 27 Part 5E complete invoice acceptance boundary', () => {
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part5-acceptance'");
     const ui=read('public/js/customer-financial-invoice-preview.js');
     expect(ui).toContain("'/reporting-part12-acceptance?");
-    expect(ui).toContain("'/part12-acceptance'");
+    expect(ui).toContain("'/part14b-acceptance'");
+    expect(ui).not.toContain("'/part12-acceptance'");
     expect(ui).not.toContain("'/accounting-part11-acceptance?");
     expect(ui).not.toContain("'/part11-acceptance'");
     expect(ui).not.toContain("'/collection-part10-acceptance?");

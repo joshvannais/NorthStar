@@ -377,8 +377,16 @@ const PART13_RELEASE = OBJECT_FREEZE({
   pr: 'PR #533', deployment: '0ee0e7c1-d388-4a53-b293-50c59cbe4c7d',
 });
 
+const PART14A_RELEASE = OBJECT_FREEZE({
+  head: '48906ed5205a489a3c0ca88a22dc47012257ae7b',
+  tree: '69dd1d1ea3465e7577edc2bfd174cdb5747c5de4',
+  main: 'db18448606db66e8ca131cba6d245f8f5e0e28d7',
+  pr: 'PR #534', deployment: 'a3e010ea-6585-4c0f-8c60-b02a62fec372',
+  image: 'sha256:ba113884bc4daea2261e6dd74fe6cf96783796375bd0009f89ee9b1a14ee36e2',
+  node: '22.23.3',
+});
+
 const LATER_LEDGER_ROWS = OBJECT_FREEZE([
-  ['14B','Complete resettable isolated fictional demo journey','No','No','No','—','No','N/A','No','Planned'],
   ['14C','Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey','No','No','No','—','No','No if offline enabled','N/A','Planned'],
   ['14D','Integrated tenant/role/CSRF/link/webhook/account/PII/amount/offline-evidence/abuse security','No','No','No','—','No','No if offline enabled','N/A','Planned'],
   ['14E','Performance, observability, accessibility, responsive/theme/state visual matrix','No','No','No','—','No','N/A','No','Planned'],
@@ -397,21 +405,27 @@ for (let index = 0; index < LATER_LEDGER_ROWS.length; index += 1) {
 const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   roadmap: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md',
-    normalizedSha256: 'e65a5dcca88b16ab56e96b6c916c2304bb935dde5c36adb8c90d4dc201027fe0',
-    normalizedUtf8Bytes: 66669,
+    normalizedSha256: 'ed9bf3ef4865a09afd59e6eac7d2b3c1423593649a94e519fc60afc829cf8461',
+    normalizedUtf8Bytes: 67512,
     normalizedLineCount: 349,
   }),
   ledger: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
-    normalizedSha256: '81c34304c22ab779583f8b74c616e5de0d08bf58845e67ad42dac0812fc6ba42',
-    normalizedUtf8Bytes: 89744,
+    normalizedSha256: '868bd105a9071a61402332a257e4f841fa42608544b8512b2840496b2d6458d5',
+    normalizedUtf8Bytes: 91712,
     normalizedLineCount: 138,
   }),
-  architecture: OBJECT_FREEZE({
+  architecture14A: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14A_PAID_PROVIDER_DISABLED_JOURNEY.md',
     normalizedSha256: '841189a5e1e03e9d6c54579a043847e87a3ae80e8c93a46dd9f975bb9843144c',
     normalizedUtf8Bytes: 6338,
     normalizedLineCount: 59,
+  }),
+  architecture14B: OBJECT_FREEZE({
+    path: 'docs/architecture/MISSION_27_PART14B_RESETTABLE_FICTIONAL_DEMO_JOURNEY.md',
+    normalizedSha256: '30434c1b1ddd49471dc9dcf9beea0006bcfed833454c946d6fbad22d4064cd9e',
+    normalizedUtf8Bytes: 6939,
+    normalizedLineCount: 35,
   }),
 });
 
@@ -508,9 +522,10 @@ function readCanonicalInput(input) {
   if (input === null || typeof input !== 'object' || IS_PROXY(input) ||
       OBJECT_GET_PROTOTYPE_OF(input) !== OBJECT_PROTOTYPE) throw invalid();
   const keys = REFLECT_OWN_KEYS(input);
-  if (keys.length !== 3) throw invalid();
-  let roadmap; let ledger; let architecture;
-  let hasRoadmap = false; let hasLedger = false; let hasArchitecture = false;
+  if (keys.length !== 4) throw invalid();
+  let roadmap; let ledger; let architecture14A; let architecture14B;
+  let hasRoadmap = false; let hasLedger = false;
+  let hasArchitecture14A = false; let hasArchitecture14B = false;
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index];
     if (typeof key !== 'string') throw invalid();
@@ -520,19 +535,22 @@ function readCanonicalInput(input) {
         typeof descriptor.value !== 'string') throw invalid();
     if (key === 'roadmap' && !hasRoadmap) { roadmap = descriptor.value; hasRoadmap = true; }
     else if (key === 'ledger' && !hasLedger) { ledger = descriptor.value; hasLedger = true; }
-    else if (key === 'architecture' && !hasArchitecture) {
-      architecture = descriptor.value; hasArchitecture = true;
+    else if (key === 'architecture14A' && !hasArchitecture14A) {
+      architecture14A = descriptor.value; hasArchitecture14A = true;
+    } else if (key === 'architecture14B' && !hasArchitecture14B) {
+      architecture14B = descriptor.value; hasArchitecture14B = true;
     } else throw invalid();
   }
-  if (!hasRoadmap || !hasLedger || !hasArchitecture) throw invalid();
-  return [roadmap, ledger, architecture];
+  if (!hasRoadmap || !hasLedger || !hasArchitecture14A || !hasArchitecture14B) throw invalid();
+  return [roadmap, ledger, architecture14A, architecture14B];
 }
 
 const VALIDATED_AUTHORITY = OBJECT_FREEZE({
-  contractVersion: 'm27-part14a-authority-ratification-v2',
+  contractVersion: 'm27-part14b-authority-ratification-v1',
   releasedPart13Head: PART13_RELEASE.head,
-  currentSlice: '14A', currentStatus: 'candidate',
-  laterSlices: OBJECT_FREEZE(['14B','14C','14D','14E','14F','14G']),
+  releasedPart14AHead: PART14A_RELEASE.head,
+  currentSlice: '14B', currentStatus: 'candidate',
+  laterSlices: OBJECT_FREEZE(['14C','14D','14E','14F','14G']),
   migrationLatest: 272, migration273Present: false,
 });
 
@@ -540,7 +558,8 @@ function validate(input) {
   const values = readCanonicalInput(input);
   validateDocument('roadmap', values[0]);
   validateDocument('ledger', values[1]);
-  validateDocument('architecture', values[2]);
+  validateDocument('architecture14A', values[2]);
+  validateDocument('architecture14B', values[3]);
   return VALIDATED_AUTHORITY;
 }
 
@@ -555,6 +574,7 @@ const API = OBJECT_CREATE(null);
 OBJECT_DEFINE_PROPERTIES(API, {
   PART14_SCOPES:{value:PART14_SCOPES, enumerable:true, writable:false, configurable:false},
   PART13_RELEASE:{value:PART13_RELEASE, enumerable:true, writable:false, configurable:false},
+  PART14A_RELEASE:{value:PART14A_RELEASE, enumerable:true, writable:false, configurable:false},
   LATER_LEDGER_ROWS:{value:LATER_LEDGER_ROWS, enumerable:true, writable:false, configurable:false},
   CANONICAL_DOCUMENTS:{value:CANONICAL_DOCUMENTS, enumerable:true, writable:false, configurable:false},
   validate:{value:validate, enumerable:true, writable:false, configurable:false},

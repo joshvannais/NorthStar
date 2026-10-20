@@ -5,6 +5,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// Jest is the only in-process adapter allowed to compose the Part 14B route.
+// The production launcher constructs a fresh allowlisted environment and never
+// forwards this marker.
+process.env.NORTHSTAR_PART14B_TEST_ADAPTER = 'jest-mounted-v1';
+
 const testPath = expect.getState().testPath || ('unknown-' + process.pid);
 const identity = crypto.createHash('sha256').update(testPath).digest('hex').slice(0, 16);
 const parent = path.join(os.tmpdir(), 'northstar-jest-data');

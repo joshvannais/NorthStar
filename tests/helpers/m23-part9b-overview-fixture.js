@@ -71,7 +71,31 @@ async function createDatabaseFixture(options = {}) {
   process.env.DATABASE_URL = roleUrl(options.singleRoleMigrations ? roles.owner : roles.runtime);
   if (options.singleRoleMigrations) delete process.env.MIGRATION_DATABASE_URL;
   else process.env.MIGRATION_DATABASE_URL = roleUrl(roles.owner);
-  const db = require('../../src/db');
+  const NodeModule = require('node:module');
+  const hostProcess = process.env.JEST_WORKER_ID ?
+    Reflect.apply(NodeModule._load, NodeModule, ['node:process', null, false]) : process;
+  hostProcess.env.DATABASE_URL = process.env.DATABASE_URL;
+  hostProcess.env.NODE_ENV = 'test';
+  hostProcess.env.AUTH_ACCESS_SECRET = process.env.AUTH_ACCESS_SECRET;
+  hostProcess.env.JEST_WORKER_ID = String(process.env.JEST_WORKER_ID || 'fixture');
+  hostProcess.env.NORTHSTAR_PART14B_TEST_ADAPTER = 'jest-mounted-v1';
+  if (process.env.MIGRATION_DATABASE_URL) {
+    hostProcess.env.MIGRATION_DATABASE_URL = process.env.MIGRATION_DATABASE_URL;
+  } else delete hostProcess.env.MIGRATION_DATABASE_URL;
+  // The canonical server is the Part 14B composition root. It must capture
+  // the genuine database and demo modules before test code obtains them. Jest
+  // has its own synthetic module registry; the mounted acceptance fixture uses
+  // Node's ordinary CommonJS loader so it exercises the production bootstrap
+  // and cannot turn Jest's registry into product authority.
+  const path = require('node:path');
+  // Jest intentionally supplies synthetic module/cache objects, so it is a
+  // non-authoritative test environment. Its fixture enters Node's real loader
+  // through the Jest process's genuine main module; production never imports
+  // this helper or accepts this adapter as authority.
+  const nodeRequire = filename => process.env.JEST_WORKER_ID ?
+    Reflect.apply(NodeModule._load, NodeModule, [filename, null, false]) : require(filename);
+  const server = nodeRequire(path.resolve(__dirname, '../../src/server.js'));
+  const db = nodeRequire(path.resolve(__dirname, '../../src/db.js'));
   const org = crypto.randomUUID(), otherOrg = crypto.randomUUID();
   const actors = {}, profiles = {};
   let sequence = 0;
@@ -83,6 +107,9 @@ async function createDatabaseFixture(options = {}) {
       try { for (const role of Object.values(roles)) await cleanupAdmin.query(`DROP ROLE ${quote(role)}`); }
       finally { await cleanupAdmin.end(); }
       delete process.env.DATABASE_URL; delete process.env.MIGRATION_DATABASE_URL;
+      delete hostProcess.env.DATABASE_URL; delete hostProcess.env.MIGRATION_DATABASE_URL;
+      delete hostProcess.env.AUTH_ACCESS_SECRET;
+      delete hostProcess.env.NORTHSTAR_PART14B_TEST_ADAPTER;
     },
     async createExecution(options = {}) {
       sequence += 1;
@@ -246,7 +273,7 @@ async function createDatabaseFixture(options = {}) {
         userId: actor.actorUserId, membershipId: actor.actorUserId, role: actor.actorAccessRole });
       Object.assign(actor, { authSessionId: session.sessionId, csrfToken: session.csrfToken, session });
     }
-    fixture.app = require('../../src/server').app; // no start(), outbox workers or provider transport
+    fixture.app = server.app; // no start(), outbox workers or provider transport
     return fixture;
   } catch (error) { await fixture.cleanup(); throw error; }
 }

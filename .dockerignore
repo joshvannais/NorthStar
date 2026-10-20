@@ -1,0 +1,10 @@
+.git
+.git/**
+node_modules
+node_modules/**
+coverage
+coverage/**
+.northstar-runtime/*
+!.northstar-runtime/.gitignore
+*.log
+npm-debug.log*

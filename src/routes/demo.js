@@ -22,10 +22,11 @@ const config = require('../config');
 const db = require('../db');
 const { getProvisionedDemoOrganization } = require('../services/organizationAuthority');
 const { readDemoLifecycle } = require('../services/demoVoiceLifecycle');
+const demoRepositoryApi = require('../commandCenter/demoRepository');
 const {
   DemoCommandCenterError,
   DemoCommandCenterRepository,
-} = require('../commandCenter/demoRepository');
+} = demoRepositoryApi;
 const {
   buildDemoWorkspace,
   demoCanonicalItems,

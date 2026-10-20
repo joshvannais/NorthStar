@@ -48,17 +48,65 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
   const binDirectory = path.dirname(expectedRealpath);
   const rootStat = fs.statSync(nodeRoot);
   const binStat = fs.statSync(binDirectory);
+  const runtimeGroups = process.getgroups();
+  const status = fs.readFileSync('/proc/self/status', 'utf8');
   const actualSha256 = crypto.createHash('sha256')
     .update(fs.readFileSync(executableRealpath)).digest('hex');
   if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch) ||
+      process.getuid() !== 1000 || process.geteuid() !== 1000 ||
+      process.getgid() !== 1000 || process.getegid() !== 1000 ||
+      runtimeGroups.length !== 1 || runtimeGroups[0] !== 1000 ||
       expectedRealpath !== '/usr/local/bin/node' || executableStat.uid !== 0 ||
-      rootStat.uid !== 0 || binStat.uid !== 0 ||
+      executableStat.gid !== 0 || rootStat.uid !== 0 || rootStat.gid !== 0 ||
+      binStat.uid !== 0 || binStat.gid !== 0 ||
       authenticatedSha256 !== expectedDigests[process.arch] ||
       actualSha256 !== authenticatedSha256 ||
       (executableStat.mode & 0o222) !== 0 || (rootStat.mode & 0o022) !== 0 ||
       (binStat.mode & 0o022) !== 0 || fs.lstatSync(nodeRoot).isSymbolicLink() ||
-      fs.lstatSync(binDirectory).isSymbolicLink()) {
+      fs.lstatSync(binDirectory).isSymbolicLink() ||
+      !/^Uid:\s+1000\s+1000\s+1000\s+1000$/m.test(status) ||
+      !/^Gid:\s+1000\s+1000\s+1000\s+1000$/m.test(status) ||
+      !/^Groups:\s+1000\s*$/m.test(status) ||
+      !/^CapInh:\s+0{16}$/m.test(status) || !/^CapPrm:\s+0{16}$/m.test(status) ||
+      !/^CapEff:\s+0{16}$/m.test(status) || !/^CapAmb:\s+0{16}$/m.test(status) ||
+      process.cwd() !== '/app' || process.env.PATH !== '/usr/local/bin' ||
+      process.env.HOME !== '/var/lib/northstar/home' ||
+      process.env.NORTHSTAR_DATA_DIR !== '/var/lib/northstar/data' ||
+      process.env.TMPDIR !== '/var/lib/northstar/tmp' ||
+      process.env.TMP !== '/var/lib/northstar/tmp' ||
+      process.env.TEMP !== '/var/lib/northstar/tmp') {
     throw new Error(`${FAILURE} Invalid immutable Docker executable.`);
+  }
+  const protectedDirectories = ['/app', '/app/scripts', '/app/src', '/app/node_modules',
+    '/app/.northstar-runtime', '/usr/local', '/usr/local/bin', '/usr/local/lib',
+    '/usr/local/lib/node_modules'];
+  const protectedFiles = ['/app/scripts/start-production.sh', expectedLauncher,
+    '/app/src/productionChild.js', '/app/src/server.js', '/app/package.json',
+    '/app/package-lock.json', '/app/Dockerfile', '/app/railway.toml',
+    '/app/scripts/node-v22.23.3-runtime-manifest.txt',
+    '/app/.northstar-runtime/node-path', '/app/.northstar-runtime/node-sha256',
+    '/app/.northstar-runtime/node-arch'];
+  for (const entry of [...protectedDirectories, ...protectedFiles]) {
+    const info = fs.statSync(entry);
+    if (info.uid !== 0 || info.gid !== 0 || (info.mode & 0o022) !== 0 ||
+        fs.lstatSync(entry).isSymbolicLink()) {
+      throw new Error(`${FAILURE} Mutable Docker authority resource.`);
+    }
+    try {
+      fs.accessSync(entry, fs.constants.W_OK);
+      throw new Error(`${FAILURE} Writable Docker authority resource.`);
+    } catch (error) {
+      if (error && error.message === `${FAILURE} Writable Docker authority resource.`) throw error;
+      if (!error || !['EACCES', 'EPERM'].includes(error.code)) throw error;
+    }
+  }
+  for (const entry of ['/var/lib/northstar/home', '/var/lib/northstar/data',
+    '/var/lib/northstar/tmp']) {
+    const info = fs.statSync(entry);
+    if (info.uid !== 1000 || info.gid !== 1000 || (info.mode & 0o777) !== 0o700 ||
+        fs.lstatSync(entry).isSymbolicLink()) {
+      throw new Error(`${FAILURE} Invalid writable runtime directory.`);
+    }
   }
 } else {
   if (process.platform !== 'win32' || process.arch !== 'x64' ||
@@ -98,7 +146,7 @@ const allowedEnvironment = Object.freeze([
   'POLARIS_INPUT_COUNT_TARIFF_REVIEWED_ON', 'POLARIS_OPENAI_ENABLED', 'PORT',
   'PUBLIC_ORIGIN', 'RESEND_API_KEY', 'RETELL_AGENT_ID', 'RETELL_API_KEY',
   'RETELL_PHONE_NUMBER', 'SMTP_HOST', 'SMTP_PASS', 'SMTP_PORT', 'SMTP_USER',
-  'SYSTEMROOT', 'TEMP', 'TMP', 'TRANSACTIONAL_EMAIL_FROM', 'TWILIO_ACCOUNT_SID',
+  'HOME', 'SYSTEMROOT', 'TEMP', 'TMP', 'TMPDIR', 'TRANSACTIONAL_EMAIL_FROM', 'TWILIO_ACCOUNT_SID',
   'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER', 'TZ', 'WINDIR',
 ]);
 

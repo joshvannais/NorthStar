@@ -30,7 +30,27 @@ ARG TARGETARCH
 WORKDIR /app
 COPY --chown=0:0 . /app
 COPY --from=dependencies --chown=0:0 /app/node_modules /app/node_modules
-RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-node.sh
+RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-node.sh \
+    && test "$(/usr/bin/id -u node)" = '1000' \
+    && test "$(/usr/bin/id -g node)" = '1000' \
+    && test "$(/usr/bin/id -G node)" = '1000' \
+    && /bin/mkdir -p /var/lib/northstar/data /var/lib/northstar/tmp /var/lib/northstar/home \
+    && if test -d /app/data; then /bin/cp -a /app/data/. /var/lib/northstar/data/; fi \
+    && /bin/chown -R 1000:1000 /var/lib/northstar \
+    && /bin/chmod 0700 /var/lib/northstar /var/lib/northstar/data \
+         /var/lib/northstar/tmp /var/lib/northstar/home \
+    && /bin/chown -R 0:0 /app \
+    && /usr/bin/find /app -xdev -type d -exec /bin/chmod 0555 '{}' + \
+    && /usr/bin/find /app -xdev -type f -exec /bin/chmod 0444 '{}' + \
+    && /usr/bin/find /usr/local -xdev -type d -exec /bin/chmod go-w '{}' + \
+    && /usr/bin/find /usr/local -xdev -type f -exec /bin/chmod go-w '{}' + \
+    && /bin/chmod 0555 /usr/local/bin/node
 
-USER root
+ENV HOME=/var/lib/northstar/home \
+    NORTHSTAR_DATA_DIR=/var/lib/northstar/data \
+    TMPDIR=/var/lib/northstar/tmp \
+    TMP=/var/lib/northstar/tmp \
+    TEMP=/var/lib/northstar/tmp
+
+USER 1000:1000
 CMD ["/bin/sh", "/app/scripts/start-production.sh"]

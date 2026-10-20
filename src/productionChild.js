@@ -49,13 +49,49 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
     x64: 'fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48',
     arm64: 'd09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d',
   });
+  const runtimeGroups = process.getgroups();
+  const status = fs.readFileSync('/proc/self/status', 'utf8');
   if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch) ||
+      process.getuid() !== 1000 || process.geteuid() !== 1000 ||
+      process.getgid() !== 1000 || process.getegid() !== 1000 ||
+      runtimeGroups.length !== 1 || runtimeGroups[0] !== 1000 ||
       executableRealpath !== '/usr/local/bin/node' ||
-      executableStat.uid !== 0 || (executableStat.mode & 0o222) !== 0 ||
-      authenticatedSha256 !== expectedDigests[process.arch]) throw new Error(FAILURE);
+      executableStat.uid !== 0 || executableStat.gid !== 0 ||
+      (executableStat.mode & 0o222) !== 0 ||
+      authenticatedSha256 !== expectedDigests[process.arch] ||
+      !/^Uid:\s+1000\s+1000\s+1000\s+1000$/m.test(status) ||
+      !/^Gid:\s+1000\s+1000\s+1000\s+1000$/m.test(status) ||
+      !/^Groups:\s+1000\s*$/m.test(status) ||
+      !/^CapInh:\s+0{16}$/m.test(status) || !/^CapPrm:\s+0{16}$/m.test(status) ||
+      !/^CapEff:\s+0{16}$/m.test(status) || !/^CapAmb:\s+0{16}$/m.test(status) ||
+      process.cwd() !== '/app' || process.env.PATH !== '/usr/local/bin' ||
+      process.env.HOME !== '/var/lib/northstar/home' ||
+      process.env.NORTHSTAR_DATA_DIR !== '/var/lib/northstar/data' ||
+      process.env.TMPDIR !== '/var/lib/northstar/tmp' ||
+      process.env.TMP !== '/var/lib/northstar/tmp' ||
+      process.env.TEMP !== '/var/lib/northstar/tmp') throw new Error(FAILURE);
   const actualSha256 = crypto.createHash('sha256')
     .update(fs.readFileSync(executableRealpath)).digest('hex');
   if (actualSha256 !== authenticatedSha256) throw new Error(FAILURE);
+  for (const entry of ['/app', '/app/scripts', '/app/src', '/app/node_modules',
+    '/app/.northstar-runtime', '/usr/local', '/usr/local/bin', '/usr/local/lib',
+    '/usr/local/lib/node_modules', '/app/scripts/start-production.sh',
+    '/app/scripts/production-launcher.js', expectedChild, expectedServer,
+    '/app/package.json', '/app/package-lock.json', '/app/Dockerfile',
+    '/app/railway.toml', '/app/scripts/node-v22.23.3-runtime-manifest.txt',
+    '/app/.northstar-runtime/node-path', '/app/.northstar-runtime/node-sha256',
+    '/app/.northstar-runtime/node-arch']) {
+    const info = fs.statSync(entry);
+    if (info.uid !== 0 || info.gid !== 0 || (info.mode & 0o022) !== 0 ||
+        fs.lstatSync(entry).isSymbolicLink()) throw new Error(FAILURE);
+    try {
+      fs.accessSync(entry, fs.constants.W_OK);
+      throw new Error(FAILURE);
+    } catch (error) {
+      if (error && error.message === FAILURE) throw error;
+      if (!error || !['EACCES', 'EPERM'].includes(error.code)) throw error;
+    }
+  }
 } else {
   if (process.platform !== 'win32' || process.arch !== 'x64' ||
       !/^[0-9a-f]{64}$/.test(authenticatedSha256 || '')) throw new Error(FAILURE);

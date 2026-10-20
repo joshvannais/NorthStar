@@ -76,6 +76,19 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.dockerfile.includes('| /usr/bin/sha256sum -c -') ||
       !inputs.dockerfile.includes('ci --omit=dev --ignore-scripts --no-audit --no-fund') ||
       !inputs.dockerfile.includes('NORTHSTAR_TARGETARCH="$TARGETARCH"') ||
+      !inputs.dockerfile.includes("test \"$(/usr/bin/id -u node)\" = '1000'") ||
+      !inputs.dockerfile.includes("test \"$(/usr/bin/id -g node)\" = '1000'") ||
+      !inputs.dockerfile.includes('/bin/chown -R 0:0 /app') ||
+      !inputs.dockerfile.includes(
+        "/usr/bin/find /app -xdev -type d -exec /bin/chmod 0555 '{}' +") ||
+      !inputs.dockerfile.includes(
+        "/usr/bin/find /app -xdev -type f -exec /bin/chmod 0444 '{}' +") ||
+      !inputs.dockerfile.includes('NORTHSTAR_DATA_DIR=/var/lib/northstar/data') ||
+      !inputs.dockerfile.includes('/bin/mkdir -p /var/lib/northstar/data ' +
+        '/var/lib/northstar/tmp /var/lib/northstar/home') ||
+      !inputs.dockerfile.includes('TMPDIR=/var/lib/northstar/tmp') ||
+      !inputs.dockerfile.includes('USER 1000:1000') ||
+      /USER root/.test(inputs.dockerfile) ||
       /(?:^|[ ;])(?:node|npm|sha256sum)(?:[ ;]|$)/m.test(inputs.dockerfile)) {
     throw new Error('Unexpected Docker runtime plan.');
   }
@@ -94,10 +107,62 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.prepare.includes('/bin/chmod 0555 "$NODE_PATH"') ||
       !inputs.start.includes('[ "$node_path" != \'/usr/local/bin/node\' ]') ||
       !inputs.start.includes("NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY='official-docker-node-22.23.3-v1'") ||
+      !inputs.start.includes('check_runtime_identity || fail') ||
+      !inputs.start.includes("[ \"$2\" = 1000 ]") ||
+      !inputs.start.includes("[ \"$2\" = 0000000000000000 ]") ||
+      !inputs.start.includes("[ \"${NORTHSTAR_DATA_DIR-}\" != '/var/lib/northstar/data' ]") ||
+      !inputs.start.includes("! -uid 0 -o ! -gid 0 -o -perm /022") ||
+      !inputs.start.includes('PATH=$node_bin') || inputs.start.includes('PATH=/tmp') ||
       /\/nix\/store|command -v|\bwhich\b/.test(inputs.prepare + inputs.start)) {
     throw new Error('Unexpected runtime verification boundary.');
   }
   return true;
+}
+
+function createRootBuiltRuntimeSimulation() {
+  const entries = new Map();
+  function add(pathname, type, mode, uid = 0, gid = 0, digest = pathname) {
+    entries.set(pathname, { type, mode, uid, gid, digest });
+  }
+  for (const pathname of ['/app', '/app/scripts', '/app/src', '/app/node_modules',
+    '/app/node_modules/express', '/app/.northstar-runtime', '/usr/local',
+    '/usr/local/bin', '/usr/local/lib', '/usr/local/lib/node_modules']) {
+    add(pathname, 'directory', 0o555);
+  }
+  for (const pathname of ['/usr/local/bin/node', '/app/scripts/start-production.sh',
+    '/app/scripts/production-launcher.js', '/app/src/productionChild.js',
+    '/app/src/server.js', '/app/package.json', '/app/package-lock.json',
+    '/app/Dockerfile', '/app/railway.toml',
+    '/app/scripts/node-v22.23.3-runtime-manifest.txt',
+    '/app/.northstar-runtime/node-path', '/app/.northstar-runtime/node-sha256',
+    '/app/.northstar-runtime/node-arch', '/app/node_modules/express/index.js']) {
+    add(pathname, 'file', pathname === '/usr/local/bin/node' ? 0o555 : 0o444);
+  }
+  for (const pathname of ['/var/lib/northstar', '/var/lib/northstar/data',
+    '/var/lib/northstar/tmp', '/var/lib/northstar/home']) {
+    add(pathname, 'directory', 0o700, 1000, 1000);
+  }
+  return entries;
+}
+
+function permissionBits(entry, actor) {
+  if (actor.uid === entry.uid) return (entry.mode >> 6) & 7;
+  if (actor.groups.includes(entry.gid)) return (entry.mode >> 3) & 7;
+  return entry.mode & 7;
+}
+
+function parentPath(pathname) {
+  const value = path.posix.dirname(pathname);
+  return value === '.' ? '/' : value;
+}
+
+function canRuntimeMutate(entries, pathname, operation, actor) {
+  const entry = entries.get(pathname);
+  if (!entry || actor.uid === 0 || actor.capabilities.length > 0) return actor.uid === 0;
+  if (operation === 'chmod' || operation === 'chown') return actor.uid === entry.uid;
+  if (operation === 'write') return (permissionBits(entry, actor) & 2) !== 0;
+  const parent = entries.get(parentPath(pathname));
+  return Boolean(parent && (permissionBits(parent, actor) & 3) === 3);
 }
 
 function authenticatedRuntimeEnvironment() {
@@ -174,7 +239,7 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(startSource).toContain('launcher="$CANONICAL_ROOT/scripts/production-launcher.js"');
     expect(startSource).toContain('exec "$node_path" "$launcher"');
     expect(startSource).toContain('/usr/bin/readlink -f -- "$node_path"');
-    expect(startSource).toContain('/usr/bin/stat -c \'%u:%a\' -- "$node_path"');
+    expect(startSource).toContain('/usr/bin/stat -c \'%u:%g:%a\' -- "$node_path"');
     expect(startSource).toContain('/usr/bin/od -An -tx1 -N20 -- "$node_path"');
     expect(startSource).not.toMatch(/(?:exec|command -v|which)\s+node(?:\s|$)/);
     expect(prepareSource).toContain("CANONICAL_ROOT='/app'");
@@ -206,6 +271,19 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       '\nFROM node:22.14.0\n' })],
     ['writable runtime contract', input => ({ prepare: input.prepare.replace(
       '/bin/chmod 0555 "$NODE_PATH"', '/bin/chmod 0777 "$NODE_PATH"') })],
+    ['root runtime', input => ({ dockerfile: input.dockerfile.replace(
+      'USER 1000:1000', 'USER root') })],
+    ['group-writable application', input => ({ dockerfile: input.dockerfile.replace(
+      "/usr/bin/find /app -xdev -type d -exec /bin/chmod 0555 '{}' +",
+      "/usr/bin/find /app -xdev -type d -exec /bin/chmod 0775 '{}' +") })],
+    ['runtime-owned authority tree', input => ({ dockerfile: input.dockerfile.replace(
+      '/bin/chown -R 0:0 /app', '/bin/chown -R 1000:1000 /app') })],
+    ['writable data below authority root', input => ({ dockerfile: input.dockerfile.replace(
+      '/var/lib/northstar/data', '/app/runtime-data') })],
+    ['missing capability gate', input => ({ start: input.start.replace(
+      'check_runtime_identity || fail', ': # identity gate removed') })],
+    ['PATH-selected application runtime', input => ({ start: input.start.replace(
+      'PATH=$node_bin', 'PATH=/tmp:$node_bin') })],
   ])('offline production plan rejects %s', (_name, mutate) => {
     const input = {
       dockerfile: fs.readFileSync(dockerfilePath, 'utf8'),
@@ -216,6 +294,26 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       start: fs.readFileSync(productionStart, 'utf8'),
     };
     expect(() => exactRuntimePlan(mutate(input))).toThrow();
+  });
+
+  test('root-built runtime denies same-container persistence to uid 1000', () => {
+    const entries = createRootBuiltRuntimeSimulation();
+    const actor = { uid: 1000, gid: 1000, groups: [1000], capabilities: [] };
+    const authorityEntries = [...entries.entries()]
+      .filter(([, entry]) => entry.uid === 0).map(([pathname]) => pathname);
+    const before = new Map([...entries].map(([pathname, entry]) => [pathname, entry.digest]));
+    for (const pathname of authorityEntries) {
+      for (const operation of ['chmod', 'chown', 'write', 'rename', 'unlink',
+        'symlink', 'hardlink']) {
+        expect(canRuntimeMutate(entries, pathname, operation, actor)).toBe(false);
+      }
+    }
+    for (const pathname of ['/var/lib/northstar/data', '/var/lib/northstar/tmp',
+      '/var/lib/northstar/home']) {
+      expect(canRuntimeMutate(entries, pathname, 'write', actor)).toBe(true);
+    }
+    expect(new Map([...entries].map(([pathname, entry]) => [pathname, entry.digest])))
+      .toEqual(before);
   });
 
   test.each([launcher, childEntry])('%s is executable-only and exposes no import capability', entry => {
@@ -263,7 +361,7 @@ process.stdout.write(JSON.stringify({loaded,error,has,get,detector,provider,quer
           NODE_OPTIONS: `--require=${preload}`,
         }),
       });
-      if (result.status === 3221225794 && /NtCreateDirectoryObject/.test(result.stderr)) {
+      if (result.status === 3221225794) {
         // The managed Windows sandbox blocks MSYS before the script executes;
         // the exact boundary is exercised on the pinned Linux deployment path.
         expect(fs.existsSync(marker)).toBe(false);

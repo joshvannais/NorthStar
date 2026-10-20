@@ -13,6 +13,40 @@ fail() {
   exit 78
 }
 
+check_runtime_identity() {
+  saw_uid=0
+  saw_gid=0
+  saw_groups=0
+  saw_cap_inh=0
+  saw_cap_prm=0
+  saw_cap_eff=0
+  saw_cap_amb=0
+  while IFS= read -r status_line; do
+    case "$status_line" in
+      Uid:*) set -- $status_line; [ "$#" -eq 5 ] &&
+        [ "$2" = 1000 ] && [ "$3" = 1000 ] && [ "$4" = 1000 ] &&
+        [ "$5" = 1000 ] || return 1; saw_uid=1 ;;
+      Gid:*) set -- $status_line; [ "$#" -eq 5 ] &&
+        [ "$2" = 1000 ] && [ "$3" = 1000 ] && [ "$4" = 1000 ] &&
+        [ "$5" = 1000 ] || return 1; saw_gid=1 ;;
+      Groups:*) set -- $status_line; [ "$#" -eq 2 ] && [ "$2" = 1000 ] || return 1;
+        saw_groups=1 ;;
+      CapInh:*) set -- $status_line; [ "$2" = 0000000000000000 ] || return 1;
+        saw_cap_inh=1 ;;
+      CapPrm:*) set -- $status_line; [ "$2" = 0000000000000000 ] || return 1;
+        saw_cap_prm=1 ;;
+      CapEff:*) set -- $status_line; [ "$2" = 0000000000000000 ] || return 1;
+        saw_cap_eff=1 ;;
+      CapAmb:*) set -- $status_line; [ "$2" = 0000000000000000 ] || return 1;
+        saw_cap_amb=1 ;;
+    esac
+  done < /proc/self/status
+  [ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb" =
+    1111111 ]
+}
+
+check_runtime_identity || fail
+
 # The Railway Docker build copies the source tree to /app. Accept only the physical canonical
 # script or the documented relative spelling while already in physical /app.
 # Caller-controlled PWD, INIT_CWD, CDPATH, npm variables, and alternate trees
@@ -34,9 +68,9 @@ if [ "$(/usr/bin/readlink -f -- "$CANONICAL_ROOT")" != "$CANONICAL_ROOT" ] ||
    [ "$(/usr/bin/readlink -f -- "$CANONICAL_SCRIPT")" != "$CANONICAL_SCRIPT" ] ||
    [ -L "$CANONICAL_ROOT" ] || [ -L "$CANONICAL_ROOT/scripts" ] ||
    [ -L "$CANONICAL_SCRIPT" ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$CANONICAL_ROOT")" != '0:755' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$CANONICAL_ROOT/scripts")" != '0:755' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$CANONICAL_SCRIPT")" != '0:644:1' ]; then
+   [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$CANONICAL_ROOT")" != '0:0:555' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$CANONICAL_ROOT/scripts")" != '0:0:555' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$CANONICAL_SCRIPT")" != '0:0:444:1' ]; then
   fail
 fi
 
@@ -83,10 +117,10 @@ if [ "$(/usr/bin/readlink -f -- "$runtime_directory")" != "$runtime_directory" ]
    [ "$(/usr/bin/readlink -f -- "$manifest")" != "$manifest" ] ||
    [ "$(/usr/bin/readlink -f -- "$sha_manifest")" != "$sha_manifest" ] ||
    [ "$(/usr/bin/readlink -f -- "$arch_manifest")" != "$arch_manifest" ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$runtime_directory")" != '0:755' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$manifest")" != '0:644:1' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$sha_manifest")" != '0:644:1' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$arch_manifest")" != '0:644:1' ]; then
+   [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$runtime_directory")" != '0:0:555' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$manifest")" != '0:0:444:1' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$sha_manifest")" != '0:0:444:1' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$arch_manifest")" != '0:0:444:1' ]; then
   fail
 fi
 read_single_line() {
@@ -106,6 +140,20 @@ runtime_arch=$(read_single_line "$arch_manifest")
 if [ "$node_path" != '/usr/local/bin/node' ]; then
   fail
 fi
+if [ "${HOME-}" != '/var/lib/northstar/home' ] ||
+   [ "${NORTHSTAR_DATA_DIR-}" != '/var/lib/northstar/data' ] ||
+   [ "${TMPDIR-}" != '/var/lib/northstar/tmp' ] ||
+   [ "${TMP-}" != '/var/lib/northstar/tmp' ] ||
+   [ "${TEMP-}" != '/var/lib/northstar/tmp' ]; then
+  fail
+fi
+for writable_directory in "$HOME" "$NORTHSTAR_DATA_DIR" "$TMPDIR"; do
+  if [ ! -d "$writable_directory" ] || [ -L "$writable_directory" ] ||
+     [ "$(/usr/bin/readlink -f -- "$writable_directory")" != "$writable_directory" ] ||
+     [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$writable_directory")" != '1000:1000:700' ]; then
+    fail
+  fi
+done
 platform=$(/usr/bin/dpkg --print-architecture) || fail
 case "$platform:$runtime_arch:$node_sha256" in
   amd64:x64:fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48) ;;
@@ -137,9 +185,9 @@ canonical_path=$(/usr/bin/readlink -f -- "$node_path") || {
   exit 78
 }
 if [ "$canonical_path" != "$node_path" ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$node_path")" != '0:555' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$node_bin")" != '0:755' ] ||
-   [ "$(/usr/bin/stat -c '%u:%a' -- "$node_root")" != '0:755' ]; then
+   [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$node_path")" != '0:0:555' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$node_bin")" != '0:0:755' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$node_root")" != '0:0:755' ]; then
   fail
 fi
 printf '%s  %s\n' "$node_sha256" "$node_path" |
@@ -160,6 +208,7 @@ fi
 unset NODE_OPTIONS NODE_PATH NPM_CONFIG_NODE_OPTIONS npm_config_node_options
 PATH=$node_bin
 export PATH
+export HOME NORTHSTAR_DATA_DIR TMPDIR TMP TEMP
 NORTHSTAR_AUTHENTICATED_NODE_PATH=$node_path
 NORTHSTAR_AUTHENTICATED_NODE_AUTHORITY='official-docker-node-22.23.3-v1'
 NORTHSTAR_AUTHENTICATED_NODE_SHA256=$node_sha256
@@ -176,10 +225,23 @@ for resource in "$launcher" "$child" "$server" \
 do
   if [ ! -f "$resource" ] || [ -L "$resource" ] ||
      [ "$(/usr/bin/readlink -f -- "$resource")" != "$resource" ] ||
-     [ "$(/usr/bin/stat -c '%u:%a:%h' -- "$resource")" != '0:644:1' ]; then
+     [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$resource")" != '0:0:444:1' ]; then
     fail
   fi
 done
+for protected_directory in "$CANONICAL_ROOT" "$CANONICAL_ROOT/scripts" \
+  "$CANONICAL_ROOT/src" "$CANONICAL_ROOT/node_modules" "$runtime_directory" \
+  "$node_root" "$node_bin" /usr/local/lib /usr/local/lib/node_modules; do
+  if [ ! -d "$protected_directory" ] || [ -L "$protected_directory" ] ||
+     [ "$(/usr/bin/stat -c '%u:%g' -- "$protected_directory")" != '0:0' ] ||
+     [ $((0$(/usr/bin/stat -c '%a' -- "$protected_directory") & 022)) -ne 0 ]; then
+    fail
+  fi
+done
+unsafe_app_entry=$(/usr/bin/find "$CANONICAL_ROOT" -xdev \
+  \( -type f -o -type d \) \
+  \( ! -uid 0 -o ! -gid 0 -o -perm /022 \) -print -quit) || fail
+[ -z "$unsafe_app_entry" ] || fail
 CDPATH=''
 export CDPATH
 cd "$CANONICAL_ROOT" || fail

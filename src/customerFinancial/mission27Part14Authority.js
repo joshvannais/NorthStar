@@ -386,8 +386,15 @@ const PART14A_RELEASE = OBJECT_FREEZE({
   node: '22.23.3',
 });
 
+const PART14B_ACCEPTANCE = OBJECT_FREEZE({
+  head: '497fad89e145dece26bdf1fb43789f64bc29560f',
+  tree: '7daede5a8b32b31a5888a02d634871451f93a521',
+  main: 'd4ba06ba83170c6db697d05f484bdce29040926b',
+  pr: 'PR #539', deploymentState: 'queued_global_railway_build_pause',
+  released: false,
+});
+
 const LATER_LEDGER_ROWS = OBJECT_FREEZE([
-  ['14C','Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey','No','No','No','—','No','No if offline enabled','N/A','Planned'],
   ['14D','Integrated tenant/role/CSRF/link/webhook/account/PII/amount/offline-evidence/abuse security','No','No','No','—','No','No if offline enabled','N/A','Planned'],
   ['14E','Performance, observability, accessibility, responsive/theme/state visual matrix','No','No','No','—','No','N/A','No','Planned'],
   ['14F','Independent exact-head authority/privacy/security/accounting/provider full audit','No','No','No','—','No','No','N/A','Planned'],
@@ -405,14 +412,14 @@ for (let index = 0; index < LATER_LEDGER_ROWS.length; index += 1) {
 const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   roadmap: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md',
-    normalizedSha256: '267502f95c67d2a4337e5f8d98d8f34960aafeda2f3840049e6eaebf8768cbd8',
-    normalizedUtf8Bytes: 71704,
+    normalizedSha256: 'ae7c0f24d290b78cd904aac9686736f00446ea63e96ddc9809defa4174f77b61',
+    normalizedUtf8Bytes: 72070,
     normalizedLineCount: 349,
   }),
   ledger: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
-    normalizedSha256: 'ae003d746948ed78b6c89a30d937dcad78c501112b72d6a0bfc5af86d227600e',
-    normalizedUtf8Bytes: 95401,
+    normalizedSha256: '9312002a5001f8b4fbae2a45d263655b1cdd68e36a9f641ed65c7c0db2122a8c',
+    normalizedUtf8Bytes: 97730,
     normalizedLineCount: 138,
   }),
   architecture14A: OBJECT_FREEZE({
@@ -423,9 +430,15 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   architecture14B: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14B_RESETTABLE_FICTIONAL_DEMO_JOURNEY.md',
-    normalizedSha256: 'fdff486a229079d2a8333f6a3b846375dcf9da8fcc7d36a4916aa9d64435da8c',
-    normalizedUtf8Bytes: 8954,
+    normalizedSha256: 'd04de9c968d17b41f2149454a2d1b53ab9cae6bb33eb29a1d4d2665f54bb217b',
+    normalizedUtf8Bytes: 9124,
     normalizedLineCount: 35,
+  }),
+  architecture14C: OBJECT_FREEZE({
+    path: 'docs/architecture/MISSION_27_PART14C_FINANCIAL_LIFECYCLE_RECOVERY.md',
+    normalizedSha256: '28e1dd9aba2dc8513d552586abde162704ec9c844184b6f6eb92dd3cb5dbc7d8',
+    normalizedUtf8Bytes: 6055,
+    normalizedLineCount: 83,
   }),
 });
 
@@ -522,10 +535,11 @@ function readCanonicalInput(input) {
   if (input === null || typeof input !== 'object' || IS_PROXY(input) ||
       OBJECT_GET_PROTOTYPE_OF(input) !== OBJECT_PROTOTYPE) throw invalid();
   const keys = REFLECT_OWN_KEYS(input);
-  if (keys.length !== 4) throw invalid();
-  let roadmap; let ledger; let architecture14A; let architecture14B;
+  if (keys.length !== 5) throw invalid();
+  let roadmap; let ledger; let architecture14A; let architecture14B; let architecture14C;
   let hasRoadmap = false; let hasLedger = false;
   let hasArchitecture14A = false; let hasArchitecture14B = false;
+  let hasArchitecture14C = false;
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index];
     if (typeof key !== 'string') throw invalid();
@@ -539,18 +553,22 @@ function readCanonicalInput(input) {
       architecture14A = descriptor.value; hasArchitecture14A = true;
     } else if (key === 'architecture14B' && !hasArchitecture14B) {
       architecture14B = descriptor.value; hasArchitecture14B = true;
+    } else if (key === 'architecture14C' && !hasArchitecture14C) {
+      architecture14C = descriptor.value; hasArchitecture14C = true;
     } else throw invalid();
   }
-  if (!hasRoadmap || !hasLedger || !hasArchitecture14A || !hasArchitecture14B) throw invalid();
-  return [roadmap, ledger, architecture14A, architecture14B];
+  if (!hasRoadmap || !hasLedger || !hasArchitecture14A || !hasArchitecture14B ||
+      !hasArchitecture14C) throw invalid();
+  return [roadmap, ledger, architecture14A, architecture14B, architecture14C];
 }
 
 const VALIDATED_AUTHORITY = OBJECT_FREEZE({
-  contractVersion: 'm27-part14b-authority-ratification-v1',
+  contractVersion: 'm27-part14c-authority-ratification-v1',
   releasedPart13Head: PART13_RELEASE.head,
   releasedPart14AHead: PART14A_RELEASE.head,
-  currentSlice: '14B', currentStatus: 'candidate',
-  laterSlices: OBJECT_FREEZE(['14C','14D','14E','14F','14G']),
+  acceptedPart14BHead: PART14B_ACCEPTANCE.head,
+  currentSlice: '14C', currentStatus: 'candidate',
+  laterSlices: OBJECT_FREEZE(['14D','14E','14F','14G']),
   migrationLatest: 272, migration273Present: false,
 });
 
@@ -560,6 +578,7 @@ function validate(input) {
   validateDocument('ledger', values[1]);
   validateDocument('architecture14A', values[2]);
   validateDocument('architecture14B', values[3]);
+  validateDocument('architecture14C', values[4]);
   return VALIDATED_AUTHORITY;
 }
 
@@ -575,6 +594,7 @@ OBJECT_DEFINE_PROPERTIES(API, {
   PART14_SCOPES:{value:PART14_SCOPES, enumerable:true, writable:false, configurable:false},
   PART13_RELEASE:{value:PART13_RELEASE, enumerable:true, writable:false, configurable:false},
   PART14A_RELEASE:{value:PART14A_RELEASE, enumerable:true, writable:false, configurable:false},
+  PART14B_ACCEPTANCE:{value:PART14B_ACCEPTANCE, enumerable:true, writable:false, configurable:false},
   LATER_LEDGER_ROWS:{value:LATER_LEDGER_ROWS, enumerable:true, writable:false, configurable:false},
   CANONICAL_DOCUMENTS:{value:CANONICAL_DOCUMENTS, enumerable:true, writable:false, configurable:false},
   validate:{value:validate, enumerable:true, writable:false, configurable:false},

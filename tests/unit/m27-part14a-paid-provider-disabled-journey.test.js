@@ -326,14 +326,15 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
     const docs = Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
       .map(([name,entry])=>[name,fs.readFileSync(path.join(ROOT,entry.path),'utf8')]));
     expect(authority.validate(docs)).toEqual(expect.objectContaining({
-      currentSlice:'14B', currentStatus:'candidate', migrationLatest:272,
-      migration273Present:false, laterSlices:['14C','14D','14E','14F','14G'],
+      currentSlice:'14C', currentStatus:'candidate', migrationLatest:272,
+      migration273Present:false, laterSlices:['14D','14E','14F','14G'],
+      acceptedPart14BHead:'497fad89e145dece26bdf1fb43789f64bc29560f',
     }));
     const mutations = [
-      ['false release','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B accepted and released'],
-      ['false production complete','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B production complete'],
-      ['deployed','ledger','sole automatic deployment `c82929fa-7393-4d91-975b-9bb7080e61b6` passed Docker build and selected the hardened `setpriv` start but restarted before health with only the generic pre-Node rejection; fourth diagnostic correction head `c32d59b89d06742a2bdc8434760ce2658b01e604`, tree `ac2c5fe1830f99481ce4796f77ba7a62cddfdf9c`, independently rejected with one P2 for raw checksum-verifier stderr; same-writer correction pending','deployment `forged` succeeded; Part 14B released'],
-      ['later slice','ledger','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | Complete'],
+      ['false release','ledger','Part 14B remains unreleased.','Part 14B is released.'],
+      ['false production complete','ledger','Part 14B remains unreleased.','Part 14B production is complete.'],
+      ['deployed','ledger','no deployment or health verdict exists','deployment succeeded and health passed'],
+      ['later slice','ledger','| 14D | Integrated tenant/role/CSRF','| 14D | Complete tenant/role/CSRF'],
       ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
       ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],
       ['automatic refund','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic refund authorized.'],

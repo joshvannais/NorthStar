@@ -62,6 +62,8 @@ const reportingPart12AcceptanceRepository =
   require('../customerFinancial/reportingPart12AcceptanceRepository');
 const paidTenantJourneyAcceptanceRepository =
   require('../customerFinancial/paidTenantJourneyAcceptanceRepository');
+const financialLifecycleRecoveryAcceptanceRepository =
+  require('../customerFinancial/financialLifecycleRecoveryAcceptanceRepository');
 
 const PART8D_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PART8D_DIGEST = /^[0-9a-f]{64}$/i;
@@ -160,8 +162,12 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
     reportingPart12AcceptanceRepository.readBundle;
   const paidTenantJourneyAcceptanceRead = options.paidTenantJourneyAcceptanceRead ||
     paidTenantJourneyAcceptanceRepository.read;
+  const financialLifecycleRecoveryAcceptanceRead =
+    options.financialLifecycleRecoveryAcceptanceRead ||
+    financialLifecycleRecoveryAcceptanceRepository.read;
   const auth = options.auth || requireOnboardedInternal;
   const role = options.role || requireRole('owner','admin');
+  const recoveryRole = options.recoveryRole || requireRole('owner');
   const quoteRole = options.quoteRole || requireRole('owner','admin','member');
   const throttle = options.throttle || rateLimit('internal-api', req =>
     `m27-editable-estimate:${req.tenantContext.organizationId}:${req.tenantContext.userId}`);
@@ -739,6 +745,31 @@ function createCustomerFinancialEditableEstimateRouter(options = {}) {
         status:400,code:'CUSTOMER_FINANCIAL_PAID_JOURNEY_INVALID',
         message:'Select one exact current paid provider-disabled journey.' });
       try { return res.json({success:true,data:await paidTenantJourneyAcceptanceRead(
+        poolProvider(),source(req),req.params.estimateId,req.query.handoffReceiptId,
+        req.query.handoffReceiptDigest)}); }
+      catch (error) { return failure(res,error); }
+    });
+  router.all('/:estimateId/financial-lifecycle-recovery-acceptance', (req,res,next) => {
+      if (req.method === 'GET') return next();
+      res.set('Allow','GET');
+      return res.status(405).json({ success:false, error:{
+        category:'CUSTOMER_FINANCIAL_RECOVERY_ACCEPTANCE_METHOD_NOT_ALLOWED',
+        message:'Use the exact financial lifecycle recovery read boundary.',
+      } });
+    });
+  router.get('/:estimateId/financial-lifecycle-recovery-acceptance',
+    auth, recoveryRole, throttle, async (req,res) => {
+      res.set('Cache-Control','private, no-store'); res.vary('Cookie');
+      const keys=Object.keys(req.query);
+      if (keys.length!==2 || !keys.includes('handoffReceiptId') ||
+          !keys.includes('handoffReceiptDigest') ||
+          typeof req.query.handoffReceiptId!=='string' ||
+          typeof req.query.handoffReceiptDigest!=='string' ||
+          !PART8D_UUID.test(req.query.handoffReceiptId) ||
+          !PART8D_DIGEST.test(req.query.handoffReceiptDigest)) return failure(res,{
+        status:400,code:'CUSTOMER_FINANCIAL_RECOVERY_ACCEPTANCE_INVALID',
+        message:'Select one exact current financial lifecycle recovery journey.' });
+      try { return res.json({success:true,data:await financialLifecycleRecoveryAcceptanceRead(
         poolProvider(),source(req),req.params.estimateId,req.query.handoffReceiptId,
         req.query.handoffReceiptDigest)}); }
       catch (error) { return failure(res,error); }

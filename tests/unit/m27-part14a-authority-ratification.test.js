@@ -8,7 +8,9 @@ const authority = require('../../src/customerFinancial/mission27Part14Authority'
 
 const ROOT = path.resolve(__dirname, '../..');
 const AUTHORITY_PATH = require.resolve('../../src/customerFinancial/mission27Part14Authority');
-const DOCUMENT_KEYS = Object.freeze(['roadmap', 'ledger', 'architecture14A', 'architecture14B']);
+const DOCUMENT_KEYS = Object.freeze([
+  'roadmap', 'ledger', 'architecture14A', 'architecture14B', 'architecture14C',
+]);
 const DOCS = Object.freeze(Object.fromEntries(DOCUMENT_KEYS.map(name => [
   name,
   fs.readFileSync(path.join(ROOT, authority.CANONICAL_DOCUMENTS[name].path), 'utf8'),
@@ -58,7 +60,7 @@ function runFresh(source) {
   return JSON.parse(result.stdout.trim());
 }
 
-describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
+describe('Mission 27 Part 14C complete canonical authority allowlist', () => {
   test('independently derives the locked normalized whole-document manifest', () => {
     for (const name of DOCUMENT_KEYS) {
       const document = normalized(DOCS[name]);
@@ -70,9 +72,10 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
     }
     expect(Object.isFrozen(authority.CANONICAL_DOCUMENTS)).toBe(true);
     expect(authority.validate({ ...DOCS })).toEqual(expect.objectContaining({
-      contractVersion:'m27-part14b-authority-ratification-v1',
-      currentSlice:'14B', currentStatus:'candidate', migrationLatest:272,
-      migration273Present:false, laterSlices:['14C','14D','14E','14F','14G'],
+      contractVersion:'m27-part14c-authority-ratification-v1',
+      acceptedPart14BHead:authority.PART14B_ACCEPTANCE.head,
+      currentSlice:'14C', currentStatus:'candidate', migrationLatest:272,
+      migration273Present:false, laterSlices:['14D','14E','14F','14G'],
     }));
   });
 
@@ -92,7 +95,7 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
     ['received check cleared','A received check is treated as cleared cash.'],
     ['check variant','check_received implies bank clearance and settlement.'],
   ])('rejects contradictory normative appendix: %s', (_name, claim) => {
-    expectRejected('architecture14B', `${DOCS.architecture14B}\n## Additional authority\n\n${claim}\n`);
+    expectRejected('architecture14C', `${DOCS.architecture14C}\n## Additional authority\n\n${claim}\n`);
   });
 
   test('rejects every material ledger cell and every later-row status/order mutation', () => {
@@ -113,7 +116,7 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
 
   test('rejects status, provenance, scope, evidence, unavailable and Part13D limitation drift', () => {
     replaceExact('roadmap',
-      'Status: frozen plan through released Part 14A; original Part 14B was accepted and merged, and its fourth source-only release correction is the current implementation candidate.',
+      'Status: frozen plan through released Part 14A; original Part 14B is accepted and merged with its exact automatic deployment trigger queued during a global Railway build pause; original Part 14C is the current implementation candidate.',
       'Status: frozen plan through released complete Part 14; original Part 14B is released.');
     replaceExact('roadmap', authority.PART13_RELEASE.head, 'f'.repeat(40));
     replaceExact('roadmap', authority.PART14A_RELEASE.head, 'e'.repeat(40));
@@ -128,16 +131,18 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
       'Unavailable and unclaimed: immutable issued invoice/document, real customer delivery,',
       'Accepted and complete: immutable issued invoice/document, real customer delivery,');
     replaceExact('architecture14B',
-      'Status: accepted at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`, tree `2c11c575f6d0a5171981be681fd5978d8f4bbd35`, and normally merged as PR #535 to exact main `667befdbf06a26cd3416bce5f6d25ab124287c9e`. Its first source-only release correction at head `380d059ecd6805b28c5b93e1be31f2c151da7658`, tree `689db31fd041dcecd20ca0a4d3d6bc0976e2ab61`, was normally merged as PR #536 to exact main `14443062ecde40b3bca90a6ca0276b870b362311`; sole automatic Railway deployment `e4601c19-713e-49f3-9bba-3b185a8c924a` passed the pinned amd64 Docker build and entered deployment, then failed before health verification because Debian dash split the runtime-identity comparison across two physical commands. Its second source-only release correction at head `85e7eaa0af05b64c1710697cae996a8534873451`, tree `527856cce3cc33d33baebaf4016f287cf7ea3013`, was normally merged as PR #537 to exact main `b60fe6d49da5f89ce5d85945213b8d7e22efaace`; sole automatic Railway deployment `9d81c8e0-1187-4716-8c7a-072d664d700e` again passed the pinned amd64 Docker build and executed past that dash defect, then restarted before health with the generic runtime-identity rejection because the valid Railway OCI process had cleared supplementary groups. Its third source-only release correction at head `c405929144ca6e8e0ad9e7367d59a3615422619d`, tree `9399cc3a69083f4fa87f5eec8d402286f698e4fd`, was normally merged as PR #538 to exact main `d66b16c7cc2cc81f5d5f141e2b3d5013e68fb0f7`; sole automatic deployment `c82929fa-7393-4d91-975b-9bb7080e61b6` passed the pinned Docker build and selected the hardened `setpriv` start, then restarted before health with only the generic pre-Node rejection, so the later failed invariant is not attributable from the production logs. The fourth source-only release correction at head `c32d59b89d06742a2bdc8434760ce2658b01e604`, tree `ac2c5fe1830f99481ce4796f77ba7a62cddfdf9c`, was independently rejected with one P2 because checksum-manifest verification could emit raw utility stderr before the fixed startup code; its same-writer correction is current. Part 14B remains release-incomplete. Provider evidence, live-money evidence, and founder visual approval are not accepted.',
-      'Status: released, deployed, and production complete.');
-    replaceExact('architecture14B',
+      'Railway globally paused builds before the exact automatic trigger could run, so that trigger is queued, no deployment or health verdict exists, and Part 14B remains unreleased.',
+      'Part 14B is released, deployed, and production complete.');    replaceExact('architecture14B',
       'Offline cash remains `offline_received`. A received check remains `check_clearance_unknown`; the disabled clearance transition remains `check_clearance_authority_unavailable`.',
       'Offline cash and checks are both cleared settlement.');
     replaceExact('architecture14B',
       'Part 14B performs zero provider calls or mutations, receiver mutations, outbound messages, accounting mutations, downstream mutations, paid-repository reads, production-database mutations, or live-money movements.',
       'Part 14B may call providers, receivers, accounting, paid repositories, and move money.');
-    replaceExact('ledger', 'Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`',
+    replaceExact('ledger', 'Accepted; no P0–P3 at corrected head `497fad89e145dece26bdf1fb43789f64bc29560f`',
       'Accepted, released, deployed, and production complete');
+    replaceExact('architecture14C',
+      'The contract remains `incomplete_required_evidence`',
+      'The contract is complete and accepted');
   });
 
   test('rejects reordered, removed, duplicated, renamed, appended and evasively rewritten authority', () => {
@@ -155,6 +160,10 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
     replaceExact('architecture14B', '## HTTP and browser boundary', '## Browser boundary');
     replaceExact('architecture14B', 'The projection covers, in order,',
       'The projection may cover, in any order,');
+    expectRejected('architecture14C', swapAdjacentSections(DOCS.architecture14C,
+      '## Private acceptance boundary', '## Ordered recovery scenarios'));
+    replaceExact('architecture14C', '18. downstream correction and recovery.',
+      '18. automatic downstream mutation.');
     expectRejected('roadmap', `${DOCS.roadmap}\n## Unreviewed normative appendix\n\nPart 14A is complete.\n`);
     expectRejected('ledger', `${DOCS.ledger}\n| 14H | Unexpected normative row | No | No | No | — | No | No | No | Planned |\n`);
     expectRejected('roadmap', DOCS.roadmap.replace('Part 14A', 'Part  14A'));
@@ -371,10 +380,11 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
         const originalUpdate=Object.getOwnPropertyDescriptor(prototype,'update');
         const originalDigest=Object.getOwnPropertyDescriptor(prototype,'digest');
         const answers=['ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
-          'ed9bf3ef4865a09afd59e6eac7d2b3c1423593649a94e519fc60afc829cf8461',
-          '1cd66efecf4bf918a62fcfe03a491c614ee5c6ebac9adf757964dad30379bfc6',
+          'ae7c0f24d290b78cd904aac9686736f00446ea63e96ddc9809defa4174f77b61',
+          '64b1cb0d0adc88a6afcfb7aefdf7f01a6b4f973887d76ac0ad0bb03a1f7f701f',
           '841189a5e1e03e9d6c54579a043847e87a3ae80e8c93a46dd9f975bb9843144c',
-          '670e99cd9a72f0494041ed6077d4decb3994d8b29e00da3ba47d5dafc49eee6f'];
+          'd04de9c968d17b41f2149454a2d1b53ab9cae6bb33eb29a1d4d2665f54bb217b',
+          '3adf2ee7d523a38f9c7402e05a44f0ec782a1044bab27a8260638e8a36258408'];
         function update(data,encoding){counts.update+=1; this.input=data; return this;}
         function digest(encoding){counts.digest+=1; return encoding==='hex'?answers.shift():'';}
         Object.defineProperty(prototype,'update',{...originalUpdate,value:update});

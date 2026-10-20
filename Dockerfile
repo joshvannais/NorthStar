@@ -54,25 +54,67 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
          /usr/bin/chage /usr/bin/expiry /usr/sbin/unix_chkpwd \
     && /usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' + \
     && capability_inventory=/tmp/northstar-file-capabilities \
-    && /sbin/getcap -r / 2>/dev/null > "$capability_inventory" \
+    && /usr/sbin/getcap -r / 2>/dev/null > "$capability_inventory" \
     && while IFS= read -r capability_entry; do \
          test -z "$capability_entry" && continue; \
          capability_path=${capability_entry% *}; \
          test "$capability_path" != "$capability_entry" || exit 78; \
-         /sbin/setcap -r "$capability_path"; \
+         /usr/sbin/setcap -r "$capability_path"; \
        done < "$capability_inventory" \
-    && /bin/rm -f "$capability_inventory" /sbin/setcap \
-    && test -z "$(/usr/bin/find / -xdev -type f -perm /6000 -print -quit)" \
-    && test -z "$(/sbin/getcap -r / 2>/dev/null)" \
-    && /usr/bin/printf '%s\n' 'northstar-privilege-inventory-v1' \
+    && /bin/rm -f "$capability_inventory" /usr/sbin/setcap \
+    && /bin/rm -f /usr/sbin/capsh /usr/sbin/getpcaps \
+    && /bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap \
+    && case "$TARGETARCH" in \
+         amd64) setpriv_sha='d5839b20edb0d77222b1e11be7d155c7122d381dbfad40876b0def7dd710f5bd'; setpriv_size='80192'; \
+                  getcap_sha='815e0a9db190b9f50e83a9443daa368c705bf466142521b12b4770bf7f69f579'; getcap_size='14576' ;; \
+         arm64) setpriv_sha='24410fedc29286402ae3b366bd3a78c3d177f7a1190797f1ea564f190097356c'; setpriv_size='133288'; \
+                  getcap_sha='dfd4546e0dbf6213e920622249d10e4469a4e41cfbdc62fd0da2472acffdd836'; getcap_size='67672' ;; \
+         *) exit 78 ;; \
+       esac \
+    && printf '%s  %s\n' "$setpriv_sha" /usr/bin/setpriv | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$getcap_sha" /usr/sbin/getcap | /usr/bin/sha256sum -c - \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/setpriv)" = "$setpriv_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/sbin/getcap)" = "$getcap_size" \
+    && /bin/ln /usr/bin/setpriv /app/.northstar-runtime/setpriv.identity \
+    && /bin/ln /usr/sbin/getcap /app/.northstar-runtime/getcap.identity \
+    && setpriv_build_device_inode=$(/usr/bin/stat -c '%d:%i' /usr/bin/setpriv) \
+    && getcap_build_device_inode=$(/usr/bin/stat -c '%d:%i' /usr/sbin/getcap) \
+    && /usr/bin/printf '%s\n' 'northstar-privilege-inventory-v2' \
          'setid=none' 'filecap=none' 'runtime_uid=1000' 'runtime_gid=1000' \
+         'removed_helper=/usr/sbin/capsh' 'removed_helper=/usr/sbin/getpcaps' \
+         'removed_helper=/usr/sbin/setcap' \
          > /app/.northstar-runtime/privilege-inventory \
+    && /usr/bin/printf '%s\n' 'northstar-executable-inventory-v1' \
+         'setpriv_path=/usr/bin/setpriv' "setpriv_sha256=$setpriv_sha" \
+         "setpriv_size=$setpriv_size" 'setpriv_mode=555' \
+         "setpriv_build_device_inode=$setpriv_build_device_inode" \
+         'setpriv_identity_anchor=/app/.northstar-runtime/setpriv.identity' \
+         'getcap_path=/usr/sbin/getcap' "getcap_sha256=$getcap_sha" \
+         "getcap_size=$getcap_size" 'getcap_mode=555' \
+         "getcap_build_device_inode=$getcap_build_device_inode" \
+         'getcap_identity_anchor=/app/.northstar-runtime/getcap.identity' \
+         > /app/.northstar-runtime/executable-inventory \
     && /usr/bin/sha256sum /app/.northstar-runtime/privilege-inventory \
          > /app/.northstar-runtime/privilege-inventory.sha256 \
+    && /usr/bin/sha256sum /app/.northstar-runtime/executable-inventory \
+         > /app/.northstar-runtime/executable-inventory.sha256 \
     && /bin/chown 0:0 /app/.northstar-runtime/privilege-inventory \
          /app/.northstar-runtime/privilege-inventory.sha256 \
+         /app/.northstar-runtime/executable-inventory \
+         /app/.northstar-runtime/executable-inventory.sha256 \
+         /app/.northstar-runtime/setpriv.identity \
+         /app/.northstar-runtime/getcap.identity \
     && /bin/chmod 0444 /app/.northstar-runtime/privilege-inventory \
-         /app/.northstar-runtime/privilege-inventory.sha256
+         /app/.northstar-runtime/privilege-inventory.sha256 \
+         /app/.northstar-runtime/executable-inventory \
+         /app/.northstar-runtime/executable-inventory.sha256 \
+    && test ! -e /usr/sbin/capsh && test ! -L /usr/sbin/capsh \
+    && test ! -e /usr/sbin/getpcaps && test ! -L /usr/sbin/getpcaps \
+    && test ! -e /usr/sbin/setcap && test ! -L /usr/sbin/setcap \
+    && test -z "$(/usr/bin/find / -xdev -type f -perm /6000 -print -quit)" \
+    && test -z "$(/usr/sbin/getcap -r / 2>/dev/null)" \
+    && test -z "$(/usr/bin/find /usr/lib -xdev \( -type f -o -type d \) \
+         \( ! -uid 0 -o ! -gid 0 -o -perm /022 \) -print -quit)"
 
 ENV HOME=/var/lib/northstar/home \
     NORTHSTAR_DATA_DIR=/var/lib/northstar/data \

@@ -89,10 +89,22 @@ const RENEWABLE_JOURNEY_ERRORS = new Set([
 // exists; this transaction-scoped key also closes the first-read/first-write
 // race before that row exists.
 const CURRENT_READ_LOCK_SEED = '27001402';
+// The mounted Part 14B projection has measured as high as 116.4 seconds while
+// the authoritative transaction remains open. Keep this finite 180-second
+// transaction-local ceiling so a pooled backend carrying another repository's
+// shorter session setting cannot terminate the lock-held projection. PostgreSQL
+// restores the inherited session value automatically on COMMIT or ROLLBACK.
+const PART14B_IDLE_IN_TRANSACTION_TIMEOUT_MS = 180000;
 
 async function boundTransaction(client) {
   await client.query("SET LOCAL lock_timeout='2000ms'");
   await client.query("SET LOCAL statement_timeout='5000ms'");
+}
+
+async function boundFictionalJourneyTransaction(client) {
+  await boundTransaction(client);
+  await client.query(`SET LOCAL idle_in_transaction_session_timeout='${
+    PART14B_IDLE_IN_TRANSACTION_TIMEOUT_MS}ms'`);
 }
 
 function journeyUnavailable() {
@@ -668,7 +680,7 @@ class DemoCommandCenterRepository {
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
       open = true;
-      await boundTransaction(client);
+      await boundFictionalJourneyTransaction(client);
       await client.query(
         'SELECT pg_advisory_xact_lock_shared(hashtextextended($1::text,$2::bigint))',
         [token.tokenHash, CURRENT_READ_LOCK_SEED]

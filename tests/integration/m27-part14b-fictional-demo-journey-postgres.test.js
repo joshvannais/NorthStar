@@ -4,6 +4,7 @@ jest.setTimeout(900000);
 
 const crypto=require('node:crypto');
 const http=require('node:http');
+const {Client}=require('pg');
 const request=require('supertest');
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
 const contract=require('../../src/customerFinancial/fictionalDemoJourneyAcceptance');
@@ -30,6 +31,20 @@ function mutation(pending,cookieValue,intent,key){return pending.set('Host',HOST
 function deadline(message,ms){return new Promise((_,reject)=>{
   const timer=setTimeout(()=>reject(new Error(message)),ms);timer.unref?.();
 });}
+async function withEveryRuntimeClient(pool,callback){
+  const clients=[];
+  try {
+    for(let index=0;index<pool.options.max;index+=1) clients.push(await pool.connect());
+    return await callback(clients);
+  } finally { for(const client of clients) client.release(); }
+}
+async function runtimeTimeouts(pool){
+  return withEveryRuntimeClient(pool,clients=>Promise.all(clients.map(async client=>(await client.query(
+    `SELECT current_setting('idle_in_transaction_session_timeout') idle_timeout,
+            current_setting('statement_timeout') statement_timeout,
+            current_setting('lock_timeout') lock_timeout,
+            pg_backend_pid() pid`)).rows[0])));
+}
 
 realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
   let fixture,transport,journeyDbEntrySpy,forgedDetachedCalls=0;
@@ -109,6 +124,61 @@ realPostgres('Mission 27 Part 14B mounted resettable fictional journey',()=>{
       expect(recovered.body.data.journeyAcceptance[key]).toBe(0);
     expect(await protectedCounts(fixture.ownerPool)).toEqual(before);
     expect(forgedDetachedCalls).toBe(0);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  test('overrides a reused poisoned backend only inside the Part14B transaction',async()=>{
+    const entry=await request(fixture.app).get('/api/demo/command-center').set('Host',HOST);
+    const savedCookie=cookie(entry),estimate=entry.body.data.graphs[0].ids.estimate;
+    const runtimePool=fixture.db.getPool();
+    const inherited=new Map();
+    await withEveryRuntimeClient(runtimePool,clients=>Promise.all(clients.map(async client=>{
+      const before=(await client.query(
+        `SELECT current_setting('statement_timeout') statement_timeout,
+                current_setting('lock_timeout') lock_timeout,
+                pg_backend_pid() pid`)).rows[0];
+      inherited.set(Number(before.pid),before);
+      await client.query("SET idle_in_transaction_session_timeout='5000ms'");
+    })));
+    const poisoned=await runtimeTimeouts(runtimePool);
+    expect(new Set(poisoned.map(value=>value.pid)).size).toBe(runtimePool.options.max);
+    expect(poisoned.every(value=>value.idle_timeout==='5s')).toBe(true);
+
+    const originalSend=fixture.app.response.send;
+    let delayed=false,delayedResolve;
+    const delayedEntered=new Promise(resolve=>{delayedResolve=resolve;});
+    const responseDelay=jest.spyOn(fixture.app.response,'send').mockImplementation(function(...args){
+      if(!delayed&&this.req?.url?.includes('/part14b-acceptance')){
+        delayed=true;delayedResolve();setTimeout(()=>originalSend.apply(this,args),5500);return this;
+      }
+      return originalSend.apply(this,args);
+    });
+    let transactionPid;
+    try {
+      const pending=request(fixture.app).get(route(estimate)).set('Host',HOST)
+        .set('Cookie',savedCookie).then(value=>value);
+      await Promise.race([delayedEntered,
+        deadline('Part14B response delay boundary was not reached',600000)]);
+      const inspector=new Client({connectionString:process.env.M19_PG_ADMIN_URL});
+      await inspector.connect();
+      let holders;
+      try { holders=(await inspector.query(
+        `SELECT pid FROM pg_stat_activity
+          WHERE usename=$1 AND state LIKE 'idle in transaction%'`,[fixture.roles.runtime])).rows; }
+      finally { await inspector.end(); }
+      expect(holders).toHaveLength(1);transactionPid=Number(holders[0].pid);
+      const accepted=await Promise.race([pending,
+        deadline('Part14B did not survive the inherited idle transaction timeout',600000),
+      ]);
+      expect(accepted.status).toBe(200);expect(delayed).toBe(true);
+    } finally {responseDelay.mockRestore();}
+
+    const restored=await runtimeTimeouts(runtimePool);
+    const transactionSession=restored.find(value=>Number(value.pid)===transactionPid);
+    expect(transactionSession).toBeDefined();
+    expect(transactionSession.idle_timeout).toBe('5s');
+    expect(transactionSession.statement_timeout).toBe(inherited.get(transactionPid).statement_timeout);
+    expect(transactionSession.lock_timeout).toBe(inherited.get(transactionPid).lock_timeout);
     expect(transport).not.toHaveBeenCalled();
   });
 

@@ -50,6 +50,10 @@ check_runtime_identity() {
 
 check_runtime_identity || fail
 
+if [ -n "${LD_PRELOAD-}" ] || [ -n "${LD_LIBRARY_PATH-}" ]; then
+  fail
+fi
+
 # The Railway Docker build copies the source tree to /app. Accept only the physical canonical
 # script or the documented relative spelling while already in physical /app.
 # Caller-controlled PWD, INIT_CWD, CDPATH, npm variables, and alternate trees
@@ -112,11 +116,15 @@ sha_manifest="$runtime_directory/node-sha256"
 arch_manifest="$runtime_directory/node-arch"
 privilege_manifest="$runtime_directory/privilege-inventory"
 privilege_sha_manifest="$runtime_directory/privilege-inventory.sha256"
+executable_manifest="$runtime_directory/executable-inventory"
+executable_sha_manifest="$runtime_directory/executable-inventory.sha256"
 if [ ! -f "$manifest" ] || [ -L "$manifest" ] ||
    [ ! -f "$sha_manifest" ] || [ -L "$sha_manifest" ] ||
    [ ! -f "$arch_manifest" ] || [ -L "$arch_manifest" ] ||
    [ ! -f "$privilege_manifest" ] || [ -L "$privilege_manifest" ] ||
-   [ ! -f "$privilege_sha_manifest" ] || [ -L "$privilege_sha_manifest" ]; then
+   [ ! -f "$privilege_sha_manifest" ] || [ -L "$privilege_sha_manifest" ] ||
+   [ ! -f "$executable_manifest" ] || [ -L "$executable_manifest" ] ||
+   [ ! -f "$executable_sha_manifest" ] || [ -L "$executable_sha_manifest" ]; then
   echo "$FAILURE Missing authenticated Docker runtime manifest." >&2
   exit 78
 fi
@@ -126,12 +134,16 @@ if [ "$(/usr/bin/readlink -f -- "$runtime_directory")" != "$runtime_directory" ]
    [ "$(/usr/bin/readlink -f -- "$arch_manifest")" != "$arch_manifest" ] ||
    [ "$(/usr/bin/readlink -f -- "$privilege_manifest")" != "$privilege_manifest" ] ||
    [ "$(/usr/bin/readlink -f -- "$privilege_sha_manifest")" != "$privilege_sha_manifest" ] ||
+   [ "$(/usr/bin/readlink -f -- "$executable_manifest")" != "$executable_manifest" ] ||
+   [ "$(/usr/bin/readlink -f -- "$executable_sha_manifest")" != "$executable_sha_manifest" ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$runtime_directory")" != '0:0:555' ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$manifest")" != '0:0:444:1' ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$sha_manifest")" != '0:0:444:1' ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$arch_manifest")" != '0:0:444:1' ] ||
    [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$privilege_manifest")" != '0:0:444:1' ] ||
-   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$privilege_sha_manifest")" != '0:0:444:1' ]; then
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$privilege_sha_manifest")" != '0:0:444:1' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$executable_manifest")" != '0:0:444:1' ] ||
+   [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$executable_sha_manifest")" != '0:0:444:1' ]; then
   fail
 fi
 read_single_line() {
@@ -167,8 +179,9 @@ for writable_directory in "$HOME" "$NORTHSTAR_DATA_DIR" "$TMPDIR"; do
 done
 /usr/bin/sha256sum -c "$privilege_sha_manifest" >/dev/null || fail
 exec 3< "$privilege_manifest"
-for expected_privilege_line in northstar-privilege-inventory-v1 setid=none filecap=none \
-  runtime_uid=1000 runtime_gid=1000; do
+for expected_privilege_line in northstar-privilege-inventory-v2 setid=none filecap=none \
+  runtime_uid=1000 runtime_gid=1000 removed_helper=/usr/sbin/capsh \
+  removed_helper=/usr/sbin/getpcaps removed_helper=/usr/sbin/setcap; do
   IFS= read -r privilege_line <&3 || fail
   [ "$privilege_line" = "$expected_privilege_line" ] || fail
 done
@@ -178,13 +191,105 @@ if IFS= read -r privilege_line <&3; then
 fi
 exec 3<&-
 
+case "$runtime_arch:$node_sha256" in
+  x64:fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48)
+    setpriv_sha='d5839b20edb0d77222b1e11be7d155c7122d381dbfad40876b0def7dd710f5bd'
+    setpriv_size='80192'
+    getcap_sha='815e0a9db190b9f50e83a9443daa368c705bf466142521b12b4770bf7f69f579'
+    getcap_size='14576'
+    ;;
+  arm64:d09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d)
+    setpriv_sha='24410fedc29286402ae3b366bd3a78c3d177f7a1190797f1ea564f190097356c'
+    setpriv_size='133288'
+    getcap_sha='dfd4546e0dbf6213e920622249d10e4469a4e41cfbdc62fd0da2472acffdd836'
+    getcap_size='67672'
+    ;;
+  *) fail ;;
+esac
+
+/usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null || fail
+exec 3< "$executable_manifest"
+for expected_executable_line in northstar-executable-inventory-v1 \
+  setpriv_path=/usr/bin/setpriv "setpriv_sha256=$setpriv_sha" \
+  "setpriv_size=$setpriv_size" setpriv_mode=555; do
+  IFS= read -r executable_line <&3 || fail
+  [ "$executable_line" = "$expected_executable_line" ] || fail
+done
+IFS= read -r setpriv_build_line <&3 || fail
+case "$setpriv_build_line" in setpriv_build_device_inode=*) ;;
+  *) fail ;;
+esac
+setpriv_build_identity=${setpriv_build_line#setpriv_build_device_inode=}
+case "$setpriv_build_identity" in
+  *:*) build_device=${setpriv_build_identity%%:*};
+       build_inode=${setpriv_build_identity#*:} ;;
+  *) fail ;;
+esac
+case "$build_device" in ''|*[!0-9]*) fail ;; esac
+case "$build_inode" in ''|*[!0-9]*) fail ;; esac
+for expected_executable_line in \
+  setpriv_identity_anchor=/app/.northstar-runtime/setpriv.identity \
+  getcap_path=/usr/sbin/getcap "getcap_sha256=$getcap_sha" \
+  "getcap_size=$getcap_size" getcap_mode=555; do
+  IFS= read -r executable_line <&3 || fail
+  [ "$executable_line" = "$expected_executable_line" ] || fail
+done
+IFS= read -r getcap_build_line <&3 || fail
+case "$getcap_build_line" in getcap_build_device_inode=*) ;;
+  *) fail ;;
+esac
+getcap_build_identity=${getcap_build_line#getcap_build_device_inode=}
+case "$getcap_build_identity" in
+  *:*) build_device=${getcap_build_identity%%:*};
+       build_inode=${getcap_build_identity#*:} ;;
+  *) fail ;;
+esac
+case "$build_device" in ''|*[!0-9]*) fail ;; esac
+case "$build_inode" in ''|*[!0-9]*) fail ;; esac
+IFS= read -r executable_line <&3 || fail
+[ "$executable_line" = \
+  'getcap_identity_anchor=/app/.northstar-runtime/getcap.identity' ] || fail
+if IFS= read -r executable_line <&3; then
+  exec 3<&-
+  fail
+fi
+exec 3<&-
+
+check_executable_identity() {
+  executable_path=$1
+  identity_anchor=$2
+  executable_sha=$3
+  executable_size=$4
+  if [ ! -f "$executable_path" ] || [ ! -x "$executable_path" ] ||
+     [ -L "$executable_path" ] || [ ! -f "$identity_anchor" ] ||
+     [ ! -x "$identity_anchor" ] || [ -L "$identity_anchor" ] ||
+     [ "$(/usr/bin/readlink -f -- "$executable_path")" != "$executable_path" ] ||
+     [ "$(/usr/bin/readlink -f -- "$identity_anchor")" != "$identity_anchor" ] ||
+     [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$executable_path")" != '0:0:555:2' ] ||
+     [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$identity_anchor")" != '0:0:555:2' ] ||
+     [ "$(/usr/bin/stat -c '%s' -- "$executable_path")" != "$executable_size" ] ||
+     [ "$(/usr/bin/stat -c '%d:%i' -- "$executable_path")" != \
+       "$(/usr/bin/stat -c '%d:%i' -- "$identity_anchor")" ]; then
+    fail
+  fi
+  /usr/bin/printf '%s  %s\n' "$executable_sha" "$executable_path" |
+    /usr/bin/sha256sum -c - >/dev/null || fail
+}
+check_executable_identity /usr/bin/setpriv \
+  "$runtime_directory/setpriv.identity" "$setpriv_sha" "$setpriv_size"
+check_executable_identity /usr/sbin/getcap \
+  "$runtime_directory/getcap.identity" "$getcap_sha" "$getcap_size"
+for removed_helper in /usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap; do
+  [ ! -e "$removed_helper" ] && [ ! -L "$removed_helper" ] || fail
+done
+
 for privilege_root in /usr "$CANONICAL_ROOT" /var/lib/northstar /tmp /home; do
   [ -e "$privilege_root" ] || continue
   unexpected_setid=$(/usr/bin/find "$privilege_root" -xdev -type f \
     -perm /6000 -print -quit) || fail
   [ -z "$unexpected_setid" ] || fail
 done
-unexpected_filecap=$(/sbin/getcap -r /usr "$CANONICAL_ROOT" /var/lib/northstar \
+unexpected_filecap=$(/usr/sbin/getcap -r /usr "$CANONICAL_ROOT" /var/lib/northstar \
   /tmp /home 2>/dev/null) || fail
 [ -z "$unexpected_filecap" ] || fail
 platform=$(/usr/bin/dpkg --print-architecture) || fail
@@ -255,7 +360,8 @@ for resource in "$launcher" "$child" "$server" \
   "$CANONICAL_ROOT/package.json" "$CANONICAL_ROOT/package-lock.json" \
   "$CANONICAL_ROOT/Dockerfile" "$CANONICAL_ROOT/railway.toml" \
   "$CANONICAL_ROOT/scripts/node-v22.23.3-runtime-manifest.txt" \
-  "$privilege_manifest" "$privilege_sha_manifest" /usr/bin/setpriv /sbin/getcap
+  "$privilege_manifest" "$privilege_sha_manifest" \
+  "$executable_manifest" "$executable_sha_manifest"
 do
   if [ ! -f "$resource" ] || [ -L "$resource" ] ||
      [ "$(/usr/bin/readlink -f -- "$resource")" != "$resource" ] ||
@@ -263,15 +369,23 @@ do
     fail
   fi
 done
+check_executable_identity /usr/bin/setpriv \
+  "$runtime_directory/setpriv.identity" "$setpriv_sha" "$setpriv_size"
+check_executable_identity /usr/sbin/getcap \
+  "$runtime_directory/getcap.identity" "$getcap_sha" "$getcap_size"
 for protected_directory in "$CANONICAL_ROOT" "$CANONICAL_ROOT/scripts" \
   "$CANONICAL_ROOT/src" "$CANONICAL_ROOT/node_modules" "$runtime_directory" \
-  "$node_root" "$node_bin" /usr/local/lib /usr/local/lib/node_modules; do
+  "$node_root" "$node_bin" /usr/local/lib /usr/local/lib/node_modules /usr/lib; do
   if [ ! -d "$protected_directory" ] || [ -L "$protected_directory" ] ||
      [ "$(/usr/bin/stat -c '%u:%g' -- "$protected_directory")" != '0:0' ] ||
      [ $((0$(/usr/bin/stat -c '%a' -- "$protected_directory") & 022)) -ne 0 ]; then
     fail
   fi
 done
+unsafe_runtime_library=$(/usr/bin/find /usr/lib -xdev \
+  \( -type f -o -type d \) \
+  \( ! -uid 0 -o ! -gid 0 -o -perm /022 \) -print -quit) || fail
+[ -z "$unsafe_runtime_library" ] || fail
 unsafe_app_entry=$(/usr/bin/find "$CANONICAL_ROOT" -xdev \
   \( -type f -o -type d \) \
   \( ! -uid 0 -o ! -gid 0 -o -perm /022 \) -print -quit) || fail

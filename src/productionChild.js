@@ -22,6 +22,7 @@ const expectedChild = path.join(expectedRoot, 'src', 'productionChild.js');
 const expectedServer = path.join(expectedRoot, 'src', 'server.js');
 const executableRealpath = fs.realpathSync.native(process.execPath);
 const executableStat = fs.statSync(executableRealpath);
+if (process.env.LD_PRELOAD || process.env.LD_LIBRARY_PATH) throw new Error(FAILURE);
 if (process.version !== EXPECTED_NODE || process.execArgv.length !== 0 ||
     process.argv.length !== 2 ||
     process.argv[1] !== expectedChild || __filename !== expectedChild ||
@@ -83,7 +84,11 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
     '/app/.northstar-runtime/node-path', '/app/.northstar-runtime/node-sha256',
     '/app/.northstar-runtime/node-arch',
     '/app/.northstar-runtime/privilege-inventory',
-    '/app/.northstar-runtime/privilege-inventory.sha256', '/usr/bin/setpriv', '/sbin/getcap']) {
+    '/app/.northstar-runtime/privilege-inventory.sha256',
+    '/app/.northstar-runtime/executable-inventory',
+    '/app/.northstar-runtime/executable-inventory.sha256',
+    '/app/.northstar-runtime/setpriv.identity',
+    '/app/.northstar-runtime/getcap.identity', '/usr/bin/setpriv', '/usr/sbin/getcap']) {
     const info = fs.statSync(entry);
     if (info.uid !== 0 || info.gid !== 0 || (info.mode & 0o022) !== 0 ||
         fs.lstatSync(entry).isSymbolicLink()) throw new Error(FAILURE);
@@ -95,6 +100,19 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
       if (!error || !['EACCES', 'EPERM'].includes(error.code)) throw error;
     }
   }
+  const setprivStat = fs.statSync('/usr/bin/setpriv');
+  const setprivAnchorStat = fs.statSync('/app/.northstar-runtime/setpriv.identity');
+  const getcapStat = fs.statSync('/usr/sbin/getcap');
+  const getcapAnchorStat = fs.statSync('/app/.northstar-runtime/getcap.identity');
+  if ((setprivStat.mode & 0o777) !== 0o555 || setprivStat.nlink !== 2 ||
+      (setprivAnchorStat.mode & 0o777) !== 0o555 || setprivAnchorStat.nlink !== 2 ||
+      setprivStat.dev !== setprivAnchorStat.dev || setprivStat.ino !== setprivAnchorStat.ino ||
+      (getcapStat.mode & 0o777) !== 0o555 || getcapStat.nlink !== 2 ||
+      (getcapAnchorStat.mode & 0o777) !== 0o555 || getcapAnchorStat.nlink !== 2 ||
+      getcapStat.dev !== getcapAnchorStat.dev || getcapStat.ino !== getcapAnchorStat.ino ||
+      ['/usr/sbin/capsh', '/usr/sbin/getpcaps', '/usr/sbin/setcap'].some(fs.existsSync)) {
+    throw new Error(FAILURE);
+  }
 } else {
   if (process.platform !== 'win32' || process.arch !== 'x64' ||
       !/^[0-9a-f]{64}$/.test(authenticatedSha256 || '')) throw new Error(FAILURE);
@@ -103,7 +121,7 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
   if (actualSha256 !== authenticatedSha256) throw new Error(FAILURE);
 }
 for (const key of ['NODE_OPTIONS', 'NODE_PATH', 'NPM_CONFIG_NODE_OPTIONS',
-  'npm_config_node_options', 'NODE_V8_COVERAGE']) {
+  'npm_config_node_options', 'NODE_V8_COVERAGE', 'LD_PRELOAD', 'LD_LIBRARY_PATH']) {
   if (typeof process.env[key] === 'string' && process.env[key].length > 0) {
     throw new Error(FAILURE);
   }

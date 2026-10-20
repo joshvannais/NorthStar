@@ -28,6 +28,23 @@ const PINNED_NODE_SHA256 = Object.freeze({
   amd64: 'fde6a4bf8d0562f7751d1a2d6cb9b417c4cfe107bbcb0aa3e9a24e125e348f48',
   arm64: 'd09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d',
 });
+const PINNED_TOOL_IDENTITY = Object.freeze({
+  amd64: Object.freeze({
+    setpriv: Object.freeze({ size: 80192,
+      sha256: 'd5839b20edb0d77222b1e11be7d155c7122d381dbfad40876b0def7dd710f5bd' }),
+    getcap: Object.freeze({ size: 14576,
+      sha256: '815e0a9db190b9f50e83a9443daa368c705bf466142521b12b4770bf7f69f579' }),
+  }),
+  arm64: Object.freeze({
+    setpriv: Object.freeze({ size: 133288,
+      sha256: '24410fedc29286402ae3b366bd3a78c3d177f7a1190797f1ea564f190097356c' }),
+    getcap: Object.freeze({ size: 67672,
+      sha256: 'dfd4546e0dbf6213e920622249d10e4469a4e41cfbdc62fd0da2472acffdd836' }),
+  }),
+});
+const REMOVED_CAPABILITY_HELPERS = Object.freeze([
+  '/usr/sbin/capsh', '/usr/sbin/getpcaps', '/usr/sbin/setcap',
+]);
 const PRIVILEGED_BASE_PATHS = Object.freeze([
   '/usr/bin/chfn', '/usr/bin/chsh', '/usr/bin/gpasswd', '/usr/bin/mount',
   '/usr/bin/newgrp', '/usr/bin/passwd', '/usr/bin/su', '/usr/bin/umount',
@@ -65,6 +82,18 @@ function exactRuntimePlan(overrides = {}) {
     'docker-linux-amd64-manifest-sha256=efd0ab5780c2d9ab1f0f869571a00d5edb17793bff4cce4a2792e3eb0ffc7562',
     'docker-linux-arm64-manifest-sha256=b20fe038d9592822dd534600a1ddf467e985178aa3fed60ec441a056c2cc45bd',
     'docker-source-revision=81f419144a1251854c6d9afb09eaa39928e724e8',
+    'runtime-setpriv-path=/usr/bin/setpriv',
+    'runtime-getcap-path=/usr/sbin/getcap',
+    `linux-amd64-setpriv-sha256=${PINNED_TOOL_IDENTITY.amd64.setpriv.sha256}`,
+    `linux-amd64-setpriv-size=${PINNED_TOOL_IDENTITY.amd64.setpriv.size}`,
+    `linux-amd64-getcap-sha256=${PINNED_TOOL_IDENTITY.amd64.getcap.sha256}`,
+    `linux-amd64-getcap-size=${PINNED_TOOL_IDENTITY.amd64.getcap.size}`,
+    `linux-arm64-setpriv-sha256=${PINNED_TOOL_IDENTITY.arm64.setpriv.sha256}`,
+    `linux-arm64-setpriv-size=${PINNED_TOOL_IDENTITY.arm64.setpriv.size}`,
+    `linux-arm64-getcap-sha256=${PINNED_TOOL_IDENTITY.arm64.getcap.sha256}`,
+    `linux-arm64-getcap-size=${PINNED_TOOL_IDENTITY.arm64.getcap.size}`,
+    'debian-libcap2-bin-version=1:2.66-4+deb12u3+b1',
+    'removed-capability-helpers=/usr/sbin/capsh,/usr/sbin/getpcaps,/usr/sbin/setcap',
   ];
   if (JSON.stringify(manifestLines) !== JSON.stringify(expectedManifestLines)) {
     throw new Error('Unexpected Node runtime provenance manifest.');
@@ -97,10 +126,16 @@ function exactRuntimePlan(overrides = {}) {
         'libcap2=1:2.66-4+deb12u3+b1 libcap2-bin=1:2.66-4+deb12u3+b1') ||
       !inputs.dockerfile.includes(
         "/usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' +") ||
-      !inputs.dockerfile.includes('/sbin/getcap -r / 2>/dev/null') ||
-      !inputs.dockerfile.includes('/sbin/setcap -r "$capability_path"') ||
-      !inputs.dockerfile.includes('/bin/rm -f "$capability_inventory" /sbin/setcap') ||
-      !inputs.dockerfile.includes("'northstar-privilege-inventory-v1'") ||
+      !inputs.dockerfile.includes('/usr/sbin/getcap -r / 2>/dev/null') ||
+      !inputs.dockerfile.includes('/usr/sbin/setcap -r "$capability_path"') ||
+      !inputs.dockerfile.includes('/bin/rm -f "$capability_inventory" /usr/sbin/setcap') ||
+      !inputs.dockerfile.includes('/bin/rm -f /usr/sbin/capsh /usr/sbin/getpcaps') ||
+      !inputs.dockerfile.includes('/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap') ||
+      !inputs.dockerfile.includes("'northstar-privilege-inventory-v2'") ||
+      !inputs.dockerfile.includes("'northstar-executable-inventory-v1'") ||
+      !inputs.dockerfile.includes('/app/.northstar-runtime/setpriv.identity') ||
+      !inputs.dockerfile.includes('/app/.northstar-runtime/getcap.identity') ||
+      !inputs.dockerfile.includes('/usr/bin/find /usr/lib -xdev') ||
       !PRIVILEGED_BASE_PATHS.every(value => inputs.dockerfile.includes(value)) ||
       !inputs.dockerfile.includes('USER 1000:1000') ||
       !inputs.dockerfile.includes(
@@ -127,6 +162,16 @@ function exactRuntimePlan(overrides = {}) {
     if (!inputs.prepare.includes(digest) || !inputs.start.includes(digest)) {
       throw new Error(`Missing ${arch} executable binding.`);
     }
+    for (const tool of ['setpriv', 'getcap']) {
+      const identity = PINNED_TOOL_IDENTITY[arch][tool];
+      if (!inputs.dockerfile.includes(identity.sha256) ||
+          !inputs.dockerfile.includes(`'${identity.size}'`) ||
+          !inputs.manifest.includes(identity.sha256) ||
+          !inputs.start.includes(identity.sha256) ||
+          !inputs.start.includes(`'${identity.size}'`)) {
+        throw new Error(`Missing ${arch} ${tool} identity binding.`);
+      }
+    }
   }
   if (!inputs.prepare.includes('/usr/bin/dpkg --print-architecture') ||
       !inputs.prepare.includes('/usr/bin/sha256sum -c -') ||
@@ -139,8 +184,13 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes("[ \"${NORTHSTAR_DATA_DIR-}\" != '/var/lib/northstar/data' ]") ||
       !inputs.start.includes("! -uid 0 -o ! -gid 0 -o -perm /022") ||
       !inputs.start.includes('[ "$2" = 1 ]') ||
-      !inputs.start.includes('/sbin/getcap -r /usr "$CANONICAL_ROOT"') ||
+      !inputs.start.includes('/usr/sbin/getcap -r /usr "$CANONICAL_ROOT"') ||
       !inputs.start.includes('/usr/bin/sha256sum -c "$privilege_sha_manifest"') ||
+      !inputs.start.includes('/usr/bin/sha256sum -c "$executable_sha_manifest"') ||
+      !inputs.start.includes("!= '0:0:555:2'") ||
+      !inputs.start.includes('/usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap') ||
+      !inputs.start.includes('LD_PRELOAD') || !inputs.start.includes('LD_LIBRARY_PATH') ||
+      !inputs.start.includes('unsafe_runtime_library=$(/usr/bin/find /usr/lib -xdev') ||
       !inputs.start.includes('PATH=$node_bin') || inputs.start.includes('PATH=/tmp') ||
       /\/nix\/store|command -v|\bwhich\b/.test(inputs.prepare + inputs.start)) {
     throw new Error('Unexpected runtime verification boundary.');
@@ -166,10 +216,23 @@ function createRootBuiltRuntimeSimulation(architecture = 'amd64') {
     '/app/scripts/node-v22.23.3-runtime-manifest.txt',
     '/app/.northstar-runtime/node-path', '/app/.northstar-runtime/node-sha256',
     '/app/.northstar-runtime/node-arch', '/app/.northstar-runtime/privilege-inventory',
-    '/app/.northstar-runtime/privilege-inventory.sha256', '/app/node_modules/express/index.js',
-    '/usr/bin/setpriv', '/sbin/getcap']) {
+    '/app/.northstar-runtime/privilege-inventory.sha256',
+    '/app/.northstar-runtime/executable-inventory',
+    '/app/.northstar-runtime/executable-inventory.sha256',
+    '/app/node_modules/express/index.js']) {
     add(pathname, 'file', pathname === '/usr/local/bin/node' ? 0o555 : 0o444);
   }
+  const setpriv = { type: 'file', mode: 0o555, uid: 0, gid: 0,
+    digest: PINNED_TOOL_IDENTITY[architecture].setpriv.sha256, capabilities: [],
+    size: PINNED_TOOL_IDENTITY[architecture].setpriv.size, device: 9, inode: 101 };
+  const getcap = { type: 'file', mode: 0o555, uid: 0, gid: 0,
+    digest: PINNED_TOOL_IDENTITY[architecture].getcap.sha256, capabilities: [],
+    size: PINNED_TOOL_IDENTITY[architecture].getcap.size, device: 9, inode: 102 };
+  entries.set('/usr/bin/setpriv', setpriv);
+  entries.set('/app/.northstar-runtime/setpriv.identity', setpriv);
+  entries.set('/usr/sbin/getcap', getcap);
+  entries.set('/app/.northstar-runtime/getcap.identity', getcap);
+  for (const pathname of REMOVED_CAPABILITY_HELPERS) add(pathname, 'file', 0o755);
   for (const pathname of PRIVILEGED_BASE_PATHS) {
     add(pathname, 'file', pathname.includes('chage') || pathname.includes('expiry') ||
       pathname.includes('unix_chkpwd') ? 0o2755 : 0o4755, 0, 0,
@@ -192,6 +255,7 @@ function createRootBuiltRuntimeSimulation(architecture = 'amd64') {
 
 function hardenRootBuiltRuntime(entries) {
   for (const pathname of PRIVILEGED_BASE_PATHS) entries.delete(pathname);
+  for (const pathname of REMOVED_CAPABILITY_HELPERS) entries.delete(pathname);
   for (const entry of new Set(entries.values())) {
     if (entry.type !== 'file') continue;
     entry.mode &= ~0o6000;
@@ -215,6 +279,24 @@ function runtimePrivilegeBoundaryAccepts(entries) {
   for (const [pathname, entry] of entries) {
     if (entry.type !== 'file' || !protectedRoots.some(root => pathname.startsWith(root))) continue;
     if ((entry.mode & 0o6000) !== 0 || entry.capabilities.length !== 0) return false;
+  }
+  return true;
+}
+
+function executableInventoryAccepts(entries, architecture) {
+  const expected = PINNED_TOOL_IDENTITY[architecture];
+  const pairs = [
+    ['/usr/bin/setpriv', '/app/.northstar-runtime/setpriv.identity', expected.setpriv],
+    ['/usr/sbin/getcap', '/app/.northstar-runtime/getcap.identity', expected.getcap],
+  ];
+  if (REMOVED_CAPABILITY_HELPERS.some(pathname => entries.has(pathname))) return false;
+  for (const [pathname, anchor, identity] of pairs) {
+    const executable = entries.get(pathname), witness = entries.get(anchor);
+    if (!executable || executable !== witness || executable.type !== 'file' ||
+        executable.uid !== 0 || executable.gid !== 0 || executable.mode !== 0o555 ||
+        executable.capabilities.length !== 0 || executable.digest !== identity.sha256 ||
+        executable.size !== identity.size || executable.device !== witness.device ||
+        executable.inode !== witness.inode) return false;
   }
   return true;
 }
@@ -314,7 +396,7 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(startSource).toContain('launcher="$CANONICAL_ROOT/scripts/production-launcher.js"');
     expect(startSource).toContain('exec "$node_path" "$launcher"');
     expect(startSource).toContain('[ "$2" = 1 ]');
-    expect(startSource).toContain('/sbin/getcap -r /usr "$CANONICAL_ROOT"');
+    expect(startSource).toContain('/usr/sbin/getcap -r /usr "$CANONICAL_ROOT"');
     expect(startSource).toContain('/usr/bin/readlink -f -- "$node_path"');
     expect(startSource).toContain('/usr/bin/stat -c \'%u:%g:%a\' -- "$node_path"');
     expect(startSource).toContain('/usr/bin/od -An -tx1 -N20 -- "$node_path"');
@@ -365,13 +447,25 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       "/usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' +",
       ': # setid clearing removed') })],
     ['missing file capability clearing', input => ({ dockerfile: input.dockerfile.replace(
-      '/sbin/setcap -r "$capability_path"', ': # capability clearing removed') })],
+      '/usr/sbin/setcap -r "$capability_path"', ': # capability clearing removed') })],
+    ['retained capability mutation helpers', input => ({ dockerfile: input.dockerfile.replace(
+      '/bin/rm -f /usr/sbin/capsh /usr/sbin/getpcaps', ': # helpers retained') })],
+    ['non-executable retained verifier', input => ({ dockerfile: input.dockerfile.replace(
+      '/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap',
+      '/bin/chmod 0444 /usr/bin/setpriv /usr/sbin/getcap') })],
+    ['missing executable identity inventory', input => ({ dockerfile: input.dockerfile.replace(
+      "'northstar-executable-inventory-v1'", "'unbound-executable-inventory'") })],
     ['copy after privilege scan', input => ({ dockerfile: input.dockerfile.replace(
       'USER 1000:1000', 'COPY package.json /usr/bin/late-copy\nUSER 1000:1000') })],
     ['runtime without no-new-privileges', input => ({ railway: input.railway.replace(
       '/usr/bin/setpriv --no-new-privs -- ', '') })],
     ['startup without runtime privilege scan', input => ({ start: input.start.replace(
-      '/sbin/getcap -r /usr "$CANONICAL_ROOT"', ': # getcap scan removed') })],
+       '/usr/sbin/getcap -r /usr "$CANONICAL_ROOT"', ': # getcap scan removed') })],
+    ['startup accepts dynamic-loader injection', input => ({ start: input.start.replace(
+      'if [ -n "${LD_PRELOAD-}" ] || [ -n "${LD_LIBRARY_PATH-}" ]; then',
+      'if false; then') })],
+    ['writable dynamic library tree', input => ({ dockerfile: input.dockerfile.replace(
+      '/usr/bin/find /usr/lib -xdev', '/usr/bin/find /app -xdev') })],
   ])('offline production plan rejects %s', (_name, mutate) => {
     const input = {
       dockerfile: fs.readFileSync(dockerfilePath, 'utf8'),
@@ -395,8 +489,58 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       hardenRootBuiltRuntime(entries);
       expect(privilegeInventory(entries)).toEqual({ setid: [], filecaps: [] });
       expect(runtimePrivilegeBoundaryAccepts(entries)).toBe(true);
+      expect(executableInventoryAccepts(entries, architecture)).toBe(true);
       for (const pathname of PRIVILEGED_BASE_PATHS) expect(entries.has(pathname)).toBe(false);
+      for (const pathname of REMOVED_CAPABILITY_HELPERS) expect(entries.has(pathname)).toBe(false);
     });
+
+  test.each(['amd64', 'arm64'])(
+    'exact %s archive tool identity stays executable, immutable, and read-only', architecture => {
+      const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation(architecture));
+      const expected = PINNED_TOOL_IDENTITY[architecture];
+      expect(entries.get('/usr/bin/setpriv')).toMatchObject({ mode: 0o555, uid: 0, gid: 0,
+        digest: expected.setpriv.sha256, size: expected.setpriv.size, capabilities: [] });
+      expect(entries.get('/usr/sbin/getcap')).toMatchObject({ mode: 0o555, uid: 0, gid: 0,
+        digest: expected.getcap.sha256, size: expected.getcap.size, capabilities: [] });
+      expect(entries.get('/usr/bin/setpriv'))
+        .toBe(entries.get('/app/.northstar-runtime/setpriv.identity'));
+      expect(entries.get('/usr/sbin/getcap'))
+        .toBe(entries.get('/app/.northstar-runtime/getcap.identity'));
+      expect(executableInventoryAccepts(entries, architecture)).toBe(true);
+    });
+
+  test.each([
+    ['setpriv mode 0444', '/usr/bin/setpriv', { mode: 0o444 }],
+    ['setpriv mode 0755 drift', '/usr/bin/setpriv', { mode: 0o755 }],
+    ['getcap digest drift', '/usr/sbin/getcap', { digest: '0'.repeat(64) }],
+    ['getcap size drift', '/usr/sbin/getcap', { size: 1 }],
+    ['getcap owner drift', '/usr/sbin/getcap', { uid: 1000 }],
+    ['setpriv device-inode alias drift', '/app/.northstar-runtime/setpriv.identity',
+      { device: 10, inode: 999 }],
+    ['getcap detached identity anchor', '/app/.northstar-runtime/getcap.identity',
+      { inode: 999 }],
+    ['capsh restored', '/usr/sbin/capsh', { mode: 0o755 }],
+    ['getpcaps restored', '/usr/sbin/getpcaps', { mode: 0o755 }],
+    ['setcap restored', '/usr/sbin/setcap', { mode: 0o755 }],
+  ])('runtime rejects executable inventory drift: %s', (_name, pathname, change) => {
+    const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation());
+    const current = entries.get(pathname);
+    entries.set(pathname, { type: 'file', uid: 0, gid: 0, mode: 0o555,
+      digest: pathname, capabilities: [], size: 1, device: 9, inode: 500,
+      ...(current || {}), ...change });
+    expect(executableInventoryAccepts(entries, 'amd64')).toBe(false);
+  });
+
+  test('data resources and executable authority use disjoint exact modes', () => {
+    const source = fs.readFileSync(productionStart, 'utf8');
+    expect(source).toContain("!= '0:0:444:1'");
+    expect(source).toContain("!= '0:0:555:2'");
+    expect(source).not.toMatch(/privilege_sha_manifest" \/usr\/bin\/setpriv/);
+    expect(source).toContain('check_executable_identity /usr/bin/setpriv');
+    expect(source).toContain('check_executable_identity /usr/sbin/getcap');
+    expect(source).toContain(
+      'for removed_helper in /usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap');
+  });
 
   test.each([
     ['/usr/bin injected setuid', '/usr/bin/injected-setuid', 0o4755, []],

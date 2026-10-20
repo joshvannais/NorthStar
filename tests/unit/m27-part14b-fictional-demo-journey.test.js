@@ -2,6 +2,7 @@
 
 jest.setTimeout(240000);
 
+const fs=require('node:fs');
 const workspace=require('../../src/commandCenter/workspace');
 const providerBoundary=require('../../src/customerFinancial/paymentProviderBoundary');
 const demoPart12=require('../../src/customerFinancial/demoReportingPart12Acceptance');
@@ -142,6 +143,22 @@ describe('Mission 27 Part 14B resettable fictional demo financial journey',()=>{
     expect(()=>{moduleRecord.exports={};}).toThrow();
     expect(()=>Object.defineProperty(moduleRecord,'exports',{value:{}})).toThrow();
     expect(poolReads).toBe(0);
+  });
+
+  test('keeps the long Part14B read on one finite transaction-local idle ceiling',()=>{
+    const source=fs.readFileSync(require.resolve('../../src/commandCenter/demoRepository'),'utf8');
+    expect(source).toContain('const PART14B_IDLE_IN_TRANSACTION_TIMEOUT_MS = 180000;');
+    const binder=source.match(/async function boundFictionalJourneyTransaction\(client\) \{([\s\S]*?)\n\}/);
+    expect(binder).not.toBeNull();
+    expect(binder[1]).toContain('await boundTransaction(client);');
+    expect(binder[1]).toContain("SET LOCAL idle_in_transaction_session_timeout='");
+    expect(binder[1]).toContain('PART14B_IDLE_IN_TRANSACTION_TIMEOUT_MS');
+    const journey=source.match(/async #deliverFictionalDemoJourney\(token, estimateId, res\) \{([\s\S]*?)\n  \}/);
+    expect(journey).not.toBeNull();
+    expect(journey[1]).toContain('BEGIN ISOLATION LEVEL REPEATABLE READ');
+    expect(journey[1]).toContain('await boundFictionalJourneyTransaction(client);');
+    expect(journey[1]).toContain("await client.query('COMMIT');");
+    expect(journey[1]).toContain("await client.query('ROLLBACK');");
   });
 
   test('browser data-only gate rejects poison in every embedded part before invoking accessors',async()=>{

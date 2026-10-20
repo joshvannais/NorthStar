@@ -1,6 +1,6 @@
 # Mission 27 Part 14B — resettable fictional demo financial journey
 
-Status: implementation candidate. Independent whole-head acceptance, merge, deployment, provider evidence, live-money evidence, and founder visual approval are not accepted.
+Status: accepted at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`, tree `2c11c575f6d0a5171981be681fd5978d8f4bbd35`, and normally merged as PR #535 to exact main `667befdbf06a26cd3416bce5f6d25ab124287c9e`; sole automatic Railway deployment `89601f06-30bd-41bc-85ff-3fc8e96772a5` failed during the pinned amd64 Docker build before application startup or health verification, so Part 14B remains release-incomplete and its source-only release correction is current. Provider evidence, live-money evidence, and founder visual approval are not accepted.
 
 ## Authority
 

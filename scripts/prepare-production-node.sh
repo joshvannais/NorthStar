@@ -53,10 +53,11 @@ if [ ! -f "$NODE_PATH" ] || [ ! -x "$NODE_PATH" ] || [ -L "$NODE_PATH" ] ||
 fi
 printf '%s  %s\n' "$expected_sha256" "$NODE_PATH" |
   /usr/bin/sha256sum -c - >/dev/null || fail
+# Both pinned Node 22.23.3 Linux artifacts declare ELFOSABI_LINUX (03).
 set -- $(/usr/bin/od -An -tx1 -N20 -- "$NODE_PATH")
 if [ "$#" -ne 20 ] || [ "$1" != '7f' ] || [ "$2" != '45' ] ||
    [ "$3" != '4c' ] || [ "$4" != '46' ] || [ "$5" != '02' ] ||
-   [ "$6" != '01' ] || [ "$8" != '00' ] || [ "${19}" != "$elf_machine" ] ||
+   [ "$6" != '01' ] || [ "$8" != '03' ] || [ "${19}" != "$elf_machine" ] ||
    [ "${20}" != '00' ]; then
   fail
 fi

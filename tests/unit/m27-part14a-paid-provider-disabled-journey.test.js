@@ -332,7 +332,7 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
     const mutations = [
       ['false release','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B accepted and released'],
       ['false production complete','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B production complete'],
-      ['deployed','ledger','sole automatic deployment `9d81c8e0-1187-4716-8c7a-072d664d700e` passed Docker build and executed past the dash defect but restarted before health because Railway cleared supplementary groups; third release correction pending','deployment `forged` succeeded; Part 14B released'],
+      ['deployed','ledger','sole automatic deployment `c82929fa-7393-4d91-975b-9bb7080e61b6` passed Docker build and selected the hardened `setpriv` start but restarted before health with only the generic pre-Node rejection; fourth diagnostic correction pending','deployment `forged` succeeded; Part 14B released'],
       ['later slice','ledger','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | Complete'],
       ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
       ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],

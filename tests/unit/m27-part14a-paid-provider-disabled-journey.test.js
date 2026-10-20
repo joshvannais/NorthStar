@@ -326,14 +326,15 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
     const docs = Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
       .map(([name,entry])=>[name,fs.readFileSync(path.join(ROOT,entry.path),'utf8')]));
     expect(authority.validate(docs)).toEqual(expect.objectContaining({
-      currentSlice:'14B', currentStatus:'candidate', migrationLatest:272,
-      migration273Present:false, laterSlices:['14C','14D','14E','14F','14G'],
+      currentSlice:'14C', currentStatus:'candidate', migrationLatest:272,
+      migration273Present:false, laterSlices:['14D','14E','14F','14G'],
+      acceptedPart14BHead:'497fad89e145dece26bdf1fb43789f64bc29560f',
     }));
     const mutations = [
-      ['false release','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B accepted and released'],
-      ['false production complete','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B production complete'],
-      ['deployed','ledger','sole automatic Railway deployment `2ed48d38-2aa9-47ba-887d-f6d1b616a868` completed the pinned Docker build and verified the setpriv/getcap digests, then restart-looped before health at exact fixed gate `NS14B-13K`, proving Railway runtime materialization restored `/usr/sbin/capsh` after the final build layer verified it absent','deployment `forged` succeeded; Part 14B released'],
-      ['later slice','ledger','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | Complete'],
+      ['false release','ledger','Part 14B remains unreleased.','Part 14B is released.'],
+      ['false production complete','ledger','Part 14B remains unreleased.','Part 14B production is complete.'],
+      ['deployed','ledger','no deployment or health verdict exists','deployment succeeded and health passed'],
+      ['later slice','ledger','| 14D | Integrated tenant/role/CSRF','| 14D | Complete tenant/role/CSRF'],
       ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
       ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],
       ['automatic refund','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic refund authorized.'],

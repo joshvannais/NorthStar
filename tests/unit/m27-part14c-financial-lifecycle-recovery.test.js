@@ -107,6 +107,50 @@ function isolatedRepository(readers) {
   return value;
 }
 
+function poisonSecondSnapshot(sourceName, shape, counters) {
+  const value = clone(sourceName === 'paid' ? canonicalPaid :
+    sourceName === 'recovery' ? canonicalRecovery : canonicalAcceptance);
+  const target = sourceName === 'paid' ? value.execution.repositoryReadCounts :
+    sourceName === 'recovery' ? value.concurrency : value.disasterRecovery;
+  const parent = sourceName === 'paid' ? value.execution :
+    sourceName === 'recovery' ? value : value;
+  const parentKey = sourceName === 'paid' ? 'repositoryReadCounts' :
+    sourceName === 'recovery' ? 'concurrency' : 'disasterRecovery';
+  const existingKey = sourceName === 'paid' ? 'part12' : 'state';
+  const array = sourceName === 'paid' ? value.execution.productionContractsExecuted :
+    value.requirements;
+
+  if (shape === 'getter') {
+    Object.defineProperty(target, existingKey, { enumerable:true, configurable:true,
+      get() { counters.getter += 1; return 'attacker-controlled'; } });
+  } else if (shape === 'proxy' || shape === 'revoked_proxy') {
+    const handler = {};
+    for (const trap of ['get','getPrototypeOf','getOwnPropertyDescriptor','ownKeys','has']) {
+      handler[trap] = (...args) => {
+        counters.proxy += 1;
+        return Reflect[trap](...args);
+      };
+    }
+    const wrapped = Proxy.revocable(target, handler);
+    parent[parentKey] = wrapped.proxy;
+    if (shape === 'revoked_proxy') wrapped.revoke();
+  } else if (shape === 'toJSON') {
+    Object.defineProperty(target, 'toJSON', { enumerable:false, configurable:true,
+      value() { counters.serialization += 1; return {}; } });
+  } else if (shape === 'symbol') {
+    target[Symbol('secret')] = 'sk_part14c_second_snapshot';
+  } else if (shape === 'custom_prototype') {
+    Object.setPrototypeOf(target, { inheritedSecret:'sk_part14c_second_snapshot' });
+  } else if (shape === 'sparse_array') {
+    delete array[0];
+  } else if (shape === 'unknown_nested_key') {
+    target.unexpectedAuthority = 'forged';
+  } else if (shape === 'unknown_top_level_key') {
+    value.unexpectedAuthority = 'forged';
+  } else throw new Error(`Unknown poison shape: ${shape}`);
+  return value;
+}
+
 beforeAll(() => {
   const paid = paidBundle(); ESTIMATE = paid.bundle.preview.draftIdentity.estimateId;
   context = { source:source(), estimateId:ESTIMATE, handoffReceiptId:RECEIPT,
@@ -245,6 +289,43 @@ describe('Mission 27 Part 14C financial lifecycle recovery acceptance', () => {
     await expect(changedRepository.read({}, source(), ESTIMATE, RECEIPT, DIGEST))
       .rejects.toMatchObject({status:409,code:'CUSTOMER_FINANCIAL_RECOVERY_ACCEPTANCE_CHANGED'});
   });
+
+  test('validates every second snapshot before digesting or invoking hostile hooks', async () => {
+    const route = `/api/v1/customer-financial/editable-estimates/${ESTIMATE}` +
+      '/financial-lifecycle-recovery-acceptance';
+    const query = {handoffReceiptId:RECEIPT,handoffReceiptDigest:DIGEST};
+    const headers = {'X-Test-Auth':'current','X-Test-Role':'owner'};
+    const shapes = ['getter','proxy','revoked_proxy','toJSON','symbol','custom_prototype',
+      'sparse_array','unknown_nested_key','unknown_top_level_key'];
+    for (const sourceName of ['paid','recovery','acceptance']) {
+      for (const shape of shapes) {
+        const counters = {getter:0,proxy:0,serialization:0};
+        const poisoned = poisonSecondSnapshot(sourceName, shape, counters);
+        const readers = {
+          paid:jest.fn().mockResolvedValueOnce(canonicalPaid)
+            .mockResolvedValueOnce(sourceName === 'paid' ? poisoned : canonicalPaid),
+          recovery:jest.fn().mockResolvedValueOnce(canonicalRecovery)
+            .mockResolvedValueOnce(sourceName === 'recovery' ? poisoned : canonicalRecovery),
+          acceptance:jest.fn().mockResolvedValueOnce(canonicalAcceptance)
+            .mockResolvedValueOnce(sourceName === 'acceptance' ? poisoned : canonicalAcceptance),
+        };
+        const repository = isolatedRepository(readers);
+        const application = buildApp((...args) => repository.read(...args));
+        const response = await request(application).get(route).query(query).set(headers);
+        expect(response.status).toBe(409);
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+        expect(response.body).toEqual({ success:false, error:{
+          category:'CUSTOMER_FINANCIAL_RECOVERY_ACCEPTANCE_CHANGED',
+          message:'The exact financial lifecycle recovery journey changed. Reload its current evidence.',
+        } });
+        expect(counters).toEqual({getter:0,proxy:0,serialization:0});
+        expect(readers.paid).toHaveBeenCalledTimes(2);
+        expect(readers.recovery).toHaveBeenCalledTimes(2);
+        expect(readers.acceptance).toHaveBeenCalledTimes(2);
+      }
+    }
+  }, 180000);
 
   test('the private owner GET fails closed for widened input, bodies, methods and roles', async () => {
     const calls = { read:0 };

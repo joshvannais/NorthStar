@@ -28,9 +28,16 @@ async function read(pool, source, estimateId, receiptId, receiptDigest) {
     const afterAcceptance = await providerAcceptanceRepository.read(source);
     const afterPaid = await paidJourneyRepository.read(
       pool, source, estimateId, receiptId, receiptDigest);
-    if (providerBoundary.digest(beforePaid) !== providerBoundary.digest(afterPaid) ||
-        providerBoundary.digest(beforeRecovery) !== providerBoundary.digest(afterRecovery) ||
-        providerBoundary.digest(beforeAcceptance) !== providerBoundary.digest(afterAcceptance)) {
+    // The second raw snapshots are untrusted repository values. Build their
+    // exact Part 14C projection first so the contract's recursive
+    // descriptor-only data gate rejects accessors, proxies and exotic values
+    // before any digest or serialization can traverse them. The canonical
+    // projection binds the full digest of each of the three sources, so one
+    // comparison retains exact before/after currentness without touching raw
+    // second-snapshot fields here.
+    const afterValue = contract.candidate(
+      afterPaid, afterRecovery, afterAcceptance, context);
+    if (providerBoundary.digest(value) !== providerBoundary.digest(afterValue)) {
       throw changed();
     }
     return contract.project(value, afterPaid, afterRecovery, afterAcceptance, context);

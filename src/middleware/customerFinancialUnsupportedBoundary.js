@@ -1,6 +1,7 @@
 'use strict';
 
 const NAMESPACE = '/api/v1/customer-financial';
+const CLASSIFIED_NAMESPACE = Symbol('northstar.customerFinancialNamespace');
 const UNSUPPORTED_PART14_PATTERN = new RegExp(
   '^/api/v1/customer-financial/(?:public(?:/|$)|payment-provider/(?:webhook|charge)(?:/|$)|offline-receipts(?:/|$))',
   'i');
@@ -12,25 +13,64 @@ function requestPath(req) {
   return query < 0 ? value : value.slice(0, query);
 }
 
-function unsupportedPart14Path(req) {
-  const raw = requestPath(req).replace(/\\/g, '/');
-  if (UNSUPPORTED_PART14_PATTERN.test(raw)) return true;
-  try {
-    return UNSUPPORTED_PART14_PATTERN.test(decodeURIComponent(raw));
-  } catch (_error) {
-    // A malformed escape under a literal protected prefix remains unsupported.
-    return UNSUPPORTED_PART14_PATTERN.test(raw);
+function decodeAsciiPercent(value) {
+  let output = '';
+  let changed = false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '%' && index + 2 < value.length &&
+        /^[0-9a-f]{2}$/i.test(value.slice(index + 1, index + 3))) {
+      const byte = Number.parseInt(value.slice(index + 1, index + 3), 16);
+      if (byte <= 0x7f) {
+        output += String.fromCharCode(byte);
+        index += 2;
+        changed = true;
+        continue;
+      }
+    }
+    output += value[index];
   }
+  return { value:output, changed };
+}
+
+function resolveSegments(value) {
+  const segments = value.replace(/\\/g, '/').split('/');
+  const resolved = [];
+  for (const segment of segments) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') { if (resolved.length) resolved.pop(); continue; }
+    resolved.push(segment);
+  }
+  return '/' + resolved.join('/');
+}
+
+function classifyPath(req) {
+  const raw = requestPath(req);
+  let candidate = raw;
+  // Every ASCII percent-decoding round shortens the bounded request target.
+  // Iterate to a fixed point so double and repeated encodings cannot create a
+  // second routing interpretation after this boundary.
+  for (let round = 0; round <= raw.length; round += 1) {
+    const decoded = decodeAsciiPercent(candidate);
+    candidate = decoded.value;
+    if (!decoded.changed) break;
+  }
+  const canonical = resolveSegments(candidate);
+  const namespace = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(canonical);
+  if (!namespace) return null;
+  const literal = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(raw);
+  const ambiguous = !literal || raw.includes('\\') || /\/{2,}/.test(raw) ||
+    /(?:^|\/)\.{1,2}(?:\/|$)/.test(raw) || candidate.includes('\\') ||
+    /\/{2,}/.test(candidate) || /(?:^|\/)\.{1,2}(?:\/|$)/.test(candidate);
+  return { canonical, ambiguous };
+}
+
+function unsupportedPart14Path(req) {
+  const classification = classifyPath(req);
+  return !!classification && UNSUPPORTED_PART14_PATTERN.test(classification.canonical);
 }
 
 function customerFinancialPath(req) {
-  const raw = requestPath(req).replace(/\\/g, '/');
-  if (/^\/api\/v1\/customer-financial(?:\/|$)/i.test(raw)) return true;
-  try {
-    return /^\/api\/v1\/customer-financial(?:\/|$)/i.test(decodeURIComponent(raw));
-  } catch (_error) {
-    return false;
-  }
+  return req[CLASSIFIED_NAMESPACE] === true || !!classifyPath(req);
 }
 
 function setPrivate(res) {
@@ -54,7 +94,12 @@ function deny(res) {
 // CORS, correlation IDs and body parsing. Malformed or scalar request bodies
 // therefore cannot fall through to a reflective parser/not-found response.
 function customerFinancialUnsupportedBoundary(req, res, next) {
-  return unsupportedPart14Path(req) ? deny(res) : next();
+  const classification = classifyPath(req);
+  if (!classification) return next();
+  Object.defineProperty(req, CLASSIFIED_NAMESPACE, { value:true, enumerable:false,
+    writable:false, configurable:false });
+  return classification.ambiguous ||
+    UNSUPPORTED_PART14_PATTERN.test(classification.canonical) ? deny(res) : next();
 }
 
 // Seal parser failures for the whole private namespace. Without this scoped
@@ -66,7 +111,9 @@ function customerFinancialParserError(error, req, res, next) {
 
 // Any other unmatched customer-financial route receives the same fixed private
 // response after all canonical routers have had an opportunity to handle it.
-function customerFinancialNotFound(_req, res) { return deny(res); }
+function customerFinancialNotFound(req, res, next) {
+  return customerFinancialPath(req) ? deny(res) : next();
+}
 
 module.exports = Object.freeze({ NAMESPACE, UNSUPPORTED_PART14_PATTERN,
   unsupportedPart14Path, customerFinancialUnsupportedBoundary,

@@ -56,7 +56,7 @@ function buildApp(options={}){
     createCustomerFinancialProviderConnectionRouter({auth,role:owner,
       throttle:(_req,_res,next)=>next(),read:options.provider.read,
       attempt:options.provider.attempt}));}
-  app.use('/api/v1/customer-financial',customerFinancialNotFound);
+  app.use(customerFinancialNotFound);
   return app;
 }
 
@@ -192,6 +192,44 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
       message:'The requested customer financial resource is unavailable.'}});
   });
 
+  test('encoded duplicate and ambiguous namespace prefixes cannot escape the fixed denial',async()=>{
+    const app=buildApp({read:jest.fn()});
+    const protectedVariants=[
+      '/%61pi/v1/customer-financial/unrecognized/sk_secret',
+      '/api/%76%31/customer-financial/unrecognized/sk_secret',
+      '/api/v1/%63ustomer-financial/unrecognized/sk_secret',
+      '//api/v1/customer-financial/unrecognized/sk_secret',
+      '/%2561pi/v1/customer-financial/unrecognized/sk_secret',
+      '/api/%2576%2531/customer-financial/unrecognized/sk_secret',
+      '/%2fapi%2fv1%2fcustomer-financial%2funrecognized%2fsk_secret',
+      '/%5capi%5cv1%5ccustomer-financial%5cunrecognized%5csk_secret',
+      '/x/../api/v1/customer-financial/unrecognized/sk_secret',
+      '/api/./v1/customer-financial/unrecognized/sk_secret',
+      '/api//v1///customer-financial/unrecognized/sk_secret',
+      '/api/v1/customer-financial/%2funrecognized/sk_secret',
+      '/api/v1/customer-financial/%252funrecognized/sk_secret',
+      '/api/v1/customer-financial/%2e/unrecognized/sk_secret',
+      '/%61Pi/V1/CUSTOMER-FINANCIAL/%ZZ/sk_secret',
+    ];
+    const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}};
+    for(const pathname of protectedVariants){
+      const response=await request(app).get(pathname+'?email=customer@example.test&amount=999999');
+      expect(response.status).toBe(404);expect(response.body).toEqual(exact);
+      expect(response.headers['cache-control']).toContain('private');
+      expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.headers['x-request-id']).toBeUndefined();
+      expect(response.headers['x-correlation-id']).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toMatch(/sk_|customer@example|999999|requestId/i);
+    }
+    for(const pathname of ['/api/v2/customer-financial/unrecognized',
+      '/api/v1/customer-financially/unrecognized','/not-api/v1/customer-financial/unrecognized',
+      '/x/api/v1/customer-financial/unrecognized','/%61pix/v1/customer-financial/unrecognized']){
+      const response=await request(app).get(pathname);
+      expect(response.status).toBe(404);expect(response.body).not.toEqual(exact);
+    }
+  });
+
   test('mounted inventory exposes no financial public-link webhook charge or offline-receipt mutation',()=>{
     const server=read('src/server.js');const editable=read('src/routes/customerFinancialEditableEstimate.js');
     const demo=read('src/routes/demo.js');const provider=read('src/routes/customerFinancialProviderConnection.js');
@@ -200,7 +238,7 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
     const correlation=server.indexOf('app.use(correlationId)');
     const parserError=server.indexOf('app.use(customerFinancialParserError)');
     const securityHeaders=server.indexOf('app.use(securityHeaders)');
-    const finalBoundary=server.indexOf("app.use('/api/v1/customer-financial', customerFinancialNotFound)");
+    const finalBoundary=server.indexOf('app.use(customerFinancialNotFound)');
     const globalNotFound=server.indexOf('app.use(notFound)');
     expect(earlyBoundary).toBeGreaterThan(-1);
     expect(cors).toBeGreaterThan(earlyBoundary);

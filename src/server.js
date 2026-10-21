@@ -632,8 +632,10 @@ app.use('/api', createLegacyAuthorityRetirementRouter());
 // API routes (global requireAuth applies to all remaining /api/* routes)
 app.use('/api', apiRoutes);
 
-// Preserve one fixed private denial for every unmatched customer-financial path.
-app.use('/api/v1/customer-financial', customerFinancialNotFound);
+// Preserve one fixed private denial for every raw or canonicalized unmatched
+// customer-financial path. The early boundary's private classification avoids
+// relying on Express's literal mount semantics here.
+app.use(customerFinancialNotFound);
 
 // 404 + error handler (single instances)
 app.use(notFound);

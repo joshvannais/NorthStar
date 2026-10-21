@@ -1,12 +1,9 @@
 'use strict';
 
 const crypto=require('node:crypto');
-const express=require('express');
 const request=require('supertest');
 const {createPart4ePaidBrowserFixture}=
   require('../helpers/m27-part4e-paid-journey-fixture');
-const {customerFinancialUnsupportedBoundary,customerFinancialParserError}=
-  require('../../src/middleware/customerFinancialUnsupportedBoundary');
 
 const realPostgres=process.env.M19_PG_ADMIN_URL?describe:describe.skip;
 
@@ -24,8 +21,7 @@ realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
       throw new Error('External transport forbidden in Part 14D');
     });
     prepared=await createPart4ePaidBrowserFixture();
-    app=express();app.use(customerFinancialUnsupportedBoundary);app.use(prepared.fixture.app);
-    app.use(customerFinancialParserError);
+    app=prepared.fixture.app;
     route=`/api/v1/customer-financial/editable-estimates/${prepared.estimate}`+
       '/financial-lifecycle-recovery-acceptance';
     exactQuery={handoffReceiptId:prepared.receipt.receiptId,
@@ -94,6 +90,10 @@ realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
       ['/api/v1/customer-financial/offline-receipts/check_cleared','patch'],
       ['/api/v1/customer-financial/public%2Finvoices%2Fcustomer@example.test','delete'],
       ['/api/v1/customer-financial/unrecognized/sk_secret_customer@example.test_999999','post'],
+      ['/%61pi/v1/customer-financial/unrecognized/sk_secret','get'],
+      ['/api/%76%31/customer-financial/unrecognized/sk_secret','get'],
+      ['/api/v1/%63ustomer-financial/unrecognized/sk_secret','get'],
+      ['//api/v1/customer-financial/unrecognized/sk_secret','get'],
     ];
     const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
       message:'The requested customer financial resource is unavailable.'}};

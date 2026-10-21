@@ -2,6 +2,11 @@
 
 const NAMESPACE = '/api/v1/customer-financial';
 const CLASSIFIED_NAMESPACE = Symbol('northstar.customerFinancialNamespace');
+const PATH_CLASSIFICATION_POLICY = Object.freeze({
+  maxDecodeRounds:4,
+  maxRawTargetLength:8192,
+  maxNestedPercentDepth:8,
+});
 const UNSUPPORTED_PART14_PATTERN = new RegExp(
   '^/api/v1/customer-financial/(?:public(?:/|$)|payment-provider/(?:webhook|charge)(?:/|$)|offline-receipts(?:/|$))',
   'i');
@@ -13,23 +18,43 @@ function requestPath(req) {
   return query < 0 ? value : value.slice(0, query);
 }
 
+function hexValue(code) {
+  if (code >= 48 && code <= 57) return code - 48;
+  if (code >= 65 && code <= 70) return code - 55;
+  if (code >= 97 && code <= 102) return code - 87;
+  return -1;
+}
+
+// Collapse a conventional repeatedly encoded ASCII byte (%252561 -> "a")
+// in one left-to-right pass. This keeps arbitrary %25 nesting linear instead
+// of requiring one full-string decoding pass per layer.
 function decodeAsciiPercent(value) {
   let output = '';
   let changed = false;
+  let complex = false;
   for (let index = 0; index < value.length; index += 1) {
-    if (value[index] === '%' && index + 2 < value.length &&
-        /^[0-9a-f]{2}$/i.test(value.slice(index + 1, index + 3))) {
-      const byte = Number.parseInt(value.slice(index + 1, index + 3), 16);
+    if (value.charCodeAt(index) === 37) {
+      let cursor = index + 1;
+      let nestedDepth = 0;
+      while (cursor + 1 < value.length && value.charCodeAt(cursor) === 50 &&
+          value.charCodeAt(cursor + 1) === 53) {
+        nestedDepth += 1;
+        cursor += 2;
+      }
+      if (nestedDepth > PATH_CLASSIFICATION_POLICY.maxNestedPercentDepth) complex = true;
+      const high = cursor < value.length ? hexValue(value.charCodeAt(cursor)) : -1;
+      const low = cursor + 1 < value.length ? hexValue(value.charCodeAt(cursor + 1)) : -1;
+      const byte = high < 0 || low < 0 ? 256 : high * 16 + low;
       if (byte <= 0x7f) {
         output += String.fromCharCode(byte);
-        index += 2;
+        index = cursor + 1;
         changed = true;
         continue;
       }
     }
     output += value[index];
   }
-  return { value:output, changed };
+  return { value:output, changed, complex };
 }
 
 function inspectSegments(value) {
@@ -52,15 +77,22 @@ function classifyPath(req) {
   let candidate = raw;
   let inspection = inspectSegments(raw);
   let enteredNamespace = inspection.enteredNamespace;
-  // Every ASCII percent-decoding round shortens the bounded request target.
-  // Iterate to a fixed point so double and repeated encodings cannot create a
-  // second routing interpretation after this boundary.
-  for (let round = 0; round <= raw.length; round += 1) {
+  let complex = raw.length > PATH_CLASSIFICATION_POLICY.maxRawTargetLength;
+  let decodeLimitExceeded = false;
+  // The number of full-string passes is a small constant independent of input
+  // length. Each pass also collapses an arbitrary conventional %25 nesting
+  // chain in one scan. Inputs that still transform at the limit are ambiguous
+  // and, once the protected namespace has been observed, fail closed.
+  for (let round = 0; round < PATH_CLASSIFICATION_POLICY.maxDecodeRounds; round += 1) {
     const decoded = decodeAsciiPercent(candidate);
     candidate = decoded.value;
+    complex = complex || decoded.complex;
     inspection = inspectSegments(candidate);
     enteredNamespace = enteredNamespace || inspection.enteredNamespace;
     if (!decoded.changed) break;
+    if (round === PATH_CLASSIFICATION_POLICY.maxDecodeRounds - 1) {
+      decodeLimitExceeded = true;
+    }
   }
   const canonical = inspection.canonical;
   const namespace = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(canonical);
@@ -69,7 +101,8 @@ function classifyPath(req) {
   // that provenance and expose the reflective global 404.
   if (!enteredNamespace && !namespace) return null;
   const literal = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(raw);
-  const ambiguous = !literal || !namespace || raw.includes('\\') || /\/{2,}/.test(raw) ||
+  const ambiguous = complex || decodeLimitExceeded || !literal || !namespace ||
+    raw.includes('\\') || /\/{2,}/.test(raw) ||
     /(?:^|\/)\.{1,2}(?:\/|$)/.test(raw) || candidate.includes('\\') ||
     /\/{2,}/.test(candidate) || /(?:^|\/)\.{1,2}(?:\/|$)/.test(candidate);
   return { canonical, ambiguous };
@@ -126,6 +159,7 @@ function customerFinancialNotFound(req, res, next) {
   return customerFinancialPath(req) ? deny(res) : next();
 }
 
-module.exports = Object.freeze({ NAMESPACE, UNSUPPORTED_PART14_PATTERN,
+module.exports = Object.freeze({ NAMESPACE, PATH_CLASSIFICATION_POLICY,
+  UNSUPPORTED_PART14_PATTERN,
   unsupportedPart14Path, customerFinancialUnsupportedBoundary,
   customerFinancialParserError, customerFinancialNotFound });

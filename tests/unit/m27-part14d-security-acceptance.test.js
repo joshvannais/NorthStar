@@ -7,6 +7,9 @@ const express=require('express');
 const request=require('supertest');
 const {financialLifecycleRecoveryAcceptanceBoundary}=
   require('../../src/middleware/financialLifecycleRecoveryAcceptanceBoundary');
+const {customerFinancialUnsupportedBoundary,customerFinancialParserError,
+  customerFinancialNotFound}=
+  require('../../src/middleware/customerFinancialUnsupportedBoundary');
 const {corsOptions}=require('../../src/middleware/security');
 const {createCustomerFinancialEditableEstimateRouter}=
   require('../../src/routes/customerFinancialEditableEstimate');
@@ -36,7 +39,9 @@ function owner(req,res,next){return req.userRole==='owner'?next():
 function buildApp(options={}){
   const app=express();
   app.use(financialLifecycleRecoveryAcceptanceBoundary);
+  app.use(customerFinancialUnsupportedBoundary);
   app.use(cors(corsOptions));app.use(express.json({limit:'32kb'}));
+  app.use(customerFinancialParserError);
   app.use('/api/v1/customer-financial/editable-estimates',
     createCustomerFinancialEditableEstimateRouter({auth,role:owner,recoveryRole:owner,
       throttle:options.throttle||((_req,_res,next)=>next()),poolProvider:()=>({}),
@@ -51,6 +56,7 @@ function buildApp(options={}){
     createCustomerFinancialProviderConnectionRouter({auth,role:owner,
       throttle:(_req,_res,next)=>next(),read:options.provider.read,
       attempt:options.provider.attempt}));}
+  app.use('/api/v1/customer-financial',customerFinancialNotFound);
   return app;
 }
 
@@ -126,9 +132,83 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
     expect(JSON.stringify(widened.body)).not.toMatch(/acct_victim|sk_secret|100/);
   });
 
+  test('unsupported financial namespaces return one fixed private nonreflective denial',async()=>{
+    const repository=jest.fn();const throttle=jest.fn((_req,_res,next)=>next());
+    const provider={read:jest.fn(),attempt:jest.fn()};
+    const app=buildApp({read:repository,throttle,provider});
+    const attacks=[
+      ['get','/api/v1/customer-financial/public/invoices/sk_secret_customer-999999-check_cleared'],
+      ['post','/api/v1/customer-financial/PUBLIC/invoices/customer%40example.test'],
+      ['options','/api/v1/customer-financial/payment-provider/webhook/acct_victim'],
+      ['put','/api/v1/customer-financial/payment-provider/charge/sk_live_secret'],
+      ['patch','/api/v1/customer-financial/offline-receipts/check_cleared'],
+      ['delete','/api/v1/customer-financial/public%2Finvoices%2Fcustomer@example.test'],
+    ];
+    const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}};
+    for(const [method,pathname] of attacks){
+      const response=await request(app)[method](pathname+'?credential=sk_query&amount=999999')
+        .set(HEADERS).set('Content-Type','application/json')
+        .send('{"nested":{"secret":"sk_body","email":"customer@example.test"}');
+      expect(response.status).toBe(404);expect(response.body).toEqual(exact);
+      expect(response.headers['cache-control']).toContain('private');
+      expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.headers['x-request-id']).toBeUndefined();
+      expect(response.headers['x-correlation-id']).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toMatch(
+        /sk_|customer@example|999999|check_cleared|acct_victim|public%2f/i);
+    }
+    expect(repository).not.toHaveBeenCalled();expect(throttle).not.toHaveBeenCalled();
+    expect(provider.read).not.toHaveBeenCalled();expect(provider.attempt).not.toHaveBeenCalled();
+  });
+
+  test('canonical financial routes still pass while all other namespace fallthrough is fixed',async()=>{
+    const repository=jest.fn(async()=>({contractVersion:'m27-security-safe-v1',value:null,
+      providerCallCount:0,databaseMutationCount:0,liveMoneyMovementCount:0}));
+    const app=buildApp({read:repository});
+    expect((await request(app).get(ROUTE).query(QUERY).set(HEADERS)).status).toBe(200);
+    expect(repository).toHaveBeenCalledTimes(1);
+    const absent=await request(app).get(
+      '/api/v1/customer-financial/unrecognized/sk_secret_customer@example.test_999999');
+    expect(absent.status).toBe(404);
+    expect(absent.body).toEqual({success:false,error:{
+      category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}});
+    expect(absent.headers['cache-control']).toContain('private');
+    expect(absent.headers['x-request-id']).toBeUndefined();
+    expect(JSON.stringify(absent.body)).not.toMatch(/sk_secret|customer@example|999999|requestId/i);
+    const malformed=await request(app).post(
+      '/api/v1/customer-financial/unrecognized/sk_secret_customer@example.test_999999')
+      .set('Content-Type','application/json').send('{"nested":"sk_body"');
+    expect(malformed.status).toBe(404);
+    expect(malformed.body).toEqual(absent.body);
+    expect(malformed.headers['cache-control']).toContain('private');
+    expect(malformed.headers['x-request-id']).toBeUndefined();
+    expect(JSON.stringify(malformed.body)).not.toMatch(/sk_|customer@example|999999|requestId/i);
+    const outside=await request(app).get('/api/not-customer-financial/sk_secret_negative-control');
+    expect(outside.status).toBe(404);
+    expect(outside.body).not.toEqual({success:false,error:{
+      category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}});
+  });
+
   test('mounted inventory exposes no financial public-link webhook charge or offline-receipt mutation',()=>{
     const server=read('src/server.js');const editable=read('src/routes/customerFinancialEditableEstimate.js');
     const demo=read('src/routes/demo.js');const provider=read('src/routes/customerFinancialProviderConnection.js');
+    const earlyBoundary=server.indexOf('app.use(customerFinancialUnsupportedBoundary)');
+    const cors=server.indexOf('app.use(cors(corsOptions))');
+    const correlation=server.indexOf('app.use(correlationId)');
+    const parserError=server.indexOf('app.use(customerFinancialParserError)');
+    const securityHeaders=server.indexOf('app.use(securityHeaders)');
+    const finalBoundary=server.indexOf("app.use('/api/v1/customer-financial', customerFinancialNotFound)");
+    const globalNotFound=server.indexOf('app.use(notFound)');
+    expect(earlyBoundary).toBeGreaterThan(-1);
+    expect(cors).toBeGreaterThan(earlyBoundary);
+    expect(correlation).toBeGreaterThan(earlyBoundary);
+    expect(parserError).toBeGreaterThan(correlation);
+    expect(securityHeaders).toBeGreaterThan(parserError);
+    expect(finalBoundary).toBeGreaterThan(-1);
+    expect(globalNotFound).toBeGreaterThan(finalBoundary);
     expect(server).toContain("app.use('/api/v1/customer-financial/editable-estimates'");
     expect(server).not.toMatch(/app\.(?:post|put|patch|delete)\(['"]\/api\/v1\/customer-financial\/(?:public|webhook|charge|offline-receipt)/);
     expect(editable).toContain("router.get('/:estimateId/financial-lifecycle-recovery-acceptance'");

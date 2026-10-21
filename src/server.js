@@ -157,6 +157,9 @@ const { paidTenantJourneyAcceptanceBoundary } =
   require('./middleware/paidTenantJourneyAcceptanceBoundary');
 const { financialLifecycleRecoveryAcceptanceBoundary } =
   require('./middleware/financialLifecycleRecoveryAcceptanceBoundary');
+const { customerFinancialUnsupportedBoundary, customerFinancialParserError,
+  customerFinancialNotFound } =
+  require('./middleware/customerFinancialUnsupportedBoundary');
 const { fictionalDemoJourneyAcceptanceBoundary } =
   require('./middleware/fictionalDemoJourneyAcceptanceBoundary');
 const { createCustomerFinancialProviderAcceptanceRouter } =
@@ -256,6 +259,9 @@ app.use(reportingPart12AcceptanceBoundary);
 // method/body composition is rejected before CORS, parsing, admission or any
 // demo/paid source read.
 app.use(fictionalDemoJourneyAcceptanceBoundary);
+// Part 14D owns never-mounted financial action namespaces before CORS,
+// correlation and body parsing so no rejected path or payload can be reflected.
+app.use(customerFinancialUnsupportedBoundary);
 app.use(cors(corsOptions));
 // Part 13A owns the complete method/body composition for its exact private
 // read after GET-only CORS has narrowed browser policy and before body parsing.
@@ -305,6 +311,7 @@ app.use(express.json({
     req.rawBody = buffer.toString();
   },
 }));
+app.use(customerFinancialParserError);
 app.use(securityHeaders);
 app.use(auditLogger);
 
@@ -624,6 +631,9 @@ app.use('/api', createCompatibilityRouter());
 app.use('/api', createLegacyAuthorityRetirementRouter());
 // API routes (global requireAuth applies to all remaining /api/* routes)
 app.use('/api', apiRoutes);
+
+// Preserve one fixed private denial for every unmatched customer-financial path.
+app.use('/api/v1/customer-financial', customerFinancialNotFound);
 
 // 404 + error handler (single instances)
 app.use(notFound);

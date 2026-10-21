@@ -1,6 +1,7 @@
 'use strict';
 
 const fs=require('node:fs');
+const http=require('node:http');
 const path=require('node:path');
 const cors=require('cors');
 const express=require('express');
@@ -36,6 +37,20 @@ function auth(req,res,next){
 }
 function owner(req,res,next){return req.userRole==='owner'?next():
   res.status(403).json({success:false});}
+function rawRequest(server,method,target,body){
+  return new Promise((resolve,reject)=>{
+    const payload=Buffer.from(JSON.stringify(body));
+    const req=http.request({host:'127.0.0.1',port:server.address().port,
+      method:method.toUpperCase(),path:target,headers:{'Content-Type':'application/json',
+        'Content-Length':String(payload.length)}},response=>{
+      let text='';response.setEncoding('utf8');
+      response.on('data',chunk=>{text+=chunk;});
+      response.on('end',()=>{let parsed={};try{parsed=JSON.parse(text);}catch(_error){}
+        resolve({status:response.statusCode,headers:response.headers,body:parsed,text});});
+    });
+    req.on('error',reject);req.end(payload);
+  });
+}
 function buildApp(options={}){
   const app=express();
   app.use(financialLifecycleRecoveryAcceptanceBoundary);
@@ -228,6 +243,49 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
       const response=await request(app).get(pathname);
       expect(response.status).toBe(404);expect(response.body).not.toEqual(exact);
     }
+  });
+
+  test('post-prefix traversal retains protected provenance across methods and encodings',async()=>{
+    const read=jest.fn();const providerRead=jest.fn();const providerAttempt=jest.fn();
+    const app=buildApp({read,provider:{read:providerRead,attempt:providerAttempt}});
+    const escapes=[
+      '/api/v1/customer-financial/%252e%252e/sk_secret',
+      '/api/v1/customer-financial/%252E%252E/sk_secret',
+      '/api/v1/customer-financial/%2e%2e/sk_secret',
+      '/api/v1/customer-financial/%2E%2E/sk_secret',
+      '/api/v1/customer-financial/%255c%252e%252e%255csk_secret',
+      '/api/v1/customer-financial/%5c%2e%2e%5csk_secret',
+      '/api/v1/customer-financial%255c%252e%252e%255csk_secret',
+      '/api/v1/customer-financial%5c%2e%2e%5csk_secret',
+      '/api/v1/customer-financial/%252f%252e%252e%252fsk_secret',
+      '/api/v1/customer-financial/%2f%2e%2e%2fsk_secret',
+      '/api/v1/customer-financial/inside/%252e%252e/%252e%252e/sk_secret',
+      '/api/v1/customer-financial/inside/%2e%2e/%2e%2e/sk_secret',
+      '/api/v1/customer-financial//%252e%252e///sk_secret',
+      '/api/v1/customer-financial/%252e%252e/%ZZ/sk_secret',
+      '/x/%252e%252e/api/v1/customer-financial/%252e%252e/sk_secret',
+      '/x/%2e%2e/api/v1/customer-financial/%2e%2e/sk_secret',
+      '/x/%252e%252e/%2561pi/%2576%2531/%2563ustomer-financial/%252e%252e/sk_secret',
+    ];
+    const methods=['get','post','put','patch','delete'];
+    const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}};
+    const server=app.listen(0,'127.0.0.1');
+    await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
+    try{for(const pathname of escapes){for(const method of methods){
+      const response=await rawRequest(server,method,pathname+
+        '?marker=customer%40example.test_sk_secret_999999',
+      {secret:'sk_secret',email:'customer@example.test',amount:999999});
+      expect({pathname,method,status:response.status,body:response.body}).toEqual(
+        {pathname,method,status:404,body:exact});
+      expect(response.headers['cache-control']).toContain('private');
+      expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.headers['x-request-id']).toBeUndefined();
+      expect(response.headers['x-correlation-id']).toBeUndefined();
+      expect(response.text).not.toMatch(/sk_|customer@example|999999|requestId/i);
+    }}}finally{await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
+    expect(read).not.toHaveBeenCalled();expect(providerRead).not.toHaveBeenCalled();
+    expect(providerAttempt).not.toHaveBeenCalled();
   });
 
   test('mounted inventory exposes no financial public-link webhook charge or offline-receipt mutation',()=>{

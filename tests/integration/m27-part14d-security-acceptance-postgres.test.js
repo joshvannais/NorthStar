@@ -1,14 +1,17 @@
 'use strict';
 
 const crypto=require('node:crypto');
+const express=require('express');
 const request=require('supertest');
 const {createPart4ePaidBrowserFixture}=
   require('../helpers/m27-part4e-paid-journey-fixture');
+const {customerFinancialUnsupportedBoundary,customerFinancialParserError}=
+  require('../../src/middleware/customerFinancialUnsupportedBoundary');
 
 const realPostgres=process.env.M19_PG_ADMIN_URL?describe:describe.skip;
 
 realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
-  let prepared;let transport;let recoveryRead;let route;let exactQuery;
+  let prepared;let app;let transport;let recoveryRead;let route;let exactQuery;
 
   beforeAll(async()=>{
     for(const key of ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','OPENAI_API_KEY',
@@ -21,6 +24,8 @@ realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
       throw new Error('External transport forbidden in Part 14D');
     });
     prepared=await createPart4ePaidBrowserFixture();
+    app=express();app.use(customerFinancialUnsupportedBoundary);app.use(prepared.fixture.app);
+    app.use(customerFinancialParserError);
     route=`/api/v1/customer-financial/editable-estimates/${prepared.estimate}`+
       '/financial-lifecycle-recovery-acceptance';
     exactQuery={handoffReceiptId:prepared.receipt.receiptId,
@@ -53,16 +58,16 @@ realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
 
   test('tenant role session and real CSRF witnesses fail closed with zero financial effect',async()=>{
     const before=await residue();
-    expect((await request(prepared.fixture.app).get(route).query(exactQuery)).status).toBe(401);
+    expect((await request(app).get(route).query(exactQuery)).status).toBe(401);
     for(const actor of [prepared.fixture.actors.admin,prepared.fixture.actors.member,
       prepared.fixture.actors.viewer]){
-      expect((await request(prepared.fixture.app).get(route).query(exactQuery)
+      expect((await request(app).get(route).query(exactQuery)
         .set(actor.session.headers)).status).toBe(403);
     }
-    const cross=await request(prepared.fixture.app).get(route).query(exactQuery)
+    const cross=await request(app).get(route).query(exactQuery)
       .set(prepared.fixture.actors.otherOwner.session.headers);
     expect([403,404,409,503]).toContain(cross.status);
-    const wrongCsrf=await request(prepared.fixture.app)
+    const wrongCsrf=await request(app)
       .post(`/api/v1/customer-financial/editable-estimates/${prepared.estimate}`+
         '/invoice-draft/workflow-capability')
       .set(prepared.actor.session.headers).set('X-CSRF-Token','wrong-but-bounded-csrf-witness')
@@ -74,7 +79,7 @@ realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
 
   test('public link webhook provider account secret PII amount and offline evidence are nonreflective denials',async()=>{
     const before=await residue();recoveryRead.mockClear();
-    const widened=await request(prepared.fixture.app).get(route).query({...exactQuery,
+    const widened=await request(app).get(route).query({...exactQuery,
       tenantId:prepared.fixture.org,providerAccountId:'acct_victim',credential:'sk_test_secret',
       customerEmail:'customer@example.test',amountMinorUnits:'999999',
       offlineEvidence:'check_cleared'}).set(prepared.actor.session.headers);
@@ -82,19 +87,29 @@ realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
     expect(JSON.stringify(widened.body)).not.toMatch(
       /acct_victim|sk_test_secret|customer@example|999999|check_cleared/i);
     const deniedPaths=[
-      ['/api/v1/customer-financial/public/invoices/guessed-token','get'],
-      ['/api/v1/customer-financial/payment-provider/webhook','post'],
-      ['/api/v1/customer-financial/payment-provider/charge','post'],
-      ['/api/v1/customer-financial/offline-receipts','post'],
+      ['/api/v1/customer-financial/public/invoices/sk_secret_customer-999999-check_cleared','get'],
+      ['/api/v1/customer-financial/PUBLIC/invoices/customer%40example.test','post'],
+      ['/api/v1/customer-financial/payment-provider/webhook/acct_victim','options'],
+      ['/api/v1/customer-financial/payment-provider/charge/sk_live_secret','put'],
+      ['/api/v1/customer-financial/offline-receipts/check_cleared','patch'],
+      ['/api/v1/customer-financial/public%2Finvoices%2Fcustomer@example.test','delete'],
+      ['/api/v1/customer-financial/unrecognized/sk_secret_customer@example.test_999999','post'],
     ];
+    const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}};
     for(const [pathname,method] of deniedPaths){
-      const response=await request(prepared.fixture.app)[method](pathname)
+      const response=await request(app)[method](pathname+
+        '?credential=sk_query&customerEmail=customer@example.test&amountMinorUnits=999999')
         .set(prepared.actor.session.headers).set('X-CSRF-Token',prepared.actor.csrfToken)
-        .type('application/json').send({token:'guessed-token',providerAccountId:'acct_victim',
-          credential:'sk_test_secret',amountMinorUnits:999999,checkState:'check_cleared'});
-      expect([400,403,404,405]).toContain(response.status);
+        .set('Content-Type','application/json')
+        .send('{"nested":{"providerAccountId":"acct_victim","credential":"sk_test_secret"}');
+      expect(response.status).toBe(404);expect(response.body).toEqual(exact);
+      expect(response.headers['cache-control']).toContain('private');
+      expect(response.headers['cache-control']).toContain('no-store');
+      expect(response.headers['x-request-id']).toBeUndefined();
+      expect(response.headers['x-correlation-id']).toBeUndefined();
       expect(JSON.stringify(response.body||{})).not.toMatch(
-        /acct_victim|sk_test_secret|999999|check_cleared/i);
+        /acct_victim|sk_|customer@example|999999|check_cleared|requestId|public%2f/i);
     }
     expect(await residue()).toEqual(before);expect(transport).not.toHaveBeenCalled();
   },180000);
@@ -103,15 +118,15 @@ realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
     const before=await residue();recoveryRead.mockClear();
     const attempts=[];
     for(let index=0;index<12;index+=1){
-      attempts.push(request(prepared.fixture.app).post(
+      attempts.push(request(app).post(
         '/api/v1/customer-financial/payment-provider/charge')
         .set(prepared.actor.session.headers).set('X-CSRF-Token',prepared.actor.csrfToken)
         .type('application/json').send({idempotencyKey:'duplicate-charge',amountMinorUnits:100}));
-      attempts.push(request(prepared.fixture.app).post(
+      attempts.push(request(app).post(
         '/api/v1/customer-financial/offline-receipts')
         .set(prepared.actor.session.headers).set('X-CSRF-Token',prepared.actor.csrfToken)
         .type('application/json').send({idempotencyKey:'duplicate-offline',state:'check_cleared'}));
-      attempts.push(request(prepared.fixture.app).get(
+      attempts.push(request(app).get(
         route.replace(prepared.estimate,'x'.repeat(1024))).query(exactQuery)
         .set(prepared.actor.session.headers));
     }

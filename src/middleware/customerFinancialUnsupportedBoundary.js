@@ -32,33 +32,44 @@ function decodeAsciiPercent(value) {
   return { value:output, changed };
 }
 
-function resolveSegments(value) {
+function inspectSegments(value) {
   const segments = value.replace(/\\/g, '/').split('/');
   const resolved = [];
+  let enteredNamespace = false;
   for (const segment of segments) {
     if (!segment || segment === '.') continue;
     if (segment === '..') { if (resolved.length) resolved.pop(); continue; }
     resolved.push(segment);
+    if (resolved.length >= 3 && resolved[0].toLowerCase() === 'api' &&
+        resolved[1].toLowerCase() === 'v1' &&
+        resolved[2].toLowerCase() === 'customer-financial') enteredNamespace = true;
   }
-  return '/' + resolved.join('/');
+  return { canonical:'/' + resolved.join('/'), enteredNamespace };
 }
 
 function classifyPath(req) {
   const raw = requestPath(req);
   let candidate = raw;
+  let inspection = inspectSegments(raw);
+  let enteredNamespace = inspection.enteredNamespace;
   // Every ASCII percent-decoding round shortens the bounded request target.
   // Iterate to a fixed point so double and repeated encodings cannot create a
   // second routing interpretation after this boundary.
   for (let round = 0; round <= raw.length; round += 1) {
     const decoded = decodeAsciiPercent(candidate);
     candidate = decoded.value;
+    inspection = inspectSegments(candidate);
+    enteredNamespace = enteredNamespace || inspection.enteredNamespace;
     if (!decoded.changed) break;
   }
-  const canonical = resolveSegments(candidate);
+  const canonical = inspection.canonical;
   const namespace = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(canonical);
-  if (!namespace) return null;
+  // Protection is monotonic: once any bounded raw/decoded representation
+  // begins inside this namespace, later dot-segment resolution cannot erase
+  // that provenance and expose the reflective global 404.
+  if (!enteredNamespace && !namespace) return null;
   const literal = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(raw);
-  const ambiguous = !literal || raw.includes('\\') || /\/{2,}/.test(raw) ||
+  const ambiguous = !literal || !namespace || raw.includes('\\') || /\/{2,}/.test(raw) ||
     /(?:^|\/)\.{1,2}(?:\/|$)/.test(raw) || candidate.includes('\\') ||
     /\/{2,}/.test(candidate) || /(?:^|\/)\.{1,2}(?:\/|$)/.test(candidate);
   return { canonical, ambiguous };

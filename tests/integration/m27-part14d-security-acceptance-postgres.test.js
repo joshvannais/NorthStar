@@ -94,6 +94,8 @@ realPostgres('Mission 27 Part 14D mounted security acceptance',()=>{
       ['/api/%76%31/customer-financial/unrecognized/sk_secret','get'],
       ['/api/v1/%63ustomer-financial/unrecognized/sk_secret','get'],
       ['//api/v1/customer-financial/unrecognized/sk_secret','get'],
+      ['/api/v1/customer-financial/%252e%252e/sk_secret','post'],
+      ['/api/v1/customer-financial%5c%2e%2e%5csk_secret','delete'],
     ];
     const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
       message:'The requested customer financial resource is unavailable.'}};

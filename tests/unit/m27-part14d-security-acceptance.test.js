@@ -8,8 +8,8 @@ const express=require('express');
 const request=require('supertest');
 const {financialLifecycleRecoveryAcceptanceBoundary}=
   require('../../src/middleware/financialLifecycleRecoveryAcceptanceBoundary');
-const {customerFinancialUnsupportedBoundary,customerFinancialParserError,
-  customerFinancialNotFound}=
+const {PATH_CLASSIFICATION_POLICY,customerFinancialUnsupportedBoundary,
+  customerFinancialParserError,customerFinancialNotFound}=
   require('../../src/middleware/customerFinancialUnsupportedBoundary');
 const {corsOptions}=require('../../src/middleware/security');
 const {createCustomerFinancialEditableEstimateRouter}=
@@ -287,6 +287,61 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
     expect(read).not.toHaveBeenCalled();expect(providerRead).not.toHaveBeenCalled();
     expect(providerAttempt).not.toHaveBeenCalled();
   });
+
+  test('deep percent nesting has fixed decode rounds and bounded linear denial work',async()=>{
+    expect(PATH_CLASSIFICATION_POLICY).toEqual({maxDecodeRounds:4,
+      maxRawTargetLength:8192,maxNestedPercentDepth:8});
+    const source=read('src/middleware/customerFinancialUnsupportedBoundary.js');
+    expect(source).toContain(
+      'round < PATH_CLASSIFICATION_POLICY.maxDecodeRounds');
+    expect(source).not.toMatch(/round\s*<=?\s*raw\.length/);
+
+    const readRepository=jest.fn();
+    const app=buildApp({read:readRepository});
+    const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}};
+    const server=app.listen(0,'127.0.0.1');
+    await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
+    try{
+      for(const depth of [1,2,4,8,9,64,512,2048,7900]){
+        const target=`/%${'25'.repeat(depth)}61pi/v1/customer-financial/sksecret`;
+        const response=await rawRequest(server,'get',target,{secret:'sk_body'});
+        expect({depth,status:response.status,body:response.body}).toEqual(
+          {depth,status:404,body:exact});
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+        expect(response.headers['x-request-id']).toBeUndefined();
+        expect(response.text).not.toMatch(/sk_body|sksecret|requestId/i);
+      }
+
+      const exactAuditorTarget=`/%${'25'.repeat(7900)}`+
+        '61pi/v1/customer-financial/sksecret';
+      expect(exactAuditorTarget.length).toBe(15837);
+      const started=process.hrtime.bigint();
+      const burst=await Promise.all(Array.from({length:5},()=>
+        rawRequest(server,'get',exactAuditorTarget,{secret:'sk_burst'})));
+      const elapsedMs=Number(process.hrtime.bigint()-started)/1e6;
+      expect(burst.every(response=>response.status===404 &&
+        JSON.stringify(response.body)===JSON.stringify(exact))).toBe(true);
+      expect(burst.every(response=>String(response.headers['cache-control']).includes('private') &&
+        !/sk_|requestId/i.test(response.text))).toBe(true);
+      // Secondary guard only: deterministic fixed rounds above are the primary
+      // complexity proof. The rejected implementation took about 2.4 seconds
+      // for this exact five-request burst on Node 22.23.3.
+      expect(elapsedMs).toBeLessThan(1000);
+
+      for(const target of [
+        `/api/v1/customer-financially/${'a'.repeat(9000)}`,
+        `/outside/${'a'.repeat(9000)}/customer-financial`,
+      ]){
+        const outside=await rawRequest(server,'get',target,{secret:'outside'});
+        expect(outside.status).toBe(404);expect(outside.body).not.toEqual(exact);
+      }
+    }finally{
+      await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+    }
+    expect(readRepository).not.toHaveBeenCalled();
+  },30000);
 
   test('mounted inventory exposes no financial public-link webhook charge or offline-receipt mutation',()=>{
     const server=read('src/server.js');const editable=read('src/routes/customerFinancialEditableEstimate.js');

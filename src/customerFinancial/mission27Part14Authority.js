@@ -425,8 +425,8 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   ledger: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
-    normalizedSha256: '26318593ab17b10678ea7c726ac4affa59f665114c69f448a287019215f390eb',
-    normalizedUtf8Bytes: 100392,
+    normalizedSha256: '058a83f0bab75a6fe76415ec279b9b2a632abfad613234fcc1d86e6615293a3d',
+    normalizedUtf8Bytes: 100536,
     normalizedLineCount: 138,
   }),
   architecture14A: OBJECT_FREEZE({

@@ -10,6 +10,7 @@ const ROOT = path.resolve(__dirname, '../..');
 const AUTHORITY_PATH = require.resolve('../../src/customerFinancial/mission27Part14Authority');
 const DOCUMENT_KEYS = Object.freeze([
   'roadmap', 'ledger', 'architecture14A', 'architecture14B', 'architecture14C',
+  'architecture14D',
 ]);
 const DOCS = Object.freeze(Object.fromEntries(DOCUMENT_KEYS.map(name => [
   name,
@@ -60,7 +61,7 @@ function runFresh(source) {
   return JSON.parse(result.stdout.trim());
 }
 
-describe('Mission 27 Part 14C complete canonical authority allowlist', () => {
+describe('Mission 27 Part 14D complete canonical authority allowlist', () => {
   test('independently derives the locked normalized whole-document manifest', () => {
     for (const name of DOCUMENT_KEYS) {
       const document = normalized(DOCS[name]);
@@ -72,10 +73,11 @@ describe('Mission 27 Part 14C complete canonical authority allowlist', () => {
     }
     expect(Object.isFrozen(authority.CANONICAL_DOCUMENTS)).toBe(true);
     expect(authority.validate({ ...DOCS })).toEqual(expect.objectContaining({
-      contractVersion:'m27-part14c-authority-ratification-v1',
+      contractVersion:'m27-part14d-authority-ratification-v1',
       acceptedPart14BHead:authority.PART14B_ACCEPTANCE.head,
-      currentSlice:'14C', currentStatus:'candidate', migrationLatest:272,
-      migration273Present:false, laterSlices:['14D','14E','14F','14G'],
+      acceptedPart14CHead:authority.PART14C_ACCEPTANCE.head,
+      currentSlice:'14D', currentStatus:'candidate', migrationLatest:272,
+      migration273Present:false, laterSlices:['14E','14F','14G'],
     }));
   });
 
@@ -95,7 +97,7 @@ describe('Mission 27 Part 14C complete canonical authority allowlist', () => {
     ['received check cleared','A received check is treated as cleared cash.'],
     ['check variant','check_received implies bank clearance and settlement.'],
   ])('rejects contradictory normative appendix: %s', (_name, claim) => {
-    expectRejected('architecture14C', `${DOCS.architecture14C}\n## Additional authority\n\n${claim}\n`);
+    expectRejected('architecture14D', `${DOCS.architecture14D}\n## Additional authority\n\n${claim}\n`);
   });
 
   test('rejects every material ledger cell and every later-row status/order mutation', () => {
@@ -116,7 +118,7 @@ describe('Mission 27 Part 14C complete canonical authority allowlist', () => {
 
   test('rejects status, provenance, scope, evidence, unavailable and Part13D limitation drift', () => {
     replaceExact('roadmap',
-      'Status: frozen plan through released Part 14A; original Part 14B is accepted and merged with its exact automatic deployment trigger queued during a global Railway build pause; original Part 14C is the current implementation candidate.',
+      'Status: frozen plan through released Part 14A; original Part 14B is accepted and merged with its exact automatic deployment trigger queued during a global Railway build pause; original Part 14C is independently accepted at exact head `4975a58d43c1ab71f9500e765ef375d2ae221ec2`, tree `37e9c62d2da1965c498c380478349ee24d137459`, but remains unmerged and undeployed behind Part 14B; original Part 14D is the current implementation candidate.',
       'Status: frozen plan through released complete Part 14; original Part 14B is released.');
     replaceExact('roadmap', authority.PART13_RELEASE.head, 'f'.repeat(40));
     replaceExact('roadmap', authority.PART14A_RELEASE.head, 'e'.repeat(40));
@@ -143,6 +145,9 @@ describe('Mission 27 Part 14C complete canonical authority allowlist', () => {
     replaceExact('architecture14C',
       'The contract remains `incomplete_required_evidence`',
       'The contract is complete and accepted');
+    replaceExact('architecture14D',
+      'does not make Part 14D accepted, audited, merged or deployed',
+      'makes Part 14D accepted, audited, merged and deployed');
   });
 
   test('rejects reordered, removed, duplicated, renamed, appended and evasively rewritten authority', () => {
@@ -164,6 +169,10 @@ describe('Mission 27 Part 14C complete canonical authority allowlist', () => {
       '## Private acceptance boundary', '## Ordered recovery scenarios'));
     replaceExact('architecture14C', '18. downstream correction and recovery.',
       '18. automatic downstream mutation.');
+    expectRejected('architecture14D', swapAdjacentSections(DOCS.architecture14D,
+      '## Exact security matrix', '## Evidence contract'));
+    replaceExact('architecture14D', 'No customer-financial provider webhook mutation route is mounted.',
+      'Customer-financial provider webhook mutation is authorized.');
     expectRejected('roadmap', `${DOCS.roadmap}\n## Unreviewed normative appendix\n\nPart 14A is complete.\n`);
     expectRejected('ledger', `${DOCS.ledger}\n| 14H | Unexpected normative row | No | No | No | — | No | No | No | Planned |\n`);
     expectRejected('roadmap', DOCS.roadmap.replace('Part 14A', 'Part  14A'));

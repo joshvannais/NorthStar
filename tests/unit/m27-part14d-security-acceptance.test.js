@@ -51,6 +51,18 @@ function rawRequest(server,method,target,body){
     req.on('error',reject);req.end(payload);
   });
 }
+function encodeEveryAscii(value){
+  let encoded='';
+  for(const character of value){
+    encoded+=`%${character.charCodeAt(0).toString(16).padStart(2,'0')}`;
+  }
+  return encoded;
+}
+function encodeEveryAsciiLayers(value,depth){
+  let encoded=value;
+  for(let layer=0;layer<depth;layer+=1) encoded=encodeEveryAscii(encoded);
+  return encoded;
+}
 function buildApp(options={}){
   const app=express();
   app.use(financialLifecycleRecoveryAcceptanceBoundary);
@@ -289,7 +301,7 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
   });
 
   test('deep percent nesting has fixed decode rounds and bounded linear denial work',async()=>{
-    expect(PATH_CLASSIFICATION_POLICY).toEqual({maxDecodeRounds:4,
+    expect(PATH_CLASSIFICATION_POLICY).toEqual({maxDecodeRounds:1,
       maxRawTargetLength:8192,maxNestedPercentDepth:8});
     const source=read('src/middleware/customerFinancialUnsupportedBoundary.js');
     expect(source).toContain(
@@ -315,8 +327,8 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
       }
 
       const exactAuditorTarget=`/%${'25'.repeat(7900)}`+
-        '61pi/v1/customer-financial/sksecret';
-      expect(exactAuditorTarget.length).toBe(15837);
+        '61pi/v1/customer-financial/sksecret'+'x'.repeat(14);
+      expect(exactAuditorTarget.length).toBe(15851);
       const started=process.hrtime.bigint();
       const burst=await Promise.all(Array.from({length:5},()=>
         rawRequest(server,'get',exactAuditorTarget,{secret:'sk_burst'})));
@@ -341,6 +353,61 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
       await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
     }
     expect(readRepository).not.toHaveBeenCalled();
+  },30000);
+
+  test('fully and mixed recursively encoded namespace bytes cannot outlive the fixed pass',async()=>{
+    const readRepository=jest.fn();const providerRead=jest.fn();const providerAttempt=jest.fn();
+    const app=buildApp({read:readRepository,
+      provider:{read:providerRead,attempt:providerAttempt}});
+    const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}};
+    const marker='/unrecognized/sk_secret_customer@example.test_999999';
+    const fiveLayerCases=[
+      `/${encodeEveryAsciiLayers('a',5)}pi/v1/customer-financial${marker}`,
+      `/api/${encodeEveryAsciiLayers('v',5)}1/customer-financial${marker}`,
+      `/api/v1/${encodeEveryAsciiLayers('c',5)}ustomer-financial${marker}`,
+    ];
+    expect(fiveLayerCases.map(value=>value.length)).toEqual([320,320,320]);
+    const fullPrefixBase=`/${encodeEveryAsciiLayers('api/v1/customer-financial',5)}${marker}`;
+    const fullPrefix6199=fullPrefixBase+'x'.repeat(6199-fullPrefixBase.length);
+    expect(fullPrefix6199.length).toBe(6199);
+    const mixed=[
+      `/${encodeEveryAsciiLayers('%61',4)}pi/v1/customer-financial${marker}`,
+      `/${encodeEveryAsciiLayers('%2561',3)}pi/v1/customer-financial${marker}`,
+      `/%25${encodeEveryAsciiLayers('61',4)}pi/v1/customer-financial${marker}`,
+    ];
+    const methods=['get','post','put','patch','delete'];
+    const server=app.listen(0,'127.0.0.1');
+    await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
+    try{
+      for(const target of [...fiveLayerCases,fullPrefix6199,...mixed]){
+        for(const method of methods){
+          const response=await rawRequest(server,method,target+
+            '?marker=customer%40example.test_sk_query_999999',
+          {secret:'sk_body',email:'customer@example.test',amount:999999});
+          expect({targetLength:target.length,method,status:response.status,body:response.body})
+            .toEqual({targetLength:target.length,method,status:404,body:exact});
+          expect(response.headers['cache-control']).toContain('private');
+          expect(response.headers['cache-control']).toContain('no-store');
+          expect(response.headers['x-request-id']).toBeUndefined();
+          expect(response.headers['x-correlation-id']).toBeUndefined();
+          expect(response.text).not.toMatch(/sk_|customer@example|999999|requestId/i);
+        }
+      }
+      for(const target of [
+        `/${encodeEveryAsciiLayers('a',5)}pix/v1/customer-financial${marker}`,
+        `/api/${encodeEveryAsciiLayers('v',5)}2/customer-financial${marker}`,
+        `/api/v1/${encodeEveryAsciiLayers('c',5)}ustomer-financially${marker}`,
+        `/outside/${encodeEveryAsciiLayers('customer-financial',5)}${marker}`,
+      ]){
+        const response=await rawRequest(server,'get',target,{secret:'outside'});
+        expect(response.status).toBe(404);expect(response.body).not.toEqual(exact);
+      }
+    }finally{
+      await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+    }
+    expect(readRepository).not.toHaveBeenCalled();expect(providerRead).not.toHaveBeenCalled();
+    expect(providerAttempt).not.toHaveBeenCalled();
   },30000);
 
   test('mounted inventory exposes no financial public-link webhook charge or offline-receipt mutation',()=>{

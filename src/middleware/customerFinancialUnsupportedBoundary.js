@@ -3,7 +3,7 @@
 const NAMESPACE = '/api/v1/customer-financial';
 const CLASSIFIED_NAMESPACE = Symbol('northstar.customerFinancialNamespace');
 const PATH_CLASSIFICATION_POLICY = Object.freeze({
-  maxDecodeRounds:4,
+  maxDecodeRounds:1,
   maxRawTargetLength:8192,
   maxNestedPercentDepth:8,
 });
@@ -25,36 +25,35 @@ function hexValue(code) {
   return -1;
 }
 
-// Collapse a conventional repeatedly encoded ASCII byte (%252561 -> "a")
-// in one left-to-right pass. This keeps arbitrary %25 nesting linear instead
-// of requiring one full-string decoding pass per layer.
+// Resolve every recursively percent-encoded ASCII byte in one streaming pass.
+// The reduction stack also handles encodings that split the percent sign and
+// hex digits into separate escapes (for example %25%361 -> %61 -> "a"). Each
+// input character is pushed once and each reduction removes two stack items,
+// so work remains linear even when an admitted target uses mixed encodings.
 function decodeAsciiPercent(value) {
-  let output = '';
+  const output = [];
+  const depths = [];
   let changed = false;
   let complex = false;
   for (let index = 0; index < value.length; index += 1) {
-    if (value.charCodeAt(index) === 37) {
-      let cursor = index + 1;
-      let nestedDepth = 0;
-      while (cursor + 1 < value.length && value.charCodeAt(cursor) === 50 &&
-          value.charCodeAt(cursor + 1) === 53) {
-        nestedDepth += 1;
-        cursor += 2;
-      }
-      if (nestedDepth > PATH_CLASSIFICATION_POLICY.maxNestedPercentDepth) complex = true;
-      const high = cursor < value.length ? hexValue(value.charCodeAt(cursor)) : -1;
-      const low = cursor + 1 < value.length ? hexValue(value.charCodeAt(cursor + 1)) : -1;
+    output.push(value[index]);
+    depths.push(0);
+    while (output.length >= 3 && output[output.length - 3] === '%') {
+      const high = hexValue(output[output.length - 2].charCodeAt(0));
+      const low = hexValue(output[output.length - 1].charCodeAt(0));
       const byte = high < 0 || low < 0 ? 256 : high * 16 + low;
-      if (byte <= 0x7f) {
-        output += String.fromCharCode(byte);
-        index = cursor + 1;
-        changed = true;
-        continue;
-      }
+      if (byte > 0x7f) break;
+      const depth = Math.max(depths[depths.length - 3], depths[depths.length - 2],
+        depths[depths.length - 1]) + 1;
+      output.length -= 3;
+      depths.length -= 3;
+      output.push(String.fromCharCode(byte));
+      depths.push(depth);
+      changed = true;
+      if (depth > PATH_CLASSIFICATION_POLICY.maxNestedPercentDepth) complex = true;
     }
-    output += value[index];
   }
-  return { value:output, changed, complex };
+  return { value:output.join(''), changed, complex };
 }
 
 function inspectSegments(value) {
@@ -79,10 +78,10 @@ function classifyPath(req) {
   let enteredNamespace = inspection.enteredNamespace;
   let complex = raw.length > PATH_CLASSIFICATION_POLICY.maxRawTargetLength;
   let decodeLimitExceeded = false;
-  // The number of full-string passes is a small constant independent of input
-  // length. Each pass also collapses an arbitrary conventional %25 nesting
-  // chain in one scan. Inputs that still transform at the limit are ambiguous
-  // and, once the protected namespace has been observed, fail closed.
+  // The number of full-string passes is a fixed constant independent of input
+  // length. The streaming decoder reaches the recursive ASCII fixed point in
+  // this single pass, including mixed encodings; a changed result is therefore
+  // deliberately marked ambiguous but never requires another full scan.
   for (let round = 0; round < PATH_CLASSIFICATION_POLICY.maxDecodeRounds; round += 1) {
     const decoded = decodeAsciiPercent(candidate);
     candidate = decoded.value;

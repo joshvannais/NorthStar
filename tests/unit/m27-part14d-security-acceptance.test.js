@@ -338,10 +338,11 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
   test('deep percent nesting and target forms have fixed bounded linear denial work',async()=>{
     expect(PATH_CLASSIFICATION_POLICY).toEqual({maxDecodeRounds:1,
       maxRawTargetLength:8192,maxNestedPercentDepth:8,maxTargetRepresentations:3,
-      maxAuthorityPathExtractions:2});
+    });
     const source=read('src/middleware/customerFinancialUnsupportedBoundary.js');
     expect(source).toContain(
-      'extraction < PATH_CLASSIFICATION_POLICY.maxAuthorityPathExtractions');
+      'isAuthoritySeparator(value, cursor + 1)');
+    expect(source).toContain('cursor = separator');
     expect(source).toContain(
       'representations.length < PATH_CLASSIFICATION_POLICY.maxTargetRepresentations');
     expect(source).not.toMatch(/round\s*<=?\s*raw\.length/);
@@ -461,6 +462,13 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
       `//example.test/api/v1/customer-financial${marker}`,
       `http:////example.test/api/v1/customer-financial${marker}`,
       `http://example.test%2fapi%2fv1%2fcustomer-financial${marker}`,
+      `//h0.test//h1.test//h2.test/api/v1/customer-financial${marker}`,
+      `http://h0.test//h1.test//h2.test//h3.test/api/v1/customer-financial${marker}`,
+      `http://h0.test%2f%2fh1.test%2f%2fh2.test%2fapi%2fv1%2f`+
+        `customer-financial${marker}`,
+      `http://h0.test%5c%5ch1.test%5capi%5cv1%5ccustomer-financial${marker}`,
+      Array.from({length:64},(_value,index)=>`//h${index}.test`).join('')+
+        `/api/v1/customer-financial${marker}`,
     ];
     const methods=['get','post','put','patch','delete'];
     const server=app.listen(0,'127.0.0.1');
@@ -481,6 +489,8 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
         'http://example.test/api/v2/customer-financial/unrecognized/sk_negative',
         'http://example.test/api/v1/customer-financially/unrecognized/sk_negative',
         '//example.test/outside/api/v1/customer-financial/sk_negative',
+        '//h0.test//h1.test/outside/api/v1/customer-financial/sk_negative',
+        'http://h0.test//h1.test/outside/api/v1/customer-financial/sk_negative',
       ]){
         const response=await rawSocketRequest(server,'get',target,{body:''});
         expect(response.status).toBe(404);expect(response.body).not.toEqual(exact);

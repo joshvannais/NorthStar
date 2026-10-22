@@ -2,6 +2,7 @@
 
 const fs=require('node:fs');
 const http=require('node:http');
+const net=require('node:net');
 const path=require('node:path');
 const cors=require('cors');
 const express=require('express');
@@ -49,6 +50,40 @@ function rawRequest(server,method,target,body){
         resolve({status:response.statusCode,headers:response.headers,body:parsed,text});});
     });
     req.on('error',reject);req.end(payload);
+  });
+}
+function rawSocketRequest(server,method,target,{body='{"nested":"sk_body"',headers={}}={}){
+  return new Promise((resolve,reject)=>{
+    const payload=Buffer.from(body);
+    const requestHeaders={Host:'127.0.0.1',Connection:'close',
+      'Content-Type':'application/json','Content-Length':String(payload.length),...headers};
+    const lines=[`${method.toUpperCase()} ${target} HTTP/1.1`,
+      ...Object.entries(requestHeaders).map(([name,value])=>`${name}: ${value}`),'',''];
+    const socket=net.createConnection({host:'127.0.0.1',port:server.address().port});
+    const chunks=[];
+    socket.setTimeout(5000,()=>socket.destroy(new Error('raw socket response timed out')));
+    socket.on('connect',()=>socket.write(Buffer.concat([Buffer.from(lines.join('\r\n')),payload])));
+    socket.on('data',chunk=>chunks.push(chunk));socket.on('error',reject);
+    socket.on('end',()=>{
+      const raw=Buffer.concat(chunks).toString('utf8');
+      const boundary=raw.indexOf('\r\n\r\n');
+      const head=boundary<0?raw:raw.slice(0,boundary);
+      let text=boundary<0?'':raw.slice(boundary+4);
+      const headerLines=head.split('\r\n');
+      const status=Number((headerLines.shift()||'').split(' ')[1]);
+      const responseHeaders={};
+      for(const line of headerLines){const colon=line.indexOf(':');if(colon>0){
+        responseHeaders[line.slice(0,colon).toLowerCase()]=line.slice(colon+1).trim();}}
+      if(responseHeaders['transfer-encoding']==='chunked'){
+        let cursor=0;let decoded='';
+        while(cursor<text.length){const end=text.indexOf('\r\n',cursor);if(end<0)break;
+          const size=Number.parseInt(text.slice(cursor,end),16);if(!Number.isFinite(size)||size===0)break;
+          const start=end+2;decoded+=text.slice(start,start+size);cursor=start+size+2;}
+        text=decoded;
+      }
+      let parsed={};try{parsed=JSON.parse(text);}catch(_error){}
+      resolve({status,headers:responseHeaders,body:parsed,text});
+    });
   });
 }
 function encodeEveryAscii(value){
@@ -300,12 +335,15 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
     expect(providerAttempt).not.toHaveBeenCalled();
   });
 
-  test('deep percent nesting has fixed decode rounds and bounded linear denial work',async()=>{
+  test('deep percent nesting and target forms have fixed bounded linear denial work',async()=>{
     expect(PATH_CLASSIFICATION_POLICY).toEqual({maxDecodeRounds:1,
-      maxRawTargetLength:8192,maxNestedPercentDepth:8});
+      maxRawTargetLength:8192,maxNestedPercentDepth:8,maxTargetRepresentations:3,
+      maxAuthorityPathExtractions:2});
     const source=read('src/middleware/customerFinancialUnsupportedBoundary.js');
     expect(source).toContain(
-      'round < PATH_CLASSIFICATION_POLICY.maxDecodeRounds');
+      'extraction < PATH_CLASSIFICATION_POLICY.maxAuthorityPathExtractions');
+    expect(source).toContain(
+      'representations.length < PATH_CLASSIFICATION_POLICY.maxTargetRepresentations');
     expect(source).not.toMatch(/round\s*<=?\s*raw\.length/);
 
     const readRepository=jest.fn();
@@ -407,6 +445,53 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
       await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
     }
     expect(readRepository).not.toHaveBeenCalled();expect(providerRead).not.toHaveBeenCalled();
+    expect(providerAttempt).not.toHaveBeenCalled();
+  },30000);
+
+  test('absolute-form and authority network-path targets receive the fixed private boundary',async()=>{
+    const readRepository=jest.fn();const providerRead=jest.fn();const providerAttempt=jest.fn();
+    const app=buildApp({read:readRepository,
+      provider:{read:providerRead,attempt:providerAttempt}});
+    const exact={success:false,error:{category:'CUSTOMER_FINANCIAL_RESOURCE_UNAVAILABLE',
+      message:'The requested customer financial resource is unavailable.'}};
+    const marker='/unrecognized/sk_absolute_exact';
+    const protectedTargets=[
+      `http://example.test/api/v1/customer-financial${marker}`,
+      `http://example.test/%61pi/v1/customer-financial${marker}`,
+      `//example.test/api/v1/customer-financial${marker}`,
+      `http:////example.test/api/v1/customer-financial${marker}`,
+      `http://example.test%2fapi%2fv1%2fcustomer-financial${marker}`,
+    ];
+    const methods=['get','post','put','patch','delete'];
+    const server=app.listen(0,'127.0.0.1');
+    await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
+    try{
+      for(const target of protectedTargets){for(const method of methods){
+        const response=await rawSocketRequest(server,method,target+
+          '?email=customer@example.test&amount=999999',{body:'{"secret":"sk_body"'});
+        expect({target,method,status:response.status,body:response.body})
+          .toEqual({target,method,status:404,body:exact});
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+        expect(response.headers['x-request-id']).toBeUndefined();
+        expect(response.headers['x-correlation-id']).toBeUndefined();
+        expect(response.text).not.toMatch(/sk_|customer@example|999999|requestId/i);
+      }}
+      for(const target of [
+        'http://example.test/api/v2/customer-financial/unrecognized/sk_negative',
+        'http://example.test/api/v1/customer-financially/unrecognized/sk_negative',
+        '//example.test/outside/api/v1/customer-financial/sk_negative',
+      ]){
+        const response=await rawSocketRequest(server,'get',target,{body:''});
+        expect(response.status).toBe(404);expect(response.body).not.toEqual(exact);
+      }
+      const canonical=await rawSocketRequest(server,'get',`${ROUTE}?`+
+        new URLSearchParams(QUERY).toString(),{body:'',headers:HEADERS});
+      expect(canonical.status).toBe(200);
+    }finally{
+      await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+    }
+    expect(readRepository).toHaveBeenCalledTimes(1);expect(providerRead).not.toHaveBeenCalled();
     expect(providerAttempt).not.toHaveBeenCalled();
   },30000);
 

@@ -6,6 +6,8 @@ const PATH_CLASSIFICATION_POLICY = Object.freeze({
   maxDecodeRounds:1,
   maxRawTargetLength:8192,
   maxNestedPercentDepth:8,
+  maxTargetRepresentations:3,
+  maxAuthorityPathExtractions:2,
 });
 const UNSUPPORTED_PART14_PATTERN = new RegExp(
   '^/api/v1/customer-financial/(?:public(?:/|$)|payment-provider/(?:webhook|charge)(?:/|$)|offline-receipts(?:/|$))',
@@ -71,39 +73,110 @@ function inspectSegments(value) {
   return { canonical:'/' + resolved.join('/'), enteredNamespace };
 }
 
-function classifyPath(req) {
-  const raw = requestPath(req);
-  let candidate = raw;
-  let inspection = inspectSegments(raw);
-  let enteredNamespace = inspection.enteredNamespace;
-  let complex = raw.length > PATH_CLASSIFICATION_POLICY.maxRawTargetLength;
-  let decodeLimitExceeded = false;
-  // The number of full-string passes is a fixed constant independent of input
-  // length. The streaming decoder reaches the recursive ASCII fixed point in
-  // this single pass, including mixed encodings; a changed result is therefore
-  // deliberately marked ambiguous but never requires another full scan.
-  for (let round = 0; round < PATH_CLASSIFICATION_POLICY.maxDecodeRounds; round += 1) {
-    const decoded = decodeAsciiPercent(candidate);
-    candidate = decoded.value;
-    complex = complex || decoded.complex;
-    inspection = inspectSegments(candidate);
-    enteredNamespace = enteredNamespace || inspection.enteredNamespace;
-    if (!decoded.changed) break;
-    if (round === PATH_CLASSIFICATION_POLICY.maxDecodeRounds - 1) {
-      decodeLimitExceeded = true;
+function firstAuthoritySeparator(value, start) {
+  for (let index = start; index < value.length; index += 1) {
+    if (value[index] === '/' || value[index] === '\\') return index;
+  }
+  return -1;
+}
+
+function validScheme(value, colon) {
+  if (colon < 1) return false;
+  const first = value.charCodeAt(0);
+  if (!((first >= 65 && first <= 90) || (first >= 97 && first <= 122))) return false;
+  for (let index = 1; index < colon; index += 1) {
+    const code = value.charCodeAt(index);
+    if (!((code >= 65 && code <= 90) || (code >= 97 && code <= 122) ||
+        (code >= 48 && code <= 57) || code === 43 || code === 45 || code === 46)) return false;
+  }
+  return true;
+}
+
+// Extract the pathname from HTTP absolute-form and network-path targets without
+// using URL parsing that can apply a second, disagreeing normalization policy.
+// The caller invokes this at most twice so malformed forms such as http:////host
+// remain bounded while their protected pathname provenance cannot disappear.
+function authorityPath(value) {
+  let authorityStart = -1;
+  let form = 'origin';
+  if (value[0] === '/' && value[1] === '/') {
+    authorityStart = 2;
+    form = 'network';
+  } else {
+    const colon = value.indexOf(':');
+    if (validScheme(value, colon) && value[colon + 1] === '/' &&
+        value[colon + 2] === '/') {
+      authorityStart = colon + 3;
+      form = 'absolute';
     }
   }
-  const canonical = inspection.canonical;
+  if (authorityStart < 0) return { path:value, form, ambiguous:false };
+  const separator = firstAuthoritySeparator(value, authorityStart);
+  const authority = separator < 0 ? value.slice(authorityStart) :
+    value.slice(authorityStart, separator);
+  return { path:separator < 0 ? '/' : value.slice(separator), form,
+    ambiguous:authority.length === 0 || authority.includes('\\') };
+}
+
+function candidatePaths(value) {
+  const paths = [{ path:value, form:'origin', ambiguous:false }];
+  let remainder = value;
+  for (let extraction = 0;
+    extraction < PATH_CLASSIFICATION_POLICY.maxAuthorityPathExtractions;
+    extraction += 1) {
+    const extracted = authorityPath(remainder);
+    if (extracted.form === 'origin') break;
+    paths.push({ path:extracted.path, form:extracted.form,
+      ambiguous:extracted.ambiguous || extraction > 0 });
+    remainder = extracted.path;
+  }
+  return paths;
+}
+
+function classifyPath(req) {
+  const raw = requestPath(req);
+  const decodedTarget = decodeAsciiPercent(raw);
+  const representations = raw === decodedTarget.value ? [raw] : [raw, decodedTarget.value];
+  // Express exposes the pathname it resolved from origin- and absolute-form
+  // targets. Treat it only as one additional bounded representation; the raw
+  // target remains authoritative for network-path and ambiguity provenance.
+  if (representations.length < PATH_CLASSIFICATION_POLICY.maxTargetRepresentations &&
+      typeof req.path === 'string' && !representations.includes(req.path)) {
+    representations.push(req.path);
+  }
+  const paths = [];
+  for (const representation of representations) {
+    for (const candidate of candidatePaths(representation)) paths.push(candidate);
+  }
+  let canonical = '/';
+  let enteredNamespace = false;
+  let alternateForm = false;
+  let targetAmbiguous = false;
+  let complex = raw.length > PATH_CLASSIFICATION_POLICY.maxRawTargetLength;
+  let changed = decodedTarget.changed;
+  for (const target of paths) {
+    const decoded = decodeAsciiPercent(target.path);
+    complex = complex || decoded.complex;
+    changed = changed || decoded.changed;
+    const inspection = inspectSegments(decoded.value);
+    const namespace = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(
+      inspection.canonical);
+    if (inspection.enteredNamespace || namespace) {
+      enteredNamespace = true;
+      canonical = inspection.canonical;
+      alternateForm = alternateForm || target.form !== 'origin';
+      targetAmbiguous = targetAmbiguous || target.ambiguous;
+    }
+  }
   const namespace = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(canonical);
   // Protection is monotonic: once any bounded raw/decoded representation
   // begins inside this namespace, later dot-segment resolution cannot erase
   // that provenance and expose the reflective global 404.
   if (!enteredNamespace && !namespace) return null;
   const literal = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(raw);
-  const ambiguous = complex || decodeLimitExceeded || !literal || !namespace ||
+  const ambiguous = complex || changed || alternateForm || targetAmbiguous || !literal || !namespace ||
     raw.includes('\\') || /\/{2,}/.test(raw) ||
-    /(?:^|\/)\.{1,2}(?:\/|$)/.test(raw) || candidate.includes('\\') ||
-    /\/{2,}/.test(candidate) || /(?:^|\/)\.{1,2}(?:\/|$)/.test(candidate);
+    /(?:^|\/)\.{1,2}(?:\/|$)/.test(raw);
   return { canonical, ambiguous };
 }
 

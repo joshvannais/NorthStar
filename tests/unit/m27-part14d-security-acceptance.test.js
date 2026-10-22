@@ -338,6 +338,7 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
   test('deep percent nesting and target forms have fixed bounded linear denial work',async()=>{
     expect(PATH_CLASSIFICATION_POLICY).toEqual({maxDecodeRounds:1,
       maxRawTargetLength:8192,maxNestedPercentDepth:8,maxTargetRepresentations:3,
+      maxAuthorityPathInterpretations:128,
     });
     const source=read('src/middleware/customerFinancialUnsupportedBoundary.js');
     expect(source).toContain(
@@ -467,6 +468,12 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
       `http://h0.test%2f%2fh1.test%2f%2fh2.test%2fapi%2fv1%2f`+
         `customer-financial${marker}`,
       `http://h0.test%5c%5ch1.test%5capi%5cv1%5ccustomer-financial${marker}`,
+      `//h0.test//api/v1/customer-financial${marker}`,
+      `//h0.test///api/v1/customer-financial${marker}`,
+      `//h0.test////api/v1/customer-financial${marker}`,
+      `//h0.test%2f%2fapi%2fv1%2fcustomer-financial${marker}`,
+      `//h0.test%5c%5capi%5cv1%5ccustomer-financial${marker}`,
+      `//h0.test%2f%5capi%2fv1%2fcustomer-financial${marker}`,
       Array.from({length:64},(_value,index)=>`//h${index}.test`).join('')+
         `/api/v1/customer-financial${marker}`,
     ];
@@ -485,6 +492,15 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
         expect(response.headers['x-correlation-id']).toBeUndefined();
         expect(response.text).not.toMatch(/sk_|customer@example|999999|requestId/i);
       }}
+      const malformed=await rawSocketRequest(server,'post',
+        `//h0.test//api/v1/customer-financial${marker}?email=customer@example.test`,
+        {body:'{"secret":"sk_malformed"'});
+      expect({status:malformed.status,body:malformed.body})
+        .toEqual({status:404,body:exact});
+      expect(malformed.headers['cache-control']).toContain('private');
+      expect(malformed.headers['cache-control']).toContain('no-store');
+      expect(malformed.headers['x-request-id']).toBeUndefined();
+      expect(malformed.text).not.toMatch(/sk_|customer@example|requestId|JSON/i);
       for(const target of [
         'http://example.test/api/v2/customer-financial/unrecognized/sk_negative',
         'http://example.test/api/v1/customer-financially/unrecognized/sk_negative',

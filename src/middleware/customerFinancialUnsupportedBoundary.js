@@ -7,6 +7,7 @@ const PATH_CLASSIFICATION_POLICY = Object.freeze({
   maxRawTargetLength:8192,
   maxNestedPercentDepth:8,
   maxTargetRepresentations:3,
+  maxAuthorityPathInterpretations:128,
 });
 const UNSUPPORTED_PART14_PATTERN = new RegExp(
   '^/api/v1/customer-financial/(?:public(?:/|$)|payment-provider/(?:webhook|charge)(?:/|$)|offline-receipts(?:/|$))',
@@ -95,11 +96,13 @@ function validScheme(value, colon) {
   return true;
 }
 
-// Extract the pathname from HTTP absolute-form and recursively authority-
-// prefixed network-path targets without using URL parsing that can apply a
-// second, disagreeing normalization policy. The cursor only advances, so any
-// number of admitted authority prefixes is consumed in one linear scan.
-function authorityPath(value) {
+// Retain every bounded pathname interpretation from HTTP absolute-form and
+// recursively authority-prefixed network-path targets. A separator pair can
+// be either the next authority or a duplicate-separated pathname, so a later
+// authority interpretation must never erase the earlier suffix. The cursor
+// advances monotonically and the interpretation count is fixed, keeping total
+// work bounded and linear in the admitted target length.
+function authorityPaths(value) {
   let cursor = -1;
   let form = 'origin';
   let ambiguous = false;
@@ -116,25 +119,34 @@ function authorityPath(value) {
       ambiguous = value[colon + 1] !== '/' || value[colon + 2] !== '/';
     }
   }
-  if (cursor < 0) return { path:value, form, ambiguous:false };
+  if (cursor < 0) return { paths:[], overflow:false };
+  const paths = [];
   while (isAuthoritySeparator(value, cursor) &&
       isAuthoritySeparator(value, cursor + 1)) {
     let authorityStart = cursor;
     while (isAuthoritySeparator(value, authorityStart)) authorityStart += 1;
     if (authorityStart - cursor !== 2) ambiguous = true;
     const separator = firstAuthoritySeparator(value, authorityStart);
-    if (separator < 0) return { path:'/', form, ambiguous };
+    if (separator < 0) {
+      paths.push({ path:'/', form, ambiguous });
+      return { paths, overflow:false };
+    }
     if (separator === authorityStart || value[separator] === '\\') ambiguous = true;
+    if (paths.length === PATH_CLASSIFICATION_POLICY.maxAuthorityPathInterpretations) {
+      return { paths, overflow:true };
+    }
+    paths.push({ path:value.slice(separator), form,
+      ambiguous:ambiguous || paths.length > 0 });
     cursor = separator;
   }
-  return { path:value.slice(cursor), form, ambiguous };
+  return { paths, overflow:false };
 }
 
 function candidatePaths(value) {
   const paths = [{ path:value, form:'origin', ambiguous:false }];
-  const extracted = authorityPath(value);
-  if (extracted.form !== 'origin') paths.push(extracted);
-  return paths;
+  const extracted = authorityPaths(value);
+  paths.push(...extracted.paths);
+  return { paths, authorityOverflow:extracted.overflow };
 }
 
 function classifyPath(req) {
@@ -149,8 +161,11 @@ function classifyPath(req) {
     representations.push(req.path);
   }
   const paths = [];
+  let authorityOverflow = false;
   for (const representation of representations) {
-    for (const candidate of candidatePaths(representation)) paths.push(candidate);
+    const candidates = candidatePaths(representation);
+    for (const candidate of candidates.paths) paths.push(candidate);
+    authorityOverflow = authorityOverflow || candidates.authorityOverflow;
   }
   let canonical = '/';
   let enteredNamespace = false;
@@ -176,9 +191,10 @@ function classifyPath(req) {
   // Protection is monotonic: once any bounded raw/decoded representation
   // begins inside this namespace, later dot-segment resolution cannot erase
   // that provenance and expose the reflective global 404.
-  if (!enteredNamespace && !namespace) return null;
+  if (!enteredNamespace && !namespace && !authorityOverflow) return null;
   const literal = /^\/api\/v1\/customer-financial(?:\/|$)/i.test(raw);
-  const ambiguous = complex || changed || alternateForm || targetAmbiguous || !literal || !namespace ||
+  const ambiguous = complex || changed || alternateForm || targetAmbiguous ||
+    authorityOverflow || !literal || !namespace ||
     raw.includes('\\') || /\/{2,}/.test(raw) ||
     /(?:^|\/)\.{1,2}(?:\/|$)/.test(raw);
   return { canonical, ambiguous };

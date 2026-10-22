@@ -7,7 +7,6 @@ const PATH_CLASSIFICATION_POLICY = Object.freeze({
   maxRawTargetLength:8192,
   maxNestedPercentDepth:8,
   maxTargetRepresentations:3,
-  maxAuthorityPathExtractions:2,
 });
 const UNSUPPORTED_PART14_PATTERN = new RegExp(
   '^/api/v1/customer-financial/(?:public(?:/|$)|payment-provider/(?:webhook|charge)(?:/|$)|offline-receipts(?:/|$))',
@@ -80,6 +79,10 @@ function firstAuthoritySeparator(value, start) {
   return -1;
 }
 
+function isAuthoritySeparator(value, index) {
+  return value[index] === '/' || value[index] === '\\';
+}
+
 function validScheme(value, colon) {
   if (colon < 1) return false;
   const first = value.charCodeAt(0);
@@ -92,44 +95,45 @@ function validScheme(value, colon) {
   return true;
 }
 
-// Extract the pathname from HTTP absolute-form and network-path targets without
-// using URL parsing that can apply a second, disagreeing normalization policy.
-// The caller invokes this at most twice so malformed forms such as http:////host
-// remain bounded while their protected pathname provenance cannot disappear.
+// Extract the pathname from HTTP absolute-form and recursively authority-
+// prefixed network-path targets without using URL parsing that can apply a
+// second, disagreeing normalization policy. The cursor only advances, so any
+// number of admitted authority prefixes is consumed in one linear scan.
 function authorityPath(value) {
-  let authorityStart = -1;
+  let cursor = -1;
   let form = 'origin';
-  if (value[0] === '/' && value[1] === '/') {
-    authorityStart = 2;
+  let ambiguous = false;
+  if (isAuthoritySeparator(value, 0) && isAuthoritySeparator(value, 1)) {
+    cursor = 0;
     form = 'network';
+    ambiguous = value[0] !== '/' || value[1] !== '/';
   } else {
     const colon = value.indexOf(':');
-    if (validScheme(value, colon) && value[colon + 1] === '/' &&
-        value[colon + 2] === '/') {
-      authorityStart = colon + 3;
+    if (validScheme(value, colon) && isAuthoritySeparator(value, colon + 1) &&
+        isAuthoritySeparator(value, colon + 2)) {
+      cursor = colon + 1;
       form = 'absolute';
+      ambiguous = value[colon + 1] !== '/' || value[colon + 2] !== '/';
     }
   }
-  if (authorityStart < 0) return { path:value, form, ambiguous:false };
-  const separator = firstAuthoritySeparator(value, authorityStart);
-  const authority = separator < 0 ? value.slice(authorityStart) :
-    value.slice(authorityStart, separator);
-  return { path:separator < 0 ? '/' : value.slice(separator), form,
-    ambiguous:authority.length === 0 || authority.includes('\\') };
+  if (cursor < 0) return { path:value, form, ambiguous:false };
+  while (isAuthoritySeparator(value, cursor) &&
+      isAuthoritySeparator(value, cursor + 1)) {
+    let authorityStart = cursor;
+    while (isAuthoritySeparator(value, authorityStart)) authorityStart += 1;
+    if (authorityStart - cursor !== 2) ambiguous = true;
+    const separator = firstAuthoritySeparator(value, authorityStart);
+    if (separator < 0) return { path:'/', form, ambiguous };
+    if (separator === authorityStart || value[separator] === '\\') ambiguous = true;
+    cursor = separator;
+  }
+  return { path:value.slice(cursor), form, ambiguous };
 }
 
 function candidatePaths(value) {
   const paths = [{ path:value, form:'origin', ambiguous:false }];
-  let remainder = value;
-  for (let extraction = 0;
-    extraction < PATH_CLASSIFICATION_POLICY.maxAuthorityPathExtractions;
-    extraction += 1) {
-    const extracted = authorityPath(remainder);
-    if (extracted.form === 'origin') break;
-    paths.push({ path:extracted.path, form:extracted.form,
-      ambiguous:extracted.ambiguous || extraction > 0 });
-    remainder = extracted.path;
-  }
+  const extracted = authorityPath(value);
+  if (extracted.form !== 'origin') paths.push(extracted);
   return paths;
 }
 

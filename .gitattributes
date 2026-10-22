@@ -1,1 +1,7 @@
 migrations/*.sql text eol=lf
+.node-version text eol=lf
+railway.toml text eol=lf
+.dockerignore text eol=lf
+Dockerfile text eol=lf
+scripts/*.sh text eol=lf
+scripts/*.txt text eol=lf

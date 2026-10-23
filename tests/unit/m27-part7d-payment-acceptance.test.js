@@ -130,8 +130,16 @@ describe('Mission 27 Part 7D complete payment-provider acceptance', () => {
     expect(paid).not.toContain("router.post('/:estimateId/payment-part7-acceptance'");
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part7-acceptance'");
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part7-acceptance'");
-    expect(ui).toContain("'/payment-part9-acceptance?");
-    expect(ui).toContain("'/part9-acceptance'");
+    expect(ui).toContain("'/reporting-part12-acceptance?");
+    expect(ui).toContain("'/part14b-acceptance'");
+    expect(ui).not.toContain("'/payment-part9-acceptance?");
+    expect(ui).not.toContain("'/part9-acceptance'");
+    expect(ui).toContain('var part9Acceptance = bundle && bundle.part9Acceptance;');
+    expect(ui).toContain('part12Bundle.part9Acceptance');
+    expect(ui).toContain(
+      "review.simulated ? request(demoBase + '/part14b-acceptance') : loadPaid(token)");
+    expect(ui).toContain('value.providerCallCount !== 0 || value.providerMutationCount !== 0 ||');
+    expect(ui).toContain('value.receiverMutationCount !== 0 || value.liveMoneyMovementCount !== 0;');
     expect(ui).toContain('function invalidPart7(value, expectedMode)');
     expect(ui).toContain('Ten exact payment prerequisites');
     for (const requirement of contract.REQUIREMENTS) expect(ui).toContain(requirement.requirement);

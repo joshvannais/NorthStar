@@ -1,6 +1,6 @@
 # Mission 27 Part 14D — integrated financial-lifecycle security acceptance
 
-Status: implementation candidate. This slice adds executable acceptance evidence over the released mounted customer-financial engines and the accepted-but-unreleased Parts 14B–14C heads. It does not add a financial engine, a public/customer surface, an external integration, or authority to move money.
+Status: independently accepted and buffered at exact head `0588a6f7507d0cc84ba98d96df0c46fea0c0c490`, tree `30729e13c557f2c93ad01a06e7db8634aac84ea8`, through root fallback whole-head report SHA-256 `6c60dee08d13200cbdbb0be675e642088f5df32fa10bf4c51047172e3093c453`. This slice adds executable acceptance evidence over the released mounted customer-financial engines and the accepted-but-unreleased Parts 14B–14C heads. It does not add a financial engine, a public/customer surface, an external integration, or authority to move money.
 
 ## Authority
 
@@ -34,6 +34,6 @@ Fresh disposable PostgreSQL 17 evidence runs migrations through 272 with no 273 
 
 ## State and effect boundary
 
-Passing writer evidence makes Part 14D only a candidate for independent whole-head review. It does not make Part 14B or Part 14C released, does not make Part 14D accepted, audited, merged or deployed, and does not earn a Mission 27 named verdict.
+The exact fallback whole-head audit accepted Part 14D with no P0–P3. It does not make Part 14B or Part 14C released, does not make Part 14D merged, deployed or released, and does not earn a Mission 27 named verdict.
 
 No real provider account, credential, webhook, recipient, customer session, bank evidence, accounting receiver, private-production event, payment, settlement, payout, refund, receipt or money movement is available or claimed. Provider-sandbox acceptance, production restore, hosted load/DoS capacity evidence, professional security review, physical-device evidence, founder visual approval and first-paying-customer live-money validation remain unavailable. Browser/demo evidence is not applicable because Part 14D changes no rendered or customer/demo surface; Part 14E owns the complete rendered matrix.

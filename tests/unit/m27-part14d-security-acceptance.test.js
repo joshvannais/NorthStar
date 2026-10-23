@@ -135,7 +135,7 @@ describe('Mission 27 Part 14D integrated security acceptance',()=>{
       expect(next).toBeGreaterThan(offset);offset=next;}
     expect(roadmap).toContain('| D | Tenant, role, CSRF, public-link, webhook, provider-account, direct-table, secret, PII, amount-tampering, duplicate-charge, duplicate-offline-receipt, offline-evidence tampering, and denial-of-service security acceptance. |');
     expect(architecture).toContain('Part 14E owns the complete rendered matrix');
-    expect(architecture).toContain('does not make Part 14D accepted, audited, merged or deployed');
+    expect(architecture).toContain('does not make Part 14D merged, deployed or released');
     expect(architecture).not.toMatch(/live-money validation (?:passed|accepted)|provider sandbox accepted/i);
   });
 

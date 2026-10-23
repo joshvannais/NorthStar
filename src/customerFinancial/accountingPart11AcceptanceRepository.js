@@ -15,14 +15,11 @@ async function readBundle(pool, source, estimateId, receiptId, receiptDigest, op
   const readPart10 = options.readPart10 || part10Repository.readBundle;
   const before = part10Contract.projectBundle(await readPart10(
     pool,source,estimateId,receiptId,receiptDigest),'paid');
-  const sources = contract.derive(before,'paid');
   const after = part10Contract.projectBundle(await readPart10(
     pool,source,estimateId,receiptId,receiptDigest),'paid');
   if (JSON.stringify(before) !== JSON.stringify(after)) throw changed();
-  try {
-    const acceptance = contract.unavailable('paid',after,sources);
-    return contract.bundle(after,acceptance,sources);
-  } catch (_error) { throw changed(); }
+  try { return contract.candidate(after,'paid'); }
+  catch (_error) { throw changed(); }
 }
 
 module.exports = { readBundle };

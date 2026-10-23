@@ -342,6 +342,28 @@ describe('Mission 27 Part 11D complete Part 11 acceptance',()=>{
       .rejects.toMatchObject({code:'CUSTOMER_FINANCIAL_ACCOUNTING_PART11_CHANGED',status:409});
   });
 
+  test('builds the repository candidate from strict exact Part 10 input without the legacy outer recomposition',()=>{
+    const part10=paidPart10();
+    const project=jest.spyOn(part10Contract,'projectBundle');
+    try {
+      const value=contract.candidate(part10,'paid');
+      expect(value).toMatchObject({contractVersion:contract.BUNDLE_VERSION,
+        part11Acceptance:{state:'unavailable',accountingMutationCount:0,
+          providerCallCount:0,receiverMutationCount:0,liveMoneyMovementCount:0}});
+      expect(project).toHaveBeenCalled();
+    } finally { project.mockRestore(); }
+    const changed=paidPart10();changed.part10Acceptance.accountingMutationCount=1;
+    expect(()=>contract.candidate(changed,'paid')).toThrow(/Collection Part 10/);
+    const extra=paidPart10();extra.untrusted='accepted';
+    expect(()=>contract.candidate(extra,'paid')).toThrow(/Collection Part 10/);
+    let modeReads=0;
+    const accessor={};
+    Object.defineProperty(accessor,'preview',{enumerable:true,
+      get(){modeReads+=1;return {mode:'paid'};}});
+    expect(()=>contract.candidate(accessor)).toThrow(/mode invalid/);
+    expect(modeReads).toBe(0);
+  });
+
   test('mounts GET-only paid and isolated demo reads with pre-auth OPTIONS denial',async()=>{
     const paid=read('src/routes/customerFinancialEditableEstimate.js');
     const demoRoute=read('src/routes/demo.js');
@@ -352,7 +374,8 @@ describe('Mission 27 Part 11D complete Part 11 acceptance',()=>{
     expect(demoRoute).toContain("router.all('/customer-financial/invoice-drafts/:estimateId/part11-acceptance'");
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part11-acceptance'");
     expect(client).toContain("'/reporting-part12-acceptance?");
-    expect(client).toContain("'/part12-acceptance'");
+    expect(client).toContain("'/part14b-acceptance'");
+    expect(client).not.toContain("'/part12-acceptance'");
     expect(client).not.toContain("'/accounting-part11-acceptance?");
     expect(client).not.toContain("'/part11-acceptance'");
     expect(client).not.toContain("'/collection-part10-acceptance?");

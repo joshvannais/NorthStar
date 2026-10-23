@@ -41,8 +41,7 @@ async function readBundle(pool, source, estimateId, receiptId, receiptDigest, op
     pool, source, estimateId, receiptId, receiptDigest), 'paid');
   if (JSON.stringify(before) !== JSON.stringify(after)) throw changed();
   try {
-    const acceptance = contract.unavailable('paid', after, sources);
-    return contract.bundle(after, acceptance, sources);
+    return contract.candidate(after, 'paid', sources);
   } catch (_error) { throw changed(); }
 }
 

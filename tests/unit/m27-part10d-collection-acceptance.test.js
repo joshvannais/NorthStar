@@ -148,6 +148,26 @@ describe('Mission 27 Part 10D complete Part 10 acceptance', () => {
       .rejects.toMatchObject({code:'CUSTOMER_FINANCIAL_COLLECTION_PART10_CHANGED',status:409});
   });
 
+  test('builds the repository candidate from each strict current source without legacy recomposition', () => {
+    const part9=paidPart9(); const sources=contract.defaultSources();
+    const project=jest.spyOn(part9Contract,'projectBundle');
+    try {
+      const value=contract.candidate(part9,'paid',sources);
+      expect(project).toHaveBeenCalledTimes(1);
+      project.mockRestore();
+      expect(value).toEqual(contract.bundle(part9,
+        contract.unavailable('paid',part9,sources),sources));
+    } finally { if (project.mockRestore) project.mockRestore(); }
+    expect(()=>contract.candidate(part9,'paid',{...sources,extra:true}))
+      .toThrow(/source contracts invalid/);
+    const changed=clone(sources);changed.collectionReview.state='ready';
+    expect(()=>contract.candidate(part9,'paid',changed)).toThrow();
+    let reads=0;
+    const unread={get preview(){reads+=1;throw new Error('read');}};
+    expect(()=>contract.candidate(unread,'other',sources)).toThrow(/mode invalid/);
+    expect(reads).toBe(0);
+  });
+
   test('mounts only private paid and isolated demo reads and clears Part 10 state', () => {
     const paid=read('src/routes/customerFinancialEditableEstimate.js');
     const demoRoute=read('src/routes/demo.js');
@@ -161,7 +181,8 @@ describe('Mission 27 Part 10D complete Part 10 acceptance', () => {
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part10-acceptance'");
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part10-acceptance'");
     expect(ui).toContain("'/reporting-part12-acceptance?");
-    expect(ui).toContain("'/part12-acceptance'");
+    expect(ui).toContain("'/part14b-acceptance'");
+    expect(ui).not.toContain("'/part12-acceptance'");
     expect(ui).not.toContain("'/accounting-part11-acceptance?");
     expect(ui).not.toContain("'/part11-acceptance'");
     expect(ui).not.toContain("'/collection-part10-acceptance?");

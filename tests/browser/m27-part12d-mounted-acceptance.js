@@ -13,11 +13,37 @@ for (const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','OPENAI_API_KEY','POL
 
 const { provisionDurableSession } = require('../helpers/account-session-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
-const { MISSION_26_FIVE_LAYOUTS } = require('../helpers/m26-part12d-rendered-review');
+const { MISSION_26_FIVE_LAYOUTS, auditRenderedPage } =
+  require('../helpers/m26-part12d-rendered-review');
 const paidPart12Repository = require('../../src/customerFinancial/reportingPart12AcceptanceRepository');
 const demoPart12 = require('../../src/customerFinancial/demoReportingPart12Acceptance');
+const paidPart11Repository = require('../../src/customerFinancial/accountingPart11AcceptanceRepository');
+const paidPart10Repository = require('../../src/customerFinancial/collectionPart10AcceptanceRepository');
+const paidPart9Repository = require('../../src/customerFinancial/paymentPart9AcceptanceRepository');
+const paidPart7Repository = require('../../src/customerFinancial/paymentPart7AcceptanceRepository');
 const realPaidPart12Read = paidPart12Repository.readBundle;
 const realDemoPart12Bundle = demoPart12.bundle;
+const part12ReadTimings = []; const part12StageTimings = [];
+async function timedPart7(...args) {
+  const started=Date.now();
+  try { return await paidPart7Repository.readBundle(...args); }
+  finally { part12StageTimings.push({stage:'part7',durationMs:Date.now()-started}); }
+}
+async function timedPart9(...args) {
+  const started=Date.now();
+  try { return await paidPart9Repository.readBundle(...args,{readPart7:timedPart7}); }
+  finally { part12StageTimings.push({stage:'part9',durationMs:Date.now()-started}); }
+}
+async function timedPart10(...args) {
+  const started=Date.now();
+  try { return await paidPart10Repository.readBundle(...args,{readPart9:timedPart9}); }
+  finally { part12StageTimings.push({stage:'part10',durationMs:Date.now()-started}); }
+}
+async function timedPart11(...args) {
+  const started=Date.now();
+  try { return await paidPart11Repository.readBundle(...args,{readPart10:timedPart10}); }
+  finally { part12StageTimings.push({stage:'part11',durationMs:Date.now()-started}); }
+}
 let part12ContractFault = null;
 function corruptPart12Contract(value, kind) {
   const changed=JSON.parse(JSON.stringify(value));
@@ -26,7 +52,11 @@ function corruptPart12Contract(value, kind) {
   return changed;
 }
 paidPart12Repository.readBundle = async function () {
-  const value=await realPaidPart12Read.apply(this,arguments);
+  const started=Date.now();
+  let value;
+  const args=[...arguments];
+  try { value=await realPaidPart12Read(...args.slice(0,5),{...(args[5]||{}),readPart11:timedPart11}); }
+  finally { part12ReadTimings.push(Date.now()-started); }
   if (!part12ContractFault || part12ContractFault.mode !== 'paid') return value;
   const fault=part12ContractFault; part12ContractFault=null;
   return corruptPart12Contract(value,fault.kind);
@@ -48,6 +78,7 @@ const output = path.resolve(argument('output'));
 const requestedLayout = process.argv.find(item => item.startsWith('--layout='));
 const selectedLayouts = requestedLayout ? MISSION_26_FIVE_LAYOUTS.filter(layout =>
   layout.name === requestedLayout.slice('--layout='.length)) : MISSION_26_FIVE_LAYOUTS;
+const renderOnly = process.argv.includes('--render-only');
 assert.ok(['chrome','webkit'].includes(engine));
 assert.ok(selectedLayouts.length > 0, 'Unknown --layout');
 assert.ok(!fs.existsSync(output), 'Supply a new output directory');
@@ -116,6 +147,14 @@ async function proveDatabaseDelayedSuppression(options) {
   const client = await options.pool.connect(); let open = false; let released = false;
   try {
     await client.query('BEGIN'); open = true;
+    // Other mounted panels intentionally exercise older repositories that set
+    // a session-level five-second idle timeout.  This evidence transaction is
+    // expected to hold an ACCESS EXCLUSIVE lock while the browser demonstrates
+    // delayed-response suppression, so override that inherited pool state for
+    // this transaction only.  PostgreSQL restores the prior session value at
+    // COMMIT/ROLLBACK; the finite two-minute bound covers the measured local
+    // five-layout request ceiling without leaking an unlimited policy.
+    await client.query("SET LOCAL idle_in_transaction_session_timeout='120000ms'");
     const blocker = await client.query('SELECT pg_backend_pid()::int AS pid');
     await client.query(`LOCK TABLE ${options.relation} IN ACCESS EXCLUSIVE MODE`);
     const started = options.page.waitForRequest(request =>
@@ -156,7 +195,13 @@ async function proveDatabaseDelayedSuppression(options) {
     options.page.on('request',countReopenedRequest);
     try {
       await options.summary.focus(); await options.page.keyboard.press('Enter');
-      assert.equal(await options.root.evaluate(node=>node.open),true);
+      // The mounted app and Playwright controller intentionally share this
+      // evidence process. A genuine Part 12 projection can occupy that process
+      // for roughly a minute before WebKit can service the next evaluation, so
+      // keep the assertion bound above the measured projection window.
+      await options.page.waitForFunction(() =>
+        document.querySelector('#cdEstimateHub > .invoice-draft-preview')?.open === true,
+      null,{timeout:120000});
       await options.root.getByText(options.expectedText, { exact: true }).waitFor({ timeout: 240000 });
       await options.page.waitForTimeout(100);
     } finally { options.page.off('request',countReopenedRequest); }
@@ -199,7 +244,22 @@ async function openActualCustomerInvoice(page, customer) {
   // Use the page keyboard after focus so Playwright does not keep the locator
   // action open while the disclosure's genuine asynchronous load is in flight.
   // This still exercises the mounted native keydown/keyup boundary.
-  await summary.focus(); await page.keyboard.press('Enter');
+  // Focusing the summary may itself finish a customer-detail render and
+  // replace the disclosure.  Do not send the native key event to the page
+  // body in that race: require the currently mounted summary to retain focus
+  // across a render frame, then exercise the real keydown/keyup boundary.
+  let focused = false;
+  for (let attempt = 0; attempt < 10 && !focused; attempt += 1) {
+    await summary.focus();
+    await page.waitForTimeout(50);
+    focused = await summary.evaluate(node => node.isConnected && document.activeElement === node);
+  }
+  assert.equal(focused, true, 'Invoice disclosure did not retain keyboard focus');
+  if (!await summary.evaluate(node => node.parentElement?.open === true)) {
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelector('#cdEstimateHub > .invoice-draft-preview')?.open === true,
+      null, { timeout: 120000 });
+  }
   await page.locator('#cdEstimateHub .invoice-draft-preview-heading').waitFor({ timeout: 240000 });
   return page.locator('#cdEstimateHub > .invoice-draft-preview');
 }
@@ -425,6 +485,13 @@ async function auditActualSurface(page, root, layout) {
   assert.deepEqual(Array.from(new Set(audit.duplicateIds)), []);
   assert.equal(audit.drawerVisible, true); assert.equal(audit.privatePricesVisible, true);
   assert.equal(await root.getByRole('button', { name: /issue|send|collect|approve invoice/i }).count(), 0);
+  const mainSelector=await page.locator('#mainContent').count()?'#mainContent':'#commandCenterMain';
+  await auditRenderedPage(page,{mainSelector,layout});
+  await page.emulateMedia({forcedColors:'active',reducedMotion:'reduce'});
+  assert.equal(await page.evaluate(()=>matchMedia('(forced-colors: active)').matches),true);
+  const summary=root.locator(':scope > summary');await summary.focus();
+  assert.equal(await summary.evaluate(node=>node===document.activeElement),true);
+  await page.emulateMedia({forcedColors:'none',reducedMotion:'reduce'});
 }
 
 async function assertPart12FailureCleared(root) {
@@ -445,7 +512,8 @@ async function assertPart12FailureCleared(root) {
   let prepared; let server; let browser; let activePage;
   const ledger = { engine, layouts: [], actualPage: '/dashboard', mockedResponses: 0,
     requestInterceptions: 0, responseInterceptions: 0,
-    providerCalls: 0, receiverMutations: 0, liveMoneyEvidence: 'not-run-deferred-first-paying-customer' };
+    providerCalls: 0, receiverMutations: 0, part12ReadTimings,part12StageTimings,
+    liveMoneyEvidence: 'not-run-deferred-first-paying-customer' };
   try {
     prepared = await createPart4ePaidBrowserFixture();
     server = await listen(prepared.fixture.app);
@@ -464,8 +532,10 @@ async function assertPart12FailureCleared(root) {
       await context.addCookies(Object.entries(layoutSession.cookies).map(([name,value]) => ({
         name, value, url: origin, sameSite: 'Lax', httpOnly: name !== 'northstar_csrf' })));
       const page = await context.newPage(); activePage = page; const errors = []; const external = [];
-      const routeEvidence = []; const bundleEvidence = []; const failedResponses = []; const consoleErrors = [];
-      ledger.current = { name: layout.name, errors, failedResponses, consoleErrors };
+      const routeEvidence = []; const bundleEvidence = []; const failedResponses = [];
+      const failedRequests = []; const consoleErrors = [];
+      ledger.current = { name: layout.name, errors, failedResponses, failedRequests,
+        routeEvidence, consoleErrors };
       page.on('pageerror', error => errors.push(error.message));
       page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
       page.on('request', request => {
@@ -479,11 +549,20 @@ async function assertPart12FailureCleared(root) {
           routeEvidence.push({ method: request.method(), path: url.pathname + url.search });
         }
       });
+      page.on('requestfailed', request => {
+        const url = new URL(request.url());
+        if (url.origin === origin) failedRequests.push({
+          method: request.method(), path: url.pathname + url.search,
+          error: request.failure()?.errorText || 'request failed',
+        });
+      });
       page.on('response', response => {
         const url = new URL(response.url());
         if (url.origin === origin && response.status() >= 400) {
-          failedResponses.push({ method: response.request().method(), path: url.pathname + url.search,
-            status: response.status() });
+          const failed={ method: response.request().method(), path: url.pathname + url.search,
+            status: response.status() };
+          failedResponses.push(failed);
+          response.text().then(text=>{failed.body=text.slice(0,500);}).catch(()=>{});
         }
         if (url.pathname.includes('/invoice-draft') || url.pathname.includes('/invoice-part5') ||
             url.pathname.includes('/invoice-part6') || url.pathname.includes('/payment-part9') ||
@@ -513,7 +592,7 @@ async function assertPart12FailureCleared(root) {
       await saveDraft(root, `Mounted ${engine} ${layout.name} reviewed line`);
       await root.getByRole('button', { name: 'Record tax preparation review' }).waitFor({ timeout: 30000 });
       await assertTaxEvidence(root);
-      if (index === 0) {
+      if (index === 0 && !renderOnly) {
         await correctDraftThroughRealSession(page, prepared.estimate,
           `Concurrent ${engine} exact-current line`);
         await recordTax(root);
@@ -595,33 +674,35 @@ async function assertPart12FailureCleared(root) {
         await root.getByText('Financial reporting and downstream evidence',{exact:true})
           .waitFor({timeout:120000});
       }
-      const summary = root.locator(':scope > summary'); await summary.focus(); await page.keyboard.press('Enter');
-      await root.locator('table').waitFor({ state: 'detached', timeout: 10000 });
-      assert.equal(await root.getByText('Invoice draft — not issued', { exact: true }).count(), 0);
-      assert.equal(await root.getByText(/\$/, { exact: false }).count(), 0);
-      await correctDraftThroughRealSession(page, prepared.estimate,
-        `Reopen ${engine} ${layout.name} exact-current line`);
-      await summary.focus(); await page.keyboard.press('Enter');
-      await root.getByRole('button', { name: 'Record tax preparation review' }).waitFor({ timeout: 30000 });
-      assert.equal(await root.locator('.invoice-draft-preview-document').count(), 0);
-      assert.equal(await root.locator('.invoice-part5-acceptance').count(), 0);
-      assert.equal(await root.locator('.invoice-part6-acceptance').count(), 0);
-      assert.equal(await root.locator('.invoice-part7-acceptance').count(), 0);
-      assert.equal(await root.locator('.invoice-part9-acceptance').count(), 0);
-      assert.equal(await root.locator('.invoice-part10-acceptance').count(), 0);
-      assert.equal(await root.locator('.invoice-part11-acceptance').count(), 0);
-      assert.equal(await root.locator('.invoice-part12-acceptance').count(), 0);
-      assert.equal(await root.getByText(/Mounted .* reviewed line/, { exact: false }).count(), 0);
-      await recordTax(root);
-      await root.getByText('Invoice draft — not issued', { exact: true }).waitFor({ timeout: 240000 });
-      await root.getByText(`Reopen ${engine} ${layout.name} exact-current line`, { exact: true })
-        .waitFor({ timeout: 240000 });
-      if (index === 0) {
-        await proveDatabaseDelayedSuppression({ page, root, summary,
-          pool: prepared.fixture.ownerPool,
-          relation: 'public.canonical_customer_financial_invoice_draft_revisions_v1',
-          routePath: '/invoice-draft',
-          expectedText: `Reopen ${engine} ${layout.name} exact-current line` });
+      if (!renderOnly) {
+        const summary = root.locator(':scope > summary'); await summary.focus(); await page.keyboard.press('Enter');
+        await root.locator('table').waitFor({ state: 'detached', timeout: 10000 });
+        assert.equal(await root.getByText('Invoice draft — not issued', { exact: true }).count(), 0);
+        assert.equal(await root.getByText(/\$/, { exact: false }).count(), 0);
+        await correctDraftThroughRealSession(page, prepared.estimate,
+          `Reopen ${engine} ${layout.name} exact-current line`);
+        await summary.focus(); await page.keyboard.press('Enter');
+        await root.getByRole('button', { name: 'Record tax preparation review' }).waitFor({ timeout: 30000 });
+        assert.equal(await root.locator('.invoice-draft-preview-document').count(), 0);
+        assert.equal(await root.locator('.invoice-part5-acceptance').count(), 0);
+        assert.equal(await root.locator('.invoice-part6-acceptance').count(), 0);
+        assert.equal(await root.locator('.invoice-part7-acceptance').count(), 0);
+        assert.equal(await root.locator('.invoice-part9-acceptance').count(), 0);
+        assert.equal(await root.locator('.invoice-part10-acceptance').count(), 0);
+        assert.equal(await root.locator('.invoice-part11-acceptance').count(), 0);
+        assert.equal(await root.locator('.invoice-part12-acceptance').count(), 0);
+        assert.equal(await root.getByText(/Mounted .* reviewed line/, { exact: false }).count(), 0);
+        await recordTax(root);
+        await root.getByText('Invoice draft — not issued', { exact: true }).waitFor({ timeout: 240000 });
+        await root.getByText(`Reopen ${engine} ${layout.name} exact-current line`, { exact: true })
+          .waitFor({ timeout: 240000 });
+        if (index === 0) {
+          await proveDatabaseDelayedSuppression({ page, root, summary,
+            pool: prepared.fixture.ownerPool,
+            relation: 'public.canonical_customer_financial_invoice_draft_revisions_v1',
+            routePath: '/invoice-draft',
+            expectedText: `Reopen ${engine} ${layout.name} exact-current line` });
+        }
       }
       await auditActualSurface(page, root, layout);
       assert.ok(routeEvidence.some(row => row.method === 'POST' && row.path.endsWith('/invoice-draft/workflow-capability') && row.status === 200));
@@ -732,8 +813,10 @@ async function assertPart12FailureCleared(root) {
         completePart10ContractValidation: true, completePart11ContractValidation: true,
         completePart12ContractValidation:true,
         keyboard: true, responsive: true,
-        currentnessRecovery: index === 0, delayedResponseSuppression: index === 0,
-        malformedPart12ContractClearing:index===0 });
+        currentnessRecovery: !renderOnly && index === 0,
+        delayedResponseSuppression: !renderOnly && index === 0,
+        malformedPart12ContractClearing:!renderOnly && index===0,
+        renderOnly });
       delete ledger.current;
       await context.close();
 
@@ -821,18 +904,21 @@ async function assertPart12FailureCleared(root) {
       assert.equal(await demoRoot.getByText(/Fictional demo boundary/).count(), 7);
       assert.equal(await demoRoot.getByRole('button', {name:/approve invoice|issue|send|resend|revoke|deliver|collect|correct invoice|connect provider|start checkout|pay invoice/i}).count(),0);
       assert.equal(demoRoutes.some(row => row.path.endsWith('/preview')), false);
-      assert.ok(demoRoutes.some(row => row.path.endsWith('/part12-acceptance') && row.status === 200));
       const demoPart12=await demoPage.evaluate(async estimateId=>{
         const response=await fetch('/api/demo/customer-financial/invoice-drafts/'+
           encodeURIComponent(estimateId)+'/part12-acceptance',{cache:'no-store'});
         const body=await response.json(); return body.data;
       },graph.ids.estimate);
+      // The explicit mounted contract read above is part of this evidence gate,
+      // so inspect the route ledger after it has completed.  This avoids racing
+      // the Node-side response listener against the DOM's final rendering task.
+      assert.ok(demoRoutes.some(row => row.path.endsWith('/part12-acceptance') && row.status === 200));
       await assertPart7ClientContract(demoPage,demoPart12.part7Acceptance,'demo');
       await assertPart9ClientContract(demoPage,demoPart12.part9Acceptance,'demo');
       await assertPart10ClientContract(demoPage,demoPart12.part10Acceptance,'demo');
       await assertPart11ClientContract(demoPage,demoPart12,'demo');
       await assertPart12ClientContract(demoPage,demoPart12,'demo');
-      if (index === 0) {
+      if (index === 0 && !renderOnly) {
         part12ContractFault={mode:'demo',kind:'digest'};
         await demoRoot.getByRole('button',{name:'Reload current preview'}).focus();
         await demoPage.keyboard.press('Enter');
@@ -846,59 +932,63 @@ async function assertPart12FailureCleared(root) {
         await proveDatabaseDelayedSuppression({ page:demoPage, root:demoRoot,
           summary:delayedDemoSummary, pool:prepared.fixture.ownerPool,
           relation:'public.demo_command_center_sessions',
-          routePath:'/part12-acceptance',
+          routePath:'/part14b-acceptance',
           expectedText:'Fictional invoice draft — not issued' });
       }
-      const oldSummary = demoRoot.locator(':scope > summary'); await oldSummary.focus(); await demoPage.keyboard.press('Enter');
-      await demoRoot.locator('table').waitFor({state:'detached',timeout:10000});
-      const oldDemoRevision=await demoPage.evaluate(() => Number(document.documentElement.dataset.demoRevision));
-      const resetGraph = await demoPage.evaluate(async () => {
-        const currentResponse=await fetch('/api/demo/command-center',{cache:'no-store'});
-        const current=(await currentResponse.json()).data;
-        const response=await fetch('/api/demo/command-center/reset',{method:'POST',cache:'no-store',
-          headers:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID(),
-            'X-NorthStar-Demo-Intent':'reset'},
-          body:JSON.stringify({expectedRevision:current.integrity.revision})});
-        const body=await response.json(); if(!response.ok||!body.success)throw new Error('demo reset failed');
-        return {...body.data.graphs[0],workspaceRevision:body.data.integrity.revision};
-      });
-      assert.ok(resetGraph.workspaceRevision > oldDemoRevision);
-      await oldSummary.focus(); await demoPage.keyboard.press('Enter');
-      assert.equal(await demoRoot.evaluate(node=>node.open),true);
-      const resetAlert=demoRoot.locator('[role=alert]'); await resetAlert.waitFor({timeout:30000});
-      assert.match(await resetAlert.textContent(), /changed|unavailable/i);
-      assert.equal(await demoRoot.locator('table').count(),0);
-      assert.equal(await demoRoot.locator('.invoice-part5-acceptance').count(),0);
-      assert.equal(await demoRoot.locator('.invoice-part6-acceptance').count(),0);
-      assert.equal(await demoRoot.locator('.invoice-part7-acceptance').count(),0);
-      assert.equal(await demoRoot.locator('.invoice-part9-acceptance').count(),0);
-      assert.equal(await demoRoot.locator('.invoice-part10-acceptance').count(),0);
-      assert.equal(await demoRoot.locator('.invoice-part11-acceptance').count(),0);
-      assert.equal(await demoRoot.locator('.invoice-part12-acceptance').count(),0);
-      await demoPage.reload({waitUntil:'networkidle'});
-      assert.equal(await demoPage.evaluate(() => Number(document.documentElement.dataset.demoRevision)),
-        resetGraph.workspaceRevision);
-      const recoveredDemoRoot=await openActualCustomerInvoice(demoPage,resetGraph.ids.customer);
-      await recoveredDemoRoot.getByText('Fictional invoice draft — not issued',{exact:true})
-        .waitFor({timeout:120000});
-      await recoveredDemoRoot.getByText('Approval, issue, and invoice lifecycle',{exact:true})
-        .waitFor({timeout:30000});
-      await recoveredDemoRoot.getByText('Payment provider and initiation',{exact:true})
-        .waitFor({timeout:30000});
-      await recoveredDemoRoot.getByText('Payment corrections, receipts, and accounting',{exact:true})
-        .waitFor({timeout:30000});
-      await recoveredDemoRoot.getByText('Collections review and follow-up',{exact:true})
-        .waitFor({timeout:30000});
-      await recoveredDemoRoot.getByText('Accounting handoff and reconciliation',{exact:true})
-        .waitFor({timeout:30000});
-      await recoveredDemoRoot.getByText('Financial reporting and downstream evidence',{exact:true})
-        .waitFor({timeout:30000});
+      if (!renderOnly) {
+        const oldSummary = demoRoot.locator(':scope > summary'); await oldSummary.focus(); await demoPage.keyboard.press('Enter');
+        await demoRoot.locator('table').waitFor({state:'detached',timeout:10000});
+        const oldDemoRevision=await demoPage.evaluate(() => Number(document.documentElement.dataset.demoRevision));
+        const resetGraph = await demoPage.evaluate(async () => {
+          const currentResponse=await fetch('/api/demo/command-center',{cache:'no-store'});
+          const current=(await currentResponse.json()).data;
+          const response=await fetch('/api/demo/command-center/reset',{method:'POST',cache:'no-store',
+            headers:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID(),
+              'X-NorthStar-Demo-Intent':'reset'},
+            body:JSON.stringify({expectedRevision:current.integrity.revision})});
+          const body=await response.json(); if(!response.ok||!body.success)throw new Error('demo reset failed');
+          return {...body.data.graphs[0],workspaceRevision:body.data.integrity.revision};
+        });
+        assert.ok(resetGraph.workspaceRevision > oldDemoRevision);
+        await oldSummary.focus(); await demoPage.keyboard.press('Enter');
+        assert.equal(await demoRoot.evaluate(node=>node.open),true);
+        const resetAlert=demoRoot.locator('[role=alert]'); await resetAlert.waitFor({timeout:30000});
+        assert.match(await resetAlert.textContent(), /changed|unavailable/i);
+        assert.equal(await demoRoot.locator('table').count(),0);
+        assert.equal(await demoRoot.locator('.invoice-part5-acceptance').count(),0);
+        assert.equal(await demoRoot.locator('.invoice-part6-acceptance').count(),0);
+        assert.equal(await demoRoot.locator('.invoice-part7-acceptance').count(),0);
+        assert.equal(await demoRoot.locator('.invoice-part9-acceptance').count(),0);
+        assert.equal(await demoRoot.locator('.invoice-part10-acceptance').count(),0);
+        assert.equal(await demoRoot.locator('.invoice-part11-acceptance').count(),0);
+        assert.equal(await demoRoot.locator('.invoice-part12-acceptance').count(),0);
+        await demoPage.reload({waitUntil:'networkidle'});
+        assert.equal(await demoPage.evaluate(() => Number(document.documentElement.dataset.demoRevision)),
+          resetGraph.workspaceRevision);
+        const recoveredDemoRoot=await openActualCustomerInvoice(demoPage,resetGraph.ids.customer);
+        await recoveredDemoRoot.getByText('Fictional invoice draft — not issued',{exact:true})
+          .waitFor({timeout:120000});
+        await recoveredDemoRoot.getByText('Approval, issue, and invoice lifecycle',{exact:true})
+          .waitFor({timeout:30000});
+        await recoveredDemoRoot.getByText('Payment provider and initiation',{exact:true})
+          .waitFor({timeout:30000});
+        await recoveredDemoRoot.getByText('Payment corrections, receipts, and accounting',{exact:true})
+          .waitFor({timeout:30000});
+        await recoveredDemoRoot.getByText('Collections review and follow-up',{exact:true})
+          .waitFor({timeout:30000});
+        await recoveredDemoRoot.getByText('Accounting handoff and reconciliation',{exact:true})
+          .waitFor({timeout:30000});
+        await recoveredDemoRoot.getByText('Financial reporting and downstream evidence',{exact:true})
+          .waitFor({timeout:30000});
+      }
       assert.deepEqual(demoExternal, []); assert.deepEqual(demoErrors, []);
       assert.deepEqual(demoPaidRoutes, []);
       await demoPage.screenshot({fullPage:true,path:path.join(output,`${engine}-${layout.name}-demo.png`)});
       ledger.layouts.at(-1).demo = { actualPage:'/demo', routes:demoRoutes, fictional:true,
-        resetClearing:true, delayedResponseSuppression:index===0,
-        malformedPart12ContractClearing:index===0,
+        resetClearing:!renderOnly,
+        delayedResponseSuppression:!renderOnly && index===0,
+        malformedPart12ContractClearing:!renderOnly && index===0,
+        renderOnly,
         completePart7ContractValidation:true, completePart9ContractValidation:true,
         completePart10ContractValidation:true, completePart11ContractValidation:true,
         completePart12ContractValidation:true,

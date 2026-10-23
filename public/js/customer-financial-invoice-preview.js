@@ -1890,22 +1890,32 @@
     }
     function clearCollapsed() { requestToken += 1; data = null; part5 = null; part6 = null; part7 = null; part9 = null; part10 = null; part11 = null; part12 = null; part14b = null; context = null; body.replaceChildren(); }
     function toggleDisclosure() {
-      var opening = !desiredOpenState; desiredOpenState = opening; section.open = opening;
+      // A native disclosure can settle a queued browser toggle after the
+      // desired-state observer.  User activation must therefore toggle the
+      // state the user can actually see, not a stale recovery intent.
+      var opening = !section.open; desiredOpenState = opening; section.open = opening;
       if (opening) load(); else clearCollapsed();
+    }
+    function settleKeyboardDisclosure(expectedOpen) {
+      setTimeout(function () {
+        if (!section.isConnected) return;
+        desiredOpenState = expectedOpen;
+        section.open = expectedOpen;
+      }, 0);
     }
     summary.addEventListener('keydown', function (event) {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
       event.preventDefault(); if (event.repeat) return;
       mutationRecoveryActive = false;
-      var activation = { desiredOpen: !desiredOpenState, expiresAt: Date.now() + 1000 };
-      keyboardActivationState = activation;
+      keyboardActivationState = { desiredOpen: !section.open };
       toggleDisclosure();
-      setTimeout(function () {
-        if (keyboardActivationState === activation) keyboardActivationState = null;
-      }, 1000);
     });
     summary.addEventListener('keyup', function (event) {
-      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') event.preventDefault();
+      if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+      event.preventDefault();
+      if (keyboardActivationState !== null) {
+        settleKeyboardDisclosure(keyboardActivationState.desiredOpen);
+      }
     });
     summary.addEventListener('pointerdown', function () {
       mutationRecoveryActive = false;
@@ -1914,17 +1924,33 @@
     summary.addEventListener('click', function (event) {
       event.preventDefault();
       if (mutationRecoveryActive) return;
-      if (keyboardActivationState !== null && event.detail === 0 &&
-          Date.now() <= keyboardActivationState.expiresAt) return;
+      // A real pointer activation always passed through pointerdown, which
+      // clears the keyboard state.  WebKit does not consistently expose a
+      // keyboard-generated click as detail=0, so the surviving state itself is
+      // the reliable native-boundary signal for suppressing the duplicate.
+      if (keyboardActivationState !== null) {
+        settleKeyboardDisclosure(keyboardActivationState.desiredOpen);
+        keyboardActivationState = null;
+        return;
+      }
       keyboardActivationState = null;
       toggleDisclosure();
     });
     section.addEventListener('toggle', function () {
       if (section.open !== desiredOpenState) section.open = desiredOpenState;
     });
+    var disclosureObserver = new MutationObserver(function () {
+      if (!section.isConnected) { disclosureObserver.disconnect(); return; }
+      if (section.open !== desiredOpenState) section.open = desiredOpenState;
+    });
+    disclosureObserver.observe(section, { attributes: true, attributeFilter: ['open'] });
+    if (activeDisclosureMount && typeof activeDisclosureMount.disconnect === 'function') {
+      activeDisclosureMount.disconnect();
+    }
     activeDisclosureMount = { host: host, estimateId: estimateId, section: section,
       desiredOpen: function () { return desiredOpenState; },
-      mutationRecoveryActive: function () { return mutationRecoveryActive; } };
+      mutationRecoveryActive: function () { return mutationRecoveryActive; },
+      disconnect: function () { disclosureObserver.disconnect(); } };
     if (resumeMutationRecovery) {
       section.open = true;
       setTimeout(function () {
@@ -1947,6 +1973,9 @@
     mountGeneration += 1;
     if (activeDemoMount && activeDemoMount.section.isConnected) activeDemoMount.invalidate();
     activeDemoMount = null;
+    if (activeDisclosureMount && typeof activeDisclosureMount.disconnect === 'function') {
+      activeDisclosureMount.disconnect();
+    }
     activeDisclosureMount = null;
   }
   function validateActiveFictionalDemoEnvelope(value) {

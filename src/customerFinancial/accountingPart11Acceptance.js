@@ -32,8 +32,7 @@ function exact(value, keys) {
     Object.keys(value).every(key => keys.includes(key));
 }
 
-function derive(part10Raw, mode) {
-  const part10 = part10Contract.projectBundle(part10Raw, mode);
+function deriveProjected(part10, mode) {
   const source = exportContract.project(exportContract.unavailable(part10, mode), part10, mode);
   const readiness = exportReadiness.project(
     exportReadiness.unavailable(source, part10, mode), source, part10, mode);
@@ -41,6 +40,10 @@ function derive(part10Raw, mode) {
     reconciliation.unavailable(readiness, source, part10, mode),
     readiness, source, part10, mode);
   return { part10, source, readiness, reconciliation:reconciled };
+}
+
+function derive(part10Raw, mode) {
+  return deriveProjected(part10Contract.projectBundle(part10Raw, mode), mode);
 }
 
 function sourceParts(values) {
@@ -53,14 +56,8 @@ function sourceParts(values) {
   }));
 }
 
-function unavailable(mode, part10Raw, sourcesRaw) {
-  if (!['paid','demo'].includes(mode)) throw new Error('Accounting Part 11 mode invalid');
-  const derived = sourcesRaw || derive(part10Raw, mode);
-  const part10 = part10Contract.projectBundle(derived.part10 || part10Raw, mode);
-  const source = exportContract.project(derived.source, part10, mode);
-  const readiness = exportReadiness.project(derived.readiness, source, part10, mode);
-  const reconciled = reconciliation.project(
-    derived.reconciliation, readiness, source, part10, mode);
+function buildUnavailable(mode, part10, derived) {
+  const source=derived.source, readiness=derived.readiness, reconciled=derived.reconciliation;
   const policy = providerBoundary.validateLaunchPolicy();
   const financial = policy.financial;
   const accounting = financial.accounting;
@@ -200,6 +197,17 @@ function unavailable(mode, part10Raw, sourcesRaw) {
   });
 }
 
+function unavailable(mode, part10Raw, sourcesRaw) {
+  if (!['paid','demo'].includes(mode)) throw new Error('Accounting Part 11 mode invalid');
+  const supplied = sourcesRaw || derive(part10Raw, mode);
+  const part10 = part10Contract.projectBundle(supplied.part10 || part10Raw, mode);
+  const source = exportContract.project(supplied.source, part10, mode);
+  const readiness = exportReadiness.project(supplied.readiness, source, part10, mode);
+  const reconciled = reconciliation.project(
+    supplied.reconciliation, readiness, source, part10, mode);
+  return buildUnavailable(mode,part10,{part10,source,readiness,reconciliation:reconciled});
+}
+
 function project(raw, mode, part10Raw, sources) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('Accounting Part 11 acceptance invalid');
@@ -222,11 +230,7 @@ function project(raw, mode, part10Raw, sources) {
   return expected;
 }
 
-function bundle(part10Raw, acceptance, sources) {
-  const mode = part10Raw?.preview?.mode;
-  const part10 = part10Contract.projectBundle(part10Raw, mode);
-  const derived = sources || derive(part10, mode);
-  const value = project(acceptance, mode, part10, derived);
+function buildBundle(part10,value,derived) {
   if (JSON.stringify(value.previewWitness) !==
       JSON.stringify(part10.part10Acceptance.previewWitness)) {
     throw new Error('Accounting Part 11 preview bundle currentness mismatch');
@@ -247,6 +251,29 @@ function bundle(part10Raw, acceptance, sources) {
     part11SourceContracts:sourceContracts,
     part11Acceptance:value,
   });
+}
+
+function bundle(part10Raw, acceptance, sources) {
+  const mode = part10Raw?.preview?.mode;
+  const part10 = part10Contract.projectBundle(part10Raw, mode);
+  const derived = sources || derive(part10, mode);
+  const value = project(acceptance, mode, part10, derived);
+  return buildBundle(part10,value,derived);
+}
+
+// Repository-facing composition remains a public untrusted-input boundary: it
+// begins with one direct projection of the exact supplied Part 10 bundle.
+// The released Part 11A-C validators retain their own nested projections, but
+// this composition does not repeat the outer derive/unavailable/project/bundle
+// chain that pushed the mounted response beyond WebKit's resource window.
+function candidate(part10Raw, expectedMode) {
+  if (!['paid','demo'].includes(expectedMode)) {
+    throw new Error('Accounting Part 11 mode invalid');
+  }
+  const part10=part10Contract.projectBundle(part10Raw,expectedMode);
+  const derived=deriveProjected(part10,expectedMode);
+  const value=buildUnavailable(expectedMode,part10,derived);
+  return buildBundle(part10,value,derived);
 }
 
 function projectBundle(raw, expectedMode, sources) {
@@ -278,4 +305,4 @@ function projectBundle(raw, expectedMode, sources) {
 
 module.exports = { CONTRACT_VERSION, BUNDLE_VERSION, RETENTION_HOLD_VERSION,
   ADAPTER_LIFECYCLE_VERSION, REASON, SOURCE_PARTS, HOLD_PURPOSES,
-  ADAPTER_LIFECYCLE_STATES, derive, unavailable, project, bundle, projectBundle };
+  ADAPTER_LIFECYCLE_STATES, derive, unavailable, project, bundle, candidate, projectBundle };

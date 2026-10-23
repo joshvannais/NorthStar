@@ -60,15 +60,23 @@ function sourceParts(sources) {
   }));
 }
 
-function unavailable(mode, part9Raw, sourcesRaw = {}) {
-  const part9 = part9Contract.projectBundle(part9Raw, mode);
-  const defaults = defaultSources();
-  const agingRaw = sourcesRaw.receivableAging || defaults.receivableAging;
-  const reviewRaw = sourcesRaw.collectionReview || defaults.collectionReview;
-  const handoffRaw = sourcesRaw.collectionHandoff || defaults.collectionHandoff;
-  const aging = receivableAging.project(agingRaw);
-  const review = collectionReview.projectWithSource(reviewRaw, aging);
-  const handoff = collectionHandoff.projectWithSource(handoffRaw, review);
+function projectSources(sourcesRaw, allowDefaults) {
+  const keys = ['receivableAging','collectionReview','collectionHandoff'];
+  const supplied = sourcesRaw && Object.keys(sourcesRaw).length ? sourcesRaw :
+    (allowDefaults ? defaultSources() : null);
+  if (!exact(supplied, keys)) {
+    throw new Error('Collection Part 10 source contracts invalid');
+  }
+  const aging = receivableAging.project(supplied.receivableAging);
+  const review = collectionReview.projectWithSource(supplied.collectionReview, aging);
+  const handoff = collectionHandoff.projectWithSource(supplied.collectionHandoff, review);
+  return { receivableAging:aging, collectionReview:review, collectionHandoff:handoff };
+}
+
+function buildUnavailable(mode, part9, sources) {
+  const aging = sources.receivableAging;
+  const review = sources.collectionReview;
+  const handoff = sources.collectionHandoff;
   const previewWitness = part9.part9Acceptance.previewWitness;
   return Object.freeze({
     contractVersion: CONTRACT_VERSION,
@@ -157,6 +165,14 @@ function unavailable(mode, part9Raw, sourcesRaw = {}) {
   });
 }
 
+function unavailable(mode, part9Raw, sourcesRaw = {}) {
+  if (!['paid','demo'].includes(mode)) {
+    throw new Error('Collection Part 10 mode invalid');
+  }
+  const part9 = part9Contract.projectBundle(part9Raw, mode);
+  return buildUnavailable(mode, part9, projectSources(sourcesRaw, true));
+}
+
 function project(raw, mode, part9Bundle, sources) {
   const expected = unavailable(mode, part9Bundle, sources);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
@@ -186,9 +202,7 @@ function project(raw, mode, part9Bundle, sources) {
   return raw;
 }
 
-function bundle(part9Raw, acceptance, sources) {
-  const part9 = part9Contract.projectBundle(part9Raw);
-  const value = project(acceptance, part9.preview.mode, part9, sources);
+function buildBundle(part9, value) {
   if (JSON.stringify(value.previewWitness) !==
       JSON.stringify(part9.part9Acceptance.previewWitness)) {
     throw new Error('Collection Part 10 preview bundle currentness mismatch');
@@ -202,6 +216,26 @@ function bundle(part9Raw, acceptance, sources) {
     part9Acceptance: part9.part9Acceptance,
     part10Acceptance: value,
   });
+}
+
+function bundle(part9Raw, acceptance, sources) {
+  const part9 = part9Contract.projectBundle(part9Raw);
+  const value = project(acceptance, part9.preview.mode, part9, sources);
+  return buildBundle(part9, value);
+}
+
+// Repository-facing composition starts with one strict projection of the exact
+// Part 9 bundle and one strict projection of each exact Part 10 source. The
+// repository has already bracketed these values with current before/after
+// reads, so rebuilding and then re-projecting the same acceptance would add no
+// authority while materially extending the mounted response window.
+function candidate(part9Raw, expectedMode, sourcesRaw) {
+  if (!['paid','demo'].includes(expectedMode)) {
+    throw new Error('Collection Part 10 mode invalid');
+  }
+  const part9 = part9Contract.projectBundle(part9Raw, expectedMode);
+  const sources = projectSources(sourcesRaw, false);
+  return buildBundle(part9, buildUnavailable(expectedMode, part9, sources));
 }
 
 function projectBundle(raw, expectedMode, sources) {
@@ -226,4 +260,5 @@ function projectBundle(raw, expectedMode, sources) {
 }
 
 module.exports = { CONTRACT_VERSION, BUNDLE_VERSION, REASON, SOURCE_PARTS,
-  FAILURE_ORDER, REVOCATION_ORDER, defaultSources, unavailable, project, bundle, projectBundle };
+  FAILURE_ORDER, REVOCATION_ORDER, defaultSources, unavailable, project, bundle,
+  candidate, projectBundle };

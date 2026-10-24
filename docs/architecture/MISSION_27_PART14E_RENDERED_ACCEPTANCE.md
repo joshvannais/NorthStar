@@ -1,6 +1,6 @@
 # Mission 27 Part 14E — rendered acceptance
 
-Status: implementation candidate. Part 14D is independently accepted at exact head `0588a6f7507d0cc84ba98d96df0c46fea0c0c490`, tree `30729e13c557f2c93ad01a06e7db8634aac84ea8`, through the root fallback whole-head report SHA-256 `6c60dee08d13200cbdbb0be675e642088f5df32fa10bf4c51047172e3093c453`. Parts 14B–14D remain unreleased behind the queued Railway release lane. This candidate does not make Part 14E independently accepted, merged, deployed, released, mission-complete, live-payment accepted, or founder approved.
+Status: accepted and buffered at exact head `a40be2435c3aa720cb2d179b10adc00530bd794e`, tree `af9831f8ebda83eecbdd2a4ce8717fc8e6576e86`. Part 14D remains independently accepted at exact head `0588a6f7507d0cc84ba98d96df0c46fea0c0c490`, tree `30729e13c557f2c93ad01a06e7db8634aac84ea8`, through the root fallback whole-head report SHA-256 `6c60dee08d13200cbdbb0be675e642088f5df32fa10bf4c51047172e3093c453`. Parts 14B–14E remain unreleased behind the queued Railway release lane. Part 14F independently accepted the corrected cumulative exact head `6f7a8939b6eb8d58bd20e2eff7500c9a5a01a9b0`, tree `ead3dc3b463d1ae48aa606b19a51fbf8ea06e30c`, with no P0-P3. Neither acceptance makes Part 14E merged, deployed, released, mission-complete, live-payment accepted or founder approved.
 
 ## Authority
 
@@ -50,4 +50,4 @@ Physical Safari and physical mobile/tablet devices, manual assistive-technology 
 
 Founder visual approval remains separate and ungranted. Automated screenshots and functional rendered evidence support later review; they cannot issue a founder verdict or authorize a redesign. Command Center information architecture and any founder-selected visual direction remain outside Part 14E.
 
-Part 14F retains the independent complete exact-head audit. Part 14G retains backup, reviewed merge, the ordered automatic deployment lane, migration and health verification, production-safe rendered verification, the founder visual verdict, final source-linked ledger and the exact named verdict earned.
+Part 14F completed the independent complete exact-head audit at `6f7a8939b6eb8d58bd20e2eff7500c9a5a01a9b0`. [Part 14G release readiness](../evidence/MISSION_27_PART14G_RELEASE_READINESS.md) retains the fresh backup, reviewed merge, ordered automatic deployment lane, migration and health verification, production-safe rendered verification, founder visual verdict, final source-linked ledger and exact named verdict earned; none of those release gates is closed by this functional rendered acceptance.

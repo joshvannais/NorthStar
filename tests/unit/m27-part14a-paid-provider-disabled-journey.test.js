@@ -326,11 +326,13 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
     const docs = Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
       .map(([name,entry])=>[name,fs.readFileSync(path.join(ROOT,entry.path),'utf8')]));
     expect(authority.validate(docs)).toEqual(expect.objectContaining({
-      currentSlice:'14E', currentStatus:'candidate', migrationLatest:272,
-      migration273Present:false, laterSlices:['14F','14G'],
+      currentSlice:'14G', currentStatus:'readiness_candidate', migrationLatest:272,
+      migration273Present:false, laterSlices:[],
       acceptedPart14BHead:'497fad89e145dece26bdf1fb43789f64bc29560f',
       acceptedPart14CHead:'4975a58d43c1ab71f9500e765ef375d2ae221ec2',
       acceptedPart14DHead:'0588a6f7507d0cc84ba98d96df0c46fea0c0c490',
+      acceptedPart14EHead:'a40be2435c3aa720cb2d179b10adc00530bd794e',
+      acceptedPart14FHead:'6f7a8939b6eb8d58bd20e2eff7500c9a5a01a9b0',
     }));
     const mutations = [
       ['false release','ledger','Part 14B remains unreleased.','Part 14B is released.'],

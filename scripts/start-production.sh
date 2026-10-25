@@ -236,46 +236,14 @@ esac
 startup_check='NS14B-12'
 /usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$executable_manifest"
-for expected_executable_line in northstar-executable-inventory-v1 \
+for expected_executable_line in northstar-executable-inventory-v2 \
   setpriv_path=/usr/bin/setpriv "setpriv_sha256=$setpriv_sha" \
-  "setpriv_size=$setpriv_size" setpriv_mode=555; do
-  IFS= read -r executable_line <&3 || fail
-  [ "$executable_line" = "$expected_executable_line" ] || fail
-done
-IFS= read -r setpriv_build_line <&3 || fail
-case "$setpriv_build_line" in setpriv_build_device_inode=*) ;;
-  *) fail ;;
-esac
-setpriv_build_identity=${setpriv_build_line#setpriv_build_device_inode=}
-case "$setpriv_build_identity" in
-  *:*) build_device=${setpriv_build_identity%%:*};
-       build_inode=${setpriv_build_identity#*:} ;;
-  *) fail ;;
-esac
-case "$build_device" in ''|*[!0-9]*) fail ;; esac
-case "$build_inode" in ''|*[!0-9]*) fail ;; esac
-for expected_executable_line in \
-  setpriv_identity_anchor=/app/.northstar-runtime/setpriv.identity \
+  "setpriv_size=$setpriv_size" setpriv_mode=555 setpriv_nlink=1 \
   getcap_path=/usr/sbin/getcap "getcap_sha256=$getcap_sha" \
-  "getcap_size=$getcap_size" getcap_mode=555; do
+  "getcap_size=$getcap_size" getcap_mode=555 getcap_nlink=1; do
   IFS= read -r executable_line <&3 || fail
   [ "$executable_line" = "$expected_executable_line" ] || fail
 done
-IFS= read -r getcap_build_line <&3 || fail
-case "$getcap_build_line" in getcap_build_device_inode=*) ;;
-  *) fail ;;
-esac
-getcap_build_identity=${getcap_build_line#getcap_build_device_inode=}
-case "$getcap_build_identity" in
-  *:*) build_device=${getcap_build_identity%%:*};
-       build_inode=${getcap_build_identity#*:} ;;
-  *) fail ;;
-esac
-case "$build_device" in ''|*[!0-9]*) fail ;; esac
-case "$build_inode" in ''|*[!0-9]*) fail ;; esac
-IFS= read -r executable_line <&3 || fail
-[ "$executable_line" = \
-  'getcap_identity_anchor=/app/.northstar-runtime/getcap.identity' ] || fail
 if IFS= read -r executable_line <&3; then
   exec 3<&-
   fail
@@ -284,19 +252,13 @@ exec 3<&-
 
 check_executable_identity() {
   executable_path=$1
-  identity_anchor=$2
-  executable_sha=$3
-  executable_size=$4
+  executable_sha=$2
+  executable_size=$3
   if [ ! -f "$executable_path" ] || [ ! -x "$executable_path" ] ||
-     [ -L "$executable_path" ] || [ ! -f "$identity_anchor" ] ||
-     [ ! -x "$identity_anchor" ] || [ -L "$identity_anchor" ] ||
+     [ -L "$executable_path" ] ||
      [ "$(/usr/bin/readlink -f -- "$executable_path")" != "$executable_path" ] ||
-     [ "$(/usr/bin/readlink -f -- "$identity_anchor")" != "$identity_anchor" ] ||
-     [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$executable_path")" != '0:0:555:2' ] ||
-     [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$identity_anchor")" != '0:0:555:2' ] ||
-     [ "$(/usr/bin/stat -c '%s' -- "$executable_path")" != "$executable_size" ] ||
-     [ "$(/usr/bin/stat -c '%d:%i' -- "$executable_path")" != \
-       "$(/usr/bin/stat -c '%d:%i' -- "$identity_anchor")" ]; then
+     [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$executable_path")" != '0:0:555:1' ] ||
+     [ "$(/usr/bin/stat -c '%s' -- "$executable_path")" != "$executable_size" ]; then
     fail
   fi
   /usr/bin/printf '%s  %s\n' "$executable_sha" "$executable_path" |
@@ -304,9 +266,9 @@ check_executable_identity() {
 }
 startup_check='NS14B-13'
 check_executable_identity /usr/bin/setpriv \
-  "$runtime_directory/setpriv.identity" "$setpriv_sha" "$setpriv_size"
+  "$setpriv_sha" "$setpriv_size"
 check_executable_identity /usr/sbin/getcap \
-  "$runtime_directory/getcap.identity" "$getcap_sha" "$getcap_size"
+  "$getcap_sha" "$getcap_size"
 for removed_helper in /usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap; do
   [ ! -e "$removed_helper" ] && [ ! -L "$removed_helper" ] || fail
 done
@@ -401,9 +363,9 @@ do
   fi
 done
 check_executable_identity /usr/bin/setpriv \
-  "$runtime_directory/setpriv.identity" "$setpriv_sha" "$setpriv_size"
+  "$setpriv_sha" "$setpriv_size"
 check_executable_identity /usr/sbin/getcap \
-  "$runtime_directory/getcap.identity" "$getcap_sha" "$getcap_size"
+  "$getcap_sha" "$getcap_size"
 startup_check='NS14B-17'
 for protected_directory in "$CANONICAL_ROOT" "$CANONICAL_ROOT/scripts" \
   "$CANONICAL_ROOT/src" "$CANONICAL_ROOT/node_modules" "$runtime_directory" \

@@ -94,8 +94,7 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
     '/app/.northstar-runtime/privilege-inventory.sha256',
     '/app/.northstar-runtime/executable-inventory',
     '/app/.northstar-runtime/executable-inventory.sha256',
-    '/app/.northstar-runtime/setpriv.identity',
-    '/app/.northstar-runtime/getcap.identity', '/usr/bin/setpriv', '/usr/sbin/getcap'];
+    '/usr/bin/setpriv', '/usr/sbin/getcap'];
   for (const entry of [...protectedDirectories, ...protectedFiles]) {
     const info = fs.statSync(entry);
     if (info.uid !== 0 || info.gid !== 0 || (info.mode & 0o022) !== 0 ||
@@ -111,15 +110,9 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
     }
   }
   const setprivStat = fs.statSync('/usr/bin/setpriv');
-  const setprivAnchorStat = fs.statSync('/app/.northstar-runtime/setpriv.identity');
   const getcapStat = fs.statSync('/usr/sbin/getcap');
-  const getcapAnchorStat = fs.statSync('/app/.northstar-runtime/getcap.identity');
-  if ((setprivStat.mode & 0o777) !== 0o555 || setprivStat.nlink !== 2 ||
-      (setprivAnchorStat.mode & 0o777) !== 0o555 || setprivAnchorStat.nlink !== 2 ||
-      setprivStat.dev !== setprivAnchorStat.dev || setprivStat.ino !== setprivAnchorStat.ino ||
-      (getcapStat.mode & 0o777) !== 0o555 || getcapStat.nlink !== 2 ||
-      (getcapAnchorStat.mode & 0o777) !== 0o555 || getcapAnchorStat.nlink !== 2 ||
-      getcapStat.dev !== getcapAnchorStat.dev || getcapStat.ino !== getcapAnchorStat.ino ||
+  if ((setprivStat.mode & 0o777) !== 0o555 || setprivStat.nlink !== 1 ||
+      (getcapStat.mode & 0o777) !== 0o555 || getcapStat.nlink !== 1 ||
       ['/usr/sbin/capsh', '/usr/sbin/getpcaps', '/usr/sbin/setcap'].some(fs.existsSync)) {
     throw new Error(`${FAILURE} Invalid executable privilege inventory.`);
   }

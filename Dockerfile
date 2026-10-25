@@ -75,24 +75,18 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
     && printf '%s  %s\n' "$getcap_sha" /usr/sbin/getcap | /usr/bin/sha256sum -c - \
     && test "$(/usr/bin/stat -c '%s' /usr/bin/setpriv)" = "$setpriv_size" \
     && test "$(/usr/bin/stat -c '%s' /usr/sbin/getcap)" = "$getcap_size" \
-    && /bin/ln /usr/bin/setpriv /app/.northstar-runtime/setpriv.identity \
-    && /bin/ln /usr/sbin/getcap /app/.northstar-runtime/getcap.identity \
-    && setpriv_build_device_inode=$(/usr/bin/stat -c '%d:%i' /usr/bin/setpriv) \
-    && getcap_build_device_inode=$(/usr/bin/stat -c '%d:%i' /usr/sbin/getcap) \
     && /usr/bin/printf '%s\n' 'northstar-privilege-inventory-v2' \
          'setid=none' 'filecap=none' 'runtime_uid=1000' 'runtime_gid=1000' \
          'removed_helper=/usr/sbin/capsh' 'removed_helper=/usr/sbin/getpcaps' \
          'removed_helper=/usr/sbin/setcap' \
          > /app/.northstar-runtime/privilege-inventory \
-    && /usr/bin/printf '%s\n' 'northstar-executable-inventory-v1' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a:%h' /usr/bin/setpriv)" = '0:0:555:1' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a:%h' /usr/sbin/getcap)" = '0:0:555:1' \
+    && /usr/bin/printf '%s\n' 'northstar-executable-inventory-v2' \
          'setpriv_path=/usr/bin/setpriv' "setpriv_sha256=$setpriv_sha" \
-         "setpriv_size=$setpriv_size" 'setpriv_mode=555' \
-         "setpriv_build_device_inode=$setpriv_build_device_inode" \
-         'setpriv_identity_anchor=/app/.northstar-runtime/setpriv.identity' \
+         "setpriv_size=$setpriv_size" 'setpriv_mode=555' 'setpriv_nlink=1' \
          'getcap_path=/usr/sbin/getcap' "getcap_sha256=$getcap_sha" \
-         "getcap_size=$getcap_size" 'getcap_mode=555' \
-         "getcap_build_device_inode=$getcap_build_device_inode" \
-         'getcap_identity_anchor=/app/.northstar-runtime/getcap.identity' \
+         "getcap_size=$getcap_size" 'getcap_mode=555' 'getcap_nlink=1' \
          > /app/.northstar-runtime/executable-inventory \
     && /usr/bin/sha256sum /app/.northstar-runtime/privilege-inventory \
          > /app/.northstar-runtime/privilege-inventory.sha256 \
@@ -102,8 +96,6 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
          /app/.northstar-runtime/privilege-inventory.sha256 \
          /app/.northstar-runtime/executable-inventory \
          /app/.northstar-runtime/executable-inventory.sha256 \
-         /app/.northstar-runtime/setpriv.identity \
-         /app/.northstar-runtime/getcap.identity \
     && /bin/chmod 0444 /app/.northstar-runtime/privilege-inventory \
          /app/.northstar-runtime/privilege-inventory.sha256 \
          /app/.northstar-runtime/executable-inventory \

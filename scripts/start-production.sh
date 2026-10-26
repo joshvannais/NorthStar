@@ -15,7 +15,9 @@ fail() {
   # caller, credential, digest, database fact, or stack trace is emitted.
   case "$startup_check" in
     NS14B-00|NS14B-01|NS14B-02|NS14B-03|NS14B-04|NS14B-05|NS14B-06|\
-    NS14B-07|NS14B-08|NS14B-09|NS14B-10|NS14B-11|NS14B-12|NS14B-13|\
+    NS14B-07|NS14B-08|NS14B-09|NS14B-10|NS14B-11|NS14B-12|\
+    NS14B-13A|NS14B-13B|NS14B-13C|NS14B-13D|NS14B-13E|NS14B-13F|\
+    NS14B-13G|NS14B-13H|NS14B-13I|NS14B-13J|NS14B-13K|NS14B-13L|NS14B-13M|\
     NS14B-14|NS14B-15|NS14B-16|NS14B-17|NS14B-18) ;;
     *) startup_check='NS14B-00' ;;
   esac
@@ -250,35 +252,50 @@ if IFS= read -r executable_line <&3; then
 fi
 exec 3<&-
 
-check_executable_identity() {
-  executable_path=$1
-  executable_sha=$2
-  executable_size=$3
-  if [ ! -f "$executable_path" ] || [ ! -x "$executable_path" ] ||
-     [ -L "$executable_path" ] ||
-     [ "$(/usr/bin/readlink -f -- "$executable_path")" != "$executable_path" ] ||
-     [ "$(/usr/bin/stat -c '%s' -- "$executable_path")" != "$executable_size" ]; then
-    fail
-  fi
-  # Railway's OCI runtime can restore the package-layer owner-write bit even
-  # though the final build layer records 0555. UID/GID 1000 still cannot
-  # mutate either root-owned form; all group/world write and set-id variants
-  # remain rejected, while digest and size continue to bind exact bytes.
-  case "$(/usr/bin/stat -c '%u:%g:%a' -- "$executable_path")" in
+check_setpriv_identity() {
+  startup_check='NS14B-13A'
+  [ -f /usr/bin/setpriv ] && [ -x /usr/bin/setpriv ] || fail
+  startup_check='NS14B-13B'
+  [ ! -L /usr/bin/setpriv ] &&
+    [ "$(/usr/bin/readlink -f -- /usr/bin/setpriv)" = /usr/bin/setpriv ] || fail
+  startup_check='NS14B-13C'
+  [ "$(/usr/bin/stat -c '%s' -- /usr/bin/setpriv)" = "$setpriv_size" ] || fail
+  startup_check='NS14B-13D'
+  case "$(/usr/bin/stat -c '%u:%g:%a' -- /usr/bin/setpriv)" in
     0:0:555|0:0:755) ;;
     *) fail ;;
   esac
-  /usr/bin/printf '%s  %s\n' "$executable_sha" "$executable_path" |
+  startup_check='NS14B-13E'
+  /usr/bin/printf '%s  %s\n' "$setpriv_sha" /usr/bin/setpriv |
     /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
 }
-startup_check='NS14B-13'
-check_executable_identity /usr/bin/setpriv \
-  "$setpriv_sha" "$setpriv_size"
-check_executable_identity /usr/sbin/getcap \
-  "$getcap_sha" "$getcap_size"
-for removed_helper in /usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap; do
-  [ ! -e "$removed_helper" ] && [ ! -L "$removed_helper" ] || fail
-done
+
+check_getcap_identity() {
+  startup_check='NS14B-13F'
+  [ -f /usr/sbin/getcap ] && [ -x /usr/sbin/getcap ] || fail
+  startup_check='NS14B-13G'
+  [ ! -L /usr/sbin/getcap ] &&
+    [ "$(/usr/bin/readlink -f -- /usr/sbin/getcap)" = /usr/sbin/getcap ] || fail
+  startup_check='NS14B-13H'
+  [ "$(/usr/bin/stat -c '%s' -- /usr/sbin/getcap)" = "$getcap_size" ] || fail
+  startup_check='NS14B-13I'
+  case "$(/usr/bin/stat -c '%u:%g:%a' -- /usr/sbin/getcap)" in
+    0:0:555|0:0:755) ;;
+    *) fail ;;
+  esac
+  startup_check='NS14B-13J'
+  /usr/bin/printf '%s  %s\n' "$getcap_sha" /usr/sbin/getcap |
+    /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
+}
+
+check_setpriv_identity
+check_getcap_identity
+startup_check='NS14B-13K'
+[ ! -e /usr/sbin/capsh ] && [ ! -L /usr/sbin/capsh ] || fail
+startup_check='NS14B-13L'
+[ ! -e /usr/sbin/getpcaps ] && [ ! -L /usr/sbin/getpcaps ] || fail
+startup_check='NS14B-13M'
+[ ! -e /usr/sbin/setcap ] && [ ! -L /usr/sbin/setcap ] || fail
 
 startup_check='NS14B-14'
 for privilege_root in /usr "$CANONICAL_ROOT" /var/lib/northstar /tmp /home; do
@@ -369,10 +386,8 @@ do
     fail
   fi
 done
-check_executable_identity /usr/bin/setpriv \
-  "$setpriv_sha" "$setpriv_size"
-check_executable_identity /usr/sbin/getcap \
-  "$getcap_sha" "$getcap_size"
+check_setpriv_identity
+check_getcap_identity
 startup_check='NS14B-17'
 for protected_directory in "$CANONICAL_ROOT" "$CANONICAL_ROOT/scripts" \
   "$CANONICAL_ROOT/src" "$CANONICAL_ROOT/node_modules" "$runtime_directory" \

@@ -56,8 +56,12 @@ const PRIVILEGED_BASE_PATHS = Object.freeze([
 ]);
 const RUNTIME_IDENTITY_PREDICATE =
   '[ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" = 11111111 ]';
-const STARTUP_CHECKS = Object.freeze(Array.from({ length: 19 },
-  (_value, index) => `NS14B-${String(index).padStart(2, '0')}`));
+const STARTUP_CHECKS = Object.freeze([
+  ...Array.from({ length: 13 }, (_value, index) =>
+    `NS14B-${String(index).padStart(2, '0')}`),
+  ...'ABCDEFGHIJKLM'.split('').map(suffix => `NS14B-13${suffix}`),
+  ...Array.from({ length: 5 }, (_value, index) => `NS14B-${index + 14}`),
+]);
 
 function runtimeIdentityFunction(source) {
   const start = source.indexOf('check_runtime_identity() {');
@@ -289,7 +293,9 @@ function exactRuntimePlan(overrides = {}) {
       inputs.start.includes('nlink') ||
       inputs.start.includes('_identity_anchor=') ||
       inputs.start.includes('_build_device_inode=') ||
-      !inputs.start.includes('/usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap') ||
+      !inputs.start.includes('[ ! -e /usr/sbin/capsh ]') ||
+      !inputs.start.includes('[ ! -e /usr/sbin/getpcaps ]') ||
+      !inputs.start.includes('[ ! -e /usr/sbin/setcap ]') ||
       !inputs.start.includes('LD_PRELOAD') || !inputs.start.includes('LD_LIBRARY_PATH') ||
       !inputs.start.includes('unsafe_runtime_library=$(/usr/bin/find /usr/lib -xdev') ||
       !inputs.start.includes('PATH=$node_bin') || inputs.start.includes('PATH=/tmp') ||
@@ -307,13 +313,13 @@ function exactRuntimePlan(overrides = {}) {
     }
   }
   const diagnosticAssignments = Array.from(inputs.start.matchAll(
-    /^startup_check='(NS14B-\d\d)'$/gm), match => match[1]);
+    /^\s*startup_check='(NS14B-\d\d[A-M]?)'$/gm), match => match[1]);
   const checksumVerifications = Array.from(inputs.start.matchAll(
     /\/usr\/bin\/sha256sum -c (?:"\$[a-z_]+"|-) >\/dev\/null 2>&1 \|\| fail/g));
   if (JSON.stringify(diagnosticAssignments) !== JSON.stringify(STARTUP_CHECKS) ||
       !inputs.start.includes('echo "$FAILURE Check $startup_check." >&2') ||
       !inputs.start.includes("*) startup_check='NS14B-00' ;;") ||
-      checksumVerifications.length !== 4) {
+      checksumVerifications.length !== 5) {
     throw new Error('Unexpected startup diagnostic boundary.');
   }
   return true;
@@ -675,7 +681,7 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     });
 
   test.each(['amd64', 'arm64'])(
-    'exact %s executable identity survives bounded OCI owner-write restoration', architecture => {
+    'exact %s executable identity accepts only bounded root-owned modes', architecture => {
       const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation(architecture));
       for (const [setprivMode, getcapMode] of [
         [0o555, 0o555],
@@ -721,7 +727,7 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(executableInventoryAccepts(entries, 'amd64')).toBe(false);
   });
 
-  test('data resources stay exact while executable authority tolerates only root owner-write', () => {
+  test('data resources stay exact while executable authority accepts only root-owned 0555/0755', () => {
     const source = fs.readFileSync(productionStart, 'utf8');
     expect(source).toContain("!= '0:0:444:1'");
     expect(source).toContain('0:0:555|0:0:755');
@@ -729,10 +735,43 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(source).not.toContain('_identity_anchor=');
     expect(source).not.toContain('_build_device_inode=');
     expect(source).not.toMatch(/privilege_sha_manifest" \/usr\/bin\/setpriv/);
-    expect(source).toContain('check_executable_identity /usr/bin/setpriv');
-    expect(source).toContain('check_executable_identity /usr/sbin/getcap');
-    expect(source).toContain(
-      'for removed_helper in /usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap');
+    expect(source).toContain('check_setpriv_identity');
+    expect(source).toContain('check_getcap_identity');
+    expect(source).toContain('[ ! -e /usr/sbin/capsh ]');
+    expect(source).toContain('[ ! -e /usr/sbin/getpcaps ]');
+    expect(source).toContain('[ ! -e /usr/sbin/setcap ]');
+  });
+
+  test('every NS14B-13 predicate has one fixed non-secret diagnostic identifier', () => {
+    const source = fs.readFileSync(productionStart, 'utf8').replace(/\r\n/g, '\n');
+    const predicates = [
+      ['NS14B-13A', '[ -f /usr/bin/setpriv ] && [ -x /usr/bin/setpriv ] || fail'],
+      ['NS14B-13B', '[ ! -L /usr/bin/setpriv ] &&'],
+      ['NS14B-13C', 'stat -c \'%s\' -- /usr/bin/setpriv'],
+      ['NS14B-13D', 'stat -c \'%u:%g:%a\' -- /usr/bin/setpriv'],
+      ['NS14B-13E', '"$setpriv_sha" /usr/bin/setpriv'],
+      ['NS14B-13F', '[ -f /usr/sbin/getcap ] && [ -x /usr/sbin/getcap ] || fail'],
+      ['NS14B-13G', '[ ! -L /usr/sbin/getcap ] &&'],
+      ['NS14B-13H', 'stat -c \'%s\' -- /usr/sbin/getcap'],
+      ['NS14B-13I', 'stat -c \'%u:%g:%a\' -- /usr/sbin/getcap'],
+      ['NS14B-13J', '"$getcap_sha" /usr/sbin/getcap'],
+      ['NS14B-13K', '[ ! -e /usr/sbin/capsh ] && [ ! -L /usr/sbin/capsh ] || fail'],
+      ['NS14B-13L', '[ ! -e /usr/sbin/getpcaps ] && [ ! -L /usr/sbin/getpcaps ] || fail'],
+      ['NS14B-13M', '[ ! -e /usr/sbin/setcap ] && [ ! -L /usr/sbin/setcap ] || fail'],
+    ];
+    for (let index = 0; index < predicates.length; index += 1) {
+      const [check, predicate] = predicates[index];
+      const assignment = `startup_check='${check}'`;
+      expect(source.split(assignment)).toHaveLength(2);
+      const start = source.indexOf(assignment);
+      const next = index + 1 < predicates.length
+        ? source.indexOf(`startup_check='${predicates[index + 1][0]}'`, start + 1)
+        : source.indexOf("startup_check='NS14B-14'", start + 1);
+      expect(start).toBeGreaterThan(-1);
+      expect(next).toBeGreaterThan(start);
+      expect(source.slice(start, next)).toContain(predicate);
+    }
+    expect(source).not.toMatch(/echo .*executable|echo .*setpriv|echo .*getcap/i);
   });
 
   (dashRuntimeAvailable() ? test : test.skip)(

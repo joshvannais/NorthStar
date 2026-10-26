@@ -42,17 +42,19 @@ describe('Mission 27 Part 14G release readiness', () => {
 
   test('keeps the strict queue and every release action open', () => {
     expect(authority.PART14B_ACCEPTANCE).toEqual(expect.objectContaining({
-      main:'d4ba06ba83170c6db697d05f484bdce29040926b', pr:'PR #539',
-      deploymentState:'queued_global_railway_build_pause', released:false,
+      head:'dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9',
+      tree:'4d7c7adb19afffcf46e798098e8212d6f90a7a7f',
+      main:'5b99fa56a30c6c7ededcefb50d96d9272e41a8f0', pr:'PR #546',
+      deploymentState:'post_merge_deployment_health_unavailable', released:false,
     }));
-    expect(readiness).toContain('No deployment ID or health verdict exists for that trigger');
-    expect(readiness).toContain('Parts 14C, 14D, 14E and the Part 14F-corrected cumulative head remain accepted but unmerged and unreleased');
+    expect(readiness).toContain('No post-merge automatic deployment or health evidence was supplied');
+    expect(readiness).toContain('Parts 14C-14F retain their exact accepted source identities');
     const gates = [...readiness.matchAll(/^(\d+)\. /gm)].map(match => Number(match[1]));
     expect(gates).toEqual([1,2,3,4,5,6,7,8,9]);
     for (const required of [
-      'Observe the already queued Part 14B automatic Railway trigger',
-      'Reconcile the cumulative accepted Parts 14C–14F head',
-      'fresh pre-migration production backup',
+      'Require one automatic Railway deployment',
+      'Local reconciliation is complete',
+      'Backup gate evidence is recorded',
       'one normal reviewed pull request',
       'exactly one automatic Railway application deployment',
       'verify the complete migration ledger and checksums',
@@ -60,8 +62,9 @@ describe('Mission 27 Part 14G release readiness', () => {
       "founder's separate page-by-page visual verdict",
       'final source-linked acceptance ledger',
     ]) expect(readiness).toContain(required);
-    expect(row('14G')).toContain('Current readiness candidate; unreleased');
-    expect(row('14G')).toContain('no backup, PR, merge, deployment, production verification');
+    expect(row('14G')).toContain('Current reconciled readiness candidate; unreleased');
+    expect(row('14G')).toContain('verified pre-migration backup dashboard record');
+    expect(row('14G')).toContain('no restore, PR, merge, deployment, production verification');
   });
 
   test('advances no named verdict and preserves every unavailable boundary', () => {
@@ -81,12 +84,12 @@ describe('Mission 27 Part 14G release readiness', () => {
       'disaster-restore execution', 'first-paying-customer live-money validation',
       'founder visual approval',
     ]) expect(readiness).toContain(unavailable);
-    expect(readiness).toContain('No backup, PR, merge, deployment, Railway mutation');
+    expect(readiness).toContain('No restore, PR, merge, deployment, Railway mutation');
   });
 
   test.each([
-    ['backup', 'No backup was created or inspected', 'A fresh verified backup was created and inspected'],
-    ['deployment', 'No deployment ID or health verdict exists', 'Deployment and health succeeded'],
+    ['backup', 'This packet did not create, download, inspect contents of or restore it', 'The backup was restored and fully verified'],
+    ['deployment', 'No post-merge automatic deployment or health evidence was supplied', 'Deployment and health succeeded'],
     ['founder', 'cannot grant it', 'granted the founder verdict'],
     ['live money', 'remain unavailable', 'are accepted and available'],
     ['verdict', 'remain not achieved', 'are all achieved'],

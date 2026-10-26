@@ -1,6 +1,6 @@
 # Mission 27 Part 14G — release readiness, not release acceptance
 
-Status: readiness candidate. Part 14E is accepted at exact head `a40be2435c3aa720cb2d179b10adc00530bd794e`, tree `af9831f8ebda83eecbdd2a4ce8717fc8e6576e86`. Part 14F independently accepted the corrected cumulative exact head `6f7a8939b6eb8d58bd20e2eff7500c9a5a01a9b0`, tree `ead3dc3b463d1ae48aa606b19a51fbf8ea06e30c`, with P0=0, P1=0, P2=0 and P3=0. This document prepares Part 14G release gates; it does not satisfy them.
+Status: cumulative reconciliation candidate. Part 14E is accepted at exact head `a40be2435c3aa720cb2d179b10adc00530bd794e`, tree `af9831f8ebda83eecbdd2a4ce8717fc8e6576e86`. Part 14F independently accepted corrected cumulative source head `6f7a8939b6eb8d58bd20e2eff7500c9a5a01a9b0`, tree `ead3dc3b463d1ae48aa606b19a51fbf8ea06e30c`, with P0=0, P1=0, P2=0 and P3=0. Accepted local Part 14G source head `f081765071ba6f9025d52c77bf8417f93f83f8e8` is reconciled onto exact live main `5b99fa56a30c6c7ededcefb50d96d9272e41a8f0`; the resulting candidate still requires a complete fresh independent whole-head audit and every remaining release gate.
 
 ## Exact accepted local evidence
 
@@ -20,7 +20,7 @@ This is accepted local and disposable-database evidence. It is not production de
 
 ## Ordered release queue
 
-Part 14B correction head `497fad89e145dece26bdf1fb43789f64bc29560f`, tree `7daede5a8b32b31a5888a02d634871451f93a521`, was normally merged as PR #539 to exact main `d4ba06ba83170c6db697d05f484bdce29040926b`. Its sole automatic Railway trigger remains queued during the provider build pause. No deployment ID or health verdict exists for that trigger, so Part 14B remains unreleased. Parts 14C, 14D, 14E and the Part 14F-corrected cumulative head remain accepted but unmerged and unreleased behind it.
+The accepted eleventh bounded source-only helper-ownership correction at head `dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9`, tree `4d7c7adb19afffcf46e798098e8212d6f90a7a7f`, was normally merged as PR #546 to exact live main `5b99fa56a30c6c7ededcefb50d96d9272e41a8f0`. No post-merge automatic deployment or health evidence was supplied to this reconciliation, so Part 14B remains unreleased. Parts 14C-14F retain their exact accepted source identities and are now included in the cumulative reconciliation candidate; none is released by that reconciliation.
 
 The release lane stays strictly ordered. A failed or changed earlier gate returns to correction and exact-head review; it cannot be skipped or summarized as a later pass.
 
@@ -28,9 +28,9 @@ The release lane stays strictly ordered. A failed or changed earlier gate return
 
 Every item below remains open until direct source-linked evidence closes it:
 
-1. Observe the already queued Part 14B automatic Railway trigger and require terminal success, exact commit binding, migration 272 latest with no 273 or drift, startup success and `/api/health`, `/`, and `/demo/` HTTP 200. Any mismatch stops the lane.
-2. Reconcile the cumulative accepted Parts 14C–14F head with the exact then-current deployed main. Any integration delta requires focused validation and a fresh complete independent exact-head audit before release.
-3. Create and verify a fresh pre-migration production backup before the reviewed merge. No backup was created or inspected by this readiness packet, and no retained snapshot is treated as a tested restore.
+1. Require one automatic Railway deployment of the exact reviewed cumulative merge, exact commit binding, migration 272 latest with no 273 or drift, startup success and `/api/health`, `/`, and `/demo/` HTTP 200. No post-Fix11 deployment or health verdict is supplied here; any mismatch stops the lane.
+2. Local reconciliation is complete from exact live main `5b99fa56a30c6c7ededcefb50d96d9272e41a8f0` plus accepted local source head `f081765071ba6f9025d52c77bf8417f93f83f8e8`; focused validation and a fresh complete independent exact-head audit remain mandatory before release.
+3. Backup gate evidence is recorded from the verified Railway dashboard record `2026-10-26 09:03 America/New_York`, size 216 MB. This packet did not create, download, inspect contents of or restore it; restore evidence remains unavailable.
 4. Open one normal reviewed pull request for the exact accepted cumulative head and merge it without force, admin bypass or an unexpected head change.
 5. Observe exactly one automatic Railway application deployment. No manual or duplicate deployment is authorized.
 6. Bind the accepted head/tree, merge commit, deployment and image identities; verify the complete migration ledger and checksums, migration 272 latest with no 273 or drift, startup and `/api/health`, `/`, and `/demo/` HTTP 200. No production SQL write is authorized by this packet.
@@ -46,4 +46,4 @@ Every item below remains open until direct source-linked evidence closes it:
 
 Physical Safari and physical devices, manual assistive-technology testing, hosted production load and SLA evidence, private-production tenant behavior, provider sandbox/account/capability/credential/event evidence, real recipients or delivery, bank settlement and payout, accounting receiver behavior, professional legal/provider/accounting/tax/security opinions, disaster-restore execution, first-paying-customer live-money validation and founder visual approval remain unavailable. Playwright WebKit is not physical Safari. Provider-disabled deterministic fixtures are not provider-sandbox or live-money evidence.
 
-No backup, PR, merge, deployment, Railway mutation, production/provider credential or data access, recipient/message/provider call, money movement or founder verdict occurred in this readiness packet.
+No backup was created by this packet. It records only the verified dashboard identity and size above. No restore, PR, merge, deployment, Railway mutation, production/provider credential or data access, recipient/message/provider call, money movement or founder verdict occurred in this reconciliation.

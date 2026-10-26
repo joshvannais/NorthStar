@@ -117,7 +117,7 @@ describe('Mission 27 Part 5D post-issue correction boundary', () => {
     expect(ledger).toContain(
       '| 14F | Independent exact-head authority/privacy/security/accounting/provider full audit | **Complete and independently accepted**');
     expect(ledger).toContain('| 14G | [Backup, reviewed merge, sole deploy, health, named verdict, ledger, founder verdict]');
-    expect(ledger).toContain('**Release-readiness candidate only**');
+    expect(ledger).toContain('**Cumulative release candidate only**');
     const names=fs.readdirSync(path.join(ROOT,'migrations')).filter(name=>name.endsWith('.sql')).sort();
     expect(names.at(-1)).toBe('272_customer_financial_invoice_draft_preview_v1.sql');
     expect(names.some(name=>/^273_/.test(name))).toBe(false);

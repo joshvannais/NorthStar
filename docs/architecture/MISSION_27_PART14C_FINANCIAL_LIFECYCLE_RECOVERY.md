@@ -1,6 +1,6 @@
 # Mission 27 Part 14C — financial lifecycle recovery acceptance
 
-Status: implementation candidate. It has not been independently audited, merged, deployed, or released. Part 14B was accepted at corrected head `497fad89e145dece26bdf1fb43789f64bc29560f`, tree `7daede5a8b32b31a5888a02d634871451f93a521`, and normally merged as PR #539 to exact main `d4ba06ba83170c6db697d05f484bdce29040926b`; Railway globally paused builds, so its exact automatic deployment trigger remains queued and Part 14B remains unreleased. Migration 272 remains latest and migration 273 is absent.
+Status: independently accepted at exact head `4975a58d43c1ab71f9500e765ef375d2ae221ec2`, tree `37e9c62d2da1965c498c380478349ee24d137459`, with P0=0, P1=0, P2=0 and P3=0; audit report SHA-256 `926153ac3aad33c01fcf24f1f153cf2d9955658c832751a58c802bd6667a1ba4` and manifest SHA-256 `e838b77a1ce3f821d5ac60f2a81f5b30816675785a24c1bc5ba9dbb0fbd48689`. It is included in the current cumulative reconciliation candidate derived from exact live main `5b99fa56a30c6c7ededcefb50d96d9272e41a8f0`; that integration remains unaudited, unmerged, undeployed and unreleased. Migration 272 remains latest and migration 273 is absent.
 
 ## Authority
 

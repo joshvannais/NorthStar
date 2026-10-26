@@ -136,14 +136,14 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
       'Unavailable and unclaimed: immutable issued invoice/document, real customer delivery,',
       'Accepted and complete: immutable issued invoice/document, real customer delivery,');
     replaceExact('architecture14B',
-      'Railway globally paused builds before the exact automatic trigger could run, so that trigger is queued, no deployment or health verdict exists, and Part 14B remains unreleased.',
+      'No post-merge automatic deployment or health evidence was supplied to this reconciliation, so Part 14B remains unreleased.',
       'Part 14B is released, deployed, and production complete.');    replaceExact('architecture14B',
       'Offline cash remains `offline_received`. A received check remains `check_clearance_unknown`; the disabled clearance transition remains `check_clearance_authority_unavailable`.',
       'Offline cash and checks are both cleared settlement.');
     replaceExact('architecture14B',
       'Part 14B performs zero provider calls or mutations, receiver mutations, outbound messages, accounting mutations, downstream mutations, paid-repository reads, production-database mutations, or live-money movements.',
       'Part 14B may call providers, receivers, accounting, paid repositories, and move money.');
-    replaceExact('ledger', 'Accepted; no P0–P3 at corrected head `497fad89e145dece26bdf1fb43789f64bc29560f`',
+    replaceExact('ledger', 'Accepted; original behavior unchanged by bounded release corrections',
       'Accepted, released, deployed, and production complete');
     replaceExact('architecture14C',
       'The contract remains `incomplete_required_evidence`',
@@ -155,7 +155,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
       'Founder visual approval remains separate and ungranted.',
       'Founder visual approval is automatically granted by screenshots.');
     replaceExact('releaseReadiness14G',
-      'No backup, PR, merge, deployment, Railway mutation, production/provider credential or data access, recipient/message/provider call, money movement or founder verdict occurred in this readiness packet.',
+      'No restore, PR, merge, deployment, Railway mutation, production/provider credential or data access, recipient/message/provider call, money movement or founder verdict occurred in this reconciliation.',
       'The backup, merge, deployment, provider payment and founder verdict all passed.');
   });
 

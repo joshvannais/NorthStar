@@ -387,10 +387,10 @@ const PART14A_RELEASE = OBJECT_FREEZE({
 });
 
 const PART14B_ACCEPTANCE = OBJECT_FREEZE({
-  head: '497fad89e145dece26bdf1fb43789f64bc29560f',
-  tree: '7daede5a8b32b31a5888a02d634871451f93a521',
-  main: 'd4ba06ba83170c6db697d05f484bdce29040926b',
-  pr: 'PR #539', deploymentState: 'queued_global_railway_build_pause',
+  head: 'dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9',
+  tree: '4d7c7adb19afffcf46e798098e8212d6f90a7a7f',
+  main: '5b99fa56a30c6c7ededcefb50d96d9272e41a8f0',
+  pr: 'PR #546', deploymentState: 'post_merge_deployment_health_unavailable',
   released: false,
 });
 
@@ -429,9 +429,13 @@ const PART14F_ACCEPTANCE = OBJECT_FREEZE({
 
 const LATER_LEDGER_ROWS = OBJECT_FREEZE([
   ['14G','Backup, reviewed merge, sole deploy, health, named verdict, ledger, founder verdict',
-    'Release-readiness candidate only','Deterministic source-linked readiness contract',
-    'Pending complete fresh independent exact-head audit','—','None','No','No',
-    'Current readiness candidate; unreleased'],
+    'Cumulative release candidate only - accepted Parts 14C-F and Part 14G readiness are reconciled onto exact live main without executing a release action or advancing a named verdict.',
+    'Deterministic whole-document authority, static readiness and exact reconciliation evidence; verified pre-migration backup dashboard record `2026-10-26 09:03 America/New_York`, 216 MB; no restore, PR, merge, deployment, production verification, provider/live evidence or founder verdict performed',
+    'Pending complete fresh independent whole-head audit of the reconciled candidate','-',
+    'None; exact live-main reconciliation complete locally, with fresh audit and ordered release gates still open',
+    'No provider sandbox/account/credential/event, private-production or live-money evidence',
+    'No — founder visual verdict remains unavailable and cannot be automated',
+    'Current reconciled readiness candidate; unreleased'],
 ]);
 for (let index = 0; index < LATER_LEDGER_ROWS.length; index += 1) {
   OBJECT_FREEZE(LATER_LEDGER_ROWS[index]);
@@ -445,14 +449,14 @@ for (let index = 0; index < LATER_LEDGER_ROWS.length; index += 1) {
 const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   roadmap: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md',
-    normalizedSha256: '99dbb1c0910706a8678a885cfc561553c14b5a42f35a3add6d2040b954bba7be',
-    normalizedUtf8Bytes: 74830,
+    normalizedSha256: '56442a85067b17b0ea50c24acf3526e0247f24b20f4404257bd6d75840cb8ad4',
+    normalizedUtf8Bytes: 79651,
     normalizedLineCount: 349,
   }),
   ledger: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
-    normalizedSha256: 'b2cb1f9bf4577a82324c306b3a88b411b48366f3cafbf443d0a23bfb1d0548e9',
-    normalizedUtf8Bytes: 103761,
+    normalizedSha256: 'ad9272f0e6078d9db65677ea6e7df019c077fc8d767481721262f3e466d829ff',
+    normalizedUtf8Bytes: 109568,
     normalizedLineCount: 138,
   }),
   architecture14A: OBJECT_FREEZE({
@@ -463,14 +467,14 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   architecture14B: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14B_RESETTABLE_FICTIONAL_DEMO_JOURNEY.md',
-    normalizedSha256: 'd04de9c968d17b41f2149454a2d1b53ab9cae6bb33eb29a1d4d2665f54bb217b',
-    normalizedUtf8Bytes: 9124,
+    normalizedSha256: '1d761efd1a06bc001238ed440aecb333fe0e15903564653b35cf8bc5c469598c',
+    normalizedUtf8Bytes: 14736,
     normalizedLineCount: 35,
   }),
   architecture14C: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14C_FINANCIAL_LIFECYCLE_RECOVERY.md',
-    normalizedSha256: 'efc996dffa9f0c5acc79a6b5f7021bb15ca5af55526d18aa6fcce202fa71e5a0',
-    normalizedUtf8Bytes: 6188,
+    normalizedSha256: '00376815dc217405e3abdd3e305142966c3e5b2c31a5be4f3eb99804d4ca1a2c',
+    normalizedUtf8Bytes: 6299,
     normalizedLineCount: 83,
   }),
   architecture14D: OBJECT_FREEZE({
@@ -481,14 +485,14 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   architecture14E: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14E_RENDERED_ACCEPTANCE.md',
-    normalizedSha256: '9a17105138931c9e5ba07fd93565a5cf5df9108c1991caab82451c0f856a2b59',
-    normalizedUtf8Bytes: 6338,
+    normalizedSha256: '29a82fc2d306c36ab8440e911a24295a47ae1ba349d32158082e8fb89710a595',
+    normalizedUtf8Bytes: 6465,
     normalizedLineCount: 54,
   }),
   releaseReadiness14G: OBJECT_FREEZE({
     path: 'docs/evidence/MISSION_27_PART14G_RELEASE_READINESS.md',
-    normalizedSha256: '2b81a3e7f722456df42809d49739d4697b004bfe8cf73a844f84f671d144f814',
-    normalizedUtf8Bytes: 5489,
+    normalizedSha256: 'acca888f10ddd302f22971fac75588111a901be871238068bdd35ddfa1dd8f59',
+    normalizedUtf8Bytes: 6006,
     normalizedLineCount: 50,
   }),
 });

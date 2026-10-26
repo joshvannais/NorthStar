@@ -405,14 +405,14 @@ for (let index = 0; index < LATER_LEDGER_ROWS.length; index += 1) {
 const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   roadmap: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md',
-    normalizedSha256: '98122817d4b649c522f99ef62c77627129d476538ddc2b66f9ab101299db5877',
-    normalizedUtf8Bytes: 73582,
+    normalizedSha256: '41e14716984714c10216a3923ba54bc44afba300a83fb073610a449cff9e04aa',
+    normalizedUtf8Bytes: 74978,
     normalizedLineCount: 349,
   }),
   ledger: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
-    normalizedSha256: 'df00218486732d193ecf74d8899eeed5cf0df5d32444ca231ecfe1897b7e4891',
-    normalizedUtf8Bytes: 96965,
+    normalizedSha256: '9e4e1493664a438fb75801b612692f13969ab1daea6dc69582e43a1bcbd2c421',
+    normalizedUtf8Bytes: 98191,
     normalizedLineCount: 138,
   }),
   architecture14A: OBJECT_FREEZE({
@@ -423,8 +423,8 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   architecture14B: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14B_RESETTABLE_FICTIONAL_DEMO_JOURNEY.md',
-    normalizedSha256: 'cb39ba8cd9c2f17ba1ab972501077473e13d448215e15406ba903d6cc5ae1c7c',
-    normalizedUtf8Bytes: 9905,
+    normalizedSha256: '882ff03b51f1370e1950bbbe0e39cc5b12af5e5f81166f3fb7fe754ba6e5f57c',
+    normalizedUtf8Bytes: 10602,
     normalizedLineCount: 35,
   }),
 });

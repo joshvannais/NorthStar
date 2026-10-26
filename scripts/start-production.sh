@@ -236,11 +236,11 @@ esac
 startup_check='NS14B-12'
 /usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$executable_manifest"
-for expected_executable_line in northstar-executable-inventory-v3 \
+for expected_executable_line in northstar-executable-inventory-v4 \
   setpriv_path=/usr/bin/setpriv "setpriv_sha256=$setpriv_sha" \
-  "setpriv_size=$setpriv_size" setpriv_mode=555 \
+  "setpriv_size=$setpriv_size" setpriv_mode_policy=0555-or-0755 \
   getcap_path=/usr/sbin/getcap "getcap_sha256=$getcap_sha" \
-  "getcap_size=$getcap_size" getcap_mode=555; do
+  "getcap_size=$getcap_size" getcap_mode_policy=0555-or-0755; do
   IFS= read -r executable_line <&3 || fail
   [ "$executable_line" = "$expected_executable_line" ] || fail
 done
@@ -257,10 +257,17 @@ check_executable_identity() {
   if [ ! -f "$executable_path" ] || [ ! -x "$executable_path" ] ||
      [ -L "$executable_path" ] ||
      [ "$(/usr/bin/readlink -f -- "$executable_path")" != "$executable_path" ] ||
-     [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$executable_path")" != '0:0:555' ] ||
      [ "$(/usr/bin/stat -c '%s' -- "$executable_path")" != "$executable_size" ]; then
     fail
   fi
+  # Railway's OCI runtime can restore the package-layer owner-write bit even
+  # though the final build layer records 0555. UID/GID 1000 still cannot
+  # mutate either root-owned form; all group/world write and set-id variants
+  # remain rejected, while digest and size continue to bind exact bytes.
+  case "$(/usr/bin/stat -c '%u:%g:%a' -- "$executable_path")" in
+    0:0:555|0:0:755) ;;
+    *) fail ;;
+  esac
   /usr/bin/printf '%s  %s\n' "$executable_sha" "$executable_path" |
     /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
 }

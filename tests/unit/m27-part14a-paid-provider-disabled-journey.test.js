@@ -335,9 +335,9 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
       acceptedPart14FHead:'6f7a8939b6eb8d58bd20e2eff7500c9a5a01a9b0',
     }));
     const mutations = [
-      ['false release','ledger','Part 14B remains unreleased.','Part 14B is released.'],
-      ['false production complete','ledger','Part 14B remains unreleased.','Part 14B production is complete.'],
-      ['deployed','ledger','no post-merge deployment or health evidence supplied','deployment succeeded and health passed'],
+      ['false release','ledger','Part 14B is released by sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`','Part 14B remains unreleased despite deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`'],
+      ['false production complete','ledger','Part 14B is released by sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`','Part 14B is released and the full financial lifecycle is production complete by deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`'],
+      ['missing deployment','ledger','sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`','no post-merge deployment or health evidence supplied'],
       ['later slice','ledger','| 14E | [Performance, observability','| 14E | [Complete performance, observability'],
       ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
       ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],

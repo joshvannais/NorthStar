@@ -45,9 +45,14 @@ describe('Mission 27 Part 14G release readiness', () => {
       head:'dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9',
       tree:'4d7c7adb19afffcf46e798098e8212d6f90a7a7f',
       main:'5b99fa56a30c6c7ededcefb50d96d9272e41a8f0', pr:'PR #546',
-      deploymentState:'post_merge_deployment_health_unavailable', released:false,
+      deployment:'7ab284a4-34a9-4a22-96c7-cffc5f36355f',
+      image:'sha256:51be9509ba6715b39f12d9415fbcde6ec968d15157c10656e24439a33727086c',
+      deploymentState:'success', startupHealthy:true, healthRootDemoHttp200:true,
+      productionMigrationTotal:268, migrationLatest:272, migration273Present:false,
+      released:true,
     }));
-    expect(readiness).toContain('No post-merge automatic deployment or health evidence was supplied');
+    expect(readiness).toContain('sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`');
+    expect(readiness).toContain('`/api/health`, `/`, and `/demo/` returned HTTP 200');
     expect(readiness).toContain('Parts 14C-14F retain their exact accepted source identities');
     const gates = [...readiness.matchAll(/^(\d+)\. /gm)].map(match => Number(match[1]));
     expect(gates).toEqual([1,2,3,4,5,6,7,8,9]);
@@ -89,7 +94,7 @@ describe('Mission 27 Part 14G release readiness', () => {
 
   test.each([
     ['backup', 'This packet did not create, download, inspect contents of or restore it', 'The backup was restored and fully verified'],
-    ['deployment', 'No post-merge automatic deployment or health evidence was supplied', 'Deployment and health succeeded'],
+    ['deployment', 'Part 14B is released', 'Part 14B remains unreleased'],
     ['founder', 'cannot grant it', 'granted the founder verdict'],
     ['live money', 'remain unavailable', 'are accepted and available'],
     ['verdict', 'remain not achieved', 'are all achieved'],

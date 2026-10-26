@@ -390,8 +390,11 @@ const PART14B_ACCEPTANCE = OBJECT_FREEZE({
   head: 'dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9',
   tree: '4d7c7adb19afffcf46e798098e8212d6f90a7a7f',
   main: '5b99fa56a30c6c7ededcefb50d96d9272e41a8f0',
-  pr: 'PR #546', deploymentState: 'post_merge_deployment_health_unavailable',
-  released: false,
+  pr: 'PR #546', deployment: '7ab284a4-34a9-4a22-96c7-cffc5f36355f',
+  image: 'sha256:51be9509ba6715b39f12d9415fbcde6ec968d15157c10656e24439a33727086c',
+  deploymentState: 'success', startupHealthy: true, healthRootDemoHttp200: true,
+  productionMigrationTotal: 268, migrationLatest: 272, migration273Present: false,
+  released: true,
 });
 
 const PART14C_ACCEPTANCE = OBJECT_FREEZE({
@@ -449,14 +452,14 @@ for (let index = 0; index < LATER_LEDGER_ROWS.length; index += 1) {
 const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   roadmap: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md',
-    normalizedSha256: '56442a85067b17b0ea50c24acf3526e0247f24b20f4404257bd6d75840cb8ad4',
-    normalizedUtf8Bytes: 79651,
+    normalizedSha256: '31a677ed3040baf74f9f04796d8580a3162a2ae7ce32cee0ff5847bdbbdf5fde',
+    normalizedUtf8Bytes: 79969,
     normalizedLineCount: 349,
   }),
   ledger: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
-    normalizedSha256: 'ad9272f0e6078d9db65677ea6e7df019c077fc8d767481721262f3e466d829ff',
-    normalizedUtf8Bytes: 109568,
+    normalizedSha256: '54453885d4071b3300438f332c2ee4d53e0f8983832532f9d39f13b802e93668',
+    normalizedUtf8Bytes: 110214,
     normalizedLineCount: 138,
   }),
   architecture14A: OBJECT_FREEZE({
@@ -467,8 +470,8 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   architecture14B: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14B_RESETTABLE_FICTIONAL_DEMO_JOURNEY.md',
-    normalizedSha256: '1d761efd1a06bc001238ed440aecb333fe0e15903564653b35cf8bc5c469598c',
-    normalizedUtf8Bytes: 14736,
+    normalizedSha256: 'e8fada72459fc50c689f35b30b867817d0b5a28a8e416bce998fbe3c81e61106',
+    normalizedUtf8Bytes: 14936,
     normalizedLineCount: 35,
   }),
   architecture14C: OBJECT_FREEZE({
@@ -485,14 +488,14 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   architecture14E: OBJECT_FREEZE({
     path: 'docs/architecture/MISSION_27_PART14E_RENDERED_ACCEPTANCE.md',
-    normalizedSha256: '29a82fc2d306c36ab8440e911a24295a47ae1ba349d32158082e8fb89710a595',
-    normalizedUtf8Bytes: 6465,
+    normalizedSha256: '2bca84fe75f473973ba86314af43f78fa75c4515bfb725a054131afe9472b628',
+    normalizedUtf8Bytes: 6487,
     normalizedLineCount: 54,
   }),
   releaseReadiness14G: OBJECT_FREEZE({
     path: 'docs/evidence/MISSION_27_PART14G_RELEASE_READINESS.md',
-    normalizedSha256: 'acca888f10ddd302f22971fac75588111a901be871238068bdd35ddfa1dd8f59',
-    normalizedUtf8Bytes: 6006,
+    normalizedSha256: '8908a81da8cc87056112cc8772c5b6ea25d6e82ee29d0733b1185a70a65e53e1',
+    normalizedUtf8Bytes: 6297,
     normalizedLineCount: 50,
   }),
 });

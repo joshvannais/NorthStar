@@ -20,7 +20,7 @@ This is accepted local and disposable-database evidence. It is not production de
 
 ## Ordered release queue
 
-The accepted eleventh bounded source-only helper-ownership correction at head `dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9`, tree `4d7c7adb19afffcf46e798098e8212d6f90a7a7f`, was normally merged as PR #546 to exact live main `5b99fa56a30c6c7ededcefb50d96d9272e41a8f0`. No post-merge automatic deployment or health evidence was supplied to this reconciliation, so Part 14B remains unreleased. Parts 14C-14F retain their exact accepted source identities and are now included in the cumulative reconciliation candidate; none is released by that reconciliation.
+The accepted eleventh bounded source-only helper-ownership correction at head `dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9`, tree `4d7c7adb19afffcf46e798098e8212d6f90a7a7f`, was normally merged as PR #546 to exact live main `5b99fa56a30c6c7ededcefb50d96d9272e41a8f0`. Part 14B is released by sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`, which reached SUCCESS with image `sha256:51be9509ba6715b39f12d9415fbcde6ec968d15157c10656e24439a33727086c`; startup was healthy, `/api/health`, `/`, and `/demo/` returned HTTP 200, and production migrations reported total 268 with migration 272 latest and no 273. Parts 14C-14F retain their exact accepted source identities and are now included in the cumulative reconciliation candidate; none is released by that reconciliation.
 
 The release lane stays strictly ordered. A failed or changed earlier gate returns to correction and exact-head review; it cannot be skipped or summarized as a later pass.
 
@@ -28,7 +28,7 @@ The release lane stays strictly ordered. A failed or changed earlier gate return
 
 Every item below remains open until direct source-linked evidence closes it:
 
-1. Require one automatic Railway deployment of the exact reviewed cumulative merge, exact commit binding, migration 272 latest with no 273 or drift, startup success and `/api/health`, `/`, and `/demo/` HTTP 200. No post-Fix11 deployment or health verdict is supplied here; any mismatch stops the lane.
+1. Require one automatic Railway deployment of the exact reviewed cumulative merge, exact commit binding, migration 272 latest with no 273 or drift, startup success and `/api/health`, `/`, and `/demo/` HTTP 200. Part 14B Fix11 deployment and health are verified; this gate applies to the exact reviewed cumulative merge, and any mismatch stops the lane.
 2. Local reconciliation is complete from exact live main `5b99fa56a30c6c7ededcefb50d96d9272e41a8f0` plus accepted local source head `f081765071ba6f9025d52c77bf8417f93f83f8e8`; focused validation and a fresh complete independent exact-head audit remain mandatory before release.
 3. Backup gate evidence is recorded from the verified Railway dashboard record `2026-10-26 09:03 America/New_York`, size 216 MB. This packet did not create, download, inspect contents of or restore it; restore evidence remains unavailable.
 4. Open one normal reviewed pull request for the exact accepted cumulative head and merge it without force, admin bypass or an unexpected head change.

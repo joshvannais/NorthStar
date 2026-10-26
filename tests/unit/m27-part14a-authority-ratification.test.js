@@ -136,8 +136,9 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
       'Unavailable and unclaimed: immutable issued invoice/document, real customer delivery,',
       'Accepted and complete: immutable issued invoice/document, real customer delivery,');
     replaceExact('architecture14B',
-      'No post-merge automatic deployment or health evidence was supplied to this reconciliation, so Part 14B remains unreleased.',
-      'Part 14B is released, deployed, and production complete.');    replaceExact('architecture14B',
+      'Part 14B is released by sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`, which reached SUCCESS with image `sha256:51be9509ba6715b39f12d9415fbcde6ec968d15157c10656e24439a33727086c`;',
+      'Part 14B is released, deployed, and the full financial lifecycle is production complete;');
+    replaceExact('architecture14B',
       'Offline cash remains `offline_received`. A received check remains `check_clearance_unknown`; the disabled clearance transition remains `check_clearance_authority_unavailable`.',
       'Offline cash and checks are both cleared settlement.');
     replaceExact('architecture14B',

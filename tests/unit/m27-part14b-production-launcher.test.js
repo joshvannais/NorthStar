@@ -143,6 +143,8 @@ function exactRuntimePlan(overrides = {}) {
     manifest: fs.readFileSync(runtimeManifestPath, 'utf8'),
     prepare: fs.readFileSync(productionPrepare, 'utf8'),
     start: fs.readFileSync(productionStart, 'utf8'),
+    launcher: fs.readFileSync(launcher, 'utf8'),
+    child: fs.readFileSync(childEntry, 'utf8'),
     ...overrides,
   };
   const expectedRailway = '[build]\nbuilder = "DOCKERFILE"\n' +
@@ -216,9 +218,8 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.dockerfile.includes('/bin/rm -f /usr/sbin/capsh /usr/sbin/getpcaps') ||
       !inputs.dockerfile.includes('/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap') ||
       !inputs.dockerfile.includes("'northstar-privilege-inventory-v2'") ||
-      !inputs.dockerfile.includes("'northstar-executable-inventory-v2'") ||
-      !inputs.dockerfile.includes("'setpriv_nlink=1'") ||
-      !inputs.dockerfile.includes("'getcap_nlink=1'") ||
+      !inputs.dockerfile.includes("'northstar-executable-inventory-v3'") ||
+      inputs.dockerfile.includes('nlink') ||
       inputs.dockerfile.includes('/app/.northstar-runtime/setpriv.identity') ||
       inputs.dockerfile.includes('/app/.northstar-runtime/getcap.identity') ||
       inputs.dockerfile.includes('/bin/ln /usr/bin/setpriv') ||
@@ -284,7 +285,8 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes('/usr/bin/sha256sum -c "$executable_sha_manifest"') ||
       !inputs.start.includes('setpriv_path=/usr/bin/setpriv') ||
       !inputs.start.includes('getcap_path=/usr/sbin/getcap') ||
-      !inputs.start.includes("!= '0:0:555:1'") ||
+      !inputs.start.includes("!= '0:0:555'") ||
+      inputs.start.includes('nlink') ||
       inputs.start.includes('_identity_anchor=') ||
       inputs.start.includes('_build_device_inode=') ||
       !inputs.start.includes('/usr/sbin/capsh /usr/sbin/getpcaps /usr/sbin/setcap') ||
@@ -293,6 +295,16 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes('PATH=$node_bin') || inputs.start.includes('PATH=/tmp') ||
       /\/nix\/store|command -v|\bwhich\b/.test(inputs.prepare + inputs.start)) {
     throw new Error('Unexpected runtime verification boundary.');
+  }
+  for (const source of [inputs.launcher, inputs.child]) {
+    if (source.includes('nlink') || source.includes('setpriv.identity') ||
+        source.includes('getcap.identity') ||
+        !source.includes("(setprivStat.mode & 0o777) !== 0o555") ||
+        !source.includes("(getcapStat.mode & 0o777) !== 0o555") ||
+        !source.includes("'/usr/bin/setpriv', '/usr/sbin/getcap'") ||
+        !source.includes("'/usr/sbin/capsh', '/usr/sbin/getpcaps', '/usr/sbin/setcap'")) {
+      throw new Error('Unexpected executable verification boundary.');
+    }
   }
   const diagnosticAssignments = Array.from(inputs.start.matchAll(
     /^startup_check='(NS14B-\d\d)'$/gm), match => match[1]);
@@ -333,10 +345,10 @@ function createRootBuiltRuntimeSimulation(architecture = 'amd64') {
   }
   const setpriv = { type: 'file', mode: 0o555, uid: 0, gid: 0,
     digest: PINNED_TOOL_IDENTITY[architecture].setpriv.sha256, capabilities: [],
-    size: PINNED_TOOL_IDENTITY[architecture].setpriv.size, nlink: 1 };
+    size: PINNED_TOOL_IDENTITY[architecture].setpriv.size };
   const getcap = { type: 'file', mode: 0o555, uid: 0, gid: 0,
     digest: PINNED_TOOL_IDENTITY[architecture].getcap.sha256, capabilities: [],
-    size: PINNED_TOOL_IDENTITY[architecture].getcap.size, nlink: 1 };
+    size: PINNED_TOOL_IDENTITY[architecture].getcap.size };
   entries.set('/usr/bin/setpriv', setpriv);
   entries.set('/usr/sbin/getcap', getcap);
   for (const pathname of REMOVED_CAPABILITY_HELPERS) add(pathname, 'file', 0o755);
@@ -402,7 +414,7 @@ function executableInventoryAccepts(entries, architecture) {
     if (!executable || executable.type !== 'file' ||
         executable.uid !== 0 || executable.gid !== 0 || executable.mode !== 0o555 ||
         executable.capabilities.length !== 0 || executable.digest !== identity.sha256 ||
-        executable.size !== identity.size || executable.nlink !== 1) return false;
+        executable.size !== identity.size) return false;
   }
   return true;
 }
@@ -594,7 +606,17 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       '/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap',
       '/bin/chmod 0444 /usr/bin/setpriv /usr/sbin/getcap') })],
     ['missing executable identity inventory', input => ({ dockerfile: input.dockerfile.replace(
-      "'northstar-executable-inventory-v2'", "'unbound-executable-inventory'") })],
+      "'northstar-executable-inventory-v3'", "'unbound-executable-inventory'") })],
+    ['build manifest restores link-count authority', input => ({ dockerfile:
+      input.dockerfile.replace("'setpriv_mode=555'", "'setpriv_mode=555' 'setpriv_nlink=1'") })],
+    ['startup restores link-count authority', input => ({ start: input.start.replace(
+      'setpriv_mode=555', 'setpriv_mode=555 setpriv_nlink=1') })],
+    ['launcher restores link-count authority', input => ({ launcher: input.launcher.replace(
+      '(setprivStat.mode & 0o777) !== 0o555',
+      '(setprivStat.mode & 0o777) !== 0o555 || setprivStat.nlink !== 1') })],
+    ['child restores link-count authority', input => ({ child: input.child.replace(
+      '(setprivStat.mode & 0o777) !== 0o555',
+      '(setprivStat.mode & 0o777) !== 0o555 || setprivStat.nlink !== 1') })],
     ['copy after privilege scan', input => ({ dockerfile: input.dockerfile.replace(
       'USER 1000:1000', 'COPY package.json /usr/bin/late-copy\nUSER 1000:1000') })],
     ['runtime without no-new-privileges', input => ({ railway: input.railway.replace(
@@ -614,6 +636,8 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       manifest: fs.readFileSync(runtimeManifestPath, 'utf8'),
       prepare: fs.readFileSync(productionPrepare, 'utf8'),
       start: fs.readFileSync(productionStart, 'utf8'),
+      launcher: fs.readFileSync(launcher, 'utf8'),
+      child: fs.readFileSync(childEntry, 'utf8'),
     };
     expect(() => exactRuntimePlan(mutate(input))).toThrow();
   });
@@ -644,8 +668,6 @@ describe('Mission 27 Part 14B production launcher contract', () => {
         digest: expected.getcap.sha256, size: expected.getcap.size, capabilities: [] });
       expect(entries.has('/app/.northstar-runtime/setpriv.identity')).toBe(false);
       expect(entries.has('/app/.northstar-runtime/getcap.identity')).toBe(false);
-      expect(entries.get('/usr/bin/setpriv').nlink).toBe(1);
-      expect(entries.get('/usr/sbin/getcap').nlink).toBe(1);
       expect(executableInventoryAccepts(entries, architecture)).toBe(true);
     });
 
@@ -671,8 +693,6 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     ['setpriv symlink substitution', '/usr/bin/setpriv', { type: 'symlink' }],
     ['getcap gained file capability', '/usr/sbin/getcap',
       { capabilities: ['cap_dac_override=ep'] }],
-    ['setpriv extra hardlink', '/usr/bin/setpriv', { nlink: 2 }],
-    ['getcap missing link count', '/usr/sbin/getcap', { nlink: 0 }],
     ['capsh restored', '/usr/sbin/capsh', { mode: 0o755 }],
     ['getpcaps restored', '/usr/sbin/getpcaps', { mode: 0o755 }],
     ['setcap restored', '/usr/sbin/setcap', { mode: 0o755 }],
@@ -680,7 +700,7 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation());
     const current = entries.get(pathname);
     entries.set(pathname, { type: 'file', uid: 0, gid: 0, mode: 0o555,
-      digest: pathname, capabilities: [], size: 1, nlink: 1,
+      digest: pathname, capabilities: [], size: 1,
       ...(current || {}), ...change });
     expect(executableInventoryAccepts(entries, 'amd64')).toBe(false);
   });
@@ -688,7 +708,8 @@ describe('Mission 27 Part 14B production launcher contract', () => {
   test('data resources and executable authority use disjoint exact modes', () => {
     const source = fs.readFileSync(productionStart, 'utf8');
     expect(source).toContain("!= '0:0:444:1'");
-    expect(source).toContain("!= '0:0:555:1'");
+    expect(source).toContain("!= '0:0:555'");
+    expect(source).not.toContain('nlink');
     expect(source).not.toContain('_identity_anchor=');
     expect(source).not.toContain('_build_device_inode=');
     expect(source).not.toMatch(/privilege_sha_manifest" \/usr\/bin\/setpriv/);

@@ -236,11 +236,11 @@ esac
 startup_check='NS14B-12'
 /usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$executable_manifest"
-for expected_executable_line in northstar-executable-inventory-v2 \
+for expected_executable_line in northstar-executable-inventory-v3 \
   setpriv_path=/usr/bin/setpriv "setpriv_sha256=$setpriv_sha" \
-  "setpriv_size=$setpriv_size" setpriv_mode=555 setpriv_nlink=1 \
+  "setpriv_size=$setpriv_size" setpriv_mode=555 \
   getcap_path=/usr/sbin/getcap "getcap_sha256=$getcap_sha" \
-  "getcap_size=$getcap_size" getcap_mode=555 getcap_nlink=1; do
+  "getcap_size=$getcap_size" getcap_mode=555; do
   IFS= read -r executable_line <&3 || fail
   [ "$executable_line" = "$expected_executable_line" ] || fail
 done
@@ -257,7 +257,7 @@ check_executable_identity() {
   if [ ! -f "$executable_path" ] || [ ! -x "$executable_path" ] ||
      [ -L "$executable_path" ] ||
      [ "$(/usr/bin/readlink -f -- "$executable_path")" != "$executable_path" ] ||
-     [ "$(/usr/bin/stat -c '%u:%g:%a:%h' -- "$executable_path")" != '0:0:555:1' ] ||
+     [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$executable_path")" != '0:0:555' ] ||
      [ "$(/usr/bin/stat -c '%s' -- "$executable_path")" != "$executable_size" ]; then
     fail
   fi

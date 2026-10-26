@@ -115,13 +115,16 @@ describe('Mission 27 Part 4E invoice-draft preview', () => {
     expect(ui).toContain("summary.addEventListener('click', function (event) {");
     expect(ui).toContain('event.preventDefault();');
     expect(ui).toContain('keyboardActivationState');
+    expect(ui).toContain('keyboardActivationSequence');
+    expect(ui).toContain('sequence: ++keyboardActivationSequence');
     expect(ui).toContain('if (keyboardActivationState !== null)');
     expect(ui).not.toContain('keyboardActivationState !== null && event.detail === 0');
     expect(ui).toContain('keyboardActivationState = null;');
     expect(ui).not.toContain('keyboardActivationState.expiresAt');
     expect(ui).toContain('var opening = !section.open; desiredOpenState = opening;');
-    expect(ui).toContain('settleKeyboardDisclosure(keyboardActivationState.desiredOpen);');
-    expect(ui).toContain('section.open = expectedOpen;');
+    expect(ui).toContain('settleKeyboardDisclosure(keyboardActivationState);');
+    expect(ui).toContain('activation.sequence !== keyboardActivationSequence');
+    expect(ui).toContain('section.open = activation.desiredOpen;');
     expect(ui).toContain('if (section.open !== desiredOpenState) section.open = desiredOpenState;');
     expect(ui).toContain("disclosureObserver.observe(section, { attributes: true, attributeFilter: ['open'] });");
     expect(ui).toContain('disconnect: function () { disclosureObserver.disconnect(); }');

@@ -1037,6 +1037,7 @@
       part12 = null, part14b = null,
       context = null;
     var desiredOpenState = resumeMutationRecovery, keyboardActivationState = null,
+      keyboardActivationSequence = 0,
       mutationRecoveryActive = resumeMutationRecovery;
     var expectedDemoRevision = review.simulated ?
       Number(document.documentElement.dataset.demoRevision) : null;
@@ -1896,29 +1897,32 @@
       var opening = !section.open; desiredOpenState = opening; section.open = opening;
       if (opening) load(); else clearCollapsed();
     }
-    function settleKeyboardDisclosure(expectedOpen) {
+    function settleKeyboardDisclosure(activation) {
       setTimeout(function () {
         if (!section.isConnected) return;
-        desiredOpenState = expectedOpen;
-        section.open = expectedOpen;
+        if (!activation || activation.sequence !== keyboardActivationSequence) return;
+        desiredOpenState = activation.desiredOpen;
+        section.open = activation.desiredOpen;
       }, 0);
     }
     summary.addEventListener('keydown', function (event) {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
       event.preventDefault(); if (event.repeat) return;
       mutationRecoveryActive = false;
-      keyboardActivationState = { desiredOpen: !section.open };
+      keyboardActivationState = { sequence: ++keyboardActivationSequence,
+        desiredOpen: !section.open };
       toggleDisclosure();
     });
     summary.addEventListener('keyup', function (event) {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
       event.preventDefault();
       if (keyboardActivationState !== null) {
-        settleKeyboardDisclosure(keyboardActivationState.desiredOpen);
+        settleKeyboardDisclosure(keyboardActivationState);
       }
     });
     summary.addEventListener('pointerdown', function () {
       mutationRecoveryActive = false;
+      keyboardActivationSequence += 1;
       keyboardActivationState = null;
     });
     summary.addEventListener('click', function (event) {
@@ -1929,7 +1933,7 @@
       // keyboard-generated click as detail=0, so the surviving state itself is
       // the reliable native-boundary signal for suppressing the duplicate.
       if (keyboardActivationState !== null) {
-        settleKeyboardDisclosure(keyboardActivationState.desiredOpen);
+        settleKeyboardDisclosure(keyboardActivationState);
         keyboardActivationState = null;
         return;
       }

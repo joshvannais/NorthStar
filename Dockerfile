@@ -61,32 +61,53 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
          test "$capability_path" != "$capability_entry" || exit 78; \
          /usr/sbin/setcap -r "$capability_path"; \
        done < "$capability_inventory" \
-    && /bin/rm -f "$capability_inventory" /usr/sbin/setcap \
-    && /bin/rm -f /usr/sbin/capsh /usr/sbin/getpcaps \
-    && /bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap \
+    && /bin/rm -f "$capability_inventory" \
+    && /bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap /usr/sbin/capsh \
+         /usr/sbin/getpcaps /usr/sbin/setcap \
     && case "$TARGETARCH" in \
          amd64) setpriv_sha='d5839b20edb0d77222b1e11be7d155c7122d381dbfad40876b0def7dd710f5bd'; setpriv_size='80192'; \
-                  getcap_sha='815e0a9db190b9f50e83a9443daa368c705bf466142521b12b4770bf7f69f579'; getcap_size='14576' ;; \
+                  getcap_sha='815e0a9db190b9f50e83a9443daa368c705bf466142521b12b4770bf7f69f579'; getcap_size='14576'; \
+                  capsh_sha='16246b635b9a566874e1374bb2c686379cb1ff7e57497d9bb71869d77d3bc35c'; capsh_size='54568'; \
+                  getpcaps_sha='e7d7113447a52f62eae75aebb44e6f14b4706ac840a668260090e5b818af629d'; getpcaps_size='14576'; \
+                  setcap_sha='58b227dc41893b9b29e40e68a1c2af081e3a84630371980071056a80fed8fbe0'; setcap_size='14576' ;; \
          arm64) setpriv_sha='24410fedc29286402ae3b366bd3a78c3d177f7a1190797f1ea564f190097356c'; setpriv_size='133288'; \
-                  getcap_sha='dfd4546e0dbf6213e920622249d10e4469a4e41cfbdc62fd0da2472acffdd836'; getcap_size='67672' ;; \
+                  getcap_sha='dfd4546e0dbf6213e920622249d10e4469a4e41cfbdc62fd0da2472acffdd836'; getcap_size='67672'; \
+                  capsh_sha='ce65733af73e8357b3b61ed9495254147f70a9783af257d2dad5ab5445f44dc7'; capsh_size='70464'; \
+                  getpcaps_sha='2979481886c0ebd48a0ffbe5dcd2d2d63cb6cc8d9e23174558e774cc0dc03246'; getpcaps_size='67672'; \
+                  setcap_sha='17caa8b013d9c946534dd9973d69040066778e92ac5e756e06572cc6f6c492c7'; setcap_size='67672' ;; \
          *) exit 78 ;; \
        esac \
     && printf '%s  %s\n' "$setpriv_sha" /usr/bin/setpriv | /usr/bin/sha256sum -c - \
     && printf '%s  %s\n' "$getcap_sha" /usr/sbin/getcap | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$capsh_sha" /usr/sbin/capsh | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$getpcaps_sha" /usr/sbin/getpcaps | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$setcap_sha" /usr/sbin/setcap | /usr/bin/sha256sum -c - \
     && test "$(/usr/bin/stat -c '%s' /usr/bin/setpriv)" = "$setpriv_size" \
     && test "$(/usr/bin/stat -c '%s' /usr/sbin/getcap)" = "$getcap_size" \
-    && /usr/bin/printf '%s\n' 'northstar-privilege-inventory-v2' \
+    && test "$(/usr/bin/stat -c '%s' /usr/sbin/capsh)" = "$capsh_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/sbin/getpcaps)" = "$getpcaps_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/sbin/setcap)" = "$setcap_size" \
+    && /usr/bin/printf '%s\n' 'northstar-privilege-inventory-v3' \
          'setid=none' 'filecap=none' 'runtime_uid=1000' 'runtime_gid=1000' \
-         'removed_helper=/usr/sbin/capsh' 'removed_helper=/usr/sbin/getpcaps' \
-         'removed_helper=/usr/sbin/setcap' \
+         'pinned_helper=/usr/sbin/capsh' 'pinned_helper=/usr/sbin/getpcaps' \
+         'pinned_helper=/usr/sbin/setcap' \
          > /app/.northstar-runtime/privilege-inventory \
     && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/setpriv)" = '0:0:555' \
     && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/getcap)" = '0:0:555' \
-    && /usr/bin/printf '%s\n' 'northstar-executable-inventory-v4' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/capsh)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/getpcaps)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/setcap)" = '0:0:555' \
+    && /usr/bin/printf '%s\n' 'northstar-executable-inventory-v5' \
          'setpriv_path=/usr/bin/setpriv' "setpriv_sha256=$setpriv_sha" \
          "setpriv_size=$setpriv_size" 'setpriv_mode_policy=0555-or-0755' \
          'getcap_path=/usr/sbin/getcap' "getcap_sha256=$getcap_sha" \
          "getcap_size=$getcap_size" 'getcap_mode_policy=0555-or-0755' \
+         'capsh_path=/usr/sbin/capsh' "capsh_sha256=$capsh_sha" \
+         "capsh_size=$capsh_size" 'capsh_mode_policy=0555-or-0755' \
+         'getpcaps_path=/usr/sbin/getpcaps' "getpcaps_sha256=$getpcaps_sha" \
+         "getpcaps_size=$getpcaps_size" 'getpcaps_mode_policy=0555-or-0755' \
+         'setcap_path=/usr/sbin/setcap' "setcap_sha256=$setcap_sha" \
+         "setcap_size=$setcap_size" 'setcap_mode_policy=0555-or-0755' \
          > /app/.northstar-runtime/executable-inventory \
     && /usr/bin/sha256sum /app/.northstar-runtime/privilege-inventory \
          > /app/.northstar-runtime/privilege-inventory.sha256 \
@@ -100,9 +121,6 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
          /app/.northstar-runtime/privilege-inventory.sha256 \
          /app/.northstar-runtime/executable-inventory \
          /app/.northstar-runtime/executable-inventory.sha256 \
-    && test ! -e /usr/sbin/capsh && test ! -L /usr/sbin/capsh \
-    && test ! -e /usr/sbin/getpcaps && test ! -L /usr/sbin/getpcaps \
-    && test ! -e /usr/sbin/setcap && test ! -L /usr/sbin/setcap \
     && test -z "$(/usr/bin/find / -xdev -type f -perm /6000 -print -quit)" \
     && test -z "$(/usr/sbin/getcap -r / 2>/dev/null)" \
     && test -z "$(/usr/bin/find /usr/lib -xdev \( -type f -o -type d \) \

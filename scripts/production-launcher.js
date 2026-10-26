@@ -82,7 +82,7 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
     throw new Error(`${FAILURE} Invalid immutable Docker executable.`);
   }
   const protectedDirectories = ['/app', '/app/scripts', '/app/src', '/app/node_modules',
-    '/app/.northstar-runtime', '/usr/local', '/usr/local/bin', '/usr/local/lib',
+    '/app/.northstar-runtime', '/usr/bin', '/usr/sbin', '/usr/local', '/usr/local/bin', '/usr/local/lib',
     '/usr/local/lib/node_modules'];
   const protectedFiles = ['/app/scripts/start-production.sh', expectedLauncher,
     '/app/src/productionChild.js', '/app/src/server.js', '/app/package.json',
@@ -94,7 +94,8 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
     '/app/.northstar-runtime/privilege-inventory.sha256',
     '/app/.northstar-runtime/executable-inventory',
     '/app/.northstar-runtime/executable-inventory.sha256',
-    '/usr/bin/setpriv', '/usr/sbin/getcap'];
+    '/usr/bin/setpriv', '/usr/sbin/getcap', '/usr/sbin/capsh',
+    '/usr/sbin/getpcaps', '/usr/sbin/setcap'];
   for (const entry of [...protectedDirectories, ...protectedFiles]) {
     const info = fs.statSync(entry);
     if (info.uid !== 0 || info.gid !== 0 || (info.mode & 0o022) !== 0 ||
@@ -109,14 +110,40 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
       if (!error || !['EACCES', 'EPERM'].includes(error.code)) throw error;
     }
   }
-  const setprivStat = fs.statSync('/usr/bin/setpriv');
-  const getcapStat = fs.statSync('/usr/sbin/getcap');
-  const setprivMode = setprivStat.mode & 0o777;
-  const getcapMode = getcapStat.mode & 0o777;
-  if ((setprivMode !== 0o555 && setprivMode !== 0o755) ||
-      (getcapMode !== 0o555 && getcapMode !== 0o755) ||
-      ['/usr/sbin/capsh', '/usr/sbin/getpcaps', '/usr/sbin/setcap'].some(fs.existsSync)) {
-    throw new Error(`${FAILURE} Invalid executable privilege inventory.`);
+  const expectedPrivilegeTools = Object.freeze({
+    x64: Object.freeze({
+      '/usr/bin/setpriv': Object.freeze([80192,
+        'd5839b20edb0d77222b1e11be7d155c7122d381dbfad40876b0def7dd710f5bd']),
+      '/usr/sbin/getcap': Object.freeze([14576,
+        '815e0a9db190b9f50e83a9443daa368c705bf466142521b12b4770bf7f69f579']),
+      '/usr/sbin/capsh': Object.freeze([54568,
+        '16246b635b9a566874e1374bb2c686379cb1ff7e57497d9bb71869d77d3bc35c']),
+      '/usr/sbin/getpcaps': Object.freeze([14576,
+        'e7d7113447a52f62eae75aebb44e6f14b4706ac840a668260090e5b818af629d']),
+      '/usr/sbin/setcap': Object.freeze([14576,
+        '58b227dc41893b9b29e40e68a1c2af081e3a84630371980071056a80fed8fbe0']),
+    }),
+    arm64: Object.freeze({
+      '/usr/bin/setpriv': Object.freeze([133288,
+        '24410fedc29286402ae3b366bd3a78c3d177f7a1190797f1ea564f190097356c']),
+      '/usr/sbin/getcap': Object.freeze([67672,
+        'dfd4546e0dbf6213e920622249d10e4469a4e41cfbdc62fd0da2472acffdd836']),
+      '/usr/sbin/capsh': Object.freeze([70464,
+        'ce65733af73e8357b3b61ed9495254147f70a9783af257d2dad5ab5445f44dc7']),
+      '/usr/sbin/getpcaps': Object.freeze([67672,
+        '2979481886c0ebd48a0ffbe5dcd2d2d63cb6cc8d9e23174558e774cc0dc03246']),
+      '/usr/sbin/setcap': Object.freeze([67672,
+        '17caa8b013d9c946534dd9973d69040066778e92ac5e756e06572cc6f6c492c7']),
+    }),
+  });
+  for (const [entry, [size, digest]] of Object.entries(expectedPrivilegeTools[process.arch])) {
+    const info = fs.statSync(entry);
+    const mode = info.mode & 0o777;
+    const actualDigest = crypto.createHash('sha256').update(fs.readFileSync(entry)).digest('hex');
+    if (!info.isFile() || (mode !== 0o555 && mode !== 0o755) ||
+        info.size !== size || actualDigest !== digest) {
+      throw new Error(`${FAILURE} Invalid executable privilege inventory.`);
+    }
   }
   for (const entry of ['/var/lib/northstar/home', '/var/lib/northstar/data',
     '/var/lib/northstar/tmp']) {

@@ -218,7 +218,7 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.dockerfile.includes('/bin/rm -f /usr/sbin/capsh /usr/sbin/getpcaps') ||
       !inputs.dockerfile.includes('/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap') ||
       !inputs.dockerfile.includes("'northstar-privilege-inventory-v2'") ||
-      !inputs.dockerfile.includes("'northstar-executable-inventory-v3'") ||
+      !inputs.dockerfile.includes("'northstar-executable-inventory-v4'") ||
       inputs.dockerfile.includes('nlink') ||
       inputs.dockerfile.includes('/app/.northstar-runtime/setpriv.identity') ||
       inputs.dockerfile.includes('/app/.northstar-runtime/getcap.identity') ||
@@ -285,7 +285,7 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes('/usr/bin/sha256sum -c "$executable_sha_manifest"') ||
       !inputs.start.includes('setpriv_path=/usr/bin/setpriv') ||
       !inputs.start.includes('getcap_path=/usr/sbin/getcap') ||
-      !inputs.start.includes("!= '0:0:555'") ||
+      !inputs.start.includes('0:0:555|0:0:755') ||
       inputs.start.includes('nlink') ||
       inputs.start.includes('_identity_anchor=') ||
       inputs.start.includes('_build_device_inode=') ||
@@ -299,8 +299,8 @@ function exactRuntimePlan(overrides = {}) {
   for (const source of [inputs.launcher, inputs.child]) {
     if (source.includes('nlink') || source.includes('setpriv.identity') ||
         source.includes('getcap.identity') ||
-        !source.includes("(setprivStat.mode & 0o777) !== 0o555") ||
-        !source.includes("(getcapStat.mode & 0o777) !== 0o555") ||
+        !source.includes('setprivMode !== 0o555 && setprivMode !== 0o755') ||
+        !source.includes('getcapMode !== 0o555 && getcapMode !== 0o755') ||
         !source.includes("'/usr/bin/setpriv', '/usr/sbin/getcap'") ||
         !source.includes("'/usr/sbin/capsh', '/usr/sbin/getpcaps', '/usr/sbin/setcap'")) {
       throw new Error('Unexpected executable verification boundary.');
@@ -412,7 +412,8 @@ function executableInventoryAccepts(entries, architecture) {
   for (const [pathname, identity] of executables) {
     const executable = entries.get(pathname);
     if (!executable || executable.type !== 'file' ||
-        executable.uid !== 0 || executable.gid !== 0 || executable.mode !== 0o555 ||
+        executable.uid !== 0 || executable.gid !== 0 ||
+        (executable.mode !== 0o555 && executable.mode !== 0o755) ||
         executable.capabilities.length !== 0 || executable.digest !== identity.sha256 ||
         executable.size !== identity.size) return false;
   }
@@ -606,17 +607,19 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       '/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap',
       '/bin/chmod 0444 /usr/bin/setpriv /usr/sbin/getcap') })],
     ['missing executable identity inventory', input => ({ dockerfile: input.dockerfile.replace(
-      "'northstar-executable-inventory-v3'", "'unbound-executable-inventory'") })],
+      "'northstar-executable-inventory-v4'", "'unbound-executable-inventory'") })],
     ['build manifest restores link-count authority', input => ({ dockerfile:
-      input.dockerfile.replace("'setpriv_mode=555'", "'setpriv_mode=555' 'setpriv_nlink=1'") })],
+      input.dockerfile.replace("'setpriv_mode_policy=0555-or-0755'",
+        "'setpriv_mode_policy=0555-or-0755' 'setpriv_nlink=1'") })],
     ['startup restores link-count authority', input => ({ start: input.start.replace(
-      'setpriv_mode=555', 'setpriv_mode=555 setpriv_nlink=1') })],
+      'setpriv_mode_policy=0555-or-0755',
+      'setpriv_mode_policy=0555-or-0755 setpriv_nlink=1') })],
     ['launcher restores link-count authority', input => ({ launcher: input.launcher.replace(
-      '(setprivStat.mode & 0o777) !== 0o555',
-      '(setprivStat.mode & 0o777) !== 0o555 || setprivStat.nlink !== 1') })],
+      'setprivMode !== 0o555 && setprivMode !== 0o755',
+      '(setprivMode !== 0o555 && setprivMode !== 0o755) || setprivStat.nlink !== 1') })],
     ['child restores link-count authority', input => ({ child: input.child.replace(
-      '(setprivStat.mode & 0o777) !== 0o555',
-      '(setprivStat.mode & 0o777) !== 0o555 || setprivStat.nlink !== 1') })],
+      'setprivMode !== 0o555 && setprivMode !== 0o755',
+      '(setprivMode !== 0o555 && setprivMode !== 0o755) || setprivStat.nlink !== 1') })],
     ['copy after privilege scan', input => ({ dockerfile: input.dockerfile.replace(
       'USER 1000:1000', 'COPY package.json /usr/bin/late-copy\nUSER 1000:1000') })],
     ['runtime without no-new-privileges', input => ({ railway: input.railway.replace(
@@ -672,20 +675,33 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     });
 
   test.each(['amd64', 'arm64'])(
-    'exact %s executable identity survives OCI export without cross-path hardlinks', architecture => {
+    'exact %s executable identity survives bounded OCI owner-write restoration', architecture => {
       const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation(architecture));
-      const exported = new Map([...entries].map(([pathname, entry]) =>
-        [pathname, { ...entry, capabilities: [...entry.capabilities] }]));
-      expect(exported.get('/usr/bin/setpriv'))
-        .not.toBe(entries.get('/usr/bin/setpriv'));
-      expect(exported.get('/usr/sbin/getcap'))
-        .not.toBe(entries.get('/usr/sbin/getcap'));
-      expect(executableInventoryAccepts(exported, architecture)).toBe(true);
+      for (const [setprivMode, getcapMode] of [
+        [0o555, 0o555],
+        [0o755, 0o555],
+        [0o555, 0o755],
+        [0o755, 0o755],
+      ]) {
+        const exported = new Map([...entries].map(([pathname, entry]) =>
+          [pathname, { ...entry, capabilities: [...entry.capabilities] }]));
+        exported.get('/usr/bin/setpriv').mode = setprivMode;
+        exported.get('/usr/sbin/getcap').mode = getcapMode;
+        expect(exported.get('/usr/bin/setpriv'))
+          .not.toBe(entries.get('/usr/bin/setpriv'));
+        expect(exported.get('/usr/sbin/getcap'))
+          .not.toBe(entries.get('/usr/sbin/getcap'));
+        expect(executableInventoryAccepts(exported, architecture)).toBe(true);
+      }
     });
 
   test.each([
     ['setpriv mode 0444', '/usr/bin/setpriv', { mode: 0o444 }],
-    ['setpriv mode 0755 drift', '/usr/bin/setpriv', { mode: 0o755 }],
+    ['setpriv mode 0744 missing group/other execute', '/usr/bin/setpriv', { mode: 0o744 }],
+    ['setpriv mode 0775 group-write drift', '/usr/bin/setpriv', { mode: 0o775 }],
+    ['setpriv mode 0757 world-write drift', '/usr/bin/setpriv', { mode: 0o757 }],
+    ['setpriv mode 1755 sticky drift', '/usr/bin/setpriv', { mode: 0o1755 }],
+    ['setpriv mode 4755 set-id drift', '/usr/bin/setpriv', { mode: 0o4755 }],
     ['getcap digest drift', '/usr/sbin/getcap', { digest: '0'.repeat(64) }],
     ['getcap size drift', '/usr/sbin/getcap', { size: 1 }],
     ['getcap owner drift', '/usr/sbin/getcap', { uid: 1000 }],
@@ -705,10 +721,10 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     expect(executableInventoryAccepts(entries, 'amd64')).toBe(false);
   });
 
-  test('data resources and executable authority use disjoint exact modes', () => {
+  test('data resources stay exact while executable authority tolerates only root owner-write', () => {
     const source = fs.readFileSync(productionStart, 'utf8');
     expect(source).toContain("!= '0:0:444:1'");
-    expect(source).toContain("!= '0:0:555'");
+    expect(source).toContain('0:0:555|0:0:755');
     expect(source).not.toContain('nlink');
     expect(source).not.toContain('_identity_anchor=');
     expect(source).not.toContain('_build_device_inode=');

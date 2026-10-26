@@ -101,8 +101,10 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
   }
   const setprivStat = fs.statSync('/usr/bin/setpriv');
   const getcapStat = fs.statSync('/usr/sbin/getcap');
-  if ((setprivStat.mode & 0o777) !== 0o555 ||
-      (getcapStat.mode & 0o777) !== 0o555 ||
+  const setprivMode = setprivStat.mode & 0o777;
+  const getcapMode = getcapStat.mode & 0o777;
+  if ((setprivMode !== 0o555 && setprivMode !== 0o755) ||
+      (getcapMode !== 0o555 && getcapMode !== 0o755) ||
       ['/usr/sbin/capsh', '/usr/sbin/getpcaps', '/usr/sbin/setcap'].some(fs.existsSync)) {
     throw new Error(FAILURE);
   }

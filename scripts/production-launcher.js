@@ -111,8 +111,8 @@ if (runtimeAuthority === 'official-docker-node-22.23.3-v1') {
   }
   const setprivStat = fs.statSync('/usr/bin/setpriv');
   const getcapStat = fs.statSync('/usr/sbin/getcap');
-  if ((setprivStat.mode & 0o777) !== 0o555 || setprivStat.nlink !== 1 ||
-      (getcapStat.mode & 0o777) !== 0o555 || getcapStat.nlink !== 1 ||
+  if ((setprivStat.mode & 0o777) !== 0o555 ||
+      (getcapStat.mode & 0o777) !== 0o555 ||
       ['/usr/sbin/capsh', '/usr/sbin/getpcaps', '/usr/sbin/setcap'].some(fs.existsSync)) {
     throw new Error(`${FAILURE} Invalid executable privilege inventory.`);
   }

@@ -332,7 +332,7 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
     const mutations = [
       ['false release','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B accepted and released'],
       ['false production complete','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B production complete'],
-      ['deployed','ledger','sole automatic deployment `32c6681e-1b31-47fb-8f67-8f04fa1b6de1` built but restart-looped at `NS14B-13` because image export did not preserve cross-path executable hardlinks; fifth source-only correction pending','deployment `forged` succeeded; Part 14B released'],
+      ['deployed','ledger','sole automatic deployment `5a20a6c1-8011-4c9b-8c70-350b2ce4ac70` built/exported image `sha256:c5e42076e23ddc1a69704fe06b8a1912c474d9ac40c6c0de9e048552f9956ea1` but restart-looped at `NS14B-13` because runtime link count differed from the build-time assumption; sixth source-only correction pending','deployment `forged` succeeded; Part 14B released'],
       ['later slice','ledger','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | Complete'],
       ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
       ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],

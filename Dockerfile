@@ -59,6 +59,17 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
          /usr/sbin/setcap -r "$capability_path"; \
        done < "$capability_inventory" \
     && /bin/rm -f "$capability_inventory" \
+    && /bin/chown 0:0 /usr/bin/chage /usr/bin/chfn /usr/bin/chsh \
+         /usr/bin/expiry /usr/bin/gpasswd /usr/bin/mount /usr/bin/newgrp \
+         /usr/bin/passwd /usr/bin/su /usr/bin/umount /usr/sbin/unix_chkpwd \
+    && for helper in /usr/bin/chage /usr/bin/chfn /usr/bin/chsh \
+         /usr/bin/expiry /usr/bin/gpasswd /usr/bin/mount /usr/bin/newgrp \
+         /usr/bin/passwd /usr/bin/su /usr/bin/umount /usr/sbin/unix_chkpwd; do \
+         test "$(/usr/bin/stat -c '%u:%g' -- "$helper" 2>/dev/null)" = '0:0' || \
+           { /usr/bin/printf '%s\n' \
+               'NorthStar production build rejected the deprivileged helper ownership. Check NS14B-BUILD-SETID-OWNER.' >&2; \
+             exit 78; }; \
+       done \
     && /bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap /usr/sbin/capsh \
          /usr/sbin/getpcaps /usr/sbin/setcap /usr/bin/chage /usr/bin/chfn \
          /usr/bin/chsh /usr/bin/expiry /usr/bin/gpasswd /usr/bin/mount \

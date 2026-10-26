@@ -113,7 +113,7 @@ describe('Mission 27 Part 14B complete canonical authority allowlist', () => {
 
   test('rejects status, provenance, scope, evidence, unavailable and Part13D limitation drift', () => {
     replaceExact('roadmap',
-      'Status: frozen plan through released Part 14A; original Part 14B was accepted and merged, and its tenth bounded source-only set-id materialization correction is the current implementation candidate.',
+      'Status: frozen plan through released Part 14A; original Part 14B was accepted and merged, and its eleventh bounded source-only helper-ownership correction is the current implementation candidate.',
       'Status: frozen plan through released complete Part 14; original Part 14B is released.');
     replaceExact('roadmap', authority.PART13_RELEASE.head, 'f'.repeat(40));
     replaceExact('roadmap', authority.PART14A_RELEASE.head, 'e'.repeat(40));

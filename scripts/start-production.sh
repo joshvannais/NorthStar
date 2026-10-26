@@ -18,6 +18,7 @@ fail() {
     NS14B-07|NS14B-08|NS14B-09|NS14B-10|NS14B-11|NS14B-12|\
     NS14B-13A|NS14B-13B|NS14B-13C|NS14B-13D|NS14B-13E|NS14B-13F|\
     NS14B-13G|NS14B-13H|NS14B-13I|NS14B-13J|NS14B-13K|NS14B-13L|NS14B-13M|\
+    NS14B-13N|\
     NS14B-14|NS14B-15|NS14B-16|NS14B-17|NS14B-18) ;;
     *) startup_check='NS14B-00' ;;
   esac
@@ -207,9 +208,9 @@ done
 startup_check='NS14B-11'
 /usr/bin/sha256sum -c "$privilege_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$privilege_manifest"
-for expected_privilege_line in northstar-privilege-inventory-v2 setid=none filecap=none \
-  runtime_uid=1000 runtime_gid=1000 removed_helper=/usr/sbin/capsh \
-  removed_helper=/usr/sbin/getpcaps removed_helper=/usr/sbin/setcap; do
+for expected_privilege_line in northstar-privilege-inventory-v3 setid=none filecap=none \
+  runtime_uid=1000 runtime_gid=1000 pinned_helper=/usr/sbin/capsh \
+  pinned_helper=/usr/sbin/getpcaps pinned_helper=/usr/sbin/setcap; do
   IFS= read -r privilege_line <&3 || fail
   [ "$privilege_line" = "$expected_privilege_line" ] || fail
 done
@@ -225,12 +226,24 @@ case "$runtime_arch:$node_sha256" in
     setpriv_size='80192'
     getcap_sha='815e0a9db190b9f50e83a9443daa368c705bf466142521b12b4770bf7f69f579'
     getcap_size='14576'
+    capsh_sha='16246b635b9a566874e1374bb2c686379cb1ff7e57497d9bb71869d77d3bc35c'
+    capsh_size='54568'
+    getpcaps_sha='e7d7113447a52f62eae75aebb44e6f14b4706ac840a668260090e5b818af629d'
+    getpcaps_size='14576'
+    setcap_sha='58b227dc41893b9b29e40e68a1c2af081e3a84630371980071056a80fed8fbe0'
+    setcap_size='14576'
     ;;
   arm64:d09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d)
     setpriv_sha='24410fedc29286402ae3b366bd3a78c3d177f7a1190797f1ea564f190097356c'
     setpriv_size='133288'
     getcap_sha='dfd4546e0dbf6213e920622249d10e4469a4e41cfbdc62fd0da2472acffdd836'
     getcap_size='67672'
+    capsh_sha='ce65733af73e8357b3b61ed9495254147f70a9783af257d2dad5ab5445f44dc7'
+    capsh_size='70464'
+    getpcaps_sha='2979481886c0ebd48a0ffbe5dcd2d2d63cb6cc8d9e23174558e774cc0dc03246'
+    getpcaps_size='67672'
+    setcap_sha='17caa8b013d9c946534dd9973d69040066778e92ac5e756e06572cc6f6c492c7'
+    setcap_size='67672'
     ;;
   *) fail ;;
 esac
@@ -238,11 +251,17 @@ esac
 startup_check='NS14B-12'
 /usr/bin/sha256sum -c "$executable_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$executable_manifest"
-for expected_executable_line in northstar-executable-inventory-v4 \
+for expected_executable_line in northstar-executable-inventory-v5 \
   setpriv_path=/usr/bin/setpriv "setpriv_sha256=$setpriv_sha" \
   "setpriv_size=$setpriv_size" setpriv_mode_policy=0555-or-0755 \
   getcap_path=/usr/sbin/getcap "getcap_sha256=$getcap_sha" \
-  "getcap_size=$getcap_size" getcap_mode_policy=0555-or-0755; do
+  "getcap_size=$getcap_size" getcap_mode_policy=0555-or-0755 \
+  capsh_path=/usr/sbin/capsh "capsh_sha256=$capsh_sha" \
+  "capsh_size=$capsh_size" capsh_mode_policy=0555-or-0755 \
+  getpcaps_path=/usr/sbin/getpcaps "getpcaps_sha256=$getpcaps_sha" \
+  "getpcaps_size=$getpcaps_size" getpcaps_mode_policy=0555-or-0755 \
+  setcap_path=/usr/sbin/setcap "setcap_sha256=$setcap_sha" \
+  "setcap_size=$setcap_size" setcap_mode_policy=0555-or-0755; do
   IFS= read -r executable_line <&3 || fail
   [ "$executable_line" = "$expected_executable_line" ] || fail
 done
@@ -291,11 +310,63 @@ check_getcap_identity() {
 check_setpriv_identity
 check_getcap_identity
 startup_check='NS14B-13K'
-[ ! -e /usr/sbin/capsh ] && [ ! -L /usr/sbin/capsh ] || fail
+[ -f /usr/sbin/capsh ] && [ -x /usr/sbin/capsh ] && [ ! -L /usr/sbin/capsh ] &&
+  [ "$(/usr/bin/readlink -f -- /usr/sbin/capsh)" = /usr/sbin/capsh ] &&
+  [ "$(/usr/bin/stat -c '%s' -- /usr/sbin/capsh)" = "$capsh_size" ] || fail
+case "$(/usr/bin/stat -c '%u:%g:%a' -- /usr/sbin/capsh)" in
+  0:0:555|0:0:755) ;;
+  *) fail ;;
+esac
+/usr/bin/printf '%s  %s\n' "$capsh_sha" /usr/sbin/capsh |
+  /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
 startup_check='NS14B-13L'
-[ ! -e /usr/sbin/getpcaps ] && [ ! -L /usr/sbin/getpcaps ] || fail
+[ -f /usr/sbin/getpcaps ] && [ -x /usr/sbin/getpcaps ] && [ ! -L /usr/sbin/getpcaps ] &&
+  [ "$(/usr/bin/readlink -f -- /usr/sbin/getpcaps)" = /usr/sbin/getpcaps ] &&
+  [ "$(/usr/bin/stat -c '%s' -- /usr/sbin/getpcaps)" = "$getpcaps_size" ] || fail
+case "$(/usr/bin/stat -c '%u:%g:%a' -- /usr/sbin/getpcaps)" in
+  0:0:555|0:0:755) ;;
+  *) fail ;;
+esac
+/usr/bin/printf '%s  %s\n' "$getpcaps_sha" /usr/sbin/getpcaps |
+  /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
 startup_check='NS14B-13M'
-[ ! -e /usr/sbin/setcap ] && [ ! -L /usr/sbin/setcap ] || fail
+[ -f /usr/sbin/setcap ] && [ -x /usr/sbin/setcap ] && [ ! -L /usr/sbin/setcap ] &&
+  [ "$(/usr/bin/readlink -f -- /usr/sbin/setcap)" = /usr/sbin/setcap ] &&
+  [ "$(/usr/bin/stat -c '%s' -- /usr/sbin/setcap)" = "$setcap_size" ] || fail
+case "$(/usr/bin/stat -c '%u:%g:%a' -- /usr/sbin/setcap)" in
+  0:0:555|0:0:755) ;;
+  *) fail ;;
+esac
+/usr/bin/printf '%s  %s\n' "$setcap_sha" /usr/sbin/setcap |
+  /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
+
+# The pinned package tools remain ordinary root-owned executables with no
+# set-id bit or file capability. Prove that this uid-1000, zero-capability,
+# no-new-privileges process cannot use the mutation helper to install one.
+startup_check='NS14B-13N'
+privilege_probe="$TMPDIR/.northstar-capability-probe-$$"
+umask 077
+set -C
+: > "$privilege_probe" || { set +C; fail; }
+set +C
+[ -f "$privilege_probe" ] && [ ! -L "$privilege_probe" ] &&
+  [ "$(/usr/bin/stat -c '%u:%g:%a' -- "$privilege_probe")" = '1000:1000:600' ] || {
+  /bin/rm -f "$privilege_probe"
+  fail
+}
+/bin/chmod 0700 "$privilege_probe" || { /bin/rm -f "$privilege_probe"; fail; }
+if /usr/sbin/capsh --has-p=cap_setuid >/dev/null 2>&1 ||
+   /usr/sbin/setcap cap_setuid=ep "$privilege_probe" >/dev/null 2>&1; then
+  /usr/sbin/setcap -r "$privilege_probe" >/dev/null 2>&1 || :
+  /bin/rm -f "$privilege_probe"
+  fail
+fi
+probe_capability=$(/usr/sbin/getcap "$privilege_probe" 2>/dev/null) || {
+  /bin/rm -f "$privilege_probe"
+  fail
+}
+[ -z "$probe_capability" ] || { /bin/rm -f "$privilege_probe"; fail; }
+/bin/rm -f "$privilege_probe" || fail
 
 startup_check='NS14B-14'
 for privilege_root in /usr "$CANONICAL_ROOT" /var/lib/northstar /tmp /home; do
@@ -391,7 +462,8 @@ check_getcap_identity
 startup_check='NS14B-17'
 for protected_directory in "$CANONICAL_ROOT" "$CANONICAL_ROOT/scripts" \
   "$CANONICAL_ROOT/src" "$CANONICAL_ROOT/node_modules" "$runtime_directory" \
-  "$node_root" "$node_bin" /usr/local/lib /usr/local/lib/node_modules /usr/lib; do
+  "$node_root" "$node_bin" /usr/bin /usr/sbin /usr/local/lib \
+  /usr/local/lib/node_modules /usr/lib; do
   if [ ! -d "$protected_directory" ] || [ -L "$protected_directory" ] ||
      [ "$(/usr/bin/stat -c '%u:%g' -- "$protected_directory")" != '0:0' ] ||
      [ $((0$(/usr/bin/stat -c '%a' -- "$protected_directory") & 022)) -ne 0 ]; then

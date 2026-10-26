@@ -44,6 +44,28 @@ const PINNED_TOOL_IDENTITY = Object.freeze({
       sha256: 'e7d7113447a52f62eae75aebb44e6f14b4706ac840a668260090e5b818af629d' }),
     setcap: Object.freeze({ size: 14576,
       sha256: '58b227dc41893b9b29e40e68a1c2af081e3a84630371980071056a80fed8fbe0' }),
+    chage: Object.freeze({ size: 80376,
+      sha256: 'f1aced4c56099e77221aa8a408a073a41d971520fd82108bd8e737cad6e7fcd1' }),
+    chfn: Object.freeze({ size: 62672,
+      sha256: '0d91ea5e4961f4b09526e7eba8f1aa7fea53b56290019c656dba29256c860bb4' }),
+    chsh: Object.freeze({ size: 52880,
+      sha256: 'e9ea120b0d271feb49f02ad923e8789f51128beb0f41be11f1a0e7e46484bdf0' }),
+    expiry: Object.freeze({ size: 31184,
+      sha256: '76ca5abc17ecc1ec50f9716f91b7ec9044bce69431b4fc3f172489b56d41e308' }),
+    gpasswd: Object.freeze({ size: 88496,
+      sha256: 'f5ddf4ff327b07c2e1109645d35b0f75011d20877c9a0c2c1b0678dd1b8c3879' }),
+    mount: Object.freeze({ size: 59704,
+      sha256: '18ca60a1e1c93f58fca00607ad32bf192fea00157eac73a5341f8bd1c2201403' }),
+    newgrp: Object.freeze({ size: 48896,
+      sha256: 'ced400910c4fe7ab0676ae07ee6489d677baa18e1425750a21b9688ab2e02fb6' }),
+    passwd: Object.freeze({ size: 68248,
+      sha256: 'd30cd42625b51cb54c49edc5b0b3348d6a438539446af3752a6af10393c4f2d2' }),
+    su: Object.freeze({ size: 72000,
+      sha256: '4b8bb44ac13b8f8f8c08708faff91a9b63b3fa369b8cbfe1abb5ef09e8029993' }),
+    umount: Object.freeze({ size: 35128,
+      sha256: '54bf7fbc1db029188f5d7e1397f4ad7b2cd1e2d7a57869002d390063cbbb3268' }),
+    unix_chkpwd: Object.freeze({ size: 39160,
+      sha256: '0ef065c7d555e7dc66789956ae2a67547a98a38fc5f846373975c85e95009345' }),
   }),
   arm64: Object.freeze({
     setpriv: Object.freeze({ size: 133288,
@@ -56,6 +78,28 @@ const PINNED_TOOL_IDENTITY = Object.freeze({
       sha256: '2979481886c0ebd48a0ffbe5dcd2d2d63cb6cc8d9e23174558e774cc0dc03246' }),
     setcap: Object.freeze({ size: 67672,
       sha256: '17caa8b013d9c946534dd9973d69040066778e92ac5e756e06572cc6f6c492c7' }),
+    chage: Object.freeze({ size: 137424,
+      sha256: 'be8de5f4f97c24251b9265acfc814e8565f3045c69cab72f1dd8c31002fe64f0' }),
+    chfn: Object.freeze({ size: 70616,
+      sha256: '41732ba55e81bdd78c784fbe80ca85e76c7e076a4dbd1a23ef0a6607a9042540' }),
+    chsh: Object.freeze({ size: 69064,
+      sha256: 'ac7c3f9f29f423b9edb8b6bf449ec65fec4b2aa047011908d6e42e9f2f603d25' }),
+    expiry: Object.freeze({ size: 67880,
+      sha256: 'e8f60724dd66050667a72c415e116c13aec2dc9d320a3dc711959a63a99d8d49' }),
+    gpasswd: Object.freeze({ size: 137352,
+      sha256: '91280540427c40502aad93ea821f848061f49eadb36994ce5c8e2de6fdb3a42b' }),
+    mount: Object.freeze({ size: 67744,
+      sha256: '4e3aa9cd2b207144bc3206a95019fcdeeac9114cb58d9b19850b948b2003c2ef' }),
+    newgrp: Object.freeze({ size: 69176,
+      sha256: '0466e757f261cc50fa879f50c0663372e399fa6653a659053037faaa334da104' }),
+    passwd: Object.freeze({ size: 72048,
+      sha256: 'bc0b502346f44eff9bf08cfd121b280684652a7e8eb4e78cba6404d32892ebf0' }),
+    su: Object.freeze({ size: 133312,
+      sha256: 'c673b670821b019213950a266be48d235cd2faf6692ea7f50c399dc4a59c0396' }),
+    umount: Object.freeze({ size: 67744,
+      sha256: '60ac2e037660e390520585a8d6afd4ee09949eead31dbb18c21b07245d082816' }),
+    unix_chkpwd: Object.freeze({ size: 67680,
+      sha256: '18b7c15bf7267ad65341e19e682e136c3f60d2de88944dcd66ededfab7442ac1' }),
   }),
 });
 const PINNED_CAPABILITY_HELPERS = Object.freeze([
@@ -65,6 +109,14 @@ const PRIVILEGED_BASE_PATHS = Object.freeze([
   '/usr/bin/chfn', '/usr/bin/chsh', '/usr/bin/gpasswd', '/usr/bin/mount',
   '/usr/bin/newgrp', '/usr/bin/passwd', '/usr/bin/su', '/usr/bin/umount',
   '/usr/bin/chage', '/usr/bin/expiry', '/usr/sbin/unix_chkpwd',
+]);
+const DEPRIVILEGED_BASE_TOOLS = Object.freeze([
+  ['chage', '/usr/bin/chage'], ['chfn', '/usr/bin/chfn'],
+  ['chsh', '/usr/bin/chsh'], ['expiry', '/usr/bin/expiry'],
+  ['gpasswd', '/usr/bin/gpasswd'], ['mount', '/usr/bin/mount'],
+  ['newgrp', '/usr/bin/newgrp'], ['passwd', '/usr/bin/passwd'],
+  ['su', '/usr/bin/su'], ['umount', '/usr/bin/umount'],
+  ['unix_chkpwd', '/usr/sbin/unix_chkpwd'],
 ]);
 const RUNTIME_IDENTITY_PREDICATE =
   '[ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" = 11111111 ]';
@@ -210,6 +262,22 @@ function exactRuntimePlan(overrides = {}) {
     `linux-arm64-getpcaps-size=${PINNED_TOOL_IDENTITY.arm64.getpcaps.size}`,
     `linux-arm64-setcap-sha256=${PINNED_TOOL_IDENTITY.arm64.setcap.sha256}`,
     `linux-arm64-setcap-size=${PINNED_TOOL_IDENTITY.arm64.setcap.size}`,
+    'docker-linux-amd64-base-layer-sha256=7fd1ebe418b5079d4aa36f416af9b143d127bc75b0155d71cb5fd559b5e04d39',
+    'docker-linux-arm64-base-layer-sha256=c75f989a229d12b2d2613a5997de9ff3546f664c22da9248720033a2410220f6',
+    'runtime-deprivileged-setid-helpers=' + DEPRIVILEGED_BASE_TOOLS
+      .map(([, pathname]) => pathname).join(','),
+    ...DEPRIVILEGED_BASE_TOOLS.flatMap(([tool]) => {
+      const manifestTool = tool.replace('_', '-');
+      const identity = PINNED_TOOL_IDENTITY.amd64[tool];
+      return [`linux-amd64-${manifestTool}-sha256=${identity.sha256}`,
+        `linux-amd64-${manifestTool}-size=${identity.size}`];
+    }),
+    ...DEPRIVILEGED_BASE_TOOLS.flatMap(([tool]) => {
+      const manifestTool = tool.replace('_', '-');
+      const identity = PINNED_TOOL_IDENTITY.arm64[tool];
+      return [`linux-arm64-${manifestTool}-sha256=${identity.sha256}`,
+        `linux-arm64-${manifestTool}-size=${identity.size}`];
+    }),
   ];
   if (JSON.stringify(manifestLines) !== JSON.stringify(expectedManifestLines)) {
     throw new Error('Unexpected Node runtime provenance manifest.');
@@ -246,7 +314,9 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.dockerfile.includes('/usr/sbin/setcap -r "$capability_path"') ||
       !inputs.dockerfile.includes('/bin/rm -f "$capability_inventory"') ||
       !inputs.dockerfile.includes('/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap /usr/sbin/capsh') ||
-      !inputs.dockerfile.includes("'northstar-privilege-inventory-v3'") ||
+      !inputs.dockerfile.includes('/usr/bin/chage /usr/bin/chfn') ||
+      inputs.dockerfile.includes('/bin/rm -f /usr/bin/chfn') ||
+      !inputs.dockerfile.includes("'northstar-privilege-inventory-v4'") ||
       !inputs.dockerfile.includes("'northstar-executable-inventory-v5'") ||
       inputs.dockerfile.includes('nlink') ||
       inputs.dockerfile.includes('/app/.northstar-runtime/setpriv.identity') ||
@@ -280,7 +350,8 @@ function exactRuntimePlan(overrides = {}) {
     if (!inputs.prepare.includes(digest) || !inputs.start.includes(digest)) {
       throw new Error(`Missing ${arch} executable binding.`);
     }
-    for (const tool of ['setpriv', 'getcap', 'capsh', 'getpcaps', 'setcap']) {
+    for (const tool of ['setpriv', 'getcap', 'capsh', 'getpcaps', 'setcap',
+      ...DEPRIVILEGED_BASE_TOOLS.map(([name]) => name)]) {
       const identity = PINNED_TOOL_IDENTITY[arch][tool];
       if (!inputs.dockerfile.includes(identity.sha256) ||
           !inputs.dockerfile.includes(`'${identity.size}'`) ||
@@ -323,6 +394,8 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.start.includes('setcap_path=/usr/sbin/setcap') ||
       !inputs.start.includes('/usr/sbin/capsh --has-p=cap_setuid') ||
       !inputs.start.includes('/usr/sbin/setcap cap_setuid=ep "$privilege_probe"') ||
+      !inputs.start.includes('check_deprivileged_helper /usr/bin/chage') ||
+      !inputs.start.includes('check_deprivileged_helper /usr/sbin/unix_chkpwd') ||
       !inputs.start.includes('set -C') ||
       !inputs.start.includes("= '1000:1000:600'") ||
       !inputs.start.includes('"$node_root" "$node_bin" /usr/bin /usr/sbin') ||
@@ -339,8 +412,11 @@ function exactRuntimePlan(overrides = {}) {
         !source.includes('expectedPrivilegeTools') ||
          !source.includes("'/usr/bin', '/usr/sbin'") ||
          !source.includes("'/usr/bin/setpriv', '/usr/sbin/getcap', '/usr/sbin/capsh'") ||
+         !source.includes("'/usr/bin/chsh', '/usr/bin/expiry', '/usr/bin/gpasswd'") ||
          !source.includes(PINNED_TOOL_IDENTITY.amd64.capsh.sha256) ||
-         !source.includes(PINNED_TOOL_IDENTITY.arm64.setcap.sha256)) {
+         !source.includes(PINNED_TOOL_IDENTITY.arm64.setcap.sha256) ||
+         !source.includes(PINNED_TOOL_IDENTITY.amd64.chfn.sha256) ||
+         !source.includes(PINNED_TOOL_IDENTITY.arm64.unix_chkpwd.sha256)) {
       throw new Error('Unexpected executable verification boundary.');
     }
   }
@@ -351,7 +427,7 @@ function exactRuntimePlan(overrides = {}) {
   if (JSON.stringify(diagnosticAssignments) !== JSON.stringify(STARTUP_CHECKS) ||
       !inputs.start.includes('echo "$FAILURE Check $startup_check." >&2') ||
       !inputs.start.includes("*) startup_check='NS14B-00' ;;") ||
-      checksumVerifications.length !== 8) {
+      checksumVerifications.length !== 9) {
     throw new Error('Unexpected startup diagnostic boundary.');
   }
   return true;
@@ -397,10 +473,12 @@ function createRootBuiltRuntimeSimulation(architecture = 'amd64') {
     entries.set(pathname, { type: 'file', mode: 0o755, uid: 0, gid: 0,
       digest: identity.sha256, capabilities: [], size: identity.size });
   }
-  for (const pathname of PRIVILEGED_BASE_PATHS) {
+  for (const [tool, pathname] of DEPRIVILEGED_BASE_TOOLS) {
+    const identity = PINNED_TOOL_IDENTITY[architecture][tool];
     add(pathname, 'file', pathname.includes('chage') || pathname.includes('expiry') ||
       pathname.includes('unix_chkpwd') ? 0o2755 : 0o4755, 0, 0,
-    `${architecture}:${pathname}`);
+    identity.sha256);
+    entries.get(pathname).size = identity.size;
   }
   add('/app/node_modules/injected-setuid', 'file', 0o4755);
   add('/usr/local/bin/injected-setgid', 'file', 0o2755);
@@ -418,7 +496,6 @@ function createRootBuiltRuntimeSimulation(architecture = 'amd64') {
 }
 
 function hardenRootBuiltRuntime(entries) {
-  for (const pathname of PRIVILEGED_BASE_PATHS) entries.delete(pathname);
   for (const entry of new Set(entries.values())) {
     if (entry.type !== 'file') continue;
     entry.mode &= ~0o6000;
@@ -454,6 +531,7 @@ function executableInventoryAccepts(entries, architecture) {
     ['/usr/sbin/capsh', expected.capsh],
     ['/usr/sbin/getpcaps', expected.getpcaps],
     ['/usr/sbin/setcap', expected.setcap],
+    ...DEPRIVILEGED_BASE_TOOLS.map(([tool, pathname]) => [pathname, expected[tool]]),
   ];
   for (const [pathname, identity] of executables) {
     const executable = entries.get(pathname);
@@ -645,10 +723,15 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     ['missing setid clearing', input => ({ dockerfile: input.dockerfile.replace(
       "/usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' +",
       ': # setid clearing removed') })],
+    ['whiteout-dependent setid helper deletion', input => ({ dockerfile: input.dockerfile.replace(
+      "/usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' +",
+      "/bin/rm -f /usr/bin/chfn \\\n    && /usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' +") })],
     ['missing file capability clearing', input => ({ dockerfile: input.dockerfile.replace(
       '/usr/sbin/setcap -r "$capability_path"', ': # capability clearing removed') })],
     ['unpinned retained capability helper', input => ({ dockerfile: input.dockerfile.replace(
       PINNED_TOOL_IDENTITY.amd64.capsh.sha256, '0'.repeat(64)) })],
+    ['unpinned retained setid helper', input => ({ dockerfile: input.dockerfile.replace(
+      PINNED_TOOL_IDENTITY.arm64.chfn.sha256, '3'.repeat(64)) })],
     ['non-executable retained verifier', input => ({ dockerfile: input.dockerfile.replace(
       '/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap',
       '/bin/chmod 0444 /usr/bin/setpriv /usr/sbin/getcap') })],
@@ -703,7 +786,11 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       expect(privilegeInventory(entries)).toEqual({ setid: [], filecaps: [] });
       expect(runtimePrivilegeBoundaryAccepts(entries)).toBe(true);
       expect(executableInventoryAccepts(entries, architecture)).toBe(true);
-      for (const pathname of PRIVILEGED_BASE_PATHS) expect(entries.has(pathname)).toBe(false);
+      for (const [tool, pathname] of DEPRIVILEGED_BASE_TOOLS) {
+        expect(entries.get(pathname)).toMatchObject({ type: 'file', mode: 0o755,
+          uid: 0, gid: 0, digest: PINNED_TOOL_IDENTITY[architecture][tool].sha256,
+          size: PINNED_TOOL_IDENTITY[architecture][tool].size, capabilities: [] });
+      }
       for (const pathname of PINNED_CAPABILITY_HELPERS) expect(entries.has(pathname)).toBe(true);
     });
 
@@ -755,6 +842,39 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     });
 
   test.each(['amd64', 'arm64'])(
+    'exact %s OCI set-id materialization is retained, deprivileged, pinned, and immutable',
+    architecture => {
+      const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation(architecture));
+      const actor = { uid: 1000, gid: 1000, groups: [1000], capabilities: [],
+        noNewPrivileges: true };
+      expect(executableInventoryAccepts(entries, architecture)).toBe(true);
+      expect(runtimePrivilegeBoundaryAccepts(entries)).toBe(true);
+      for (const [tool, pathname] of DEPRIVILEGED_BASE_TOOLS) {
+        expect(entries.get(pathname)).toMatchObject({ type: 'file', mode: 0o755,
+          uid: 0, gid: 0, digest: PINNED_TOOL_IDENTITY[architecture][tool].sha256,
+          size: PINNED_TOOL_IDENTITY[architecture][tool].size, capabilities: [] });
+        for (const operation of ['chmod', 'chown', 'write', 'rename', 'unlink',
+          'symlink', 'hardlink']) {
+          expect(canRuntimeMutate(entries, pathname, operation, actor)).toBe(false);
+        }
+      }
+
+      const deletedAtBuild = new Map(entries);
+      for (const [, pathname] of DEPRIVILEGED_BASE_TOOLS) deletedAtBuild.delete(pathname);
+      expect(executableInventoryAccepts(deletedAtBuild, architecture)).toBe(false);
+
+      const restoredLowerLayer = new Map(entries);
+      for (const [, pathname] of DEPRIVILEGED_BASE_TOOLS) {
+        const helper = restoredLowerLayer.get(pathname);
+        restoredLowerLayer.set(pathname, { ...helper,
+          mode: pathname.includes('chage') || pathname.includes('expiry') ||
+            pathname.includes('unix_chkpwd') ? 0o2755 : 0o4755 });
+      }
+      expect(runtimePrivilegeBoundaryAccepts(restoredLowerLayer)).toBe(false);
+      expect(executableInventoryAccepts(restoredLowerLayer, architecture)).toBe(false);
+    });
+
+  test.each(['amd64', 'arm64'])(
     'exact %s executable identity accepts only bounded root-owned modes', architecture => {
       const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation(architecture));
       for (const [setprivMode, getcapMode] of [
@@ -794,6 +914,10 @@ describe('Mission 27 Part 14B production launcher contract', () => {
     ['setcap owner drift', '/usr/sbin/setcap', { uid: 1000 }],
     ['setcap gains file capability', '/usr/sbin/setcap',
       { capabilities: ['cap_setfcap=ep'] }],
+    ['chfn restored set-id mode', '/usr/bin/chfn', { mode: 0o4755 }],
+    ['chage restored set-group-id mode', '/usr/bin/chage', { mode: 0o2755 }],
+    ['passwd digest drift', '/usr/bin/passwd', { digest: '2'.repeat(64) }],
+    ['unix_chkpwd size drift', '/usr/sbin/unix_chkpwd', { size: 1 }],
   ])('runtime rejects executable inventory drift: %s', (_name, pathname, change) => {
     const entries = hardenRootBuiltRuntime(createRootBuiltRuntimeSimulation());
     const current = entries.get(pathname);

@@ -49,9 +49,6 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
     && /usr/bin/find /usr/local -xdev -type d -exec /bin/chmod go-w '{}' + \
     && /usr/bin/find /usr/local -xdev -type f -exec /bin/chmod go-w '{}' + \
     && /bin/chmod 0555 /usr/local/bin/node \
-    && /bin/rm -f /usr/bin/chfn /usr/bin/chsh /usr/bin/gpasswd /usr/bin/mount \
-         /usr/bin/newgrp /usr/bin/passwd /usr/bin/su /usr/bin/umount \
-         /usr/bin/chage /usr/bin/expiry /usr/sbin/unix_chkpwd \
     && /usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' + \
     && capability_inventory=/tmp/northstar-file-capabilities \
     && /usr/sbin/getcap -r / 2>/dev/null > "$capability_inventory" \
@@ -63,18 +60,43 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
        done < "$capability_inventory" \
     && /bin/rm -f "$capability_inventory" \
     && /bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap /usr/sbin/capsh \
-         /usr/sbin/getpcaps /usr/sbin/setcap \
+         /usr/sbin/getpcaps /usr/sbin/setcap /usr/bin/chage /usr/bin/chfn \
+         /usr/bin/chsh /usr/bin/expiry /usr/bin/gpasswd /usr/bin/mount \
+         /usr/bin/newgrp /usr/bin/passwd /usr/bin/su /usr/bin/umount \
+         /usr/sbin/unix_chkpwd \
     && case "$TARGETARCH" in \
          amd64) setpriv_sha='d5839b20edb0d77222b1e11be7d155c7122d381dbfad40876b0def7dd710f5bd'; setpriv_size='80192'; \
                   getcap_sha='815e0a9db190b9f50e83a9443daa368c705bf466142521b12b4770bf7f69f579'; getcap_size='14576'; \
                   capsh_sha='16246b635b9a566874e1374bb2c686379cb1ff7e57497d9bb71869d77d3bc35c'; capsh_size='54568'; \
                   getpcaps_sha='e7d7113447a52f62eae75aebb44e6f14b4706ac840a668260090e5b818af629d'; getpcaps_size='14576'; \
-                  setcap_sha='58b227dc41893b9b29e40e68a1c2af081e3a84630371980071056a80fed8fbe0'; setcap_size='14576' ;; \
+                  setcap_sha='58b227dc41893b9b29e40e68a1c2af081e3a84630371980071056a80fed8fbe0'; setcap_size='14576'; \
+                  chage_sha='f1aced4c56099e77221aa8a408a073a41d971520fd82108bd8e737cad6e7fcd1'; chage_size='80376'; \
+                  chfn_sha='0d91ea5e4961f4b09526e7eba8f1aa7fea53b56290019c656dba29256c860bb4'; chfn_size='62672'; \
+                  chsh_sha='e9ea120b0d271feb49f02ad923e8789f51128beb0f41be11f1a0e7e46484bdf0'; chsh_size='52880'; \
+                  expiry_sha='76ca5abc17ecc1ec50f9716f91b7ec9044bce69431b4fc3f172489b56d41e308'; expiry_size='31184'; \
+                  gpasswd_sha='f5ddf4ff327b07c2e1109645d35b0f75011d20877c9a0c2c1b0678dd1b8c3879'; gpasswd_size='88496'; \
+                  mount_sha='18ca60a1e1c93f58fca00607ad32bf192fea00157eac73a5341f8bd1c2201403'; mount_size='59704'; \
+                  newgrp_sha='ced400910c4fe7ab0676ae07ee6489d677baa18e1425750a21b9688ab2e02fb6'; newgrp_size='48896'; \
+                  passwd_sha='d30cd42625b51cb54c49edc5b0b3348d6a438539446af3752a6af10393c4f2d2'; passwd_size='68248'; \
+                  su_sha='4b8bb44ac13b8f8f8c08708faff91a9b63b3fa369b8cbfe1abb5ef09e8029993'; su_size='72000'; \
+                  umount_sha='54bf7fbc1db029188f5d7e1397f4ad7b2cd1e2d7a57869002d390063cbbb3268'; umount_size='35128'; \
+                  unix_chkpwd_sha='0ef065c7d555e7dc66789956ae2a67547a98a38fc5f846373975c85e95009345'; unix_chkpwd_size='39160' ;; \
          arm64) setpriv_sha='24410fedc29286402ae3b366bd3a78c3d177f7a1190797f1ea564f190097356c'; setpriv_size='133288'; \
                   getcap_sha='dfd4546e0dbf6213e920622249d10e4469a4e41cfbdc62fd0da2472acffdd836'; getcap_size='67672'; \
                   capsh_sha='ce65733af73e8357b3b61ed9495254147f70a9783af257d2dad5ab5445f44dc7'; capsh_size='70464'; \
                   getpcaps_sha='2979481886c0ebd48a0ffbe5dcd2d2d63cb6cc8d9e23174558e774cc0dc03246'; getpcaps_size='67672'; \
-                  setcap_sha='17caa8b013d9c946534dd9973d69040066778e92ac5e756e06572cc6f6c492c7'; setcap_size='67672' ;; \
+                  setcap_sha='17caa8b013d9c946534dd9973d69040066778e92ac5e756e06572cc6f6c492c7'; setcap_size='67672'; \
+                  chage_sha='be8de5f4f97c24251b9265acfc814e8565f3045c69cab72f1dd8c31002fe64f0'; chage_size='137424'; \
+                  chfn_sha='41732ba55e81bdd78c784fbe80ca85e76c7e076a4dbd1a23ef0a6607a9042540'; chfn_size='70616'; \
+                  chsh_sha='ac7c3f9f29f423b9edb8b6bf449ec65fec4b2aa047011908d6e42e9f2f603d25'; chsh_size='69064'; \
+                  expiry_sha='e8f60724dd66050667a72c415e116c13aec2dc9d320a3dc711959a63a99d8d49'; expiry_size='67880'; \
+                  gpasswd_sha='91280540427c40502aad93ea821f848061f49eadb36994ce5c8e2de6fdb3a42b'; gpasswd_size='137352'; \
+                  mount_sha='4e3aa9cd2b207144bc3206a95019fcdeeac9114cb58d9b19850b948b2003c2ef'; mount_size='67744'; \
+                  newgrp_sha='0466e757f261cc50fa879f50c0663372e399fa6653a659053037faaa334da104'; newgrp_size='69176'; \
+                  passwd_sha='bc0b502346f44eff9bf08cfd121b280684652a7e8eb4e78cba6404d32892ebf0'; passwd_size='72048'; \
+                  su_sha='c673b670821b019213950a266be48d235cd2faf6692ea7f50c399dc4a59c0396'; su_size='133312'; \
+                  umount_sha='60ac2e037660e390520585a8d6afd4ee09949eead31dbb18c21b07245d082816'; umount_size='67744'; \
+                  unix_chkpwd_sha='18b7c15bf7267ad65341e19e682e136c3f60d2de88944dcd66ededfab7442ac1'; unix_chkpwd_size='67680' ;; \
          *) exit 78 ;; \
        esac \
     && printf '%s  %s\n' "$setpriv_sha" /usr/bin/setpriv | /usr/bin/sha256sum -c - \
@@ -82,21 +104,60 @@ RUN NORTHSTAR_TARGETARCH="$TARGETARCH" /bin/sh /app/scripts/prepare-production-n
     && printf '%s  %s\n' "$capsh_sha" /usr/sbin/capsh | /usr/bin/sha256sum -c - \
     && printf '%s  %s\n' "$getpcaps_sha" /usr/sbin/getpcaps | /usr/bin/sha256sum -c - \
     && printf '%s  %s\n' "$setcap_sha" /usr/sbin/setcap | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$chage_sha" /usr/bin/chage | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$chfn_sha" /usr/bin/chfn | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$chsh_sha" /usr/bin/chsh | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$expiry_sha" /usr/bin/expiry | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$gpasswd_sha" /usr/bin/gpasswd | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$mount_sha" /usr/bin/mount | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$newgrp_sha" /usr/bin/newgrp | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$passwd_sha" /usr/bin/passwd | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$su_sha" /usr/bin/su | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$umount_sha" /usr/bin/umount | /usr/bin/sha256sum -c - \
+    && printf '%s  %s\n' "$unix_chkpwd_sha" /usr/sbin/unix_chkpwd | /usr/bin/sha256sum -c - \
     && test "$(/usr/bin/stat -c '%s' /usr/bin/setpriv)" = "$setpriv_size" \
     && test "$(/usr/bin/stat -c '%s' /usr/sbin/getcap)" = "$getcap_size" \
     && test "$(/usr/bin/stat -c '%s' /usr/sbin/capsh)" = "$capsh_size" \
     && test "$(/usr/bin/stat -c '%s' /usr/sbin/getpcaps)" = "$getpcaps_size" \
     && test "$(/usr/bin/stat -c '%s' /usr/sbin/setcap)" = "$setcap_size" \
-    && /usr/bin/printf '%s\n' 'northstar-privilege-inventory-v3' \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/chage)" = "$chage_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/chfn)" = "$chfn_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/chsh)" = "$chsh_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/expiry)" = "$expiry_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/gpasswd)" = "$gpasswd_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/mount)" = "$mount_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/newgrp)" = "$newgrp_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/passwd)" = "$passwd_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/su)" = "$su_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/bin/umount)" = "$umount_size" \
+    && test "$(/usr/bin/stat -c '%s' /usr/sbin/unix_chkpwd)" = "$unix_chkpwd_size" \
+    && /usr/bin/printf '%s\n' 'northstar-privilege-inventory-v4' \
          'setid=none' 'filecap=none' 'runtime_uid=1000' 'runtime_gid=1000' \
          'pinned_helper=/usr/sbin/capsh' 'pinned_helper=/usr/sbin/getpcaps' \
          'pinned_helper=/usr/sbin/setcap' \
+         'deprivileged_helper=/usr/bin/chage' 'deprivileged_helper=/usr/bin/chfn' \
+         'deprivileged_helper=/usr/bin/chsh' 'deprivileged_helper=/usr/bin/expiry' \
+         'deprivileged_helper=/usr/bin/gpasswd' 'deprivileged_helper=/usr/bin/mount' \
+         'deprivileged_helper=/usr/bin/newgrp' 'deprivileged_helper=/usr/bin/passwd' \
+         'deprivileged_helper=/usr/bin/su' 'deprivileged_helper=/usr/bin/umount' \
+         'deprivileged_helper=/usr/sbin/unix_chkpwd' \
          > /app/.northstar-runtime/privilege-inventory \
     && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/setpriv)" = '0:0:555' \
     && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/getcap)" = '0:0:555' \
     && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/capsh)" = '0:0:555' \
     && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/getpcaps)" = '0:0:555' \
     && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/setcap)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/chage)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/chfn)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/chsh)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/expiry)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/gpasswd)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/mount)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/newgrp)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/passwd)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/su)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/bin/umount)" = '0:0:555' \
+    && test "$(/usr/bin/stat -c '%u:%g:%a' /usr/sbin/unix_chkpwd)" = '0:0:555' \
     && /usr/bin/printf '%s\n' 'northstar-executable-inventory-v5' \
          'setpriv_path=/usr/bin/setpriv' "setpriv_sha256=$setpriv_sha" \
          "setpriv_size=$setpriv_size" 'setpriv_mode_policy=0555-or-0755' \

@@ -118,6 +118,9 @@ const DEPRIVILEGED_BASE_TOOLS = Object.freeze([
   ['su', '/usr/bin/su'], ['umount', '/usr/bin/umount'],
   ['unix_chkpwd', '/usr/sbin/unix_chkpwd'],
 ]);
+const SHADOW_GROUP_BASE_PATHS = Object.freeze([
+  '/usr/bin/chage', '/usr/bin/expiry', '/usr/sbin/unix_chkpwd',
+]);
 const RUNTIME_IDENTITY_PREDICATE =
   '[ "$saw_uid$saw_gid$saw_groups$saw_cap_inh$saw_cap_prm$saw_cap_eff$saw_cap_amb$saw_no_new_privs" = 11111111 ]';
 const STARTUP_CHECKS = Object.freeze([
@@ -266,6 +269,7 @@ function exactRuntimePlan(overrides = {}) {
     'docker-linux-arm64-base-layer-sha256=c75f989a229d12b2d2613a5997de9ff3546f664c22da9248720033a2410220f6',
     'runtime-deprivileged-setid-helpers=' + DEPRIVILEGED_BASE_TOOLS
       .map(([, pathname]) => pathname).join(','),
+    'runtime-shadow-group-setid-helpers=' + SHADOW_GROUP_BASE_PATHS.join(','),
     ...DEPRIVILEGED_BASE_TOOLS.flatMap(([tool]) => {
       const manifestTool = tool.replace('_', '-');
       const identity = PINNED_TOOL_IDENTITY.amd64[tool];
@@ -283,6 +287,7 @@ function exactRuntimePlan(overrides = {}) {
     throw new Error('Unexpected Node runtime provenance manifest.');
   }
   const expectedFrom = `FROM node:22.23.3-bookworm-slim@sha256:${PINNED_DOCKER_INDEX} AS pinned-node`;
+  const dockerLogical = inputs.dockerfile.replace(/ \\\r?\n\s*/g, ' ');
   if (inputs.dockerfile.split('\n').filter(line => line === expectedFrom).length !== 1 ||
       inputs.dockerfile.split('\n').filter(line => /^FROM /.test(line) &&
         !/^FROM pinned-node /.test(line)).length !== 1 ||
@@ -313,6 +318,11 @@ function exactRuntimePlan(overrides = {}) {
       !inputs.dockerfile.includes('/usr/sbin/getcap -r / 2>/dev/null') ||
       !inputs.dockerfile.includes('/usr/sbin/setcap -r "$capability_path"') ||
       !inputs.dockerfile.includes('/bin/rm -f "$capability_inventory"') ||
+      !dockerLogical.includes('/bin/chown 0:0 ' + DEPRIVILEGED_BASE_TOOLS
+        .map(([, pathname]) => pathname).join(' ')) ||
+      !inputs.dockerfile.includes(
+        'NorthStar production build rejected the deprivileged helper ownership. ' +
+        'Check NS14B-BUILD-SETID-OWNER.') ||
       !inputs.dockerfile.includes('/bin/chmod 0555 /usr/bin/setpriv /usr/sbin/getcap /usr/sbin/capsh') ||
       !inputs.dockerfile.includes('/usr/bin/chage /usr/bin/chfn') ||
       inputs.dockerfile.includes('/bin/rm -f /usr/bin/chfn') ||
@@ -476,8 +486,9 @@ function createRootBuiltRuntimeSimulation(architecture = 'amd64') {
   for (const [tool, pathname] of DEPRIVILEGED_BASE_TOOLS) {
     const identity = PINNED_TOOL_IDENTITY[architecture][tool];
     add(pathname, 'file', pathname.includes('chage') || pathname.includes('expiry') ||
-      pathname.includes('unix_chkpwd') ? 0o2755 : 0o4755, 0, 0,
-    identity.sha256);
+      pathname.includes('unix_chkpwd') ? 0o2755 : 0o4755, 0,
+      SHADOW_GROUP_BASE_PATHS.includes(pathname) ? 42 : 0,
+      identity.sha256);
     entries.get(pathname).size = identity.size;
   }
   add('/app/node_modules/injected-setuid', 'file', 0o4755);
@@ -501,6 +512,7 @@ function hardenRootBuiltRuntime(entries) {
     entry.mode &= ~0o6000;
     entry.capabilities = [];
   }
+  for (const [, pathname] of DEPRIVILEGED_BASE_TOOLS) entries.get(pathname).gid = 0;
   return entries;
 }
 
@@ -728,6 +740,14 @@ describe('Mission 27 Part 14B production launcher contract', () => {
       "/bin/rm -f /usr/bin/chfn \\\n    && /usr/bin/find / -xdev -type f -perm /6000 -exec /bin/chmod a-s '{}' +") })],
     ['missing file capability clearing', input => ({ dockerfile: input.dockerfile.replace(
       '/usr/sbin/setcap -r "$capability_path"', ': # capability clearing removed') })],
+    ['missing retained helper ownership normalization', input => ({ dockerfile:
+      input.dockerfile.replace('/bin/chown 0:0 /usr/bin/chage /usr/bin/chfn',
+        ': # retained helper ownership normalization removed\n    && : /usr/bin/chage /usr/bin/chfn') })],
+    ['missing fixed helper ownership diagnostic', input => ({ dockerfile:
+      input.dockerfile.replace(
+        'NorthStar production build rejected the deprivileged helper ownership. ' +
+        'Check NS14B-BUILD-SETID-OWNER.',
+        'Unbounded helper ownership failure: $helper') })],
     ['unpinned retained capability helper', input => ({ dockerfile: input.dockerfile.replace(
       PINNED_TOOL_IDENTITY.amd64.capsh.sha256, '0'.repeat(64)) })],
     ['unpinned retained setid helper', input => ({ dockerfile: input.dockerfile.replace(
@@ -777,6 +797,18 @@ describe('Mission 27 Part 14B production launcher contract', () => {
   test.each(['amd64', 'arm64'])(
     'exact %s OCI privilege inventory is empty after the final hardening mutation', architecture => {
       const entries = createRootBuiltRuntimeSimulation(architecture);
+      for (const [, pathname] of DEPRIVILEGED_BASE_TOOLS) {
+        expect(entries.get(pathname).gid).toBe(
+          SHADOW_GROUP_BASE_PATHS.includes(pathname) ? 42 : 0);
+      }
+      const modeOnly = new Map([...entries].map(([pathname, entry]) =>
+        [pathname, { ...entry, capabilities: [...entry.capabilities] }]));
+      for (const entry of new Set(modeOnly.values())) {
+        if (entry.type !== 'file') continue;
+        entry.mode &= ~0o6000;
+        entry.capabilities = [];
+      }
+      expect(executableInventoryAccepts(modeOnly, architecture)).toBe(false);
       const before = privilegeInventory(entries);
       expect(before.setid).toEqual(expect.arrayContaining(PRIVILEGED_BASE_PATHS));
       expect(before.filecaps).toEqual([

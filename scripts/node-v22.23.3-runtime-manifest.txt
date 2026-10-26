@@ -39,6 +39,7 @@ linux-arm64-setcap-size=67672
 docker-linux-amd64-base-layer-sha256=7fd1ebe418b5079d4aa36f416af9b143d127bc75b0155d71cb5fd559b5e04d39
 docker-linux-arm64-base-layer-sha256=c75f989a229d12b2d2613a5997de9ff3546f664c22da9248720033a2410220f6
 runtime-deprivileged-setid-helpers=/usr/bin/chage,/usr/bin/chfn,/usr/bin/chsh,/usr/bin/expiry,/usr/bin/gpasswd,/usr/bin/mount,/usr/bin/newgrp,/usr/bin/passwd,/usr/bin/su,/usr/bin/umount,/usr/sbin/unix_chkpwd
+runtime-shadow-group-setid-helpers=/usr/bin/chage,/usr/bin/expiry,/usr/sbin/unix_chkpwd
 linux-amd64-chage-sha256=f1aced4c56099e77221aa8a408a073a41d971520fd82108bd8e737cad6e7fcd1
 linux-amd64-chage-size=80376
 linux-amd64-chfn-sha256=0d91ea5e4961f4b09526e7eba8f1aa7fea53b56290019c656dba29256c860bb4

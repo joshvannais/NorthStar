@@ -208,9 +208,15 @@ done
 startup_check='NS14B-11'
 /usr/bin/sha256sum -c "$privilege_sha_manifest" >/dev/null 2>&1 || fail
 exec 3< "$privilege_manifest"
-for expected_privilege_line in northstar-privilege-inventory-v3 setid=none filecap=none \
+for expected_privilege_line in northstar-privilege-inventory-v4 setid=none filecap=none \
   runtime_uid=1000 runtime_gid=1000 pinned_helper=/usr/sbin/capsh \
-  pinned_helper=/usr/sbin/getpcaps pinned_helper=/usr/sbin/setcap; do
+  pinned_helper=/usr/sbin/getpcaps pinned_helper=/usr/sbin/setcap \
+  deprivileged_helper=/usr/bin/chage deprivileged_helper=/usr/bin/chfn \
+  deprivileged_helper=/usr/bin/chsh deprivileged_helper=/usr/bin/expiry \
+  deprivileged_helper=/usr/bin/gpasswd deprivileged_helper=/usr/bin/mount \
+  deprivileged_helper=/usr/bin/newgrp deprivileged_helper=/usr/bin/passwd \
+  deprivileged_helper=/usr/bin/su deprivileged_helper=/usr/bin/umount \
+  deprivileged_helper=/usr/sbin/unix_chkpwd; do
   IFS= read -r privilege_line <&3 || fail
   [ "$privilege_line" = "$expected_privilege_line" ] || fail
 done
@@ -232,6 +238,17 @@ case "$runtime_arch:$node_sha256" in
     getpcaps_size='14576'
     setcap_sha='58b227dc41893b9b29e40e68a1c2af081e3a84630371980071056a80fed8fbe0'
     setcap_size='14576'
+    chage_sha='f1aced4c56099e77221aa8a408a073a41d971520fd82108bd8e737cad6e7fcd1'; chage_size='80376'
+    chfn_sha='0d91ea5e4961f4b09526e7eba8f1aa7fea53b56290019c656dba29256c860bb4'; chfn_size='62672'
+    chsh_sha='e9ea120b0d271feb49f02ad923e8789f51128beb0f41be11f1a0e7e46484bdf0'; chsh_size='52880'
+    expiry_sha='76ca5abc17ecc1ec50f9716f91b7ec9044bce69431b4fc3f172489b56d41e308'; expiry_size='31184'
+    gpasswd_sha='f5ddf4ff327b07c2e1109645d35b0f75011d20877c9a0c2c1b0678dd1b8c3879'; gpasswd_size='88496'
+    mount_sha='18ca60a1e1c93f58fca00607ad32bf192fea00157eac73a5341f8bd1c2201403'; mount_size='59704'
+    newgrp_sha='ced400910c4fe7ab0676ae07ee6489d677baa18e1425750a21b9688ab2e02fb6'; newgrp_size='48896'
+    passwd_sha='d30cd42625b51cb54c49edc5b0b3348d6a438539446af3752a6af10393c4f2d2'; passwd_size='68248'
+    su_sha='4b8bb44ac13b8f8f8c08708faff91a9b63b3fa369b8cbfe1abb5ef09e8029993'; su_size='72000'
+    umount_sha='54bf7fbc1db029188f5d7e1397f4ad7b2cd1e2d7a57869002d390063cbbb3268'; umount_size='35128'
+    unix_chkpwd_sha='0ef065c7d555e7dc66789956ae2a67547a98a38fc5f846373975c85e95009345'; unix_chkpwd_size='39160'
     ;;
   arm64:d09e299258c24f7cdf6f5d5ec185e3a56512b27a697113735dac909f1cac7b8d)
     setpriv_sha='24410fedc29286402ae3b366bd3a78c3d177f7a1190797f1ea564f190097356c'
@@ -244,6 +261,17 @@ case "$runtime_arch:$node_sha256" in
     getpcaps_size='67672'
     setcap_sha='17caa8b013d9c946534dd9973d69040066778e92ac5e756e06572cc6f6c492c7'
     setcap_size='67672'
+    chage_sha='be8de5f4f97c24251b9265acfc814e8565f3045c69cab72f1dd8c31002fe64f0'; chage_size='137424'
+    chfn_sha='41732ba55e81bdd78c784fbe80ca85e76c7e076a4dbd1a23ef0a6607a9042540'; chfn_size='70616'
+    chsh_sha='ac7c3f9f29f423b9edb8b6bf449ec65fec4b2aa047011908d6e42e9f2f603d25'; chsh_size='69064'
+    expiry_sha='e8f60724dd66050667a72c415e116c13aec2dc9d320a3dc711959a63a99d8d49'; expiry_size='67880'
+    gpasswd_sha='91280540427c40502aad93ea821f848061f49eadb36994ce5c8e2de6fdb3a42b'; gpasswd_size='137352'
+    mount_sha='4e3aa9cd2b207144bc3206a95019fcdeeac9114cb58d9b19850b948b2003c2ef'; mount_size='67744'
+    newgrp_sha='0466e757f261cc50fa879f50c0663372e399fa6653a659053037faaa334da104'; newgrp_size='69176'
+    passwd_sha='bc0b502346f44eff9bf08cfd121b280684652a7e8eb4e78cba6404d32892ebf0'; passwd_size='72048'
+    su_sha='c673b670821b019213950a266be48d235cd2faf6692ea7f50c399dc4a59c0396'; su_size='133312'
+    umount_sha='60ac2e037660e390520585a8d6afd4ee09949eead31dbb18c21b07245d082816'; umount_size='67744'
+    unix_chkpwd_sha='18b7c15bf7267ad65341e19e682e136c3f60d2de88944dcd66ededfab7442ac1'; unix_chkpwd_size='67680'
     ;;
   *) fail ;;
 esac
@@ -369,6 +397,31 @@ probe_capability=$(/usr/sbin/getcap "$privilege_probe" 2>/dev/null) || {
 /bin/rm -f "$privilege_probe" || fail
 
 startup_check='NS14B-14'
+check_deprivileged_helper() {
+  helper_path=$1
+  helper_size=$2
+  helper_sha=$3
+  [ -f "$helper_path" ] && [ -x "$helper_path" ] && [ ! -L "$helper_path" ] &&
+    [ "$(/usr/bin/readlink -f -- "$helper_path" 2>/dev/null)" = "$helper_path" ] &&
+    [ "$(/usr/bin/stat -c '%s' -- "$helper_path" 2>/dev/null)" = "$helper_size" ] || fail
+  case "$(/usr/bin/stat -c '%u:%g:%a' -- "$helper_path" 2>/dev/null)" in
+    0:0:555|0:0:755) ;;
+    *) fail ;;
+  esac
+  /usr/bin/printf '%s  %s\n' "$helper_sha" "$helper_path" |
+    /usr/bin/sha256sum -c - >/dev/null 2>&1 || fail
+}
+check_deprivileged_helper /usr/bin/chage "$chage_size" "$chage_sha"
+check_deprivileged_helper /usr/bin/chfn "$chfn_size" "$chfn_sha"
+check_deprivileged_helper /usr/bin/chsh "$chsh_size" "$chsh_sha"
+check_deprivileged_helper /usr/bin/expiry "$expiry_size" "$expiry_sha"
+check_deprivileged_helper /usr/bin/gpasswd "$gpasswd_size" "$gpasswd_sha"
+check_deprivileged_helper /usr/bin/mount "$mount_size" "$mount_sha"
+check_deprivileged_helper /usr/bin/newgrp "$newgrp_size" "$newgrp_sha"
+check_deprivileged_helper /usr/bin/passwd "$passwd_size" "$passwd_sha"
+check_deprivileged_helper /usr/bin/su "$su_size" "$su_sha"
+check_deprivileged_helper /usr/bin/umount "$umount_size" "$umount_sha"
+check_deprivileged_helper /usr/sbin/unix_chkpwd "$unix_chkpwd_size" "$unix_chkpwd_sha"
 for privilege_root in /usr "$CANONICAL_ROOT" /var/lib/northstar /tmp /home; do
   [ -e "$privilege_root" ] || continue
   unexpected_setid=$(/usr/bin/find "$privilege_root" -xdev -type f \

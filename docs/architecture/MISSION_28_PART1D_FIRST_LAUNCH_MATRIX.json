@@ -1,0 +1,443 @@
+{
+  "contractVersion": "mission28.part1d.first-launch-matrix.v1",
+  "authority": {
+    "mission": 28,
+    "part": "1D",
+    "state": "implementation_candidate",
+    "baselineCommit": "eba50a7903ac0000a9eb663d52744cc760f3afd3",
+    "baselineTree": "f923240512ae70a1029708ff9f9c9354a21d504b",
+    "part1C": {
+      "sourceHead": "467668a9de408adb381ac91beb61cc73b01532ec",
+      "pullRequest": 551,
+      "mergedMain": "eba50a7903ac0000a9eb663d52744cc760f3afd3",
+      "deployment": "fbca00f3-5806-46c3-981f-7120306a09ed",
+      "deploymentState": "SUCCESS_RUNNING",
+      "imageSha256": "ff3695a8ea06b5096d11487c21e7d349f5a686fba2f20e32818df11e62f75452",
+      "auditVerdict": "P0=P1=P2=P3=0",
+      "auditReportSha256": null
+    },
+    "frozenInputs": [
+      {
+        "path": "docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md",
+        "normalizedLfSha256": "92DAD00F8A7623A87C780FC1AC965B66569616650F53FDED8454F51872458179"
+      },
+      {
+        "path": "docs/architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json",
+        "normalizedLfSha256": "62E37CF07A26F0C2B1A50A2C2F0EB927695500DB32B44B16E5B431F594B93142"
+      },
+      {
+        "path": "docs/architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json",
+        "normalizedLfSha256": "1CB5FF594AE7D1BEED313C1A94D7FE8200FB0024B36DF11B4C668F211481312B"
+      }
+    ],
+    "runtimeImplemented": false,
+    "runtimeAuthorityGranted": false,
+    "providerAuthorityGranted": false,
+    "externalEffectAuthorityGranted": false
+  },
+  "requiredDimensions": [
+    "source_classes",
+    "action_families",
+    "roles_capabilities",
+    "channels",
+    "recipient_classes",
+    "countries_regions",
+    "consent_bases",
+    "quiet_hours",
+    "languages",
+    "providers_modes",
+    "limits",
+    "retention",
+    "legal_provider_review",
+    "rollout_flags",
+    "demo_behavior",
+    "performance_bounds",
+    "unavailable_states",
+    "migration_rules",
+    "audit_independence",
+    "release_sequence"
+  ],
+  "decisionStates": [
+    "conditional_first_launch_not_implemented",
+    "unavailable",
+    "deny_invalid",
+    "deny_unsupported"
+  ],
+  "sourceClasses": [
+    {
+      "id": "mission20_business_contact_preferences",
+      "owner": "Mission 20",
+      "boundary": "Current tenant identity, communication identity, locations, fixed roles, contact preferences, and accepted operating policy are facts only."
+    },
+    {
+      "id": "mission21_knowledge_reference",
+      "owner": "Mission 21",
+      "boundary": "Only one reviewed provider-agnostic knowledge version/reference may be read; publication and projection remain Mission 21 authority."
+    },
+    {
+      "id": "mission22_appointment_dispatch",
+      "owner": "Mission 22",
+      "boundary": "Current appointment, assignment, dispatch, timing, and response-handoff facts may be read; scheduling and rescheduling remain upstream."
+    },
+    {
+      "id": "mission23_work_execution",
+      "owner": "Mission 23",
+      "boundary": "Current work state, field events, completion/reopening evidence, and accepted customer-update facts may be read; work truth remains upstream."
+    },
+    {
+      "id": "mission24_estimate_quote",
+      "owner": "Mission 24",
+      "boundary": "One exact current estimate, proposal, quote, commercial revision, response, expiry, or customer-safe document may be read; pricing and approval remain upstream."
+    },
+    {
+      "id": "mission25_26_advisory",
+      "owner": "Missions 25 and 26",
+      "boundary": "Accepted tenant-private observations, recommendations, forecasts, alerts, evidence quality, uncertainty, and reviewed handoffs are advisory facts, never permission."
+    },
+    {
+      "id": "mission27_financial_collection",
+      "owner": "Mission 27",
+      "boundary": "One exact current invoice, balance, due/aging, payment, receipt, refund, dispute, settlement, or reviewed collection-handoff fact may be read; financial truth remains upstream."
+    }
+  ],
+  "capabilities": [
+    { "id": "automation_internal_action_view", "firstLaunch": true, "boundary": "View tenant-private internal action material within exact record scope." },
+    { "id": "automation_internal_action_prepare", "firstLaunch": true, "boundary": "Prepare one bounded no-external-effect internal action from one exact current source snapshot." },
+    { "id": "automation_approval_request_create", "firstLaunch": true, "boundary": "Create one in-app request for the tenant owner; creating it grants no downstream approval." },
+    { "id": "automation_approval_decide", "firstLaunch": true, "boundary": "Tenant owner may decide one exact in-app request; the decision still cannot execute an unavailable downstream effect." },
+    { "id": "automation_collection_work_item_view", "firstLaunch": true, "boundary": "View one internal reviewed collection work item without customer, legal, provider, or financial effect." },
+    { "id": "automation_collection_work_item_prepare", "firstLaunch": true, "boundary": "Prepare one owner-only internal work item from one current Mission 27 reviewed handoff." },
+    { "id": "automation_external_effect_execute", "firstLaunch": false, "boundary": "Unavailable in the first launch; no role receives this capability." },
+    { "id": "automation_upstream_or_money_mutate", "firstLaunch": false, "boundary": "Unsupported permanently in Mission 28; no role receives this capability." }
+  ],
+  "roles": [
+    {
+      "id": "owner",
+      "capabilityIds": [
+        "automation_internal_action_view",
+        "automation_internal_action_prepare",
+        "automation_approval_request_create",
+        "automation_approval_decide",
+        "automation_collection_work_item_view",
+        "automation_collection_work_item_prepare"
+      ],
+      "boundary": "Fixed tenant owner only; recent/exact authentication and later durable policy/approval authority remain mandatory where required."
+    },
+    {
+      "id": "admin",
+      "capabilityIds": [
+        "automation_internal_action_view",
+        "automation_internal_action_prepare",
+        "automation_approval_request_create"
+      ],
+      "boundary": "Fixed tenant admin may prepare internal work and request owner approval but cannot decide owner approval or operate collection escalation at first launch."
+    },
+    {
+      "id": "staff",
+      "capabilityIds": ["automation_internal_action_view"],
+      "boundary": "Fixed tenant staff may view only an explicitly assigned internal action; no creation, approval, collection, recipient, channel, provider, or effect authority."
+    }
+  ],
+  "channels": [
+    { "id": "in_app_passive", "firstLaunchState": "conditional", "boundary": "Passive authenticated tenant UI only; no push, email, SMS, provider, or operating-system dispatch." },
+    { "id": "native_manual_handoff", "firstLaunchState": "manual_excluded", "boundary": "Existing tel, mailto, file, copy, or composer handoff stays manual and is never counted as a Mission 28 attempt, send, delivery, reply, or outcome." },
+    { "id": "email", "firstLaunchState": "unavailable", "boundary": "No sender, consent basis, template, provider, deliverability, callback, or legal/provider review is accepted." },
+    { "id": "sms", "firstLaunchState": "unavailable", "boundary": "No sender, consent basis, template, provider, deliverability, callback, or legal/provider review is accepted." },
+    { "id": "secure_link_delivery", "firstLaunchState": "unavailable", "boundary": "Existing link creation/copy remains upstream/manual; automated recipient delivery is unavailable." },
+    { "id": "provider_callback", "firstLaunchState": "evidence_only_unavailable", "boundary": "A callback may later be evidence after authentication/reconciliation; it is never a channel or authority and no provider is enabled." }
+  ],
+  "recipientClasses": [
+    { "id": "tenant_owner", "firstLaunchState": "conditional_internal", "boundary": "Exact authenticated owner in the same tenant and session/record scope." },
+    { "id": "tenant_admin", "firstLaunchState": "conditional_internal", "boundary": "Exact authenticated admin in the same tenant and permitted internal scope." },
+    { "id": "assigned_staff", "firstLaunchState": "conditional_internal_view_only", "boundary": "Exact assigned staff member may only view the assigned internal item." },
+    { "id": "customer", "firstLaunchState": "unavailable_external", "boundary": "No automated customer recipient is accepted at first launch." },
+    { "id": "authorized_billing_contact", "firstLaunchState": "unavailable_external", "boundary": "No automated billing-contact recipient is accepted at first launch." },
+    { "id": "lead_or_prospect", "firstLaunchState": "unavailable_external", "boundary": "No automated lead/prospect recipient is accepted at first launch." },
+    { "id": "collection_agency_legal_credit_or_other_external", "firstLaunchState": "deny_unsupported", "boundary": "External collection, legal, credit, enforcement, or other widened recipient classes are unsupported." }
+  ],
+  "countryRegionPolicy": {
+    "internalMode": "tenant_configured_timezone_and_region_metadata_only",
+    "internalBoundary": "Internal passive actions may preserve the tenant's accepted timezone/region metadata but make no country eligibility, consent, or legal conclusion.",
+    "externalAcceptedCountriesRegions": [],
+    "unknownOrMissing": "unavailable",
+    "externalBoundary": "No country or region is accepted for automated customer, document, financial, or collection communication until professional review is recorded."
+  },
+  "consentBases": {
+    "internalAccepted": ["authenticated_tenant_membership_and_exact_capability"],
+    "externalAccepted": [],
+    "unknownOrConflicting": "unavailable",
+    "boundary": "Tenant membership is internal product authority, not customer communications consent or a legal basis for external contact."
+  },
+  "quietHours": {
+    "inAppPassive": "not_applicable_no_interruptive_delivery",
+    "external": "unavailable_until_exact_tenant_timezone_quiet_hours_and_professional_review",
+    "missingTimezone": "unavailable",
+    "boundary": "No first-launch action may bypass quiet-hour evaluation by falling back to another channel or time basis."
+  },
+  "languages": {
+    "internalInterface": ["en-US"],
+    "externalCustomerContent": [],
+    "unknownOrUnsupported": "unavailable",
+    "boundary": "English internal labels are not acceptance of an external template, translation, locale, or legal meaning."
+  },
+  "providerModes": [
+    { "id": "none_internal", "firstLaunchState": "conditional", "boundary": "In-app passive state uses no external provider, credential, callback, or transport." },
+    { "id": "provider_disabled", "firstLaunchState": "required_default", "boundary": "Every external/provider path remains disabled and must fail closed without fallback." },
+    { "id": "sandbox", "firstLaunchState": "unavailable", "boundary": "No provider sandbox account, capability, credential, sender, template, callback, or evidence is accepted." },
+    { "id": "live", "firstLaunchState": "unavailable", "boundary": "No live provider, recipient, message, document, collection, financial, or money effect is accepted." }
+  ],
+  "limits": {
+    "maxTenantsPerActionUnit": 1,
+    "maxSourceSnapshotsPerActionUnit": 1,
+    "maxActionsPerEvaluation": 1,
+    "maxInternalRecipientsPerAction": 1,
+    "maxExternalRecipientsPerAction": 0,
+    "maxExternalMessagesPerAction": 0,
+    "maxProviderAttemptsPerAction": 0,
+    "maxRetriesPerAction": 0,
+    "maxUpstreamMutationsPerAction": 0,
+    "maxMoneyMovementsPerAction": 0,
+    "batchOrFanout": "unavailable"
+  },
+  "retention": {
+    "staticAuthority": "repository_history",
+    "runtimeRecords": "unavailable_until_parts2D_and13E_accept_exact_retention_deletion_and_export_rules",
+    "providerPayloads": "none",
+    "customerContent": "none",
+    "launchWithoutAcceptedRuntimeRetention": "unavailable"
+  },
+  "legalProviderReview": {
+    "professionalLegalPrivacyConsentCollectionsRegulatoryReview": "unavailable",
+    "providerAccountCapabilityCredentialTemplateCallbackReview": "unavailable",
+    "securityOpinion": "unavailable",
+    "boundary": "The matrix is a product contract, not a professional opinion; unavailable review blocks external cells and cannot be inferred from tests or implementation."
+  },
+  "rolloutFlags": {
+    "globalAutomationEnabled": false,
+    "tenantAutomationEnabled": false,
+    "externalEffectsEnabled": false,
+    "providerEffectsEnabled": false,
+    "moneyEffectsEnabled": false,
+    "default": "fail_closed_disabled",
+    "boundary": "Part 1D defines names only; it adds no flag, configuration, runtime read, or production mutation."
+  },
+  "demoBehavior": {
+    "state": "fictional_isolated_no_effect_only",
+    "paidDataAccess": false,
+    "realRecipientAccess": false,
+    "credentialAccess": false,
+    "providerCalls": 0,
+    "moneyEffects": 0,
+    "externalEffects": 0,
+    "resetContract": "required_before_demo_runtime_support",
+    "boundary": "Demo labels or interactions can never serve as paid, provider, delivery, outcome, consent, or legal evidence."
+  },
+  "performanceBounds": {
+    "maxSourceSnapshotsPerDecision": 1,
+    "maxActionUnitsPerDecision": 1,
+    "maxInternalRecipientsPerDecision": 1,
+    "maxExternalFanout": 0,
+    "maxProviderWork": 0,
+    "maxDecisionInputBytes": 65536,
+    "mountedLocalDecisionDeadlineMilliseconds": 2000,
+    "hostedProductionSla": "unavailable",
+    "boundary": "The local deadline is a later functional acceptance bound, not hosted capacity, load, percentile, or SLA evidence."
+  },
+  "unavailableStates": [
+    "missing_or_ambiguous_tenant_actor_role_or_capability",
+    "missing_or_stale_source_identity_version_digest_or_currentness",
+    "mixed_cross_tenant_cross_record_or_cross_revision_state",
+    "missing_or_replayed_approval_policy_preview_or_action_identity",
+    "missing_or_conflicting_recipient_permission_suppression_or_quiet_hours",
+    "unsupported_country_region_language_recipient_or_channel",
+    "missing_retention_deletion_or_export_contract",
+    "missing_professional_legal_privacy_consent_collections_or_regulatory_review",
+    "missing_provider_account_capability_credential_sender_template_callback_or_mode",
+    "provider_unknown_uncertain_unreconciled_or_corrected_outcome",
+    "part1b_legacy_ambiguous_simulated_manual_or_excluded_surface_used_as_authority",
+    "requested_external_upstream_financial_accounting_legal_or_money_effect",
+    "limit_size_deadline_or_resource_bound_exceeded"
+  ],
+  "migrationRules": {
+    "part1DMigration": "none",
+    "sourceMigrationCount": 268,
+    "latestSourceMigration": 272,
+    "migration273Present": false,
+    "futureRule": "Additive reviewed migrations only after exact later-slice authority; no destructive rewrite, implicit legacy adoption, production SQL, or status claim without applied-history evidence."
+  },
+  "auditIndependence": {
+    "writerEvidenceIndependent": false,
+    "requiredAudit": "fresh_isolated_whole_exact_head",
+    "acceptedSeverityCountsRequired": "P0=P1=P2=P3=0",
+    "sameWriterCorrections": true,
+    "sameAuditorReauditRequired": true
+  },
+  "releaseSequence": [
+    "freeze_exact_clean_remote_head",
+    "fresh_independent_whole_head_audit",
+    "same_writer_corrects_any_finding",
+    "fresh_whole_corrected_head_reaudit",
+    "one_normal_pull_request_and_merge",
+    "one_automatic_deployment_without_manual_mutation",
+    "startup_migration_health_root_demo_passive_verification"
+  ],
+  "launchCells": [
+    {
+      "actionFamily": "internal_read_digest_task",
+      "owner": "Mission 28 tenant-private internal automation policy",
+      "riskClass": "internal_sensitive",
+      "firstLaunchState": "conditional_first_launch_not_implemented",
+      "sourceClassIds": [
+        "mission20_business_contact_preferences",
+        "mission21_knowledge_reference",
+        "mission22_appointment_dispatch",
+        "mission23_work_execution",
+        "mission24_estimate_quote",
+        "mission25_26_advisory",
+        "mission27_financial_collection"
+      ],
+      "roleIds": ["owner", "admin", "staff"],
+      "capabilityIds": ["automation_internal_action_view", "automation_internal_action_prepare"],
+      "channelIds": ["in_app_passive"],
+      "recipientClassIds": ["tenant_owner", "tenant_admin", "assigned_staff"],
+      "providerModeIds": ["none_internal", "provider_disabled"],
+      "allowedBindings": [
+        { "roleId": "owner", "capabilityId": "automation_internal_action_view", "recipientClassId": "tenant_owner" },
+        { "roleId": "owner", "capabilityId": "automation_internal_action_prepare", "recipientClassId": "tenant_owner" },
+        { "roleId": "owner", "capabilityId": "automation_internal_action_prepare", "recipientClassId": "tenant_admin" },
+        { "roleId": "owner", "capabilityId": "automation_internal_action_prepare", "recipientClassId": "assigned_staff" },
+        { "roleId": "admin", "capabilityId": "automation_internal_action_view", "recipientClassId": "tenant_admin" },
+        { "roleId": "admin", "capabilityId": "automation_internal_action_prepare", "recipientClassId": "tenant_owner" },
+        { "roleId": "admin", "capabilityId": "automation_internal_action_prepare", "recipientClassId": "tenant_admin" },
+        { "roleId": "admin", "capabilityId": "automation_internal_action_prepare", "recipientClassId": "assigned_staff" },
+        { "roleId": "staff", "capabilityId": "automation_internal_action_view", "recipientClassId": "assigned_staff" }
+      ],
+      "boundary": "One passive in-app internal item from one exact accepted source snapshot; staff is view-only and no external or upstream effect exists."
+    },
+    {
+      "actionFamily": "owner_approval_request",
+      "owner": "Mission 28 owner-control contract",
+      "riskClass": "owner_attention",
+      "firstLaunchState": "conditional_first_launch_not_implemented",
+      "sourceClassIds": [
+        "mission20_business_contact_preferences",
+        "mission21_knowledge_reference",
+        "mission22_appointment_dispatch",
+        "mission23_work_execution",
+        "mission24_estimate_quote",
+        "mission25_26_advisory",
+        "mission27_financial_collection"
+      ],
+      "roleIds": ["owner", "admin"],
+      "capabilityIds": ["automation_approval_request_create", "automation_approval_decide"],
+      "channelIds": ["in_app_passive"],
+      "recipientClassIds": ["tenant_owner"],
+      "providerModeIds": ["none_internal", "provider_disabled"],
+      "allowedBindings": [
+        { "roleId": "owner", "capabilityId": "automation_approval_request_create", "recipientClassId": "tenant_owner" },
+        { "roleId": "owner", "capabilityId": "automation_approval_decide", "recipientClassId": "tenant_owner" },
+        { "roleId": "admin", "capabilityId": "automation_approval_request_create", "recipientClassId": "tenant_owner" }
+      ],
+      "boundary": "Admin or owner may later prepare one in-app request, but only the exact owner may decide it and no unavailable downstream effect executes."
+    },
+    {
+      "actionFamily": "customer_communication",
+      "owner": "Mission 28 approved customer-communication policy",
+      "riskClass": "external_communication",
+      "firstLaunchState": "unavailable",
+      "sourceClassIds": [],
+      "roleIds": [],
+      "capabilityIds": [],
+      "channelIds": [],
+      "recipientClassIds": [],
+      "providerModeIds": ["provider_disabled"],
+      "allowedBindings": [],
+      "boundary": "No first-launch customer communication is accepted because country/region, consent, quiet hours, language, provider, retention, and professional review gates are unavailable."
+    },
+    {
+      "actionFamily": "secure_document_delivery",
+      "owner": "Mission 28 approved document-delivery policy over upstream-owned documents",
+      "riskClass": "sensitive_document_delivery",
+      "firstLaunchState": "unavailable",
+      "sourceClassIds": [],
+      "roleIds": [],
+      "capabilityIds": [],
+      "channelIds": [],
+      "recipientClassIds": [],
+      "providerModeIds": ["provider_disabled"],
+      "allowedBindings": [],
+      "boundary": "Existing secure-link creation/copy is not automated delivery; no first-launch recipient delivery is accepted without exact later authority and review."
+    },
+    {
+      "actionFamily": "financial_reminder",
+      "owner": "Mission 28 approved reminder policy over Mission 27 financial facts",
+      "riskClass": "financial_communication",
+      "firstLaunchState": "unavailable",
+      "sourceClassIds": [],
+      "roleIds": [],
+      "capabilityIds": [],
+      "channelIds": [],
+      "recipientClassIds": [],
+      "providerModeIds": ["provider_disabled"],
+      "allowedBindings": [],
+      "boundary": "No first-launch financial communication is accepted; exact billing-recipient, consent, legal/provider, retention, channel, and currentness gates remain unavailable."
+    },
+    {
+      "actionFamily": "collection_escalation",
+      "owner": "Mission 28 human-controlled collection communication policy over Mission 27 reviewed handoff",
+      "riskClass": "collection_communication",
+      "firstLaunchState": "conditional_first_launch_not_implemented",
+      "sourceClassIds": ["mission27_financial_collection"],
+      "roleIds": ["owner"],
+      "capabilityIds": ["automation_collection_work_item_view", "automation_collection_work_item_prepare"],
+      "channelIds": ["in_app_passive"],
+      "recipientClassIds": ["tenant_owner"],
+      "providerModeIds": ["none_internal", "provider_disabled"],
+      "allowedBindings": [
+        { "roleId": "owner", "capabilityId": "automation_collection_work_item_view", "recipientClassId": "tenant_owner" },
+        { "roleId": "owner", "capabilityId": "automation_collection_work_item_prepare", "recipientClassId": "tenant_owner" }
+      ],
+      "boundary": "One owner-only internal work item from one exact current reviewed Mission 27 handoff; no customer contact, legal escalation, provider, financial mutation, or money effect."
+    },
+    {
+      "actionFamily": "unsupported_upstream_mutation_or_money_movement",
+      "owner": "No Mission 28 owner",
+      "riskClass": "prohibited_mutation_or_money",
+      "firstLaunchState": "deny_unsupported",
+      "sourceClassIds": [],
+      "roleIds": [],
+      "capabilityIds": [],
+      "channelIds": [],
+      "recipientClassIds": [],
+      "providerModeIds": ["provider_disabled"],
+      "allowedBindings": [],
+      "boundary": "No role, capability, source, channel, recipient, country, consent basis, provider, mode, flag, evidence, demo, or later Mission 28 policy may authorize this family."
+    }
+  ],
+  "part1Exit": {
+    "inventorySurfaceCount": 49,
+    "inventorySourceReferenceCount": 181,
+    "inventoryDispositionCount": 6,
+    "actionFamilyCount": 7,
+    "firstLaunchConditionalActionFamilies": [
+      "internal_read_digest_task",
+      "owner_approval_request",
+      "collection_escalation"
+    ],
+    "unavailableFirstLaunchActionFamilies": [
+      "customer_communication",
+      "secure_document_delivery",
+      "financial_reminder"
+    ],
+    "unsupportedActionFamilies": ["unsupported_upstream_mutation_or_money_movement"],
+    "part1CUnsupportedCombinationCount": 16,
+    "state": "candidate_pending_independent_acceptance"
+  },
+  "unavailableEvidence": [
+    "Part 1D independent audit, PR, merge, deployment, release, and runtime implementation",
+    "Production provider accounts, credentials, senders, callbacks, templates, capability, sandbox, deliverability, or live mode",
+    "Any automated customer communication, secure document delivery, financial reminder, external collection escalation, real recipient/message, provider effect, or live money",
+    "Professional legal, privacy, communications-consent, collections, debt, consumer-protection, country/region, regulatory, provider, or security review",
+    "Private-production customer evidence, hosted load or SLA, exercised disaster restore, physical Safari/devices, manual assistive-technology review, or founder visual approval"
+  ]
+}

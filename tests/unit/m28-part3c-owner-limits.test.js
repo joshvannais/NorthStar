@@ -771,22 +771,27 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     expect(validateReplay(profile, seal(changed, contract), trusted)).toBe('deny_digest_or_replay_conflict');
   });
 
-  test('roadmap and ledger record Part 3B released and only Part 3C current', () => {
+  test('roadmap and ledger record Part 3C released and only Part 3D current', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–3B released; Part 3C implementation candidate only.');
+      expect(document).toContain('Parts 1A–3C released; Part 3D implementation candidate only.');
       expect(document).toContain('56a39854325826982283d78dffed4e039c61335b');
       expect(document).toContain('d88a0fe294619fa982bc1541affc8052031cc406');
       expect(document).toContain('81bc25de-eb77-413e-8745-97882bdd7c09');
       expect(document).toContain('96720a1fc1c5379d53992081046540f28ddf1c42307cb34f0b824fe737ef8974');
+      expect(document).toContain('3cd41fe5379d92fe629c62e0ebc3a51d8886c3cc');
+      expect(document).toContain('d227c50f73e3fb9fc89ee48332a9eda57d1c8713');
+      expect(document).toContain('b745a483-1031-4020-9ab2-38c0044e599d');
+      expect(document).toContain('27c84d6cd34be043aa2f6388080c90b5500a8ea1d87ab018c9d58f34277e5590');
       expect(document).toContain('Part 3C');
     }
     expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | **Released** |');
-    expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | **Implementation candidate** |');
-    expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | Planned / unimplemented | None |');
-    expect(roadmap).not.toContain('Part 3C independently accepted');
-    expect(ledger).toContain('Part 3C has no independent acceptance, PR, merge, deployment or release evidence');
+    expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | **Released** |');
+    expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Implementation candidate** |');
+    expect(roadmap).toContain('Released Part 3C artifacts');
+    expect(roadmap).toContain('Current Part 3D artifacts');
+    expect(ledger).toContain('Part 3D has no independent acceptance, PR, merge, deployment or release evidence');
   });
 
   test('keeps runtime database provider effect and migration boundaries unavailable', () => {

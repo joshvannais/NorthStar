@@ -66,10 +66,16 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
     expect(model.retention.automaticDeletionAvailable).toBe(false);
     expect(model.digestAndCurrentness).toMatchObject({
       lifecycleSourceSetMustResolveFromStoredAuthority: true,
+      causalParentScope: 'exact_same_tenant_run_policy_id_and_policy_version',
+      historicalRunCausality: 'policy_and_run_locked_bound_active_event_strictly_precedes_every_run_record_and_is_latest_lifecycle_state_at_first_record',
+      historicalRunScope: 'every_run_record_has_exact_policy_id_policy_version_and_source_set_digest',
+      sourceStateAggregation: 'source_state_and_source_set_marker_derive_only_from_exact_source_bindings',
+      recordMarkerAggregation: 'record_marker_derives_from_policy_state_plus_independently_derived_source_state',
+      lifecycleSerialization: 'one_tenant_policy_lock_before_current_or_related_version_lifecycle_reads',
       unrelatedLifecycleBindings: 'deny',
       nonCurrentMayGrantActiveAuthority: false,
     });
-    expect(model.digestAndCurrentness.supersessionRule).toContain('resolved_active_lifecycle_event_digest');
+    expect(model.digestAndCurrentness.supersessionRule).toContain('latest_state_active_and_no_terminal_event');
     expect(model.digestAndCurrentness.boundedRollbackRule).toContain('exact_stored_immediate_predecessor');
     expect(model.digestAndCurrentness.trustedExpiryRule).toContain('database_statement_time');
     expect(model.legacyConversion).toMatchObject({ automaticDiscovery: 'deny', automaticImport: 'deny',
@@ -129,8 +135,16 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
     expect(sql).toContain("source_origin='mission28_native'");
     expect(sql).toContain('converted_policy_id IS NULL');
     expect(sql).toContain('Mission 28 lifecycle successor authority unavailable');
+    expect(sql).toContain("':m28-lifecycle-policy:'||policy::text");
+    expect(sql).toContain("related_latest_state IS DISTINCT FROM 'active'");
+    expect(sql).toContain('related_terminal_digest IS NOT NULL');
     expect(sql).toContain('Mission 28 lifecycle rollback authority unavailable');
     expect(sql).toContain('Mission 28 policy expiry is not due');
+    expect(sql).toContain('source_state_value IS DISTINCT FROM expected_source_state');
+    expect(sql).toContain('source_set_marker IS DISTINCT FROM expected_source_set_marker');
+    expect(sql).toContain('AND policy_id=policy AND policy_version=version_value');
+    expect(sql).toContain('event_row.recorded_at>=first_record_at');
+    expect(sql).toContain('latest_event_row.lifecycle_event_id IS DISTINCT FROM event_row.lifecycle_event_id');
     expect(sql).not.toMatch(/DROP\s+(TABLE|COLUMN)|ALTER\s+COLUMN\s+.*TYPE|DELETE\s+FROM|UPDATE\s+public\./i);
   });
 

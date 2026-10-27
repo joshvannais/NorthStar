@@ -130,6 +130,37 @@ function redigestLifecycle(event, model) {
   return event;
 }
 
+function redigestRecord(record, model) {
+  record.payloadDigest = digest(model.canonicalization.payloadNamespace, record.payload);
+  const withoutDigest = { ...record }; delete withoutDigest.recordDigest;
+  record.recordDigest = digest(model.canonicalization.recordNamespace, withoutDigest);
+  return record;
+}
+
+function clonePolicyFor(model, policy, policyId, version = 1, previousVersionDigest = null) {
+  const cloned = JSON.parse(JSON.stringify(policy));
+  cloned.policyId = policyId;
+  cloned.version = version;
+  cloned.previousVersionDigest = previousVersionDigest;
+  const withoutDigest = { ...cloned }; delete withoutDigest.canonicalDigest;
+  cloned.canonicalDigest = digest(model.canonicalization.namespace, withoutDigest);
+  return cloned;
+}
+
+function buildHistoricalBinding(model, record, active) {
+  const binding = {
+    tenantId: TENANT, runId: record.runId, policyBinding: record.policyBinding,
+    sourceSnapshotBinding: { tenantId: TENANT, sourceSetDigest: record.payload.sourceSetDigest,
+      currentnessMarker: record.currentness.marker },
+    createdByLifecycleEventBinding: { lifecycleEventId: active.lifecycleEventId, eventDigest: active.eventDigest,
+      operation: active.operation, toState: active.toState },
+    lifecycleStateAtCreation: 'active', immutable: true, bindingDigest: '',
+  };
+  const withoutDigest = { ...binding }; delete withoutDigest.bindingDigest;
+  binding.bindingDigest = digest(model.canonicalization.historicalRunNamespace, withoutDigest);
+  return binding;
+}
+
 realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', () => {
   let database; let ownerPool; let runtimePool; let roles; let migrations; let storedFixture;
   const db = require('../../src/db');
@@ -231,16 +262,7 @@ realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', ()
     const record = records[0];
 
     const active = events.at(-1);
-    const binding = {
-      tenantId: TENANT, runId: record.runId, policyBinding: record.policyBinding,
-      sourceSnapshotBinding: { tenantId: TENANT, sourceSetDigest: record.payload.sourceSetDigest,
-        currentnessMarker: 'contract_fixture_unverified' },
-      createdByLifecycleEventBinding: { lifecycleEventId: active.lifecycleEventId, eventDigest: active.eventDigest,
-        operation: active.operation, toState: active.toState },
-      lifecycleStateAtCreation: 'active', immutable: true, bindingDigest: '',
-    };
-    const bindingWithoutDigest = { ...binding }; delete bindingWithoutDigest.bindingDigest;
-    binding.bindingDigest = digest(lifecycleModel.canonicalization.historicalRunNamespace, bindingWithoutDigest);
+    const binding = buildHistoricalBinding(lifecycleModel, record, active);
     expect((await ownerPool.query('SELECT public.canonical_automation_store_historical_run_binding_v1($1) result',
       [canonical.canonicalize(binding)])).rows[0].result).toMatchObject({ state: 'stored', replayed: false });
     storedFixture = { source, sourceSet, events, records, binding };
@@ -260,6 +282,114 @@ realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', ()
       expect(snapshot.records).toEqual(records);
       expect(snapshot.historicalRunBindings).toEqual([binding]);
     } finally { await restarted.end(); }
+  }, 120000);
+
+  test('binds every causal parent to the exact same stored tenant, run and policy version', async () => {
+    const foreignPolicy = clonePolicyFor(policyModel, policyModel.canonicalExamples[0],
+      '00000000-0000-4000-8000-00000000002d');
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_policy_v1($1)',
+      [canonical.canonicalize(foreignPolicy)])).resolves.toBeDefined();
+
+    const foreignRoot = JSON.parse(JSON.stringify(storedFixture.records[0]));
+    foreignRoot.recordId = '00000000-0000-4000-8000-000000000215';
+    foreignRoot.causalOrdinal = 15;
+    foreignRoot.policyBinding = policyBinding(foreignPolicy);
+    redigestRecord(foreignRoot, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(foreignRoot)])).resolves.toBeDefined();
+
+    const crossPolicyChild = JSON.parse(JSON.stringify(storedFixture.records[1]));
+    crossPolicyChild.recordId = '00000000-0000-4000-8000-000000000216';
+    crossPolicyChild.causalOrdinal = 16;
+    crossPolicyChild.causalParents = [{ recordId: foreignRoot.recordId,
+      recordType: foreignRoot.recordType, recordDigest: foreignRoot.recordDigest }];
+    redigestRecord(crossPolicyChild, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(crossPolicyChild)])).rejects.toThrow(/record parent invalid/);
+  }, 120000);
+
+  test('derives source currentness only from sources while policy state controls the overall record marker', async () => {
+    const exactSource = { ...storedFixture.source,
+      sourceRecordId: '00000000-0000-4000-8000-000000000217',
+      sourceDigest: `sha256:${'1'.repeat(64)}`, currentnessMarker: 'captured_exact_current' };
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_source_binding_v1($1)',
+      [canonical.canonicalize(exactSource)])).resolves.toBeDefined();
+    const exactSet = { tenantId: TENANT, sourceBindings: [exactSource],
+      currentnessMarker: 'exact_current_not_runtime_revalidated',
+      sourceSetDigest: digest(recordModel.canonicalization.sourceSetNamespace, [exactSource]) };
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_source_set_v1($1)',
+      [canonical.canonicalize(exactSet)])).resolves.toBeDefined();
+
+    const cases = [
+      { suffix: '218', policyState: 'unavailable', marker: 'captured_unavailable_fail_closed' },
+      { suffix: '219', policyState: 'stale', marker: 'captured_stale_fail_closed' },
+    ];
+    for (const entry of cases) {
+      const record = JSON.parse(JSON.stringify(storedFixture.records[0]));
+      record.recordId = `00000000-0000-4000-8000-000000000${entry.suffix}`;
+      record.runId = record.recordId;
+      record.sourceBindings = [exactSource];
+      record.currentness = { policyState: entry.policyState, sourceState: 'exact_bound', marker: entry.marker };
+      record.payload.sourceSetDigest = exactSet.sourceSetDigest;
+      redigestRecord(record, recordModel);
+      await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+        [canonical.canonicalize(record)])).resolves.toBeDefined();
+    }
+  }, 120000);
+
+  test('denies retroactive historical-run bindings for records created before activation or after terminal state', async () => {
+    const sourceSnapshot = { tenantId: TENANT, sourceSetDigest: storedFixture.sourceSet.sourceSetDigest,
+      currentnessMarker: storedFixture.sourceSet.currentnessMarker };
+
+    const preActivationPolicy = clonePolicyFor(policyModel, policyModel.canonicalExamples[0],
+      '00000000-0000-4000-8000-000000000031');
+    await ownerPool.query('SELECT public.canonical_automation_store_policy_v1($1)',
+      [canonical.canonicalize(preActivationPolicy)]);
+    const preActivationRecord = JSON.parse(JSON.stringify(storedFixture.records[0]));
+    preActivationRecord.recordId = '00000000-0000-4000-8000-000000000231';
+    preActivationRecord.runId = preActivationRecord.recordId;
+    preActivationRecord.policyBinding = policyBinding(preActivationPolicy);
+    redigestRecord(preActivationRecord, recordModel);
+    await ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(preActivationRecord)]);
+    await ownerPool.query('SELECT pg_sleep(0.002)');
+    const preActivationEvents = [];
+    for (const operation of ['draft_create', 'validate', 'preview', 'activate']) {
+      const event = buildLifecycle(lifecycleModel, operation, preActivationEvents.at(-1), preActivationEvents,
+        sourceSnapshot, { eventIdBase: 800, policyBinding: policyBinding(preActivationPolicy) });
+      preActivationEvents.push(event);
+      await ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+        [canonical.canonicalize(event)]);
+    }
+    const retroactiveBinding = buildHistoricalBinding(lifecycleModel, preActivationRecord,
+      preActivationEvents.at(-1));
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_historical_run_binding_v1($1)',
+      [canonical.canonicalize(retroactiveBinding)])).rejects.toThrow(/historical authority unavailable/);
+
+    const terminalPolicy = clonePolicyFor(policyModel, policyModel.canonicalExamples[0],
+      '00000000-0000-4000-8000-000000000032');
+    await ownerPool.query('SELECT public.canonical_automation_store_policy_v1($1)',
+      [canonical.canonicalize(terminalPolicy)]);
+    const terminalEvents = [];
+    for (const operation of ['draft_create', 'validate', 'preview', 'activate', 'emergency_stop']) {
+      const event = buildLifecycle(lifecycleModel, operation, terminalEvents.at(-1), terminalEvents,
+        sourceSnapshot, { eventIdBase: 900, policyBinding: policyBinding(terminalPolicy) });
+      terminalEvents.push(event);
+      await ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+        [canonical.canonicalize(event)]);
+    }
+    await ownerPool.query('SELECT pg_sleep(0.002)');
+    const postTerminalRecord = JSON.parse(JSON.stringify(storedFixture.records[0]));
+    postTerminalRecord.recordId = '00000000-0000-4000-8000-000000000232';
+    postTerminalRecord.runId = postTerminalRecord.recordId;
+    postTerminalRecord.policyBinding = policyBinding(terminalPolicy);
+    redigestRecord(postTerminalRecord, recordModel);
+    await ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(postTerminalRecord)]);
+    const postTerminalBinding = buildHistoricalBinding(lifecycleModel, postTerminalRecord,
+      terminalEvents.find(event => event.operation === 'activate'));
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_historical_run_binding_v1($1)',
+      [canonical.canonicalize(postTerminalBinding)])).rejects.toThrow(/historical authority unavailable/);
   }, 120000);
 
   test('resolves supersession and bounded rollback against exact stored policies and lifecycle evidence', async () => {
@@ -340,12 +470,84 @@ realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', ()
     await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
       [canonical.canonicalize(supersede)])).resolves.toBeDefined();
 
+    const retireSuccessor = buildLifecycle(lifecycleModel, 'retire', rollbackEvents.at(-1), rollbackEvents,
+      sourceSnapshot, { eventIdBase: 500, policyBinding: policyBinding(policyV3) });
+    rollbackEvents.push(retireSuccessor);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+      [canonical.canonicalize(retireSuccessor)])).resolves.toBeDefined();
+    const terminalSuccessorAttempt = JSON.parse(JSON.stringify(supersede));
+    terminalSuccessorAttempt.lifecycleEventId = '00000000-0000-4000-8000-000000000395';
+    redigestLifecycle(terminalSuccessorAttempt, lifecycleModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+      [canonical.canonicalize(terminalSuccessorAttempt)])).rejects.toThrow(/successor authority unavailable/);
+
     const unrelated = JSON.parse(JSON.stringify(storedFixture.events[0]));
     unrelated.lifecycleEventId = '00000000-0000-4000-8000-000000000396';
     unrelated.relatedPolicyBinding = successor;
     redigestLifecycle(unrelated, lifecycleModel);
     await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
       [canonical.canonicalize(unrelated)])).rejects.toThrow(/unrelated lifecycle binding denied/);
+  }, 120000);
+
+  test('serializes successor terminal state and supersession under one tenant-policy lock', async () => {
+    const policyId = '00000000-0000-4000-8000-000000000030';
+    const policyV1 = clonePolicyFor(policyModel, policyModel.canonicalExamples[0], policyId);
+    const policyV2 = clonePolicyFor(policyModel, policyModel.canonicalExamples[1], policyId, 2,
+      policyV1.canonicalDigest);
+    for (const policy of [policyV1, policyV2]) {
+      await expect(ownerPool.query('SELECT public.canonical_automation_store_policy_v1($1)',
+        [canonical.canonicalize(policy)])).resolves.toBeDefined();
+    }
+    const sourceSnapshot = { tenantId: TENANT, sourceSetDigest: storedFixture.sourceSet.sourceSetDigest,
+      currentnessMarker: storedFixture.sourceSet.currentnessMarker };
+    const histories = [];
+    for (const [index, policy] of [policyV1, policyV2].entries()) {
+      const events = [];
+      for (const operation of ['draft_create', 'validate', 'preview', 'activate']) {
+        const event = buildLifecycle(lifecycleModel, operation, events.at(-1), events, sourceSnapshot,
+          { eventIdBase: 600 + (index * 100), policyBinding: policyBinding(policy) });
+        events.push(event);
+        await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+          [canonical.canonicalize(event)])).resolves.toBeDefined();
+      }
+      histories.push(events);
+    }
+    const successor = { relation: 'successor', policyBinding: policyBinding(policyV2),
+      activationEventDigest: histories[1].at(-1).eventDigest, terminalEventDigest: null };
+    const supersede = buildLifecycle(lifecycleModel, 'supersede', histories[0].at(-1), histories[0],
+      sourceSnapshot, { eventIdBase: 600, policyBinding: policyBinding(policyV1), relatedPolicyBinding: successor });
+    const emergencyStop = buildLifecycle(lifecycleModel, 'emergency_stop', histories[1].at(-1), histories[1],
+      sourceSnapshot, { eventIdBase: 700, policyBinding: policyBinding(policyV2) });
+
+    const lockOwner = new Client({ connectionString: roleUrl(database.connectionString, roles.owner),
+      application_name: 'm28_part2d_policy_lock_owner' });
+    const contender = new Client({ connectionString: roleUrl(database.connectionString, roles.owner),
+      application_name: 'm28_part2d_supersede_contender' });
+    await lockOwner.connect(); await contender.connect();
+    let contenderPromise;
+    try {
+      await lockOwner.query('BEGIN');
+      await lockOwner.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+        [`${TENANT}:m28-lifecycle-policy:${policyId}`]);
+      contenderPromise = contender.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+        [canonical.canonicalize(supersede)]);
+      let waiting = false;
+      for (let attempt = 0; attempt < 50 && !waiting; attempt += 1) {
+        const state = await ownerPool.query(`SELECT wait_event_type FROM pg_stat_activity
+          WHERE application_name='m28_part2d_supersede_contender' AND state='active'`);
+        waiting = state.rows.some(row => row.wait_event_type === 'Lock');
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(waiting).toBe(true);
+      await lockOwner.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+        [canonical.canonicalize(emergencyStop)]);
+      await lockOwner.query('COMMIT');
+      await expect(contenderPromise).rejects.toThrow(/successor authority unavailable/);
+    } finally {
+      await lockOwner.query('ROLLBACK').catch(() => {});
+      if (contenderPromise) await contenderPromise.catch(() => {});
+      await contender.end(); await lockOwner.end();
+    }
   }, 120000);
 
   test('denies coherent source-set, lifecycle, record, history and tenant rebinding attacks', async () => {

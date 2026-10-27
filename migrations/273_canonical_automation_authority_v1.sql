@@ -563,6 +563,7 @@ DECLARE doc JSONB; org UUID; policy UUID; version_value BIGINT; sequence_value B
  policy_digest_value TEXT; policy_previous_digest TEXT; policy_expires_at TIMESTAMPTZ;
  related_policy_id UUID; related_policy_version BIGINT; related_policy_digest TEXT;
  related_stored_digest TEXT; related_activation_digest TEXT; related_terminal_digest TEXT;
+ related_latest_digest TEXT; related_latest_operation TEXT; related_latest_state TEXT;
  rollback_predecessor_version BIGINT; rollback_predecessor_digest TEXT; rollback_stored_digest TEXT;
 BEGIN
  doc:=public.canonical_automation_document_v1(canonical_text_value);
@@ -634,6 +635,10 @@ BEGIN
     doc#>>'{currentness,marker}' NOT IN('exact_current_not_runtime_revalidated','contract_fixture_unverified') THEN
   RAISE EXCEPTION 'Mission 28 lifecycle active authority is not current' USING ERRCODE='40001'; END IF;
  now_value:=public.canonical_automation_enter_tenant_v1(org);
+ -- One lock serializes every lifecycle version for this tenant/policy before any
+ -- current or related-version read. A successor cannot become terminal between
+ -- supersession validation and append.
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-lifecycle-policy:'||policy::text,0));
  SELECT canonical_digest,previous_version_digest,expires_at
   INTO policy_digest_value,policy_previous_digest,policy_expires_at
   FROM public.canonical_automation_policy_versions_v1 WHERE organization_id=org
@@ -672,8 +677,20 @@ BEGIN
    WHERE organization_id=org AND policy_id=related_policy_id AND policy_version=related_policy_version
     AND operation='activate' AND to_state='active'
    ORDER BY lifecycle_sequence DESC LIMIT 1;
+  SELECT event_digest,operation,to_state
+   INTO related_latest_digest,related_latest_operation,related_latest_state
+   FROM public.canonical_automation_lifecycle_events_v1
+   WHERE organization_id=org AND policy_id=related_policy_id AND policy_version=related_policy_version
+   ORDER BY lifecycle_sequence DESC LIMIT 1;
+  SELECT event_digest INTO related_terminal_digest FROM public.canonical_automation_lifecycle_events_v1
+   WHERE organization_id=org AND policy_id=related_policy_id AND policy_version=related_policy_version
+    AND operation IN('supersede','expire','retire','emergency_stop')
+    AND to_state IN('superseded','expired','retired','emergency_stopped')
+   ORDER BY lifecycle_sequence DESC LIMIT 1;
   IF related_stored_digest IS DISTINCT FROM related_policy_digest OR
-     related_activation_digest IS DISTINCT FROM doc#>>'{relatedPolicyBinding,activationEventDigest}' THEN
+     related_activation_digest IS DISTINCT FROM doc#>>'{relatedPolicyBinding,activationEventDigest}' OR
+     related_latest_digest IS NULL OR related_latest_state IS DISTINCT FROM 'active' OR
+     related_latest_operation NOT IN('activate','resume') OR related_terminal_digest IS NOT NULL THEN
    RAISE EXCEPTION 'Mission 28 lifecycle successor authority unavailable' USING ERRCODE='40001'; END IF;
  ELSE
   IF jsonb_typeof(doc->'relatedPolicyBinding')<>'object' OR
@@ -729,7 +746,6 @@ BEGIN
   RAISE EXCEPTION 'Mission 28 expired policy active authority denied' USING ERRCODE='40001'; END IF;
  IF operation_value='expire' AND policy_expires_at>now_value THEN
   RAISE EXCEPTION 'Mission 28 policy expiry is not due' USING ERRCODE='40001'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-lifecycle:'||policy::text||':'||version_value::text,0));
  SELECT * INTO stored FROM public.canonical_automation_lifecycle_events_v1
   WHERE organization_id=org AND lifecycle_event_id=event_value FOR SHARE;
  IF stored.lifecycle_event_id IS NOT NULL THEN
@@ -787,6 +803,8 @@ DECLARE doc JSONB; org UUID; record_value UUID; run_value UUID; policy UUID; ver
  expected_minimum INTEGER; expected_maximum INTEGER; source_key_count INTEGER; source_distinct_count INTEGER;
  source_fixture_count INTEGER; source_stale_count INTEGER; source_unavailable_count INTEGER;
  parent_ids UUID[]:=ARRAY[]::UUID[]; unresolved_id UUID; reconciliation_ids UUID[]; source_set_marker TEXT;
+ expected_source_state TEXT; expected_source_set_marker TEXT; expected_record_marker TEXT;
+ policy_state_value TEXT; source_state_value TEXT;
 BEGIN
  doc:=public.canonical_automation_document_v1(canonical_text_value);
  IF (SELECT count(*) FROM jsonb_object_keys(doc))<>14 OR NOT doc ?& ARRAY['schemaVersion','tenantId','recordId','runId','recordType',
@@ -833,6 +851,8 @@ BEGIN
   RAISE EXCEPTION 'Mission 28 record authority invalid' USING ERRCODE='22023'; END IF;
  now_value:=public.canonical_automation_enter_tenant_v1(org);
  source_digest_value:=public.canonical_automation_digest_v1('mission28.record.source-set.v1'||chr(10),doc->'sourceBindings');
+ policy_state_value:=doc#>>'{currentness,policyState}';
+ source_state_value:=doc#>>'{currentness,sourceState}';
  FOR source_binding IN SELECT value FROM jsonb_array_elements(doc->'sourceBindings') LOOP
   IF (SELECT count(*) FROM jsonb_object_keys(source_binding))<>7 OR
      NOT source_binding ?& ARRAY['tenantId','sourceClassId','ownerMission','sourceRecordId','sourceVersion','sourceDigest','currentnessMarker'] OR
@@ -853,28 +873,44 @@ BEGIN
  INTO source_key_count,source_distinct_count,source_fixture_count,source_stale_count,source_unavailable_count
  FROM jsonb_array_elements(doc->'sourceBindings') sources(source);
  IF source_key_count<>source_distinct_count THEN RAISE EXCEPTION 'Mission 28 duplicate source binding denied' USING ERRCODE='22023'; END IF;
+ IF source_fixture_count=source_key_count THEN
+  expected_source_state:='contract_fixture_unverified'; expected_source_set_marker:='contract_fixture_unverified';
+ ELSIF source_fixture_count>0 THEN
+  RAISE EXCEPTION 'Mission 28 record currentness invalid' USING ERRCODE='22023';
+ ELSIF source_unavailable_count=source_key_count THEN
+  expected_source_state:='unavailable'; expected_source_set_marker:='unavailable_fail_closed';
+ ELSIF source_unavailable_count>0 THEN
+  expected_source_state:='mixed'; expected_source_set_marker:='unavailable_fail_closed';
+ ELSIF source_stale_count=source_key_count THEN
+  expected_source_state:='stale'; expected_source_set_marker:='stale_fail_closed';
+ ELSIF source_stale_count>0 THEN
+  expected_source_state:='mixed'; expected_source_set_marker:='stale_fail_closed';
+ ELSE
+  expected_source_state:='exact_bound'; expected_source_set_marker:='exact_current_not_runtime_revalidated';
+ END IF;
+ IF policy_state_value NOT IN('exact_bound','stale','unavailable','contract_fixture_unverified') OR
+    (policy_state_value='contract_fixture_unverified')<>(expected_source_state='contract_fixture_unverified') THEN
+  RAISE EXCEPTION 'Mission 28 record currentness invalid' USING ERRCODE='22023';
+ END IF;
  SELECT currentness_marker INTO source_set_marker FROM public.canonical_automation_source_sets_v1
   WHERE organization_id=org AND source_set_digest=source_digest_value;
- IF source_set_marker IS NULL OR source_set_marker IS DISTINCT FROM (CASE
-   WHEN marker_value='contract_fixture_unverified' THEN 'contract_fixture_unverified'
-   WHEN marker_value='captured_stale_fail_closed' THEN 'stale_fail_closed'
-   WHEN marker_value='captured_unavailable_fail_closed' THEN 'unavailable_fail_closed'
-   ELSE 'exact_current_not_runtime_revalidated' END) THEN
+ IF source_set_marker IS NULL OR source_set_marker IS DISTINCT FROM expected_source_set_marker THEN
   RAISE EXCEPTION 'Mission 28 record source set unavailable' USING ERRCODE='40001'; END IF;
- IF source_fixture_count>0 THEN
-  IF source_fixture_count<>source_key_count OR doc#>>'{currentness,policyState}'<>'contract_fixture_unverified' OR
-     doc#>>'{currentness,sourceState}'<>'contract_fixture_unverified' OR marker_value<>'contract_fixture_unverified' THEN
+ IF policy_state_value='contract_fixture_unverified' AND expected_source_state='contract_fixture_unverified' THEN
+  expected_record_marker:='contract_fixture_unverified';
+ ELSIF policy_state_value='unavailable' OR source_unavailable_count>0 THEN
+  expected_record_marker:='captured_unavailable_fail_closed';
+ ELSIF policy_state_value='stale' OR source_stale_count>0 THEN
+  expected_record_marker:='captured_stale_fail_closed';
+ ELSIF policy_state_value='exact_bound' AND expected_source_state='exact_bound' THEN
+  IF marker_value NOT IN('captured_not_runtime_revalidated','captured_runtime_revalidation_required') THEN
    RAISE EXCEPTION 'Mission 28 record currentness invalid' USING ERRCODE='22023'; END IF;
- ELSIF source_unavailable_count>0 OR doc#>>'{currentness,policyState}'='unavailable' THEN
-  IF doc#>>'{currentness,sourceState}' NOT IN('unavailable','mixed') OR marker_value<>'captured_unavailable_fail_closed' THEN
-   RAISE EXCEPTION 'Mission 28 record currentness invalid' USING ERRCODE='22023'; END IF;
- ELSIF source_stale_count>0 OR doc#>>'{currentness,policyState}'='stale' THEN
-  IF doc#>>'{currentness,sourceState}' NOT IN('stale','mixed') OR marker_value<>'captured_stale_fail_closed' THEN
-   RAISE EXCEPTION 'Mission 28 record currentness invalid' USING ERRCODE='22023'; END IF;
+  expected_record_marker:=marker_value;
  ELSE
-  IF doc#>>'{currentness,policyState}'<>'exact_bound' OR doc#>>'{currentness,sourceState}'<>'exact_bound' OR
-     marker_value NOT IN('captured_not_runtime_revalidated','captured_runtime_revalidation_required') THEN
-   RAISE EXCEPTION 'Mission 28 record currentness invalid' USING ERRCODE='22023'; END IF;
+  RAISE EXCEPTION 'Mission 28 record currentness invalid' USING ERRCODE='22023';
+ END IF;
+ IF source_state_value IS DISTINCT FROM expected_source_state OR marker_value IS DISTINCT FROM expected_record_marker THEN
+  RAISE EXCEPTION 'Mission 28 record currentness invalid' USING ERRCODE='22023';
  END IF;
  IF type_value='eligibility_evaluation' AND doc#>>'{payload,sourceSetDigest}'<>source_digest_value THEN
   RAISE EXCEPTION 'Mission 28 record source digest invalid' USING ERRCODE='22023'; END IF;
@@ -996,6 +1032,7 @@ BEGIN
   parent_ids:=array_append(parent_ids,(parent->>'recordId')::uuid);
   SELECT record_id,record_type,record_digest,causal_ordinal INTO parent_row
    FROM public.canonical_automation_records_v1 WHERE organization_id=org AND run_id=run_value
+    AND policy_id=policy AND policy_version=version_value
     AND record_id=(parent->>'recordId')::uuid FOR SHARE;
   IF parent_row.record_id IS NULL OR parent_row.record_type<>parent->>'recordType' OR
      parent_row.record_digest<>parent->>'recordDigest' OR parent_row.causal_ordinal>=ordinal_value THEN
@@ -1038,7 +1075,8 @@ CREATE FUNCTION public.canonical_automation_store_historical_run_binding_v1(cano
 RETURNS JSONB LANGUAGE plpgsql VOLATILE SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE doc JSONB; org UUID; run_value UUID; policy UUID; version_value BIGINT; event_value UUID;
- digest_value TEXT; now_value TIMESTAMPTZ; event_row RECORD; stored RECORD;
+ digest_value TEXT; now_value TIMESTAMPTZ; event_row RECORD; latest_event_row RECORD; stored RECORD;
+ first_record_at TIMESTAMPTZ; run_record_count INTEGER;
 BEGIN
  doc:=public.canonical_automation_document_v1(canonical_text_value);
  IF (SELECT count(*) FROM jsonb_object_keys(doc))<>8 OR NOT doc ?& ARRAY['tenantId','runId','policyBinding','sourceSnapshotBinding',
@@ -1061,18 +1099,33 @@ BEGIN
     digest_value<>public.canonical_automation_digest_v1('mission28.policy.lifecycle.historical-run.v1'||chr(10),doc-'bindingDigest') THEN
   RAISE EXCEPTION 'Mission 28 historical binding digest invalid' USING ERRCODE='22023'; END IF;
  now_value:=public.canonical_automation_enter_tenant_v1(org);
-  SELECT lifecycle_event_id,event_digest,operation,to_state,source_set_digest,currentness_marker INTO event_row
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-lifecycle-policy:'||policy::text,0));
+ PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-run:'||run_value::text,0));
+ SELECT count(*)::integer,min(recorded_at) INTO run_record_count,first_record_at
+  FROM public.canonical_automation_records_v1 WHERE organization_id=org AND run_id=run_value;
+ SELECT lifecycle_event_id,event_digest,operation,to_state,source_set_digest,currentness_marker,
+  lifecycle_sequence,recorded_at INTO event_row
   FROM public.canonical_automation_lifecycle_events_v1 WHERE organization_id=org AND lifecycle_event_id=event_value
    AND policy_id=policy AND policy_version=version_value FOR SHARE;
+ SELECT lifecycle_event_id,event_digest,operation,to_state,lifecycle_sequence INTO latest_event_row
+  FROM public.canonical_automation_lifecycle_events_v1 WHERE organization_id=org AND policy_id=policy
+   AND policy_version=version_value AND recorded_at<=first_record_at
+  ORDER BY lifecycle_sequence DESC LIMIT 1 FOR SHARE;
  IF event_row.lifecycle_event_id IS NULL OR event_row.event_digest<>doc#>>'{createdByLifecycleEventBinding,eventDigest}' OR
-     event_row.operation<>doc#>>'{createdByLifecycleEventBinding,operation}' OR event_row.to_state<>'active' OR
+     event_row.operation<>doc#>>'{createdByLifecycleEventBinding,operation}' OR
+     event_row.operation NOT IN('activate','resume') OR event_row.to_state<>'active' OR
     doc#>>'{createdByLifecycleEventBinding,toState}'<>'active' OR
      event_row.source_set_digest<>doc#>>'{sourceSnapshotBinding,sourceSetDigest}' OR
      event_row.currentness_marker<>doc#>>'{sourceSnapshotBinding,currentnessMarker}' OR
+     run_record_count=0 OR event_row.recorded_at>=first_record_at OR
+     latest_event_row.lifecycle_event_id IS DISTINCT FROM event_row.lifecycle_event_id OR
+     latest_event_row.event_digest IS DISTINCT FROM event_row.event_digest OR
+     latest_event_row.operation IS DISTINCT FROM event_row.operation OR latest_event_row.to_state IS DISTINCT FROM 'active' OR
     NOT EXISTS(SELECT 1 FROM public.canonical_automation_policy_versions_v1 WHERE organization_id=org
       AND policy_id=policy AND version=version_value AND canonical_digest=doc#>>'{policyBinding,policyDigest}') OR
-    NOT EXISTS(SELECT 1 FROM public.canonical_automation_records_v1 WHERE organization_id=org AND run_id=run_value
-     AND policy_id=policy AND policy_version=version_value AND source_set_digest=doc#>>'{sourceSnapshotBinding,sourceSetDigest}') THEN
+     EXISTS(SELECT 1 FROM public.canonical_automation_records_v1 WHERE organization_id=org AND run_id=run_value
+      AND (policy_id<>policy OR policy_version<>version_value OR
+       source_set_digest<>doc#>>'{sourceSnapshotBinding,sourceSetDigest}')) THEN
   RAISE EXCEPTION 'Mission 28 historical authority unavailable' USING ERRCODE='40001'; END IF;
  SELECT * INTO stored FROM public.canonical_automation_historical_run_bindings_v1
   WHERE organization_id=org AND run_id=run_value FOR SHARE;

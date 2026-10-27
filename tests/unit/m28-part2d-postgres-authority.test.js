@@ -184,15 +184,15 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
     expect(db).toContain('REVOKE ALL ON FUNCTION ');
   });
 
-  test('roadmap and ledger retain released Part 2D truth while advancing only Part 3A', () => {
+  test('roadmap and ledger retain released Part 2D and Part 3A truth while advancing only Part 3B', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–2D released; Part 3A implementation candidate only.');
-    expect(ledger).toContain('Parts 1A–2D released; Part 3A implementation candidate only.');
+    expect(roadmap).toContain('Parts 1A–3A released; Part 3B implementation candidate only.');
+    expect(ledger).toContain('Parts 1A–3A released; Part 3B implementation candidate only.');
     expect(ledger).toContain('| 07 | 2C | Policy lifecycle and historical binding | **Released** |');
     expect(ledger).toContain('| 08 | 2D | PostgreSQL authority, canonicalization, retention and restart contract | **Released** |');
-    expect(ledger).toContain('| 09 | 3A | Fixed action capability matrix | **Implementation candidate** |');
-    expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | Planned / unimplemented | None |');
+    expect(ledger).toContain('| 09 | 3A | Fixed action capability matrix | **Released** |');
+    expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | **Implementation candidate** |');
     expect(roadmap).toContain('production migrations reconciled 269/269 through exact 273/no274');
   });
 

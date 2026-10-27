@@ -479,20 +479,20 @@ describe('Mission 28 Part 3A fixed capability matrix', () => {
     });
   });
 
-  test('roadmap and ledger record Part 2D released and Part 3A candidate only', () => {
+  test('roadmap and ledger record Part 3A released and Part 3B candidate only', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–2D released; Part 3A implementation candidate only.');
+      expect(document).toContain('Parts 1A–3A released; Part 3B implementation candidate only.');
       expect(document).toContain('98c4b3562ad48787472584ca64c601d584c2427f');
       expect(document).toContain('f40e401a-649f-42b3-a1cc-71dbd0ffce4d');
       expect(document).toContain('586afe8103acc0e4f27d5967e8a8554876d7f5f51dc38bd7c7f4a98e2c320337');
     }
     expect(ledger).toContain('| 08 | 2D | PostgreSQL authority, canonicalization, retention and restart contract | **Released** |');
-    expect(ledger).toContain('| 09 | 3A | Fixed action capability matrix | **Implementation candidate** |');
-    expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | Planned / unimplemented | None |');
-    expect(roadmap).toContain('Current Part 3A artifacts');
-    expect(roadmap).not.toContain('Part 3A independently accepted');
+    expect(ledger).toContain('| 09 | 3A | Fixed action capability matrix | **Released** |');
+    expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | **Implementation candidate** |');
+    expect(roadmap).toContain('Released Part 3A artifacts');
+    expect(roadmap).toContain('Current Part 3B artifacts');
   });
 
   test('narrative states exact display-role, runtime and unavailable boundaries', () => {

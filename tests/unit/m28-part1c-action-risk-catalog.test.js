@@ -421,11 +421,11 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(contract).toContain('founder visual approval remain unavailable and unclaimed');
   });
 
-  test('records released Parts 1A–2D, exactly Part 3A current and all later slices planned', () => {
+  test('records released Parts 1A–3A, exactly Part 3B current and all later slices planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–2D released; Part 3A implementation candidate only.');
-    expect(roadmap).toContain('Parts 3B–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–3A released; Part 3B implementation candidate only.');
+    expect(roadmap).toContain('Parts 3C–14G remain planned and unimplemented.');
     for (const identity of [PART1B_HEAD, BASE, PART1B_DEPLOYMENT, PART1B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -446,12 +446,14 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(rows[6][5]).toContain('PR #555');
     expect(rows[7][4]).toBe('**Released**');
     expect(rows[7][5]).toContain('production migration 273');
-    expect(rows[8][4]).toBe('**Implementation candidate**');
-    expect(rows[8][5]).toContain('no runtime resolver');
-    expect(rows.slice(9).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[8][4]).toBe('**Released**');
+    expect(rows[8][5]).toContain('PR #557');
+    expect(rows[9][4]).toBe('**Implementation candidate**');
+    expect(rows[9][5]).toContain('no runtime resolver');
+    expect(rows.slice(10).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(57);
-    expect(ledger).toContain('Part 3A has no independent acceptance, PR, merge, deployment or release evidence');
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(56);
+    expect(ledger).toContain('Part 3B has no independent acceptance, PR, merge, deployment or release evidence');
   });
 
   test('does not activate the static catalog from production source or add a migration', () => {

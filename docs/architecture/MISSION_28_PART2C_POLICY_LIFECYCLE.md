@@ -10,7 +10,7 @@ Each policy version begins with an immutable `draft_create` event. The only ordi
 
 An active version may be paused; only a paused, nonterminal version may resume, and resume requires the exact still-current validation and preview evidence for that immutable policy version plus current authority and currentness evidence. Superseded, expired, retired, and emergency-stopped versions are terminal. They cannot resume, reactivate, accept another terminal event, or silently attach to a newer authority.
 
-Every lifecycle event has one exact tenant, policy tenant/ID/version/digest, sequence, operation, predecessor ID/digest/state, idempotency digest, source snapshot, prerequisite evidence, currentness, payload, payload digest, and event digest. Records are append-only. Skips, forks, gaps, duplicates, reordered events, stale bindings, cross-tenant/cross-policy reuse, conflicting idempotency, or in-place mutation fail closed.
+Every lifecycle event has one exact tenant, policy tenant/ID/version/digest, sequence, operation, predecessor ID/digest/state, idempotency digest, source snapshot, prerequisite evidence, currentness, payload, payload digest, and event digest. Records are append-only. Skips, forks, gaps, duplicates, reordered events, stale bindings, cross-tenant/cross-policy reuse, conflicting idempotency, or in-place mutation fail closed. Draft creation, validation, preview, activation, resume, supersession, and rollback-draft creation require exact-current policy and source authority. Coherently stale or unavailable authority cannot create or continue active authority. It may only support the explicitly authority-reducing pause, expiry, retirement, or emergency-stop decisions under their other exact requirements.
 
 ## Supersession, expiry, retirement, and emergency stop
 
@@ -20,9 +20,9 @@ Expiry requires future trusted-time evidence and cannot be inferred from caller 
 
 ## Bounded rollback and history
 
-Rollback never rewinds or reactivates an old policy version. It creates a new draft at the exact next version. Its `previousVersionDigest` remains the digest of the immediate predecessor; a separate rollback-source binding may name an older version that previously reached active. Reviewed configuration may be copied, but the new version receives a new digest and must traverse draft, validation, preview, and activation with new authority.
+Rollback never rewinds or reactivates an old policy version. It creates a new draft at the exact next version. The rollback lifecycle event includes a separately trusted current/immediate-predecessor policy binding, and the target policy's `previousVersionDigest` must equal that immediate predecessor's policy digest. A separate rollback-source binding may name an older version that previously reached active; it cannot replace the immediate-predecessor link or name the new target itself. Reviewed configuration may be copied, but the new version receives a new digest and must traverse draft, validation, preview, and activation with new authority.
 
-Historical runs remain permanently bound to the exact tenant, run ID, policy tenant/ID/version/digest, source snapshot digest/currentness, and lifecycle event that created them. Pause, resume, supersession, expiry, retirement, emergency stop, or rollback cannot rebind an old run to a newer policy or source. Corrections append new run/evidence records under their own exact bindings; they never rewrite history.
+Historical runs remain permanently bound to the exact tenant, run ID, policy tenant/ID/version/digest, source snapshot digest/currentness, and lifecycle event that created them. A separately trusted immutable run/lifecycle lookup by exact tenant and run ID must return that complete binding; record-supplied tuples and recomputed digests cannot establish their own authority. Pause, resume, supersession, expiry, retirement, emergency stop, or rollback cannot rebind an old run to a newer policy or source. Corrections append new run/evidence records under their own exact bindings; they never rewrite history.
 
 ## Acceptance and unavailable evidence
 

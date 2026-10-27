@@ -218,6 +218,7 @@
     "sourceSnapshotBinding",
     "requirementBindings",
     "relatedPolicyBinding",
+    "rollbackPredecessorBinding",
     "currentness",
     "payload",
     "payloadDigest",
@@ -231,6 +232,8 @@
     "relatedPolicyBindingExactKeys": ["relation", "policyBinding", "activationEventDigest", "terminalEventDigest"],
     "relatedPolicyRelations": ["successor", "rollback_source"],
     "relatedPolicyResolutionRule": "complete_related_binding_must_equal_a_separately_trusted_append_only_policy_and_lifecycle_authority_resolution_or_fail_closed",
+    "rollbackPredecessorBindingExactKeys": ["immediatePredecessorPolicyBinding", "targetPreviousVersionDigest"],
+    "rollbackPredecessorResolutionRule": "bounded_rollback_event_must_equal_a_separately_trusted_current_immediate_predecessor_policy_resolution_and_target_previous_version_digest_must_equal_that_predecessor_policy_digest",
     "currentnessExactKeys": ["policyState", "sourceState", "marker"],
     "sameTenantRule": "event_policy_source_predecessor_related_policy_and_historical_run_bindings_must_share_exact_tenant",
     "policyTupleRule": "tenant_id_policy_id_policy_version_policy_digest_must_resolve_exactly_from_separately_trusted_append_only_policy_authority",
@@ -255,11 +258,17 @@
       "fixture_mixed_with_non_fixture": "deny",
       "all_other_combinations": "deny"
     },
+    "operationAdmission": {
+      "exactCurrentRequired": ["draft_create", "validate", "preview", "activate", "resume", "supersede", "bounded_rollback_draft"],
+      "failSafeNonCurrentAllowed": ["pause", "expire", "retire", "emergency_stop"],
+      "activeAuthorityFromStaleOrUnavailable": "deny",
+      "grammarFixtureException": "contract_fixture_unverified_is_accepted_only_for_this_zero_authority_zero_effect_executable_grammar_fixture_and_never_as_runtime_currentness"
+    },
     "trustedResolutionRule": "complete_currentness_must_equal_separately_trusted_policy_and_source_resolution_and_marker_must_equal_source_snapshot_currentness_marker",
     "preEffectRuntimeRevalidation": "required_by_later_runtime_slice_not_granted_here"
   },
   "idempotencyContract": {
-    "idempotencyDigest": "required_sha256_of_exact_tenant_policy_sequence_operation_predecessor_and_related_policy_binding",
+    "idempotencyDigest": "required_sha256_of_exact_tenant_policy_sequence_operation_predecessor_related_policy_and_rollback_predecessor_binding",
     "sameDigestSameCanonicalEvent": "idempotent_replay_no_new_record",
     "sameDigestDifferentEvent": "deny_conflict",
     "differentDigestDuplicateTransition": "deny_replay_or_fork",
@@ -279,6 +288,8 @@
     ],
     "lifecycleStateAtCreationAllowed": ["active"],
     "immutable": true,
+    "trustedLookupExactKeys": ["tenantId", "runId", "resolvedBinding"],
+    "trustedResolutionRule": "tenant_and_run_id_must_resolve_the_complete_expected_binding_from_a_separately_trusted_immutable_run_and_lifecycle_authority_record_supplied_policy_source_event_tuples_and_digests_never_establish_their_own_authority",
     "rebindToNewPolicyVersion": "deny",
     "rebindToNewSourceSnapshot": "deny",
     "supersessionExpiryRetirementEmergencyStopOrRollbackEffect": "historical_binding_unchanged",
@@ -289,6 +300,7 @@
     "deleteRewriteOrRetargetHistory": "deny",
     "targetVersionRule": "new_append_only_policy_version_exact_immediate_predecessor_plus_one",
     "targetPreviousVersionDigestRule": "exact_digest_of_immediate_predecessor_not_the_rollback_source",
+    "eventBindingRule": "event_includes_exact_separately_trusted_immediate_predecessor_policy_binding_and_target_previous_version_digest",
     "rollbackSourceRule": "exact_same_tenant_same_policy_id_prior_version_with_exact_activation_and_terminal_event_digests",
     "configurationCopyRule": "new_version_may_copy_reviewed_fields_but_receives_new_digest_and_new_lifecycle",
     "requiredLifecycle": ["draft", "validated", "previewed", "active"],

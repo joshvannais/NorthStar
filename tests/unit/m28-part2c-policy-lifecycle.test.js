@@ -17,7 +17,7 @@ const BASE_TREE = '0fb86eefc19c322593d9e09710e9102329d82d12';
 const PART2B_HEAD = 'be14e2467b278f00dfd55082b0f42a4497ef5c22';
 const PART2B_DEPLOYMENT = '1a04c6ac-412a-4f5f-b86b-7f506b2a3cc8';
 const PART2B_IMAGE = '9defb2eda71fc5fb8905c6b4c623aefd5a0b3a7923980b7b6736cdcebbaf217e';
-const MODEL_SHA = '5E3E86A5381A85C2003A93E3504DE7F340543DF4961C541BA374E1744B5B8E09';
+const MODEL_SHA = '26BEE9E6ED0096D8C9D8E8C9AA3B3D04E97E7B3329D3023C4B12AE05BDCDE943';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -34,8 +34,8 @@ const EVENT_FIELDS = [
   'schemaVersion', 'tenantId', 'lifecycleEventId', 'policyBinding',
   'lifecycleSequence', 'operation', 'eventClass', 'fromState', 'toState',
   'predecessorBinding', 'idempotencyDigest', 'sourceSnapshotBinding',
-  'requirementBindings', 'relatedPolicyBinding', 'currentness', 'payload',
-  'payloadDigest', 'eventDigest',
+  'requirementBindings', 'relatedPolicyBinding', 'rollbackPredecessorBinding',
+  'currentness', 'payload', 'payloadDigest', 'eventDigest',
 ];
 
 function normalizedLfSha256(relative) {
@@ -116,6 +116,7 @@ function idempotencyDigest(event, model) {
     operation: event.operation,
     predecessorEventDigest: event.predecessorBinding?.eventDigest || null,
     relatedPolicyBinding: event.relatedPolicyBinding,
+    rollbackPredecessorBinding: event.rollbackPredecessorBinding,
   });
 }
 
@@ -157,6 +158,7 @@ function trustedContext(model, overrides = {}) {
       successor: null,
       rollback_source: null,
     },
+    rollbackPredecessorBinding: null,
     ...overrides,
   };
 }
@@ -207,6 +209,9 @@ function buildEvent(model, operation, previous, priorEvents, options = {}) {
         ? options.relatedTerminalEventDigest || `sha256:${'f'.repeat(64)}`
         : null,
     } : null,
+    rollbackPredecessorBinding: options.rollbackPredecessorBinding
+      ? clone(options.rollbackPredecessorBinding)
+      : null,
     currentness: {
       policyState: 'contract_fixture_unverified',
       sourceState: 'contract_fixture_unverified',
@@ -244,6 +249,33 @@ function validateCurrentness(event) {
   }
 }
 
+function validateOperationCurrentness(event, model) {
+  const admission = model.currentnessSchema.operationAdmission;
+  const fixture = event.currentness.marker === 'contract_fixture_unverified';
+  if (fixture) {
+    expect(event.payload).toEqual({
+      reasonCode: `${event.operation}_contract_fixture`,
+      grammarFixtureOnly: true,
+      externalEffects: 0,
+    });
+    expect(model.availability.grammarFixtureOnly).toBe(true);
+    expect(model.availability.activationAuthorityAvailable).toBe(false);
+    expect(model.availability.externalEffectsAllowed).toBe(0);
+    return;
+  }
+  if (admission.exactCurrentRequired.includes(event.operation)) {
+    expect(event.currentness).toEqual({
+      policyState: 'exact_current',
+      sourceState: 'exact_current',
+      marker: 'exact_current_not_runtime_revalidated',
+    });
+    return;
+  }
+  expect(admission.failSafeNonCurrentAllowed).toContain(event.operation);
+  expect(['exact_current_not_runtime_revalidated', 'stale_fail_closed', 'unavailable_fail_closed'])
+    .toContain(event.currentness.marker);
+}
+
 function validateEvent(event, model, priorEvents, trusted) {
   assertPlainData(event);
   assertPlainData(trusted);
@@ -251,7 +283,7 @@ function validateEvent(event, model, priorEvents, trusted) {
   exactKeySet(trusted, [
     'tenantId', 'policyBinding', 'sourceSnapshotBinding',
     'authorityEvidenceDigest', 'trustedTimeEvidenceDigest', 'currentness',
-    'relatedPolicyBindings',
+    'relatedPolicyBindings', 'rollbackPredecessorBinding',
   ]);
   expect(event.schemaVersion).toBe('mission28.policy.lifecycle.event.v1');
   expect(event.tenantId).toBe(trusted.tenantId);
@@ -329,6 +361,23 @@ function validateEvent(event, model, priorEvents, trusted) {
     }
   }
 
+  if (event.operation === 'bounded_rollback_draft') {
+    expect(event.rollbackPredecessorBinding).not.toBeNull();
+    exactKeySet(event.rollbackPredecessorBinding, model.bindingSchemas.rollbackPredecessorBindingExactKeys);
+    expect(trusted.rollbackPredecessorBinding).not.toBeNull();
+    expect(event.rollbackPredecessorBinding).toEqual(trusted.rollbackPredecessorBinding);
+    const predecessorPolicy = event.rollbackPredecessorBinding.immediatePredecessorPolicyBinding;
+    exactKeySet(predecessorPolicy, model.bindingSchemas.policyBindingExactKeys);
+    expect(predecessorPolicy.tenantId).toBe(event.tenantId);
+    expect(predecessorPolicy.policyId).toBe(event.policyBinding.policyId);
+    expect(event.policyBinding.policyVersion).toBe(predecessorPolicy.policyVersion + 1);
+    expect(event.policyBinding.policyDigest).not.toBe(predecessorPolicy.policyDigest);
+    expect(event.rollbackPredecessorBinding.targetPreviousVersionDigest).toBe(predecessorPolicy.policyDigest);
+    expect(event.relatedPolicyBinding.policyBinding).not.toEqual(event.policyBinding);
+  } else {
+    expect(event.rollbackPredecessorBinding).toBeNull();
+  }
+
   exactKeySet(event.currentness, model.bindingSchemas.currentnessExactKeys);
   expect(model.currentnessSchema.policyStates).toContain(event.currentness.policyState);
   expect(model.currentnessSchema.sourceStates).toContain(event.currentness.sourceState);
@@ -336,6 +385,7 @@ function validateEvent(event, model, priorEvents, trusted) {
   expect(event.currentness).toEqual(trusted.currentness);
   expect(event.sourceSnapshotBinding.currentnessMarker).toBe(event.currentness.marker);
   validateCurrentness(event);
+  validateOperationCurrentness(event, model);
   exactKeySet(event.payload, ['reasonCode', 'grammarFixtureOnly', 'externalEffects']);
   expect(event.payload).toEqual({
     reasonCode: `${event.operation}_contract_fixture`,
@@ -405,10 +455,31 @@ function buildHistoricalBinding(model, activeEvent) {
   return binding;
 }
 
-function validateHistoricalBinding(binding, model, expected) {
+function createTrustedHistoricalResolver(bindings) {
+  const records = new Map();
+  for (const binding of bindings) {
+    const key = `${binding.tenantId}:${binding.runId}`;
+    if (records.has(key)) throw new Error('duplicate trusted run identity');
+    records.set(key, clone(binding));
+  }
+  return (tenantId, runId) => {
+    const resolvedBinding = records.get(`${tenantId}:${runId}`);
+    if (!resolvedBinding) return null;
+    return { tenantId, runId, resolvedBinding: clone(resolvedBinding) };
+  };
+}
+
+function validateHistoricalBinding(binding, model, resolveTrustedRun) {
   assertPlainData(binding);
+  expect(typeof resolveTrustedRun).toBe('function');
+  const trustedLookup = resolveTrustedRun(binding.tenantId, binding.runId);
+  expect(trustedLookup).not.toBeNull();
+  assertPlainData(trustedLookup);
   exactKeySet(binding, model.historicalRunBindingContract.exactKeys);
-  expect(binding).toEqual(expected);
+  exactKeySet(trustedLookup, model.historicalRunBindingContract.trustedLookupExactKeys);
+  expect(binding.tenantId).toBe(trustedLookup.tenantId);
+  expect(binding.runId).toBe(trustedLookup.runId);
+  expect(binding).toEqual(trustedLookup.resolvedBinding);
   expect(binding.tenantId).toMatch(UUID);
   expect(binding.runId).toMatch(UUID);
   expect(binding.policyBinding.tenantId).toBe(binding.tenantId);
@@ -585,6 +656,48 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     }
   });
 
+  test('denies stale or unavailable activation and resume even when separately trusted currentness matches', () => {
+    const model = parse(CONTRACT_PATH);
+    const base = buildActiveLedger(model);
+    const unsafeCases = [
+      { index: 3, policyState: 'stale', sourceState: 'exact_current', marker: 'stale_fail_closed' },
+      { index: 3, policyState: 'exact_current', sourceState: 'unavailable', marker: 'unavailable_fail_closed' },
+      { index: 5, policyState: 'stale', sourceState: 'stale', marker: 'stale_fail_closed' },
+      { index: 5, policyState: 'unavailable', sourceState: 'exact_current', marker: 'unavailable_fail_closed' },
+    ];
+    for (const item of unsafeCases) {
+      const event = clone(base[item.index]);
+      event.currentness = {
+        policyState: item.policyState,
+        sourceState: item.sourceState,
+        marker: item.marker,
+      };
+      event.sourceSnapshotBinding.currentnessMarker = item.marker;
+      event.idempotencyDigest = idempotencyDigest(event, model);
+      event.eventDigest = eventDigest(event, model);
+      const trusted = trustedContext(model, {
+        sourceSnapshotBinding: clone(event.sourceSnapshotBinding),
+        currentness: clone(event.currentness),
+      });
+      expect(() => validateEvent(event, model, base.slice(0, item.index), trusted)).toThrow();
+    }
+
+    const failSafePause = clone(base[4]);
+    failSafePause.currentness = {
+      policyState: 'stale',
+      sourceState: 'unavailable',
+      marker: 'unavailable_fail_closed',
+    };
+    failSafePause.sourceSnapshotBinding.currentnessMarker = 'unavailable_fail_closed';
+    failSafePause.idempotencyDigest = idempotencyDigest(failSafePause, model);
+    failSafePause.eventDigest = eventDigest(failSafePause, model);
+    const failSafeTrusted = trustedContext(model, {
+      sourceSnapshotBinding: clone(failSafePause.sourceSnapshotBinding),
+      currentness: clone(failSafePause.currentness),
+    });
+    expect(() => validateEvent(failSafePause, model, base.slice(0, 4), failSafeTrusted)).not.toThrow();
+  });
+
   test('rejects resume or any successor transition after terminal expiry retirement or emergency stop', () => {
     const model = parse(CONTRACT_PATH);
     const active = buildActiveLedger(model).slice(0, 4);
@@ -646,40 +759,120 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
       policyVersion: 3,
       policyDigest: `sha256:${'c'.repeat(64)}`,
     });
-    const validateRollback = (targetBinding, previousBinding, sourceBinding, previousVersionDigest) => {
-      expect(targetBinding.tenantId).toBe(previousBinding.tenantId);
-      expect(targetBinding.policyId).toBe(previousBinding.policyId);
-      expect(targetBinding.policyVersion).toBe(previousBinding.policyVersion + 1);
-      expect(targetBinding.policyDigest).not.toBe(previousBinding.policyDigest);
-      expect(previousVersionDigest).toBe(previousBinding.policyDigest);
-      expect(sourceBinding.tenantId).toBe(targetBinding.tenantId);
-      expect(sourceBinding.policyId).toBe(targetBinding.policyId);
-      expect(sourceBinding.policyVersion).toBeLessThan(targetBinding.policyVersion);
-      expect(sourceBinding.policyDigest).not.toBe(targetBinding.policyDigest);
+    const predecessorResolution = {
+      immediatePredecessorPolicyBinding: clone(immediatePredecessor),
+      targetPreviousVersionDigest: immediatePredecessor.policyDigest,
     };
-    expect(() => validateRollback(target, immediatePredecessor, rollbackSource, immediatePredecessor.policyDigest)).not.toThrow();
-    const invalid = [
-      () => validateRollback({ ...target, policyVersion: 2 }, immediatePredecessor, rollbackSource, immediatePredecessor.policyDigest),
-      () => validateRollback(target, immediatePredecessor, rollbackSource, rollbackSource.policyDigest),
-      () => validateRollback(target, immediatePredecessor, { ...rollbackSource, tenantId: '00000000-0000-4000-8000-000000000029' }, immediatePredecessor.policyDigest),
-      () => validateRollback(target, immediatePredecessor, { ...rollbackSource, policyId: '00000000-0000-4000-8000-00000000002d' }, immediatePredecessor.policyDigest),
-    ];
-    for (const attempt of invalid) expect(attempt).toThrow();
     const rollbackDraft = buildEvent(model, 'bounded_rollback_draft', null, [], {
       policyBinding: target,
       relatedPolicyBinding: rollbackSource,
+      rollbackPredecessorBinding: predecessorResolution,
       idIndex: 80,
     });
     const rollbackTrusted = trustedContext(model, {
       policyBinding: target,
       relatedPolicyBindings: { successor: null, rollback_source: clone(rollbackDraft.relatedPolicyBinding) },
+      rollbackPredecessorBinding: clone(predecessorResolution),
     });
     validateLifecycleLedger([rollbackDraft], model, rollbackTrusted);
+
+    const rollbackLifecycle = [rollbackDraft];
+    for (const operation of ['validate', 'preview', 'activate']) {
+      rollbackLifecycle.push(buildEvent(model, operation, rollbackLifecycle.at(-1), rollbackLifecycle, {
+        policyBinding: target,
+      }));
+    }
+    validateLifecycleLedger(rollbackLifecycle, model, rollbackTrusted);
+    expect(rollbackLifecycle.map(event => event.toState)).toEqual(['draft', 'validated', 'previewed', 'active']);
+
     const forgedTerminal = clone(rollbackDraft);
     forgedTerminal.relatedPolicyBinding.terminalEventDigest = `sha256:${'9'.repeat(64)}`;
     forgedTerminal.idempotencyDigest = idempotencyDigest(forgedTerminal, model);
     forgedTerminal.eventDigest = eventDigest(forgedTerminal, model);
     expect(() => validateLifecycleLedger([forgedTerminal], model, rollbackTrusted)).toThrow();
+
+    const buildRollbackAttack = (targetBinding, predecessorBinding, sourceBinding, previousDigest) => buildEvent(
+      model,
+      'bounded_rollback_draft',
+      null,
+      [],
+      {
+        policyBinding: targetBinding,
+        relatedPolicyBinding: sourceBinding,
+        rollbackPredecessorBinding: {
+          immediatePredecessorPolicyBinding: predecessorBinding,
+          targetPreviousVersionDigest: previousDigest,
+        },
+        idIndex: 90,
+      },
+    );
+    const matchingTrusted = event => trustedContext(model, {
+      policyBinding: clone(event.policyBinding),
+      relatedPolicyBindings: { successor: null, rollback_source: clone(event.relatedPolicyBinding) },
+      rollbackPredecessorBinding: clone(event.rollbackPredecessorBinding),
+    });
+
+    const retargetedPredecessor = policyBinding(model, {
+      policyVersion: 3,
+      policyDigest: `sha256:${'d'.repeat(64)}`,
+    });
+    const retargetedTarget = policyBinding(model, {
+      policyVersion: 4,
+      policyDigest: `sha256:${'e'.repeat(64)}`,
+    });
+    const wholeRetarget = buildRollbackAttack(
+      retargetedTarget,
+      retargetedPredecessor,
+      rollbackSource,
+      retargetedPredecessor.policyDigest,
+    );
+    const independentlyResolvedOriginal = trustedContext(model, {
+      policyBinding: clone(retargetedTarget),
+      relatedPolicyBindings: { successor: null, rollback_source: clone(wholeRetarget.relatedPolicyBinding) },
+      rollbackPredecessorBinding: clone(predecessorResolution),
+    });
+    expect(() => validateLifecycleLedger([wholeRetarget], model, independentlyResolvedOriginal)).toThrow();
+
+    const versionFork = buildRollbackAttack(
+      { ...target, policyDigest: `sha256:${'d'.repeat(64)}` },
+      immediatePredecessor,
+      rollbackSource,
+      immediatePredecessor.policyDigest,
+    );
+    const canonicalTargetResolution = trustedContext(model, {
+      policyBinding: clone(target),
+      relatedPolicyBindings: { successor: null, rollback_source: clone(versionFork.relatedPolicyBinding) },
+      rollbackPredecessorBinding: clone(versionFork.rollbackPredecessorBinding),
+    });
+    expect(() => validateLifecycleLedger([versionFork], model, canonicalTargetResolution)).toThrow();
+
+    const gap = buildRollbackAttack(
+      { ...target, policyVersion: 4 },
+      immediatePredecessor,
+      rollbackSource,
+      immediatePredecessor.policyDigest,
+    );
+    const wrongPreviousDigest = buildRollbackAttack(
+      target,
+      immediatePredecessor,
+      rollbackSource,
+      rollbackSource.policyDigest,
+    );
+    const digestFork = buildRollbackAttack(
+      { ...target, policyDigest: immediatePredecessor.policyDigest },
+      immediatePredecessor,
+      rollbackSource,
+      immediatePredecessor.policyDigest,
+    );
+    const selfSource = buildRollbackAttack(
+      target,
+      immediatePredecessor,
+      target,
+      immediatePredecessor.policyDigest,
+    );
+    for (const attack of [gap, wrongPreviousDigest, digestFork, selfSource]) {
+      expect(() => validateLifecycleLedger([attack], model, matchingTrusted(attack))).toThrow();
+    }
     expect(rollbackDraft.toState).toBe('draft');
     expect(model.boundedRollbackContract.authorityRule).toContain('new_authority');
     expect(model.boundedRollbackContract.rewindOrReactivateOldVersion).toBe('deny');
@@ -689,7 +882,8 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     const model = parse(CONTRACT_PATH);
     const activeEvent = buildActiveLedger(model)[3];
     const binding = buildHistoricalBinding(model, activeEvent);
-    validateHistoricalBinding(binding, model, clone(binding));
+    const resolveTrustedRun = createTrustedHistoricalResolver([binding]);
+    validateHistoricalBinding(binding, model, resolveTrustedRun);
     const cases = [
       value => { value.policyBinding.policyVersion = 3; value.policyBinding.policyDigest = `sha256:${'c'.repeat(64)}`; value.bindingDigest = historicalBindingDigest(value, model); },
       value => { value.sourceSnapshotBinding.sourceSetDigest = `sha256:${'9'.repeat(64)}`; value.bindingDigest = historicalBindingDigest(value, model); },
@@ -700,8 +894,36 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     for (const alter of cases) {
       const mutation = clone(binding);
       alter(mutation);
-      expect(() => validateHistoricalBinding(mutation, model, binding)).toThrow();
+      expect(() => validateHistoricalBinding(mutation, model, resolveTrustedRun)).toThrow();
     }
+
+    const coherentWholeRebind = clone(binding);
+    coherentWholeRebind.policyBinding = {
+      tenantId: coherentWholeRebind.tenantId,
+      policyId: '00000000-0000-4000-8000-00000000002d',
+      policyVersion: 99,
+      policyDigest: `sha256:${'9'.repeat(64)}`,
+    };
+    coherentWholeRebind.sourceSnapshotBinding = {
+      tenantId: coherentWholeRebind.tenantId,
+      sourceSetDigest: `sha256:${'8'.repeat(64)}`,
+      currentnessMarker: 'contract_fixture_unverified',
+    };
+    coherentWholeRebind.createdByLifecycleEventBinding = {
+      lifecycleEventId: '00000000-0000-4000-8000-0000000004f1',
+      eventDigest: `sha256:${'7'.repeat(64)}`,
+      operation: 'activate',
+      toState: 'active',
+    };
+    coherentWholeRebind.bindingDigest = historicalBindingDigest(coherentWholeRebind, model);
+    expect(() => validateHistoricalBinding(coherentWholeRebind, model, resolveTrustedRun)).toThrow();
+
+    const crossTenantClone = clone(coherentWholeRebind);
+    crossTenantClone.tenantId = '00000000-0000-4000-8000-000000000029';
+    crossTenantClone.policyBinding.tenantId = crossTenantClone.tenantId;
+    crossTenantClone.sourceSnapshotBinding.tenantId = crossTenantClone.tenantId;
+    crossTenantClone.bindingDigest = historicalBindingDigest(crossTenantClone, model);
+    expect(() => validateHistoricalBinding(crossTenantClone, model, resolveTrustedRun)).toThrow();
   });
 
   test('rejects lifecycle mutation, conflicting replay, duplicate transition and malformed data', () => {

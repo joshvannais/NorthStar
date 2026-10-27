@@ -1,0 +1,515 @@
+{
+  "contractVersion": "mission28.part2b.immutable-record-model.v1",
+  "authority": {
+    "mission": 28,
+    "part": "2B",
+    "state": "implementation_candidate",
+    "baselineCommit": "cc55048e91c2b5c6dd70671d01ebe913123201ad",
+    "baselineTree": "954f9e685642ee23c17376c83cc92a34ae6b72ad",
+    "runtimeImplemented": false,
+    "databaseAuthorityGranted": false,
+    "lifecycleAuthorityGranted": false,
+    "providerAuthorityGranted": false,
+    "externalEffectAuthorityGranted": false
+  },
+  "part2ARelease": {
+    "acceptedSourceHead": "6f1c299193456afd756542da43c72c6517101661",
+    "acceptedTree": "954f9e685642ee23c17376c83cc92a34ae6b72ad",
+    "pullRequest": 553,
+    "mergedMain": "cc55048e91c2b5c6dd70671d01ebe913123201ad",
+    "deployment": "9e976ab1-733d-4d85-b1f6-6c33073dc3aa",
+    "deploymentState": "SUCCESS_RUNNING",
+    "imageSha256": "a4fffc825163c836e10a59a60fd64586531d6a365b96eced5b0ce3a880fa5372",
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null,
+    "health": ["startup_ready", "migrations_268_of_268_latest_272_no_273", "health_200", "root_200", "demo_200"]
+  },
+  "frozenInputs": [
+    {
+      "path": "docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md",
+      "normalizedLfSha256": "92DAD00F8A7623A87C780FC1AC965B66569616650F53FDED8454F51872458179"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json",
+      "normalizedLfSha256": "62E37CF07A26F0C2B1A50A2C2F0EB927695500DB32B44B16E5B431F594B93142"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json",
+      "normalizedLfSha256": "1CB5FF594AE7D1BEED313C1A94D7FE8200FB0024B36DF11B4C668F211481312B"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json",
+      "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json",
+      "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"
+    }
+  ],
+  "recordFields": [
+    "schemaVersion",
+    "tenantId",
+    "recordId",
+    "runId",
+    "recordType",
+    "causalOrdinal",
+    "policyBinding",
+    "sourceBindings",
+    "causalParents",
+    "classification",
+    "currentness",
+    "payload",
+    "payloadDigest",
+    "recordDigest"
+  ],
+  "identityContract": {
+    "tenantId": "required_exact_uuid",
+    "recordId": "required_exact_uuid_unique_within_tenant",
+    "runId": "required_exact_uuid_stable_for_one_causal_automation_history",
+    "recordType": "required_exact_record_definition_id",
+    "causalOrdinal": "positive_safe_integer_strictly_greater_than_every_parent",
+    "policyAndEverySourceBindingTenantIdMustEqualRecordTenantId": true,
+    "acceptanceRequiresSeparatelyTrustedTenantPolicyAndSourceResolution": true,
+    "crossTenantCrossPolicyAliasCloneReplayOrIdentityReuse": "deny",
+    "missingAmbiguousDuplicateOrMutableIdentity": "unavailable"
+  },
+  "bindingSchemas": {
+    "policyBindingExactKeys": ["tenantId", "policyId", "policyVersion", "policyDigest"],
+    "policyBinding": {
+      "tenantId": "exact_uuid_equal_to_record_tenant_id_and_trusted_policy_owner",
+      "policyId": "exact_uuid",
+      "policyVersion": "positive_safe_integer",
+      "policyDigest": "sha256_lowercase_hex"
+    },
+    "sourceBindingExactKeys": [
+      "tenantId",
+      "sourceClassId",
+      "ownerMission",
+      "sourceRecordId",
+      "sourceVersion",
+      "sourceDigest",
+      "currentnessMarker"
+    ],
+    "sourceClassIds": [
+      "mission20_business_contact_preferences",
+      "mission21_knowledge_reference",
+      "mission22_appointment_dispatch",
+      "mission23_work_execution",
+      "mission24_estimate_quote",
+      "mission25_26_advisory",
+      "mission27_financial_collection"
+    ],
+    "sourceOwnerMissions": [
+      "Mission 20",
+      "Mission 21",
+      "Mission 22",
+      "Mission 23",
+      "Mission 24",
+      "Missions 25 and 26",
+      "Mission 27"
+    ],
+    "sourceVersion": "positive_safe_integer",
+    "sourceDigest": "sha256_lowercase_hex",
+    "sourceTenantRule": "exact_uuid_equal_to_record_tenant_id_and_separately_trusted_source_owner",
+    "sourceCurrentnessMarkers": [
+      "captured_exact_current",
+      "captured_stale",
+      "captured_unavailable",
+      "contract_fixture_unverified"
+    ],
+    "causalParentExactKeys": ["recordId", "recordType", "recordDigest"],
+    "causalParentRule": "same_tenant_same_run_same_policy_exact_existing_immutable_record_with_lower_ordinal",
+    "trustedResolutionRule": "A record is accepted only when a separately trusted tenant-private resolver returns the exact tenant, policy tenant/id/version/digest and every source tenant/class/owner/id/version/digest/currentness tuple. Record-supplied tuples never establish their own authority. Part 2B proves this rule with a locked fictional fixture; Part 2D owns the production resolver.",
+    "emptySourceBindings": "deny",
+    "duplicateSourceOrParentBindings": "deny"
+  },
+  "classificationSchema": {
+    "exactKeys": ["authorityClass", "recordClass", "effectClaim"],
+    "authorityClasses": ["automation_decision", "external_effect", "effect_evidence"],
+    "effectClaims": [
+      "none_internal_only",
+      "attempt_only_not_acknowledgement",
+      "bounded_evidence_only_not_business_outcome"
+    ],
+    "strongerClaimThanRecordDefinition": "deny"
+  },
+  "currentnessSchema": {
+    "exactKeys": ["policyState", "sourceState", "marker"],
+    "policyStates": ["exact_bound", "stale", "unavailable", "contract_fixture_unverified"],
+    "sourceStates": ["exact_bound", "mixed", "stale", "unavailable", "contract_fixture_unverified"],
+    "markers": [
+      "captured_not_runtime_revalidated",
+      "captured_runtime_revalidation_required",
+      "captured_stale_fail_closed",
+      "captured_unavailable_fail_closed",
+      "contract_fixture_unverified"
+    ],
+    "sourceAggregationRules": {
+      "all_captured_exact_current": "exact_bound",
+      "all_captured_stale": "stale",
+      "all_captured_unavailable": "unavailable",
+      "mixed_non_fixture_markers": "mixed",
+      "all_contract_fixture_unverified": "contract_fixture_unverified",
+      "fixture_marker_mixed_with_any_non_fixture_marker": "deny"
+    },
+    "recordMarkerRules": {
+      "policy_or_any_source_unavailable": "captured_unavailable_fail_closed",
+      "otherwise_policy_or_any_source_stale": "captured_stale_fail_closed",
+      "exact_policy_and_all_sources_exact": ["captured_not_runtime_revalidated", "captured_runtime_revalidation_required"],
+      "fixture_policy_and_all_sources_fixture": "contract_fixture_unverified",
+      "every_other_combination": "deny"
+    },
+    "currentnessAuthority": "Part 4 and later runtime slices must capture and revalidate currentness; this contract only separates immutable markers."
+  },
+  "payloadValueTypes": [
+    "enum",
+    "boolean",
+    "uuid",
+    "digest",
+    "uuid_array",
+    "digest_array",
+    "nullable_uuid"
+  ],
+  "recordDefinitions": [
+    {
+      "recordType": "eligibility_evaluation",
+      "authorityClass": "automation_decision",
+      "recordClass": "eligibility",
+      "effectClaim": "none_internal_only",
+      "allowedParentTypes": [],
+      "minimumParents": 0,
+      "maximumParents": 0,
+      "payloadSchema": [
+        { "field": "resultState", "type": "enum", "allowedValues": ["eligible", "ineligible", "suppressed", "unavailable", "approval_required"] },
+        { "field": "reasonCode", "type": "enum", "allowedValues": ["contract_fixture", "exact_match", "source_stale", "authority_missing", "suppressed"] },
+        { "field": "sourceSetDigest", "type": "digest", "allowedValues": [] }
+      ],
+      "fixturePayload": { "resultState": "approval_required", "reasonCode": "contract_fixture", "sourceSetDigest": "sha256:c58524ad2a6b17dbcec967b340837cddd93c2a402741cc9deb8d9fcc88e76b32" },
+      "effectBoundary": "Eligibility is an internal decision only; it never proves approval, scheduling, execution or effect."
+    },
+    {
+      "recordType": "proposed_action",
+      "authorityClass": "automation_decision",
+      "recordClass": "proposal",
+      "effectClaim": "none_internal_only",
+      "allowedParentTypes": ["eligibility_evaluation"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "actionFamily", "type": "enum", "allowedValues": ["internal_read_digest_task", "owner_approval_request", "collection_escalation"] },
+        { "field": "recipientClassId", "type": "enum", "allowedValues": ["tenant_owner", "tenant_admin", "assigned_staff"] },
+        { "field": "channelId", "type": "enum", "allowedValues": ["in_app_passive"] },
+        { "field": "proposalState", "type": "enum", "allowedValues": ["proposed_not_authorized"] }
+      ],
+      "fixturePayload": { "actionFamily": "internal_read_digest_task", "recipientClassId": "tenant_owner", "channelId": "in_app_passive", "proposalState": "proposed_not_authorized" },
+      "effectBoundary": "A proposal is neither approval nor execution and cannot widen the released Part 1 launch matrix."
+    },
+    {
+      "recordType": "approval",
+      "authorityClass": "automation_decision",
+      "recordClass": "approval_authority",
+      "effectClaim": "none_internal_only",
+      "allowedParentTypes": ["proposed_action"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "approvalClass", "type": "enum", "allowedValues": ["per_run", "standing"] },
+        { "field": "authorityState", "type": "enum", "allowedValues": ["unavailable_pending_part3", "approved", "denied", "expired", "revoked"] },
+        { "field": "actorBindingDigest", "type": "digest", "allowedValues": [] },
+        { "field": "previewDigest", "type": "digest", "allowedValues": [] }
+      ],
+      "fixturePayload": { "approvalClass": "per_run", "authorityState": "unavailable_pending_part3", "actorBindingDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "previewDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333" },
+      "effectBoundary": "The record type can preserve later accepted human authority but Part 2B grants none and cannot self-authorize."
+    },
+    {
+      "recordType": "scheduled_run",
+      "authorityClass": "automation_decision",
+      "recordClass": "schedule_intent",
+      "effectClaim": "none_internal_only",
+      "allowedParentTypes": ["approval"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "scheduleState", "type": "enum", "allowedValues": ["unavailable_contract_only", "scheduled", "due", "expired"] },
+        { "field": "scheduleBindingDigest", "type": "digest", "allowedValues": [] },
+        { "field": "trustedClockState", "type": "enum", "allowedValues": ["unavailable_pending_part2d", "trusted"] }
+      ],
+      "fixturePayload": { "scheduleState": "unavailable_contract_only", "scheduleBindingDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444", "trustedClockState": "unavailable_pending_part2d" },
+      "effectBoundary": "A scheduled run is internal intent only; trusted time and scheduling remain later authority."
+    },
+    {
+      "recordType": "action_unit",
+      "authorityClass": "automation_decision",
+      "recordClass": "bounded_action_intent",
+      "effectClaim": "none_internal_only",
+      "allowedParentTypes": ["scheduled_run"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "unitState", "type": "enum", "allowedValues": ["unavailable_contract_only", "ready", "blocked", "cancelled"] },
+        { "field": "idempotencyKeyDigest", "type": "digest", "allowedValues": [] },
+        { "field": "effectClass", "type": "enum", "allowedValues": ["internal_only", "external_provider"] }
+      ],
+      "fixturePayload": { "unitState": "unavailable_contract_only", "idempotencyKeyDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555", "effectClass": "internal_only" },
+      "effectBoundary": "An action unit is bounded intent, not an attempt, provider acceptance or completed effect."
+    },
+    {
+      "recordType": "provider_attempt",
+      "authorityClass": "external_effect",
+      "recordClass": "provider_attempt",
+      "effectClaim": "attempt_only_not_acknowledgement",
+      "allowedParentTypes": ["action_unit"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "attemptState", "type": "enum", "allowedValues": ["not_attempted_contract_fixture", "attempted", "uncertain", "failed"] },
+        { "field": "providerMode", "type": "enum", "allowedValues": ["provider_disabled", "sandbox", "live"] },
+        { "field": "providerRequestIdentityDigest", "type": "digest", "allowedValues": [] },
+        { "field": "effectOccurred", "type": "boolean", "allowedValues": [] }
+      ],
+      "fixturePayload": { "attemptState": "not_attempted_contract_fixture", "providerMode": "provider_disabled", "providerRequestIdentityDigest": "sha256:6666666666666666666666666666666666666666666666666666666666666666", "effectOccurred": false },
+      "effectBoundary": "This record can later prove only an attempt; provider transport is unavailable and attempt never equals acknowledgement or delivery."
+    },
+    {
+      "recordType": "provider_acknowledgement",
+      "authorityClass": "effect_evidence",
+      "recordClass": "provider_acknowledgement",
+      "effectClaim": "bounded_evidence_only_not_business_outcome",
+      "allowedParentTypes": ["provider_attempt"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "ackState", "type": "enum", "allowedValues": ["unavailable_contract_fixture", "accepted", "rejected", "unknown"] },
+        { "field": "authenticated", "type": "boolean", "allowedValues": [] },
+        { "field": "providerAttemptDigest", "type": "digest", "allowedValues": [] },
+        { "field": "strongerEffectProven", "type": "boolean", "allowedValues": [] }
+      ],
+      "fixturePayload": { "ackState": "unavailable_contract_fixture", "authenticated": false, "providerAttemptDigest": "sha256:63a3256dae08c96c0bba949e5c1ebe12f64409c8a7e87934f1fc3b1bc155101e", "strongerEffectProven": false },
+      "effectBoundary": "Acknowledgement evidence cannot prove sent, delivered, viewed, replied, paid, collected or successful."
+    },
+    {
+      "recordType": "delivery_state",
+      "authorityClass": "effect_evidence",
+      "recordClass": "delivery_evidence",
+      "effectClaim": "bounded_evidence_only_not_business_outcome",
+      "allowedParentTypes": ["provider_acknowledgement"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "deliveryState", "type": "enum", "allowedValues": ["unavailable_contract_fixture", "accepted", "sent", "delivered", "opened", "failed", "unknown"] },
+        { "field": "evidenceSource", "type": "enum", "allowedValues": ["contract_fixture", "authenticated_provider", "native_handoff"] },
+        { "field": "strongestClaim", "type": "enum", "allowedValues": ["none", "accepted", "sent", "delivered", "opened", "failed"] }
+      ],
+      "fixturePayload": { "deliveryState": "unavailable_contract_fixture", "evidenceSource": "contract_fixture", "strongestClaim": "none" },
+      "effectBoundary": "Each delivery state is separately evidenced and never implies reply, payment, collection or causal business outcome."
+    },
+    {
+      "recordType": "reply_opt_out",
+      "authorityClass": "effect_evidence",
+      "recordClass": "recipient_response_evidence",
+      "effectClaim": "bounded_evidence_only_not_business_outcome",
+      "allowedParentTypes": ["delivery_state"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "responseState", "type": "enum", "allowedValues": ["unavailable_contract_fixture", "reply_received", "opt_out_received", "complaint_received", "unknown"] },
+        { "field": "authenticated", "type": "boolean", "allowedValues": [] },
+        { "field": "suppressionRequired", "type": "boolean", "allowedValues": [] }
+      ],
+      "fixturePayload": { "responseState": "unavailable_contract_fixture", "authenticated": false, "suppressionRequired": true },
+      "effectBoundary": "A response record is minimized evidence, not permission, consent, payment, collection or upstream truth."
+    },
+    {
+      "recordType": "internal_task",
+      "authorityClass": "automation_decision",
+      "recordClass": "internal_task",
+      "effectClaim": "none_internal_only",
+      "allowedParentTypes": ["proposed_action", "approval", "action_unit"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "taskState", "type": "enum", "allowedValues": ["unavailable_contract_only", "open", "completed", "cancelled"] },
+        { "field": "assigneeClass", "type": "enum", "allowedValues": ["tenant_owner", "tenant_admin", "assigned_staff"] },
+        { "field": "externalEffect", "type": "boolean", "allowedValues": [] }
+      ],
+      "fixturePayload": { "taskState": "unavailable_contract_only", "assigneeClass": "tenant_owner", "externalEffect": false },
+      "effectBoundary": "An internal task is tenant-private work intent and cannot represent customer contact or an upstream mutation."
+    },
+    {
+      "recordType": "suppression",
+      "authorityClass": "automation_decision",
+      "recordClass": "suppression",
+      "effectClaim": "none_internal_only",
+      "allowedParentTypes": ["eligibility_evaluation", "proposed_action", "scheduled_run", "action_unit", "provider_attempt", "reply_opt_out"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "suppressionCode", "type": "enum", "allowedValues": ["global_stop", "tenant_pause", "source_changed_stale_corrected_or_unavailable", "manual_activity_or_owner_action", "prior_effect_unknown_or_unreconciled", "recipient_permission_or_channel_unavailable", "limit_exceeded", "expired_or_rollout_disabled"] },
+        { "field": "scope", "type": "enum", "allowedValues": ["global", "tenant", "source", "action", "recipient"] },
+        { "field": "blocksEffect", "type": "boolean", "allowedValues": [] }
+      ],
+      "fixturePayload": { "suppressionCode": "global_stop", "scope": "global", "blocksEffect": true },
+      "effectBoundary": "Suppression blocks intent or effect; it never silently deletes history or rewrites an earlier record."
+    },
+    {
+      "recordType": "cancellation",
+      "authorityClass": "automation_decision",
+      "recordClass": "cancellation",
+      "effectClaim": "none_internal_only",
+      "allowedParentTypes": ["scheduled_run", "action_unit", "provider_attempt", "internal_task"],
+      "minimumParents": 1,
+      "maximumParents": 1,
+      "payloadSchema": [
+        { "field": "cancellationState", "type": "enum", "allowedValues": ["requested", "accepted", "too_late", "unavailable"] },
+        { "field": "targetRecordId", "type": "uuid", "allowedValues": [] },
+        { "field": "effectReversalClaim", "type": "boolean", "allowedValues": [] }
+      ],
+      "fixturePayload": { "cancellationState": "unavailable", "targetRecordId": "00000000-0000-4000-8000-000000000105", "effectReversalClaim": false },
+      "effectBoundary": "Cancellation is a new immutable decision; it cannot erase a prior attempt or claim reversal of an irreversible effect."
+    },
+    {
+      "recordType": "reconciliation",
+      "authorityClass": "effect_evidence",
+      "recordClass": "reconciliation",
+      "effectClaim": "bounded_evidence_only_not_business_outcome",
+      "allowedParentTypes": ["provider_attempt", "provider_acknowledgement", "delivery_state", "reply_opt_out", "cancellation"],
+      "minimumParents": 1,
+      "maximumParents": 8,
+      "payloadSchema": [
+        { "field": "reconciliationState", "type": "enum", "allowedValues": ["unavailable_contract_fixture", "consistent", "corrected", "conflicting", "uncertain"] },
+        { "field": "reconciledRecordIds", "type": "uuid_array", "allowedValues": [] },
+        { "field": "strongestClaim", "type": "enum", "allowedValues": ["none", "attempted", "accepted", "sent", "delivered", "opened", "reply_or_opt_out", "failed", "uncertain"] }
+      ],
+      "fixturePayload": { "reconciliationState": "unavailable_contract_fixture", "reconciledRecordIds": ["00000000-0000-4000-8000-000000000106"], "strongestClaim": "none" },
+      "effectBoundary": "Reconciliation appends bounded evidence and corrections; it cannot invent authority or a stronger status than its inputs."
+    },
+    {
+      "recordType": "terminal_outcome",
+      "authorityClass": "effect_evidence",
+      "recordClass": "automation_terminal_outcome",
+      "effectClaim": "bounded_evidence_only_not_business_outcome",
+      "allowedParentTypes": ["action_unit", "internal_task", "suppression", "cancellation", "reconciliation"],
+      "minimumParents": 1,
+      "maximumParents": 8,
+      "payloadSchema": [
+        { "field": "terminalState", "type": "enum", "allowedValues": ["completed_internal", "suppressed", "cancelled", "failed", "unavailable", "uncertain"] },
+        { "field": "businessOutcomeClaimed", "type": "boolean", "allowedValues": [] },
+        { "field": "unresolvedRecordIds", "type": "uuid_array", "allowedValues": [] }
+      ],
+      "fixturePayload": { "terminalState": "unavailable", "businessOutcomeClaimed": false, "unresolvedRecordIds": [] },
+      "effectBoundary": "Terminal means only that one automation run reached a typed endpoint; it never proves customer, provider, payment, collection or business success."
+    }
+  ],
+  "relationalPayloadRules": [
+    {
+      "recordType": "eligibility_evaluation",
+      "field": "sourceSetDigest",
+      "rule": "equals_source_set_digest_of_the_record_exact_sourceBindings"
+    },
+    {
+      "recordType": "provider_acknowledgement",
+      "field": "providerAttemptDigest",
+      "rule": "equals_recordDigest_of_the_single_direct_provider_attempt_parent"
+    },
+    {
+      "recordType": "cancellation",
+      "field": "targetRecordId",
+      "rule": "equals_recordId_of_the_single_direct_cancellation_subject_parent"
+    },
+    {
+      "recordType": "reconciliation",
+      "field": "reconciledRecordIds",
+      "rule": "equals_the_ordered_unique_recordIds_of_all_direct_reconciliation_parents"
+    },
+    {
+      "recordType": "terminal_outcome",
+      "field": "unresolvedRecordIds",
+      "rule": "ordered_unique_subset_of_direct_terminal_parent_recordIds"
+    }
+  ],
+  "opaqueDigestFields": [
+    "approval.actorBindingDigest",
+    "approval.previewDigest",
+    "scheduled_run.scheduleBindingDigest",
+    "action_unit.idempotencyKeyDigest",
+    "provider_attempt.providerRequestIdentityDigest"
+  ],
+  "immutabilityContract": {
+    "recordsAppendOnly": true,
+    "recordMutationDeletionReplacementOrInPlaceCorrection": "deny",
+    "correctionRule": "append_a_new_typed_record_with_exact_parent_id_type_and_digest",
+    "causalOrderingRule": "every parent must exist, be immutable, share tenant and policy binding, and have a lower causal ordinal",
+    "ledgerOrderingRule": "serialized evidence input must be strictly increasing by causal ordinal and is never silently reordered",
+    "recordConflation": "deny",
+    "oneRecordOneTypeOneAuthorityClass": true,
+    "ambiguousOrMultipleTerminalClaims": "deny_until_reconciled_by_a_new_record"
+  },
+  "part2BAvailability": {
+    "policyActivation": false,
+    "providerModesAllowed": ["provider_disabled"],
+    "providerAttemptStatesAllowed": ["not_attempted_contract_fixture"],
+    "externalEffectsAllowed": 0,
+    "providerCallsAllowed": 0,
+    "upstreamMutationsAllowed": 0,
+    "accountingEffectsAllowed": 0,
+    "moneyEffectsAllowed": 0,
+    "effectEvidenceAuthority": "schema_only_no_observation_claim"
+  },
+  "canonicalization": {
+    "algorithm": "mission28_record_sorted_json_v1",
+    "sourceSetNamespace": "mission28.record.source-set.v1\n",
+    "payloadNamespace": "mission28.record.payload.v1\n",
+    "recordNamespace": "mission28.record.v1\n",
+    "encoding": "UTF-8",
+    "objectKeys": "lexicographic_unicode_code_point_order",
+    "arrayOrder": "preserved",
+    "numbers": "safe_integers_only_negative_zero_denied",
+    "dataModel": "plain_json_data_only_no_sparse_arrays_aliases_cycles_symbols_accessors_toJSON_custom_prototypes_or_proxies",
+    "payloadDigestInput": "payload_namespace_plus_canonical_json_of_payload",
+    "sourceSetDigestInput": "source_set_namespace_plus_canonical_json_of_exact_sourceBindings_array",
+    "recordDigestInput": "record_namespace_plus_canonical_json_of_all_record_fields_except_recordDigest",
+    "digestAlgorithm": "SHA-256",
+    "digestFormat": "sha256:lowercase_hex",
+    "implementationBoundary": "Part 2D owns production canonicalization, persistence, RLS, trusted time, retention, indexes, migration and restart behavior."
+  },
+  "structuralRules": [
+    "Every record is tenant-private and binds one exact run, one exact immutable Part 2A policy version and at least one exact source snapshot; record-supplied bindings are accepted only after separately trusted tenant-private policy and source resolution.",
+    "Every non-root record names each direct parent by record identity, record type and canonical record digest.",
+    "A parent from another tenant or policy, a stale digest, a missing parent, a duplicate parent, a disallowed parent type or a non-lower ordinal fails closed.",
+    "Eligibility, proposal, approval, schedule, action unit, attempt, acknowledgement, delivery, response, task, suppression, cancellation, reconciliation and terminal outcome are never represented by one conflated record.",
+    "A provider attempt is the only record class that may describe an attempted external effect; it is not acknowledgement, delivery, reply, payment, collection or success.",
+    "Every relational payload subject is tied to exact direct parent identity, type and digest; opaque content digests are explicitly not record links or authority.",
+    "Currentness source aggregation and record marker precedence are exact; contradictory or mixed fixture/non-fixture currentness fails closed.",
+    "Evidence records cannot create or retroactively widen action authority, mutate upstream truth, move money, or claim a stronger state than authenticated evidence.",
+    "Corrections, suppression, cancellation and reconciliation append records; they never mutate or erase prior intent, attempts or evidence.",
+    "Terminal outcome is an automation endpoint only and must identify unresolved uncertainty rather than convert it to success."
+  ],
+  "fixtureContract": {
+    "tenantId": "00000000-0000-4000-8000-000000000028",
+    "runId": "00000000-0000-4000-8000-00000000002b",
+    "policyId": "00000000-0000-4000-8000-00000000002a",
+    "policyVersion": 2,
+    "policyDigest": "sha256:c71ef8d1c9b94ef047e7988a8bbb0195f08fac9f016bbe8843b22a857dc55f84",
+    "sourceBinding": {
+      "tenantId": "00000000-0000-4000-8000-000000000028",
+      "sourceClassId": "mission23_work_execution",
+      "ownerMission": "Mission 23",
+      "sourceRecordId": "00000000-0000-4000-8000-000000000023",
+      "sourceVersion": 1,
+      "sourceDigest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "currentnessMarker": "contract_fixture_unverified"
+    },
+    "fictional": true,
+    "externalEffects": 0,
+    "providerCalls": 0,
+    "moneyEffects": 0,
+    "upstreamMutations": 0
+  },
+  "unavailableEvidence": [
+    "Part 2B independent audit, PR, merge, deployment, release, runtime implementation, lifecycle, database, migration, persistence, RLS, trusted-time, retention, index, restart, scheduler, worker, route, UI, provider, callback, outbound or demo behavior",
+    "Production provider accounts, credentials, senders, callbacks, templates, capability, sandbox, deliverability, or live mode",
+    "Any automated customer communication, secure document delivery, financial reminder, external collection escalation, real recipient/message, provider effect, upstream mutation, accounting effect, or live money",
+    "Professional legal, privacy, communications-consent, collections, debt, consumer-protection, country/region, regulatory, provider, or security review",
+    "Private-production customer evidence, hosted load or SLA, exercised disaster restore, physical Safari/devices, manual assistive-technology review, or founder visual approval"
+  ]
+}

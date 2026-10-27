@@ -754,8 +754,8 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–3C released; Part 3D implementation candidate only.');
-      expect(document).toContain('Parts 4A–14G');
+      expect(document).toContain('Parts 1A–3D released; Part 4A implementation candidate only.');
+      expect(document).toContain('Parts 4B–14G');
       expect(document).toContain('05a541792adac121f8c51b2cf200c0d18fcfbbf1');
       expect(document).toContain('1e62336afe2c9e65cccbe1629a62b86855da3ff8');
       expect(document).toContain('7ca335a1-7bf6-4f8d-ae98-a188b891f85d');
@@ -764,11 +764,13 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     expect(ledger).toContain('| 09 | 3A | Fixed action capability matrix | **Released** |');
     expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | **Released** |');
     expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | **Released** |');
-    expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Implementation candidate** |');
+    expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Released** |');
+    expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Implementation candidate** |');
     expect(roadmap).toContain('Released Part 3B artifacts');
     expect(roadmap).toContain('Released Part 3C artifacts');
-    expect(roadmap).toContain('Current Part 3D artifacts');
-    expect(ledger).toContain('Part 3D has no independent acceptance, PR, merge, deployment or release evidence');
+    expect(roadmap).toContain('Released Part 3D artifacts');
+    expect(roadmap).toContain('Current Part 4A artifacts');
+    expect(ledger).toContain('Part 4A has no independent acceptance, PR, merge, deployment or release evidence');
   });
 
   test('keeps migration 273 authoritative and adds no migration 274', () => {

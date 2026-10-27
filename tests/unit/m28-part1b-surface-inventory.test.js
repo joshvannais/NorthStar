@@ -68,6 +68,26 @@ const SIMULATOR_CONSUMER_PATHS = [
   'public/dashboard/leads.html',
 ];
 
+const PAID_SIMULATION_WRITE_PATHS = [
+  'public/dashboard.html',
+  'public/js/polaris-api.js',
+  'src/routes/simulation/pipeline.js',
+  'src/routes/simulations.js',
+  'src/server.js',
+  'src/services/canonicalGraphService.js',
+];
+
+const LEGACY_WORKFLOW_PATHS = [
+  'src/polaris/communications-engine.js',
+  'src/polaris/workflow-engine.js',
+];
+
+const NOTIFICATION_PREFERENCE_PATHS = [
+  'src/accounts/repository.js',
+  'src/routes/account.js',
+  'src/routes/api.js',
+];
+
 const PROVIDER_IMPLEMENTATION_PATHS = [
   'public/js/retell-provider.js',
   'src/browser/retellWebEntry.mjs',
@@ -192,7 +212,7 @@ function validate(value) {
   if (value.authority.baselineCommit !== BASE || value.authority.baselineTree !== BASE_TREE) throw new Error('base');
   if (JSON.stringify(value.dispositions) !== JSON.stringify(DISPOSITIONS)) throw new Error('dispositions');
   if (JSON.stringify(value.requiredFacets) !== JSON.stringify(FACETS)) throw new Error('facets');
-  if (!Array.isArray(value.surfaces) || value.surfaces.length !== 44) throw new Error('surface count');
+  if (!Array.isArray(value.surfaces) || value.surfaces.length !== 46) throw new Error('surface count');
   const ids = value.surfaces.map(surface => surface.id);
   if (new Set(ids).size !== ids.length) throw new Error('duplicate surface');
   for (const surface of value.surfaces) {
@@ -213,7 +233,7 @@ function validate(value) {
     value.surfaces.filter(surface => surface.disposition === disposition).length]));
   if (JSON.stringify(dispositionCounts) !== JSON.stringify({
     mission28_owned_reusable_after_later_authority: 2,
-    upstream_or_subscription_owned_excluded: 17,
+    upstream_or_subscription_owned_excluded: 19,
     simulated_or_demo_only: 8,
     legacy_unsupported_or_quarantined: 11,
     manual_handoff: 3,
@@ -223,7 +243,7 @@ function validate(value) {
 }
 
 describe('Mission 28 Part 1B automation-surface inventory', () => {
-  test('is an exact bounded candidate with six dispositions, forty-four unique surfaces and all required facets', () => {
+  test('is an exact bounded candidate with six dispositions, forty-six unique surfaces and all required facets', () => {
     const value = validate(inventory());
     expect(value.authority.state).toBe('implementation_candidate');
     expect(value.authority.part1A).toEqual({
@@ -238,7 +258,7 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(Object.fromEntries(DISPOSITIONS.map(disposition => [disposition,
       value.surfaces.filter(surface => surface.disposition === disposition).length]))).toEqual({
       mission28_owned_reusable_after_later_authority: 2,
-      upstream_or_subscription_owned_excluded: 17,
+      upstream_or_subscription_owned_excluded: 19,
       simulated_or_demo_only: 8,
       legacy_unsupported_or_quarantined: 11,
       manual_handoff: 3,
@@ -318,14 +338,59 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
 
     const simulator = inventory().surfaces.find(surface =>
       surface.id === 'demo.legacy-browser-call-simulator');
-    expect(simulator.disposition).toBe('legacy_unsupported_or_quarantined');
+    expect(simulator.disposition).toBe('upstream_or_subscription_owned_excluded');
     expect(simulator.entryPoints).toEqual([
       'window.ccSimulateLead()', 'window.genCall()', 'window.AppStore.addLead(call)',
-      "window.EventBus.emit('call:generated', call)",
+      "window.EventBus.emit('call:generated', call)", 'POST /api/v1/simulations/leads',
     ]);
+    expect(simulator.effectBoundary).toContain('accepted synthetic tenant record');
     const localBus = inventory().surfaces.find(surface => surface.id === 'event.browser-local-store-bus');
     expect(localBus.sourceRefs.map(reference => reference.path))
       .toContain('public/js/canonical-intelligence.js');
+  });
+
+  test('discovers the complete paid synthetic-write pipeline and its tenant-record boundary', () => {
+    const covered = sourcePaths(inventory());
+    const files = [
+      ...walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js')),
+      ...walk(path.join(ROOT, 'public')).filter(file => /\.(?:js|html)$/.test(file) &&
+        !slash(file).includes('/vendor/')),
+    ];
+    const discovered = matchingPaths(files,
+      /NorthStarAccountSession\.fetch\('\/api\/v1\/simulations\/leads'|apiFetch\('\/api\/v1\/simulations\/leads'|router\.post\('\/simulations\/leads'|const simulationsRoutes = require\('\.\/routes\/simulations'\)|function ingestSimulation\(pool, source, options\)|function withDeterministicSeed\(seed, work\)/);
+    expect(discovered).toEqual(PAID_SIMULATION_WRITE_PATHS);
+    for (const candidate of PAID_SIMULATION_WRITE_PATHS) expect(covered.has(candidate)).toBe(true);
+    const graphDependencies = relativeDependencies(path.join(ROOT, 'src/services/canonicalGraphService.js'));
+    expect(graphDependencies).toContain('src/persistence/v2/repository.js');
+    expect(covered.has('src/persistence/v2/repository.js')).toBe(true);
+    const surface = inventory().surfaces.find(item => item.id === 'demo.legacy-browser-call-simulator');
+    expect(surface.sourceRefs.map(reference => reference.path))
+      .toEqual(expect.arrayContaining([...PAID_SIMULATION_WRITE_PATHS,
+        'src/persistence/v2/repository.js']));
+  });
+
+  test('discovers legacy workflow/reminder engines and current notification preferences', () => {
+    const covered = sourcePaths(inventory());
+    const sourceFiles = walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js'));
+    const workflows = matchingPaths(sourceFiles,
+      /automated workflows across|Get follow-up recommendations for a customer/);
+    const preferences = matchingPaths(sourceFiles,
+      /email_new_lead|email_call_summary|email_appointment|sms_new_lead|sms_urgent|notification_phone/);
+    expect(workflows).toEqual(LEGACY_WORKFLOW_PATHS);
+    expect(preferences).toEqual(NOTIFICATION_PREFERENCE_PATHS);
+    for (const candidate of [...workflows, ...preferences, 'src/polaris/analytics-engine.js',
+      'src/polaris/store.js']) {
+      expect(covered.has(candidate)).toBe(true);
+    }
+    expect(relativeDependencies(path.join(ROOT, 'src/polaris/analytics-engine.js')))
+      .toContain('src/polaris/workflow-engine.js');
+    const byId = Object.fromEntries(inventory().surfaces.map(surface => [surface.id, surface]));
+    expect(byId['workflow.legacy-polaris-reminders-followups'].disposition)
+      .toBe('legacy_unsupported_or_quarantined');
+    expect(byId['preferences.account-notification-destinations'].disposition)
+      .toBe('upstream_or_subscription_owned_excluded');
+    expect(byId['preferences.account-notification-destinations'].effectBoundary)
+      .toContain('do not establish recipient consent');
   });
 
   test('discovers every outbound provider implementation and its active direct consumers', () => {
@@ -395,8 +460,11 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
       "'/command-center/estimates/:estimateId/material-adoptions'",
       "'/command-center/estimates/:estimateId/cost-adoptions'",
     ]) expect(demoSource).toContain(marker);
-    expect(value.surfaces.filter(surface => surface.facets.includes('demo_action'))
+    expect(value.surfaces.filter(surface => surface.facets.includes('demo_action') &&
+      surface.id !== 'demo.legacy-browser-call-simulator')
       .every(surface => ['simulated_or_demo_only', 'legacy_unsupported_or_quarantined'].includes(surface.disposition))).toBe(true);
+    expect(value.surfaces.find(surface => surface.id === 'demo.legacy-browser-call-simulator').disposition)
+      .toBe('upstream_or_subscription_owned_excluded');
   });
 
   test('quarantines effect-capable legacy paths and preserves the fact-decision-effect-evidence boundary', () => {
@@ -405,9 +473,11 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
       'notification.legacy-lead-email', 'notification.legacy-lead-sms',
       'notification.legacy-simulated-lead-fanout', 'provider.google-sheets-lead-append',
       'provider.jobber-oauth-and-lead-push', 'browser.legacy-communications-provider-registry',
-      'browser.legacy-retell-provider', 'demo.legacy-browser-call-simulator',
+      'browser.legacy-retell-provider', 'workflow.legacy-polaris-reminders-followups',
       'demo.retired-call-mutations',
     ]) expect(byId[id].disposition).toBe('legacy_unsupported_or_quarantined');
+    expect(byId['demo.legacy-browser-call-simulator'].disposition)
+      .toBe('upstream_or_subscription_owned_excluded');
     expect(byId['collection.mission27-reviewed-handoff-labels'].effectBoundary)
       .toContain('do not authorize reminders, retry, charges, fees, legal escalation, or external collection');
     expect(byId['handoff.customer-phone-and-email'].effectBoundary)

@@ -185,17 +185,36 @@
     },
     {
       "id": "demo.legacy-browser-call-simulator",
-      "facets": ["demo_action", "event_listener"],
-      "disposition": "legacy_unsupported_or_quarantined",
-      "owner": "legacy paid-dashboard browser simulator",
-      "effectBoundary": "The simulator creates fictional call/lead objects, writes browser-local AppStore state, and emits a local event from paid dashboard pages; it has no accepted tenant record, provider, recipient, delivery, or Mission 28 effect authority and remains quarantined.",
-      "entryPoints": ["window.ccSimulateLead()", "window.genCall()", "window.AppStore.addLead(call)", "window.EventBus.emit('call:generated', call)"],
+      "facets": ["demo_action", "event_listener", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "paid canonical synthetic-lead ingestion",
+      "effectBoundary": "The paid dashboard first writes browser-local fictional state, then its authenticated tenant/idempotency-scoped POST may commit a canonical PostgreSQL graph with explicit simulation provenance. That is an accepted synthetic tenant record, not a real lead, provider event, customer contact, delivery, or reusable Mission 28 effect authority.",
+      "entryPoints": ["window.ccSimulateLead()", "window.genCall()", "window.AppStore.addLead(call)", "window.EventBus.emit('call:generated', call)", "POST /api/v1/simulations/leads"],
       "sourceRefs": [
         { "path": "public/js/simulator.js", "anchors": ["function genCall()", "window.AppStore.addLead(call)", "window.EventBus.emit('call:generated', call)", "window.genCall = routedGenCall"] },
-        { "path": "public/dashboard.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
+        { "path": "public/dashboard.html", "anchors": ["<script src=\"/js/simulator.js\"></script>", "apiFetch('/api/v1/simulations/leads'"] },
+        { "path": "public/js/polaris-api.js", "anchors": ["function simulateLead(data)", "fetch('/api/v1/simulations/leads'"] },
         { "path": "public/dashboard/calendar.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
         { "path": "public/dashboard/leads.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
-        { "path": "public/dashboard/communications.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] }
+        { "path": "public/dashboard/communications.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
+        { "path": "src/server.js", "anchors": ["const simulationsRoutes = require('./routes/simulations')", "app.use('/api/v1', simulationsRoutes)"] },
+        { "path": "src/routes/simulations.js", "anchors": ["router.post('/simulations/leads'", "const result = await ingestSimulation(db.getPool(), graphRequest)", "sourceVersion: 'simulation-pipeline-v1'"] },
+        { "path": "src/routes/simulation/pipeline.js", "anchors": ["function withDeterministicSeed", "function generateScenario", "function generateTranscript"] },
+        { "path": "src/services/canonicalGraphService.js", "anchors": ["const repository = require('../persistence/v2/repository')", "function ingestSimulation(pool, source, options)", "source: 'simulation'"] },
+        { "path": "src/persistence/v2/repository.js", "anchors": ["async function withTransaction", "async function claimOperation", "async function completeOperation"] }
+      ]
+    },
+    {
+      "id": "workflow.legacy-polaris-reminders-followups",
+      "facets": ["reminder", "queue"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy file-backed Polaris workflow engine",
+      "effectBoundary": "The legacy engine can create in-memory/file-backed tasks, reminders, follow-ups, appointments, and communication records, but it is not mounted tenant-private automation authority and cannot schedule or prove an external message, appointment, reminder, or Mission 28 effect.",
+      "sourceRefs": [
+        { "path": "src/polaris/workflow-engine.js", "anchors": ["follow-ups, appointments, reminders, and automated workflows", "function scheduleReminder", "function scheduleAppointment", "function createFollowUp", "var comms = require('./communications-engine')"] },
+        { "path": "src/polaris/communications-engine.js", "anchors": ["Centralized communications layer", "Follow-up recommendations", "const store = require('./store')"] },
+        { "path": "src/polaris/analytics-engine.js", "anchors": ["return require('./workflow-engine')"] },
+        { "path": "src/polaris/store.js", "anchors": ["File-backed storage for Polaris data", "recommendations: path.join(DATA_DIR, 'polaris-recommendations.json')"] }
       ]
     },
     {
@@ -460,6 +479,18 @@
       "owner": "legacy business-profile preferences",
       "effectBoundary": "Email, SMS, push, briefing, revenue, crew, and critical flags are stored presentation preferences only; they do not identify a sender, recipient, channel permission, scheduler, template, or effect.",
       "sourceRefs": [{ "path": "src/services/businessProfile.js", "anchors": ["dailyExecutiveBriefing: true", "revenueAlerts: true", "criticalAlerts: true"] }]
+    },
+    {
+      "id": "preferences.account-notification-destinations",
+      "facets": ["notification", "email_sms_path"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "tenant account notification settings",
+      "effectBoundary": "Current tenant-scoped email/SMS preference booleans and destination fields are upstream account facts. They do not establish recipient consent, sender/channel authority, a template, scheduling, delivery, or Mission 28 effect evidence; the separate legacy simulation fan-out remains quarantined.",
+      "sourceRefs": [
+        { "path": "src/routes/account.js", "anchors": ["emailEnabled: Boolean(row.email_new_lead)", "smsUrgent: Boolean(row.sms_urgent)", "notificationEmail: email", "notificationPhone: phone", "router.get('/preferences'", "router.put('/preferences'"] },
+        { "path": "src/accounts/repository.js", "anchors": ["async accountPreferences(organizationId)", "FROM public.notification_preferences notification", "async updateAccountPreferences", "SET email_new_lead = $2", "notification_phone = $8"] },
+        { "path": "src/routes/api.js", "anchors": ["new AccountRepository().accountPreferences", "preferences.sms_new_lead === true", "preferences.email_new_lead === true"] }
+      ]
     },
     {
       "id": "demo.command-center-action-family",

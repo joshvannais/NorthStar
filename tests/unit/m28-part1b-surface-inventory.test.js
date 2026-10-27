@@ -140,6 +140,7 @@ const PROVIDER_IMPORT_CONSUMER_PATHS = [
 const OPENAI_POLARIS_PROVIDER_CHAIN_PATHS = [
   'src/polaris/assistantRuntime.js',
   'src/polaris/callGenerationBinding.js',
+  'src/polaris/connectedCallRepository.js',
   'src/polaris/demoGrounded.js',
   'src/polaris/openaiRuntime.js',
   'src/polaris/providerLedger.js',
@@ -160,6 +161,23 @@ const CUSTOMER_ESTIMATE_HANDOFF_PATHS = [
   'src/routes/customerEstimateDelivery.js',
   'src/routes/demo.js',
   'src/server.js',
+];
+
+const CANONICAL_VOICE_PROVIDER_CHAIN_PATHS = [
+  'src/retell/client.js',
+  'src/routes/api.js',
+  'src/routes/voice.js',
+  'src/server.js',
+  'src/services/canonicalVoiceSessionCreation.js',
+  'src/services/voiceSessionAuthority.js',
+];
+
+const VOICE_SESSION_AUTHORITY_CONSUMER_PATHS = [
+  'src/polaris/connectedCallRepository.js',
+  'src/routes/voice.js',
+  'src/services/canonicalRetellIngestion.js',
+  'src/services/canonicalVoiceSessionCreation.js',
+  'src/services/demoVoiceLifecycle.js',
 ];
 
 const MISSION27_PAYMENT_PROVIDER_LIFECYCLE_PATHS = [
@@ -596,6 +614,47 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(surface.effectBoundary).toContain('do not authorize reminders, resend, retry');
   });
 
+  test('binds provider call effects, durable voice evidence and fail-closed runtime actions', () => {
+    const sourceFiles = walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js'));
+    const discovered = sourceFiles.map(file => slash(path.relative(ROOT, file)))
+      .filter(file => /^(?:src\/retell\/client|src\/routes\/(?:api|voice)|src\/server|src\/services\/(?:canonicalVoiceSessionCreation|voiceSessionAuthority))\.js$/.test(file))
+      .sort();
+    expect(discovered).toEqual(CANONICAL_VOICE_PROVIDER_CHAIN_PATHS);
+
+    const surface = inventory().surfaces.find(item => item.id === 'provider.retell-call-sms-client');
+    expect(surface.sourceRefs.map(reference => reference.path).sort())
+      .toEqual(CANONICAL_VOICE_PROVIDER_CHAIN_PATHS);
+
+    const creation = read('src/services/canonicalVoiceSessionCreation.js');
+    expect(creation).toContain("require('../retell/client')");
+    expect(creation).toContain("require('./voiceSessionAuthority')");
+    for (const event of ["eventType: 'provider_creation_requested'", "eventType: 'call_started'",
+      "eventType: 'provider_creation_failed'"]) expect(creation).toContain(event);
+
+    const route = read('src/routes/voice.js');
+    expect(route).toContain("require('../services/canonicalVoiceSessionCreation')");
+    expect(route).toContain("require('../services/voiceSessionAuthority')");
+    expect(route).toContain("router.post('/sessions/:id/handoff'");
+    expect(route).toContain("router.post('/sessions/:id/cancel'");
+    const server = read('src/server.js');
+    expect(server).toContain("app.use('/api/v1/voice', voiceRoutes)");
+
+    const authority = read('src/services/voiceSessionAuthority.js');
+    expect(authority).toContain('INSERT INTO canonical_voice_sessions');
+    expect(authority).toContain('INSERT INTO canonical_voice_session_events');
+    expect(authority).toContain("eventType: action === 'cancel' ? 'call_cancelled' : 'human_handoff'");
+    const productionRegistrars = matchingPaths(sourceFiles,
+      /\.registerRuntimeHandle\s*\(/);
+    expect(productionRegistrars).toEqual([]);
+    const authorityConsumers = matchingPaths(sourceFiles,
+      /require\(['"](?:\.\/|\.\.\/services\/)voiceSessionAuthority['"]\)/);
+    expect(authorityConsumers).toEqual(VOICE_SESSION_AUTHORITY_CONSUMER_PATHS);
+    const covered = sourcePaths(inventory());
+    for (const consumer of authorityConsumers) expect(covered.has(consumer)).toBe(true);
+    expect(surface.effectBoundary).toContain('no production caller registers one');
+    expect(surface.effectBoundary).toContain('fail closed before a human_handoff or call_cancelled event');
+  });
+
   test('discovers every outbound provider implementation and its active direct consumers', () => {
     const covered = sourcePaths(inventory());
     const scripts = [
@@ -626,7 +685,7 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     const covered = sourcePaths(inventory());
     const sourceFiles = walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js'));
     const discovered = matchingPaths(sourceFiles,
-      /createProductionOpenAIRuntime|createProviderUsageLedger|connectedCallGenerate|demoGroundedRuntime|require\(['"]\.\.\/polaris\/demoGrounded['"]\)\.createHandler|async function executeProvider\(runtime|function createProductionCallGenerate/);
+      /createProductionOpenAIRuntime|createProviderUsageLedger|connectedCallGenerate|demoGroundedRuntime|require\(['"]\.\.\/polaris\/demoGrounded['"]\)\.createHandler|async function executeProvider\(runtime|function createProductionCallGenerate|function createConnectedCallRepository/);
     expect(discovered).toEqual(OPENAI_POLARIS_PROVIDER_CHAIN_PATHS);
     for (const candidate of discovered) expect(covered.has(candidate)).toBe(true);
     const surface = inventory().surfaces.find(item => item.id === 'provider.openai-polaris-runtime');

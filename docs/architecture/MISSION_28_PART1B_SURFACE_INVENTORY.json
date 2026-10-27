@@ -309,12 +309,14 @@
       "facets": ["provider_adapter", "email_sms_path", "retry", "notification"],
       "disposition": "upstream_or_subscription_owned_excluded",
       "owner": "voice and call intake",
-      "effectBoundary": "Retell call/SMS creation and exponential retry remain voice-provider authority; they cannot be invoked by Mission 28 without later channel, recipient, consent, and provider acceptance.",
+      "effectBoundary": "Retell call/SMS creation and exponential retry remain voice-provider effects. Canonical call creation separately persists tenant-scoped session identity plus requested, started, and failed event evidence. Mounted handoff/cancel actions require a same-process runtime handle; no production caller registers one, so they fail closed before a human_handoff or call_cancelled event. None is Mission 28 authority without later trigger, channel, recipient, consent, provider, runtime-owner, and effect-evidence acceptance.",
       "sourceRefs": [
         { "path": "src/retell/client.js", "anchors": ["const RETELL_BASE = 'https://api.retellai.com'", "Retry loop with exponential backoff", "async function sendSMS"] },
-        { "path": "src/services/canonicalVoiceSessionCreation.js", "anchors": ["const retell = require('../retell/client')", "const createProviderCall = source.createProviderCall || retell.createCall"] },
+        { "path": "src/services/canonicalVoiceSessionCreation.js", "anchors": ["const retell = require('../retell/client')", "const voiceSessions = require('./voiceSessionAuthority')", "voiceSessions.createSession", "eventType: 'provider_creation_requested'", "const createProviderCall = source.createProviderCall || retell.createCall", "eventType: 'call_started'", "eventType: 'provider_creation_failed'"] },
+        { "path": "src/services/voiceSessionAuthority.js", "anchors": ["INSERT INTO canonical_voice_sessions", "INSERT INTO canonical_voice_session_events", "function registerRuntimeHandle", "async function requireRuntimeHandle", "VOICE_RUNTIME_UNAVAILABLE", "async function performRuntimeAction", "eventType: action === 'cancel' ? 'call_cancelled' : 'human_handoff'"] },
         { "path": "src/routes/api.js", "anchors": ["router.post('/retell/create-call'", "router.post('/retell/send-sms'"] },
-        { "path": "src/routes/voice.js", "anchors": ["router.post('/call'", "router.post('/sessions/:id/handoff'", "router.post('/sessions/:id/cancel'"] }
+        { "path": "src/routes/voice.js", "anchors": ["const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionCreation')", "const voiceSessions = require('../services/voiceSessionAuthority')", "router.post('/call'", "voiceSessions.performRuntimeAction", "router.post('/sessions/:id/handoff'", "router.post('/sessions/:id/cancel'"] },
+        { "path": "src/server.js", "anchors": ["const voiceRoutes = require('./routes/voice')", "app.use('/api/v1/voice', voiceRoutes)"] }
       ]
     },
     {
@@ -386,7 +388,8 @@
         { "path": "src/routes/canonicalPolaris.js", "anchors": ["require('../polaris/assistantRuntime')", "require('../polaris/providerLedger')", "dependencies.assistantRuntime.preflight", "dependencies.assistantUsageLedger.reconcile"] },
         { "path": "src/polaris/demoGrounded.js", "anchors": ["const runtime = req.app.locals.demoGroundedRuntime", "runtime.preflight(envelope)", "await runtime.respond(envelope"] },
         { "path": "src/routes/demo.js", "anchors": ["'/command-center/polaris/messages-v2'", "require('../polaris/demoGrounded').createHandler"] },
-        { "path": "src/routes/connectedCall.js", "anchors": ["router.post('/api/retell/tools/job-guidance'", "No provider adapter is provisioned by mounting this authenticated boundary."] }
+        { "path": "src/routes/connectedCall.js", "anchors": ["router.post('/api/retell/tools/job-guidance'", "const {createConnectedCallRepository}=require('../polaris/connectedCallRepository')", "No provider adapter is provisioned by mounting this authenticated boundary."] },
+        { "path": "src/polaris/connectedCallRepository.js", "anchors": ["const voices = require('../services/voiceSessionAuthority')", "function createConnectedCallRepository", "voices.appendEventWithClient", "eventType:'grounded_tool'"] }
       ]
     },
     {

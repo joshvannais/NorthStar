@@ -779,11 +779,11 @@ describe('Mission 28 Part 2B immutable record model', () => {
     for (const recordType of RECORD_TYPES) expect(narrative).toContain(`\`${recordType}\``);
   });
 
-  test('records Parts 1A–3B released, only Part 3C current and every later slice planned', () => {
+  test('records Parts 1A–3C released, only Part 3D current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–3B released; Part 3C implementation candidate only.');
-    expect(roadmap).toContain('Parts 3D–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–3C released; Part 3D implementation candidate only.');
+    expect(roadmap).toContain('Parts 4A–14G remain planned and unimplemented.');
     for (const identity of [PART2A_HEAD, BASE, PART2A_DEPLOYMENT, PART2A_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -802,11 +802,13 @@ describe('Mission 28 Part 2B immutable record model', () => {
     expect(rows[8][5]).toContain('PR #557');
     expect(rows[9][4]).toBe('**Released**');
     expect(rows[9][5]).toContain('PR #558');
-    expect(rows[10][4]).toBe('**Implementation candidate**');
-    expect(rows[10][5]).toContain('no runtime resolver');
-    expect(rows.slice(11).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[10][4]).toBe('**Released**');
+    expect(rows[10][5]).toContain('PR #559');
+    expect(rows[11][4]).toBe('**Implementation candidate**');
+    expect(rows[11][5]).toContain('no runtime resolver');
+    expect(rows.slice(12).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(55);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(54);
   });
 
   test('adds no runtime, database, migration, provider, scheduling, route, UI or demo behavior', () => {

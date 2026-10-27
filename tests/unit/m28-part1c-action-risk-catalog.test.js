@@ -421,11 +421,11 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(contract).toContain('founder visual approval remain unavailable and unclaimed');
   });
 
-  test('records released Parts 1A–1B, exactly Part 1C current and all later slices planned', () => {
+  test('records released Parts 1A–1C, exactly Part 1D current and all later slices planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–1B released; Part 1C implementation candidate only.');
-    expect(roadmap).toContain('Parts 1D–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–1C released; Part 1D implementation candidate only.');
+    expect(roadmap).toContain('Parts 2A–14G remain planned and unimplemented.');
     for (const identity of [PART1B_HEAD, BASE, PART1B_DEPLOYMENT, PART1B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -434,11 +434,13 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(rows).toHaveLength(66);
     expect(rows[0][4]).toBe('**Released**');
     expect(rows[1][4]).toBe('**Released**');
-    expect(rows[2][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(3).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[2][4]).toBe('**Released**');
+    expect(rows[2][5]).toContain('PR #551');
+    expect(rows[3][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(4).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(63);
-    expect(ledger).toContain('report hash unavailable to this writer and unclaimed');
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(62);
+    expect(ledger).toContain('Part 1D has no independent acceptance, PR, merge, deployment, or release evidence.');
   });
 
   test('does not activate the static catalog from production source or add a migration', () => {

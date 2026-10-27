@@ -1193,11 +1193,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     expect(narrative).toContain('cannot rebind an old run to a newer policy or source');
   });
 
-  test('records Parts 1A–1D and 2A–2B released, only Part 2C current and every later slice planned', () => {
+  test('records Parts 1A–1D and 2A–2C released, only Part 2D current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–1D and 2A–2B released; Part 2C implementation candidate only.');
-    expect(roadmap).toContain('Parts 2D–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–1D and 2A–2C released; Part 2D implementation candidate only.');
+    expect(roadmap).toContain('Parts 3A–14G remain planned and unimplemented.');
     for (const identity of [PART2B_HEAD, BASE, PART2B_DEPLOYMENT, PART2B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -1206,11 +1206,13 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     expect(rows).toHaveLength(66);
     expect(rows.slice(0, 6).every(row => row[4] === '**Released**')).toBe(true);
     expect(rows[5][5]).toContain('PR #554');
-    expect(rows[6][4]).toBe('**Implementation candidate**');
-    expect(rows[6][5]).toContain('source-only policy lifecycle contract');
-    expect(rows.slice(7).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[6][4]).toBe('**Released**');
+    expect(rows[6][5]).toContain('PR #555');
+    expect(rows[7][4]).toBe('**Implementation candidate**');
+    expect(rows[7][5]).toContain('Additive migration 273');
+    expect(rows.slice(8).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(59);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(58);
   });
 
   test('adds no runtime activation, production source, package or migration', () => {

@@ -1010,6 +1010,42 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
         'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I',
         runtime_role
       );
+      -- Mission 28 Part 2D installs PostgreSQL authority without granting an
+      -- application write/read capability. Parts 3+ must deliberately review
+      -- and grant individual entry points after capability/approval authority
+      -- exists; the broad legacy bootstrap grant must not expose these tables
+      -- or owner-only storage functions in the meantime.
+      IF pg_catalog.to_regclass('public.canonical_automation_policy_versions_v1') IS NOT NULL THEN
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON TABLE public.canonical_automation_retention_classes_v1,' ||
+          'public.canonical_automation_policy_versions_v1,' ||
+          'public.canonical_automation_source_bindings_v1,' ||
+          'public.canonical_automation_source_sets_v1,' ||
+          'public.canonical_automation_lifecycle_events_v1,' ||
+          'public.canonical_automation_records_v1,' ||
+          'public.canonical_automation_historical_run_bindings_v1,' ||
+          'public.canonical_automation_legacy_conversion_reviews_v1 FROM %I', runtime_role
+        );
+        EXECUTE pg_catalog.format(
+          'REVOKE ALL ON FUNCTION ' ||
+          'public.canonical_automation_json_shape_v1(jsonb,integer),' ||
+          'public.canonical_automation_json_nodes_v1(jsonb,integer),' ||
+          'public.canonical_automation_json_v1(jsonb),' ||
+          'public.canonical_automation_document_v1(text),' ||
+          'public.canonical_automation_digest_v1(text,jsonb),' ||
+          'public.canonical_automation_utc_v1(timestamp with time zone),' ||
+          'public.canonical_automation_clock_v1(),' ||
+          'public.canonical_automation_immutable_v1(),' ||
+          'public.canonical_automation_enter_tenant_v1(uuid),' ||
+          'public.canonical_automation_store_policy_v1(text),' ||
+          'public.canonical_automation_store_source_binding_v1(text),' ||
+          'public.canonical_automation_store_source_set_v1(text),' ||
+          'public.canonical_automation_store_lifecycle_event_v1(text),' ||
+          'public.canonical_automation_store_record_v1(text),' ||
+          'public.canonical_automation_store_historical_run_binding_v1(text),' ||
+          'public.canonical_automation_storage_snapshot_v1(uuid,uuid) FROM %I', runtime_role
+        );
+      END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_settings_revisions_v1') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
           'REVOKE ALL PRIVILEGES ON TABLE public.canonical_forecast_settings_revisions_v1 FROM %I',
@@ -5266,6 +5302,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_customer_financial_estimate_%'
            AND relation.relname NOT LIKE 'canonical_customer_financial_billable_%'
            AND relation.relname NOT LIKE 'canonical_customer_financial_invoice_%'
+           AND relation.relname NOT LIKE 'canonical_automation_%'
            AND relation.relname NOT LIKE 'canonical_customer_estimate_proposal_%'
            AND relation.relname NOT LIKE 'canonical_customer_estimate_multi_option_%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
@@ -7420,6 +7457,23 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
             )
           ))
         )) AS demand_schedule_v1_private,
+       (to_regclass('public.canonical_automation_policy_versions_v1') IS NULL OR (
+         NOT has_table_privilege($1,'public.canonical_automation_retention_classes_v1','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_automation_policy_versions_v1','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_automation_source_bindings_v1','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_automation_source_sets_v1','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_automation_lifecycle_events_v1','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_automation_records_v1','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_automation_historical_run_bindings_v1','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_table_privilege($1,'public.canonical_automation_legacy_conversion_reviews_v1','SELECT,INSERT,UPDATE,DELETE')
+         AND NOT has_function_privilege($1,'public.canonical_automation_store_policy_v1(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_automation_store_source_binding_v1(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_automation_store_source_set_v1(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_automation_store_lifecycle_event_v1(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_automation_store_record_v1(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_automation_store_historical_run_binding_v1(text)','EXECUTE')
+         AND NOT has_function_privilege($1,'public.canonical_automation_storage_snapshot_v1(uuid,uuid)','EXECUTE')
+       )) AS automation_authority_private,
        (to_regclass('public.polaris_provider_requests') IS NULL OR (
          NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')
          AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'INSERT')
@@ -7623,6 +7677,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.material_entry_execute ||
       !runtimePrivileges.material_helpers_withheld ||
       !runtimePrivileges.demand_schedule_v1_private ||
+      !runtimePrivileges.automation_authority_private ||
       !runtimePrivileges.polaris_provider_usage_guarded ||
       !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
       !runtimePrivileges.ledger_sequence_withheld) {

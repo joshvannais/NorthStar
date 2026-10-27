@@ -334,10 +334,11 @@
       "facets": ["webhook", "event_listener", "retry"],
       "disposition": "upstream_or_subscription_owned_excluded",
       "owner": "voice provider ingress",
-      "effectBoundary": "Signature, replay, and routed voice events are upstream facts only; a callback never grants Mission 28 action authority.",
+      "effectBoundary": "Signature, routed voice events, and the durable PostgreSQL replay claim lifecycle are upstream facts only. Its 60-second claim lease, 24-hour retention, 10,000-entry saturation boundary, and claim/release/finalize writes do not grant Mission 28 retry, action, recipient, provider, or effect authority.",
       "sourceRefs": [
         { "path": "src/routes/retellWebhookBoundary.js", "anchors": ["router.post('/api/retell/webhook'", "router.post('/api/v1/voice/webhook'"] },
-        { "path": "src/voice/webhook.js", "anchors": ["handleSignedWebhook", "replayAuthority.claimWebhookDelivery", "businessEvents.emit(bizEvent)"] }
+        { "path": "src/voice/webhook.js", "anchors": ["const replayAuthority = require('../retell/webhookReplayAuthority')", "handleSignedWebhook", "replayAuthority.claimWebhookDelivery", "replayAuthority.releaseWebhookDelivery", "replayAuthority.finalizeWebhookDelivery", "businessEvents.emit(bizEvent)"] },
+        { "path": "src/retell/webhookReplayAuthority.js", "anchors": ["const CLAIM_LEASE_MS = 60 * 1000", "const REPLAY_RETENTION_MS = 24 * 60 * 60 * 1000", "const MAX_REPLAY_ENTRIES = 10000", "async function claimWebhookDelivery", "return { kind: 'replay' }", "return { kind: 'saturated' }", "async function releaseWebhookDelivery", "async function finalizeWebhookDelivery"] }
       ]
     },
     {

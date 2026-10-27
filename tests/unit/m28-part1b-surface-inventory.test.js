@@ -198,6 +198,12 @@ const MISSION27_PAYMENT_PROVIDER_LIFECYCLE_PATHS = [
   'src/server.js',
 ];
 
+const RETELL_WEBHOOK_REPLAY_CHAIN_PATHS = [
+  'src/routes/retellWebhookBoundary.js',
+  'src/voice/webhook.js',
+  'src/retell/webhookReplayAuthority.js',
+];
+
 const PROVIDER_IMPLEMENTATION_SIGNAL =
   /require\(['"](?:node:https|https|twilio|nodemailer|googleapis|openai)['"]\)|from ['"]retell-client-js-sdk['"]|https:\/\/api\.(?:retellai|resend|getjobber)\.com|client\.llm\.(?:retrieve|update)|function createEquipmentExtractor|fetch\(config\.apiBase|client\.messages\.create\(|client\.events\.insert\(|spreadsheets\.values\.(?:append|update)\(|new OpenAI\b/;
 
@@ -525,6 +531,34 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     }
     expect(surface.effectBoundary).toContain('frozen provider-disabled');
     expect(surface.effectBoundary).toContain('not adapters or reusable effect authority');
+  });
+
+  test('binds signed Retell ingress to its directly imported durable replay authority', () => {
+    const sourceFiles = walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js'));
+    const replayConsumers = matchingPaths(sourceFiles,
+      /require\(['"]\.\.\/retell\/webhookReplayAuthority['"]\)/);
+    expect(replayConsumers).toEqual(['src/voice/webhook.js']);
+
+    const route = read('src/routes/retellWebhookBoundary.js');
+    expect(route).toContain("require('../voice/webhook')");
+    expect(route).toContain("router.post('/api/retell/webhook'");
+    expect(route).toContain("router.post('/api/v1/voice/webhook'");
+
+    const webhook = read('src/voice/webhook.js');
+    expect(webhook).toContain("require('../retell/webhookReplayAuthority')");
+    for (const operation of ['claimWebhookDelivery', 'releaseWebhookDelivery',
+      'finalizeWebhookDelivery']) expect(webhook).toContain(`replayAuthority.${operation}`);
+
+    const replay = read('src/retell/webhookReplayAuthority.js');
+    for (const invariant of ['const CLAIM_LEASE_MS = 60 * 1000',
+      'const REPLAY_RETENTION_MS = 24 * 60 * 60 * 1000',
+      'const MAX_REPLAY_ENTRIES = 10000', "return { kind: 'replay' }",
+      "return { kind: 'saturated' }"]) expect(replay).toContain(invariant);
+
+    const surface = inventory().surfaces.find(item => item.id === 'webhook.retell-signed-ingress');
+    expect(surface.sourceRefs.map(reference => reference.path)).toEqual(RETELL_WEBHOOK_REPLAY_CHAIN_PATHS);
+    expect(surface.effectBoundary).toContain('durable PostgreSQL replay claim lifecycle');
+    expect(surface.effectBoundary).toContain('do not grant Mission 28 retry');
   });
 
   test('discovers every outbound provider implementation and its active direct consumers', () => {

@@ -1,0 +1,227 @@
+'use strict';
+
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '../..');
+const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
+const ROADMAP_PATH = 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md';
+const LEDGER_PATH = 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md';
+const CONTRACT_PATH = 'docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md';
+const SOURCE_SHA = 'DDBA5CA7523A1684330E136313F4416584D142A63167310EEABEC1EBFBB010B4';
+const BODY_SHA = '109589DA2242EE6AA7FDD4C2DED3E3440B909B26452DEFCD39BC2502C1ADAAF5';
+const BASE = '7736fe6d31ce2300cf06cfcaa461f9b9ea5184c3';
+const BASE_TREE = '861215b3b6ffdcdf53f2f658e2d46098526f8b65';
+
+const PARTS = [
+  [1, 'mission authority, inventory, risk model, and acceptance contract', 4],
+  [2, 'canonical automation policy, run, and evidence model', 4],
+  [3, 'owner control, capabilities, limits, and approvals', 4],
+  [4, 'trigger ingestion, exact source binding, and correction propagation', 4],
+  [5, 'rule evaluation, collision control, preview, and dry run', 4],
+  [6, 'durable scheduling, execution, idempotency, and recovery', 6],
+  [7, 'sender, recipient, content, channel, and reply safety', 6],
+  [8, 'approved document sending and revision-aware delivery', 4],
+  [9, 'lead, estimate, and customer follow-up automation', 4],
+  [10, 'appointment, dispatch, work, and completion communications', 4],
+  [11, 'invoice reminders and human-controlled collections automation', 6],
+  [12, 'internal action center and advisory handoffs', 4],
+  [13, 'channel adapters, callbacks, observability, privacy, and lifecycle', 5],
+  [14, 'Automation Center, isolated demo, complete validation, and release', 7],
+];
+
+const EXPECTED_SLICES = PARTS.flatMap(([part, , count]) =>
+  Array.from({ length: count }, (_, index) => `${part}${String.fromCharCode(65 + index)}`));
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value, 'utf8').digest('hex').toUpperCase();
+}
+
+function canonicalBody(document) {
+  const normalized = document.replace(/\r\n/g, '\n');
+  if (normalized.includes('\r')) throw new Error('lone CR is not canonical');
+  const marker = '\n## Mission objective\n';
+  const index = normalized.indexOf(marker);
+  if (index < 0 || normalized.indexOf(marker, index + marker.length) >= 0) {
+    throw new Error('canonical mission body marker must occur exactly once');
+  }
+  return `${normalized.slice(index + 1).trim()}\n`;
+}
+
+function parseParts(document) {
+  const headings = [...document.matchAll(/^## Part (\d+) — (.+)$/gm)]
+    .map(match => ({ number: Number(match[1]), title: match[2], index: match.index }));
+  return headings.map((heading, index) => {
+    const end = headings[index + 1]?.index ?? document.indexOf('\n## Complete acceptance standard');
+    const section = document.slice(heading.index, end);
+    const slices = [...section.matchAll(/^\| ([A-G]) \| (.+) \|$/gm)]
+      .map(match => ({ id: `${heading.number}${match[1]}`, scope: match[2] }));
+    return { ...heading, slices };
+  });
+}
+
+function parseLedger(document) {
+  return [...document.matchAll(/^\| (\d{2}) \| (\d{1,2}[A-G]) \| (.+) \| (.+) \| (.+) \|$/gm)]
+    .map(match => ({ order: Number(match[1]), id: match[2], scope: match[3], state: match[4], evidence: match[5] }));
+}
+
+function validatePartOrder(document) {
+  const actual = parseParts(document);
+  expect(actual.map(part => [part.number, part.title, part.slices.length])).toEqual(PARTS);
+  expect(actual.flatMap(part => part.slices.map(slice => slice.id))).toEqual(EXPECTED_SLICES);
+  expect(actual.flatMap(part => part.slices)).toHaveLength(66);
+}
+
+function validateLedger(document) {
+  const rows = parseLedger(document);
+  expect(rows).toHaveLength(66);
+  expect(rows.map(row => row.order)).toEqual(Array.from({ length: 66 }, (_, index) => index + 1));
+  expect(rows.map(row => row.id)).toEqual(EXPECTED_SLICES);
+  expect(rows[0]).toMatchObject({
+    id: '1A',
+    state: '**Implementation candidate**',
+    evidence: 'Writer implementation and tests only; independent audit, PR, merge, deployment and release unavailable',
+  });
+  expect(rows.slice(1).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+}
+
+describe('Mission 28 Part 1A authority ratification', () => {
+  test('binds the exact frozen source, canonical body and deployed Mission 27 baseline', () => {
+    const roadmap = read(ROADMAP_PATH);
+    const ledger = read(LEDGER_PATH);
+    const contract = read(CONTRACT_PATH);
+
+    expect(sha256(canonicalBody(roadmap))).toBe(BODY_SHA);
+    for (const document of [roadmap, ledger, contract]) {
+      expect(document).toContain(SOURCE_SHA);
+      expect(document).toContain(BODY_SHA);
+      expect(document).toContain(BASE);
+      expect(document).toContain(BASE_TREE);
+    }
+    expect(roadmap).toContain('Part 1A implementation candidate; not independently accepted, merged, deployed, or released.');
+    expect(roadmap).toContain('Parts 1B–14G remain planned and unimplemented.');
+  });
+
+  test('freezes fourteen parts and all sixty-six slices in exact order', () => {
+    const roadmap = read(ROADMAP_PATH);
+    validatePartOrder(roadmap);
+    expect(roadmap).toContain('The complete proposed structure is **14 serialized parts and 66 slices**.');
+    expect(roadmap).toContain('Any later change requires a written authority or acceptance reason, affected gates, and a revised total before implementation continues.');
+  });
+
+  test('preserves all twelve non-negotiable invariants and complete acceptance boundaries', () => {
+    const roadmap = read(ROADMAP_PATH);
+    const invariantTitles = [
+      'Owner control is durable authority.',
+      'No source fact grants action authority.',
+      'Currentness is checked twice.',
+      'Intent, execution, and evidence stay separate.',
+      'Uncertainty fails closed.',
+      'Retries do not duplicate effects.',
+      'Human activity wins.',
+      'AI may prepare; it may not self-authorize.',
+      'Demo cannot escape.',
+      'Provider-neutral design is mandatory.',
+      'Privacy is minimized throughout.',
+      'Mission completion requires product proof.',
+    ];
+    const found = [...roadmap.matchAll(/^\d+\. \*\*(.+?)\*\*/gm)].map(match => match[1]);
+    expect(found).toEqual(invariantTitles);
+    expect(roadmap).toContain('Mission 28 is complete only when all 66 slices are accepted in order');
+    expect(roadmap).toContain('queued or provider-accepted work is never called delivered, answered, paid, collected, successful, or reconciled');
+    expect(roadmap).toContain('No implementation claims unsupported legal compliance, provider availability, physical-device coverage, disaster restoration, production performance/SLA, private-production evidence, or live-money validation.');
+  });
+
+  test('keeps every upstream and later-mission ownership boundary explicit', () => {
+    const roadmap = read(ROADMAP_PATH);
+    for (const authority of [
+      'Mission 20', 'Mission 21', 'Mission 22', 'Mission 23', 'Mission 24',
+      'Mission 25', 'Mission 26', 'Mission 27', 'Mission 29', 'Missions 30–33',
+    ]) expect(roadmap).toContain(`| ${authority} |`);
+    expect(roadmap).toContain('It may not mutate an upstream business fact merely because it communicated about that fact.');
+    expect(roadmap).toContain("Pulling forward Mission 29's enterprise administration");
+    expect(roadmap).toContain('OS-wide integration, public guided simulation, calculator ownership, or platform administration');
+  });
+
+  test('defines upstream fact, automation decision, external effect and effect evidence as disjoint authority classes', () => {
+    const contract = read(CONTRACT_PATH);
+    for (const authorityClass of ['`upstream_fact`', '`automation_decision`', '`external_effect`', '`effect_evidence`']) {
+      expect(contract).toContain(`| ${authorityClass} |`);
+    }
+    for (const prohibition of [
+      'event, elapsed clock, prediction, recommendation, callback or provider label = permission',
+      'eligible, previewed, approved, scheduled or queued = attempted',
+      'attempted or provider-accepted = sent or delivered',
+      'composer opened or native handoff created = sent',
+      'sent or delivered = viewed, acknowledged, replied, paid, collected, successful, reconciled or causally effective',
+      'communication evidence = schedule, work, estimate, invoice, balance, payment, settlement, accounting or legal truth',
+    ]) expect(contract).toContain(prohibition);
+    expect(contract).toContain('The boundary is monotonic but not automatically progressive.');
+    expect(contract).toContain('it never retroactively authorizes the attempt and never rewrites its upstream source');
+  });
+
+  test('ratifies dependencies, currentness, owner control and fail-closed terminology without granting runtime behavior', () => {
+    const contract = read(CONTRACT_PATH);
+    for (const term of [
+      'Policy', 'Per-run approval', 'Standing authorization', 'Eligibility', 'Preview',
+      'Scheduled run', 'Action unit', 'Provider attempt', 'Native handoff',
+      'Delivery evidence', 'Suppression', 'Currentness', 'Unavailable', 'Demo',
+    ]) expect(contract).toContain(`| ${term} |`);
+
+    expect(contract).toContain('A role name alone does not.');
+    expect(contract).toContain('Immediately before any effect, every relevant authority is reread and revalidated coherently.');
+    expect(contract).toContain('Unknown outcome blocks another attempt until reconciled.');
+    expect(contract).toContain('Part 1A itself implements none of those runtime steps.');
+    expect(contract).toContain('It grants no route, worker, queue, scheduler, provider adapter, callback, credential, recipient, message, document delivery, internal task, payment, refund, fee, write-off, accounting action, database authority, migration, UI control, production flag or demo effect.');
+  });
+
+  test('keeps exactly Part 1A current and every later slice planned', () => {
+    const ledger = read(LEDGER_PATH);
+    validateLedger(ledger);
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(65);
+    expect(ledger).toContain('No Mission 28 slice is independently accepted, merged, deployed, or released.');
+    expect(ledger).toContain('Part 1A audit | Unavailable until a fresh independent exact-head whole-scope audit occurs');
+  });
+
+  test('fails executable order/count/status drift mutations rather than accepting positive substrings', () => {
+    const roadmap = read(ROADMAP_PATH);
+    const ledger = read(LEDGER_PATH);
+    const mutations = [
+      roadmap.replace('## Part 2 —', '## Part 15 —'),
+      roadmap.replace('| D | Freeze the first-supported launch matrix', '| E | Freeze the first-supported launch matrix'),
+      roadmap.replace(/^\| A \| Canonical tenant-private policy definition.*\r?\n/m, ''),
+      roadmap.replace('## Part 8 — approved', '## Part 9 — approved'),
+    ];
+    for (const mutation of mutations) expect(() => validatePartOrder(mutation)).toThrow();
+
+    const ledgerMutations = [
+      ledger.replace('| 02 | 1B |', '| 02 | 1C |'),
+      ledger.replace('| 66 | 14G |', '| 67 | 14G |'),
+      ledger.replace(/^\| 25 \| 6E .*\r?\n/m, ''),
+      ledger.replace('| 02 | 1B | Existing automation-like surface inventory and quarantine | Planned / unimplemented | None |',
+        '| 02 | 1B | Existing automation-like surface inventory and quarantine | **Accepted** | None |'),
+    ];
+    for (const mutation of ledgerMutations) expect(() => validateLedger(mutation)).toThrow();
+  });
+
+  test('keeps all unavailable external, legal, provider and founder evidence unclaimed', () => {
+    const documents = [read(ROADMAP_PATH), read(LEDGER_PATH), read(CONTRACT_PATH)].join('\n');
+    for (const boundary of [
+      'Production provider accounts', 'Professional legal', 'External collection agencies',
+      'Private-production', 'real recipients', 'first-paying-customer live-money validation',
+      'Hosted CI/load', 'exercised disaster restore', 'production performance/SLA',
+      'physical Safari/devices', 'manual assistive-technology review', 'founder visual approval',
+    ]) expect(documents.toLowerCase()).toContain(boundary.toLowerCase());
+  });
+
+  test('adds no migration and preserves migration 272 as latest', () => {
+    const names = fs.readdirSync(path.join(ROOT, 'migrations'))
+      .filter(name => name.endsWith('.sql'))
+      .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
+    expect(names).toHaveLength(268);
+    expect(names.at(-1)).toBe('272_customer_financial_invoice_draft_preview_v1.sql');
+    expect(names.some(name => /^273_/.test(name))).toBe(false);
+  });
+});

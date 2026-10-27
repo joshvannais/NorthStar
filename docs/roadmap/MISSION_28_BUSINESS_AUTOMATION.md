@@ -1,6 +1,6 @@
 # Mission 28 — Business automation
 
-Status: **Part 1A released; Part 1B implementation candidate only.** Parts 1C–14G remain planned and unimplemented.
+Status: **Parts 1A–1B released; Part 1C implementation candidate only.** Parts 1D–14G remain planned and unimplemented.
 
 ## Frozen authority provenance
 
@@ -11,7 +11,8 @@ Status: **Part 1A released; Part 1B implementation candidate only.** Parts 1C–
 - Exact Mission 27 terminal deployed baseline: commit `7736fe6d31ce2300cf06cfcaa461f9b9ea5184c3`, tree `861215b3b6ffdcdf53f2f658e2d46098526f8b65`, automatic Railway deployment `c452d8fd-c896-407e-9f20-5f9ba01ee587` `SUCCESS`.
 - Released Part 1A baseline: source head `c42d1a9f72dcb6bbdd480e804988ddc3ec43cc09`, PR #549, merged main `21ca719e24382443bbf3f52e460f3c16b016c4ad`, tree `0cfdc4f0e8dc28c790893edff7bbebe0b31a5d10`, automatic Railway deployment `d3010671-da95-4247-807f-f2089b90df74` `SUCCESS/RUNNING`, image `sha256:12b0bfeb266c4849b127102ad98a2f8b6ad06080898462c41ee63c3a5b699b26`, migration/startup/health/root/demo verified.
 - Part 1A independent corrected audit: P0=P1=P2=P3=0; report SHA-256 `1C3AA77E9B1E31A4FE4A8167FC2072A5818EDC52D19B5BCB1356352FEADDBDE1`.
-- Current Part 1B artifact: [automation-surface inventory and quarantine](../architecture/MISSION_28_PART1B_AUTOMATION_SURFACE_INVENTORY.md). Its writer evidence is not independent acceptance.
+- Released Part 1B baseline: accepted source head `bc09c83d8352c4ae707e26042f9bf52750adcbc2`, PR #550, merged main `1801aa90c26bab5cba6583b8a6be342763ba387a`, tree `faaead16ab89d0f75ab021db8d7cf34436f234e6`, automatic Railway deployment `21505f81-8df6-4f7a-9f4d-61ff33e6ec90` `SUCCESS/RUNNING`, image `sha256:97210537e4a682de1e61b7e95b9873812e167fa0e47dcfcb3fba17a401df4bfd`, migration/startup/health/root/demo verified. Its fresh independent audit accepted P0=P1=P2=P3=0; the report hash was not supplied to this writer and remains unclaimed.
+- Current Part 1C artifacts: [action and risk catalog](../architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.md) and [executable catalog](../architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json). Writer evidence is not independent acceptance.
 
 The source's proposal/review status is immutable provenance from before founder approval and Mission 27 terminal release. This repository record reconciles that status only; it does not change the approved mission body, fourteen-part order, sixty-six-slice order, invariants, exclusions, acceptance standard, or release discipline. Any future authority change requires an explicit founder decision and a newly recorded source/body identity before implementation continues.
 

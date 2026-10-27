@@ -113,11 +113,11 @@ describe('Mission 27 Part 5D post-issue correction boundary', () => {
     expect(ledger).toContain('| 5C | [Orthogonal lifecycle projections and display precedence]');
     expect(ledger).toContain('`33cf32d6bac00f23ce951312e384b8b388af81f3`');
     expect(ledger).toContain('| 5D | [Post-issue credit/debit/replacement/void lineage]');
-    expect(ledger).toMatch(/\| 14E \| \[Performance, observability, accessibility, responsive\/theme\/state visual matrix\][^\n]*\| \*\*Accepted and buffered\*\*/);
+    expect(ledger).toMatch(/\| 14E \| \[Performance, observability, accessibility, responsive\/theme\/state visual matrix\][^\n]*\| \*\*Released cumulatively with functional rendered evidence\*\*/);
     expect(ledger).toContain(
       '| 14F | Independent exact-head authority/privacy/security/accounting/provider full audit | **Complete and independently accepted**');
     expect(ledger).toContain('| 14G | [Backup, reviewed merge, sole deploy, health, named verdict, ledger, founder verdict]');
-    expect(ledger).toContain('**Cumulative release candidate only**');
+    expect(ledger).toContain('**Production deployed / provider disabled**');
     const names=fs.readdirSync(path.join(ROOT,'migrations')).filter(name=>name.endsWith('.sql')).sort();
     expect(names.at(-1)).toBe('272_customer_financial_invoice_draft_preview_v1.sql');
     expect(names.some(name=>/^273_/.test(name))).toBe(false);

@@ -1,6 +1,6 @@
 # Mission 28 — Business automation
 
-Status: **Parts 1A–1C released; Part 1D implementation candidate only.** Parts 2A–14G remain planned and unimplemented.
+Status: **Parts 1A–1D released; Part 2A implementation candidate only.** Parts 2B–14G remain planned and unimplemented.
 
 ## Frozen authority provenance
 
@@ -13,7 +13,8 @@ Status: **Parts 1A–1C released; Part 1D implementation candidate only.** Parts
 - Part 1A independent corrected audit: P0=P1=P2=P3=0; report SHA-256 `1C3AA77E9B1E31A4FE4A8167FC2072A5818EDC52D19B5BCB1356352FEADDBDE1`.
 - Released Part 1B baseline: accepted source head `bc09c83d8352c4ae707e26042f9bf52750adcbc2`, PR #550, merged main `1801aa90c26bab5cba6583b8a6be342763ba387a`, tree `faaead16ab89d0f75ab021db8d7cf34436f234e6`, automatic Railway deployment `21505f81-8df6-4f7a-9f4d-61ff33e6ec90` `SUCCESS/RUNNING`, image `sha256:97210537e4a682de1e61b7e95b9873812e167fa0e47dcfcb3fba17a401df4bfd`, migration/startup/health/root/demo verified. Its fresh independent audit accepted P0=P1=P2=P3=0; the report hash was not supplied to this writer and remains unclaimed.
 - Released Part 1C baseline: accepted source head `467668a9de408adb381ac91beb61cc73b01532ec`, PR #551, merged main `eba50a7903ac0000a9eb663d52744cc760f3afd3`, tree `f923240512ae70a1029708ff9f9c9354a21d504b`, automatic Railway deployment `fbca00f3-5806-46c3-981f-7120306a09ed` `SUCCESS/RUNNING`, image `sha256:ff3695a8ea06b5096d11487c21e7d349f5a686fba2f20e32818df11e62f75452`, migration/startup/health/root/demo verified. Its fresh independent audit accepted P0=P1=P2=P3=0; the report hash was not supplied to this writer and remains unclaimed.
-- Current Part 1D artifacts: [first-supported launch matrix](../architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.md) and [executable matrix](../architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json). Writer evidence is not independent acceptance.
+- Released Part 1D baseline: accepted source head `f869b0b1e0da15149e33948e1a732208d585ebd0`, PR #552, merged main `aa875c9a2ad6e03f8d41575e6b19e31aa36ed02d`, tree `0f7df37487cc8d0b57b7ef79a730ba9fea93e7ac`, automatic Railway deployment `dc96dc7d-5fe7-4eaa-a093-e37792373f6e` `SUCCESS/RUNNING`, image `sha256:cff3f90fa227c84b24e8230581d87d2ff8f0a82cd113ac5e1c00c4589547019d`, migration/startup/health/root/demo verified. Its fresh independent audit accepted P0=P1=P2=P3=0; the report hash was not supplied to this writer and remains unclaimed.
+- Current Part 2A artifacts: [canonical automation-policy contract](../architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.md) and [executable policy definition](../architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json). Writer evidence is not independent acceptance.
 
 The source's proposal/review status is immutable provenance from before founder approval and Mission 27 terminal release. This repository record reconciles that status only; it does not change the approved mission body, fourteen-part order, sixty-six-slice order, invariants, exclusions, acceptance standard, or release discipline. Any future authority change requires an explicit founder decision and a newly recorded source/body identity before implementation continues.
 

@@ -1,0 +1,360 @@
+{
+  "contractVersion": "mission28.part2a.canonical-automation-policy.v1",
+  "authority": {
+    "mission": 28,
+    "part": "2A",
+    "state": "implementation_candidate",
+    "baselineCommit": "aa875c9a2ad6e03f8d41575e6b19e31aa36ed02d",
+    "baselineTree": "0f7df37487cc8d0b57b7ef79a730ba9fea93e7ac",
+    "runtimeImplemented": false,
+    "databaseAuthorityGranted": false,
+    "policyActivationGranted": false,
+    "providerAuthorityGranted": false,
+    "externalEffectAuthorityGranted": false
+  },
+  "part1DRelease": {
+    "acceptedSourceHead": "f869b0b1e0da15149e33948e1a732208d585ebd0",
+    "acceptedTree": "0f7df37487cc8d0b57b7ef79a730ba9fea93e7ac",
+    "pullRequest": 552,
+    "mergedMain": "aa875c9a2ad6e03f8d41575e6b19e31aa36ed02d",
+    "deployment": "dc96dc7d-5fe7-4eaa-a093-e37792373f6e",
+    "deploymentState": "SUCCESS_RUNNING",
+    "imageSha256": "cff3f90fa227c84b24e8230581d87d2ff8f0a82cd113ac5e1c00c4589547019d",
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null,
+    "health": ["startup_ready", "migrations_268_of_268_latest_272_no_273", "health_200", "root_200", "demo_200"]
+  },
+  "frozenInputs": [
+    {
+      "path": "docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md",
+      "normalizedLfSha256": "92DAD00F8A7623A87C780FC1AC965B66569616650F53FDED8454F51872458179"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json",
+      "normalizedLfSha256": "62E37CF07A26F0C2B1A50A2C2F0EB927695500DB32B44B16E5B431F594B93142"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json",
+      "normalizedLfSha256": "1CB5FF594AE7D1BEED313C1A94D7FE8200FB0024B36DF11B4C668F211481312B"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json",
+      "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"
+    }
+  ],
+  "policyVersionFields": [
+    "schemaVersion",
+    "tenantId",
+    "policyId",
+    "version",
+    "previousVersionDigest",
+    "trigger",
+    "action",
+    "recipient",
+    "channel",
+    "schedule",
+    "limits",
+    "approval",
+    "suppressions",
+    "expiresAt",
+    "rolloutState",
+    "canonicalDigest"
+  ],
+  "identity": {
+    "tenantId": "required_exact_uuid",
+    "policyId": "required_exact_uuid_stable_for_all_versions",
+    "tenantPrivate": true,
+    "crossTenantReuse": "deny",
+    "identityMutation": "deny",
+    "missingOrAmbiguousIdentity": "unavailable"
+  },
+  "versioning": {
+    "versionType": "positive_safe_integer",
+    "firstVersion": 1,
+    "nextVersionRule": "exact_predecessor_plus_one",
+    "previousVersionDigestRule": "null_only_for_version_1_otherwise_exact_immediate_predecessor",
+    "appendOnly": true,
+    "rewriteForkGapDuplicateReplayOrReorder": "deny",
+    "historicalBinding": "future_part2b_2c_runtime_authority_required"
+  },
+  "triggerGrammar": {
+    "exactKeys": ["kind", "sourceClassId", "condition"],
+    "kind": "exact_current_source",
+    "sourceClassIds": [
+      "mission20_business_contact_preferences",
+      "mission21_knowledge_reference",
+      "mission22_appointment_dispatch",
+      "mission23_work_execution",
+      "mission24_estimate_quote",
+      "mission25_26_advisory",
+      "mission27_financial_collection"
+    ],
+    "conditionExactKeys": ["operator", "expected"],
+    "conditionOperators": ["source_available_and_current"],
+    "conditionExpectedValues": [true],
+    "arbitraryCodeExpressionsProviderLogicOrMissingAsZero": "deny",
+    "laterCatalogBoundary": "Part 4A and Part 5A must accept any richer trigger or rule grammar before use."
+  },
+  "actionGrammar": {
+    "exactKeys": ["familyId", "kind", "capabilityId", "riskClass"],
+    "kind": "prepare_internal_item_only",
+    "policyDefinitionAllowedNotRunnableFamilies": [
+      "internal_read_digest_task",
+      "owner_approval_request",
+      "collection_escalation"
+    ],
+    "unavailableFamilies": [
+      "customer_communication",
+      "secure_document_delivery",
+      "financial_reminder"
+    ],
+    "permanentlyDeniedFamilies": ["unsupported_upstream_mutation_or_money_movement"],
+    "capabilityIds": [
+      "automation_internal_action_prepare",
+      "automation_approval_request_create",
+      "automation_collection_work_item_prepare"
+    ],
+    "riskClasses": ["internal_sensitive", "owner_attention", "collection_communication"],
+    "externalProviderUpstreamAccountingLegalOrMoneyEffect": "deny"
+  },
+  "recipientGrammar": {
+    "exactKeys": ["classId", "binding"],
+    "classIds": ["tenant_owner", "tenant_admin", "assigned_staff"],
+    "binding": "exact_tenant_private_internal_identity",
+    "freeFormFuzzyCrossTenantOrExternalRecipient": "deny"
+  },
+  "channelGrammar": {
+    "exactKeys": ["channelId", "providerMode"],
+    "channelIds": ["in_app_passive"],
+    "providerModes": ["none_internal", "provider_disabled"],
+    "externalChannelOrProviderMode": "unavailable"
+  },
+  "scheduleGrammar": {
+    "exactKeys": ["mode", "timeZone", "notBefore", "quietHoursMode"],
+    "mode": "evaluation_only_no_scheduler",
+    "timeZone": null,
+    "notBefore": null,
+    "quietHoursMode": "not_applicable_internal",
+    "clockOrScheduleAuthority": "unavailable_pending_part6b"
+  },
+  "limitGrammar": {
+    "exactKeys": [
+      "maxSourceSnapshots",
+      "maxActions",
+      "maxInternalRecipients",
+      "maxExternalRecipients",
+      "maxExternalMessages",
+      "maxProviderAttempts",
+      "maxUpstreamMutations",
+      "maxMoneyEffects",
+      "maxCanonicalInputBytes"
+    ],
+    "ceilings": {
+      "maxSourceSnapshots": 1,
+      "maxActions": 1,
+      "maxInternalRecipients": 1,
+      "maxExternalRecipients": 0,
+      "maxExternalMessages": 0,
+      "maxProviderAttempts": 0,
+      "maxUpstreamMutations": 0,
+      "maxMoneyEffects": 0,
+      "maxCanonicalInputBytes": 65536
+    },
+    "tenantCustomLimitAuthority": "unavailable_pending_part3c",
+    "missingNegativeFractionalNonFiniteOrAboveCeiling": "deny"
+  },
+  "approvalGrammar": {
+    "exactKeys": ["mode", "authorityGranted"],
+    "mode": "part3_per_run_or_standing_authority_required",
+    "authorityGranted": false,
+    "selfApprovalReplayOrMaterialChangeReuse": "deny",
+    "laterAuthorityBoundary": "Part 3A and Part 3B must accept capabilities and approval semantics before any policy may run."
+  },
+  "suppressionGrammar": {
+    "exactOrder": [
+      "global_stop",
+      "tenant_pause",
+      "source_changed_stale_corrected_or_unavailable",
+      "manual_activity_or_owner_action",
+      "prior_effect_unknown_or_unreconciled",
+      "recipient_permission_or_channel_unavailable",
+      "limit_exceeded",
+      "expired_or_rollout_disabled"
+    ],
+    "missingDuplicateRenamedReorderedOrContradictory": "deny",
+    "executionBoundary": "Part 5D and later runtime slices must implement and revalidate suppressions; this contract only requires their policy representation."
+  },
+  "expiryGrammar": {
+    "field": "expiresAt",
+    "format": "canonical_utc_rfc3339_seconds",
+    "required": true,
+    "expiredUnknownMalformedOrNonUtc": "deny",
+    "trustedClockAuthority": "unavailable_pending_part2d"
+  },
+  "rolloutStateGrammar": {
+    "field": "rolloutState",
+    "allowedValues": ["disabled_contract_only"],
+    "enabledValues": [],
+    "activationAuthority": "unavailable_pending_parts2c_3_6_and_release"
+  },
+  "canonicalization": {
+    "algorithm": "mission28_sorted_json_v1",
+    "namespace": "mission28.policy.version.v1\n",
+    "encoding": "UTF-8",
+    "objectKeys": "lexicographic_unicode_code_point_order",
+    "arrayOrder": "preserved",
+    "stringNormalization": "exact_no_implicit_unicode_or_whitespace_normalization",
+    "numbers": "safe_integers_only_negative_zero_denied",
+    "dataModel": "plain_json_data_only_no_sparse_arrays_aliases_cycles_symbols_accessors_toJSON_custom_prototypes_or_proxies",
+    "digestAlgorithm": "SHA-256",
+    "digestFormat": "sha256:lowercase_hex",
+    "digestInput": "namespace_plus_canonical_json_of_all_policy_version_fields_except_canonicalDigest",
+    "implementationBoundary": "Part 2D must accept a production canonicalizer and persistence contract before runtime use."
+  },
+  "allowedPolicyCells": [
+    {
+      "actionFamily": "internal_read_digest_task",
+      "sourceClassIds": [
+        "mission20_business_contact_preferences",
+        "mission21_knowledge_reference",
+        "mission22_appointment_dispatch",
+        "mission23_work_execution",
+        "mission24_estimate_quote",
+        "mission25_26_advisory",
+        "mission27_financial_collection"
+      ],
+      "capabilityId": "automation_internal_action_prepare",
+      "riskClass": "internal_sensitive",
+      "recipientClassIds": ["tenant_owner", "tenant_admin", "assigned_staff"],
+      "channelId": "in_app_passive",
+      "providerModes": ["none_internal", "provider_disabled"]
+    },
+    {
+      "actionFamily": "owner_approval_request",
+      "sourceClassIds": [
+        "mission20_business_contact_preferences",
+        "mission21_knowledge_reference",
+        "mission22_appointment_dispatch",
+        "mission23_work_execution",
+        "mission24_estimate_quote",
+        "mission25_26_advisory",
+        "mission27_financial_collection"
+      ],
+      "capabilityId": "automation_approval_request_create",
+      "riskClass": "owner_attention",
+      "recipientClassIds": ["tenant_owner"],
+      "channelId": "in_app_passive",
+      "providerModes": ["none_internal", "provider_disabled"]
+    },
+    {
+      "actionFamily": "collection_escalation",
+      "sourceClassIds": ["mission27_financial_collection"],
+      "capabilityId": "automation_collection_work_item_prepare",
+      "riskClass": "collection_communication",
+      "recipientClassIds": ["tenant_owner"],
+      "channelId": "in_app_passive",
+      "providerModes": ["none_internal", "provider_disabled"]
+    }
+  ],
+  "canonicalExamples": [
+    {
+      "schemaVersion": "mission28.policy.version.v1",
+      "tenantId": "00000000-0000-4000-8000-000000000028",
+      "policyId": "00000000-0000-4000-8000-00000000002a",
+      "version": 1,
+      "previousVersionDigest": null,
+      "trigger": {
+        "kind": "exact_current_source",
+        "sourceClassId": "mission23_work_execution",
+        "condition": { "operator": "source_available_and_current", "expected": true }
+      },
+      "action": {
+        "familyId": "internal_read_digest_task",
+        "kind": "prepare_internal_item_only",
+        "capabilityId": "automation_internal_action_prepare",
+        "riskClass": "internal_sensitive"
+      },
+      "recipient": { "classId": "tenant_owner", "binding": "exact_tenant_private_internal_identity" },
+      "channel": { "channelId": "in_app_passive", "providerMode": "provider_disabled" },
+      "schedule": { "mode": "evaluation_only_no_scheduler", "timeZone": null, "notBefore": null, "quietHoursMode": "not_applicable_internal" },
+      "limits": {
+        "maxSourceSnapshots": 1,
+        "maxActions": 1,
+        "maxInternalRecipients": 1,
+        "maxExternalRecipients": 0,
+        "maxExternalMessages": 0,
+        "maxProviderAttempts": 0,
+        "maxUpstreamMutations": 0,
+        "maxMoneyEffects": 0,
+        "maxCanonicalInputBytes": 65536
+      },
+      "approval": { "mode": "part3_per_run_or_standing_authority_required", "authorityGranted": false },
+      "suppressions": [
+        "global_stop",
+        "tenant_pause",
+        "source_changed_stale_corrected_or_unavailable",
+        "manual_activity_or_owner_action",
+        "prior_effect_unknown_or_unreconciled",
+        "recipient_permission_or_channel_unavailable",
+        "limit_exceeded",
+        "expired_or_rollout_disabled"
+      ],
+      "expiresAt": "2030-01-01T00:00:00Z",
+      "rolloutState": "disabled_contract_only",
+      "canonicalDigest": "sha256:ac63a452babdac43089bf5a0413ac5fe66b4263b8e03fe5e0299e70916166b48"
+    },
+    {
+      "schemaVersion": "mission28.policy.version.v1",
+      "tenantId": "00000000-0000-4000-8000-000000000028",
+      "policyId": "00000000-0000-4000-8000-00000000002a",
+      "version": 2,
+      "previousVersionDigest": "sha256:ac63a452babdac43089bf5a0413ac5fe66b4263b8e03fe5e0299e70916166b48",
+      "trigger": {
+        "kind": "exact_current_source",
+        "sourceClassId": "mission23_work_execution",
+        "condition": { "operator": "source_available_and_current", "expected": true }
+      },
+      "action": {
+        "familyId": "internal_read_digest_task",
+        "kind": "prepare_internal_item_only",
+        "capabilityId": "automation_internal_action_prepare",
+        "riskClass": "internal_sensitive"
+      },
+      "recipient": { "classId": "tenant_admin", "binding": "exact_tenant_private_internal_identity" },
+      "channel": { "channelId": "in_app_passive", "providerMode": "provider_disabled" },
+      "schedule": { "mode": "evaluation_only_no_scheduler", "timeZone": null, "notBefore": null, "quietHoursMode": "not_applicable_internal" },
+      "limits": {
+        "maxSourceSnapshots": 1,
+        "maxActions": 1,
+        "maxInternalRecipients": 1,
+        "maxExternalRecipients": 0,
+        "maxExternalMessages": 0,
+        "maxProviderAttempts": 0,
+        "maxUpstreamMutations": 0,
+        "maxMoneyEffects": 0,
+        "maxCanonicalInputBytes": 65536
+      },
+      "approval": { "mode": "part3_per_run_or_standing_authority_required", "authorityGranted": false },
+      "suppressions": [
+        "global_stop",
+        "tenant_pause",
+        "source_changed_stale_corrected_or_unavailable",
+        "manual_activity_or_owner_action",
+        "prior_effect_unknown_or_unreconciled",
+        "recipient_permission_or_channel_unavailable",
+        "limit_exceeded",
+        "expired_or_rollout_disabled"
+      ],
+      "expiresAt": "2030-01-01T00:00:00Z",
+      "rolloutState": "disabled_contract_only",
+      "canonicalDigest": "sha256:c71ef8d1c9b94ef047e7988a8bbb0195f08fac9f016bbe8843b22a857dc55f84"
+    }
+  ],
+  "unavailableEvidence": [
+    "Part 2A independent audit, PR, merge, deployment, release, runtime implementation, database authority, lifecycle, activation, scheduler, worker, provider, UI, and demo behavior",
+    "Production provider accounts, credentials, senders, callbacks, templates, capability, sandbox, deliverability, or live mode",
+    "Any automated customer communication, secure document delivery, financial reminder, external collection escalation, real recipient/message, provider effect, upstream mutation, accounting effect, or live money",
+    "Professional legal, privacy, communications-consent, collections, debt, consumer-protection, country/region, regulatory, provider, or security review",
+    "Private-production customer evidence, hosted load or SLA, exercised disaster restore, physical Safari/devices, manual assistive-technology review, or founder visual approval"
+  ]
+}

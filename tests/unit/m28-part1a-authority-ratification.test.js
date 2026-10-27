@@ -191,7 +191,7 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const mutations = [
       roadmap.replace('## Part 2 —', '## Part 15 —'),
       roadmap.replace('| D | Freeze the first-supported launch matrix', '| E | Freeze the first-supported launch matrix'),
-      roadmap.replace(/^\| A \| Canonical tenant-private policy definition.*\n/m, ''),
+      roadmap.replace(/^\| A \| Canonical tenant-private policy definition.*\r?\n/m, ''),
       roadmap.replace('## Part 8 — approved', '## Part 9 — approved'),
     ];
     for (const mutation of mutations) expect(() => validatePartOrder(mutation)).toThrow();
@@ -199,7 +199,7 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const ledgerMutations = [
       ledger.replace('| 02 | 1B |', '| 02 | 1C |'),
       ledger.replace('| 66 | 14G |', '| 67 | 14G |'),
-      ledger.replace(/^\| 25 \| 6E .*\n/m, ''),
+      ledger.replace(/^\| 25 \| 6E .*\r?\n/m, ''),
       ledger.replace('| 02 | 1B | Existing automation-like surface inventory and quarantine | Planned / unimplemented | None |',
         '| 02 | 1B | Existing automation-like surface inventory and quarantine | **Accepted** | None |'),
     ];

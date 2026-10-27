@@ -264,7 +264,10 @@
       "activeAuthorityFromStaleOrUnavailable": "deny",
       "grammarFixtureException": "contract_fixture_unverified_is_accepted_only_for_this_zero_authority_zero_effect_executable_grammar_fixture_and_never_as_runtime_currentness"
     },
-    "trustedResolutionRule": "complete_currentness_must_equal_separately_trusted_policy_and_source_resolution_and_marker_must_equal_source_snapshot_currentness_marker",
+    "trustedResolutionRule": "each_event_complete_currentness_must_equal_its_own_separately_trusted_immutable_event_time_policy_and_source_resolution_and_marker_must_equal_that_events_source_snapshot_currentness_marker",
+    "eventTimeResolverKey": ["lifecycleEventId", "eventDigest"],
+    "eventTimeResolverRule": "ordered_ledger_validation_must_resolve_each_event_by_exact_event_id_and_digest_never_reuse_one_latest_context_for_history",
+    "historicalCurrentnessRule": "later_currentness_or_resolver_changes_cannot_rewrite_invalidate_or_rebind_prior_event_time_authority_evidence",
     "preEffectRuntimeRevalidation": "required_by_later_runtime_slice_not_granted_here"
   },
   "idempotencyContract": {

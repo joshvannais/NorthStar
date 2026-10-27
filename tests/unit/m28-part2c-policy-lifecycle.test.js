@@ -17,7 +17,7 @@ const BASE_TREE = '0fb86eefc19c322593d9e09710e9102329d82d12';
 const PART2B_HEAD = 'be14e2467b278f00dfd55082b0f42a4497ef5c22';
 const PART2B_DEPLOYMENT = '1a04c6ac-412a-4f5f-b86b-7f506b2a3cc8';
 const PART2B_IMAGE = '9defb2eda71fc5fb8905c6b4c623aefd5a0b3a7923980b7b6736cdcebbaf217e';
-const MODEL_SHA = '26BEE9E6ED0096D8C9D8E8C9AA3B3D04E97E7B3329D3023C4B12AE05BDCDE943';
+const MODEL_SHA = '91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -212,11 +212,11 @@ function buildEvent(model, operation, previous, priorEvents, options = {}) {
     rollbackPredecessorBinding: options.rollbackPredecessorBinding
       ? clone(options.rollbackPredecessorBinding)
       : null,
-    currentness: {
+    currentness: clone(options.currentness || {
       policyState: 'contract_fixture_unverified',
       sourceState: 'contract_fixture_unverified',
       marker: 'contract_fixture_unverified',
-    },
+    }),
     payload: {
       reasonCode: `${operation}_contract_fixture`,
       grammarFixtureOnly: true,
@@ -396,10 +396,31 @@ function validateEvent(event, model, priorEvents, trusted) {
   expect(event.eventDigest).toBe(eventDigest(event, model));
 }
 
-function validateLifecycleLedger(events, model, trusted) {
+function createTrustedLifecycleResolver(events, contextForEvent) {
+  const records = new Map();
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    const trusted = typeof contextForEvent === 'function'
+      ? contextForEvent(event, index)
+      : contextForEvent;
+    assertPlainData(trusted);
+    const key = `${event.lifecycleEventId}:${event.eventDigest}`;
+    if (records.has(key)) throw new Error('duplicate trusted lifecycle event identity');
+    records.set(key, clone(trusted));
+  }
+  return (lifecycleEventId, eventDigestValue) => {
+    const trusted = records.get(`${lifecycleEventId}:${eventDigestValue}`);
+    return trusted ? clone(trusted) : null;
+  };
+}
+
+function validateLifecycleLedger(events, model, resolveTrustedEvent) {
   assertPlainData(events);
+  expect(typeof resolveTrustedEvent).toBe('function');
   const accepted = [];
   for (const event of events) {
+    const trusted = resolveTrustedEvent(event.lifecycleEventId, event.eventDigest);
+    expect(trusted).not.toBeNull();
     validateEvent(event, model, accepted, trusted);
     accepted.push(event);
   }
@@ -428,6 +449,32 @@ function redigestLedger(events, model) {
         toState: predecessor.toState,
       };
     }
+    event.idempotencyDigest = idempotencyDigest(event, model);
+    event.payloadDigest = payloadDigest(event.payload, model);
+    event.eventDigest = eventDigest(event, model);
+    prior.push(event);
+  }
+}
+
+function redigestCompleteLedger(events, model) {
+  const prior = [];
+  for (const event of events) {
+    const rule = definition(model, event.operation);
+    const predecessor = prior.at(-1);
+    event.predecessorBinding = predecessor ? {
+      lifecycleEventId: predecessor.lifecycleEventId,
+      eventDigest: predecessor.eventDigest,
+      operation: predecessor.operation,
+      toState: predecessor.toState,
+    } : null;
+    const validation = [...prior].reverse().find(item => item.operation === 'validate');
+    const preview = [...prior].reverse().find(item => item.operation === 'preview');
+    event.requirementBindings.validationEventDigest = rule.requiresValidation
+      ? validation?.eventDigest || null
+      : null;
+    event.requirementBindings.previewEventDigest = rule.requiresPreview
+      ? preview?.eventDigest || null
+      : null;
     event.idempotencyDigest = idempotencyDigest(event, model);
     event.payloadDigest = payloadDigest(event.payload, model);
     event.eventDigest = eventDigest(event, model);
@@ -594,7 +641,7 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     const model = parse(CONTRACT_PATH);
     const events = buildActiveLedger(model);
     expect(events.map(event => event.operation)).toEqual(['draft_create', 'validate', 'preview', 'activate', 'pause', 'resume']);
-    validateLifecycleLedger(events, model, trustedContext(model));
+    validateLifecycleLedger(events, model, createTrustedLifecycleResolver(events, trustedContext(model)));
     expect(events.find(event => event.operation === 'activate').requirementBindings).toEqual({
       validationEventDigest: events[1].eventDigest,
       previewEventDigest: events[2].eventDigest,
@@ -624,7 +671,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     for (const alter of cases) {
       const mutation = clone(base);
       alter(mutation);
-      expect(() => validateLifecycleLedger(mutation, model, trustedContext(model))).toThrow();
+      expect(() => validateLifecycleLedger(
+        mutation,
+        model,
+        createTrustedLifecycleResolver(mutation, trustedContext(model)),
+      )).toThrow();
     }
   });
 
@@ -652,7 +703,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
       const mutation = clone(base);
       alter(mutation);
       redigestLedger(mutation, model);
-      expect(() => validateLifecycleLedger(mutation, model, trustedContext(model))).toThrow();
+      expect(() => validateLifecycleLedger(
+        mutation,
+        model,
+        createTrustedLifecycleResolver(mutation, trustedContext(model)),
+      )).toThrow();
     }
   });
 
@@ -698,6 +753,125 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     expect(() => validateEvent(failSafePause, model, base.slice(0, 4), failSafeTrusted)).not.toThrow();
   });
 
+  test('validates immutable event-time currentness across a complete fail-safe lifecycle', () => {
+    const model = parse(CONTRACT_PATH);
+    const exactCurrent = {
+      policyState: 'exact_current',
+      sourceState: 'exact_current',
+      marker: 'exact_current_not_runtime_revalidated',
+    };
+    const stale = {
+      policyState: 'stale',
+      sourceState: 'exact_current',
+      marker: 'stale_fail_closed',
+    };
+    const unavailable = {
+      policyState: 'unavailable',
+      sourceState: 'exact_current',
+      marker: 'unavailable_fail_closed',
+    };
+    const sourceFor = currentness => ({
+      tenantId: model.fixtureContract.tenantId,
+      sourceSetDigest: model.fixtureContract.sourceSetDigest,
+      currentnessMarker: currentness.marker,
+    });
+    const append = (events, operation, currentness) => {
+      const event = buildEvent(model, operation, events.at(-1) || null, events, {
+        currentness,
+        sourceSnapshotBinding: sourceFor(currentness),
+      });
+      events.push(event);
+      return event;
+    };
+    const contextForCurrentness = currentness => trustedContext(model, {
+      sourceSnapshotBinding: sourceFor(currentness),
+      currentness: clone(currentness),
+    });
+
+    const failSafeLedger = [];
+    for (const operation of ['draft_create', 'validate', 'preview', 'activate']) {
+      append(failSafeLedger, operation, exactCurrent);
+    }
+    append(failSafeLedger, 'pause', stale);
+    append(failSafeLedger, 'emergency_stop', unavailable);
+    const eventTimeContexts = [
+      exactCurrent,
+      exactCurrent,
+      exactCurrent,
+      exactCurrent,
+      stale,
+      unavailable,
+    ].map(contextForCurrentness);
+    const eventTimeResolver = createTrustedLifecycleResolver(
+      failSafeLedger,
+      (_event, index) => eventTimeContexts[index],
+    );
+    eventTimeContexts[0] = clone(eventTimeContexts.at(-1));
+    expect(() => validateLifecycleLedger(failSafeLedger, model, eventTimeResolver)).not.toThrow();
+    const invalidLatestOnlyResolver = createTrustedLifecycleResolver(
+      failSafeLedger,
+      contextForCurrentness(unavailable),
+    );
+    expect(() => validateLifecycleLedger(failSafeLedger, model, invalidLatestOnlyResolver)).toThrow();
+    expect(failSafeLedger.map(event => event.currentness.marker)).toEqual([
+      'exact_current_not_runtime_revalidated',
+      'exact_current_not_runtime_revalidated',
+      'exact_current_not_runtime_revalidated',
+      'exact_current_not_runtime_revalidated',
+      'stale_fail_closed',
+      'unavailable_fail_closed',
+    ]);
+
+    const staleActivation = [];
+    for (const operation of ['draft_create', 'validate', 'preview']) append(staleActivation, operation, exactCurrent);
+    append(staleActivation, 'activate', stale);
+    const staleActivationContexts = [exactCurrent, exactCurrent, exactCurrent, stale]
+      .map(contextForCurrentness);
+    expect(() => validateLifecycleLedger(
+      staleActivation,
+      model,
+      createTrustedLifecycleResolver(
+        staleActivation,
+        (_event, index) => staleActivationContexts[index],
+      ),
+    )).toThrow();
+
+    const staleResume = [];
+    for (const operation of ['draft_create', 'validate', 'preview', 'activate', 'pause']) {
+      append(staleResume, operation, exactCurrent);
+    }
+    append(staleResume, 'resume', unavailable);
+    const staleResumeContexts = [exactCurrent, exactCurrent, exactCurrent, exactCurrent, exactCurrent, unavailable]
+      .map(contextForCurrentness);
+    expect(() => validateLifecycleLedger(
+      staleResume,
+      model,
+      createTrustedLifecycleResolver(staleResume, (_event, index) => staleResumeContexts[index]),
+    )).toThrow();
+
+    const reboundHistory = clone(failSafeLedger);
+    reboundHistory[1].currentness = clone(stale);
+    reboundHistory[1].sourceSnapshotBinding.currentnessMarker = stale.marker;
+    redigestCompleteLedger(reboundHistory, model);
+    expect(() => validateLifecycleLedger(reboundHistory, model, eventTimeResolver)).toThrow();
+
+    const forgedContexts = [
+      exactCurrent,
+      exactCurrent,
+      exactCurrent,
+      exactCurrent,
+      stale,
+      unavailable,
+    ].map(contextForCurrentness);
+    forgedContexts[1].currentness = clone(stale);
+    forgedContexts[1].sourceSnapshotBinding.currentnessMarker = stale.marker;
+    expect(() => validateLifecycleLedger(
+      failSafeLedger,
+      model,
+      createTrustedLifecycleResolver(failSafeLedger, (_event, index) => forgedContexts[index]),
+    )).toThrow();
+  });
+
   test('rejects resume or any successor transition after terminal expiry retirement or emergency stop', () => {
     const model = parse(CONTRACT_PATH);
     const active = buildActiveLedger(model).slice(0, 4);
@@ -705,10 +879,14 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
       const events = clone(active);
       const terminal = buildEvent(model, terminalOperation, events.at(-1), events);
       events.push(terminal);
-      validateLifecycleLedger(events, model, trustedContext(model));
+      validateLifecycleLedger(events, model, createTrustedLifecycleResolver(events, trustedContext(model)));
       const bypass = buildEvent(model, 'resume', terminal, events);
       events.push(bypass);
-      expect(() => validateLifecycleLedger(events, model, trustedContext(model))).toThrow();
+      expect(() => validateLifecycleLedger(
+        events,
+        model,
+        createTrustedLifecycleResolver(events, trustedContext(model)),
+      )).toThrow();
     }
   });
 
@@ -723,7 +901,12 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     const supersedeTrusted = trustedContext(model, {
       relatedPolicyBindings: { successor: clone(supersede.relatedPolicyBinding), rollback_source: null },
     });
-    validateLifecycleLedger([...active, supersede], model, supersedeTrusted);
+    const supersededLedger = [...active, supersede];
+    validateLifecycleLedger(
+      supersededLedger,
+      model,
+      createTrustedLifecycleResolver(supersededLedger, supersedeTrusted),
+    );
     for (const invalid of [
       { ...successor, policyVersion: 4 },
       { ...successor, tenantId: '00000000-0000-4000-8000-000000000029' },
@@ -731,21 +914,41 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
       { ...successor, policyDigest: model.fixtureContract.policyDigest },
     ]) {
       const mutation = buildEvent(model, 'supersede', active.at(-1), active, { relatedPolicyBinding: invalid });
-      expect(() => validateLifecycleLedger([...active, mutation], model, supersedeTrusted)).toThrow();
+      const ledger = [...active, mutation];
+      expect(() => validateLifecycleLedger(
+        ledger,
+        model,
+        createTrustedLifecycleResolver(ledger, supersedeTrusted),
+      )).toThrow();
     }
     const forgedActivation = clone(supersede);
     forgedActivation.relatedPolicyBinding.activationEventDigest = `sha256:${'9'.repeat(64)}`;
     forgedActivation.idempotencyDigest = idempotencyDigest(forgedActivation, model);
     forgedActivation.eventDigest = eventDigest(forgedActivation, model);
-    expect(() => validateLifecycleLedger([...active, forgedActivation], model, supersedeTrusted)).toThrow();
+    const forgedActivationLedger = [...active, forgedActivation];
+    expect(() => validateLifecycleLedger(
+      forgedActivationLedger,
+      model,
+      createTrustedLifecycleResolver(forgedActivationLedger, supersedeTrusted),
+    )).toThrow();
     const fork = clone(supersede);
     fork.lifecycleEventId = eventId(99);
     fork.relatedPolicyBinding.policyBinding.policyDigest = `sha256:${'d'.repeat(64)}`;
     fork.idempotencyDigest = idempotencyDigest(fork, model);
     fork.eventDigest = eventDigest(fork, model);
-    expect(() => validateLifecycleLedger([...active, supersede, fork], model, supersedeTrusted)).toThrow();
+    const forkedLedger = [...active, supersede, fork];
+    expect(() => validateLifecycleLedger(
+      forkedLedger,
+      model,
+      createTrustedLifecycleResolver(forkedLedger, supersedeTrusted),
+    )).toThrow();
     const reactivate = buildEvent(model, 'resume', supersede, [...active, supersede]);
-    expect(() => validateLifecycleLedger([...active, supersede, reactivate], model, supersedeTrusted)).toThrow();
+    const reactivatedLedger = [...active, supersede, reactivate];
+    expect(() => validateLifecycleLedger(
+      reactivatedLedger,
+      model,
+      createTrustedLifecycleResolver(reactivatedLedger, supersedeTrusted),
+    )).toThrow();
   });
 
   test('models bounded rollback only as a new next-version draft with new validation and authority', () => {
@@ -774,7 +977,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
       relatedPolicyBindings: { successor: null, rollback_source: clone(rollbackDraft.relatedPolicyBinding) },
       rollbackPredecessorBinding: clone(predecessorResolution),
     });
-    validateLifecycleLedger([rollbackDraft], model, rollbackTrusted);
+    validateLifecycleLedger(
+      [rollbackDraft],
+      model,
+      createTrustedLifecycleResolver([rollbackDraft], rollbackTrusted),
+    );
 
     const rollbackLifecycle = [rollbackDraft];
     for (const operation of ['validate', 'preview', 'activate']) {
@@ -782,14 +989,22 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
         policyBinding: target,
       }));
     }
-    validateLifecycleLedger(rollbackLifecycle, model, rollbackTrusted);
+    validateLifecycleLedger(
+      rollbackLifecycle,
+      model,
+      createTrustedLifecycleResolver(rollbackLifecycle, rollbackTrusted),
+    );
     expect(rollbackLifecycle.map(event => event.toState)).toEqual(['draft', 'validated', 'previewed', 'active']);
 
     const forgedTerminal = clone(rollbackDraft);
     forgedTerminal.relatedPolicyBinding.terminalEventDigest = `sha256:${'9'.repeat(64)}`;
     forgedTerminal.idempotencyDigest = idempotencyDigest(forgedTerminal, model);
     forgedTerminal.eventDigest = eventDigest(forgedTerminal, model);
-    expect(() => validateLifecycleLedger([forgedTerminal], model, rollbackTrusted)).toThrow();
+    expect(() => validateLifecycleLedger(
+      [forgedTerminal],
+      model,
+      createTrustedLifecycleResolver([forgedTerminal], rollbackTrusted),
+    )).toThrow();
 
     const buildRollbackAttack = (targetBinding, predecessorBinding, sourceBinding, previousDigest) => buildEvent(
       model,
@@ -831,7 +1046,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
       relatedPolicyBindings: { successor: null, rollback_source: clone(wholeRetarget.relatedPolicyBinding) },
       rollbackPredecessorBinding: clone(predecessorResolution),
     });
-    expect(() => validateLifecycleLedger([wholeRetarget], model, independentlyResolvedOriginal)).toThrow();
+    expect(() => validateLifecycleLedger(
+      [wholeRetarget],
+      model,
+      createTrustedLifecycleResolver([wholeRetarget], independentlyResolvedOriginal),
+    )).toThrow();
 
     const versionFork = buildRollbackAttack(
       { ...target, policyDigest: `sha256:${'d'.repeat(64)}` },
@@ -844,7 +1063,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
       relatedPolicyBindings: { successor: null, rollback_source: clone(versionFork.relatedPolicyBinding) },
       rollbackPredecessorBinding: clone(versionFork.rollbackPredecessorBinding),
     });
-    expect(() => validateLifecycleLedger([versionFork], model, canonicalTargetResolution)).toThrow();
+    expect(() => validateLifecycleLedger(
+      [versionFork],
+      model,
+      createTrustedLifecycleResolver([versionFork], canonicalTargetResolution),
+    )).toThrow();
 
     const gap = buildRollbackAttack(
       { ...target, policyVersion: 4 },
@@ -871,7 +1094,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
       immediatePredecessor.policyDigest,
     );
     for (const attack of [gap, wrongPreviousDigest, digestFork, selfSource]) {
-      expect(() => validateLifecycleLedger([attack], model, matchingTrusted(attack))).toThrow();
+      expect(() => validateLifecycleLedger(
+        [attack],
+        model,
+        createTrustedLifecycleResolver([attack], matchingTrusted(attack)),
+      )).toThrow();
     }
     expect(rollbackDraft.toState).toBe('draft');
     expect(model.boundedRollbackContract.authorityRule).toContain('new_authority');
@@ -933,7 +1160,12 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     const exactReplay = clone(original);
     expect(exactReplay).toEqual(original);
     expect(model.idempotencyContract.sameDigestSameCanonicalEvent).toBe('idempotent_replay_no_new_record');
-    expect(() => validateLifecycleLedger([...events.slice(0, 3), exactReplay], model, trustedContext(model))).toThrow();
+    const replayedLedger = [...events.slice(0, 3), exactReplay];
+    expect(() => validateLifecycleLedger(
+      replayedLedger,
+      model,
+      createTrustedLifecycleResolver(replayedLedger, trustedContext(model)),
+    )).toThrow();
 
     const mutations = [];
     const missing = clone(original); delete missing.toState; mutations.push(missing);

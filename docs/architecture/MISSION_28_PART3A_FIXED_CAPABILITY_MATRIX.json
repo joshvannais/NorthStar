@@ -1,0 +1,343 @@
+{
+  "contractVersion": "mission28.part3a.fixed-capability-matrix.v1",
+  "authority": {
+    "mission": 28,
+    "part": "3A",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "529286cf2d513df93680e2c236e37f562782cb52",
+    "baselineTree": "cb2f7072f475e927f75ee3b562884adf01234d70",
+    "runtimeCapabilityResolutionImplemented": false,
+    "routeOrUiAuthorityGranted": false,
+    "policyApprovalOrActivationAuthorityGranted": false,
+    "schedulerWorkerOrRetryAuthorityGranted": false,
+    "providerAuthorityGranted": false,
+    "externalEffectAuthorityGranted": false,
+    "upstreamMutationAuthorityGranted": false,
+    "moneyAuthorityGranted": false
+  },
+  "part2DRelease": {
+    "acceptedSourceHead": "98c4b3562ad48787472584ca64c601d584c2427f",
+    "acceptedTree": "cb2f7072f475e927f75ee3b562884adf01234d70",
+    "pullRequest": 556,
+    "mergedMain": "529286cf2d513df93680e2c236e37f562782cb52",
+    "deployment": "f40e401a-649f-42b3-a1cc-71dbd0ffce4d",
+    "deploymentState": "SUCCESS_RUNNING",
+    "imageSha256": "586afe8103acc0e4f27d5967e8a8554876d7f5f51dc38bd7c7f4a98e2c320337",
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null,
+    "health": [
+      "startup_ready",
+      "migrations_269_of_269_latest_273_no_274",
+      "authority_objects_present",
+      "legacy_conversion_rows_zero",
+      "health_200",
+      "root_200",
+      "demo_200"
+    ]
+  },
+  "frozenInputs": [
+    {
+      "path": "docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md",
+      "normalizedLfSha256": "92DAD00F8A7623A87C780FC1AC965B66569616650F53FDED8454F51872458179"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json",
+      "normalizedLfSha256": "62E37CF07A26F0C2B1A50A2C2F0EB927695500DB32B44B16E5B431F594B93142"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json",
+      "normalizedLfSha256": "1CB5FF594AE7D1BEED313C1A94D7FE8200FB0024B36DF11B4C668F211481312B"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json",
+      "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json",
+      "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json",
+      "normalizedLfSha256": "3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2C_POLICY_LIFECYCLE.json",
+      "normalizedLfSha256": "91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json",
+      "normalizedLfSha256": "03F32F3C66EF525DF9ACA541F8A7D0C08935E1DD2EDB661468F78CC2A763308A"
+    }
+  ],
+  "membershipVocabulary": {
+    "sourcePath": "src/auth/permissions.js",
+    "normalizedLfSha256": "4FD11A90AC6EE584614535580ED45C6AAE2A23B73547CE62D28A73BB11C40D42",
+    "canonicalMembershipRoleIds": ["owner", "admin", "member", "viewer"],
+    "exactActiveTenantMembershipRequired": true,
+    "exactAuthenticatedSessionRequired": true,
+    "displayRoleNameAuthority": "deny",
+    "operationalRoleTitleAuthority": "deny",
+    "jobTitleTeamTitleLabelOrAliasAuthority": "deny",
+    "roleCaseFoldingOrFuzzyAlias": "deny",
+    "customRolesOrEnterpriseAdministration": "Mission29_only"
+  },
+  "decisionStates": [
+    "eligible_contract_only_no_runtime_authority",
+    "deny_missing_or_invalid_actor_authority",
+    "deny_recent_authentication_required",
+    "deny_capability_not_assigned",
+    "deny_scope_mismatch",
+    "deny_unsupported_operation"
+  ],
+  "capabilities": [
+    {
+      "id": "automation_view",
+      "operation": "view_automation",
+      "consequenceClass": "tenant_private_read",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "exact_tenant_all_automation" },
+        { "membershipRoleId": "admin", "recordScope": "exact_tenant_all_automation" },
+        { "membershipRoleId": "member", "recordScope": "exact_assigned_internal_records_only" }
+      ],
+      "requiresRecentAuthentication": false,
+      "deferredRequirements": ["accepted_runtime_capability_resolver", "exact_record_scope_enforcement"],
+      "boundary": "Reads tenant-private automation records only; it grants no draft, approval, activation, retry, export, provider, recipient or effect authority."
+    },
+    {
+      "id": "automation_policy_draft",
+      "operation": "draft_policy",
+      "consequenceClass": "no_authority_draft",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "exact_tenant_policy_drafts" },
+        { "membershipRoleId": "admin", "recordScope": "exact_tenant_policy_drafts" }
+      ],
+      "requiresRecentAuthentication": false,
+      "deferredRequirements": ["accepted_policy_draft_runtime", "Part3B_approval_binding", "Part5_validation_and_preview"],
+      "boundary": "Creates or edits a draft only; a draft never validates, approves, activates, schedules, retries or creates an effect."
+    },
+    {
+      "id": "automation_run_approve",
+      "operation": "approve_run",
+      "consequenceClass": "consequential_per_run_authority",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "one_exact_tenant_run_preview" }
+      ],
+      "requiresRecentAuthentication": true,
+      "deferredRequirements": ["Part3B_exact_per_run_approval", "exact_actor_session_preview_policy_source_recipient_effect_digest"],
+      "boundary": "Only the tenant owner is capability-eligible; this contract creates no approval record and grants no execution or effect authority."
+    },
+    {
+      "id": "automation_standing_authority_activate",
+      "operation": "activate_standing_authority",
+      "consequenceClass": "consequential_standing_authority",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "one_exact_tenant_policy_version" }
+      ],
+      "requiresRecentAuthentication": true,
+      "deferredRequirements": ["Part3B_exact_standing_authorization", "Part3D_activation_and_revocation_controls"],
+      "boundary": "Only the tenant owner is capability-eligible; activation remains unavailable and no draft or validated policy becomes active here."
+    },
+    {
+      "id": "automation_standing_authority_change",
+      "operation": "change_standing_authority",
+      "consequenceClass": "consequential_standing_authority",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "one_exact_tenant_policy_version_transition" }
+      ],
+      "requiresRecentAuthentication": true,
+      "deferredRequirements": ["Part3B_material_change_invalidation", "Part3D_pause_revoke_resume_and_rollback_controls"],
+      "boundary": "Only the tenant owner is capability-eligible; every change must become a new exact policy/lifecycle event and cannot rewrite or reuse prior authority."
+    },
+    {
+      "id": "automation_pause",
+      "operation": "pause_automation",
+      "consequenceClass": "authority_reducing_control",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "exact_tenant_or_exact_policy_scope" },
+        { "membershipRoleId": "admin", "recordScope": "exact_tenant_or_exact_policy_scope" }
+      ],
+      "requiresRecentAuthentication": false,
+      "deferredRequirements": ["Part3D_pause_kill_drain_and_resume_semantics"],
+      "boundary": "Capability eligibility may only reduce authority; it cannot resume, activate, retry, cancel an upstream fact or claim that an in-flight effect stopped."
+    },
+    {
+      "id": "automation_retry_reviewed",
+      "operation": "retry_action",
+      "consequenceClass": "duplicate_effect_risk",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "one_exact_failed_or_reconciled_action_unit" }
+      ],
+      "requiresRecentAuthentication": true,
+      "deferredRequirements": ["Part6D_bounded_retry_and_uncertain_outcome_reconciliation", "Part6E_reviewed_retry"],
+      "boundary": "Only the tenant owner is capability-eligible; no retry is available until prior outcome reconciliation and later idempotency/lease/fencing authority are accepted."
+    },
+    {
+      "id": "automation_evidence_export",
+      "operation": "export_evidence",
+      "consequenceClass": "tenant_private_sensitive_export",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "exact_tenant_minimized_evidence" },
+        { "membershipRoleId": "admin", "recordScope": "exact_tenant_minimized_evidence" }
+      ],
+      "requiresRecentAuthentication": true,
+      "deferredRequirements": ["accepted_minimized_export_runtime", "Part13E_privacy_retention_and_deletion"],
+      "boundary": "Exports minimized evidence only; message bodies, document contents, credentials, secrets, public tokens and unnecessary customer data remain excluded."
+    },
+    {
+      "id": "automation_channel_availability_manage",
+      "operation": "manage_channel_availability",
+      "consequenceClass": "provider_and_sender_boundary",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "exact_tenant_channel_availability" }
+      ],
+      "requiresRecentAuthentication": true,
+      "deferredRequirements": ["Part13A_adapter_capability_discovery", "Part13B_connection_credential_and_mode_boundary"],
+      "boundary": "Only the tenant owner is capability-eligible; this cannot create credentials, connect a provider, enable a channel, establish consent or authorize a send."
+    },
+    {
+      "id": "automation_tenant_stop_operate",
+      "operation": "operate_tenant_wide_stop",
+      "consequenceClass": "tenant_wide_fail_safe_control",
+      "grants": [
+        { "membershipRoleId": "owner", "recordScope": "exact_tenant_global_stop" },
+        { "membershipRoleId": "admin", "recordScope": "exact_tenant_global_stop" }
+      ],
+      "requiresRecentAuthentication": false,
+      "deferredRequirements": ["Part3D_global_stop_engage_release_drain_and_evidence_semantics"],
+      "boundary": "This fixed assignment creates no control surface. Later runtime must fail safe; releasing a stop cannot be inferred from the ability to engage one."
+    }
+  ],
+  "membershipProfiles": [
+    {
+      "membershipRoleId": "owner",
+      "capabilityIds": [
+        "automation_view",
+        "automation_policy_draft",
+        "automation_run_approve",
+        "automation_standing_authority_activate",
+        "automation_standing_authority_change",
+        "automation_pause",
+        "automation_retry_reviewed",
+        "automation_evidence_export",
+        "automation_channel_availability_manage",
+        "automation_tenant_stop_operate"
+      ],
+      "boundary": "Fixed active tenant-owner membership is one required input, never sufficient authority by itself."
+    },
+    {
+      "membershipRoleId": "admin",
+      "capabilityIds": [
+        "automation_view",
+        "automation_policy_draft",
+        "automation_pause",
+        "automation_evidence_export",
+        "automation_tenant_stop_operate"
+      ],
+      "boundary": "Admin may prepare, inspect and invoke later fail-safe controls but cannot approve a run, activate/change standing authority, retry an effect or manage channel authority."
+    },
+    {
+      "membershipRoleId": "member",
+      "capabilityIds": ["automation_view"],
+      "boundary": "Member view eligibility is limited to exact assigned internal records and grants no tenant-wide view or control."
+    },
+    {
+      "membershipRoleId": "viewer",
+      "capabilityIds": [],
+      "boundary": "Generic product viewer membership receives no Mission 28 capability in this fixed matrix."
+    }
+  ],
+  "subjectContract": {
+    "requiredInputs": [
+      "tenantId",
+      "actorId",
+      "actorTenantId",
+      "sessionId",
+      "sessionSubjectActorId",
+      "sessionTenantId",
+      "membershipId",
+      "membershipSubjectActorId",
+      "membershipTenantId",
+      "membershipRoleId",
+      "membershipStatus",
+      "recentAuthenticationState",
+      "capabilityId",
+      "operation",
+      "recordScope",
+      "recordTenantId"
+    ],
+    "opaqueIdentityInputs": [
+      "tenantId",
+      "actorId",
+      "actorTenantId",
+      "sessionId",
+      "sessionSubjectActorId",
+      "sessionTenantId",
+      "membershipId",
+      "membershipSubjectActorId",
+      "membershipTenantId",
+      "recordTenantId"
+    ],
+    "opaqueIdentifierPattern": "^[A-Za-z0-9][A-Za-z0-9._:@|/-]{0,255}$",
+    "membershipStatus": "active",
+    "allTenantIdentitiesMustMatchExactly": true,
+    "actorIdMustEqualSessionSubjectAndMembershipSubjectExactly": true,
+    "actorAndSessionMustResolveFromServerAuthority": true,
+    "membershipMustBeRereadFromServerAuthorityAtDecision": true,
+    "operationAndRecordScopeMustResolveFromServerAuthority": true,
+    "recentAuthenticationRequirementMustMatchMatrix": true,
+    "capabilityAndOperationMustMatchOneExactMatrixRow": true,
+    "recordScopeMustMatchOneExactGrant": true,
+    "missingStaleSuspendedCrossTenantUnknownOrAmbiguous": "deny",
+    "sameTenantCrossActorSessionOrMembershipSubstitution": "deny",
+    "emptyWhitespaceControlNonCanonicalOrOversizedOpaqueIdentifier": "deny",
+    "displayOrOperationalRoleFieldsAcceptedAsAuthority": false,
+    "wildcardPrefixSuffixCaseFoldedOrFuzzyCapability": "deny",
+    "capabilityDelegationInheritanceChainingOrImpersonation": "deny",
+    "capabilityAloneCreatesApprovalActivationRetryProviderOrEffect": false
+  },
+  "part1DCapabilityDisposition": [
+    { "id": "automation_internal_action_view", "state": "preserved_released_no_implicit_part3a_alias" },
+    { "id": "automation_internal_action_prepare", "state": "preserved_released_no_implicit_part3a_alias" },
+    { "id": "automation_approval_request_create", "state": "preserved_released_no_implicit_part3a_alias" },
+    { "id": "automation_approval_decide", "state": "preserved_released_no_implicit_part3a_alias" },
+    { "id": "automation_collection_work_item_view", "state": "preserved_released_no_implicit_part3a_alias" },
+    { "id": "automation_collection_work_item_prepare", "state": "preserved_released_no_implicit_part3a_alias" },
+    { "id": "automation_external_effect_execute", "state": "unavailable_no_assignment" },
+    { "id": "automation_upstream_or_money_mutate", "state": "permanently_denied_no_assignment" }
+  ],
+  "deniedCombinations": [
+    "display_role_operational_role_job_title_team_title_label_or_alias_used_as_authority",
+    "missing_inactive_suspended_or_unknown_membership",
+    "same_tenant_cross_actor_session_or_membership_subject_substitution",
+    "empty_whitespace_control_noncanonical_or_oversized_opaque_identity",
+    "cross_tenant_actor_session_membership_policy_record_or_capability_scope",
+    "unknown_duplicate_wildcard_case_folded_prefixed_suffixed_or_fuzzy_capability",
+    "capability_operation_or_record_scope_mismatch",
+    "viewer_receives_any_mission28_capability",
+    "member_views_unassigned_or_tenant_wide_automation",
+    "admin_approves_run_activates_or_changes_standing_authority_retries_or_manages_channel_authority",
+    "part1d_capability_or_role_label_silently_aliased_to_part3a_control",
+    "capability_grant_treated_as_approval_activation_schedule_retry_provider_attempt_delivery_or_outcome",
+    "provider_external_recipient_message_upstream_accounting_legal_or_money_authority",
+    "custom_role_threshold_sso_mfa_or_enterprise_governance_pulled_forward_from_mission29"
+  ],
+  "runtimeBoundary": {
+    "matrixIsExecutableRuntime": false,
+    "runtimeResolverAvailable": false,
+    "routeUiWorkerSchedulerQueueProviderOrExportAvailable": false,
+    "databaseCapabilityGrantAdded": false,
+    "migrationAdded": false,
+    "laterSlicesMayOnlyConsumeAfterIndependentAcceptance": true,
+    "allEligibleResults": "eligible_contract_only_no_runtime_authority"
+  },
+  "unavailableEvidence": [
+    "runtime capability resolution and enforcement",
+    "per-run approval and standing authorization semantics",
+    "pause retry export channel and global-stop runtime controls",
+    "provider accounts credentials senders callbacks templates and deliverability",
+    "real recipients messages provider attempts or external effects",
+    "professional legal privacy consent collections provider regulatory or security review",
+    "private-production customer evidence provider sandbox live money and first-paying-customer validation",
+    "hosted load or SLA physical Safari devices manual assistive technology and founder visual approval"
+  ]
+}

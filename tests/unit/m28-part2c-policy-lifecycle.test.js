@@ -1193,11 +1193,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     expect(narrative).toContain('cannot rebind an old run to a newer policy or source');
   });
 
-  test('records Parts 1A–1D and 2A–2C released, only Part 2D current and every later slice planned', () => {
+  test('records Parts 1A–2D released, only Part 3A current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–1D and 2A–2C released; Part 2D implementation candidate only.');
-    expect(roadmap).toContain('Parts 3A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–2D released; Part 3A implementation candidate only.');
+    expect(roadmap).toContain('Parts 3B–14G remain planned and unimplemented.');
     for (const identity of [PART2B_HEAD, BASE, PART2B_DEPLOYMENT, PART2B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -1208,11 +1208,13 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     expect(rows[5][5]).toContain('PR #554');
     expect(rows[6][4]).toBe('**Released**');
     expect(rows[6][5]).toContain('PR #555');
-    expect(rows[7][4]).toBe('**Implementation candidate**');
-    expect(rows[7][5]).toContain('Additive migration 273');
-    expect(rows.slice(8).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[7][4]).toBe('**Released**');
+    expect(rows[7][5]).toContain('production migration 273');
+    expect(rows[8][4]).toBe('**Implementation candidate**');
+    expect(rows[8][5]).toContain('no runtime resolver');
+    expect(rows.slice(9).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(58);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(57);
   });
 
   test('adds no runtime activation, production source, package or migration', () => {

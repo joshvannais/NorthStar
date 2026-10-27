@@ -521,11 +521,11 @@ describe('Mission 28 Part 1D first-supported launch matrix', () => {
     for (const mutation of mutations) expect(() => validateMatrix(mutation)).toThrow();
   });
 
-  test('records Parts 1A–1D and 2A–2C released, only Part 2D current and every later slice planned', () => {
+  test('records Parts 1A–2D released, only Part 3A current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–1D and 2A–2C released; Part 2D implementation candidate only.');
-    expect(roadmap).toContain('Parts 3A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–2D released; Part 3A implementation candidate only.');
+    expect(roadmap).toContain('Parts 3B–14G remain planned and unimplemented.');
     for (const identity of [PART1C_HEAD, BASE, PART1C_DEPLOYMENT, PART1C_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -540,11 +540,12 @@ describe('Mission 28 Part 1D first-supported launch matrix', () => {
     expect(rows[5][5]).toContain('PR #554');
     expect(rows[6][4]).toBe('**Released**');
     expect(rows[6][5]).toContain('PR #555');
-    expect(rows[7][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(8).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[7][4]).toBe('**Released**');
+    expect(rows[8][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(9).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(58);
-    expect(ledger).toContain('Part 2D has no independent acceptance, PR, merge, deployment, release or production migration evidence.');
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(57);
+    expect(ledger).toContain('Part 3A has no independent acceptance, PR, merge, deployment or release evidence');
   });
 
   test('adds no runtime activation or migration and keeps all unavailable evidence unclaimed', () => {

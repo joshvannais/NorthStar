@@ -35,6 +35,9 @@ const PART2B_DEPLOYMENT = '1a04c6ac-412a-4f5f-b86b-7f506b2a3cc8';
 const PART2C_HEAD = '69d4a375a4971ab98310872b9382cba92f5a67c0';
 const PART2C_MAIN = '1d52b675d8d2bbe9065c220ff3719460bd530f38';
 const PART2C_DEPLOYMENT = '036663b4-a364-4c3a-9842-5e1686164be0';
+const PART2D_HEAD = '98c4b3562ad48787472584ca64c601d584c2427f';
+const PART2D_MAIN = '529286cf2d513df93680e2c236e37f562782cb52';
+const PART2D_DEPLOYMENT = 'f40e401a-649f-42b3-a1cc-71dbd0ffce4d';
 
 const PARTS = [
   [1, 'mission authority, inventory, risk model, and acceptance contract', 4],
@@ -132,9 +135,13 @@ function validateLedger(document) {
   expect(rows[6].evidence).toContain(`Accepted source \`${PART2C_HEAD}\``);
   expect(rows[6].evidence).toContain(`main \`${PART2C_MAIN}\``);
   expect(rows[6].evidence).toContain(`deployment \`${PART2C_DEPLOYMENT}\``);
-  expect(rows[7]).toMatchObject({ id: '2D', state: '**Implementation candidate**' });
-  expect(rows[7].evidence).toContain('independent audit, PR, merge, deployment, release and production migration unavailable');
-  expect(rows.slice(8).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+  expect(rows[7]).toMatchObject({ id: '2D', state: '**Released**' });
+  expect(rows[7].evidence).toContain(`Accepted source \`${PART2D_HEAD}\``);
+  expect(rows[7].evidence).toContain(`main \`${PART2D_MAIN}\``);
+  expect(rows[7].evidence).toContain(`deployment \`${PART2D_DEPLOYMENT}\``);
+  expect(rows[8]).toMatchObject({ id: '3A', state: '**Implementation candidate**' });
+  expect(rows[8].evidence).toContain('no runtime resolver, approval, activation, retry, provider or effect authority');
+  expect(rows.slice(9).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
 }
 
 describe('Mission 28 Part 1A authority ratification', () => {
@@ -150,8 +157,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       expect(document).toContain(BASE);
       expect(document).toContain(BASE_TREE);
     }
-    expect(roadmap).toContain('Parts 1A–1D and 2A–2C released; Part 2D implementation candidate only.');
-    expect(roadmap).toContain('Parts 3A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–2D released; Part 3A implementation candidate only.');
+    expect(roadmap).toContain('Parts 3B–14G remain planned and unimplemented.');
     for (const identity of [PART1A_HEAD, PART1A_MAIN, PART1A_DEPLOYMENT, PART1A_AUDIT]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -231,12 +238,12 @@ describe('Mission 28 Part 1A authority ratification', () => {
     expect(contract).toContain('It grants no route, worker, queue, scheduler, provider adapter, callback, credential, recipient, message, document delivery, internal task, payment, refund, fee, write-off, accounting action, database authority, migration, UI control, production flag or demo effect.');
   });
 
-  test('records released Parts 1A–1D and 2A–2C, keeps exactly Part 2D current, and leaves every later slice planned', () => {
+  test('records released Parts 1A–2D, keeps exactly Part 3A current, and leaves every later slice planned', () => {
     const ledger = read(LEDGER_PATH);
     validateLedger(ledger);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(58);
-    expect(ledger).toContain('Part 2D has no independent acceptance, PR, merge, deployment, release or production migration evidence.');
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(57);
+    expect(ledger).toContain('Part 3A has no independent acceptance, PR, merge, deployment or release evidence');
     expect(ledger).toContain(`Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 \`${PART1A_AUDIT}\``);
   });
 
@@ -255,8 +262,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       ledger.replace('| 02 | 1B |', '| 02 | 1C |'),
       ledger.replace('| 66 | 14G |', '| 67 | 14G |'),
       ledger.replace(/^\| 25 \| 6E .*\r?\n/m, ''),
-      ledger.replace('| 08 | 2D | PostgreSQL authority, canonicalization, retention and restart contract | **Implementation candidate** |',
-        '| 08 | 2D | PostgreSQL authority, canonicalization, retention and restart contract | **Accepted** |'),
+      ledger.replace('| 09 | 3A | Fixed action capability matrix | **Implementation candidate** |',
+        '| 09 | 3A | Fixed action capability matrix | **Accepted** |'),
     ];
     for (const mutation of ledgerMutations) expect(() => validateLedger(mutation)).toThrow();
   });

@@ -8,6 +8,9 @@ const request=require('supertest');
 const workspace=require('../../src/commandCenter/workspace');
 const contract=require('../../src/customerFinancial/reportingPart12Acceptance');
 const part11Contract=require('../../src/customerFinancial/accountingPart11Acceptance');
+const invoiceReporting=require('../../src/customerFinancial/invoiceReceivableReporting');
+const paymentReporting=require('../../src/customerFinancial/paymentCashReporting');
+const downstreamReaders=require('../../src/customerFinancial/downstreamReportingReaders');
 const repository=require('../../src/customerFinancial/reportingPart12AcceptanceRepository');
 const providerBoundary=require('../../src/customerFinancial/paymentProviderBoundary');
 const demo=require('../../src/customerFinancial/demoReportingPart12Acceptance');
@@ -364,12 +367,27 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
       part11Acceptance:canonical.part11Acceptance});
     const paths=semanticLeafPaths(canonical.part12Acceptance);
     expect(paths.length).toBeGreaterThan(100);
+    const sourceContracts={
+      invoiceReceivableReporting:sources.invoiceReceivableReporting,
+      paymentCashReporting:sources.paymentCashReporting,
+      downstreamReportingReaders:sources.downstreamReportingReaders,
+    };
+    // The strict source contracts have their own exhaustive matrices.  This
+    // matrix varies only Part 12 semantic leaves, so retain the exact source
+    // values and spy at those already-proven projector boundaries instead of
+    // rebuilding the complete Parts 5-12 default chain for every leaf.
     const strict=jest.spyOn(part11Contract,'projectBundle')
+      .mockImplementation(value=>value);
+    const strictInvoice=jest.spyOn(invoiceReporting,'project')
+      .mockImplementation(value=>value);
+    const strictPayment=jest.spyOn(paymentReporting,'project')
+      .mockImplementation(value=>value);
+    const strictDownstream=jest.spyOn(downstreamReaders,'project')
       .mockImplementation(value=>value);
     try {
       for (const path of paths) {
         const forged=clone(canonical.part12Acceptance); mutateLeaf(forged,path);
-        expect(()=>contract.project(forged,'demo',sources.part11)).toThrow(
+        expect(()=>contract.project(forged,'demo',sources.part11,sourceContracts)).toThrow(
           'Reporting Part 12 acceptance invalid');
         expect(await ui.invalidPart12(forged,'demo')).toBe(true);
       }
@@ -380,11 +398,19 @@ describe('Mission 27 Part 12D whole Part 12 acceptance',()=>{
       ];
       for (const mutate of structural) {
         const forged=clone(canonical.part12Acceptance); mutate(forged);
-        expect(()=>contract.project(forged,'demo',sources.part11)).toThrow();
+        expect(()=>contract.project(forged,'demo',sources.part11,sourceContracts)).toThrow();
         expect(await ui.invalidPart12(forged,'demo')).toBe(true);
       }
-    } finally { strict.mockRestore(); }
-  },600000);
+      const caseCount=paths.length+structural.length;
+      expect(strict).toHaveBeenCalledTimes(caseCount);
+      expect(strictInvoice).toHaveBeenCalledTimes(caseCount);
+      expect(strictPayment).toHaveBeenCalledTimes(caseCount);
+      expect(strictDownstream).toHaveBeenCalledTimes(caseCount);
+    } finally {
+      strict.mockRestore(); strictInvoice.mockRestore(); strictPayment.mockRestore();
+      strictDownstream.mockRestore();
+    }
+  },120000);
 
   test('binds Part 12 to the exact Part 11 witness and exact immutable source digests',async()=>{
     for (const forge of [

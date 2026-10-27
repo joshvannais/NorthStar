@@ -125,10 +125,18 @@ describe('Mission 27 Part 6D complete delivery and portal acceptance', () => {
     expect(paid).not.toContain("router.post('/:estimateId/invoice-part6-acceptance'");
     expect(demoRoute).toContain("router.get('/customer-financial/invoice-drafts/:estimateId/part6-acceptance'");
     expect(demoRoute).not.toContain("router.post('/customer-financial/invoice-drafts/:estimateId/part6-acceptance'");
-    expect(ui).toContain("'/payment-part9-acceptance?");
-    expect(ui).toContain("'/part9-acceptance'");
+    expect(ui).toContain("'/reporting-part12-acceptance?");
+    expect(ui).toContain("'/part14b-acceptance'");
+    expect(ui).not.toContain("'/payment-part9-acceptance?");
+    expect(ui).not.toContain("'/part9-acceptance'");
+    expect(ui).toContain('var part9Acceptance = bundle && bundle.part9Acceptance;');
+    expect(ui).toContain('part12Bundle.part9Acceptance');
+    expect(ui).toContain(
+      "review.simulated ? request(demoBase + '/part14b-acceptance') : loadPaid(token)");
+    expect(ui).toContain('value.providerCallCount !== 0 || value.providerMutationCount !== 0 ||');
+    expect(ui).toContain('value.receiverMutationCount !== 0 || value.liveMoneyMovementCount !== 0;');
     expect(ui).toContain('function invalidPart6(value)');
-    expect(ui).toContain("value.contractVersion !== 'm27-payment-part9-preview-bundle-v1'");
+    expect(ui).toContain("value.contractVersion !== 'm27-reporting-part12-preview-bundle-v1'");
     expect(ui).toContain('Customer document, portal, and delivery');
     expect(ui).toContain('Eight required delivery prerequisites');
     for (const requirement of contract.REQUIREMENTS) expect(ui).toContain(requirement.requirement);

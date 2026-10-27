@@ -155,6 +155,11 @@ const { providerLifecycleAcceptanceBoundary } =
   require('./middleware/providerLifecycleAcceptanceBoundary');
 const { paidTenantJourneyAcceptanceBoundary } =
   require('./middleware/paidTenantJourneyAcceptanceBoundary');
+const { financialLifecycleRecoveryAcceptanceBoundary } =
+  require('./middleware/financialLifecycleRecoveryAcceptanceBoundary');
+const { customerFinancialUnsupportedBoundary, customerFinancialParserError,
+  customerFinancialNotFound } =
+  require('./middleware/customerFinancialUnsupportedBoundary');
 const { fictionalDemoJourneyAcceptanceBoundary } =
   require('./middleware/fictionalDemoJourneyAcceptanceBoundary');
 const { createCustomerFinancialProviderAcceptanceRouter } =
@@ -254,6 +259,9 @@ app.use(reportingPart12AcceptanceBoundary);
 // method/body composition is rejected before CORS, parsing, admission or any
 // demo/paid source read.
 app.use(fictionalDemoJourneyAcceptanceBoundary);
+// Part 14D owns never-mounted financial action namespaces before CORS,
+// correlation and body parsing so no rejected path or payload can be reflected.
+app.use(customerFinancialUnsupportedBoundary);
 app.use(cors(corsOptions));
 // Part 13A owns the complete method/body composition for its exact private
 // read after GET-only CORS has narrowed browser policy and before body parsing.
@@ -270,6 +278,9 @@ app.use(providerLifecycleAcceptanceBoundary);
 // Part 14A composes its exact paid provider-disabled acceptance read before
 // parsing so scalar, malformed and framed bodies can never reach auth/source.
 app.use(paidTenantJourneyAcceptanceBoundary);
+// Part 14C owns the exact integrated recovery acceptance read before body
+// parsing so framed or unsupported requests cannot reach authentication or sources.
+app.use(financialLifecycleRecoveryAcceptanceBoundary);
 app.use(correlationId);
 // The two signed Retell entry points must receive bounded raw bytes before the
 // global JSON parser. The boundary router owns only those exact paths.
@@ -300,6 +311,7 @@ app.use(express.json({
     req.rawBody = buffer.toString();
   },
 }));
+app.use(customerFinancialParserError);
 app.use(securityHeaders);
 app.use(auditLogger);
 
@@ -619,6 +631,11 @@ app.use('/api', createCompatibilityRouter());
 app.use('/api', createLegacyAuthorityRetirementRouter());
 // API routes (global requireAuth applies to all remaining /api/* routes)
 app.use('/api', apiRoutes);
+
+// Preserve one fixed private denial for every raw or canonicalized unmatched
+// customer-financial path. The early boundary's private classification avoids
+// relying on Express's literal mount semantics here.
+app.use(customerFinancialNotFound);
 
 // 404 + error handler (single instances)
 app.use(notFound);

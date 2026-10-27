@@ -326,14 +326,19 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
     const docs = Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
       .map(([name,entry])=>[name,fs.readFileSync(path.join(ROOT,entry.path),'utf8')]));
     expect(authority.validate(docs)).toEqual(expect.objectContaining({
-      currentSlice:'14B', currentStatus:'candidate', migrationLatest:272,
-      migration273Present:false, laterSlices:['14C','14D','14E','14F','14G'],
+      currentSlice:'14G', currentStatus:'readiness_candidate', migrationLatest:272,
+      migration273Present:false, laterSlices:[],
+      acceptedPart14BHead:'dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9',
+      acceptedPart14CHead:'4975a58d43c1ab71f9500e765ef375d2ae221ec2',
+      acceptedPart14DHead:'0588a6f7507d0cc84ba98d96df0c46fea0c0c490',
+      acceptedPart14EHead:'a40be2435c3aa720cb2d179b10adc00530bd794e',
+      acceptedPart14FHead:'6f7a8939b6eb8d58bd20e2eff7500c9a5a01a9b0',
     }));
     const mutations = [
-      ['false release','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B accepted and released'],
-      ['false production complete','ledger','Accepted; no P0–P3 at head `5dc2a257b42bd2c08e7bd9ab45a2f9ed8e0720f3`','Part 14B production complete'],
-      ['deployed','ledger','sole automatic Railway deployment `2ed48d38-2aa9-47ba-887d-f6d1b616a868` completed the pinned Docker build and verified the setpriv/getcap digests, then restart-looped before health at exact fixed gate `NS14B-13K`, proving Railway runtime materialization restored `/usr/sbin/capsh` after the final build layer verified it absent','deployment `forged` succeeded; Part 14B released'],
-      ['later slice','ledger','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | No','| 14C | Integrated migration/replay/correction/refund/offline-return/retention/delete/restore journey | Complete'],
+      ['false release','ledger','Part 14B is released by sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`','Part 14B remains unreleased despite deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`'],
+      ['false production complete','ledger','Part 14B is released by sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`','Part 14B is released and the full financial lifecycle is production complete by deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`'],
+      ['missing deployment','ledger','sole automatic Railway deployment `7ab284a4-34a9-4a22-96c7-cffc5f36355f`','no post-merge deployment or health evidence supplied'],
+      ['later slice','ledger','| 14E | [Performance, observability','| 14E | [Complete performance, observability'],
       ['automatic SMS','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic SMS authorized.'],
       ['automatic charge','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic charge authorized.'],
       ['automatic refund','architecture14A','Founder visual approval remains separate.','Founder visual approval remains separate. Automatic refund authorized.'],

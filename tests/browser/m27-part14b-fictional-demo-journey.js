@@ -13,6 +13,8 @@ for(const key of [(externallyMounted?null:'DATABASE_URL'),(externallyMounted?nul
   'SMTP_HOST','SMTP_USER','SMTP_PASS']) if(key)delete process.env[key];
 const {createDatabaseFixture}=require('../helpers/m23-part9b-overview-fixture');
 const {resolveBrowserRuntime}=require('../helpers/playwright-runtime');
+const {MISSION_26_FIVE_LAYOUTS,auditRenderedPage,exerciseSkipLink}=
+  require('../helpers/m26-part12d-rendered-review');
 let serializationBarrier=null,activeSerializationRelease=null;
 let responsePrototype=null,realResponseSend=null;
 function arg(name){const value=process.argv.find(item=>item.startsWith(`--${name}=`));
@@ -21,11 +23,8 @@ function optionalArg(name){const value=process.argv.find(item=>item.startsWith(`
   return value?value.slice(name.length+3):null;}
 const engine=arg('browser'),output=path.resolve(arg('output')),layoutName=arg('layout');
 const externalOrigin=optionalArg('origin');
-const layouts={
-  'mobile-dark':{width:390,height:844,colorScheme:'dark'},
-  'desktop-light':{width:1440,height:900,colorScheme:'light'},
-};
-const layout=layouts[layoutName];assert.ok(layout);assert.ok(['chrome','webkit'].includes(engine));
+const layout=MISSION_26_FIVE_LAYOUTS.find(value=>value.name===layoutName);
+assert.ok(layout);assert.ok(['chrome','webkit'].includes(engine));
 assert.equal(fs.existsSync(output),false);fs.mkdirSync(output,{recursive:true});
 async function listen(app){const server=app.listen(0,'127.0.0.1');await new Promise((resolve,reject)=>{
   server.once('listening',resolve);server.once('error',reject);});return server;}
@@ -201,6 +200,8 @@ try{
   root=await openInvoice(page,current.graphs[0].ids.customer);await audit(page,root);
   await root.getByText('canonical',{exact:true}).waitFor();
   await root.screenshot({path:path.join(output,`${engine}-${layoutName}-after-reset.png`)});
+  await auditRenderedPage(page,{mainSelector:'#commandCenterMain',layout});
+  await exerciseSkipLink(page,{mainSelector:'#commandCenterMain'});
   const wrong=await page.evaluate(async oldEstimate=>{const r=await fetch('/api/demo/customer-financial/invoice-drafts/'+
     encodeURIComponent(oldEstimate)+'/part14b-acceptance',{cache:'no-store'});const b=await r.json();return {status:r.status,body:b};},old.ids.estimate);
   assert.equal(wrong.status,404);assert.doesNotMatch(JSON.stringify(wrong.body),/sk_|acct_|customer@example/i);

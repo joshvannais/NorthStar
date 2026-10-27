@@ -326,7 +326,7 @@ describe('Mission 27 Part 14A paid provider-disabled journey', () => {
     const docs = Object.fromEntries(Object.entries(authority.CANONICAL_DOCUMENTS)
       .map(([name,entry])=>[name,fs.readFileSync(path.join(ROOT,entry.path),'utf8')]));
     expect(authority.validate(docs)).toEqual(expect.objectContaining({
-      currentSlice:'14G', currentStatus:'readiness_candidate', migrationLatest:272,
+      currentSlice:'14G', currentStatus:'production_deployed_provider_disabled', migrationLatest:272,
       migration273Present:false, laterSlices:[],
       acceptedPart14BHead:'dcfde9c363f733f910fc11c3f1c7ad0f9ad078e9',
       acceptedPart14CHead:'4975a58d43c1ab71f9500e765ef375d2ae221ec2',

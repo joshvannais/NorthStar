@@ -73,13 +73,13 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
     }
     expect(Object.isFrozen(authority.CANONICAL_DOCUMENTS)).toBe(true);
     expect(authority.validate({ ...DOCS })).toEqual(expect.objectContaining({
-      contractVersion:'m27-part14g-release-readiness-v1',
+      contractVersion:'m27-part14g-final-ledger-v1',
       acceptedPart14BHead:authority.PART14B_ACCEPTANCE.head,
       acceptedPart14CHead:authority.PART14C_ACCEPTANCE.head,
       acceptedPart14DHead:authority.PART14D_ACCEPTANCE.head,
       acceptedPart14EHead:authority.PART14E_ACCEPTANCE.head,
       acceptedPart14FHead:authority.PART14F_ACCEPTANCE.head,
-      currentSlice:'14G', currentStatus:'readiness_candidate', migrationLatest:272,
+      currentSlice:'14G', currentStatus:'production_deployed_provider_disabled', migrationLatest:272,
       migration273Present:false, laterSlices:[],
     }));
   });
@@ -121,7 +121,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
 
   test('rejects status, provenance, scope, evidence, unavailable and Part13D limitation drift', () => {
     replaceExact('roadmap',
-      '[Part 14G release readiness](../evidence/MISSION_27_PART14G_RELEASE_READINESS.md) is current; it does not alter the queued release order, perform a release gate, advance a named verdict or grant founder visual approval.',
+      'Parts 14C–14G are cumulatively released through independently accepted source `e8f57fc820b1c302b7a18a3ee61606a62712ca1d`, tree `74eb868298d307afbfadac0330cc32815335dd01`, normal PR #547, exact main `e376a8f111b09d8d699c38243034ac1b6972006b`, and sole automatic deployment `7071c54c-8996-40bc-8285-40a4901b8353` SUCCESS/RUNNING.',
       'Part 14E is accepted, deployed, mission-complete, and founder approved.');
     replaceExact('roadmap', authority.PART13_RELEASE.head, 'f'.repeat(40));
     replaceExact('roadmap', authority.PART14A_RELEASE.head, 'e'.repeat(40));
@@ -156,7 +156,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
       'Founder visual approval remains separate and ungranted.',
       'Founder visual approval is automatically granted by screenshots.');
     replaceExact('releaseReadiness14G',
-      'No restore, PR, merge, deployment, Railway mutation, production/provider credential or data access, recipient/message/provider call, money movement or founder verdict occurred in this reconciliation.',
+      'This final source-linked ledger packet records completed evidence only. It did not create or restore a backup, open or merge a pull request, deploy or mutate Railway, access production/provider credentials or private production data, contact a recipient or provider, move money, or grant a legal, professional or founder verdict.',
       'The backup, merge, deployment, provider payment and founder verdict all passed.');
   });
 
@@ -197,7 +197,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
     const crlf = Object.fromEntries(DOCUMENT_KEYS.map(name => [
       name, normalized(DOCS[name]).replace(/\n/g, '\r\n'),
     ]));
-    expect(authority.validate(crlf).currentStatus).toBe('readiness_candidate');
+    expect(authority.validate(crlf).currentStatus).toBe('production_deployed_provider_disabled');
     for (const name of DOCUMENT_KEYS) {
       expect(() => authority.validate({ ...DOCS, [name]:new String(DOCS[name]) })).toThrow();
       expect(() => authority.validate({ ...DOCS, [name]:`${DOCS[name]} ` })).toThrow();
@@ -211,8 +211,8 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
     const crlf = Object.fromEntries(DOCUMENT_KEYS.map(name => [
       name, normalized(DOCS[name]).replace(/\n/g, '\r\n'),
     ]));
-    expect(authority.validate(lf).currentStatus).toBe('readiness_candidate');
-    expect(authority.validate(crlf).currentStatus).toBe('readiness_candidate');
+    expect(authority.validate(lf).currentStatus).toBe('production_deployed_provider_disabled');
+    expect(authority.validate(crlf).currentStatus).toBe('production_deployed_provider_disabled');
     for (const name of DOCUMENT_KEYS) {
       expectRejected(name, normalized(DOCS[name]).replace('\n', '\r'));
       expectRejected(name, normalized(DOCS[name]).replace('\n', '\r\r\n'));
@@ -300,7 +300,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
         .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
       process.stdout.write(JSON.stringify({status:authority.validate(docs).currentStatus}));
     `);
-    expect(clean).toEqual({status:'readiness_candidate'});
+    expect(clean).toEqual({status:'production_deployed_provider_disabled'});
 
     const cases = [
       `require('node:util/types').isProxy=()=>false;`,
@@ -349,7 +349,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
         Object.getPrototypeOf=()=>{throw new Error('ambient prototype');};
         Object.getOwnPropertyDescriptor=()=>{throw new Error('ambient descriptor');};
         require('node:util/types').isProxy=()=>{throw new Error('ambient proxy');};
-        capturedPass=authority.validate(docs).currentStatus==='readiness_candidate';
+        capturedPass=authority.validate(docs).currentStatus==='production_deployed_provider_disabled';
       } finally {
         Reflect.ownKeys=original.ownKeys; Object.getPrototypeOf=original.getPrototypeOf;
         Object.getOwnPropertyDescriptor=original.descriptor;
@@ -387,7 +387,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
       Object.getPrototypeOf=()=>{counts.getPrototypeOf+=1; throw new Error('ambient prototype');};
       Object.getOwnPropertyDescriptor=()=>{counts.descriptor+=1; throw new Error('ambient descriptor');};
       let canonical=false; let alteredRejected=false;
-      try { canonical=authority.validate(docs).currentStatus==='readiness_candidate'; } catch(_error) {}
+      try { canonical=authority.validate(docs).currentStatus==='production_deployed_provider_disabled'; } catch(_error) {}
       try { authority.validate(altered); } catch(_error) { alteredRejected=true; }
       process.stdout.write(JSON.stringify({canonical,alteredRejected,counts}));
     `);
@@ -504,7 +504,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
         .map(([name,entry])=>[name,fs.readFileSync(path.join(root,entry.path),'utf8')]));
       let calls=0;
       Function.prototype.toString=function toString(){calls+=1; return 'forged';};
-      let canonical=false; try { canonical=authority.validate(docs).currentStatus==='readiness_candidate'; }
+      let canonical=false; try { canonical=authority.validate(docs).currentStatus==='production_deployed_provider_disabled'; }
       catch(_error) {}
       process.stdout.write(JSON.stringify({canonical,calls}));
     `);
@@ -603,7 +603,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
       catch(_error) { attempts.apiAssign=true; }
       delete require.cache[modulePath];
       const reloaded=require(modulePath);
-      const reloadCanonical=reloaded.validate(docs).currentStatus==='readiness_candidate';
+      const reloadCanonical=reloaded.validate(docs).currentStatus==='production_deployed_provider_disabled';
       delete require.cache[modulePath];
       let forgedCalls=0; const forged=new Module(modulePath);
       forged.filename=modulePath; forged.loaded=true;
@@ -612,7 +612,7 @@ describe('Mission 27 Part 14G complete canonical release-readiness allowlist', (
       const directHostile=require(modulePath).validate(altered).currentStatus;
       let capturedRejected=false;
       try { capturedValidate(altered); } catch(_error) { capturedRejected=true; }
-      const capturedCanonical=capturedValidate(docs).currentStatus==='readiness_candidate';
+      const capturedCanonical=capturedValidate(docs).currentStatus==='production_deployed_provider_disabled';
       process.stdout.write(JSON.stringify({
         nullPrototype:Object.getPrototypeOf(original)===null,
         frozen:Object.isFrozen(original), extensible:Object.isExtensible(original),

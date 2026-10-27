@@ -402,20 +402,27 @@ const PART14C_ACCEPTANCE = OBJECT_FREEZE({
   tree: '37e9c62d2da1965c498c380478349ee24d137459',
   auditReportSha256: '926153ac3aad33c01fcf24f1f153cf2d9955658c832751a58c802bd6667a1ba4',
   auditManifestSha256: 'e838b77a1ce3f821d5ac60f2a81f5b30816675785a24c1bc5ba9dbb0fbd48689',
-  merged: false, deployed: false, released: false,
+  releasePr: 'PR #547', releaseMain: 'e376a8f111b09d8d699c38243034ac1b6972006b',
+  releaseDeployment: '7071c54c-8996-40bc-8285-40a4901b8353',
+  includedInCumulativeRelease: true, deployed: true, released: true,
 });
 
 const PART14D_ACCEPTANCE = OBJECT_FREEZE({
   head: '0588a6f7507d0cc84ba98d96df0c46fea0c0c490',
   tree: '30729e13c557f2c93ad01a06e7db8634aac84ea8',
   auditReportSha256: '6c60dee08d13200cbdbb0be675e642088f5df32fa10bf4c51047172e3093c453',
-  merged: false, deployed: false, released: false,
+  releasePr: 'PR #547', releaseMain: 'e376a8f111b09d8d699c38243034ac1b6972006b',
+  releaseDeployment: '7071c54c-8996-40bc-8285-40a4901b8353',
+  includedInCumulativeRelease: true, deployed: true, released: true,
 });
 
 const PART14E_ACCEPTANCE = OBJECT_FREEZE({
   head: 'a40be2435c3aa720cb2d179b10adc00530bd794e',
   tree: 'af9831f8ebda83eecbdd2a4ce8717fc8e6576e86',
-  merged: false, deployed: false, released: false, founderVisualVerdict: false,
+  releasePr: 'PR #547', releaseMain: 'e376a8f111b09d8d699c38243034ac1b6972006b',
+  releaseDeployment: '7071c54c-8996-40bc-8285-40a4901b8353',
+  includedInCumulativeRelease: true, deployed: true, released: true,
+  founderVisualVerdict: false,
 });
 
 const PART14F_ACCEPTANCE = OBJECT_FREEZE({
@@ -427,18 +434,57 @@ const PART14F_ACCEPTANCE = OBJECT_FREEZE({
   artifactManifestSha256: 'fc1152a4d33d4736c22fe44c4bc669c6b9076efe818bd1f6ef59a811f36466b8',
   sourceArchiveSha256: '49011b560be16b75cf8266e85481d9d69d6a7e30d71f20e51f0215a4c0b6cc4a',
   p0: 0, p1: 0, p2: 0, p3: 0,
-  merged: false, deployed: false, released: false,
+  releasePr: 'PR #547', releaseMain: 'e376a8f111b09d8d699c38243034ac1b6972006b',
+  releaseDeployment: '7071c54c-8996-40bc-8285-40a4901b8353',
+  includedInCumulativeRelease: true, deployed: true, released: true,
+});
+
+const PART14G_RELEASE = OBJECT_FREEZE({
+  sourceHead: 'e8f57fc820b1c302b7a18a3ee61606a62712ca1d',
+  tree: '74eb868298d307afbfadac0330cc32815335dd01',
+  pr: 'PR #547', mergedAt: '2026-10-27T01:59:09Z',
+  main: 'e376a8f111b09d8d699c38243034ac1b6972006b',
+  deployment: '7071c54c-8996-40bc-8285-40a4901b8353',
+  deploymentState: 'success_running',
+  image: 'sha256:0709afab6fb728f2e6ebc2007ceef461b3b0a34fbe9105f2cf440148b505946b',
+  auditReportSha256: 'a29adbc9bede2bc1c562e2b2f794021a59ff1ff77ebe8f0349895574021a907f',
+  auditSummarySha256: 'b3fb2bbc7fdd26c8215ee5212836dcc22da447f03f9ff58971c1d14c774988b1',
+  sourceManifestSha256: 'c7bb6b8e38cbf5a28f0f94991b3250a84aa851812ffd88518b1a63308f2edb80',
+  artifactManifestSha256: '8e9640cea2961c3fd6b316855aac509646aabb5004c55d248ff53cd82529391a',
+  sourceArchiveSha256: 'a8a89277f42ba56cb54ac14542493ad77b235aee9cb84221a3e96846e69bdba8',
+  p0: 0, p1: 0, p2: 0, p3: 0,
+  node: '22.23.3', syntaxPassed: 1999, syntaxTotal: 1999,
+  nonLauncherSuitesPassed: 65, nonLauncherSuitesTotal: 65,
+  nonLauncherTestsPassed: 553, nonLauncherTestsTotal: 553,
+  productionLauncherPassed: 105, productionLauncherIntentionalSkips: 3,
+  postgresSuitesPassed: 4, postgresSuitesTotal: 4,
+  postgresTestsPassed: 18, postgresTestsTotal: 18,
+  browserEngineLayoutChecksPassed: 30, browserEngineLayoutChecksTotal: 30,
+  productionMigrationReadOnlyTransaction: true,
+  productionMigrationTotal: 268, migrationLatest: 272, migration273Present: false,
+  startupCompositionReady: true, healthRootDemoHttp200: true,
+  productionSafeRenderedVerification: true,
+  demoNavigationClicksVerified: true, zeroNonReadRequests: true, zeroPageErrors: true,
+  paidDashboardAuthBoundary: '/login', expectedReadOnlyUnauthorized: true,
+  cloudflareAnalyticsCspBlockIsPlatformNoise: true,
+  backupDashboardRecord: '2026-10-26 09:03 America/New_York',
+  backupSizeMb: 216, restoreVerified: false,
+  namedVerdict: 'production_deployed_provider_disabled',
+  providerSandboxAccepted: false, livePaymentAccepted: false, missionComplete: false,
+  physicalSafariDevicesVerified: false, manualAssistiveTechnologyVerified: false,
+  hostedLoadSlaVerified: false, privateProductionProviderVerified: false,
+  founderVisualVerdict: false,
 });
 
 const LATER_LEDGER_ROWS = OBJECT_FREEZE([
   ['14G','Backup, reviewed merge, sole deploy, health, named verdict, ledger, founder verdict',
-    'Cumulative release candidate only - accepted Parts 14C-F and Part 14G readiness are reconciled onto exact live main without executing a release action or advancing a named verdict.',
-    'Deterministic whole-document authority, static readiness and exact reconciliation evidence; verified pre-migration backup dashboard record `2026-10-26 09:03 America/New_York`, 216 MB; no restore, PR, merge, deployment, production verification, provider/live evidence or founder verdict performed',
-    'Pending complete fresh independent whole-head audit of the reconciled candidate','-',
-    'None; exact live-main reconciliation complete locally, with fresh audit and ordered release gates still open',
-    'No provider sandbox/account/credential/event, private-production or live-money evidence',
-    'No — founder visual verdict remains unavailable and cannot be automated',
-    'Current reconciled readiness candidate; unreleased'],
+    'Production deployed / provider disabled - independently accepted cumulative source was normally merged through PR #547 and released by one healthy automatic deployment; no provider or money effect was enabled.',
+    'Fresh independent whole-head audit, exact Node 22.23.3 static/unit/PostgreSQL/browser evidence, verified pre-migration backup dashboard record `2026-10-26 09:03 America/New_York` (216 MB; restore unavailable), reviewed merge, sole automatic deployment and production-safe rendered checks',
+    'Accepted; P0=0, P1=0, P2=0 and P3=0','`e8f57fc820b1c302b7a18a3ee61606a62712ca1d` / tree `74eb868298d307afbfadac0330cc32815335dd01`',
+    'PR #547; exact main `e376a8f111b09d8d699c38243034ac1b6972006b`; sole automatic deployment `7071c54c-8996-40bc-8285-40a4901b8353` SUCCESS/RUNNING; startup/health/root/demo 200; production migrations total 268/latest 272/no273',
+    'Provider sandbox/account/capability/credential/event, private-production, live-money and restore evidence unavailable',
+    'No — functional Chrome/WebKit and production-safe Chrome checks are evidence only; founder visual verdict remains unavailable',
+    'Production deployed / provider disabled'],
 ]);
 for (let index = 0; index < LATER_LEDGER_ROWS.length; index += 1) {
   OBJECT_FREEZE(LATER_LEDGER_ROWS[index]);
@@ -452,14 +498,14 @@ for (let index = 0; index < LATER_LEDGER_ROWS.length; index += 1) {
 const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   roadmap: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_CUSTOMER_FINANCIAL_LIFECYCLE.md',
-    normalizedSha256: '31a677ed3040baf74f9f04796d8580a3162a2ae7ce32cee0ff5847bdbbdf5fde',
-    normalizedUtf8Bytes: 79969,
+    normalizedSha256: 'cae7466c45b248a815323d8ac9296a5907dd4676dc64ea3a01bb8138a8299dad',
+    normalizedUtf8Bytes: 79477,
     normalizedLineCount: 349,
   }),
   ledger: OBJECT_FREEZE({
     path: 'docs/roadmap/MISSION_27_ACCEPTANCE_LEDGER.md',
-    normalizedSha256: '54453885d4071b3300438f332c2ee4d53e0f8983832532f9d39f13b802e93668',
-    normalizedUtf8Bytes: 110214,
+    normalizedSha256: '6219a5e5fe2fc9535bfc259207aab58f14e64d21244c8736f656f57b0601bda2',
+    normalizedUtf8Bytes: 110866,
     normalizedLineCount: 138,
   }),
   architecture14A: OBJECT_FREEZE({
@@ -494,9 +540,9 @@ const CANONICAL_DOCUMENTS = OBJECT_FREEZE({
   }),
   releaseReadiness14G: OBJECT_FREEZE({
     path: 'docs/evidence/MISSION_27_PART14G_RELEASE_READINESS.md',
-    normalizedSha256: '8908a81da8cc87056112cc8772c5b6ea25d6e82ee29d0733b1185a70a65e53e1',
-    normalizedUtf8Bytes: 6297,
-    normalizedLineCount: 50,
+    normalizedSha256: '01a8415eda1997e3cac742666e7051d53b4aeeda4ca93594d1e9ef211a0b7c60',
+    normalizedUtf8Bytes: 5050,
+    normalizedLineCount: 47,
   }),
 });
 
@@ -631,7 +677,7 @@ function readCanonicalInput(input) {
 }
 
 const VALIDATED_AUTHORITY = OBJECT_FREEZE({
-  contractVersion: 'm27-part14g-release-readiness-v1',
+  contractVersion: 'm27-part14g-final-ledger-v1',
   releasedPart13Head: PART13_RELEASE.head,
   releasedPart14AHead: PART14A_RELEASE.head,
   acceptedPart14BHead: PART14B_ACCEPTANCE.head,
@@ -639,7 +685,8 @@ const VALIDATED_AUTHORITY = OBJECT_FREEZE({
   acceptedPart14DHead: PART14D_ACCEPTANCE.head,
   acceptedPart14EHead: PART14E_ACCEPTANCE.head,
   acceptedPart14FHead: PART14F_ACCEPTANCE.head,
-  currentSlice: '14G', currentStatus: 'readiness_candidate',
+  releasedPart14GSourceHead: PART14G_RELEASE.sourceHead,
+  currentSlice: '14G', currentStatus: 'production_deployed_provider_disabled',
   laterSlices: OBJECT_FREEZE([]),
   migrationLatest: 272, migration273Present: false,
 });
@@ -674,6 +721,7 @@ OBJECT_DEFINE_PROPERTIES(API, {
   PART14D_ACCEPTANCE:{value:PART14D_ACCEPTANCE, enumerable:true, writable:false, configurable:false},
   PART14E_ACCEPTANCE:{value:PART14E_ACCEPTANCE, enumerable:true, writable:false, configurable:false},
   PART14F_ACCEPTANCE:{value:PART14F_ACCEPTANCE, enumerable:true, writable:false, configurable:false},
+  PART14G_RELEASE:{value:PART14G_RELEASE, enumerable:true, writable:false, configurable:false},
   LATER_LEDGER_ROWS:{value:LATER_LEDGER_ROWS, enumerable:true, writable:false, configurable:false},
   CANONICAL_DOCUMENTS:{value:CANONICAL_DOCUMENTS, enumerable:true, writable:false, configurable:false},
   validate:{value:validate, enumerable:true, writable:false, configurable:false},

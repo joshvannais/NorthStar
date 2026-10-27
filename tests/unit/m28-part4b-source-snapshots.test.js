@@ -135,6 +135,8 @@ describe('Mission 28 Part 4B durable source snapshots', () => {
     expect(migration).toContain("document->>'observedAt' IS NOT DISTINCT FROM public.canonical_automation_utc_v1(observed_at)");
     expect(migration).toContain("doc#>>'{provenance,tenantId}' IS DISTINCT FROM org::text");
     expect(migration).toContain("trusted_provenance_value IS DISTINCT FROM doc->'provenance'");
+    expect(migration).toContain('JOIN public.users account ON account.organization_id=session.organization_id');
+    expect(migration).toContain("account.status='active'");
     expect(migration).toContain('canonical_automation_part4b_keys_exact_v1');
     expect(migration).not.toContain("COALESCE(doc->>'observedAt'");
   });

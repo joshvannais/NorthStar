@@ -404,9 +404,12 @@ BEGIN
   SELECT 1 FROM public.auth_sessions session
    JOIN public.organization_memberships membership ON membership.organization_id=session.organization_id
     AND membership.id=session.membership_id AND membership.user_id=session.user_id
+   JOIN public.users account ON account.organization_id=session.organization_id
+    AND account.id=session.user_id
   WHERE session.id=session_value AND session.organization_id=org AND session.user_id=actor_value
    AND session.membership_id=membership_value AND session.status='active' AND session.revoked_at IS NULL
-   AND session.access_expires_at>now_value AND membership.status='active' AND membership.revoked_at IS NULL) THEN
+   AND session.access_expires_at>now_value AND membership.status='active' AND membership.revoked_at IS NULL
+   AND account.status='active') THEN
   RAISE EXCEPTION 'Mission 28 actor session provenance unavailable' USING ERRCODE='42501'; END IF;
 
  IF lineage_kind_value='correction' THEN

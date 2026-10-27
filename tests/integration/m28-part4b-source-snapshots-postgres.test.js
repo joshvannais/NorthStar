@@ -249,6 +249,24 @@ realPostgres('Mission 28 Part 4B PostgreSQL source snapshots through migration 2
     await expect(store(request, substituted)).rejects.toThrow(/provenance shape/i);
   }, 120000);
 
+  test.each(['pending_verification', 'suspended', 'disabled'])(
+    'denies first actor-provenance storage while the tenant account is %s', async status => {
+      const request = buildRequest({ snapshotId: crypto.randomUUID(), recordIdentity: {
+        tenantId: TENANT, canonicalGraphId: `graph-m28-4b-${status}`,
+        customerId: `customer-m28-4b-${status}`, opportunityId: `opportunity-m28-4b-${status}`,
+      } });
+      await pool.query('UPDATE public.users SET status=$1 WHERE id=$2 AND organization_id=$3',
+        [status, ACTOR, TENANT]);
+      await expect(store(request)).rejects.toThrow(/provenance unavailable/i);
+      expect((await pool.query(`SELECT count(*)::integer count
+        FROM public.canonical_automation_trigger_snapshots_v1
+        WHERE organization_id=$1 AND snapshot_id=$2`, [TENANT, request.snapshotId])).rows[0].count).toBe(0);
+      await pool.query("UPDATE public.users SET status='active' WHERE id=$1 AND organization_id=$2", [ACTOR, TENANT]);
+      await expect(store(request)).resolves.toMatchObject({ state: 'stored', replayed: false,
+        snapshotId: request.snapshotId });
+    }, 120000,
+  );
+
   test('requires separately supplied trusted provenance and exact active actor-session-membership binding', async () => {
     const request = buildRequest({ snapshotId: '00000000-0000-4000-8000-000000000405' });
     const substituted = copy(request.provenance);

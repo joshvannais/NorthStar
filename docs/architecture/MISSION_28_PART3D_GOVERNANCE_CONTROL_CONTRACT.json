@@ -237,7 +237,7 @@
     "targetResolutionRule": "server_resolved_exact_tenant_policy_run_or_action_identity_digest_current_state_and_currentness_never_candidate_supplied",
     "authorizationResolutionRule": "exact_current_Part3B_standing_authorization_must_bind_the_exact_policy_source_limit_and_prior_state_for_resume_or_revoke; tenant_stop_release_requires_a_distinct_exact_tenant_stop_state_approval; reductions_use_only_fixed_Part3A_capability",
     "stateEvidenceRule": "one_coherent_observation_with_exact_counts_and_digest_missing_mixed_stale_or_ambiguous_increase_denied",
-    "candidateMayNotSupplyOrReplaceTrustedResolution": false,
+    "candidateMayNotSupplyOrReplaceTrustedResolution": true,
     "trustedClockRequired": true,
     "exactReplayOnly": true
   },

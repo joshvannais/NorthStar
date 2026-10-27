@@ -571,6 +571,16 @@ describe('Mission 28 Part 3D governance controls', () => {
     }
   });
 
+  test('forbids candidate-supplied or replaced trusted resolution consistently', () => {
+    const contract = parse(CONTRACT_PATH);
+    expect(contract.trustedResolutionContract.candidateMayNotSupplyOrReplaceTrustedResolution).toBe(true);
+    expect(contract.identityGrammar.recordSuppliedActorCapabilityTargetStateClockEvidenceOrApprovalNeverCreatesAuthority)
+      .toBe(true);
+    expect(contract.decisionStates).toContain('deny_missing_or_self_created_trusted_resolution');
+    expect(read('docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.md'))
+      .toContain('Candidate data, a display role or a recomputed outer digest cannot create or retarget any of these authorities.');
+  });
+
   test.each(['pause_policy', 'revoke_standing_authority', 'engage_tenant_kill', 'drain_policy', 'cancel_action_unit', 'resume_policy', 'release_tenant_kill'])
   ('accepts one exact %s decision as contract-only evidence', operationId => {
     const decision = buildDecision(operationId);

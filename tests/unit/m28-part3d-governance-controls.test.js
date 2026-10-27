@@ -833,7 +833,7 @@ describe('Mission 28 Part 3D governance controls', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–3D released; Part 4A implementation candidate only.');
+      expect(document).toContain('Parts 1A–4A released; Part 4B implementation candidate only.');
       expect(document).toContain('3cd41fe5379d92fe629c62e0ebc3a51d8886c3cc');
       expect(document).toContain(BASE);
       expect(document).toContain('b745a483-1031-4020-9ab2-38c0044e599d');
@@ -841,8 +841,9 @@ describe('Mission 28 Part 3D governance controls', () => {
     }
     expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | **Released** |');
     expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Released** |');
-    expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Implementation candidate** |');
-    expect(ledger).toContain('Part 4A has no independent acceptance, PR, merge, deployment or release evidence');
+    expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Released** |');
+    expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Implementation candidate** |');
+    expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 
   test('keeps runtime database provider effect migration and founder boundaries unavailable', () => {
@@ -860,8 +861,8 @@ describe('Mission 28 Part 3D governance controls', () => {
       expect.stringContaining('founder visual approval'),
     ]));
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'));
-    expect(migrations).toHaveLength(269);
-    expect(migrations.at(-1)).toBe('273_canonical_automation_authority_v1.sql');
-    expect(migrations.some(name => name.startsWith('274'))).toBe(false);
+    expect(migrations).toHaveLength(270);
+    expect(migrations.at(-1)).toBe('274_canonical_automation_trigger_snapshots_v1.sql');
+    expect(migrations.filter(name => name.startsWith('274'))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });
 });

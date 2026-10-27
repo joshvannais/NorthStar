@@ -775,7 +775,7 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–3D released; Part 4A implementation candidate only.');
+      expect(document).toContain('Parts 1A–4A released; Part 4B implementation candidate only.');
       expect(document).toContain('56a39854325826982283d78dffed4e039c61335b');
       expect(document).toContain('d88a0fe294619fa982bc1541affc8052031cc406');
       expect(document).toContain('81bc25de-eb77-413e-8745-97882bdd7c09');
@@ -789,11 +789,12 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | **Released** |');
     expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | **Released** |');
     expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Released** |');
-    expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Implementation candidate** |');
+    expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Released** |');
+    expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Implementation candidate** |');
     expect(roadmap).toContain('Released Part 3C artifacts');
     expect(roadmap).toContain('Released Part 3D artifacts');
-    expect(roadmap).toContain('Current Part 4A artifacts');
-    expect(ledger).toContain('Part 4A has no independent acceptance, PR, merge, deployment or release evidence');
+    expect(roadmap).toContain('Current Part 4B artifacts');
+    expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 
   test('keeps runtime database provider effect and migration boundaries unavailable', () => {
@@ -807,9 +808,9 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     });
     expect(contract.unavailableEvidence).toHaveLength(7);
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'));
-    expect(migrationNames).toHaveLength(269);
-    expect(Math.max(...migrationNames.map(name => Number(name.match(/^(\d+)/)?.[1] || 0)))).toBe(273);
-    expect(migrationNames.some(name => /^274/.test(name))).toBe(false);
+    expect(migrationNames).toHaveLength(270);
+    expect(Math.max(...migrationNames.map(name => Number(name.match(/^(\d+)/)?.[1] || 0)))).toBe(274);
+    expect(migrationNames.filter(name => /^274/.test(name))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
     expect(read(NARRATIVE_PATH)).toContain('This is a source contract, not a runtime limit resolver or authority grant.');
   });
 });

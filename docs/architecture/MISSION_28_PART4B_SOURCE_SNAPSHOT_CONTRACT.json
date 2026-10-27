@@ -1,0 +1,121 @@
+{
+  "contractVersion": "mission28.part4b.source-snapshot.v1",
+  "authority": {
+    "mission": 28,
+    "part": "4B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "c3a6d6c691ae39c982c872009ed4fc3f5123d13b",
+    "baselineTree": "3fcf036fcad83a804cf6baa98c7d931de2606422",
+    "runtimeIngestionMounted": false,
+    "routeUiSchedulerWorkerQueueOrProviderAuthorityGranted": false,
+    "recipientExternalEffectUpstreamMutationOrMoneyAuthorityGranted": false
+  },
+  "part4ARelease": {
+    "acceptedSourceHead": "0ff6be659df199357635f447eeff77cfd9d7aa38",
+    "acceptedTree": "3fcf036fcad83a804cf6baa98c7d931de2606422",
+    "pullRequest": 561,
+    "mergedMain": "c3a6d6c691ae39c982c872009ed4fc3f5123d13b",
+    "deployment": "40335d30-2b8d-4e99-b2fb-3083348f9d2d",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "b232d3ee-74aa-4fd8-96f9-00b8ca97895f",
+    "imageSha256": "e57f0d9e3429333938903dc700c67e84fc9d0de018d23d69f8c70cda96d89978",
+    "health": ["canonical_startup_ready", "api_health_200", "root_200", "demo_200"],
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null
+  },
+  "frozenInputs": {
+    "part4ACatalogPath": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json",
+    "part4ACatalogSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19",
+    "triggerCount": 19,
+    "eventKindCount": 36,
+    "sourceClassCount": 7
+  },
+  "requestContract": {
+    "schemaVersion": "mission28.source-snapshot.request.v1",
+    "exactTopLevelFields": [
+      "schemaVersion", "tenantId", "snapshotId", "triggerId", "sourceClassId", "ownerMission",
+      "factKind", "recordIdentity", "recordIdentityDigest", "sourceVersion", "canonicalDigest",
+      "sourceDigest", "eventBinding", "currentness", "provenance", "lineage", "requestDigest"
+    ],
+    "recordIdentity": "exact Part 4A grain object; tenantId equals the snapshot tenant; every other value is a bounded non-empty source-owned opaque identifier",
+    "sourceVersion": {
+      "exactFields": ["kind", "version", "revision"],
+      "kinds": ["version", "revision"],
+      "rule": "exactly one version or revision is present according to the trigger catalog and equals the designated Part 4A currentness pin"
+    },
+    "eventBinding": {
+      "exactFields": ["eventKind", "eventTime", "sourceField", "sourceStateSelector"],
+      "rule": "eventKind selects exactly one Part 4A sourceField and sourceStateSelector; eventTime is the canonical UTC source-owned occurrence or effective time"
+    },
+    "currentness": {
+      "exactFields": ["availability", "pins", "pinsDigest"],
+      "availability": "available_exact_current",
+      "rule": "pins have exactly the Part 4A names; eventKind and eventTime pins equal the event binding; designated digest and version pins equal their separately named fields"
+    },
+    "provenance": {
+      "exactFields": [
+        "kind", "tenantId", "actorId", "sessionId", "membershipId", "authenticatedEventId",
+        "authenticatedEventAuthority", "authenticatedEventDigest", "provenanceDigest"
+      ],
+      "kinds": ["actor", "authenticated_event"],
+      "actorRule": "exact active tenant actor, session and membership must be resolved from PostgreSQL before first storage",
+      "eventRule": "candidate provenance must equal a separately trusted server-resolved authenticated event value; no public or application-role storage entry point exists"
+    },
+    "lineage": {
+      "exactFields": ["kind", "sequence", "predecessorSnapshotId", "predecessorSnapshotDigest"],
+      "kinds": ["original", "correction"],
+      "rule": "original is sequence one with null predecessor; correction is the next sequence for the same tenant, trigger, record identity and event kind and pins the exact predecessor ID and digest"
+    },
+    "requestDigest": "sha256 over the exact canonical request without requestDigest using the mission28.source-snapshot.request.v1 namespace"
+  },
+  "storedSnapshotContract": {
+    "schemaVersion": "mission28.source-snapshot.v1",
+    "trustedObservedAt": "PostgreSQL statement_timestamp rendered in canonical UTC and added by the store function; candidate input cannot supply or substitute it",
+    "snapshotDigest": "sha256 over the exact stored snapshot without snapshotDigest using the mission28.source-snapshot.v1 namespace",
+    "retentionClass": "source_snapshot_history",
+    "appendOnly": true,
+    "tenantRlsForced": true,
+    "copyUpstreamPayload": false,
+    "sourceFactGrantsActionAuthority": false,
+    "snapshotGrantsEvaluationOrEffectAuthority": false
+  },
+  "storageContract": {
+    "migration": "274_canonical_automation_trigger_snapshots_v1.sql",
+    "table": "canonical_automation_trigger_snapshots_v1",
+    "catalogTable": "canonical_automation_trigger_catalog_v1",
+    "storeFunction": "canonical_automation_store_trigger_snapshot_v1",
+    "applicationRoleExecuteGranted": false,
+    "exactReplay": "same tenant, snapshot ID, request digest and trusted provenance returns the one stored snapshot without a second row or a new observedAt",
+    "conflictRule": "same snapshot ID with any different canonical request or provenance fails closed",
+    "correctionRule": "corrections append and preserve every predecessor; update, delete and truncate are denied",
+    "tombstoneRule": "tombstone and replacement precedence remain Part 4D and are not accepted by this store"
+  },
+  "failClosed": [
+    "unknown_trigger_or_event_kind",
+    "missing_or_substituted_event_source_field_or_selector",
+    "event_time_observed_time_substitution",
+    "cross_tenant_record_identity_or_provenance",
+    "source_class_owner_fact_kind_or_grain_drift",
+    "version_revision_or_designated_pin_mismatch",
+    "canonical_source_record_identity_pins_provenance_request_or_snapshot_digest_mismatch",
+    "stale_unavailable_fixture_or_ambiguous_currentness",
+    "missing_wrong_cross_record_or_nonadjacent_correction_predecessor",
+    "candidate_created_trusted_provenance",
+    "upstream_payload_action_recipient_provider_effect_or_money_field"
+  ],
+  "laterSliceBoundary": {
+    "part4C": "evaluation-time and immediately-pre-effect revalidation remains planned and unimplemented",
+    "part4D": "duplicate coalescing, late/reordered facts, tombstones, reopen/reversal/replacement precedence and cross-request concurrency remain planned and unimplemented",
+    "part5Plus": "rule evaluation, scheduling, execution, providers, recipients and effects remain planned and unimplemented"
+  },
+  "unavailableEvidence": [
+    "mounted_runtime_ingestion_or_source_resolver",
+    "evaluation_or_pre_effect_revalidation",
+    "duplicate_reorder_tombstone_or_concurrency_runtime",
+    "provider_sandbox_or_private_production",
+    "real_recipient_message_or_external_effect",
+    "live_money_or_upstream_mutation",
+    "professional_legal_privacy_provider_or_regulatory_review",
+    "founder_visual_approval"
+  ]
+}

@@ -147,9 +147,11 @@ function validateLedger(document) {
   expect(rows[10].evidence).toContain('PR #559');
   expect(rows[11]).toMatchObject({ id: '3D', state: '**Released**' });
   expect(rows[11].evidence).toContain('PR #560');
-  expect(rows[12]).toMatchObject({ id: '4A', state: '**Implementation candidate**' });
-  expect(rows[12].evidence).toContain('no runtime ingestion/resolver');
-  expect(rows.slice(13).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+  expect(rows[12]).toMatchObject({ id: '4A', state: '**Released**' });
+  expect(rows[12].evidence).toContain('PR #561');
+  expect(rows[13]).toMatchObject({ id: '4B', state: '**Implementation candidate**' });
+  expect(rows[13].evidence).toContain('no mounted runtime ingestion/resolver');
+  expect(rows.slice(14).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
 }
 
 describe('Mission 28 Part 1A authority ratification', () => {
@@ -165,8 +167,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       expect(document).toContain(BASE);
       expect(document).toContain(BASE_TREE);
     }
-    expect(roadmap).toContain('Parts 1A–3D released; Part 4A implementation candidate only.');
-    expect(roadmap).toContain('Parts 4B–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–4A released; Part 4B implementation candidate only.');
+    expect(roadmap).toContain('Parts 4C–14G remain planned and unimplemented.');
     for (const identity of [PART1A_HEAD, PART1A_MAIN, PART1A_DEPLOYMENT, PART1A_AUDIT]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -250,8 +252,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const ledger = read(LEDGER_PATH);
     validateLedger(ledger);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(53);
-    expect(ledger).toContain('Part 4A has no independent acceptance, PR, merge, deployment or release evidence');
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(52);
+    expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
     expect(ledger).toContain(`Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 \`${PART1A_AUDIT}\``);
   });
 
@@ -270,8 +272,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       ledger.replace('| 02 | 1B |', '| 02 | 1C |'),
       ledger.replace('| 66 | 14G |', '| 67 | 14G |'),
       ledger.replace(/^\| 25 \| 6E .*\r?\n/m, ''),
-      ledger.replace('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Implementation candidate** |',
-        '| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Accepted** |'),
+      ledger.replace('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Implementation candidate** |',
+        '| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Accepted** |'),
     ];
     for (const mutation of ledgerMutations) expect(() => validateLedger(mutation)).toThrow();
   });
@@ -290,8 +292,9 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const names = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(names).toHaveLength(269);
-    expect(names.at(-1)).toBe('273_canonical_automation_authority_v1.sql');
+    expect(names).toHaveLength(270);
+    expect(names.at(-1)).toBe('274_canonical_automation_trigger_snapshots_v1.sql');
     expect(names.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
+    expect(names.filter(name => /^274_/.test(name))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });
 });

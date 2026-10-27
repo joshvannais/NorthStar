@@ -1,0 +1,713 @@
+{
+  "contractVersion": "mission28.part1b.surface-inventory.v1",
+  "authority": {
+    "mission": 28,
+    "part": "1B",
+    "state": "implementation_candidate",
+    "baselineCommit": "21ca719e24382443bbf3f52e460f3c16b016c4ad",
+    "baselineTree": "0cfdc4f0e8dc28c790893edff7bbebe0b31a5d10",
+    "part1A": {
+      "sourceHead": "c42d1a9f72dcb6bbdd480e804988ddc3ec43cc09",
+      "pullRequest": 549,
+      "mergedMain": "21ca719e24382443bbf3f52e460f3c16b016c4ad",
+      "deployment": "d3010671-da95-4247-807f-f2089b90df74",
+      "deploymentState": "SUCCESS_RUNNING",
+      "imageSha256": "12b0bfeb266c4849b127102ad98a2f8b6ad06080898462c41ee63c3a5b699b26",
+      "auditReportSha256": "1C3AA77E9B1E31A4FE4A8167FC2072A5818EDC52D19B5BCB1356352FEADDBDE1"
+    }
+  },
+  "dispositions": [
+    "mission28_owned_reusable_after_later_authority",
+    "upstream_or_subscription_owned_excluded",
+    "simulated_or_demo_only",
+    "legacy_unsupported_or_quarantined",
+    "manual_handoff",
+    "ambiguous_fail_closed"
+  ],
+  "requiredFacets": [
+    "cron_job",
+    "worker",
+    "queue",
+    "event_listener",
+    "notification",
+    "email_sms_path",
+    "native_share_or_composer_handoff",
+    "reminder",
+    "retry",
+    "collection_label",
+    "webhook",
+    "template",
+    "provider_adapter",
+    "demo_action",
+    "manual_quick_send"
+  ],
+  "negativeFindings": [
+    {
+      "id": "cron.no-executable-job",
+      "finding": "node-cron is declared as a dependency, but no source file imports it or registers an executable cron job.",
+      "sourceRefs": [
+        { "path": "package.json", "anchors": ["\"node-cron\": \"^3.0.3\""] }
+      ]
+    },
+    {
+      "id": "native-share.no-navigator-share",
+      "finding": "No NorthStar source invokes navigator.share; existing native handoffs are explicit tel, mailto, or downloaded ICS handoffs.",
+      "sourceRefs": [
+        { "path": "public/js/customer-detail.js", "anchors": ["'tel:' + phone", "'mailto:' + encodeURIComponent(email)"] },
+        { "path": "public/js/calendar-engine.js", "anchors": ["a.download = 'calendar.ics'"] }
+      ]
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "dependency.node-cron-unused",
+      "facets": ["cron_job"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "none",
+      "effectBoundary": "A package declaration is not a scheduler or execution authority.",
+      "sourceRefs": [{ "path": "package.json", "anchors": ["\"node-cron\": \"^3.0.3\""] }]
+    },
+    {
+      "id": "worker.account-email-outbox",
+      "facets": ["worker", "queue", "email_sms_path", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "account authentication",
+      "effectBoundary": "Only account verification and password-reset outbox records are owned here; Mission 28 cannot reuse their recipient, template, retry, or delivery authority.",
+      "sourceRefs": [
+        { "path": "src/email/outbox.js", "anchors": ["class AccountEmailOutboxWorker", "purpose === 'email_verification'", "purpose === 'password_reset'"] },
+        { "path": "src/accounts/repository.js", "anchors": ["async claimAccountEmailJobs(options = {})", "public.account_email_outbox"] },
+        { "path": "src/routes/auth.js", "anchors": ["router.post('/resend-verification'", "router.post('/forgot-password'"] },
+        { "path": "src/server.js", "anchors": ["productionEmailOutboxWorker.start()"] }
+      ]
+    },
+    {
+      "id": "worker.support-case-email-outbox",
+      "facets": ["worker", "queue", "email_sms_path", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "support cases",
+      "effectBoundary": "Support forwarding is a received-case workflow, not customer automation authority.",
+      "sourceRefs": [
+        { "path": "src/support/outbox.js", "anchors": ["class SupportCaseOutboxWorker", "this.transactionalEmail.supportCase"] },
+        { "path": "src/support/repository.js", "anchors": ["async claimForwardingJobs(options = {})", "public.support_case_email_outbox"] },
+        { "path": "src/routes/support.js", "anchors": ["router.post('/bug-reports'"] },
+        { "path": "src/server.js", "anchors": ["productionSupportCaseOutboxWorker.start()"] }
+      ]
+    },
+    {
+      "id": "worker.demo-command-center-housekeeping",
+      "facets": ["worker", "queue", "retry", "demo_action"],
+      "disposition": "simulated_or_demo_only",
+      "owner": "account-free fictional demo",
+      "effectBoundary": "It expires isolated fictional demo state and grants no paid, recipient, provider, or financial authority.",
+      "sourceRefs": [
+        { "path": "src/commandCenter/demoRepository.js", "anchors": ["class DemoCommandCenterHousekeepingWorker"] },
+        { "path": "src/server.js", "anchors": ["productionDemoHousekeepingWorker.start()"] }
+      ]
+    },
+    {
+      "id": "worker.homepage-demo-admission-housekeeping",
+      "facets": ["worker", "queue", "retry", "demo_action"],
+      "disposition": "simulated_or_demo_only",
+      "owner": "public homepage demo",
+      "effectBoundary": "It retires bounded public-demo admission and purge records; it is not a reusable automation scheduler.",
+      "sourceRefs": [
+        { "path": "src/services/homepageDemoAdmission.js", "anchors": ["class HomepageDemoAdmissionHousekeepingWorker", "homepage_purge_retry_limit_reached"] },
+        { "path": "src/server.js", "anchors": ["productionHomepageDemoAdmissionHousekeepingWorker.start()"] }
+      ]
+    },
+    {
+      "id": "worker.capacity-advisory-continuation",
+      "facets": ["worker", "queue", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Mission 26 advisory continuation",
+      "effectBoundary": "The mounted tenant-private reviewed advisory route can reserve a durable continuation that the worker claims and idempotently activates under Mission 26 authority. This internal advisory continuation is not a Mission 28 trigger, external action, customer communication, financial effect, or effect evidence.",
+      "sourceRefs": [
+        { "path": "src/routes/forecastCapacityAdvisory.js", "anchors": ["function createForecastCapacityAdvisoryRouter", "router.post('/origins/:id/continuations'", "requirePermission('forecast', 'update')", "canonical_forecast_capacity_advisory_v1_continuation_reserve"] },
+        { "path": "src/services/capacityAdvisoryContinuationWorker.js", "anchors": ["class CapacityAdvisoryContinuationWorker", "canonical_forecast_capacity_advisory_v1_continuation_claim_due", "canonical_forecast_capacity_advisory_v1_continuation_activate", "Durable reservations and idempotent activation preserve retry"] },
+        { "path": "src/server.js", "anchors": ["createForecastCapacityAdvisoryRouter", "const productionCapacityAdvisoryContinuationWorker = new CapacityAdvisoryContinuationWorker", "app.use('/api/v1/forecast/capacity-advice', createForecastCapacityAdvisoryRouter())", "productionCapacityAdvisoryContinuationWorker.start()"] }
+      ]
+    },
+    {
+      "id": "worker.tax-preparation",
+      "facets": ["worker", "queue", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Mission 24 commercial estimate preparation",
+      "effectBoundary": "Preparation remains estimate authority and cannot become an outbound automation trigger.",
+      "sourceRefs": [
+        { "path": "src/estimating/taxPreparationWorker.js", "anchors": ["class TaxPreparationWorker", "canonical_commercial_tax_claim"] },
+        { "path": "src/server.js", "anchors": ["productionTaxPreparationWorker.start()"] }
+      ]
+    },
+    {
+      "id": "worker.tax-research",
+      "facets": ["worker", "queue", "retry", "provider_adapter"],
+      "disposition": "ambiguous_fail_closed",
+      "owner": "Mission 24 tax evidence acquisition",
+      "effectBoundary": "The worker exists, but the production acquisition adapter is explicitly unreviewed and locally disabled; Mission 28 treats it as unavailable.",
+      "sourceRefs": [
+        { "path": "src/estimating/taxResearchWorker.js", "anchors": ["class TaxResearchWorker extends TaxPreparationWorker", "canonical_tax_research_enqueue"] },
+        { "path": "src/server.js", "anchors": ["No reviewed live acquisition adapter is enabled by this local integration."] },
+        { "path": "src/estimating/taxSourceBinding.js", "anchors": ["const {createTaxSourceTransport}=require('./taxSourceTransport')", "function createProductionTaxAcquisition"] },
+        { "path": "src/estimating/taxSourceTransport.js", "anchors": ["const https = require('node:https')", "function createTaxSourceTransport", "request = https.request"] }
+      ]
+    },
+    {
+      "id": "worker.knowledge-synchronization",
+      "facets": ["worker", "queue", "retry", "provider_adapter"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Mission 21 knowledge publication",
+      "effectBoundary": "An authorized Mission 21 publication can enqueue synchronization, and the worker runs only when an explicitly installed, tenant-owned transport is current. Publication, queueing, retry, and projection remain Mission 21 authority; they are not a Mission 28 trigger, customer communication, recipient decision, or external-effect grant.",
+      "sourceRefs": [
+        { "path": "src/routes/knowledgeManagement.js", "anchors": ["publishKnowledgeVersion", "router.post('/items/:entryId/publish'", "accountMutation", "settingsWrite"] },
+        { "path": "src/knowledge/repository.js", "anchors": ["enqueuePublicationSynchronization", "async function publishKnowledgeVersion", "await enqueuePublicationSynchronization(client, stored, target.actorUserId)"] },
+        { "path": "src/knowledge/synchronizationRepository.js", "anchors": ["async function enqueuePublicationSynchronization", "canonical_knowledge_sync_outbox", "KnowledgeSynchronizationRepository"] },
+        { "path": "src/knowledge/synchronizationWorker.js", "anchors": ["class KnowledgeSynchronizationWorker", "this.transports", "async drainOnce"] },
+        { "path": "src/knowledge/managementRepository.js", "anchors": ["canonical_knowledge_sync_outbox"] },
+        { "path": "src/server.js", "anchors": ["app.use('/api/v1/knowledge-management', createKnowledgeManagementRouter())", "createProductionKnowledgeTransports", "Explicitly installed transports only; no agent or provider is activated here.", "app.locals.connectedKnowledgeTransports instanceof Map&&app.locals.connectedKnowledgeTransports.size"] }
+      ]
+    },
+    {
+      "id": "event.voice-business-intelligence",
+      "facets": ["event_listener", "notification"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "voice intelligence",
+      "effectBoundary": "In-memory voice events feed timeline/intelligence only; they are not durable triggers or external-effect evidence.",
+      "sourceRefs": [
+        { "path": "src/voice/businessEvents.js", "anchors": ["class EventBus", "const eventBus = new EventBus()"] },
+        { "path": "src/voice/eventIntelligence.js", "anchors": ["on(EVENT_TYPES.ESTIMATE_REQUESTED", "on(EVENT_TYPES.PRICING_QUESTION", "on(EVENT_TYPES.OBJECTION_DETECTED", "on(EVENT_TYPES.CALL_COMPLETED"] },
+        { "path": "src/voice/transcriptStream.js", "anchors": ["eventBus.emit(event)"] }
+      ]
+    },
+    {
+      "id": "voice.legacy-retell-tool-registry",
+      "facets": ["provider_adapter", "demo_action"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "unmounted legacy Retell tool execution",
+      "effectBoundary": "Retell-compatible handlers can mutate the file-era lead store and in-memory notes, tags, and timeline, while appointment and availability handlers return fictional success. No mounted tenant authority, calendar confirmation, provider execution, or Mission 28 reuse authority exists.",
+      "sourceRefs": [
+        { "path": "src/voice/toolRegistry.js", "anchors": ["Provides Retell-compatible function definitions and handlers", "function createLead", "function updateLeadFields", "function scheduleAppointment", "success: true", "confirmed: true", "function createNote", "function tagCall", "function updateTimeline"] },
+        { "path": "src/leads/store.js", "anchors": ["function addLead(lead)", "function updateLead(id, updates)"] }
+      ]
+    },
+    {
+      "id": "voice.legacy-call-completion-pipeline",
+      "facets": ["worker", "event_listener", "reminder"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "unmounted legacy post-call processing",
+      "effectBoundary": "The unmounted call-ended pipeline can generate follow-up/action labels, mutate the file-era lead store, and attempt a voice-session database write. It is not a subscribed canonical event worker, tenant-current action authority, message sender, or effect evidence.",
+      "sourceRefs": [
+        { "path": "src/voice/callCompletion.js", "anchors": ["Triggered when call_ended event fires", "function generateActionItems", "function generateFollowUpRecommendations", "function updateLeadFromCall", "async function persistVoiceSession", "async function executeCallCompletion"] },
+        { "path": "src/leads/store.js", "anchors": ["function addLead(lead)", "function updateLead(id, updates)"] },
+        { "path": "src/voice/eventIntelligence.js", "anchors": ["function getContext()", "module.exports"] }
+      ]
+    },
+    {
+      "id": "voice.legacy-human-handoff",
+      "facets": ["event_listener", "notification", "manual_quick_send"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "unmounted legacy voice escalation state",
+      "effectBoundary": "Automatic keyword and confidence triggers only create an in-memory escalation record and a claimed resolution. They do not contact a human, transfer a call, establish consent, or prove a received or completed handoff.",
+      "sourceRefs": [
+        { "path": "src/voice/humanHandoff.js", "anchors": ["Six escalation triggers", "function checkEscalation", "function initiateEscalation", "triggeredBy: 'system'", "function resolveEscalation"] }
+      ]
+    },
+    {
+      "id": "event.browser-simulation-notification",
+      "facets": ["event_listener", "notification", "demo_action"],
+      "disposition": "simulated_or_demo_only",
+      "owner": "browser simulation presentation",
+      "effectBoundary": "The listener displays a local toast for a completed simulation; a toast is neither an external notification nor delivery evidence.",
+      "sourceRefs": [
+        { "path": "public/js/notification-service.js", "anchors": ["bus.on('simulation:completed'", "bus.emit('notification:created'"] },
+        { "path": "public/dashboard/leads.html", "anchors": ["EventBus.on('simulation:completed'", "loadLeads();"] },
+        { "path": "public/dashboard/communications.html", "anchors": ["EventBus.on('simulation:completed'", "loadCalls();"] },
+        { "path": "public/dashboard/polaris.html", "anchors": ["window.EventBus.on('simulation:completed'", "renderSelectedContext();"] }
+      ]
+    },
+    {
+      "id": "demo.legacy-browser-call-simulator",
+      "facets": ["demo_action", "event_listener", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "paid canonical synthetic-lead ingestion",
+      "effectBoundary": "The paid dashboard first writes browser-local fictional state, then its authenticated tenant/idempotency-scoped POST may commit a canonical PostgreSQL graph with explicit simulation provenance. That is an accepted synthetic tenant record, not a real lead, provider event, customer contact, delivery, or reusable Mission 28 effect authority.",
+      "entryPoints": ["window.ccSimulateLead()", "window.genCall()", "window.AppStore.addLead(call)", "window.EventBus.emit('call:generated', call)", "POST /api/v1/simulations/leads"],
+      "sourceRefs": [
+        { "path": "public/js/simulator.js", "anchors": ["function genCall()", "window.AppStore.addLead(call)", "window.EventBus.emit('call:generated', call)", "window.genCall = routedGenCall"] },
+        { "path": "public/dashboard.html", "anchors": ["<script src=\"/js/simulator.js\"></script>", "apiFetch('/api/v1/simulations/leads'"] },
+        { "path": "public/js/polaris-api.js", "anchors": ["function simulateLead(data)", "fetch('/api/v1/simulations/leads'"] },
+        { "path": "public/dashboard/calendar.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
+        { "path": "public/dashboard/leads.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
+        { "path": "public/dashboard/communications.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
+        { "path": "src/server.js", "anchors": ["const simulationsRoutes = require('./routes/simulations')", "app.use('/api/v1', simulationsRoutes)"] },
+        { "path": "src/routes/simulations.js", "anchors": ["router.post('/simulations/leads'", "const result = await ingestSimulation(db.getPool(), graphRequest)", "sourceVersion: 'simulation-pipeline-v1'"] },
+        { "path": "src/routes/simulation/pipeline.js", "anchors": ["function withDeterministicSeed", "function generateScenario", "function generateTranscript"] },
+        { "path": "src/services/canonicalGraphService.js", "anchors": ["const repository = require('../persistence/v2/repository')", "function ingestSimulation(pool, source, options)", "source: 'simulation'"] },
+        { "path": "src/persistence/v2/repository.js", "anchors": ["async function withTransaction", "async function claimOperation", "async function completeOperation"] }
+      ]
+    },
+    {
+      "id": "workflow.legacy-polaris-reminders-followups",
+      "facets": ["reminder", "queue"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy file-backed Polaris workflow engine",
+      "effectBoundary": "The legacy engine can create in-memory/file-backed tasks, reminders, follow-ups, appointments, and communication records, but it is not mounted tenant-private automation authority and cannot schedule or prove an external message, appointment, reminder, or Mission 28 effect.",
+      "sourceRefs": [
+        { "path": "src/polaris/workflow-engine.js", "anchors": ["follow-ups, appointments, reminders, and automated workflows", "function scheduleReminder", "function scheduleAppointment", "function createFollowUp", "var comms = require('./communications-engine')"] },
+        { "path": "src/polaris/communications-engine.js", "anchors": ["Centralized communications layer", "Follow-up recommendations", "const store = require('./store')"] },
+        { "path": "src/polaris/analytics-engine.js", "anchors": ["return require('./workflow-engine')"] },
+        { "path": "src/polaris/store.js", "anchors": ["File-backed storage for Polaris data", "recommendations: path.join(DATA_DIR, 'polaris-recommendations.json')"] }
+      ]
+    },
+    {
+      "id": "email.resend-transactional-adapter-and-templates",
+      "facets": ["provider_adapter", "email_sms_path", "template", "notification"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "account, workforce, and support transactional email",
+      "effectBoundary": "The Resend adapter and its verification, reset, invitation, and support templates remain bound to their owning workflows; provider acceptance is not Mission 28 delivery authority.",
+      "sourceRefs": [
+        { "path": "src/email/transactional.js", "anchors": ["const RESEND_ENDPOINT = 'https://api.resend.com/emails'", "verification(recipient, rawToken, context)", "passwordReset(recipient, rawToken, context)", "invitation(recipient, rawToken, context, invite = {})", "supportCase(recipient, report = {}, context)"] },
+        { "path": "src/accounts/service.js", "anchors": ["const { emailAddress } = require('../email/transactional')", "this.transactionalEmail.verification"] },
+        { "path": "src/email/outbox.js", "anchors": ["this.transactionalEmail.verification.bind", "this.transactionalEmail.passwordReset.bind"] },
+        { "path": "src/support/outbox.js", "anchors": ["this.transactionalEmail.supportCase"] }
+      ]
+    },
+    {
+      "id": "email.workforce-invitation-direct-path",
+      "facets": ["email_sms_path", "template", "notification", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "workforce invitation",
+      "effectBoundary": "Invitation and resend actions remain workforce authority and cannot be used as a general recipient or resend path.",
+      "sourceRefs": [
+        { "path": "src/workforce/service.js", "anchors": ["this.transactionalEmail.invitation", "async resendInvitation"] },
+        { "path": "src/workforce/repository.js", "anchors": ["const { workforceInvitationEnvelope } = require('../email/transactional')"] },
+        { "path": "src/routes/workforce.js", "anchors": ["router.post('/invitations'", "router.post('/invitations/:invitationId/resend'"] }
+      ]
+    },
+    {
+      "id": "notification.legacy-lead-email",
+      "facets": ["notification", "email_sms_path", "template", "provider_adapter"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy lead notification",
+      "effectBoundary": "The global SMTP/nodemailer path has no accepted Mission 28 sender, recipient, consent, template, or effect-evidence contract.",
+      "sourceRefs": [{ "path": "src/notifications/email.js", "anchors": ["async function sendLeadNotification", "nodemailer.createTransport"] }]
+    },
+    {
+      "id": "notification.legacy-lead-sms",
+      "facets": ["notification", "email_sms_path", "template", "provider_adapter"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy lead notification",
+      "effectBoundary": "The global Twilio path has no accepted Mission 28 sender, recipient, consent, content, or effect-evidence contract.",
+      "sourceRefs": [{ "path": "src/notifications/sms.js", "anchors": ["async function sendLeadNotification", "client.messages.create"] }]
+    },
+    {
+      "id": "notification.legacy-simulated-lead-fanout",
+      "facets": ["notification", "email_sms_path", "demo_action", "manual_quick_send"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy authenticated lead simulation",
+      "effectBoundary": "Despite its simulated lead label, this route can fan out to legacy external adapters and append to Sheets; it is not reusable by Mission 28.",
+      "sourceRefs": [{ "path": "src/routes/api.js", "anchors": ["router.post('/leads/simulate'", "notifications.push(sendSms", "notifications.push(sendEmail", "await appendLead(lead)"] }]
+    },
+    {
+      "id": "provider.retell-call-sms-client",
+      "facets": ["provider_adapter", "email_sms_path", "retry", "notification"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "voice and call intake",
+      "effectBoundary": "Retell call/SMS creation and exponential retry remain voice-provider effects. Canonical call creation separately persists tenant-scoped session identity plus requested, started, and failed event evidence. Mounted handoff/cancel actions require a same-process runtime handle; no production caller registers one, so they fail closed before a human_handoff or call_cancelled event. None is Mission 28 authority without later trigger, channel, recipient, consent, provider, runtime-owner, and effect-evidence acceptance.",
+      "sourceRefs": [
+        { "path": "src/retell/client.js", "anchors": ["const RETELL_BASE = 'https://api.retellai.com'", "Retry loop with exponential backoff", "async function sendSMS"] },
+        { "path": "src/services/canonicalVoiceSessionCreation.js", "anchors": ["const retell = require('../retell/client')", "const voiceSessions = require('./voiceSessionAuthority')", "voiceSessions.createSession", "eventType: 'provider_creation_requested'", "const createProviderCall = source.createProviderCall || retell.createCall", "eventType: 'call_started'", "eventType: 'provider_creation_failed'"] },
+        { "path": "src/services/voiceSessionAuthority.js", "anchors": ["INSERT INTO canonical_voice_sessions", "INSERT INTO canonical_voice_session_events", "function registerRuntimeHandle", "async function requireRuntimeHandle", "VOICE_RUNTIME_UNAVAILABLE", "async function performRuntimeAction", "eventType: action === 'cancel' ? 'call_cancelled' : 'human_handoff'"] },
+        { "path": "src/routes/api.js", "anchors": ["router.post('/retell/create-call'", "router.post('/retell/send-sms'"] },
+        { "path": "src/routes/voice.js", "anchors": ["const { createCanonicalVoiceCall } = require('../services/canonicalVoiceSessionCreation')", "const voiceSessions = require('../services/voiceSessionAuthority')", "router.post('/call'", "voiceSessions.performRuntimeAction", "router.post('/sessions/:id/handoff'", "router.post('/sessions/:id/cancel'"] },
+        { "path": "src/server.js", "anchors": ["const voiceRoutes = require('./routes/voice')", "app.use('/api/v1/voice', voiceRoutes)"] }
+      ]
+    },
+    {
+      "id": "provider.mission26-retell-call-reconciliation",
+      "facets": ["provider_adapter", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Mission 26 reviewed demand-source diagnostics",
+      "effectBoundary": "The bounded Retell inbound-call scan is a tenant-authorized diagnostic comparison only; it cannot certify coverage, caller consent, lead identity, retention, a forecast, or Mission 28 effect authority.",
+      "sourceRefs": [
+        { "path": "src/forecasting/retellCallReconciliation.js", "anchors": ["const { listInboundCallsPage } = require('../retell/client')", "const MAX_PAGES = 21", "async function reconcileRetellInboundCalls"] },
+        { "path": "src/forecasting/retellCallScanReader.js", "anchors": ["const { reconcileRetellInboundCalls }", "async function inspectRetellCallWindow", "source_changed_during_scan"] },
+        { "path": "src/routes/forecastDemandSources.js", "anchors": ["const { inspectRetellCallWindow }", "REVIEWED_BOUNDARY"] }
+      ]
+    },
+    {
+      "id": "webhook.retell-signed-ingress",
+      "facets": ["webhook", "event_listener", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "voice provider ingress",
+      "effectBoundary": "Signature, routed voice events, and the durable PostgreSQL replay claim lifecycle are upstream facts only. Its 60-second claim lease, 24-hour retention, 10,000-entry saturation boundary, and claim/release/finalize writes do not grant Mission 28 retry, action, recipient, provider, or effect authority.",
+      "sourceRefs": [
+        { "path": "src/routes/retellWebhookBoundary.js", "anchors": ["router.post('/api/retell/webhook'", "router.post('/api/v1/voice/webhook'"] },
+        { "path": "src/voice/webhook.js", "anchors": ["const replayAuthority = require('../retell/webhookReplayAuthority')", "handleSignedWebhook", "replayAuthority.claimWebhookDelivery", "replayAuthority.releaseWebhookDelivery", "replayAuthority.finalizeWebhookDelivery", "businessEvents.emit(bizEvent)"] },
+        { "path": "src/retell/webhookReplayAuthority.js", "anchors": ["const CLAIM_LEASE_MS = 60 * 1000", "const REPLAY_RETENTION_MS = 24 * 60 * 60 * 1000", "const MAX_REPLAY_ENTRIES = 10000", "async function claimWebhookDelivery", "return { kind: 'replay' }", "return { kind: 'saturated' }", "async function releaseWebhookDelivery", "async function finalizeWebhookDelivery"] }
+      ]
+    },
+    {
+      "id": "provider.google-calendar-event-reminder",
+      "facets": ["provider_adapter", "reminder", "manual_quick_send"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Mission 22 scheduling",
+      "effectBoundary": "Google event insertion and its provider reminder override remain scheduling authority; Mission 28 cannot infer appointment or communication permission from them.",
+      "sourceRefs": [
+        { "path": "src/calendar/client.js", "anchors": ["client.events.insert", "reminders:"] },
+        { "path": "src/routes/api.js", "anchors": ["router.post('/calendar/schedule'"] }
+      ]
+    },
+    {
+      "id": "provider.google-sheets-lead-append",
+      "facets": ["provider_adapter", "notification"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy lead storage",
+      "effectBoundary": "Global Sheets credentials and best-effort append are not tenant connector, automation, or effect-evidence authority.",
+      "sourceRefs": [{ "path": "src/sheets/client.js", "anchors": ["async function appendLead", "client.spreadsheets.values.append"] }]
+    },
+    {
+      "id": "provider.jobber-oauth-and-lead-push",
+      "facets": ["provider_adapter", "webhook", "retry"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "future field-service integration",
+      "effectBoundary": "OAuth callback, token refresh, client creation, and job creation are source-disabled pending durable connector authority and cannot be automation effects.",
+      "sourceRefs": [
+        { "path": "src/integrations/jobber.js", "anchors": ["const JOBBER_TOKEN_URL", "async function pushLead", "function refreshToken"] },
+        { "path": "src/routes/jobberIntegration.js", "anchors": ["'/callback'", "jobber_connection_unavailable"] }
+      ]
+    },
+    {
+      "id": "provider.openai-polaris-runtime",
+      "facets": ["provider_adapter", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Polaris advisory runtime",
+      "effectBoundary": "The production runtime, paid and fictional-demo consumers, connected-call binding, and usage ledger remain upstream advisory/provider boundaries. Provider output or accounting state never self-authorizes an automation decision or external effect.",
+      "sourceRefs": [
+        { "path": "src/polaris/openaiRuntime.js", "anchors": ["function createProductionOpenAIRuntime"] },
+        { "path": "src/server.js", "anchors": ["const productionPolarisRuntime = createProductionOpenAIRuntime", "app.locals.connectedCallGenerate=require('./polaris/callGenerationBinding').createProductionCallGenerate", "app.locals.demoGroundedRuntime = process.env.POLARIS_DEMO_GENERATION_ENABLED === 'true' ? productionPolarisRuntime : null", "assistantRuntime: productionPolarisRuntime", "assistantUsageLedger: productionPolarisUsageLedger"] },
+        { "path": "src/polaris/callGenerationBinding.js", "anchors": ["function createProductionCallGenerate", "runtime.preflight(envelope)", "await runtime.respond(envelope"] },
+        { "path": "src/polaris/assistantRuntime.js", "anchors": ["async function executeProvider(runtime", "await provider.respond(buildRuntimeEnvelope"] },
+        { "path": "src/polaris/providerLedger.js", "anchors": ["function createProviderUsageLedger", "public.polaris_provider_reserve_usage", "public.polaris_provider_reconcile_usage"] },
+        { "path": "src/routes/canonicalPolaris.js", "anchors": ["require('../polaris/assistantRuntime')", "require('../polaris/providerLedger')", "dependencies.assistantRuntime.preflight", "dependencies.assistantUsageLedger.reconcile"] },
+        { "path": "src/polaris/demoGrounded.js", "anchors": ["const runtime = req.app.locals.demoGroundedRuntime", "runtime.preflight(envelope)", "await runtime.respond(envelope"] },
+        { "path": "src/routes/demo.js", "anchors": ["'/command-center/polaris/messages-v2'", "require('../polaris/demoGrounded').createHandler"] },
+        { "path": "src/routes/connectedCall.js", "anchors": ["router.post('/api/retell/tools/job-guidance'", "const {createConnectedCallRepository}=require('../polaris/connectedCallRepository')", "No provider adapter is provisioned by mounting this authenticated boundary."] },
+        { "path": "src/polaris/connectedCallRepository.js", "anchors": ["const voices = require('../services/voiceSessionAuthority')", "function createConnectedCallRepository", "voices.appendEventWithClient", "eventType:'grounded_tool'"] }
+      ]
+    },
+    {
+      "id": "provider.retell-knowledge-transport",
+      "facets": ["provider_adapter", "queue", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Mission 21 knowledge publication",
+      "effectBoundary": "The Retell LLM projection transport is conditional on an explicit owned binding and remains knowledge publication, not customer communication.",
+      "sourceRefs": [
+        { "path": "src/knowledge/providerBindings.js", "anchors": ["const {createRetellProjectionTransport}=require('./retellProjectionTransport')", "function createProductionKnowledgeTransports", "https://api.retellai.com/"] },
+        { "path": "src/knowledge/retellProjectionTransport.js", "anchors": ["function createRetellProjectionTransport", "client.llm.retrieve", "client.llm.update"] }
+      ]
+    },
+    {
+      "id": "provider.equipment-identifier-extraction",
+      "facets": ["provider_adapter"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "equipment intake",
+      "effectBoundary": "The provider may extract identifiers only under its own entitlement; extracted text is not automation or equipment-record authority.",
+      "sourceRefs": [{ "path": "src/equipment/provider.js", "anchors": ["function createEquipmentExtractor", "purpose: 'equipment_identifiers'"] }]
+    },
+    {
+      "id": "provider.integration-catalogue-labels",
+      "facets": ["collection_label", "provider_adapter"],
+      "disposition": "ambiguous_fail_closed",
+      "owner": "integration catalogue presentation",
+      "effectBoundary": "Catalogue labels such as available, coming soon, or connected are presentation states and do not establish connector or automation authority.",
+      "sourceRefs": [{ "path": "src/integrations/catalogue.js", "anchors": ["const PRESENTATION_LABELS", "const UNAVAILABLE_CAPABILITIES", "Legacy global adapter state is not tenant connector authority."] }]
+    },
+    {
+      "id": "browser.legacy-communications-provider-registry",
+      "facets": ["provider_adapter", "event_listener", "email_sms_path", "demo_action"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy browser communications",
+      "effectBoundary": "A browser-registered provider or simulated fallback is not a tenant-bound trusted adapter and cannot be reused for Mission 28.",
+      "sourceRefs": [{ "path": "public/js/communications-engine.js", "anchors": ["function registerProvider", "function initiateCall", "function sendSMS", "Fallback: create a simulated lead"] }]
+    },
+    {
+      "id": "browser.legacy-retell-provider",
+      "facets": ["provider_adapter", "email_sms_path", "retry"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy browser Retell bridge",
+      "effectBoundary": "Browser-held configuration and API calls are not a credential, tenant, sender, or delivery authority; retry registration cannot make them one.",
+      "sourceRefs": [{ "path": "public/js/retell-provider.js", "anchors": ["function connect(opts)", "function initiateCall", "function sendSMS", "setTimeout(register, 100)"] }]
+    },
+    {
+      "id": "event.browser-local-store-bus",
+      "facets": ["event_listener", "notification"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "browser presentation state",
+      "effectBoundary": "The local browser event bus and store notifications coordinate presentation only; an emitted or observed event is not durable automation authority or evidence of an external effect.",
+      "sourceRefs": [
+        { "path": "public/js/event-bus.js", "anchors": ["window.EventBus = (function()", "emit(event, data)"] },
+        { "path": "public/js/app-store.js", "anchors": ["bus.emit('legacy:mutation-blocked'", "window.addEventListener('canonical:loaded'"] },
+        { "path": "public/js/canonical-intelligence.js", "anchors": ["global.EventBus.emit(name, detail)", "emit('canonical:rejected'", "emit('canonical:loaded'"] },
+        { "path": "public/js/communications-engine.js", "anchors": ["bus.on('store:changed'", "bus.emit('communications:updated'"] },
+        { "path": "public/dashboard/calendar.html", "anchors": ["window.EventBus.on('store:loaded'", "window.EventBus.on('canonical:loaded'"] },
+        { "path": "public/js/polaris-engine.js", "anchors": ["window.addEventListener('canonical:loaded'", "renderPolarisCard();"] }
+      ]
+    },
+    {
+      "id": "persistence.canonical-operation-lease",
+      "facets": ["queue", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "canonical persistence and idempotency",
+      "effectBoundary": "Claim, lease, replay, and retryable-failure records are generic persistence mechanics; they neither identify a Mission 28 action nor grant trigger, recipient, provider, or effect authority.",
+      "sourceRefs": [
+        { "path": "src/persistence/v2/repository.js", "anchors": ["const OPERATION_STATES = Object.freeze", "RETRYABLE_FAILED: 'retryable_failed'", "async function claimOperation(pool, input)"] },
+        { "path": "src/db.js", "anchors": ["'public.canonical_operations'::regclass"] },
+        { "path": "src/routes/canonicalPolaris.js", "anchors": ["FROM public.canonical_operations o"] },
+        { "path": "src/services/canonicalRetellIngestion.js", "anchors": ["FROM canonical_operations o"] }
+      ]
+    },
+    {
+      "id": "handoff.customer-phone-and-email",
+      "facets": ["native_share_or_composer_handoff", "manual_quick_send", "email_sms_path"],
+      "disposition": "manual_handoff",
+      "owner": "customer detail user",
+      "effectBoundary": "Opening tel or mailto is a manual native handoff only; NorthStar has no sent, delivered, replied, or successful evidence.",
+      "sourceRefs": [{ "path": "public/js/customer-detail.js", "anchors": ["'tel:' + phone", "'mailto:' + encodeURIComponent(email)"] }]
+    },
+    {
+      "id": "handoff.support-email-composer",
+      "facets": ["native_share_or_composer_handoff", "manual_quick_send", "email_sms_path"],
+      "disposition": "manual_handoff",
+      "owner": "site visitor",
+      "effectBoundary": "The contact-page mailto opens a local composer and is not a received support case or delivery evidence.",
+      "sourceRefs": [
+        { "path": "public/contact.html", "anchors": ["Open Your Email App", "mailto:Support@northstar-os.ai"] },
+        { "path": "public/faq.html", "anchors": ["mailto:Support@northstar-os.ai", "a general email draft is not a received case until your provider sends it"] }
+      ]
+    },
+    {
+      "id": "handoff.calendar-ics-file",
+      "facets": ["native_share_or_composer_handoff", "manual_quick_send", "reminder"],
+      "disposition": "manual_handoff",
+      "owner": "calendar user",
+      "effectBoundary": "Downloading or importing an ICS file is a user-controlled file handoff, not provider synchronization or reminder delivery.",
+      "sourceRefs": [
+        { "path": "public/js/calendar-engine.js", "anchors": ["a.download = 'calendar.ics'", "`${this.baseUrl}/import/ics`"] },
+        { "path": "src/routes/dashboard.js", "anchors": ["router.get('/calendar/export/ics'", "router.post('/calendar/import/ics'"] }
+      ]
+    },
+    {
+      "id": "handoff.customer-estimate-secure-link",
+      "facets": ["manual_quick_send", "native_share_or_composer_handoff"],
+      "disposition": "mission28_owned_reusable_after_later_authority",
+      "owner": "Mission 24 document delivery source",
+      "effectBoundary": "Paid or fictional-demo users may create, copy, open, or revoke a scoped link, and the public boundary may record an inbound acceptance or question. None of those actions sends the link, selects or consents a recipient/channel, proves delivery, or grants Mission 28 effect authority; Part 8 must bind those authorities and evidence later.",
+      "entryPoints": [
+        "/api/v1/canonical/estimates/:estimateId/customer-estimate-links",
+        "/api/v1/canonical/estimates/:estimateId/customer-estimate-links/:linkId/revoke",
+        "/api/demo/command-center/estimates/:estimateId/customer-estimate-links",
+        "/api/demo/command-center/estimates/:estimateId/customer-estimate-links/:linkId/revoke",
+        "/estimate/:token",
+        "/api/public/customer-estimates/:token",
+        "/api/public/customer-estimates/:token/accept",
+        "/api/public/customer-estimates/:token/questions"
+      ],
+      "sourceRefs": [
+        { "path": "public/js/customer-estimate-preview.js", "anchors": ["function deliveryRoute(review)", "navigator.clipboard.writeText(link)", "document.execCommand('copy')", "encodeURIComponent(active.id)+'/revoke'", "openLink.target='_blank'"] },
+        { "path": "src/routes/canonicalPolaris.js", "anchors": ["'/estimates/:estimateId/customer-estimate-links'", "'/estimates/:estimateId/customer-estimate-links/:linkId/revoke'", "customerEstimateDeliveryRepository"] },
+        { "path": "src/routes/demo.js", "anchors": ["'/command-center/estimates/:estimateId/customer-estimate-links'", "'/command-center/estimates/:estimateId/customer-estimate-links/:linkId/revoke'", "repository.demoCreate", "repository.demoRevoke"] },
+        { "path": "src/estimating/customerEstimateDeliveryContract.js", "anchors": ["function token(context,idempotencyKey)", "function create(raw)", "function accept(raw)", "function question(raw)"] },
+        { "path": "src/estimating/customerEstimateDeliveryRepository.js", "anchors": ["async function create(pool,input,raw)", "async function revoke(pool,input,linkId)", "async function publicRead(client,rawToken)", "async function publicMutate(pool,input,raw,kind)"] },
+        { "path": "src/estimating/customerEstimateDeliveryHttpBoundary.js", "anchors": ["function customerEstimateDeliveryBodyBoundary", "customer-estimates\\/[^/]+\\/(?:accept|questions)"] },
+        { "path": "src/routes/customerEstimateDelivery.js", "anchors": ["router.get('/customer-estimates/:token'", "router.post('/customer-estimates/:token/accept'", "router.post('/customer-estimates/:token/questions'", "app.get('/estimate/:token'"] },
+        { "path": "src/server.js", "anchors": ["mountCustomerEstimatePage(app)", "app.use('/api/public', createCustomerEstimateDeliveryRouter())", "app.use('/api/v1/canonical', createCanonicalRouter"] },
+        { "path": "public/customer-estimate.html", "anchors": ["Secure estimate", "/js/customer-estimate-public.js"] },
+        { "path": "public/js/customer-estimate-public.js", "anchors": ["fetch('/api/public/customer-estimates/'", "acceptForm.onsubmit", "questionForm.onsubmit"] }
+      ]
+    },
+    {
+      "id": "collection.mission27-reviewed-handoff-labels",
+      "facets": ["collection_label", "reminder", "retry", "manual_quick_send"],
+      "disposition": "mission28_owned_reusable_after_later_authority",
+      "owner": "Mission 27 source boundary reserved for Mission 28",
+      "effectBoundary": "The mounted owner/admin tenant-private collection-review and reviewed-handoff GET boundaries expose due/aging/review labels, but the Mission 28 receiving adapter remains unavailable. These reads do not authorize reminders, resend, retry, charges, fees, legal escalation, external collection, or any receiver effect.",
+      "sourceRefs": [
+        { "path": "src/customerFinancial/collectionReview.js", "anchors": ["const CONTRACT_VERSION = 'm27-collection-review-v1'", "collection_communication_unsupported", "automatic_collection_unsupported"] },
+        { "path": "src/customerFinancial/collectionReviewRepository.js", "anchors": ["const receivableAgingRepository = require('./receivableAgingRepository')", "async function read(source, options = {})", "return contract.unavailable(sourceWitness)"] },
+        { "path": "src/routes/customerFinancialCollectionReview.js", "anchors": ["const repository = require('../customerFinancial/collectionReviewRepository')", "requireRole('owner','admin')", "CUSTOMER_FINANCIAL_COLLECTION_REVIEW_METHOD_NOT_ALLOWED"] },
+        { "path": "src/customerFinancial/collectionHandoffReadiness.js", "anchors": ["const CONTRACT_VERSION = 'm27-collection-handoff-readiness-v1'", "mission28_handoff_unavailable", "automatic_reminder_unsupported", "automatic_payment_retry_unsupported", "currentReceivingAdapterAvailable !== false"] },
+        { "path": "src/customerFinancial/collectionHandoffReadinessRepository.js", "anchors": ["const collectionReviewRepository = require('./collectionReviewRepository')", "async function read(source, options = {})", "return contract.unavailable(sourceWitness)"] },
+        { "path": "src/routes/customerFinancialCollectionHandoff.js", "anchors": ["const repository = require('../customerFinancial/collectionHandoffReadinessRepository')", "requireRole('owner','admin')", "CUSTOMER_FINANCIAL_COLLECTION_HANDOFF_METHOD_NOT_ALLOWED"] },
+        { "path": "src/server.js", "anchors": ["app.use('/api/v1/customer-financial/collection-review'", "createCustomerFinancialCollectionReviewRouter()", "app.use('/api/v1/customer-financial/collection-handoff'", "createCustomerFinancialCollectionHandoffRouter()"] }
+      ]
+    },
+    {
+      "id": "provider.mission27-payment-boundary",
+      "facets": ["provider_adapter", "webhook", "retry", "queue", "notification", "collection_label"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Mission 27 financial lifecycle",
+      "effectBoundary": "The mounted connection, lifecycle health/retention/recovery/acceptance, event receipt/normalization, and base payment reads are frozen provider-disabled. Queue, backpressure, retry, failover, alert, webhook, checkout, settlement, refund, and accounting fields are unavailable evidence boundaries, not adapters or reusable effect authority.",
+      "sourceRefs": [
+        { "path": "src/customerFinancial/paymentProviderBoundary.js", "anchors": ["policyState !== 'frozen_provider_disabled'", "const REASON = 'payment_provider_unavailable'"] },
+        { "path": "src/customerFinancial/paymentProviderBoundaryRepository.js", "anchors": ["async function read(source)", "return contract.unavailable()"] },
+        { "path": "src/customerFinancial/paymentProviderConnection.js", "anchors": ["const REASON = 'provider_connection_prerequisites_unavailable'", "function unavailable()"] },
+        { "path": "src/customerFinancial/paymentProviderConnectionRepository.js", "anchors": ["async function read(source)", "async function attempt(source, body)"] },
+        { "path": "src/customerFinancial/paymentProviderEventReceipt.js", "anchors": ["server_side_webhook_signing_credential", "providerRetryState: 'unavailable'"] },
+        { "path": "src/customerFinancial/paymentProviderEventReceiptRepository.js", "anchors": ["async function read(source, options = {})", "return contract.unavailable(providerBoundary)"] },
+        { "path": "src/customerFinancial/paymentProviderEventNormalization.js", "anchors": ["const REASON = 'provider_event_receipt_unavailable'", "function unavailable(receiptRaw"] },
+        { "path": "src/customerFinancial/paymentProviderEventNormalizationRepository.js", "anchors": ["async function read(source, options = {})", "return contract.unavailable(receipt)"] },
+        { "path": "src/customerFinancial/providerLifecycleHealth.js", "anchors": ["const REASON = 'provider_lifecycle_authority_unavailable'", "provider_webhook_authority_unavailable"] },
+        { "path": "src/customerFinancial/providerLifecycleHealthHttpBoundary.js", "anchors": ["function isProviderLifecycleHealthPath", "ABSOLUTE_PATH_PATTERN"] },
+        { "path": "src/customerFinancial/providerLifecycleHealthRepository.js", "anchors": ["function createRepository(options = {})", "read: production.read"] },
+        { "path": "src/customerFinancial/providerLifecycleRetention.js", "anchors": ["const REASON = 'retention_deletion_authority_unavailable'", "provider_event_receipt_unavailable"] },
+        { "path": "src/customerFinancial/providerLifecycleRetentionHttpBoundary.js", "anchors": ["function isProviderLifecycleRetentionPath", "ABSOLUTE_PATH_PATTERN"] },
+        { "path": "src/customerFinancial/providerLifecycleRetentionRepository.js", "anchors": ["function createRepository(options = {})", "read: production.read"] },
+        { "path": "src/customerFinancial/providerLifecycleRecovery.js", "anchors": ["bounded_durable_queue_and_backpressure", "tested_provider_failover_target", "retryAuthorized: false", "alertingAuthorized: false"] },
+        { "path": "src/customerFinancial/providerLifecycleRecoveryHttpBoundary.js", "anchors": ["function isProviderLifecycleRecoveryPath", "ABSOLUTE_PATH_PATTERN"] },
+        { "path": "src/customerFinancial/providerLifecycleRecoveryRepository.js", "anchors": ["function createRepository(options = {})", "read: production.read"] },
+        { "path": "src/customerFinancial/providerLifecycleAcceptance.js", "anchors": ["const REASON = 'provider_lifecycle_acceptance_unavailable'", "function unavailable"] },
+        { "path": "src/customerFinancial/providerLifecycleAcceptanceHttpBoundary.js", "anchors": ["function isProviderLifecycleAcceptancePath", "ABSOLUTE_PATH_PATTERN"] },
+        { "path": "src/customerFinancial/providerLifecycleAcceptanceRepository.js", "anchors": ["function createRepository(options)", "read: production.read"] },
+        { "path": "src/middleware/providerLifecycleHealthBoundary.js", "anchors": ["function providerLifecycleHealthBoundary", "providerLifecycleHealthHttpBoundary"] },
+        { "path": "src/middleware/providerLifecycleRetentionBoundary.js", "anchors": ["function providerLifecycleRetentionBoundary", "providerLifecycleRetentionHttpBoundary"] },
+        { "path": "src/middleware/providerLifecycleRecoveryBoundary.js", "anchors": ["function providerLifecycleRecoveryBoundary", "providerLifecycleRecoveryHttpBoundary"] },
+        { "path": "src/middleware/providerLifecycleAcceptanceBoundary.js", "anchors": ["function providerLifecycleAcceptanceBoundary", "providerLifecycleAcceptanceHttpBoundary"] },
+        { "path": "src/routes/customerFinancialPaymentProvider.js", "anchors": ["function createCustomerFinancialPaymentProviderRouter", "paymentProviderBoundaryRepository"] },
+        { "path": "src/routes/customerFinancialProviderConnection.js", "anchors": ["function createCustomerFinancialProviderConnectionRouter", "paymentProviderConnectionRepository"] },
+        { "path": "src/routes/customerFinancialProviderLifecycle.js", "anchors": ["function createCustomerFinancialProviderLifecycleRouter", "providerLifecycleHealthRepository"] },
+        { "path": "src/routes/customerFinancialProviderRetention.js", "anchors": ["function createCustomerFinancialProviderRetentionRouter", "providerLifecycleRetentionRepository"] },
+        { "path": "src/routes/customerFinancialProviderRecovery.js", "anchors": ["function createCustomerFinancialProviderRecoveryRouter", "providerLifecycleRecoveryRepository"] },
+        { "path": "src/routes/customerFinancialProviderAcceptance.js", "anchors": ["function createCustomerFinancialProviderAcceptanceRouter", "providerLifecycleAcceptanceRepository"] },
+        { "path": "src/routes/customerFinancialProviderEventReceipt.js", "anchors": ["function createCustomerFinancialProviderEventReceiptRouter", "paymentProviderEventReceiptRepository"] },
+        { "path": "src/routes/customerFinancialProviderEventNormalization.js", "anchors": ["function createCustomerFinancialProviderEventNormalizationRouter", "paymentProviderEventNormalizationRepository"] },
+        { "path": "src/server.js", "anchors": ["'/api/v1/customer-financial/payment-provider/connection'", "'/api/v1/customer-financial/payment-provider/lifecycle-health'", "'/api/v1/customer-financial/payment-provider/lifecycle-retention'", "'/api/v1/customer-financial/payment-provider/lifecycle-recovery'", "'/api/v1/customer-financial/payment-provider/lifecycle-acceptance'", "'/api/v1/customer-financial/payment-provider/event-receipt'", "'/api/v1/customer-financial/payment-provider/event-normalization'", "'/api/v1/customer-financial/payment-provider'"] }
+      ]
+    },
+    {
+      "id": "preferences.notification-flags-without-engine",
+      "facets": ["notification", "reminder", "collection_label"],
+      "disposition": "ambiguous_fail_closed",
+      "owner": "legacy business-profile preferences",
+      "effectBoundary": "Email, SMS, push, briefing, revenue, crew, and critical flags are stored presentation preferences only; they do not identify a sender, recipient, channel permission, scheduler, template, or effect.",
+      "sourceRefs": [{ "path": "src/services/businessProfile.js", "anchors": ["dailyExecutiveBriefing: true", "revenueAlerts: true", "criticalAlerts: true"] }]
+    },
+    {
+      "id": "preferences.account-notification-destinations",
+      "facets": ["notification", "email_sms_path"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "tenant account notification settings",
+      "effectBoundary": "Current tenant-scoped email/SMS preference booleans and destination fields are upstream account facts. They do not establish recipient consent, sender/channel authority, a template, scheduling, delivery, or Mission 28 effect evidence; the separate legacy simulation fan-out remains quarantined.",
+      "sourceRefs": [
+        { "path": "src/routes/account.js", "anchors": ["emailEnabled: Boolean(row.email_new_lead)", "smsUrgent: Boolean(row.sms_urgent)", "notificationEmail: email", "notificationPhone: phone", "router.get('/preferences'", "router.put('/preferences'"] },
+        { "path": "src/accounts/repository.js", "anchors": ["async accountPreferences(organizationId)", "FROM public.notification_preferences notification", "async updateAccountPreferences", "SET email_new_lead = $2", "notification_phone = $8"] },
+        { "path": "src/routes/api.js", "anchors": ["new AccountRepository().accountPreferences", "preferences.sms_new_lead === true", "preferences.email_new_lead === true"] }
+      ]
+    },
+    {
+      "id": "demo.command-center-action-family",
+      "facets": ["demo_action", "manual_quick_send", "retry"],
+      "disposition": "simulated_or_demo_only",
+      "owner": "isolated account-free command-center demo",
+      "effectBoundary": "All listed writes remain in the fictional demo namespace and cannot establish paid, provider, recipient, delivery, financial, or physical-work effects.",
+      "entryPoints": [
+        "/command-center/operations/appointments/:appointmentId/actions",
+        "/command-center/appointments/:appointmentId/mutation-previews",
+        "/command-center/appointments/:appointmentId/mutation-approvals",
+        "/command-center/simulations/leads",
+        "/command-center/reset",
+        "/command-center/estimates/:estimateId/equipment-readiness-plans",
+        "/command-center/estimates/:estimateId/equipment-readiness-preview",
+        "/command-center/estimates/:estimateId/commercial-terms",
+        "/command-center/estimates/:estimateId/commercial-approvals",
+        "/command-center/estimates/:estimateId/commercial-preview",
+        "/command-center/tax-preparation",
+        "/command-center/estimates/:estimateId/pricing-policies",
+        "/command-center/estimates/:estimateId/pricing-policy-preview",
+        "/command-center/estimates/:estimateId/pricing-plans",
+        "/command-center/estimates/:estimateId/pricing-plan-preview",
+        "/command-center/estimates/:estimateId/travel-plans",
+        "/command-center/estimates/:estimateId/travel-plan-preview",
+        "/command-center/estimates/:estimateId/equipment-cost-plans",
+        "/command-center/estimates/:estimateId/equipment-cost-preview",
+        "/command-center/estimates/:estimateId/equipment-plans",
+        "/command-center/estimates/:estimateId/equipment-plan-preview",
+        "/command-center/estimates/:estimateId/labor-plans",
+        "/command-center/estimates/:estimateId/labor-plan-preview",
+        "/command-center/estimates/:estimateId/material-plans",
+        "/command-center/estimates/:estimateId/material-plan-preview",
+        "/command-center/estimates/:estimateId/material-adoptions",
+        "/command-center/estimates/:estimateId/cost-adoptions",
+        "/command-center/estimates/:estimateId/cost-adoption-preview",
+        "/command-center/estimates/:estimateId/material-adoption-preview",
+        "/command-center/estimates/:estimateId/decisions",
+        "/command-center/polaris/messages-v2",
+        "/command-center/estimates/:estimateId/proposal-adoption-preview",
+        "/command-center/estimates/:estimateId/proposal-adoptions",
+        "/command-center/estimates/:estimateId/proposal-preview",
+        "/command-center/estimates/:estimateId/capella-scenarios",
+        "/command-center/estimates/:estimateId/customer-estimate-versions",
+        "/command-center/estimates/:estimateId/customer-estimate-links",
+        "/command-center/estimates/:estimateId/customer-estimate-links/:linkId/revoke"
+      ],
+      "sourceRefs": [
+        { "path": "src/routes/demo.js", "anchors": ["operation: 'simulate_lead'", "operation: 'reset'", "operation:'customer_estimate_issue'"] },
+        { "path": "src/commandCenter/demoOperations.js", "anchors": ["canonical_operations_progress_successor_document", "canonical_operations_document_valid"] }
+      ]
+    },
+    {
+      "id": "demo.forecast-journey-actions",
+      "facets": ["demo_action", "retry"],
+      "disposition": "simulated_or_demo_only",
+      "owner": "isolated forecast demo",
+      "effectBoundary": "Forecast actions and reruns mutate only fictional demo state; prediction and recommendation states do not authorize effects.",
+      "entryPoints": ["/forecast/journey/actions"],
+      "sourceRefs": [{ "path": "src/routes/demo.js", "anchors": ["operation: 'forecast_journey'", "req.body.action === 'rerun'"] }]
+    },
+    {
+      "id": "demo.billing-identity-actions",
+      "facets": ["demo_action", "retry", "collection_label"],
+      "disposition": "simulated_or_demo_only",
+      "owner": "isolated customer-financial demo",
+      "effectBoundary": "Fictional billing identity review and Parts 5-12/14B projections cannot reach paid records, providers, receivers, or money.",
+      "entryPoints": ["/customer-financial/billing-identities/:customerId/actions", "/customer-financial/invoice-drafts/:estimateId/part14b-acceptance"],
+      "sourceRefs": [
+        { "path": "src/routes/demo.js", "anchors": ["operation: 'billing_identity'"] },
+        { "path": "src/customerFinancial/fictionalDemoJourneyAcceptance.js", "anchors": ["providerTransportAllowed: false", "webhookAllowed: false"] }
+      ]
+    },
+    {
+      "id": "demo.learning-center-actions",
+      "facets": ["demo_action", "retry"],
+      "disposition": "simulated_or_demo_only",
+      "owner": "isolated learning demo",
+      "effectBoundary": "Learning steps and reset affect only the fictional demo; tenant-private learning never supplies communication authority.",
+      "entryPoints": ["/learning-center/actions", "/learning-center/reset"],
+      "sourceRefs": [{ "path": "src/routes/demo.js", "anchors": ["operation: 'learning_step'", "'learning-journey-reset'"] }]
+    },
+    {
+      "id": "demo.homepage-web-call-and-polaris",
+      "facets": ["demo_action", "provider_adapter", "retry"],
+      "disposition": "simulated_or_demo_only",
+      "owner": "bounded public homepage demo",
+      "effectBoundary": "Homepage web-call, Polaris, and verified deletion remain ephemeral public-demo operations; they create no customer, paid, recipient, or communication effect.",
+      "entryPoints": ["POST /web-call", "POST /polaris/:callId", "DELETE /web-call/:callId"],
+      "sourceRefs": [
+        { "path": "package.json", "anchors": ["\"build:retell-web\": \"esbuild src/browser/retellWebEntry.mjs", "--outfile=public/js/vendor/retell-web-client.mjs"] },
+        { "path": "src/browser/retellWebEntry.mjs", "anchors": ["import { RetellWebClient } from 'retell-client-js-sdk'", "export { RetellWebClient }"] },
+        { "path": "public/js/homepage-demo.js", "anchors": ["var SDK_URL = '/js/vendor/retell-web-client.mjs'", "sdkPromise = import(SDK_URL)", "typeof module.RetellWebClient !== 'function'"] },
+        { "path": "src/routes/homepageDemo.js", "anchors": ["router.post('/web-call'", "router.post('/polaris/:callId'", "router.delete('/web-call/:callId'"] },
+        { "path": "src/services/demoVoiceLifecycle.js", "anchors": ["FROM canonical_operations o"] },
+        { "path": "src/services/homepageWebCall.js", "anchors": ["homepage_provider_deletion_unverified", "northstar_demo_webhook_contract"] }
+      ]
+    },
+    {
+      "id": "demo.retired-call-mutations",
+      "facets": ["demo_action", "provider_adapter"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "retired public demo mutation API",
+      "effectBoundary": "Outbound demo call and old simulate/advance/complete/cancel mutations are fixed retired boundaries, not reusable paths.",
+      "entryPoints": ["POST /call", "POST /:id/simulate", "POST /:id/advance", "POST /:id/complete", "POST /:id/cancel"],
+      "sourceRefs": [{ "path": "src/routes/demo.js", "anchors": ["code: 'demo_external_action_retired'", "router.post('/:id/simulate', retiredMutation)"] }]
+    }
+  ]
+}

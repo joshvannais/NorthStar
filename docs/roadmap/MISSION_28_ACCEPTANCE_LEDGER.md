@@ -1,6 +1,6 @@
 # Mission 28 — acceptance ledger
 
-Status: **Part 1A implementation candidate only.** No Mission 28 slice is independently accepted, merged, deployed, or released. Parts 1B–14G are planned and unimplemented.
+Status: **Part 1A released; Part 1B implementation candidate only.** Parts 1C–14G are planned and unimplemented. Part 1B has no independent acceptance, PR, merge, deployment, or release evidence.
 
 ## Authority and baseline
 
@@ -11,11 +11,14 @@ Status: **Part 1A implementation candidate only.** No Mission 28 slice is indepe
 | Canonical body SHA-256 | `109589DA2242EE6AA7FDD4C2DED3E3440B909B26452DEFCD39BC2502C1ADAAF5` |
 | Canonical roadmap | [Mission 28 business automation](MISSION_28_BUSINESS_AUTOMATION.md) |
 | Part 1A contract | [Authority and effect-boundary contract](../architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md) |
+| Part 1B inventory | [Automation-surface inventory and quarantine](../architecture/MISSION_28_PART1B_AUTOMATION_SURFACE_INVENTORY.md); [executable inventory](../architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json) |
 | Mission 27 terminal deployed base | Commit `7736fe6d31ce2300cf06cfcaa461f9b9ea5184c3`; tree `861215b3b6ffdcdf53f2f658e2d46098526f8b65` |
 | Baseline deployment | Railway `c452d8fd-c896-407e-9f20-5f9ba01ee587` `SUCCESS`; production migration/startup/health/root/demo verified by the preceding release lane |
-| Mission 28 migrations | None; source tree remains through migration 272 with no 273 |
-| Part 1A audit | Unavailable until a fresh independent exact-head whole-scope audit occurs |
-| Part 1A PR / merge / deployment / health | Unavailable; none authorized or performed in this implementation lane |
+| Mission 28 released baseline | Main `21ca719e24382443bbf3f52e460f3c16b016c4ad`; tree `0cfdc4f0e8dc28c790893edff7bbebe0b31a5d10` |
+| Mission 28 migrations | None; production PostgreSQL 18.6 source/applied 268/268 and source tree remain through migration 272 with no missing, duplicate, mismatch, pending, or migration 273 |
+| Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 `1C3AA77E9B1E31A4FE4A8167FC2072A5818EDC52D19B5BCB1356352FEADDBDE1` |
+| Part 1A PR / merge / deployment / health | Source `c42d1a9f72dcb6bbdd480e804988ddc3ec43cc09`; PR #549 normally merged 2026-10-27T09:18:42Z to main `21ca719e24382443bbf3f52e460f3c16b016c4ad`; sole deployment `d3010671-da95-4247-807f-f2089b90df74` `SUCCESS/RUNNING`; image `sha256:12b0bfeb266c4849b127102ad98a2f8b6ad06080898462c41ee63c3a5b699b26`; startup ready and `/api/health`, `/`, `/demo/` HTTP 200 |
+| Part 1B audit / PR / merge / deployment | Unavailable; writer implementation candidate only |
 | External/provider/private-production/live evidence | Unavailable and unclaimed |
 | Founder visual verdict | Separate, unavailable and unclaimed |
 
@@ -27,8 +30,8 @@ The `Scope anchor` is a locator, not a substitute for the complete immutable sco
 
 | # | Slice | Scope anchor | State | Acceptance / release evidence |
 | ---: | --- | --- | --- | --- |
-| 01 | 1A | Mission ownership, exclusions, terminology, dependencies, order and fact/decision/effect/evidence boundary | **Implementation candidate** | Writer implementation and tests only; independent audit, PR, merge, deployment and release unavailable |
-| 02 | 1B | Existing automation-like surface inventory and quarantine | Planned / unimplemented | None |
+| 01 | 1A | Mission ownership, exclusions, terminology, dependencies, order and fact/decision/effect/evidence boundary | **Released** | Accepted source `c42d1a9f72dcb6bbdd480e804988ddc3ec43cc09`; audit P0=P1=P2=P3=0 report `1C3AA77E9B1E31A4FE4A8167FC2072A5818EDC52D19B5BCB1356352FEADDBDE1`; PR #549; main `21ca719e24382443bbf3f52e460f3c16b016c4ad`; deployment `d3010671-da95-4247-807f-f2089b90df74` `SUCCESS/RUNNING`; health/root/demo verified |
+| 02 | 1B | Existing automation-like surface inventory and quarantine | **Implementation candidate** | Writer inventory and drift tests only; independent audit, PR, merge, deployment and release unavailable |
 | 03 | 1C | Action/risk catalog and threat model | Planned / unimplemented | None |
 | 04 | 1D | First-supported launch matrix and acceptance contract | Planned / unimplemented | None |
 | 05 | 2A | Canonical tenant-private automation policy definition | Planned / unimplemented | None |

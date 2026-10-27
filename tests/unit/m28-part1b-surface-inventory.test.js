@@ -876,8 +876,8 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
   test('records Parts 1A–3D released, Part 4A as the sole candidate and every later slice as planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–3D released; Part 4A implementation candidate only.');
-    expect(roadmap).toContain('Parts 4B–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–4A released; Part 4B implementation candidate only.');
+    expect(roadmap).toContain('Parts 4C–14G remain planned and unimplemented.');
     const rows = [...ledger.matchAll(/^\| (\d{2}) \| (\d{1,2}[A-G]) \| (.+) \| (.+) \| (.+) \|$/gm)];
     expect(rows).toHaveLength(66);
     expect(rows[0][4]).toBe('**Released**');
@@ -904,9 +904,11 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(rows[10][5]).toContain('PR #559');
     expect(rows[11][4]).toBe('**Released**');
     expect(rows[11][5]).toContain('PR #560');
-    expect(rows[12][4]).toBe('**Implementation candidate**');
-    expect(rows[12][5]).toContain('no runtime ingestion/resolver');
-    expect(rows.slice(13).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[12][4]).toBe('**Released**');
+    expect(rows[12][5]).toContain('PR #561');
+    expect(rows[13][4]).toBe('**Implementation candidate**');
+    expect(rows[13][5]).toContain('no mounted runtime ingestion/resolver');
+    expect(rows.slice(14).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
   });
 
@@ -917,9 +919,10 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(productionSource).not.toContain('mission28.part1b.surface-inventory.v1');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(migrations).toHaveLength(269);
-    expect(migrations.at(-1)).toBe('273_canonical_automation_authority_v1.sql');
+    expect(migrations).toHaveLength(270);
+    expect(migrations.at(-1)).toBe('274_canonical_automation_trigger_snapshots_v1.sql');
     expect(migrations.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
+    expect(migrations.filter(name => /^274_/.test(name))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });
 
   test('preserves the accepted Part 1B artifact-time boundary without retroactive Part 1C or Part 1D authority', () => {

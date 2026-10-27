@@ -13,6 +13,10 @@ const SOURCE_SHA = 'DDBA5CA7523A1684330E136313F4416584D142A63167310EEABEC1EBFBB0
 const BODY_SHA = '109589DA2242EE6AA7FDD4C2DED3E3440B909B26452DEFCD39BC2502C1ADAAF5';
 const BASE = '7736fe6d31ce2300cf06cfcaa461f9b9ea5184c3';
 const BASE_TREE = '861215b3b6ffdcdf53f2f658e2d46098526f8b65';
+const PART1A_HEAD = 'c42d1a9f72dcb6bbdd480e804988ddc3ec43cc09';
+const PART1A_MAIN = '21ca719e24382443bbf3f52e460f3c16b016c4ad';
+const PART1A_DEPLOYMENT = 'd3010671-da95-4247-807f-f2089b90df74';
+const PART1A_AUDIT = '1C3AA77E9B1E31A4FE4A8167FC2072A5818EDC52D19B5BCB1356352FEADDBDE1';
 
 const PARTS = [
   [1, 'mission authority, inventory, risk model, and acceptance contract', 4],
@@ -80,10 +84,15 @@ function validateLedger(document) {
   expect(rows.map(row => row.id)).toEqual(EXPECTED_SLICES);
   expect(rows[0]).toMatchObject({
     id: '1A',
-    state: '**Implementation candidate**',
-    evidence: 'Writer implementation and tests only; independent audit, PR, merge, deployment and release unavailable',
+    state: '**Released**',
   });
-  expect(rows.slice(1).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+  expect(rows[0].evidence).toContain(`Accepted source \`${PART1A_HEAD}\``);
+  expect(rows[0].evidence).toContain(`report \`${PART1A_AUDIT}\``);
+  expect(rows[0].evidence).toContain(`main \`${PART1A_MAIN}\``);
+  expect(rows[0].evidence).toContain(`deployment \`${PART1A_DEPLOYMENT}\``);
+  expect(rows[1]).toMatchObject({ id: '1B', state: '**Implementation candidate**' });
+  expect(rows[1].evidence).toContain('independent audit, PR, merge, deployment and release unavailable');
+  expect(rows.slice(2).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
 }
 
 describe('Mission 28 Part 1A authority ratification', () => {
@@ -99,8 +108,12 @@ describe('Mission 28 Part 1A authority ratification', () => {
       expect(document).toContain(BASE);
       expect(document).toContain(BASE_TREE);
     }
-    expect(roadmap).toContain('Part 1A implementation candidate; not independently accepted, merged, deployed, or released.');
-    expect(roadmap).toContain('Parts 1B–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Part 1A released; Part 1B implementation candidate only.');
+    expect(roadmap).toContain('Parts 1C–14G remain planned and unimplemented.');
+    for (const identity of [PART1A_HEAD, PART1A_MAIN, PART1A_DEPLOYMENT, PART1A_AUDIT]) {
+      expect(roadmap).toContain(identity);
+      expect(ledger).toContain(identity);
+    }
   });
 
   test('freezes fourteen parts and all sixty-six slices in exact order', () => {
@@ -176,13 +189,13 @@ describe('Mission 28 Part 1A authority ratification', () => {
     expect(contract).toContain('It grants no route, worker, queue, scheduler, provider adapter, callback, credential, recipient, message, document delivery, internal task, payment, refund, fee, write-off, accounting action, database authority, migration, UI control, production flag or demo effect.');
   });
 
-  test('keeps exactly Part 1A current and every later slice planned', () => {
+  test('records released Part 1A, keeps exactly Part 1B current, and leaves every later slice planned', () => {
     const ledger = read(LEDGER_PATH);
     validateLedger(ledger);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(65);
-    expect(ledger).toContain('No Mission 28 slice is independently accepted, merged, deployed, or released.');
-    expect(ledger).toContain('Part 1A audit | Unavailable until a fresh independent exact-head whole-scope audit occurs');
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(64);
+    expect(ledger).toContain('Part 1B has no independent acceptance, PR, merge, deployment, or release evidence.');
+    expect(ledger).toContain(`Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 \`${PART1A_AUDIT}\``);
   });
 
   test('fails executable order/count/status drift mutations rather than accepting positive substrings', () => {
@@ -200,7 +213,7 @@ describe('Mission 28 Part 1A authority ratification', () => {
       ledger.replace('| 02 | 1B |', '| 02 | 1C |'),
       ledger.replace('| 66 | 14G |', '| 67 | 14G |'),
       ledger.replace(/^\| 25 \| 6E .*\r?\n/m, ''),
-      ledger.replace('| 02 | 1B | Existing automation-like surface inventory and quarantine | Planned / unimplemented | None |',
+      ledger.replace('| 02 | 1B | Existing automation-like surface inventory and quarantine | **Implementation candidate** | Writer inventory and drift tests only; independent audit, PR, merge, deployment and release unavailable |',
         '| 02 | 1B | Existing automation-like surface inventory and quarantine | **Accepted** | None |'),
     ];
     for (const mutation of ledgerMutations) expect(() => validateLedger(mutation)).toThrow();

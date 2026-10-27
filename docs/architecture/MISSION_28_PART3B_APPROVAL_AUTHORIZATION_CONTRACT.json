@@ -1,0 +1,449 @@
+{
+  "contractVersion": "mission28.part3b.approval-authorization.v1",
+  "authority": {
+    "mission": 28,
+    "part": "3B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "1e62336afe2c9e65cccbe1629a62b86855da3ff8",
+    "baselineTree": "a88024e8140900492d7ac02bcf4e07f020d8b3de",
+    "runtimeResolverImplemented": false,
+    "approvalRouteOrUiGranted": false,
+    "databaseOrMigrationAdded": false,
+    "schedulerWorkerQueueOrProviderAuthorityGranted": false,
+    "externalRecipientOrEffectAuthorityGranted": false,
+    "upstreamMutationAuthorityGranted": false,
+    "moneyAuthorityGranted": false
+  },
+  "part3ARelease": {
+    "acceptedSourceHead": "05a541792adac121f8c51b2cf200c0d18fcfbbf1",
+    "acceptedTree": "a88024e8140900492d7ac02bcf4e07f020d8b3de",
+    "pullRequest": 557,
+    "mergedMain": "1e62336afe2c9e65cccbe1629a62b86855da3ff8",
+    "deployment": "7ca335a1-7bf6-4f8d-ae98-a188b891f85d",
+    "deploymentState": "SUCCESS_RUNNING",
+    "imageSha256": "201627b8ee00cf950c267bbd522d5538a7c42461c8771de8701463fe790ac40e",
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null,
+    "health": [
+      "one_running_instance",
+      "startup_ready",
+      "migrations_269_of_269_latest_273_no_274",
+      "health_200",
+      "root_200",
+      "demo_200"
+    ]
+  },
+  "frozenInputs": [
+    {
+      "path": "docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md",
+      "normalizedLfSha256": "92DAD00F8A7623A87C780FC1AC965B66569616650F53FDED8454F51872458179"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json",
+      "normalizedLfSha256": "62E37CF07A26F0C2B1A50A2C2F0EB927695500DB32B44B16E5B431F594B93142"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json",
+      "normalizedLfSha256": "1CB5FF594AE7D1BEED313C1A94D7FE8200FB0024B36DF11B4C668F211481312B"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json",
+      "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json",
+      "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json",
+      "normalizedLfSha256": "3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2C_POLICY_LIFECYCLE.json",
+      "normalizedLfSha256": "91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json",
+      "normalizedLfSha256": "03F32F3C66EF525DF9ACA541F8A7D0C08935E1DD2EDB661468F78CC2A763308A"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json",
+      "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"
+    },
+    {
+      "path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.md",
+      "normalizedLfSha256": "F849B39A38377F5B331BE302FD2C4A6065C727F7763127FD17819C20A509C8C1"
+    }
+  ],
+  "decisionStates": [
+    "accepted_contract_record_only_no_runtime_authority",
+    "idempotent_exact_replay_no_new_authority",
+    "deny_missing_or_untrusted_resolution",
+    "deny_identity_or_capability_mismatch",
+    "deny_recent_authentication_missing_stale_or_mismatched",
+    "deny_expired_or_invalid_time_binding",
+    "deny_material_binding_mismatch_or_change",
+    "deny_kind_or_scope_mismatch",
+    "deny_digest_or_idempotency_mismatch",
+    "deny_unsupported_or_self_created_authority"
+  ],
+  "identityGrammar": {
+    "opaqueIdentifierPattern": "^[A-Za-z0-9][A-Za-z0-9._:@|/-]{0,255}$",
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+    "reasonCodePattern": "^[a-z][a-z0-9_]{0,63}$",
+    "reasonTextMinLength": 1,
+    "reasonTextMaxLength": 512,
+    "reasonTextRule": "primitive_string_trimmed_equal_no_control_characters_length_1_to_512",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_or_coercion",
+    "allTenantBindingsMustEqualExactly": true,
+    "actorIdMustEqualSessionSubjectAndMembershipSubjectExactly": true,
+    "membershipRoleId": "owner",
+    "membershipStatus": "active",
+    "capabilityDecisionState": "eligible_contract_only_no_runtime_authority",
+    "recentAuthenticationState": "valid_recent",
+    "recordSuppliedIdentityOrCapabilityNeverEstablishesAuthority": true
+  },
+  "authorizationKinds": [
+    {
+      "id": "per_run_approval",
+      "capabilityOperationPairs": [
+        {
+          "capabilityId": "automation_run_approve",
+          "operation": "approve_run",
+          "recordScope": "one_exact_tenant_run_preview"
+        }
+      ],
+      "kindBinding": {
+        "subjectRecordType": "proposed_action",
+        "runId": "required_exact_uuid",
+        "standingIntent": null,
+        "subjectRecordId": "exact_proposed_action_record_uuid",
+        "subjectRecordDigest": "exact_proposed_action_record_digest",
+        "trustedSubjectEvidence": "separately_resolved_proposed_action_evidence_must_bind_the_same_exact_run_id_record_id_and_record_digest"
+      },
+      "reuseBoundary": "one_exact_run_one_exact_material_binding_exact_idempotent_replay_only",
+      "standingOrFutureRunAuthority": "deny",
+      "boundary": "Approves one exact run preview only. It cannot activate a policy, become standing authority, transfer to another run, or prove execution or effect."
+    },
+    {
+      "id": "standing_authorization",
+      "capabilityOperationPairs": [
+        {
+          "capabilityId": "automation_standing_authority_activate",
+          "operation": "activate_standing_authority",
+          "recordScope": "one_exact_tenant_policy_version",
+          "standingIntent": "activate_exact_policy_version"
+        },
+        {
+          "capabilityId": "automation_standing_authority_change",
+          "operation": "change_standing_authority",
+          "recordScope": "one_exact_tenant_policy_version_transition",
+          "standingIntent": "change_to_exact_policy_version"
+        }
+      ],
+      "kindBinding": {
+        "subjectRecordType": "policy_version",
+        "runId": null,
+        "standingIntent": [
+          "activate_exact_policy_version",
+          "change_to_exact_policy_version"
+        ],
+        "subjectRecordId": "must_equal_policy_id",
+        "subjectRecordDigest": "must_equal_policy_digest"
+      },
+      "reuseBoundary": "exact_policy_version_and_exact_material_binding_only_exact_idempotent_replay_allowed",
+      "perRunOrDifferentPolicyAuthority": "deny",
+      "boundary": "Authorizes one exact standing-policy material envelope only. It cannot approve an arbitrary run, widen a recipient or effect, survive a material change, or activate runtime behavior by itself."
+    }
+  ],
+  "recordGrammar": {
+    "contractVersion": "mission28.authorization.record.v1",
+    "exactKeys": [
+      "contractVersion",
+      "authorizationId",
+      "authorizationKind",
+      "tenantId",
+      "actorBinding",
+      "policyBinding",
+      "sourceBinding",
+      "previewBinding",
+      "recipientBinding",
+      "effectBinding",
+      "reasonBinding",
+      "temporalBinding",
+      "idempotencyBinding",
+      "kindBinding",
+      "materialBindingDigest",
+      "recordDigest"
+    ],
+    "actorBindingExactKeys": [
+      "actorId",
+      "actorTenantId",
+      "sessionId",
+      "sessionSubjectActorId",
+      "sessionTenantId",
+      "membershipId",
+      "membershipSubjectActorId",
+      "membershipTenantId",
+      "membershipRoleId",
+      "membershipStatus",
+      "capabilityId",
+      "operation",
+      "recordScope",
+      "capabilityDecisionId",
+      "capabilityDecisionDigest",
+      "capabilityDecisionState",
+      "recentAuthenticationState",
+      "recentAuthenticationEvidenceId",
+      "recentAuthenticationEvidenceDigest",
+      "recentAuthenticationExpiresAt"
+    ],
+    "policyBindingExactKeys": [
+      "tenantId",
+      "policyId",
+      "policyVersion",
+      "policyDigest"
+    ],
+    "sourceBindingExactKeys": [
+      "tenantId",
+      "sourceSetDigest",
+      "currentnessMarker"
+    ],
+    "previewBindingExactKeys": [
+      "tenantId",
+      "previewId",
+      "previewDigest",
+      "previewState",
+      "subjectRecordType",
+      "subjectRecordId",
+      "subjectRecordDigest",
+      "policyDigest",
+      "sourceSetDigest",
+      "recipientSetDigest",
+      "effectSetDigest"
+    ],
+    "recipientBindingExactKeys": [
+      "tenantId",
+      "recipientSetId",
+      "recipientSetDigest",
+      "recipientClassIds"
+    ],
+    "effectBindingExactKeys": [
+      "tenantId",
+      "effectSetId",
+      "effectSetDigest",
+      "actionFamilyId",
+      "channelIds",
+      "providerModeIds",
+      "effectClass"
+    ],
+    "reasonBindingExactKeys": [
+      "reasonCode",
+      "reasonText",
+      "reasonDigest"
+    ],
+    "temporalBindingExactKeys": [
+      "issuedAt",
+      "expiresAt",
+      "trustedClockEvidenceId",
+      "trustedClockEvidenceDigest"
+    ],
+    "idempotencyBindingExactKeys": [
+      "namespace",
+      "keyDigest"
+    ],
+    "kindBindingExactKeys": [
+      "subjectRecordType",
+      "subjectRecordId",
+      "subjectRecordDigest",
+      "runId",
+      "standingIntent"
+    ],
+    "sourceCurrentnessMarker": "captured_exact_current",
+    "previewState": "exact_current",
+    "allowedActionFamilyIds": [
+      "internal_read_digest_task",
+      "owner_approval_request",
+      "collection_escalation"
+    ],
+    "firstLaunchBindingRules": {
+      "internal_read_digest_task": {
+        "recipientClassIds": ["tenant_owner", "tenant_admin", "assigned_staff"],
+        "channelIds": ["in_app_passive"],
+        "providerModeIds": ["provider_disabled"],
+        "effectClass": "internal_only_no_external_effect"
+      },
+      "owner_approval_request": {
+        "recipientClassIds": ["tenant_owner"],
+        "channelIds": ["in_app_passive"],
+        "providerModeIds": ["provider_disabled"],
+        "effectClass": "internal_only_no_external_effect"
+      },
+      "collection_escalation": {
+        "recipientClassIds": ["tenant_owner"],
+        "channelIds": ["in_app_passive"],
+        "providerModeIds": ["provider_disabled"],
+        "effectClass": "internal_only_no_external_effect"
+      }
+    },
+    "unavailableFirstLaunchActionFamilyIds": [
+      "customer_communication",
+      "secure_document_delivery",
+      "financial_reminder"
+    ],
+    "unsupportedActionFamilyId": "unsupported_upstream_mutation_or_money_movement"
+  },
+  "canonicalization": {
+    "objectKeyOrder": "lexicographic_unicode_code_point",
+    "arrayOrder": "preserved_exactly",
+    "strings": "primitive_utf8_no_normalization_or_coercion",
+    "numbers": "safe_integer_only_where_schema_permits",
+    "reasonNamespace": "mission28.authorization.reason.v1\n",
+    "materialNamespace": "mission28.authorization.material.v1\n",
+    "recordNamespace": "mission28.authorization.record.v1\n",
+    "digestAlgorithm": "SHA-256",
+    "digestFormat": "sha256:lowercase_hex",
+    "materialDigestInput": "material_namespace_plus_canonical_json_of_every_material_root",
+    "recordDigestInput": "record_namespace_plus_canonical_json_of_every_exact_record_field_except_recordDigest"
+  },
+  "materialBinding": {
+    "roots": [
+      "authorizationId",
+      "authorizationKind",
+      "tenantId",
+      "actorBinding",
+      "policyBinding",
+      "sourceBinding",
+      "previewBinding",
+      "recipientBinding",
+      "effectBinding",
+      "reasonBinding",
+      "temporalBinding",
+      "idempotencyBinding",
+      "kindBinding"
+    ],
+    "allDescendantLeavesAreMaterial": true,
+    "mutationReorderingRemovalAdditionOrSubstitution": "new_authority_required_old_authority_denied",
+    "sameDigestDifferentCanonicalValue": "deny",
+    "sameValueDifferentDigest": "deny",
+    "fullRecordAndDigestRecomputationAgainstOldTrustedResolution": "deny"
+  },
+  "trustedResolutionContract": {
+    "source": "server_resolved_authenticated_request_plus_part2d_policy_source_authority_plus_exact_preview_recipient_effect_and_trusted_clock",
+    "requiredSeparatelyTrustedValues": [
+      "authorizationId",
+      "authorizationKind",
+      "tenantId",
+      "actorBinding",
+      "policyBinding",
+      "sourceBinding",
+      "previewBinding",
+      "recipientBinding",
+      "effectBinding",
+      "reasonBinding",
+      "temporalBinding",
+      "idempotencyBinding",
+      "kindBinding",
+      "proposedActionSubjectEvidence_for_per_run_null_for_standing",
+      "materialBindingDigest"
+    ],
+    "perRunProposedActionSubjectEvidence": {
+      "exactKeys": [
+        "tenantId",
+        "subjectRecordType",
+        "subjectRecordId",
+        "subjectRecordDigest",
+        "runId",
+        "policyId",
+        "policyVersion",
+        "policyDigest",
+        "sourceSetDigest",
+        "currentnessMarker"
+      ],
+      "subjectRecordType": "proposed_action",
+      "resolutionSource": "server_resolved_exact_part2b_proposed_action_record_not_candidate_supplied",
+      "bindingRule": "tenant_record_id_record_digest_run_id_policy_tuple_source_set_digest_and_currentness_must_equal_the_candidate_material_exactly",
+      "standingAuthorizationValue": null
+    },
+    "candidateRecordMaySupplyOrReplaceTrustedResolution": false,
+    "actorSessionMembershipCapabilityAndRecentAuthenticationMustBeReread": true,
+    "policySourcePreviewRecipientEffectTimeKindAndPerRunProposedActionMustResolveExactly": true,
+    "previewMustCrossBindExactPolicySourceRecipientEffectAndKindSubject": true,
+    "perRunKindBindingRunIdMustEqualSeparatelyTrustedProposedActionRunId": true,
+    "wholeRecordTenantActorPolicySourcePreviewRecipientEffectOrKindRetarget": "deny_even_after_all_record_digests_are_recomputed",
+    "missingAmbiguousStaleUnavailableOrMixedResolution": "deny"
+  },
+  "expiryAndIdempotency": {
+    "issuedAtMustBeStrictlyBeforeExpiresAt": true,
+    "trustedDecisionTimeMustBeOnOrAfterIssuedAtAndStrictlyBeforeExpiresAt": true,
+    "recentAuthenticationEvidenceMustBeValidAtIssuedAtAndDecisionTime": true,
+    "expiredAuthority": "deny",
+    "perRunNamespace": "mission28.authorization.per-run.v1",
+    "standingNamespace": "mission28.authorization.standing.v1",
+    "exactSameAuthorizationIdMaterialDigestRecordDigestAndIdempotencyKey": "idempotent_exact_replay_no_new_authority",
+    "sameIdempotencyKeyDifferentMaterialOrRecord": "deny",
+    "differentIdempotencyKeyForPriorAuthority": "new_authority_required_old_authority_not_reused"
+  },
+  "materialChangeInvalidation": {
+    "policyVersionOrDigestChange": "deny_reuse",
+    "sourceSetDigestOrCurrentnessChange": "deny_reuse",
+    "previewIdentityDigestOrStateChange": "deny_reuse",
+    "recipientIdentityOrDigestChange": "deny_reuse",
+    "effectIdentityDigestOrActionFamilyChange": "deny_reuse",
+    "actorSessionMembershipCapabilityRecentAuthenticationOrScopeChange": "deny_reuse",
+    "reasonExpiryTimeEvidenceIdempotencyOrKindSubjectChange": "deny_reuse",
+    "runProposedActionSubjectOrStandingIntentChange": "deny_reuse",
+    "correctionRule": "create_new_preview_and_new_authorization_identity_from_new_separately_trusted_resolution_preserve_old_record"
+  },
+  "selfAuthorityDenials": [
+    "capability_eligibility_record_alone_creates_approval_or_standing_authority",
+    "policy_lifecycle_state_source_fact_preview_or_proposed_action_self_authorizes",
+    "approval_request_view_acknowledgement_or_generated_content_counts_as_approval",
+    "provider_callback_delivery_reply_or_effect_evidence_creates_or_widens_authority",
+    "record_supplied_actor_session_membership_recent_auth_policy_source_preview_recipient_effect_or_clock_is_trusted",
+    "ai_output_display_role_operational_label_or_part1d_capability_alias_creates_authority",
+    "per_run_approval_becomes_standing_authorization_or_transfers_to_another_run",
+    "standing_authorization_approves_arbitrary_run_new_policy_source_preview_recipient_or_effect",
+    "expired_stale_changed_replayed_or_ambiguous_authority_executes",
+    "authorization_record_proves_schedule_provider_attempt_delivery_outcome_upstream_mutation_or_money_effect"
+  ],
+  "deniedCombinations": [
+    "cross_tenant_or_same_tenant_cross_actor_session_membership_substitution",
+    "empty_whitespace_control_noncanonical_or_oversized_identity",
+    "missing_inactive_suspended_unknown_or_non_owner_membership",
+    "missing_stale_expired_or_mismatched_recent_authentication",
+    "unknown_fuzzy_wildcard_case_folded_prefixed_suffixed_or_aliased_capability",
+    "per_run_capability_with_standing_kind_or_standing_capability_with_per_run_kind",
+    "per_run_missing_or_different_run_or_proposed_action_subject_or_separately_trusted_subject_evidence",
+    "standing_run_id_present_or_policy_subject_not_exact",
+    "policy_source_preview_recipient_effect_reason_expiry_or_idempotency_mismatch",
+    "stale_unavailable_mixed_or_fixture_source_or_preview_currentness",
+    "unavailable_first_launch_customer_document_or_financial_external_effect",
+    "unsupported_upstream_mutation_or_money_action_family",
+    "material_change_with_old_authorization_id_digest_or_idempotency_key",
+    "record_self_hashes_without_separate_trusted_resolution",
+    "runtime_route_ui_database_scheduler_worker_queue_provider_recipient_effect_or_money_authority"
+  ],
+  "runtimeBoundary": {
+    "contractIsExecutableRuntime": false,
+    "runtimeResolverAvailable": false,
+    "approvalRouteUiOrDatabaseAvailable": false,
+    "activationSchedulingWorkerQueueRetryOrProviderAvailable": false,
+    "recipientMessageOrExternalEffectAvailable": false,
+    "migrationAdded": false,
+    "laterSlicesMayConsumeOnlyAfterIndependentAcceptance": true,
+    "acceptedDecisionMeaning": "valid_source_contract_record_only_no_runtime_or_effect_authority"
+  },
+  "unavailableEvidence": [
+    "runtime actor session membership capability and recent-authentication resolution",
+    "approval or standing-authorization route UI persistence or consumption",
+    "activation scheduling pause retry export channel global-stop or execution controls",
+    "provider accounts credentials senders callbacks templates deliverability or sandbox evidence",
+    "real recipients messages external effects upstream mutations accounting or money effects",
+    "professional legal privacy consent collections provider regulatory or security review",
+    "private-production customer evidence live money first-paying-customer validation hosted load or SLA",
+    "exercised restore physical Safari devices manual assistive technology and founder visual approval"
+  ]
+}

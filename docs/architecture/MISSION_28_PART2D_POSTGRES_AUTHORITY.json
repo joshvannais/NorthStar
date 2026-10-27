@@ -1,0 +1,163 @@
+{
+  "contractVersion": "mission28.part2d.postgresql.authority.v1",
+  "authority": {
+    "mission": 28,
+    "part": "2D",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "1d52b675d8d2bbe9065c220ff3719460bd530f38",
+    "baselineTree": "cb6efc54e0fe591cb9c3439126d6c7b6454b5048",
+    "databaseAuthorityGranted": true,
+    "runtimeStorageCapabilityGranted": false,
+    "policyActivationGranted": false,
+    "providerAuthorityGranted": false,
+    "externalEffectAuthorityGranted": false
+  },
+  "part2CRelease": {
+    "acceptedSourceHead": "69d4a375a4971ab98310872b9382cba92f5a67c0",
+    "acceptedTree": "cb6efc54e0fe591cb9c3439126d6c7b6454b5048",
+    "pullRequest": 555,
+    "mergedMain": "1d52b675d8d2bbe9065c220ff3719460bd530f38",
+    "deployment": "036663b4-a364-4c3a-9842-5e1686164be0",
+    "deploymentState": "SUCCESS_RUNNING",
+    "imageSha256": "sha256:b38f14f81706ee11c00b698228532744bc1efc8d2b68273c442d0c72e4651a46",
+    "auditVerdict": "P0=0 P1=0 P2=0 P3=0",
+    "auditReportSha256": null,
+    "health": ["startup_ready", "migrations_268_of_268_through_272_no_273", "health_200", "root_200", "demo_200"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md", "normalizedLfSha256": "92DAD00F8A7623A87C780FC1AC965B66569616650F53FDED8454F51872458179"},
+    {"path": "docs/architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json", "normalizedLfSha256": "62E37CF07A26F0C2B1A50A2C2F0EB927695500DB32B44B16E5B431F594B93142"},
+    {"path": "docs/architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json", "normalizedLfSha256": "1CB5FF594AE7D1BEED313C1A94D7FE8200FB0024B36DF11B4C668F211481312B"},
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json", "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"},
+    {"path": "docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json", "normalizedLfSha256": "3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5"},
+    {"path": "docs/architecture/MISSION_28_PART2C_POLICY_LIFECYCLE.json", "normalizedLfSha256": "91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD"}
+  ],
+  "migration": {
+    "number": 273,
+    "file": "273_canonical_automation_authority_v1.sql",
+    "additiveOnly": true,
+    "latestSourceMigration": 273,
+    "preMigrationLatest": 272,
+    "destructiveDataChange": false,
+    "legacyDiscoveryOrAdoption": false,
+    "applicationRouteWorkerOrProviderMount": false,
+    "restartContract": "migration_replay_is_checksum_bound_and_records_survive_new_database_connections_without_recanonicalization_or_rebinding"
+  },
+  "tables": [
+    {"name": "canonical_automation_policy_versions_v1", "grain": "tenant_policy_version", "appendOnly": true, "retentionClass": "policy_history"},
+    {"name": "canonical_automation_source_bindings_v1", "grain": "tenant_source_class_record_version", "appendOnly": true, "retentionClass": "source_snapshot_history"},
+    {"name": "canonical_automation_source_sets_v1", "grain": "tenant_exact_source_set_digest", "appendOnly": true, "retentionClass": "source_snapshot_history"},
+    {"name": "canonical_automation_lifecycle_events_v1", "grain": "tenant_lifecycle_event", "appendOnly": true, "retentionClass": "lifecycle_history"},
+    {"name": "canonical_automation_records_v1", "grain": "tenant_run_typed_record", "appendOnly": true, "retentionClass": "classification_derived_decision_or_effect_evidence_history"},
+    {"name": "canonical_automation_historical_run_bindings_v1", "grain": "tenant_run", "appendOnly": true, "retentionClass": "historical_run_binding"},
+    {"name": "canonical_automation_legacy_conversion_reviews_v1", "grain": "tenant_review", "appendOnly": true, "retentionClass": "legacy_conversion_review"},
+    {"name": "canonical_automation_retention_classes_v1", "grain": "closed_retention_class", "appendOnly": true, "retentionClass": "self_describing_registry"}
+  ],
+  "tenantRls": {
+    "enabledAndForced": true,
+    "tenantKey": "organization_id",
+    "transactionLocalTenantSetting": "northstar.automation_tenant_id",
+    "policy": "table_owner_and_exact_transaction_local_tenant_required",
+    "runtimeDirectTablePrivileges": "none",
+    "runtimeFunctionPrivileges": "none_until_later_capability_and_approval_authority",
+    "crossTenantReadWriteOrIdentityReuse": "deny"
+  },
+  "trustedClock": {
+    "source": "PostgreSQL statement_timestamp()",
+    "callerSuppliedRecordedAt": "deny",
+    "storageType": "timestamp_with_time_zone_microsecond_precision",
+    "canonicalDisplayTimeZone": "UTC",
+    "canonicalFormat": "YYYY-MM-DDTHH:mm:ss.ffffffZ",
+    "transactionLocalTimeZone": "UTC",
+    "expiryInput": "exact_UTC_Z_seconds_policy_field",
+    "schedulerOrEffectTimeAuthority": "unavailable"
+  },
+  "canonicalization": {
+    "productionModule": "src/automation/canonicalJson.js",
+    "databaseFunction": "canonical_automation_json_v1(jsonb)",
+    "encoding": "UTF-8",
+    "objectKeys": "Unicode_code_point_order_equivalent_UTF8_C_order",
+    "unicodeStrings": "valid_Unicode_scalar_values_only_with_U+0000_unavailable_for_PostgreSQL_text_parity",
+    "arrayOrder": "preserved",
+    "numbers": "safe_integers_only_negative_zero_denied_before_JSONB",
+    "exactText": "required_no_whitespace_duplicate_key_or_alternate_numeric_representation",
+    "digestAlgorithm": "SHA-256",
+    "digestFormat": "sha256:lowercase_hex",
+    "maximumCanonicalBytes": 65536,
+    "maximumDepth": 24,
+    "maximumNodes": 2048,
+    "maximumObjectKeys": 128,
+    "maximumArrayItems": 256,
+    "maximumKeyBytes": 128,
+    "maximumStringBytes": 8192,
+    "plainDataOnly": true
+  },
+  "digestAndCurrentness": {
+    "policyNamespace": "mission28.policy.version.v1\n",
+    "sourceBindingAuthority": "exact owner-only stored tenant/source-class/owner/id/version/digest/currentness tuple",
+    "recordSourceSetNamespace": "mission28.record.source-set.v1\n",
+    "recordPayloadNamespace": "mission28.record.payload.v1\n",
+    "recordNamespace": "mission28.record.v1\n",
+    "lifecyclePayloadNamespace": "mission28.policy.lifecycle.payload.v1\n",
+    "lifecycleEventNamespace": "mission28.policy.lifecycle.event.v1\n",
+    "historicalRunNamespace": "mission28.policy.lifecycle.historical-run.v1\n",
+    "policyTupleMustResolveFromStoredAuthority": true,
+    "causalParentMustResolveFromStoredAuthority": true,
+    "historicalBindingMustResolveFromStoredAuthority": true,
+    "lifecycleSourceSetMustResolveFromStoredAuthority": true,
+    "supersessionRule": "successor_is_exact_next_stored_policy_version_with_a_resolved_active_lifecycle_event_digest_before_the_old_version_can_be_superseded",
+    "boundedRollbackRule": "new_target_policy_previous_digest_equals_exact_stored_immediate_predecessor_and_rollback_source_activation_and_terminal_event_digests_resolve_from_stored_history",
+    "unrelatedLifecycleBindings": "deny",
+    "trustedExpiryRule": "database_statement_time_denies_activation_or_resume_at_or_after_policy_expiry_and_denies_expire_before_policy_expiry",
+    "nonCurrentMayGrantActiveAuthority": false,
+    "preEffectRuntimeRevalidation": "required_by_later_slice_unavailable_here"
+  },
+  "boundedFieldsAndIndexes": {
+    "uuidTenantPolicyRunRecordAndEventIdentities": true,
+    "safeIntegerVersionsSequencesAndOrdinals": true,
+    "canonicalDocumentBoundsEnforced": true,
+    "policyLatestIndex": true,
+    "policyExpiryIndex": true,
+    "lifecycleOrderIndex": true,
+    "lifecycleCurrentnessIndex": true,
+    "runOrderIndex": true,
+    "recordTypeIndex": true,
+    "retentionIndex": true,
+    "historicalPolicyIndex": true
+  },
+  "retention": {
+    "classes": ["policy_history", "lifecycle_history", "decision_history", "effect_evidence_history", "source_snapshot_history", "historical_run_binding", "legacy_conversion_review"],
+    "automaticDeletionAvailable": false,
+    "minimumDurationsAccepted": false,
+    "disposition": "retain_no_automatic_deletion_pending_review",
+    "professionalLegalPrivacyProviderReview": "unavailable"
+  },
+  "legacyConversion": {
+    "automaticDiscovery": "deny",
+    "automaticImport": "deny",
+    "legacyRowCountAfterMigration": 0,
+    "currentNativePolicyOrigin": "mission28_native",
+    "reviewedConversionWritePath": "unavailable",
+    "convertedPolicyIdentity": "must_remain_null_until_a_later_reviewed_conversion_slice"
+  },
+  "availability": {
+    "databaseSchemaAndOwnerOnlyContractStorage": true,
+    "runtimePolicyWriteReadOrActivation": false,
+    "routesUiDemoSchedulerWorkerQueueOrProvider": false,
+    "providerCallsAllowed": 0,
+    "externalRecipientsOrMessagesAllowed": 0,
+    "externalEffectsAllowed": 0,
+    "upstreamMutationsAllowed": 0,
+    "accountingEffectsAllowed": 0,
+    "moneyEffectsAllowed": 0
+  },
+  "unavailableEvidence": [
+    "Part 2D independent audit, PR, merge, deployment, release or private-production persistence",
+    "Part 3 capabilities approvals limits governance or any runtime policy draft activation pause resume stop rollback authority",
+    "Routes UI demo scheduler workers queues providers credentials callbacks templates senders real recipients messages or effects",
+    "Accepted retention durations automatic deletion legal hold conversion review or legacy adoption",
+    "Professional legal privacy consent communications collections debt country region regulatory provider or security review",
+    "Hosted load or SLA exercised backup restore physical Safari devices manual assistive-technology review or founder visual approval"
+  ]
+}

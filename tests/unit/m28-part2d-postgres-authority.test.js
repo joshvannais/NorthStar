@@ -1,0 +1,175 @@
+'use strict';
+
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.resolve(__dirname, '../..');
+const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
+const parse = relative => JSON.parse(read(relative));
+const canonical = require('../../src/automation/canonicalJson');
+
+const MODEL_PATH = 'docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json';
+const NARRATIVE_PATH = 'docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.md';
+const MIGRATION_PATH = 'migrations/273_canonical_automation_authority_v1.sql';
+const ROADMAP_PATH = 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md';
+const LEDGER_PATH = 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md';
+const PART2C_MAIN = '1d52b675d8d2bbe9065c220ff3719460bd530f38';
+
+function normalizedLfSha256(relative) {
+  const normalized = read(relative).replace(/\r\n/g, '\n');
+  if (normalized.includes('\r')) throw new Error('lone CR denied');
+  return crypto.createHash('sha256').update(normalized, 'utf8').digest('hex').toUpperCase();
+}
+
+describe('Mission 28 Part 2D PostgreSQL authority', () => {
+  test('binds the released Part 2C baseline and every frozen input exactly', () => {
+    const model = parse(MODEL_PATH);
+    expect(model.contractVersion).toBe('mission28.part2d.postgresql.authority.v1');
+    expect(model.authority).toMatchObject({
+      mission: 28, part: '2D', state: 'implementation_candidate_only',
+      baselineCommit: PART2C_MAIN, databaseAuthorityGranted: true,
+      runtimeStorageCapabilityGranted: false, policyActivationGranted: false,
+      providerAuthorityGranted: false, externalEffectAuthorityGranted: false,
+    });
+    expect(model.part2CRelease).toMatchObject({
+      acceptedSourceHead: '69d4a375a4971ab98310872b9382cba92f5a67c0', pullRequest: 555,
+      mergedMain: PART2C_MAIN, deployment: '036663b4-a364-4c3a-9842-5e1686164be0',
+      deploymentState: 'SUCCESS_RUNNING', auditVerdict: 'P0=0 P1=0 P2=0 P3=0',
+    });
+    for (const input of model.frozenInputs) expect(normalizedLfSha256(input.path)).toBe(input.normalizedLfSha256);
+  });
+
+  test('defines the complete bounded authority without a runtime or effect grant', () => {
+    const model = parse(MODEL_PATH);
+    expect(model.migration).toMatchObject({ number: 273, additiveOnly: true, preMigrationLatest: 272,
+      destructiveDataChange: false, legacyDiscoveryOrAdoption: false,
+      applicationRouteWorkerOrProviderMount: false });
+    expect(model.tables.map(item => item.name)).toEqual([
+      'canonical_automation_policy_versions_v1', 'canonical_automation_source_bindings_v1',
+      'canonical_automation_source_sets_v1',
+      'canonical_automation_lifecycle_events_v1',
+      'canonical_automation_records_v1', 'canonical_automation_historical_run_bindings_v1',
+      'canonical_automation_legacy_conversion_reviews_v1', 'canonical_automation_retention_classes_v1',
+    ]);
+    expect(model.tenantRls).toMatchObject({ enabledAndForced: true, tenantKey: 'organization_id',
+      runtimeDirectTablePrivileges: 'none',
+      runtimeFunctionPrivileges: 'none_until_later_capability_and_approval_authority' });
+    expect(model.availability).toEqual({
+      databaseSchemaAndOwnerOnlyContractStorage: true,
+      runtimePolicyWriteReadOrActivation: false,
+      routesUiDemoSchedulerWorkerQueueOrProvider: false,
+      providerCallsAllowed: 0, externalRecipientsOrMessagesAllowed: 0,
+      externalEffectsAllowed: 0, upstreamMutationsAllowed: 0,
+      accountingEffectsAllowed: 0, moneyEffectsAllowed: 0,
+    });
+    expect(model.retention.automaticDeletionAvailable).toBe(false);
+    expect(model.digestAndCurrentness).toMatchObject({
+      lifecycleSourceSetMustResolveFromStoredAuthority: true,
+      unrelatedLifecycleBindings: 'deny',
+      nonCurrentMayGrantActiveAuthority: false,
+    });
+    expect(model.digestAndCurrentness.supersessionRule).toContain('resolved_active_lifecycle_event_digest');
+    expect(model.digestAndCurrentness.boundedRollbackRule).toContain('exact_stored_immediate_predecessor');
+    expect(model.digestAndCurrentness.trustedExpiryRule).toContain('database_statement_time');
+    expect(model.legacyConversion).toMatchObject({ automaticDiscovery: 'deny', automaticImport: 'deny',
+      legacyRowCountAfterMigration: 0, reviewedConversionWritePath: 'unavailable' });
+  });
+
+  test('production canonicalizer matches every released namespace fixture', () => {
+    const policy = parse('docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json');
+    for (const version of policy.canonicalExamples) {
+      const withoutDigest = { ...version };
+      delete withoutDigest.canonicalDigest;
+      expect(canonical.digest(policy.canonicalization.namespace, withoutDigest)).toBe(version.canonicalDigest);
+      expect(canonical.parseCanonical(canonical.canonicalize(version))).toEqual(version);
+    }
+    expect(canonical.limits).toEqual({ maxBytes: 65536, maxDepth: 24, maxNodes: 2048,
+      maxObjectKeys: 128, maxArrayItems: 256, maxKeyBytes: 128, maxStringBytes: 8192 });
+  });
+
+  test('canonicalizer rejects non-data, aliases, bounds and noncanonical text before hashing', () => {
+    const cases = [];
+    const getter = {};
+    Object.defineProperty(getter, 'value', { enumerable: true, get() { throw new Error('getter ran'); } });
+    cases.push(getter, Object.create({ inherited: true }), Object.create(null), new String('value'),
+      { value: -0 }, { value: 1.5 }, { value: Number.MAX_SAFE_INTEGER + 1 }, { value: Symbol('x') });
+    const symbol = { value: 1 }; symbol[Symbol('hidden')] = true; cases.push(symbol);
+    const alias = {}; cases.push({ left: alias, right: alias });
+    const cycle = {}; cycle.self = cycle; cases.push(cycle);
+    const sparse = []; sparse[1] = 'value'; cases.push(sparse);
+    const proxied = new Proxy({ value: 1 }, { ownKeys() { throw new Error('proxy trap ran'); } }); cases.push(proxied);
+    for (const value of cases) expect(() => canonical.canonicalize(value)).toThrow();
+    expect(() => canonical.parseCanonical('{"b":1,"a":2}')).toThrow();
+    expect(() => canonical.parseCanonical('{"a":1, "b":2}')).toThrow();
+    expect(() => canonical.parseCanonical('{"a":1,"a":1}')).toThrow();
+    expect(() => canonical.parseCanonical('{"a":-0}')).toThrow();
+    expect(() => canonical.canonicalize({ a: 'x'.repeat(8193) })).toThrow();
+    expect(() => canonical.canonicalize(Array.from({ length: 257 }, () => 0))).toThrow();
+    expect(canonical.canonicalize({ '\u{10000}': 2, '\uE000': 1 })).toBe('{"\uE000":1,"\u{10000}":2}');
+    for (const invalidUnicode of ['\u0000', '\uD800', '\uDC00'])
+      expect(() => canonical.canonicalize({ value: invalidUnicode })).toThrow();
+  });
+
+  test('migration establishes exact trusted-time, RLS, immutability, indexes and zero conversion', () => {
+    const sql = read(MIGRATION_PATH);
+    for (const table of [
+      'canonical_automation_policy_versions_v1', 'canonical_automation_source_bindings_v1',
+      'canonical_automation_source_sets_v1',
+      'canonical_automation_lifecycle_events_v1',
+      'canonical_automation_records_v1', 'canonical_automation_historical_run_bindings_v1',
+      'canonical_automation_legacy_conversion_reviews_v1', 'canonical_automation_retention_classes_v1',
+    ]) expect(sql).toContain(table);
+    expect((sql.match(/ENABLE ROW LEVEL SECURITY/g) || []).length).toBeGreaterThanOrEqual(1);
+    expect(sql).toContain('FORCE ROW LEVEL SECURITY');
+    expect(sql).toContain("northstar.automation_tenant_id");
+    expect(sql).toContain('statement_timestamp()');
+    expect(sql).toContain("pg_catalog.set_config('TimeZone','UTC',TRUE)");
+    expect(sql).toContain('BEFORE UPDATE OR DELETE OR TRUNCATE');
+    expect(sql).toContain("source_origin='mission28_native'");
+    expect(sql).toContain('converted_policy_id IS NULL');
+    expect(sql).toContain('Mission 28 lifecycle successor authority unavailable');
+    expect(sql).toContain('Mission 28 lifecycle rollback authority unavailable');
+    expect(sql).toContain('Mission 28 policy expiry is not due');
+    expect(sql).not.toMatch(/DROP\s+(TABLE|COLUMN)|ALTER\s+COLUMN\s+.*TYPE|DELETE\s+FROM|UPDATE\s+public\./i);
+  });
+
+  test('runtime bootstrap revokes every new table and owner-only function', () => {
+    const db = read('src/db.js');
+    const protectedNames = [
+      'canonical_automation_retention_classes_v1', 'canonical_automation_policy_versions_v1',
+      'canonical_automation_source_bindings_v1',
+      'canonical_automation_lifecycle_events_v1', 'canonical_automation_records_v1',
+      'canonical_automation_historical_run_bindings_v1', 'canonical_automation_legacy_conversion_reviews_v1',
+      'canonical_automation_store_policy_v1', 'canonical_automation_store_lifecycle_event_v1',
+      'canonical_automation_store_source_binding_v1',
+      'canonical_automation_store_source_set_v1',
+      'canonical_automation_store_record_v1', 'canonical_automation_store_historical_run_binding_v1',
+      'canonical_automation_storage_snapshot_v1',
+    ];
+    for (const name of protectedNames) expect(db).toContain(name);
+    expect(db).toContain('REVOKE ALL ON TABLE public.canonical_automation_retention_classes_v1');
+    expect(db).toContain('REVOKE ALL ON FUNCTION ');
+  });
+
+  test('roadmap and ledger keep Part 2D candidate-only and Part 3+ planned', () => {
+    const roadmap = read(ROADMAP_PATH);
+    const ledger = read(LEDGER_PATH);
+    expect(roadmap).toContain('Parts 1A–1D and 2A–2C released; Part 2D implementation candidate only.');
+    expect(ledger).toContain('Parts 1A–1D and 2A–2C released; Part 2D implementation candidate only.');
+    expect(ledger).toContain('| 07 | 2C | Policy lifecycle and historical binding | **Released** |');
+    expect(ledger).toContain('| 08 | 2D | PostgreSQL authority, canonicalization, retention and restart contract | **Implementation candidate** |');
+    expect(ledger).toContain('| 09 | 3A | Fixed action capability matrix | Planned / unimplemented | None |');
+    expect(roadmap).toContain('migration 273');
+    expect(roadmap).not.toContain('Part 2D independently accepted');
+  });
+
+  test('narrative preserves every unavailable boundary', () => {
+    const narrative = read(NARRATIVE_PATH);
+    for (const phrase of [
+      'grants no application-role storage capability', 'statement_timestamp()',
+      'No duration or deletion authority is invented', 'never scans, imports or converts legacy data',
+      'No production migration or restart evidence is claimed', 'founder visual approval remain unavailable',
+    ]) expect(narrative).toContain(phrase);
+  });
+});

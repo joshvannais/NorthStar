@@ -52,10 +52,12 @@ The Part 1B test suite verifies that:
 - the JSON contract has exactly one entry per surface ID, only the six allowed dispositions, and coverage for all fifteen required facets;
 - every source path exists and every anchor remains present;
 - all eight server worker classes remain represented;
-- source-wide browser event-producer discovery and simulator script-consumer discovery resolve to the exact inventoried files, so an active AppStore write or EventBus producer cannot disappear behind a hand-maintained event list;
+- source-wide browser event-producer, event-listener, and simulator script-consumer discovery resolve to the exact inventoried files, so an active AppStore write, EventBus producer, or presentation listener cannot disappear behind a hand-maintained event list;
 - the paid simulation endpoint clients, route mount, deterministic pipeline and canonical graph commit are discovered as one complete synthetic-write boundary;
 - legacy workflow/reminder engines and current notification preference/destination authorities are source-discovered and separately classified;
 - source-wide provider-implementation signals and their relative-import consumers resolve to the exact inventoried source set, including concrete tax, Retell knowledge, call-reconciliation, canonical-voice, and homepage browser transports;
+- the dependency-injected OpenAI Polaris chain is separately discovered from production runtime construction through paid, fictional-demo, connected-call, usage-ledger, and execution consumers, so injection cannot hide an active provider consumer;
+- the paid and fictional-demo secure-estimate creation/copy/open/revoke flow, its shared contract/repository/body boundary, and the public read/accept/question boundary are one source-linked manual handoff; none is classified as automatic delivery;
 - the known business-event sources, external provider paths, webhook boundaries, manual handoffs, collection labels, and demo mutation route files remain represented;
 - all exact demo command-center mutation entry points in the inventory still occur in the mounted demo router, including dynamically registered path families;
 - `node-cron` remains unimported and `navigator.share` remains absent;

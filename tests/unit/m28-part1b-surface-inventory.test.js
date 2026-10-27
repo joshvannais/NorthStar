@@ -61,6 +61,17 @@ const BROWSER_EVENT_PRODUCER_PATHS = [
   'public/js/simulator.js',
 ];
 
+const BROWSER_EVENT_LISTENER_PATHS = [
+  'public/dashboard/calendar.html',
+  'public/dashboard/communications.html',
+  'public/dashboard/leads.html',
+  'public/dashboard/polaris.html',
+  'public/js/app-store.js',
+  'public/js/communications-engine.js',
+  'public/js/notification-service.js',
+  'public/js/polaris-engine.js',
+];
+
 const SIMULATOR_CONSUMER_PATHS = [
   'public/dashboard.html',
   'public/dashboard/calendar.html',
@@ -118,6 +129,31 @@ const PROVIDER_IMPORT_CONSUMER_PATHS = [
   'src/support/outbox.js',
   'src/workforce/repository.js',
   'src/workforce/service.js',
+];
+
+const OPENAI_POLARIS_PROVIDER_CHAIN_PATHS = [
+  'src/polaris/assistantRuntime.js',
+  'src/polaris/callGenerationBinding.js',
+  'src/polaris/demoGrounded.js',
+  'src/polaris/openaiRuntime.js',
+  'src/polaris/providerLedger.js',
+  'src/routes/canonicalPolaris.js',
+  'src/routes/connectedCall.js',
+  'src/routes/demo.js',
+  'src/server.js',
+];
+
+const CUSTOMER_ESTIMATE_HANDOFF_PATHS = [
+  'public/customer-estimate.html',
+  'public/js/customer-estimate-preview.js',
+  'public/js/customer-estimate-public.js',
+  'src/estimating/customerEstimateDeliveryContract.js',
+  'src/estimating/customerEstimateDeliveryHttpBoundary.js',
+  'src/estimating/customerEstimateDeliveryRepository.js',
+  'src/routes/canonicalPolaris.js',
+  'src/routes/customerEstimateDelivery.js',
+  'src/routes/demo.js',
+  'src/server.js',
 ];
 
 const PROVIDER_IMPLEMENTATION_SIGNAL =
@@ -324,17 +360,21 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     for (const discovered of discoveries.flat()) expect(covered.has(discovered)).toBe(true);
   });
 
-  test('discovers active browser event producers, local-store writers and simulator consumers', () => {
+  test('discovers active browser event producers, listeners, local-store writers and simulator consumers', () => {
     const covered = sourcePaths(inventory());
-    const browserScripts = walk(path.join(ROOT, 'public', 'js'))
-      .filter(file => file.endsWith('.js') && !slash(file).includes('/vendor/'));
+    const browserFiles = walk(path.join(ROOT, 'public'))
+      .filter(file => /\.(?:js|html)$/.test(file) && !slash(file).includes('/vendor/'));
+    const browserScripts = browserFiles.filter(file => file.endsWith('.js'));
     const producers = matchingPaths(browserScripts,
       /(?:window|global)\.EventBus\.emit\(|\bbus\.emit\(|window\.AppStore\.[A-Za-z]+\(/);
     expect(producers).toEqual(BROWSER_EVENT_PRODUCER_PATHS);
-    const consumers = matchingPaths(walk(path.join(ROOT, 'public')).filter(file => file.endsWith('.html')),
+    const listeners = matchingPaths(browserFiles,
+      /EventBus\.on\(|\bbus\.on\(|addEventListener\(['"]canonical:loaded['"]/);
+    expect(listeners).toEqual(BROWSER_EVENT_LISTENER_PATHS);
+    const consumers = matchingPaths(browserFiles.filter(file => file.endsWith('.html')),
       /<script src=["']\/js\/simulator\.js["']><\/script>/);
     expect(consumers).toEqual(SIMULATOR_CONSUMER_PATHS);
-    for (const candidate of [...producers, ...consumers]) expect(covered.has(candidate)).toBe(true);
+    for (const candidate of [...producers, ...listeners, ...consumers]) expect(covered.has(candidate)).toBe(true);
 
     const simulator = inventory().surfaces.find(surface =>
       surface.id === 'demo.legacy-browser-call-simulator');
@@ -417,6 +457,43 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     for (const candidate of ['package.json', 'src/browser/retellWebEntry.mjs', 'public/js/homepage-demo.js']) {
       expect(covered.has(candidate)).toBe(true);
     }
+  });
+
+  test('discovers the complete dependency-injected OpenAI Polaris provider consumer chain', () => {
+    const covered = sourcePaths(inventory());
+    const sourceFiles = walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js'));
+    const discovered = matchingPaths(sourceFiles,
+      /createProductionOpenAIRuntime|createProviderUsageLedger|connectedCallGenerate|demoGroundedRuntime|require\(['"]\.\.\/polaris\/demoGrounded['"]\)\.createHandler|async function executeProvider\(runtime|function createProductionCallGenerate/);
+    expect(discovered).toEqual(OPENAI_POLARIS_PROVIDER_CHAIN_PATHS);
+    for (const candidate of discovered) expect(covered.has(candidate)).toBe(true);
+    const surface = inventory().surfaces.find(item => item.id === 'provider.openai-polaris-runtime');
+    expect(surface.sourceRefs.map(reference => reference.path).sort())
+      .toEqual(OPENAI_POLARIS_PROVIDER_CHAIN_PATHS);
+    expect(surface.effectBoundary).toContain('never self-authorizes an automation decision or external effect');
+  });
+
+  test('discovers the complete paid and demo secure-estimate link handoff and public response chain', () => {
+    const covered = sourcePaths(inventory());
+    const files = [
+      ...walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js')),
+      ...walk(path.join(ROOT, 'public')).filter(file => /\.(?:js|html)$/.test(file) &&
+        !slash(file).includes('/vendor/')),
+    ];
+    const discovered = matchingPaths(files,
+      /function deliveryRoute\(review\)|customerEstimateDelivery(?:Contract|Repository)|CUSTOMER_ESTIMATE_LINK_SECRET|function customerEstimateDeliveryBodyBoundary|customer-estimates\/:token|createCustomerEstimateDeliveryRouter|customer-estimate-public\.js|fetch\('\/api\/public\/customer-estimates\//);
+    expect(discovered).toEqual(CUSTOMER_ESTIMATE_HANDOFF_PATHS);
+    for (const candidate of discovered) expect(covered.has(candidate)).toBe(true);
+    const surface = inventory().surfaces.find(item => item.id === 'handoff.customer-estimate-secure-link');
+    expect(surface.sourceRefs.map(reference => reference.path).sort())
+      .toEqual(CUSTOMER_ESTIMATE_HANDOFF_PATHS);
+    expect(surface.entryPoints).toEqual(expect.arrayContaining([
+      '/api/v1/canonical/estimates/:estimateId/customer-estimate-links',
+      '/api/demo/command-center/estimates/:estimateId/customer-estimate-links',
+      '/estimate/:token',
+      '/api/public/customer-estimates/:token/accept',
+      '/api/public/customer-estimates/:token/questions',
+    ]));
+    expect(surface.effectBoundary).toContain('None of those actions sends the link');
   });
 
   test('keeps Mission 21, 24, 26, canonical voice and homepage provider boundaries distinct', () => {

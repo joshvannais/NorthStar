@@ -181,7 +181,12 @@
       "disposition": "simulated_or_demo_only",
       "owner": "browser simulation presentation",
       "effectBoundary": "The listener displays a local toast for a completed simulation; a toast is neither an external notification nor delivery evidence.",
-      "sourceRefs": [{ "path": "public/js/notification-service.js", "anchors": ["bus.on('simulation:completed'", "bus.emit('notification:created'"] }]
+      "sourceRefs": [
+        { "path": "public/js/notification-service.js", "anchors": ["bus.on('simulation:completed'", "bus.emit('notification:created'"] },
+        { "path": "public/dashboard/leads.html", "anchors": ["EventBus.on('simulation:completed'", "loadLeads();"] },
+        { "path": "public/dashboard/communications.html", "anchors": ["EventBus.on('simulation:completed'", "loadCalls();"] },
+        { "path": "public/dashboard/polaris.html", "anchors": ["window.EventBus.on('simulation:completed'", "renderSelectedContext();"] }
+      ]
     },
     {
       "id": "demo.legacy-browser-call-simulator",
@@ -337,10 +342,16 @@
       "facets": ["provider_adapter", "retry"],
       "disposition": "upstream_or_subscription_owned_excluded",
       "owner": "Polaris advisory runtime",
-      "effectBoundary": "Provider-generated advice or extraction is an upstream/advisory result and never self-authorizes an automation decision or effect.",
+      "effectBoundary": "The production runtime, paid and fictional-demo consumers, connected-call binding, and usage ledger remain upstream advisory/provider boundaries. Provider output or accounting state never self-authorizes an automation decision or external effect.",
       "sourceRefs": [
         { "path": "src/polaris/openaiRuntime.js", "anchors": ["function createProductionOpenAIRuntime"] },
-        { "path": "src/server.js", "anchors": ["const productionPolarisRuntime = createProductionOpenAIRuntime", "app.locals.connectedCallGenerate=require('./polaris/callGenerationBinding').createProductionCallGenerate"] },
+        { "path": "src/server.js", "anchors": ["const productionPolarisRuntime = createProductionOpenAIRuntime", "app.locals.connectedCallGenerate=require('./polaris/callGenerationBinding').createProductionCallGenerate", "app.locals.demoGroundedRuntime = process.env.POLARIS_DEMO_GENERATION_ENABLED === 'true' ? productionPolarisRuntime : null", "assistantRuntime: productionPolarisRuntime", "assistantUsageLedger: productionPolarisUsageLedger"] },
+        { "path": "src/polaris/callGenerationBinding.js", "anchors": ["function createProductionCallGenerate", "runtime.preflight(envelope)", "await runtime.respond(envelope"] },
+        { "path": "src/polaris/assistantRuntime.js", "anchors": ["async function executeProvider(runtime", "await provider.respond(buildRuntimeEnvelope"] },
+        { "path": "src/polaris/providerLedger.js", "anchors": ["function createProviderUsageLedger", "public.polaris_provider_reserve_usage", "public.polaris_provider_reconcile_usage"] },
+        { "path": "src/routes/canonicalPolaris.js", "anchors": ["require('../polaris/assistantRuntime')", "require('../polaris/providerLedger')", "dependencies.assistantRuntime.preflight", "dependencies.assistantUsageLedger.reconcile"] },
+        { "path": "src/polaris/demoGrounded.js", "anchors": ["const runtime = req.app.locals.demoGroundedRuntime", "runtime.preflight(envelope)", "await runtime.respond(envelope"] },
+        { "path": "src/routes/demo.js", "anchors": ["'/command-center/polaris/messages-v2'", "require('../polaris/demoGrounded').createHandler"] },
         { "path": "src/routes/connectedCall.js", "anchors": ["router.post('/api/retell/tools/job-guidance'", "No provider adapter is provisioned by mounting this authenticated boundary."] }
       ]
     },
@@ -396,7 +407,10 @@
       "sourceRefs": [
         { "path": "public/js/event-bus.js", "anchors": ["window.EventBus = (function()", "emit(event, data)"] },
         { "path": "public/js/app-store.js", "anchors": ["bus.emit('legacy:mutation-blocked'", "window.addEventListener('canonical:loaded'"] },
-        { "path": "public/js/canonical-intelligence.js", "anchors": ["global.EventBus.emit(name, detail)", "emit('canonical:rejected'", "emit('canonical:loaded'"] }
+        { "path": "public/js/canonical-intelligence.js", "anchors": ["global.EventBus.emit(name, detail)", "emit('canonical:rejected'", "emit('canonical:loaded'"] },
+        { "path": "public/js/communications-engine.js", "anchors": ["bus.on('store:changed'", "bus.emit('communications:updated'"] },
+        { "path": "public/dashboard/calendar.html", "anchors": ["window.EventBus.on('store:loaded'", "window.EventBus.on('canonical:loaded'"] },
+        { "path": "public/js/polaris-engine.js", "anchors": ["window.addEventListener('canonical:loaded'", "renderPolarisCard();"] }
       ]
     },
     {
@@ -447,8 +461,29 @@
       "facets": ["manual_quick_send", "native_share_or_composer_handoff"],
       "disposition": "mission28_owned_reusable_after_later_authority",
       "owner": "Mission 24 document delivery source",
-      "effectBoundary": "Creating or revoking a scoped estimate link does not send it; Part 8 must later bind exact version, recipient, channel, preview, approval, and evidence.",
-      "sourceRefs": [{ "path": "src/routes/demo.js", "anchors": ["'/command-center/estimates/:estimateId/customer-estimate-links'", "'/command-center/estimates/:estimateId/customer-estimate-links/:linkId/revoke'"] }]
+      "effectBoundary": "Paid or fictional-demo users may create, copy, open, or revoke a scoped link, and the public boundary may record an inbound acceptance or question. None of those actions sends the link, selects or consents a recipient/channel, proves delivery, or grants Mission 28 effect authority; Part 8 must bind those authorities and evidence later.",
+      "entryPoints": [
+        "/api/v1/canonical/estimates/:estimateId/customer-estimate-links",
+        "/api/v1/canonical/estimates/:estimateId/customer-estimate-links/:linkId/revoke",
+        "/api/demo/command-center/estimates/:estimateId/customer-estimate-links",
+        "/api/demo/command-center/estimates/:estimateId/customer-estimate-links/:linkId/revoke",
+        "/estimate/:token",
+        "/api/public/customer-estimates/:token",
+        "/api/public/customer-estimates/:token/accept",
+        "/api/public/customer-estimates/:token/questions"
+      ],
+      "sourceRefs": [
+        { "path": "public/js/customer-estimate-preview.js", "anchors": ["function deliveryRoute(review)", "navigator.clipboard.writeText(link)", "document.execCommand('copy')", "encodeURIComponent(active.id)+'/revoke'", "openLink.target='_blank'"] },
+        { "path": "src/routes/canonicalPolaris.js", "anchors": ["'/estimates/:estimateId/customer-estimate-links'", "'/estimates/:estimateId/customer-estimate-links/:linkId/revoke'", "customerEstimateDeliveryRepository"] },
+        { "path": "src/routes/demo.js", "anchors": ["'/command-center/estimates/:estimateId/customer-estimate-links'", "'/command-center/estimates/:estimateId/customer-estimate-links/:linkId/revoke'", "repository.demoCreate", "repository.demoRevoke"] },
+        { "path": "src/estimating/customerEstimateDeliveryContract.js", "anchors": ["function token(context,idempotencyKey)", "function create(raw)", "function accept(raw)", "function question(raw)"] },
+        { "path": "src/estimating/customerEstimateDeliveryRepository.js", "anchors": ["async function create(pool,input,raw)", "async function revoke(pool,input,linkId)", "async function publicRead(client,rawToken)", "async function publicMutate(pool,input,raw,kind)"] },
+        { "path": "src/estimating/customerEstimateDeliveryHttpBoundary.js", "anchors": ["function customerEstimateDeliveryBodyBoundary", "customer-estimates\\/[^/]+\\/(?:accept|questions)"] },
+        { "path": "src/routes/customerEstimateDelivery.js", "anchors": ["router.get('/customer-estimates/:token'", "router.post('/customer-estimates/:token/accept'", "router.post('/customer-estimates/:token/questions'", "app.get('/estimate/:token'"] },
+        { "path": "src/server.js", "anchors": ["mountCustomerEstimatePage(app)", "app.use('/api/public', createCustomerEstimateDeliveryRouter())", "app.use('/api/v1/canonical', createCanonicalRouter"] },
+        { "path": "public/customer-estimate.html", "anchors": ["Secure estimate", "/js/customer-estimate-public.js"] },
+        { "path": "public/js/customer-estimate-public.js", "anchors": ["fetch('/api/public/customer-estimates/'", "acceptForm.onsubmit", "questionForm.onsubmit"] }
+      ]
     },
     {
       "id": "collection.mission27-reviewed-handoff-labels",

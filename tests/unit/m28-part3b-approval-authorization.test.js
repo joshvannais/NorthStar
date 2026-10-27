@@ -750,23 +750,23 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     expect(contract.unavailableEvidence).toHaveLength(8);
   });
 
-  test('roadmap and ledger record Part 3A released and only Part 3B current', () => {
+  test('roadmap and ledger record Part 3B released and only Part 3C current', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–3A released; Part 3B implementation candidate only.');
-      expect(document).toContain('Parts 3C–14G');
+      expect(document).toContain('Parts 1A–3B released; Part 3C implementation candidate only.');
+      expect(document).toContain('Parts 3D–14G');
       expect(document).toContain('05a541792adac121f8c51b2cf200c0d18fcfbbf1');
       expect(document).toContain('1e62336afe2c9e65cccbe1629a62b86855da3ff8');
       expect(document).toContain('7ca335a1-7bf6-4f8d-ae98-a188b891f85d');
       expect(document).toContain('201627b8ee00cf950c267bbd522d5538a7c42461c8771de8701463fe790ac40e');
     }
     expect(ledger).toContain('| 09 | 3A | Fixed action capability matrix | **Released** |');
-    expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | **Implementation candidate** |');
-    expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | Planned / unimplemented | None |');
-    expect(roadmap).toContain('Current Part 3B artifacts');
-    expect(roadmap).not.toContain('Part 3B independently accepted');
-    expect(ledger).toContain('Part 3B has no independent acceptance, PR, merge, deployment or release evidence');
+    expect(ledger).toContain('| 10 | 3B | Per-run approval versus standing authorization | **Released** |');
+    expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | **Implementation candidate** |');
+    expect(roadmap).toContain('Released Part 3B artifacts');
+    expect(roadmap).toContain('Current Part 3C artifacts');
+    expect(ledger).toContain('Part 3C has no independent acceptance, PR, merge, deployment or release evidence');
   });
 
   test('keeps migration 273 authoritative and adds no migration 274', () => {

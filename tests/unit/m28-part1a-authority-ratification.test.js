@@ -141,9 +141,11 @@ function validateLedger(document) {
   expect(rows[7].evidence).toContain(`deployment \`${PART2D_DEPLOYMENT}\``);
   expect(rows[8]).toMatchObject({ id: '3A', state: '**Released**' });
   expect(rows[8].evidence).toContain('PR #557');
-  expect(rows[9]).toMatchObject({ id: '3B', state: '**Implementation candidate**' });
-  expect(rows[9].evidence).toContain('no runtime resolver, persistence, activation, provider, recipient or effect authority');
-  expect(rows.slice(10).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+  expect(rows[9]).toMatchObject({ id: '3B', state: '**Released**' });
+  expect(rows[9].evidence).toContain('PR #558');
+  expect(rows[10]).toMatchObject({ id: '3C', state: '**Implementation candidate**' });
+  expect(rows[10].evidence).toContain('no runtime resolver, persistence, scheduler, provider, recipient, effect or money authority');
+  expect(rows.slice(11).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
 }
 
 describe('Mission 28 Part 1A authority ratification', () => {
@@ -159,8 +161,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       expect(document).toContain(BASE);
       expect(document).toContain(BASE_TREE);
     }
-    expect(roadmap).toContain('Parts 1A–3A released; Part 3B implementation candidate only.');
-    expect(roadmap).toContain('Parts 3C–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–3B released; Part 3C implementation candidate only.');
+    expect(roadmap).toContain('Parts 3D–14G remain planned and unimplemented.');
     for (const identity of [PART1A_HEAD, PART1A_MAIN, PART1A_DEPLOYMENT, PART1A_AUDIT]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -240,12 +242,12 @@ describe('Mission 28 Part 1A authority ratification', () => {
     expect(contract).toContain('It grants no route, worker, queue, scheduler, provider adapter, callback, credential, recipient, message, document delivery, internal task, payment, refund, fee, write-off, accounting action, database authority, migration, UI control, production flag or demo effect.');
   });
 
-  test('records released Parts 1A–3A, keeps exactly Part 3B current, and leaves every later slice planned', () => {
+  test('records released Parts 1A–3B, keeps exactly Part 3C current, and leaves every later slice planned', () => {
     const ledger = read(LEDGER_PATH);
     validateLedger(ledger);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(56);
-    expect(ledger).toContain('Part 3B has no independent acceptance, PR, merge, deployment or release evidence');
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(55);
+    expect(ledger).toContain('Part 3C has no independent acceptance, PR, merge, deployment or release evidence');
     expect(ledger).toContain(`Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 \`${PART1A_AUDIT}\``);
   });
 
@@ -264,8 +266,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       ledger.replace('| 02 | 1B |', '| 02 | 1C |'),
       ledger.replace('| 66 | 14G |', '| 67 | 14G |'),
       ledger.replace(/^\| 25 \| 6E .*\r?\n/m, ''),
-      ledger.replace('| 10 | 3B | Per-run approval versus standing authorization | **Implementation candidate** |',
-        '| 10 | 3B | Per-run approval versus standing authorization | **Accepted** |'),
+      ledger.replace('| 11 | 3C | Owner limits and mandatory minimum constraints | **Implementation candidate** |',
+        '| 11 | 3C | Owner limits and mandatory minimum constraints | **Accepted** |'),
     ];
     for (const mutation of ledgerMutations) expect(() => validateLedger(mutation)).toThrow();
   });

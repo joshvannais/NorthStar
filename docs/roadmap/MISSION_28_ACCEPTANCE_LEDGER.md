@@ -1,6 +1,6 @@
 # Mission 28 — acceptance ledger
 
-Status: **Parts 1A–1D released; Part 2A implementation candidate only.** Parts 2B–14G are planned and unimplemented. Part 2A has no independent acceptance, PR, merge, deployment, or release evidence.
+Status: **Parts 1A–1D and 2A released; Part 2B implementation candidate only.** Parts 2C–14G are planned and unimplemented. Part 2B has no independent acceptance, PR, merge, deployment, or release evidence.
 
 ## Authority and baseline
 
@@ -15,9 +15,10 @@ Status: **Parts 1A–1D released; Part 2A implementation candidate only.** Parts
 | Part 1C catalog | [Action and risk catalog](../architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.md); [executable catalog](../architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json) |
 | Part 1D launch matrix | [First-supported launch matrix](../architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.md); [executable matrix](../architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json) |
 | Part 2A policy contract | [Canonical automation policy](../architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.md); [executable policy definition](../architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json) |
+| Part 2B record contract | [Immutable run, effect, and evidence records](../architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.md); [executable record model](../architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json) |
 | Mission 27 terminal deployed base | Commit `7736fe6d31ce2300cf06cfcaa461f9b9ea5184c3`; tree `861215b3b6ffdcdf53f2f658e2d46098526f8b65` |
 | Baseline deployment | Railway `c452d8fd-c896-407e-9f20-5f9ba01ee587` `SUCCESS`; production migration/startup/health/root/demo verified by the preceding release lane |
-| Mission 28 released baseline | Main `aa875c9a2ad6e03f8d41575e6b19e31aa36ed02d`; tree `0f7df37487cc8d0b57b7ef79a730ba9fea93e7ac` |
+| Mission 28 released baseline | Main `cc55048e91c2b5c6dd70671d01ebe913123201ad`; tree `954f9e685642ee23c17376c83cc92a34ae6b72ad` |
 | Mission 28 migrations | None; production PostgreSQL 18.6 source/applied 268/268 and source tree remain through migration 272 with no missing, duplicate, mismatch, pending, or migration 273 |
 | Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 `1C3AA77E9B1E31A4FE4A8167FC2072A5818EDC52D19B5BCB1356352FEADDBDE1` |
 | Part 1A PR / merge / deployment / health | Source `c42d1a9f72dcb6bbdd480e804988ddc3ec43cc09`; PR #549 normally merged 2026-10-27T09:18:42Z to main `21ca719e24382443bbf3f52e460f3c16b016c4ad`; sole deployment `d3010671-da95-4247-807f-f2089b90df74` `SUCCESS/RUNNING`; image `sha256:12b0bfeb266c4849b127102ad98a2f8b6ad06080898462c41ee63c3a5b699b26`; startup ready and `/api/health`, `/`, `/demo/` HTTP 200 |
@@ -27,7 +28,9 @@ Status: **Parts 1A–1D released; Part 2A implementation candidate only.** Parts
 | Part 1C PR / merge / deployment / health | Source `467668a9de408adb381ac91beb61cc73b01532ec`; PR #551 normally merged to main `eba50a7903ac0000a9eb663d52744cc760f3afd3`; sole deployment `fbca00f3-5806-46c3-981f-7120306a09ed` `SUCCESS/RUNNING`; image `sha256:ff3695a8ea06b5096d11487c21e7d349f5a686fba2f20e32818df11e62f75452`; startup ready, migrations reconciled 268/268 through 272/no273, and `/api/health`, `/`, `/demo/` HTTP 200 |
 | Part 1D audit | Accepted P0=P1=P2=P3=0 in a fresh root audit; report hash unavailable to this writer and unclaimed |
 | Part 1D PR / merge / deployment / health | Source `f869b0b1e0da15149e33948e1a732208d585ebd0`; PR #552 normally merged to main `aa875c9a2ad6e03f8d41575e6b19e31aa36ed02d`; sole deployment `dc96dc7d-5fe7-4eaa-a093-e37792373f6e` `SUCCESS/RUNNING`; image `sha256:cff3f90fa227c84b24e8230581d87d2ff8f0a82cd113ac5e1c00c4589547019d`; startup ready, migrations reconciled 268/268 through 272/no273, and `/api/health`, `/`, `/demo/` HTTP 200 |
-| Part 2A independent acceptance / release | Unavailable; writer implementation candidate only |
+| Part 2A audit | Accepted P0=P1=P2=P3=0 in a fresh root audit; report hash unavailable to this writer and unclaimed |
+| Part 2A PR / merge / deployment / health | Source `6f1c299193456afd756542da43c72c6517101661`; PR #553 normally merged to main `cc55048e91c2b5c6dd70671d01ebe913123201ad`; sole deployment `9e976ab1-733d-4d85-b1f6-6c33073dc3aa` `SUCCESS/RUNNING`; image `sha256:a4fffc825163c836e10a59a60fd64586531d6a365b96eced5b0ce3a880fa5372`; startup ready, migrations reconciled 268/268 through 272/no273, and `/api/health`, `/`, `/demo/` HTTP 200 |
+| Part 2B independent acceptance / release | Unavailable; writer implementation candidate only |
 | External/provider/private-production/live evidence | Unavailable and unclaimed |
 | Founder visual verdict | Separate, unavailable and unclaimed |
 
@@ -43,8 +46,8 @@ The `Scope anchor` is a locator, not a substitute for the complete immutable sco
 | 02 | 1B | Existing automation-like surface inventory and quarantine | **Released** | Accepted source `bc09c83d8352c4ae707e26042f9bf52750adcbc2`; fresh root audit P0=P1=P2=P3=0 (report hash unavailable to this writer); PR #550; main `1801aa90c26bab5cba6583b8a6be342763ba387a`; deployment `21505f81-8df6-4f7a-9f4d-61ff33e6ec90` `SUCCESS/RUNNING`; health/root/demo verified |
 | 03 | 1C | Action/risk catalog and threat model | **Released** | Accepted source `467668a9de408adb381ac91beb61cc73b01532ec`; fresh root audit P0=P1=P2=P3=0 (report hash unavailable to this writer); PR #551; main `eba50a7903ac0000a9eb663d52744cc760f3afd3`; deployment `fbca00f3-5806-46c3-981f-7120306a09ed` `SUCCESS/RUNNING`; health/root/demo verified |
 | 04 | 1D | First-supported launch matrix and acceptance contract | **Released** | Accepted source `f869b0b1e0da15149e33948e1a732208d585ebd0`; fresh root audit P0=P1=P2=P3=0 (report hash unavailable to this writer); PR #552; main `aa875c9a2ad6e03f8d41575e6b19e31aa36ed02d`; deployment `dc96dc7d-5fe7-4eaa-a093-e37792373f6e` `SUCCESS/RUNNING`; health/root/demo verified |
-| 05 | 2A | Canonical tenant-private automation policy definition | **Implementation candidate** | Writer source-only policy contract, append-only digest fixtures and executable fail-closed tests; independent audit, PR, merge, deployment and release unavailable |
-| 06 | 2B | Separate immutable run/effect/evidence records | Planned / unimplemented | None |
+| 05 | 2A | Canonical tenant-private automation policy definition | **Released** | Accepted source `6f1c299193456afd756542da43c72c6517101661`; fresh root audit P0=P1=P2=P3=0 (report hash unavailable to this writer); PR #553; main `cc55048e91c2b5c6dd70671d01ebe913123201ad`; deployment `9e976ab1-733d-4d85-b1f6-6c33073dc3aa` `SUCCESS/RUNNING`; health/root/demo verified |
+| 06 | 2B | Separate immutable run/effect/evidence records | **Implementation candidate** | Writer source-only immutable record contract, digest-linked causal fixtures and executable fail-closed tests; independent audit, PR, merge, deployment and release unavailable |
 | 07 | 2C | Policy lifecycle and historical binding | Planned / unimplemented | None |
 | 08 | 2D | PostgreSQL authority, canonicalization, retention and restart contract | Planned / unimplemented | None |
 | 09 | 3A | Fixed action capability matrix | Planned / unimplemented | None |

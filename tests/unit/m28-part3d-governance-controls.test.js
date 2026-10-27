@@ -833,16 +833,16 @@ describe('Mission 28 Part 3D governance controls', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–3C released; Part 3D implementation candidate only.');
+      expect(document).toContain('Parts 1A–3D released; Part 4A implementation candidate only.');
       expect(document).toContain('3cd41fe5379d92fe629c62e0ebc3a51d8886c3cc');
       expect(document).toContain(BASE);
       expect(document).toContain('b745a483-1031-4020-9ab2-38c0044e599d');
       expect(document).toContain('27c84d6cd34be043aa2f6388080c90b5500a8ea1d87ab018c9d58f34277e5590');
     }
     expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | **Released** |');
-    expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Implementation candidate** |');
-    expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | Planned / unimplemented | None |');
-    expect(ledger).toContain('Part 3D has no independent acceptance, PR, merge, deployment or release evidence');
+    expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Released** |');
+    expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Implementation candidate** |');
+    expect(ledger).toContain('Part 4A has no independent acceptance, PR, merge, deployment or release evidence');
   });
 
   test('keeps runtime database provider effect migration and founder boundaries unavailable', () => {

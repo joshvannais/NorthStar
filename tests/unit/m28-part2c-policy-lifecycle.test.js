@@ -1193,11 +1193,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     expect(narrative).toContain('cannot rebind an old run to a newer policy or source');
   });
 
-  test('records Parts 1A–3C released, only Part 3D current and every later slice planned', () => {
+  test('records Parts 1A–3D released, only Part 4A current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–3C released; Part 3D implementation candidate only.');
-    expect(roadmap).toContain('Parts 4A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–3D released; Part 4A implementation candidate only.');
+    expect(roadmap).toContain('Parts 4B–14G remain planned and unimplemented.');
     for (const identity of [PART2B_HEAD, BASE, PART2B_DEPLOYMENT, PART2B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -1216,11 +1216,13 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     expect(rows[9][5]).toContain('PR #558');
     expect(rows[10][4]).toBe('**Released**');
     expect(rows[10][5]).toContain('PR #559');
-    expect(rows[11][4]).toBe('**Implementation candidate**');
-    expect(rows[11][5]).toContain('no runtime resolver');
-    expect(rows.slice(12).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[11][4]).toBe('**Released**');
+    expect(rows[11][5]).toContain('PR #560');
+    expect(rows[12][4]).toBe('**Implementation candidate**');
+    expect(rows[12][5]).toContain('no runtime ingestion/resolver');
+    expect(rows.slice(13).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(54);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(53);
   });
 
   test('adds no runtime activation, production source, package or migration', () => {

@@ -873,11 +873,11 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(read(missingAnchor.surfaces[0].sourceRefs[0].path)).not.toContain('invented authority');
   });
 
-  test('records Parts 1A–3C released, Part 3D as the sole candidate and every later slice as planned', () => {
+  test('records Parts 1A–3D released, Part 4A as the sole candidate and every later slice as planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–3C released; Part 3D implementation candidate only.');
-    expect(roadmap).toContain('Parts 4A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–3D released; Part 4A implementation candidate only.');
+    expect(roadmap).toContain('Parts 4B–14G remain planned and unimplemented.');
     const rows = [...ledger.matchAll(/^\| (\d{2}) \| (\d{1,2}[A-G]) \| (.+) \| (.+) \| (.+) \|$/gm)];
     expect(rows).toHaveLength(66);
     expect(rows[0][4]).toBe('**Released**');
@@ -902,9 +902,11 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(rows[9][5]).toContain('PR #558');
     expect(rows[10][4]).toBe('**Released**');
     expect(rows[10][5]).toContain('PR #559');
-    expect(rows[11][4]).toBe('**Implementation candidate**');
-    expect(rows[11][5]).toContain('no runtime resolver');
-    expect(rows.slice(12).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[11][4]).toBe('**Released**');
+    expect(rows[11][5]).toContain('PR #560');
+    expect(rows[12][4]).toBe('**Implementation candidate**');
+    expect(rows[12][5]).toContain('no runtime ingestion/resolver');
+    expect(rows.slice(13).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
   });
 

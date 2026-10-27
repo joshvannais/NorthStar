@@ -1,0 +1,269 @@
+{
+  "contractVersion": "mission28.part1c.action-risk-catalog.v1",
+  "authority": {
+    "mission": 28,
+    "part": "1C",
+    "state": "implementation_candidate",
+    "baselineCommit": "1801aa90c26bab5cba6583b8a6be342763ba387a",
+    "baselineTree": "faaead16ab89d0f75ab021db8d7cf34436f234e6",
+    "part1B": {
+      "sourceHead": "bc09c83d8352c4ae707e26042f9bf52750adcbc2",
+      "pullRequest": 550,
+      "mergedMain": "1801aa90c26bab5cba6583b8a6be342763ba387a",
+      "deployment": "21505f81-8df6-4f7a-9f4d-61ff33e6ec90",
+      "deploymentState": "SUCCESS_RUNNING",
+      "imageSha256": "97210537e4a682de1e61b7e95b9873812e167fa0e47dcfcb3fba17a401df4bfd",
+      "auditVerdict": "P0=P1=P2=P3=0",
+      "auditReportSha256": null
+    },
+    "frozenInputs": [
+      {
+        "path": "docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md",
+        "normalizedLfSha256": "92DAD00F8A7623A87C780FC1AC965B66569616650F53FDED8454F51872458179"
+      },
+      {
+        "path": "docs/architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json",
+        "normalizedLfSha256": "62E37CF07A26F0C2B1A50A2C2F0EB927695500DB32B44B16E5B431F594B93142"
+      }
+    ],
+    "runtimeAuthorityGranted": false,
+    "launchSupportGranted": false,
+    "externalEffectAuthorityGranted": false
+  },
+  "decisionStates": [
+    "catalogued_not_authorized",
+    "deny_invalid",
+    "deny_unsupported"
+  ],
+  "riskClasses": [
+    {
+      "id": "internal_sensitive",
+      "ordinal": 1,
+      "meaning": "Tenant-private read, digest, or internal-task preparation with no customer, provider, financial, or upstream mutation effect."
+    },
+    {
+      "id": "owner_attention",
+      "ordinal": 2,
+      "meaning": "A request for an owner decision; the request never stands in for the decision and never executes the proposed effect."
+    },
+    {
+      "id": "external_communication",
+      "ordinal": 3,
+      "meaning": "Customer-facing words or channel activity that can create privacy, consent, spam, harassment, or reputation harm."
+    },
+    {
+      "id": "sensitive_document_delivery",
+      "ordinal": 4,
+      "meaning": "Delivery of an exact customer-safe document or scoped access link with confidentiality, revision, recipient, expiry, and revocation risk."
+    },
+    {
+      "id": "financial_communication",
+      "ordinal": 5,
+      "meaning": "Communication about an exact current financial fact; it cannot charge, refund, assess fees, write off, settle, or alter accounting."
+    },
+    {
+      "id": "collection_communication",
+      "ordinal": 6,
+      "meaning": "Human-controlled collection attention or communication with elevated harassment, privacy, stale-balance, legal-claim, and escalation risk."
+    },
+    {
+      "id": "prohibited_mutation_or_money",
+      "ordinal": 7,
+      "meaning": "Upstream business-fact mutation, money movement, charging, refunds, fees, write-offs, settlement, accounting mutation, or unsupported external enforcement is outside Mission 28 authority."
+    }
+  ],
+  "threats": [
+    {
+      "id": "abuse",
+      "definition": "A permitted-looking action is used excessively, deceptively, coercively, or outside its reviewed business purpose.",
+      "failClosedBoundary": "No action proceeds without exact bounded purpose, owner authority, limits, and evidence; Part 1C grants none."
+    },
+    {
+      "id": "privacy",
+      "definition": "Customer, tenant, staff, document, provider, or financial data is exposed to an unnecessary party, surface, log, prompt, or channel.",
+      "failClosedBoundary": "Minimize data and deny when recipient, projection, tenant, record, channel, or retention authority is missing or ambiguous."
+    },
+    {
+      "id": "confused_deputy",
+      "definition": "A fact, callback, staff role, provider, legacy surface, or caller causes NorthStar to exercise authority it does not own.",
+      "failClosedBoundary": "Bind exact actor, tenant, capability, policy, source, recipient, action, and effect; no input or provider label grants authority."
+    },
+    {
+      "id": "spam",
+      "definition": "Duplicate, excessive, unwanted, or insufficiently authorized owner/customer communication is attempted.",
+      "failClosedBoundary": "No communication support exists until later exact permission, suppression, frequency, idempotency, and channel controls are accepted."
+    },
+    {
+      "id": "harassment",
+      "definition": "Cadence, tone, timing, channel, or escalation pressures or repeatedly contacts a person contrary to policy or current facts.",
+      "failClosedBoundary": "Unknown permission, quiet hours, suppression, dispute, human activity, or escalation basis blocks the action."
+    },
+    {
+      "id": "replay",
+      "definition": "A prior request, approval, event, callback, preview, evidence item, or action identity is reused to duplicate or widen an effect.",
+      "failClosedBoundary": "Later work must bind single-use or standing authority, current source and policy digests, idempotency, and reconciliation; Part 1C executes nothing."
+    },
+    {
+      "id": "cross_tenant",
+      "definition": "Identity, source, recipient, policy, document, evidence, or provider state from one tenant is read or used for another.",
+      "failClosedBoundary": "Every future read and effect must bind one exact tenant and fail closed on aliases, guesses, cache reuse, or mixed snapshots."
+    },
+    {
+      "id": "stale_source",
+      "definition": "An action is based on a corrected, superseded, paid, disputed, revoked, reopened, deleted, or otherwise non-current source.",
+      "failClosedBoundary": "Exact source version/digest/currentness must be checked at evaluation and again immediately before effect."
+    },
+    {
+      "id": "prompt_content_injection",
+      "definition": "Stored, supplied, generated, or provider-returned content attempts to alter instructions, authority, recipients, actions, claims, or evidence.",
+      "failClosedBoundary": "Content is data only; bounded templates and customer-safe projection cannot grant or widen authority."
+    },
+    {
+      "id": "provider",
+      "definition": "Provider availability, identity, mode, credentials, acknowledgements, callbacks, retries, or corrections are missing, forged, stale, or misunderstood.",
+      "failClosedBoundary": "Provider-neutral capability and evidence remain unavailable until later accepted work; provider state never grants action authority."
+    },
+    {
+      "id": "denial_of_service",
+      "definition": "Cost, size, fan-out, cadence, parsing, scheduling, retry, queue, recipient, or provider behavior exhausts tenant or system resources.",
+      "failClosedBoundary": "Later work must enforce deterministic bounds, quotas, backpressure, deadlines, circuit breaking, and tenant isolation before execution."
+    }
+  ],
+  "actionFamilies": [
+    {
+      "id": "internal_read_digest_task",
+      "order": 1,
+      "label": "Internal read, digest, or task",
+      "owner": "Mission 28 tenant-private internal automation policy",
+      "riskClass": "internal_sensitive",
+      "authorityState": "catalogued_not_authorized",
+      "effectBoundary": "May later read accepted tenant-private facts and prepare a bounded internal digest or task; it may not contact a customer/provider, mutate upstream truth, or create a financial effect.",
+      "requiredControls": ["exact_tenant_and_actor", "accepted_source_and_currentness", "bounded_internal_projection", "dedupe_and_limits", "tenant_private_evidence"],
+      "threatIds": ["abuse", "privacy", "confused_deputy", "replay", "cross_tenant", "stale_source", "prompt_content_injection", "denial_of_service"]
+    },
+    {
+      "id": "owner_approval_request",
+      "order": 2,
+      "label": "Owner approval request",
+      "owner": "Mission 28 owner-control contract",
+      "riskClass": "owner_attention",
+      "authorityState": "catalogued_not_authorized",
+      "effectBoundary": "May later ask an exact authorized owner to decide on one exact preview; requesting, viewing, or acknowledging approval never executes the proposed downstream action.",
+      "requiredControls": ["exact_owner_capability", "exact_preview_and_source_digest", "expiry_and_single_use", "no_self_approval_widening", "separate_downstream_authority"],
+      "threatIds": ["abuse", "privacy", "confused_deputy", "spam", "harassment", "replay", "cross_tenant", "stale_source", "prompt_content_injection", "provider", "denial_of_service"]
+    },
+    {
+      "id": "customer_communication",
+      "order": 3,
+      "label": "Customer communication",
+      "owner": "Mission 28 approved customer-communication policy",
+      "riskClass": "external_communication",
+      "authorityState": "catalogued_not_authorized",
+      "effectBoundary": "May later send only an approved bounded message to one exact current authorized recipient/channel; no delivery, reply, outcome, business-fact, or provider claim is inferred.",
+      "requiredControls": ["exact_sender_recipient_and_channel", "permission_and_suppression", "approved_bounded_content", "quiet_hours_frequency_and_idempotency", "attempt_delivery_and_reply_evidence_separation"],
+      "threatIds": ["abuse", "privacy", "confused_deputy", "spam", "harassment", "replay", "cross_tenant", "stale_source", "prompt_content_injection", "provider", "denial_of_service"]
+    },
+    {
+      "id": "secure_document_delivery",
+      "order": 4,
+      "label": "Secure document delivery",
+      "owner": "Mission 28 approved document-delivery policy over upstream-owned documents",
+      "riskClass": "sensitive_document_delivery",
+      "authorityState": "catalogued_not_authorized",
+      "effectBoundary": "May later deliver one exact current customer-safe upstream-owned document or scoped link; it cannot edit the document, widen access, or treat handoff/open/view as acceptance or payment.",
+      "requiredControls": ["exact_document_revision_and_digest", "exact_authorized_recipient", "scoped_expiring_revocable_access", "private_no_store_no_leak", "delivery_evidence_without_upstream_mutation"],
+      "threatIds": ["abuse", "privacy", "confused_deputy", "spam", "harassment", "replay", "cross_tenant", "stale_source", "prompt_content_injection", "provider", "denial_of_service"]
+    },
+    {
+      "id": "financial_reminder",
+      "order": 5,
+      "label": "Financial reminder",
+      "owner": "Mission 28 approved reminder policy over Mission 27 financial facts",
+      "riskClass": "financial_communication",
+      "authorityState": "catalogued_not_authorized",
+      "effectBoundary": "May later communicate one exact current issued invoice, due date, balance, payment option, receipt, credit, refund, or dispute fact; it cannot charge, refund, assess fees, write off, settle, collect, or alter accounting.",
+      "requiredControls": ["mission27_exact_current_fact", "exact_billing_recipient_and_permission", "amount_currency_balance_and_document_binding", "financial_change_and_human_activity_suppression", "no_money_or_accounting_effect"],
+      "threatIds": ["abuse", "privacy", "confused_deputy", "spam", "harassment", "replay", "cross_tenant", "stale_source", "prompt_content_injection", "provider", "denial_of_service"]
+    },
+    {
+      "id": "collection_escalation",
+      "order": 6,
+      "label": "Collection escalation",
+      "owner": "Mission 28 human-controlled collection communication policy over Mission 27 reviewed handoff",
+      "riskClass": "collection_communication",
+      "authorityState": "catalogued_not_authorized",
+      "effectBoundary": "May later create a graduated owner work item or explicitly reviewed customer communication from one exact current Mission 27 collection handoff; no legal threat, agency referral, fee, credit action, enforcement, or automatic financial effect is authorized.",
+      "requiredControls": ["reviewed_mission27_handoff", "owner_control_and_human_override", "dispute_payment_and_contact_suppression", "bounded_non_deceptive_content_and_cadence", "no_legal_external_or_financial_escalation"],
+      "threatIds": ["abuse", "privacy", "confused_deputy", "spam", "harassment", "replay", "cross_tenant", "stale_source", "prompt_content_injection", "provider", "denial_of_service"]
+    },
+    {
+      "id": "unsupported_upstream_mutation_or_money_movement",
+      "order": 7,
+      "label": "Unsupported upstream mutation or money movement",
+      "owner": "No Mission 28 owner",
+      "riskClass": "prohibited_mutation_or_money",
+      "authorityState": "deny_unsupported",
+      "effectBoundary": "Always deny upstream schedule, work, estimate, invoice, balance, payment, settlement, refund, fee, write-off, accounting, legal, provider-account, or money mutation and any equivalent indirect request.",
+      "requiredControls": ["closed_action_vocabulary", "deny_direct_and_indirect_aliases", "no_provider_or_callback_bypass", "no_evidence_as_authority", "fixed_fail_closed_result"],
+      "threatIds": ["abuse", "privacy", "confused_deputy", "spam", "harassment", "replay", "cross_tenant", "stale_source", "prompt_content_injection", "provider", "denial_of_service"]
+    }
+  ],
+  "part1BDispositionPolicy": [
+    {
+      "disposition": "mission28_owned_reusable_after_later_authority",
+      "part1CHandling": "catalog_input_only",
+      "boundary": "A reusable surface remains inactive and grants no action, launch, recipient, channel, provider, or effect authority."
+    },
+    {
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "part1CHandling": "upstream_fact_or_excluded_only",
+      "boundary": "It may be consumed only through its existing accepted contract and cannot become Mission 28 action authority."
+    },
+    {
+      "disposition": "simulated_or_demo_only",
+      "part1CHandling": "demo_only",
+      "boundary": "It cannot cross into paid data, real recipients, provider credentials, money, or effect evidence."
+    },
+    {
+      "disposition": "legacy_unsupported_or_quarantined",
+      "part1CHandling": "deny_reuse",
+      "boundary": "Legacy code is not an adapter, trigger, action, evidence, or fallback authority."
+    },
+    {
+      "disposition": "manual_handoff",
+      "part1CHandling": "manual_only",
+      "boundary": "Opening or preparing a native/manual handoff is not an automated attempt, sent/delivered effect, or outcome."
+    },
+    {
+      "disposition": "ambiguous_fail_closed",
+      "part1CHandling": "deny_reuse",
+      "boundary": "Ambiguity blocks reuse until a later independently accepted authority resolves it."
+    }
+  ],
+  "unsupportedCombinations": [
+    { "id": "unknown_action_family", "appliesTo": ["*"], "condition": "Action family is missing, renamed, unknown, duplicated, or structurally malformed.", "outcome": "deny_invalid" },
+    { "id": "catalog_as_runtime_authority", "appliesTo": ["*"], "condition": "Caller treats this catalog or implementation-candidate status as launch or execution permission.", "outcome": "deny_unsupported" },
+    { "id": "source_fact_as_permission", "appliesTo": ["*"], "condition": "An event, fact, elapsed time, prediction, recommendation, label, callback, or evidence item is treated as action permission.", "outcome": "deny_unsupported" },
+    { "id": "cross_tenant_or_record", "appliesTo": ["*"], "condition": "Tenant, actor, policy, source, recipient, document, provider, action, or evidence binding differs or is unknown.", "outcome": "deny_invalid" },
+    { "id": "stale_or_mixed_source", "appliesTo": ["*"], "condition": "Source, policy, recipient, consent, suppression, limit, document, balance, or evidence is stale, corrected, mixed-revision, unavailable, or unverified.", "outcome": "deny_invalid" },
+    { "id": "replayed_or_duplicate_authority", "appliesTo": ["*"], "condition": "Approval, request, preview, event, action, provider attempt, callback, or evidence identity is replayed, duplicated, aliased, or unreconciled.", "outcome": "deny_invalid" },
+    { "id": "content_or_provider_as_authority", "appliesTo": ["*"], "condition": "Prompt, stored text, generated content, template variable, provider response, callback, or transport state attempts to grant or widen authority.", "outcome": "deny_unsupported" },
+    { "id": "part1b_quarantine_as_authority", "appliesTo": ["*"], "condition": "A quarantined, ambiguous, simulated, upstream-owned, excluded, or manual Part 1B surface is treated as reusable execution authority.", "outcome": "deny_unsupported" },
+    { "id": "internal_action_external_effect", "appliesTo": ["internal_read_digest_task"], "condition": "An internal read, digest, or task requests customer/provider contact, document delivery, financial communication, upstream mutation, or money effect.", "outcome": "deny_unsupported" },
+    { "id": "approval_request_executes_effect", "appliesTo": ["owner_approval_request"], "condition": "Creating, viewing, delivering, or acknowledging an approval request executes or schedules its proposed downstream action.", "outcome": "deny_unsupported" },
+    { "id": "communication_without_exact_authority", "appliesTo": ["customer_communication"], "condition": "Sender, recipient, relationship, channel, permission, suppression, content, cadence, currentness, or owner authority is absent or ambiguous.", "outcome": "deny_invalid" },
+    { "id": "document_without_exact_authority", "appliesTo": ["secure_document_delivery"], "condition": "Document owner, customer-safe projection, revision/digest, recipient, access scope, expiry, revocation, privacy, or delivery authority is absent or ambiguous.", "outcome": "deny_invalid" },
+    { "id": "financial_reminder_mutates_money", "appliesTo": ["financial_reminder"], "condition": "Reminder requests a charge, refund, fee, write-off, settlement, payout, balance, accounting, or other money/business-fact mutation.", "outcome": "deny_unsupported" },
+    { "id": "collection_escalation_unreviewed_or_coercive", "appliesTo": ["collection_escalation"], "condition": "Reviewed handoff is absent or the action adds a legal threat, unsupported deadline/fee, agency/credit referral, harassment, enforcement, or automatic financial effect.", "outcome": "deny_unsupported" },
+    { "id": "any_upstream_mutation", "appliesTo": ["unsupported_upstream_mutation_or_money_movement"], "condition": "Any direct, indirect, aliased, provider-mediated, callback-mediated, or evidence-mediated upstream mutation is requested.", "outcome": "deny_unsupported" },
+    { "id": "any_money_movement", "appliesTo": ["unsupported_upstream_mutation_or_money_movement"], "condition": "Any direct, indirect, aliased, provider-mediated, callback-mediated, or evidence-mediated movement or reclassification of money is requested.", "outcome": "deny_unsupported" }
+  ],
+  "unavailableEvidence": [
+    "Part 1C independent audit, PR, merge, deployment, and release",
+    "Part 1D launch matrix or any supported first-launch action",
+    "Production provider accounts, credentials, senders, callbacks, templates, capability, sandbox, or deliverability",
+    "Real recipients, messages, document delivery, replies, collection activity, financial effects, or live money",
+    "Professional legal, privacy, communications-consent, collections, debt, consumer-protection, provider, or security opinion",
+    "Private-production customer evidence, hosted load or SLA, disaster restore, physical Safari/devices, manual assistive-technology review, or founder visual approval"
+  ]
+}

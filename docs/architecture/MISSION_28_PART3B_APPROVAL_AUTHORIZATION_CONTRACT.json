@@ -120,7 +120,8 @@
         "runId": "required_exact_uuid",
         "standingIntent": null,
         "subjectRecordId": "exact_proposed_action_record_uuid",
-        "subjectRecordDigest": "exact_proposed_action_record_digest"
+        "subjectRecordDigest": "exact_proposed_action_record_digest",
+        "trustedSubjectEvidence": "separately_resolved_proposed_action_evidence_must_bind_the_same_exact_run_id_record_id_and_record_digest"
       },
       "reuseBoundary": "one_exact_run_one_exact_material_binding_exact_idempotent_replay_only",
       "standingOrFutureRunAuthority": "deny",
@@ -345,12 +346,32 @@
       "temporalBinding",
       "idempotencyBinding",
       "kindBinding",
+      "proposedActionSubjectEvidence_for_per_run_null_for_standing",
       "materialBindingDigest"
     ],
+    "perRunProposedActionSubjectEvidence": {
+      "exactKeys": [
+        "tenantId",
+        "subjectRecordType",
+        "subjectRecordId",
+        "subjectRecordDigest",
+        "runId",
+        "policyId",
+        "policyVersion",
+        "policyDigest",
+        "sourceSetDigest",
+        "currentnessMarker"
+      ],
+      "subjectRecordType": "proposed_action",
+      "resolutionSource": "server_resolved_exact_part2b_proposed_action_record_not_candidate_supplied",
+      "bindingRule": "tenant_record_id_record_digest_run_id_policy_tuple_source_set_digest_and_currentness_must_equal_the_candidate_material_exactly",
+      "standingAuthorizationValue": null
+    },
     "candidateRecordMaySupplyOrReplaceTrustedResolution": false,
     "actorSessionMembershipCapabilityAndRecentAuthenticationMustBeReread": true,
-    "policySourcePreviewRecipientEffectTimeAndKindMustResolveExactly": true,
+    "policySourcePreviewRecipientEffectTimeKindAndPerRunProposedActionMustResolveExactly": true,
     "previewMustCrossBindExactPolicySourceRecipientEffectAndKindSubject": true,
+    "perRunKindBindingRunIdMustEqualSeparatelyTrustedProposedActionRunId": true,
     "wholeRecordTenantActorPolicySourcePreviewRecipientEffectOrKindRetarget": "deny_even_after_all_record_digests_are_recomputed",
     "missingAmbiguousStaleUnavailableOrMixedResolution": "deny"
   },
@@ -373,7 +394,7 @@
     "effectIdentityDigestOrActionFamilyChange": "deny_reuse",
     "actorSessionMembershipCapabilityRecentAuthenticationOrScopeChange": "deny_reuse",
     "reasonExpiryTimeEvidenceIdempotencyOrKindSubjectChange": "deny_reuse",
-    "runOrStandingIntentChange": "deny_reuse",
+    "runProposedActionSubjectOrStandingIntentChange": "deny_reuse",
     "correctionRule": "create_new_preview_and_new_authorization_identity_from_new_separately_trusted_resolution_preserve_old_record"
   },
   "selfAuthorityDenials": [
@@ -395,7 +416,7 @@
     "missing_stale_expired_or_mismatched_recent_authentication",
     "unknown_fuzzy_wildcard_case_folded_prefixed_suffixed_or_aliased_capability",
     "per_run_capability_with_standing_kind_or_standing_capability_with_per_run_kind",
-    "per_run_missing_or_different_run_or_proposed_action_subject",
+    "per_run_missing_or_different_run_or_proposed_action_subject_or_separately_trusted_subject_evidence",
     "standing_run_id_present_or_policy_subject_not_exact",
     "policy_source_preview_recipient_effect_reason_expiry_or_idempotency_mismatch",
     "stale_unavailable_mixed_or_fixture_source_or_preview_currentness",

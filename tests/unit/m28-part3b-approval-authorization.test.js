@@ -206,6 +206,20 @@ function trustedFor(record, contract, decisionAt = '2026-10-27T10:30:00.000Z') {
     authorizationId: record.authorizationId,
     materialBinding: materialOf(record, contract),
     materialBindingDigest: record.materialBindingDigest,
+    proposedActionSubjectEvidence: record.authorizationKind === 'per_run_approval'
+      ? {
+        tenantId: record.tenantId,
+        subjectRecordType: 'proposed_action',
+        subjectRecordId: record.kindBinding.subjectRecordId,
+        subjectRecordDigest: record.kindBinding.subjectRecordDigest,
+        runId: record.kindBinding.runId,
+        policyId: record.policyBinding.policyId,
+        policyVersion: record.policyBinding.policyVersion,
+        policyDigest: record.policyBinding.policyDigest,
+        sourceSetDigest: record.sourceBinding.sourceSetDigest,
+        currentnessMarker: record.sourceBinding.currentnessMarker,
+      }
+      : null,
     decisionAt,
   };
 }
@@ -221,7 +235,8 @@ function validateAuthorization(input, trustedInput) {
     return 'deny_unsupported_or_self_created_authority';
   }
   if (!exactKeys(record, contract.recordGrammar.exactKeys) ||
-      !exactKeys(trusted, ['authorizationId', 'materialBinding', 'materialBindingDigest', 'decisionAt'])) {
+      !exactKeys(trusted, ['authorizationId', 'materialBinding', 'materialBindingDigest',
+        'proposedActionSubjectEvidence', 'decisionAt'])) {
     return 'deny_unsupported_or_self_created_authority';
   }
   const grammar = contract.recordGrammar;
@@ -310,15 +325,29 @@ function validateAuthorization(input, trustedInput) {
   if (!pair) return 'deny_kind_or_scope_mismatch';
   const kindBinding = record.kindBinding;
   if (record.authorizationKind === 'per_run_approval') {
+    const evidenceContract = contract.trustedResolutionContract.perRunProposedActionSubjectEvidence;
+    const evidence = trusted.proposedActionSubjectEvidence;
     if (kindBinding.subjectRecordType !== 'proposed_action' || !uuid.test(kindBinding.subjectRecordId) ||
         !sha.test(kindBinding.subjectRecordDigest) || !uuid.test(kindBinding.runId) ||
         kindBinding.standingIntent !== null ||
+        !exactKeys(evidence, evidenceContract.exactKeys) ||
+        evidence.subjectRecordType !== evidenceContract.subjectRecordType ||
+        evidence.tenantId !== record.tenantId ||
+        evidence.subjectRecordId !== kindBinding.subjectRecordId ||
+        evidence.subjectRecordDigest !== kindBinding.subjectRecordDigest ||
+        evidence.runId !== kindBinding.runId ||
+        evidence.policyId !== record.policyBinding.policyId ||
+        evidence.policyVersion !== record.policyBinding.policyVersion ||
+        evidence.policyDigest !== record.policyBinding.policyDigest ||
+        evidence.sourceSetDigest !== record.sourceBinding.sourceSetDigest ||
+        evidence.currentnessMarker !== record.sourceBinding.currentnessMarker ||
         record.idempotencyBinding.namespace !== contract.expiryAndIdempotency.perRunNamespace) {
       return 'deny_kind_or_scope_mismatch';
     }
   } else if (kindBinding.subjectRecordType !== 'policy_version' ||
       kindBinding.subjectRecordId !== record.policyBinding.policyId ||
       kindBinding.subjectRecordDigest !== record.policyBinding.policyDigest || kindBinding.runId !== null ||
+      trusted.proposedActionSubjectEvidence !== null ||
       !kind.kindBinding.standingIntent.includes(kindBinding.standingIntent) ||
       record.idempotencyBinding.namespace !== contract.expiryAndIdempotency.standingNamespace) {
     return 'deny_kind_or_scope_mismatch';
@@ -476,6 +505,35 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
       const attack = clone(standing); mutate(attack);
       expect(validateAuthorization(seal(attack, contract), standingTrusted)).not.toBe('accepted_contract_record_only_no_runtime_authority');
     }
+  });
+
+  test('denies same-tenant per-run transfer against separately trusted proposed-action evidence', () => {
+    const contract = parse(CONTRACT_PATH);
+    const record = buildRecord('per_run_approval');
+    const independentlyResolved = trustedFor(record, contract).proposedActionSubjectEvidence;
+    const attacks = [
+      value => { value.kindBinding.runId = '00000000-0000-4000-8000-000000000499'; },
+      value => {
+        value.kindBinding.subjectRecordId = '00000000-0000-4000-8000-000000000499';
+        value.previewBinding.subjectRecordId = value.kindBinding.subjectRecordId;
+      },
+      value => {
+        value.kindBinding.subjectRecordDigest = digestValue('f');
+        value.previewBinding.subjectRecordDigest = value.kindBinding.subjectRecordDigest;
+      },
+    ];
+    for (const mutate of attacks) {
+      const attack = clone(record);
+      mutate(attack);
+      const redigested = seal(attack, contract);
+      const attackerMaterial = trustedFor(redigested, contract);
+      attackerMaterial.proposedActionSubjectEvidence = clone(independentlyResolved);
+      expect(validateAuthorization(redigested, attackerMaterial)).toBe('deny_kind_or_scope_mismatch');
+    }
+    const selfSuppliedWrongRun = trustedFor(record, contract);
+    selfSuppliedWrongRun.proposedActionSubjectEvidence.runId =
+      '00000000-0000-4000-8000-000000000499';
+    expect(validateAuthorization(record, selfSuppliedWrongRun)).toBe('deny_kind_or_scope_mismatch');
   });
 
   test('denies same-tenant cross-actor subject substitution and malformed opaque identities', () => {

@@ -146,7 +146,8 @@
       "sourceRefs": [
         { "path": "src/estimating/taxResearchWorker.js", "anchors": ["class TaxResearchWorker extends TaxPreparationWorker", "canonical_tax_research_enqueue"] },
         { "path": "src/server.js", "anchors": ["No reviewed live acquisition adapter is enabled by this local integration."] },
-        { "path": "src/estimating/taxSourceBinding.js", "anchors": ["function createProductionTaxAcquisition"] }
+        { "path": "src/estimating/taxSourceBinding.js", "anchors": ["const {createTaxSourceTransport}=require('./taxSourceTransport')", "function createProductionTaxAcquisition"] },
+        { "path": "src/estimating/taxSourceTransport.js", "anchors": ["const https = require('node:https')", "function createTaxSourceTransport", "request = https.request"] }
       ]
     },
     {
@@ -189,7 +190,10 @@
       "owner": "account, workforce, and support transactional email",
       "effectBoundary": "The Resend adapter and its verification, reset, invitation, and support templates remain bound to their owning workflows; provider acceptance is not Mission 28 delivery authority.",
       "sourceRefs": [
-        { "path": "src/email/transactional.js", "anchors": ["const RESEND_ENDPOINT = 'https://api.resend.com/emails'", "verification(recipient, rawToken, context)", "passwordReset(recipient, rawToken, context)", "invitation(recipient, rawToken, context, invite = {})", "supportCase(recipient, report = {}, context)"] }
+        { "path": "src/email/transactional.js", "anchors": ["const RESEND_ENDPOINT = 'https://api.resend.com/emails'", "verification(recipient, rawToken, context)", "passwordReset(recipient, rawToken, context)", "invitation(recipient, rawToken, context, invite = {})", "supportCase(recipient, report = {}, context)"] },
+        { "path": "src/accounts/service.js", "anchors": ["const { emailAddress } = require('../email/transactional')", "this.transactionalEmail.verification"] },
+        { "path": "src/email/outbox.js", "anchors": ["this.transactionalEmail.verification.bind", "this.transactionalEmail.passwordReset.bind"] },
+        { "path": "src/support/outbox.js", "anchors": ["this.transactionalEmail.supportCase"] }
       ]
     },
     {
@@ -200,6 +204,7 @@
       "effectBoundary": "Invitation and resend actions remain workforce authority and cannot be used as a general recipient or resend path.",
       "sourceRefs": [
         { "path": "src/workforce/service.js", "anchors": ["this.transactionalEmail.invitation", "async resendInvitation"] },
+        { "path": "src/workforce/repository.js", "anchors": ["const { workforceInvitationEnvelope } = require('../email/transactional')"] },
         { "path": "src/routes/workforce.js", "anchors": ["router.post('/invitations'", "router.post('/invitations/:invitationId/resend'"] }
       ]
     },
@@ -235,8 +240,21 @@
       "effectBoundary": "Retell call/SMS creation and exponential retry remain voice-provider authority; they cannot be invoked by Mission 28 without later channel, recipient, consent, and provider acceptance.",
       "sourceRefs": [
         { "path": "src/retell/client.js", "anchors": ["const RETELL_BASE = 'https://api.retellai.com'", "Retry loop with exponential backoff", "async function sendSMS"] },
+        { "path": "src/services/canonicalVoiceSessionCreation.js", "anchors": ["const retell = require('../retell/client')", "const createProviderCall = source.createProviderCall || retell.createCall"] },
         { "path": "src/routes/api.js", "anchors": ["router.post('/retell/create-call'", "router.post('/retell/send-sms'"] },
         { "path": "src/routes/voice.js", "anchors": ["router.post('/call'", "router.post('/sessions/:id/handoff'", "router.post('/sessions/:id/cancel'"] }
+      ]
+    },
+    {
+      "id": "provider.mission26-retell-call-reconciliation",
+      "facets": ["provider_adapter", "retry"],
+      "disposition": "upstream_or_subscription_owned_excluded",
+      "owner": "Mission 26 reviewed demand-source diagnostics",
+      "effectBoundary": "The bounded Retell inbound-call scan is a tenant-authorized diagnostic comparison only; it cannot certify coverage, caller consent, lead identity, retention, a forecast, or Mission 28 effect authority.",
+      "sourceRefs": [
+        { "path": "src/forecasting/retellCallReconciliation.js", "anchors": ["const { listInboundCallsPage } = require('../retell/client')", "const MAX_PAGES = 21", "async function reconcileRetellInboundCalls"] },
+        { "path": "src/forecasting/retellCallScanReader.js", "anchors": ["const { reconcileRetellInboundCalls }", "async function inspectRetellCallWindow", "source_changed_during_scan"] },
+        { "path": "src/routes/forecastDemandSources.js", "anchors": ["const { inspectRetellCallWindow }", "REVIEWED_BOUNDARY"] }
       ]
     },
     {
@@ -298,7 +316,10 @@
       "disposition": "upstream_or_subscription_owned_excluded",
       "owner": "Mission 21 knowledge publication",
       "effectBoundary": "The Retell LLM projection transport is conditional on an explicit owned binding and remains knowledge publication, not customer communication.",
-      "sourceRefs": [{ "path": "src/knowledge/providerBindings.js", "anchors": ["function createProductionKnowledgeTransports", "https://api.retellai.com/"] }]
+      "sourceRefs": [
+        { "path": "src/knowledge/providerBindings.js", "anchors": ["const {createRetellProjectionTransport}=require('./retellProjectionTransport')", "function createProductionKnowledgeTransports", "https://api.retellai.com/"] },
+        { "path": "src/knowledge/retellProjectionTransport.js", "anchors": ["function createRetellProjectionTransport", "client.llm.retrieve", "client.llm.update"] }
+      ]
     },
     {
       "id": "provider.equipment-identifier-extraction",
@@ -513,6 +534,9 @@
       "effectBoundary": "Homepage web-call, Polaris, and verified deletion remain ephemeral public-demo operations; they create no customer, paid, recipient, or communication effect.",
       "entryPoints": ["POST /web-call", "POST /polaris/:callId", "DELETE /web-call/:callId"],
       "sourceRefs": [
+        { "path": "package.json", "anchors": ["\"build:retell-web\": \"esbuild src/browser/retellWebEntry.mjs", "--outfile=public/js/vendor/retell-web-client.mjs"] },
+        { "path": "src/browser/retellWebEntry.mjs", "anchors": ["import { RetellWebClient } from 'retell-client-js-sdk'", "export { RetellWebClient }"] },
+        { "path": "public/js/homepage-demo.js", "anchors": ["var SDK_URL = '/js/vendor/retell-web-client.mjs'", "sdkPromise = import(SDK_URL)", "typeof module.RetellWebClient !== 'function'"] },
         { "path": "src/routes/homepageDemo.js", "anchors": ["router.post('/web-call'", "router.post('/polaris/:callId'", "router.delete('/web-call/:callId'"] },
         { "path": "src/services/demoVoiceLifecycle.js", "anchors": ["FROM canonical_operations o"] },
         { "path": "src/services/homepageWebCall.js", "anchors": ["homepage_provider_deletion_unverified", "northstar_demo_webhook_contract"] }

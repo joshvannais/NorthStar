@@ -49,21 +49,40 @@ const BUSINESS_EVENT_PATHS = [
   'src/voice/webhook.js',
 ];
 
-const EXTERNAL_ADAPTER_PATHS = [
+const PROVIDER_IMPLEMENTATION_PATHS = [
   'public/js/retell-provider.js',
+  'src/browser/retellWebEntry.mjs',
   'src/calendar/client.js',
   'src/email/transactional.js',
   'src/equipment/provider.js',
-  'src/estimating/taxSourceBinding.js',
+  'src/estimating/taxSourceTransport.js',
   'src/integrations/jobber.js',
   'src/knowledge/providerBindings.js',
+  'src/knowledge/retellProjectionTransport.js',
   'src/notifications/email.js',
   'src/notifications/sms.js',
-  'src/persistence/v2/repository.js',
   'src/polaris/openaiRuntime.js',
   'src/retell/client.js',
   'src/sheets/client.js',
 ];
+
+const PROVIDER_IMPORT_CONSUMER_PATHS = [
+  'src/accounts/service.js',
+  'src/estimating/taxSourceBinding.js',
+  'src/forecasting/retellCallReconciliation.js',
+  'src/knowledge/providerBindings.js',
+  'src/routes/api.js',
+  'src/routes/jobberIntegration.js',
+  'src/server.js',
+  'src/services/canonicalVoiceSessionCreation.js',
+  'src/services/homepageWebCall.js',
+  'src/support/outbox.js',
+  'src/workforce/repository.js',
+  'src/workforce/service.js',
+];
+
+const PROVIDER_IMPLEMENTATION_SIGNAL =
+  /require\(['"](?:node:https|https|twilio|nodemailer|googleapis|openai)['"]\)|from ['"]retell-client-js-sdk['"]|https:\/\/api\.(?:retellai|resend|getjobber)\.com|client\.llm\.(?:retrieve|update)|function createEquipmentExtractor|fetch\(config\.apiBase|client\.messages\.create\(|client\.events\.insert\(|spreadsheets\.values\.(?:append|update)\(|new OpenAI\b/;
 
 const DEMO_COMMAND_CENTER_ENTRY_POINTS = [
   '/command-center/operations/appointments/:appointmentId/actions',
@@ -134,12 +153,27 @@ function matchingPaths(files, pattern) {
     .map(file => slash(path.relative(ROOT, file))).sort();
 }
 
+function relativeDependencies(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const specifiers = [
+    ...source.matchAll(/require\(\s*['"](\.[^'"]+)['"]\s*\)/g),
+    ...source.matchAll(/\bfrom\s+['"](\.[^'"]+)['"]/g),
+    ...source.matchAll(/\bimport\(\s*['"](\.[^'"]+)['"]\s*\)/g),
+  ].map(match => match[1]);
+  return new Set(specifiers.map(specifier => {
+    const stem = path.resolve(path.dirname(file), specifier);
+    const candidates = [stem, `${stem}.js`, `${stem}.mjs`, path.join(stem, 'index.js'), path.join(stem, 'index.mjs')];
+    const resolved = candidates.find(candidate => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+    return resolved ? slash(path.relative(ROOT, resolved)) : null;
+  }).filter(Boolean));
+}
+
 function validate(value) {
   if (value.contractVersion !== 'mission28.part1b.surface-inventory.v1') throw new Error('version');
   if (value.authority.baselineCommit !== BASE || value.authority.baselineTree !== BASE_TREE) throw new Error('base');
   if (JSON.stringify(value.dispositions) !== JSON.stringify(DISPOSITIONS)) throw new Error('dispositions');
   if (JSON.stringify(value.requiredFacets) !== JSON.stringify(FACETS)) throw new Error('facets');
-  if (!Array.isArray(value.surfaces) || value.surfaces.length !== 42) throw new Error('surface count');
+  if (!Array.isArray(value.surfaces) || value.surfaces.length !== 43) throw new Error('surface count');
   const ids = value.surfaces.map(surface => surface.id);
   if (new Set(ids).size !== ids.length) throw new Error('duplicate surface');
   for (const surface of value.surfaces) {
@@ -160,7 +194,7 @@ function validate(value) {
     value.surfaces.filter(surface => surface.disposition === disposition).length]));
   if (JSON.stringify(dispositionCounts) !== JSON.stringify({
     mission28_owned_reusable_after_later_authority: 2,
-    upstream_or_subscription_owned_excluded: 16,
+    upstream_or_subscription_owned_excluded: 17,
     simulated_or_demo_only: 8,
     legacy_unsupported_or_quarantined: 10,
     manual_handoff: 3,
@@ -170,7 +204,7 @@ function validate(value) {
 }
 
 describe('Mission 28 Part 1B automation-surface inventory', () => {
-  test('is an exact bounded candidate with six dispositions, forty-two unique surfaces and all required facets', () => {
+  test('is an exact bounded candidate with six dispositions, forty-three unique surfaces and all required facets', () => {
     const value = validate(inventory());
     expect(value.authority.state).toBe('implementation_candidate');
     expect(value.authority.part1A).toEqual({
@@ -185,7 +219,7 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(Object.fromEntries(DISPOSITIONS.map(disposition => [disposition,
       value.surfaces.filter(surface => surface.disposition === disposition).length]))).toEqual({
       mission28_owned_reusable_after_later_authority: 2,
-      upstream_or_subscription_owned_excluded: 16,
+      upstream_or_subscription_owned_excluded: 17,
       simulated_or_demo_only: 8,
       legacy_unsupported_or_quarantined: 10,
       manual_handoff: 3,
@@ -220,11 +254,14 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
 
   test('covers the current business-event, provider, webhook, notification and handoff source set', () => {
     const covered = sourcePaths(inventory());
-    for (const candidate of [...BUSINESS_EVENT_PATHS, ...EXTERNAL_ADAPTER_PATHS,
+    for (const candidate of [...BUSINESS_EVENT_PATHS, ...PROVIDER_IMPLEMENTATION_PATHS,
+      ...PROVIDER_IMPORT_CONSUMER_PATHS,
       'src/routes/retellWebhookBoundary.js', 'src/customerFinancial/paymentProviderEventReceipt.js',
       'src/routes/api.js', 'src/routes/voice.js', 'src/routes/connectedCall.js',
+      'src/forecasting/retellCallScanReader.js', 'src/routes/forecastDemandSources.js',
       'src/customerFinancial/collectionHandoffReadiness.js', 'src/customerFinancial/collectionReview.js',
-      'public/js/customer-detail.js', 'public/js/calendar-engine.js', 'public/contact.html']) {
+      'public/js/customer-detail.js', 'public/js/calendar-engine.js', 'public/js/homepage-demo.js',
+      'public/contact.html']) {
       expect(covered.has(candidate)).toBe(true);
     }
     const allBrowser = walk(path.join(ROOT, 'public')).filter(file => /\.(?:js|html)$/.test(file))
@@ -246,6 +283,56 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
         /canonical_operations|account_email_outbox|support_case_email_outbox|canonical_knowledge_sync_outbox/),
     ];
     for (const discovered of discoveries.flat()) expect(covered.has(discovered)).toBe(true);
+  });
+
+  test('discovers every outbound provider implementation and its active direct consumers', () => {
+    const covered = sourcePaths(inventory());
+    const scripts = [
+      ...walk(path.join(ROOT, 'src')).filter(file => /\.(?:js|mjs)$/.test(file)),
+      ...walk(path.join(ROOT, 'public')).filter(file => /\.(?:js|mjs)$/.test(file) &&
+        !slash(file).includes('/vendor/')),
+    ];
+    const implementations = matchingPaths(scripts, PROVIDER_IMPLEMENTATION_SIGNAL);
+    expect(implementations).toEqual(PROVIDER_IMPLEMENTATION_PATHS);
+    const implementationSet = new Set(implementations);
+    const consumers = scripts.filter(file => [...relativeDependencies(file)]
+      .some(dependency => implementationSet.has(dependency)))
+      .map(file => slash(path.relative(ROOT, file))).sort();
+    expect(consumers).toEqual(PROVIDER_IMPORT_CONSUMER_PATHS);
+    for (const candidate of [...implementations, ...consumers]) expect(covered.has(candidate)).toBe(true);
+
+    // The browser provider is bundled through package.json and loaded by output path,
+    // so it deliberately has no source-relative import edge.
+    expect(read('package.json')).toContain('esbuild src/browser/retellWebEntry.mjs');
+    expect(read('package.json')).toContain('--outfile=public/js/vendor/retell-web-client.mjs');
+    expect(read('public/js/homepage-demo.js')).toContain("var SDK_URL = '/js/vendor/retell-web-client.mjs'");
+    for (const candidate of ['package.json', 'src/browser/retellWebEntry.mjs', 'public/js/homepage-demo.js']) {
+      expect(covered.has(candidate)).toBe(true);
+    }
+  });
+
+  test('keeps Mission 21, 24, 26, canonical voice and homepage provider boundaries distinct', () => {
+    const byId = Object.fromEntries(inventory().surfaces.map(surface => [surface.id, surface]));
+    expect(byId['worker.tax-research'].sourceRefs.map(reference => reference.path))
+      .toContain('src/estimating/taxSourceTransport.js');
+    expect(byId['provider.retell-knowledge-transport'].sourceRefs.map(reference => reference.path))
+      .toContain('src/knowledge/retellProjectionTransport.js');
+    expect(byId['provider.mission26-retell-call-reconciliation'].sourceRefs.map(reference => reference.path))
+      .toEqual(['src/forecasting/retellCallReconciliation.js',
+        'src/forecasting/retellCallScanReader.js', 'src/routes/forecastDemandSources.js']);
+    expect(byId['provider.retell-call-sms-client'].sourceRefs.map(reference => reference.path))
+      .toContain('src/services/canonicalVoiceSessionCreation.js');
+    expect(byId['demo.homepage-web-call-and-polaris'].sourceRefs.map(reference => reference.path))
+      .toEqual(expect.arrayContaining([
+        'src/browser/retellWebEntry.mjs', 'public/js/homepage-demo.js',
+      ]));
+    expect(new Set([
+      byId['worker.tax-research'].owner,
+      byId['provider.retell-knowledge-transport'].owner,
+      byId['provider.mission26-retell-call-reconciliation'].owner,
+      byId['provider.retell-call-sms-client'].owner,
+      byId['demo.homepage-web-call-and-polaris'].owner,
+    ]).size).toBe(5);
   });
 
   test('enumerates every command-center demo mutation path and keeps all demo surfaces isolated', () => {

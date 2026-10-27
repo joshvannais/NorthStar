@@ -74,6 +74,8 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
       terminalUnresolvedRule: 'ordered_unique_subset_of_direct_terminal_parent_record_ids',
       sourceStateAggregation: 'source_state_and_source_set_marker_derive_only_from_exact_source_bindings',
       recordMarkerAggregation: 'record_marker_derives_from_policy_state_plus_independently_derived_source_state',
+      exactJsonGrammarRule: 'all_required_top_and_nested_values_use_exact_json_types_null_safe_comparison_and_exact_key_sets_before_cast_or_authority_resolution',
+      lifecyclePredecessorRule: 'sequence_one_only_draft_create_or_bounded_rollback_draft_with_null_predecessor_every_later_event_requires_exact_non_null_immediate_predecessor',
       lifecycleSerialization: 'one_tenant_policy_lock_before_current_or_related_version_lifecycle_reads',
       lifecycleReplayRule: 'same_event_id_digest_and_canonical_text_replays_before_later_expiry_or_related_policy_state_revalidation_conflicting_identity_denied',
       unrelatedLifecycleBindings: 'deny',
@@ -152,6 +154,11 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
     expect(sql).toContain('Mission 28 historical run binding mismatch');
     expect(sql).toContain('Mission 28 causal ordinal must strictly append');
     expect(sql).toContain('Mission 28 terminal unresolved order invalid');
+    expect(sql).toContain('Mission 28 lifecycle predecessor shape invalid');
+    expect(sql).toContain("jsonb_typeof(doc#>'{payload,grammarFixtureOnly}') IS DISTINCT FROM 'boolean'");
+    expect(sql).toContain("jsonb_typeof(doc->'immutable') IS DISTINCT FROM 'boolean'");
+    expect(sql).toContain('Mission 28 record payload null denied');
+    expect(sql).not.toContain('<>');
     const replayIndex = sql.indexOf('SELECT * INTO stored FROM public.canonical_automation_lifecycle_events_v1');
     expect(replayIndex).toBeGreaterThan(0);
     expect(replayIndex).toBeLessThan(sql.indexOf('SELECT canonical_digest,previous_version_digest,expires_at', replayIndex));

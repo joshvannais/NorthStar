@@ -137,6 +137,18 @@ function redigestRecord(record, model) {
   return record;
 }
 
+function redigestPolicy(policy, model) {
+  const withoutDigest = { ...policy }; delete withoutDigest.canonicalDigest;
+  policy.canonicalDigest = digest(model.canonicalization.namespace, withoutDigest);
+  return policy;
+}
+
+function redigestHistoricalBinding(binding, model) {
+  const withoutDigest = { ...binding }; delete withoutDigest.bindingDigest;
+  binding.bindingDigest = digest(model.canonicalization.historicalRunNamespace, withoutDigest);
+  return binding;
+}
+
 function clonePolicyFor(model, policy, policyId, version = 1, previousVersionDigest = null) {
   const cloned = JSON.parse(JSON.stringify(policy));
   cloned.policyId = policyId;
@@ -282,6 +294,80 @@ realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', ()
       expect(snapshot.records).toEqual(records);
       expect(snapshot.historicalRunBindings).toEqual([binding]);
     } finally { await restarted.end(); }
+  }, 120000);
+
+  test('rejects SQL-null and malformed nested grammar before durable authority resolution', async () => {
+    const policyAttacks = [
+      policy => { policy.schemaVersion = null; },
+      policy => { policy.trigger.kind = null; },
+      policy => { policy.trigger.condition.expected = null; },
+      policy => { policy.action.familyId = null; },
+      policy => { policy.rolloutState = null; },
+    ];
+    for (const mutate of policyAttacks) {
+      const policy = JSON.parse(JSON.stringify(policyModel.canonicalExamples[0]));
+      mutate(policy);
+      redigestPolicy(policy, policyModel);
+      await expect(ownerPool.query('SELECT public.canonical_automation_store_policy_v1($1)',
+        [canonical.canonicalize(policy)])).rejects.toThrow(/policy (fields|authority) invalid/);
+    }
+
+    for (const [field, value] of [['tenantId', null], ['currentnessMarker', null]]) {
+      const source = JSON.parse(JSON.stringify(storedFixture.source));
+      source[field] = value;
+      await expect(ownerPool.query('SELECT public.canonical_automation_store_source_binding_v1($1)',
+        [canonical.canonicalize(source)])).rejects.toThrow(/source binding (fields|authority) invalid/);
+    }
+
+    const sourceSnapshot = { tenantId: TENANT, sourceSetDigest: storedFixture.sourceSet.sourceSetDigest,
+      currentnessMarker: storedFixture.sourceSet.currentnessMarker };
+    for (const [index, operation] of ['validate', 'preview', 'activate', 'resume'].entries()) {
+      const illegalFirst = buildLifecycle(lifecycleModel, operation, null, [], sourceSnapshot,
+        { eventIdBase: 1700 + (index * 10) });
+      await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+        [canonical.canonicalize(illegalFirst)])).rejects.toThrow(/lifecycle predecessor shape invalid/);
+    }
+
+    const lifecycleAttacks = [
+      event => { event.predecessorBinding = null; },
+      event => { event.predecessorBinding.extra = 'not-allowed'; },
+      event => { event.eventClass = null; },
+      event => { event.payload.grammarFixtureOnly = null; },
+    ];
+    for (const mutate of lifecycleAttacks) {
+      const event = JSON.parse(JSON.stringify(storedFixture.events[1]));
+      mutate(event);
+      redigestLifecycle(event, lifecycleModel);
+      await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+        [canonical.canonicalize(event)])).rejects.toThrow(/lifecycle (fields|predecessor shape|authority) invalid/);
+    }
+
+    const recordAttacks = [
+      record => { record.classification.recordClass = null; },
+      record => { record.classification.effectClaim = null; },
+      record => { record.payload.resultState = null; },
+    ];
+    for (const mutate of recordAttacks) {
+      const record = JSON.parse(JSON.stringify(storedFixture.records[0]));
+      mutate(record);
+      redigestRecord(record, recordModel);
+      await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+        [canonical.canonicalize(record)])).rejects.toThrow(/record (fields invalid|authority invalid|payload null denied)/);
+    }
+
+    const historicalAttacks = [
+      binding => { binding.lifecycleStateAtCreation = null; },
+      binding => { binding.immutable = null; },
+      binding => { binding.sourceSnapshotBinding.currentnessMarker = null; },
+      binding => { binding.createdByLifecycleEventBinding.operation = null; },
+    ];
+    for (const mutate of historicalAttacks) {
+      const binding = JSON.parse(JSON.stringify(storedFixture.binding));
+      mutate(binding);
+      redigestHistoricalBinding(binding, lifecycleModel);
+      await expect(ownerPool.query('SELECT public.canonical_automation_store_historical_run_binding_v1($1)',
+        [canonical.canonicalize(binding)])).rejects.toThrow(/historical binding (invalid|digest invalid)/);
+    }
   }, 120000);
 
   test('binds every causal parent to the exact same stored tenant, run and policy version', async () => {

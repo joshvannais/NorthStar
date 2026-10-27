@@ -203,11 +203,19 @@ function validateMatrix(model) {
 
   expect(model.subjectContract).toEqual({
     requiredInputs: [
-      'tenantId', 'actorId', 'actorTenantId', 'sessionId', 'sessionTenantId',
-      'membershipId', 'membershipTenantId', 'membershipRoleId', 'membershipStatus',
+      'tenantId', 'actorId', 'actorTenantId', 'sessionId', 'sessionSubjectActorId',
+      'sessionTenantId', 'membershipId', 'membershipSubjectActorId',
+      'membershipTenantId', 'membershipRoleId', 'membershipStatus',
       'recentAuthenticationState', 'capabilityId', 'operation', 'recordScope', 'recordTenantId',
     ],
+    opaqueIdentityInputs: [
+      'tenantId', 'actorId', 'actorTenantId', 'sessionId', 'sessionSubjectActorId',
+      'sessionTenantId', 'membershipId', 'membershipSubjectActorId', 'membershipTenantId',
+      'recordTenantId',
+    ],
+    opaqueIdentifierPattern: '^[A-Za-z0-9][A-Za-z0-9._:@|/-]{0,255}$',
     membershipStatus: 'active', allTenantIdentitiesMustMatchExactly: true,
+    actorIdMustEqualSessionSubjectAndMembershipSubjectExactly: true,
     actorAndSessionMustResolveFromServerAuthority: true,
     membershipMustBeRereadFromServerAuthorityAtDecision: true,
     operationAndRecordScopeMustResolveFromServerAuthority: true,
@@ -215,6 +223,8 @@ function validateMatrix(model) {
     capabilityAndOperationMustMatchOneExactMatrixRow: true,
     recordScopeMustMatchOneExactGrant: true,
     missingStaleSuspendedCrossTenantUnknownOrAmbiguous: 'deny',
+    sameTenantCrossActorSessionOrMembershipSubstitution: 'deny',
+    emptyWhitespaceControlNonCanonicalOrOversizedOpaqueIdentifier: 'deny',
     displayOrOperationalRoleFieldsAcceptedAsAuthority: false,
     wildcardPrefixSuffixCaseFoldedOrFuzzyCapability: 'deny',
     capabilityDelegationInheritanceChainingOrImpersonation: 'deny',
@@ -225,9 +235,11 @@ function validateMatrix(model) {
   expect(model.part1DCapabilityDisposition.slice(0, 6).every(item => item.state === 'preserved_released_no_implicit_part3a_alias')).toBe(true);
   expect(model.part1DCapabilityDisposition[6].state).toBe('unavailable_no_assignment');
   expect(model.part1DCapabilityDisposition[7].state).toBe('permanently_denied_no_assignment');
-  expect(model.deniedCombinations).toHaveLength(12);
+  expect(model.deniedCombinations).toHaveLength(14);
   expect(model.deniedCombinations).toEqual(expect.arrayContaining([
     'display_role_operational_role_job_title_team_title_label_or_alias_used_as_authority',
+    'same_tenant_cross_actor_session_or_membership_subject_substitution',
+    'empty_whitespace_control_noncanonical_or_oversized_opaque_identity',
     'cross_tenant_actor_session_membership_policy_record_or_capability_scope',
     'admin_approves_run_activates_or_changes_standing_authority_retries_or_manages_channel_authority',
     'provider_external_recipient_message_upstream_accounting_legal_or_money_authority',
@@ -250,10 +262,15 @@ function evaluateRequest(model, request) {
   if (required.some(key => !Object.prototype.hasOwnProperty.call(request, key))) {
     return 'deny_missing_or_invalid_actor_authority';
   }
+  const opaquePattern = new RegExp(model.subjectContract.opaqueIdentifierPattern);
+  if (model.subjectContract.opaqueIdentityInputs.some(key =>
+    typeof request[key] !== 'string' || !opaquePattern.test(request[key]))) {
+    return 'deny_missing_or_invalid_actor_authority';
+  }
   if ([request.tenantId, request.actorTenantId, request.sessionTenantId, request.membershipTenantId, request.recordTenantId]
-      .some(value => typeof value !== 'string' || value !== request.tenantId) ||
-      typeof request.actorId !== 'string' || typeof request.sessionId !== 'string' ||
-      typeof request.membershipId !== 'string' ||
+      .some(value => value !== request.tenantId) ||
+      request.actorId !== request.sessionSubjectActorId ||
+      request.actorId !== request.membershipSubjectActorId ||
       request.membershipStatus !== 'active' ||
       !model.membershipVocabulary.canonicalMembershipRoleIds.includes(request.membershipRoleId)) {
     return 'deny_missing_or_invalid_actor_authority';
@@ -277,7 +294,8 @@ function requestFor(role, capabilityId) {
   const grant = capability.grants.find(item => item.membershipRoleId === role);
   return {
     tenantId: 'tenant-a', actorId: 'actor-a', actorTenantId: 'tenant-a', sessionId: 'session-a',
-    sessionTenantId: 'tenant-a', membershipId: 'membership-a', membershipTenantId: 'tenant-a',
+    sessionSubjectActorId: 'actor-a', sessionTenantId: 'tenant-a', membershipId: 'membership-a',
+    membershipSubjectActorId: 'actor-a', membershipTenantId: 'tenant-a',
     membershipRoleId: role, membershipStatus: 'active', capabilityId,
     recentAuthenticationState: capability.requiresRecentAuthentication ? 'valid_recent' : 'not_required',
     operation: capability.operation, recordScope: grant && grant.recordScope, recordTenantId: 'tenant-a',
@@ -327,7 +345,9 @@ describe('Mission 28 Part 3A fixed capability matrix', () => {
       { ...valid, actorId: null },
       { ...valid, actorTenantId: 'tenant-b' },
       { ...valid, sessionId: null },
+      { ...valid, sessionSubjectActorId: 'actor-b' },
       { ...valid, membershipId: null },
+      { ...valid, membershipSubjectActorId: 'actor-b' },
       { ...valid, membershipStatus: 'inactive' },
       { ...valid, membershipStatus: 'suspended' },
       { ...valid, sessionTenantId: 'tenant-b' },
@@ -343,6 +363,35 @@ describe('Mission 28 Part 3A fixed capability matrix', () => {
     const missing = { ...valid };
     delete missing.sessionId;
     expect(evaluateRequest(model, missing)).toBe('deny_missing_or_invalid_actor_authority');
+  });
+
+  test('denies same-tenant cross-actor session or membership substitution', () => {
+    const model = parse(MODEL_PATH);
+    const valid = requestFor('owner', 'automation_run_approve');
+    const attacks = [
+      { ...valid, sessionSubjectActorId: 'actor-b' },
+      { ...valid, membershipSubjectActorId: 'actor-b' },
+      { ...valid, sessionSubjectActorId: 'actor-b', membershipSubjectActorId: 'actor-b' },
+      { ...valid, actorId: 'actor-b' },
+      { ...valid, actorId: 'actor-b', sessionSubjectActorId: 'actor-b' },
+      { ...valid, actorId: 'actor-b', membershipSubjectActorId: 'actor-b' },
+    ];
+    for (const attack of attacks) {
+      expect(attack.tenantId).toBe(valid.tenantId);
+      expect(evaluateRequest(model, attack)).toBe('deny_missing_or_invalid_actor_authority');
+    }
+  });
+
+  test('denies empty, whitespace, control, noncanonical and oversized opaque identities', () => {
+    const model = parse(MODEL_PATH);
+    const valid = requestFor('owner', 'automation_view');
+    for (const key of model.subjectContract.opaqueIdentityInputs) {
+      for (const invalid of ['', ' ', '\t', ` ${valid[key]}`, `${valid[key]} `, 'actor\nvalue',
+        'actor value', '-leading-marker', 'a'.repeat(257)]) {
+        expect(evaluateRequest(model, { ...valid, [key]: invalid }))
+          .toBe('deny_missing_or_invalid_actor_authority');
+      }
+    }
   });
 
   test('denies unknown, fuzzy, mismatched-operation and mismatched-scope requests', () => {

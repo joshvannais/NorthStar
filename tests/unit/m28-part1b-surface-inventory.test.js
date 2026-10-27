@@ -37,6 +37,15 @@ const WORKER_PATHS = [
   'src/support/outbox.js',
 ];
 
+const KNOWLEDGE_SYNCHRONIZATION_CHAIN_PATHS = [
+  'src/knowledge/managementRepository.js',
+  'src/knowledge/repository.js',
+  'src/knowledge/synchronizationRepository.js',
+  'src/knowledge/synchronizationWorker.js',
+  'src/routes/knowledgeManagement.js',
+  'src/server.js',
+];
+
 const BUSINESS_EVENT_PATHS = [
   'public/js/app-store.js',
   'public/js/canonical-intelligence.js',
@@ -401,6 +410,38 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     const source = walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js'))
       .map(file => fs.readFileSync(file, 'utf8')).join('\n');
     expect(source).not.toMatch(/require\(['"]node-cron['"]\)|from ['"]node-cron['"]|cron\.schedule\s*\(/);
+  });
+
+  test('binds the mounted Mission 21 publication producer to conditional knowledge synchronization', () => {
+    const sourceFiles = walk(path.join(ROOT, 'src')).filter(file => file.endsWith('.js'));
+    const discovered = sourceFiles.map(file => slash(path.relative(ROOT, file)))
+      .filter(file => file === 'src/server.js' ||
+        /^src\/knowledge\/(?:managementRepository|repository|synchronizationRepository|synchronizationWorker)\.js$/.test(file) ||
+        file === 'src/routes/knowledgeManagement.js')
+      .sort();
+    expect(discovered).toEqual(KNOWLEDGE_SYNCHRONIZATION_CHAIN_PATHS);
+
+    const surface = inventory().surfaces.find(item => item.id === 'worker.knowledge-synchronization');
+    expect(surface.sourceRefs.map(reference => reference.path).sort())
+      .toEqual(KNOWLEDGE_SYNCHRONIZATION_CHAIN_PATHS);
+
+    const route = read('src/routes/knowledgeManagement.js');
+    expect(route).toContain('publishKnowledgeVersion');
+    expect(route).toContain("router.post('/items/:entryId/publish'");
+    const repository = read('src/knowledge/repository.js');
+    expect(repository).toContain("require('./synchronizationRepository')");
+    expect(repository).toContain('await enqueuePublicationSynchronization(client, stored, target.actorUserId)');
+    const producerFiles = matchingPaths(sourceFiles, /enqueuePublicationSynchronization/);
+    expect(producerFiles).toEqual([
+      'src/knowledge/repository.js',
+      'src/knowledge/synchronizationRepository.js',
+    ]);
+
+    const server = read('src/server.js');
+    expect(server).toContain("app.use('/api/v1/knowledge-management', createKnowledgeManagementRouter())");
+    expect(server).toContain('app.locals.connectedKnowledgeTransports instanceof Map&&app.locals.connectedKnowledgeTransports.size');
+    expect(surface.effectBoundary).toContain('Mission 21 authority');
+    expect(surface.effectBoundary).toContain('not a Mission 28 trigger, customer communication');
   });
 
   test('covers the current business-event, provider, webhook, notification and handoff source set', () => {

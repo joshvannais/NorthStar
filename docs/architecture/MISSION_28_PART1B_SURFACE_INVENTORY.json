@@ -155,12 +155,14 @@
       "facets": ["worker", "queue", "retry", "provider_adapter"],
       "disposition": "upstream_or_subscription_owned_excluded",
       "owner": "Mission 21 knowledge publication",
-      "effectBoundary": "It runs only for explicitly installed knowledge transports and cannot supply Mission 28 communication or trigger authority.",
+      "effectBoundary": "An authorized Mission 21 publication can enqueue synchronization, and the worker runs only when an explicitly installed, tenant-owned transport is current. Publication, queueing, retry, and projection remain Mission 21 authority; they are not a Mission 28 trigger, customer communication, recipient decision, or external-effect grant.",
       "sourceRefs": [
-        { "path": "src/knowledge/synchronizationWorker.js", "anchors": ["class KnowledgeSynchronizationWorker"] },
+        { "path": "src/routes/knowledgeManagement.js", "anchors": ["publishKnowledgeVersion", "router.post('/items/:entryId/publish'", "accountMutation", "settingsWrite"] },
+        { "path": "src/knowledge/repository.js", "anchors": ["enqueuePublicationSynchronization", "async function publishKnowledgeVersion", "await enqueuePublicationSynchronization(client, stored, target.actorUserId)"] },
+        { "path": "src/knowledge/synchronizationRepository.js", "anchors": ["async function enqueuePublicationSynchronization", "canonical_knowledge_sync_outbox", "KnowledgeSynchronizationRepository"] },
+        { "path": "src/knowledge/synchronizationWorker.js", "anchors": ["class KnowledgeSynchronizationWorker", "this.transports", "async drainOnce"] },
         { "path": "src/knowledge/managementRepository.js", "anchors": ["canonical_knowledge_sync_outbox"] },
-        { "path": "src/server.js", "anchors": ["Explicitly installed transports only; no agent or provider is activated here."] },
-        { "path": "src/knowledge/synchronizationRepository.js", "anchors": ["canonical_knowledge_sync_outbox"] }
+        { "path": "src/server.js", "anchors": ["app.use('/api/v1/knowledge-management', createKnowledgeManagementRouter())", "createProductionKnowledgeTransports", "Explicitly installed transports only; no agent or provider is activated here.", "app.locals.connectedKnowledgeTransports instanceof Map&&app.locals.connectedKnowledgeTransports.size"] }
       ]
     },
     {

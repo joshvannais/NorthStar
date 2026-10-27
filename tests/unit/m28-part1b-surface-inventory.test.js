@@ -204,6 +204,16 @@ const RETELL_WEBHOOK_REPLAY_CHAIN_PATHS = [
   'src/retell/webhookReplayAuthority.js',
 ];
 
+const MISSION27_COLLECTION_REVIEW_HANDOFF_PATHS = [
+  'src/customerFinancial/collectionHandoffReadiness.js',
+  'src/customerFinancial/collectionHandoffReadinessRepository.js',
+  'src/customerFinancial/collectionReview.js',
+  'src/customerFinancial/collectionReviewRepository.js',
+  'src/routes/customerFinancialCollectionHandoff.js',
+  'src/routes/customerFinancialCollectionReview.js',
+  'src/server.js',
+];
+
 const PROVIDER_IMPLEMENTATION_SIGNAL =
   /require\(['"](?:node:https|https|twilio|nodemailer|googleapis|openai)['"]\)|from ['"]retell-client-js-sdk['"]|https:\/\/api\.(?:retellai|resend|getjobber)\.com|client\.llm\.(?:retrieve|update)|function createEquipmentExtractor|fetch\(config\.apiBase|client\.messages\.create\(|client\.events\.insert\(|spreadsheets\.values\.(?:append|update)\(|new OpenAI\b/;
 
@@ -561,6 +571,31 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(surface.effectBoundary).toContain('do not grant Mission 28 retry');
   });
 
+  test('discovers the complete mounted collection-review to reviewed-handoff chain', () => {
+    const discovered = walk(path.join(ROOT, 'src')).map(file => slash(path.relative(ROOT, file)))
+      .filter(file => file === 'src/server.js' ||
+        /^src\/customerFinancial\/collection(?:Review|HandoffReadiness)(?:Repository)?\.js$/.test(file) ||
+        /^src\/routes\/customerFinancialCollection(?:Review|Handoff)\.js$/.test(file))
+      .sort();
+    expect(discovered).toEqual(MISSION27_COLLECTION_REVIEW_HANDOFF_PATHS);
+
+    const surface = inventory().surfaces.find(item =>
+      item.id === 'collection.mission27-reviewed-handoff-labels');
+    expect(surface.sourceRefs.map(reference => reference.path).sort())
+      .toEqual(MISSION27_COLLECTION_REVIEW_HANDOFF_PATHS);
+
+    const reviewRepository = read('src/customerFinancial/collectionReviewRepository.js');
+    expect(reviewRepository).toContain("require('./receivableAgingRepository')");
+    const handoffRepository = read('src/customerFinancial/collectionHandoffReadinessRepository.js');
+    expect(handoffRepository).toContain("require('./collectionReviewRepository')");
+
+    const server = read('src/server.js');
+    expect(server).toContain("app.use('/api/v1/customer-financial/collection-review'");
+    expect(server).toContain("app.use('/api/v1/customer-financial/collection-handoff'");
+    expect(surface.effectBoundary).toContain('receiving adapter remains unavailable');
+    expect(surface.effectBoundary).toContain('do not authorize reminders, resend, retry');
+  });
+
   test('discovers every outbound provider implementation and its active direct consumers', () => {
     const covered = sourcePaths(inventory());
     const scripts = [
@@ -685,7 +720,7 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(byId['demo.legacy-browser-call-simulator'].disposition)
       .toBe('upstream_or_subscription_owned_excluded');
     expect(byId['collection.mission27-reviewed-handoff-labels'].effectBoundary)
-      .toContain('do not authorize reminders, retry, charges, fees, legal escalation, or external collection');
+      .toContain('do not authorize reminders, resend, retry, charges, fees, legal escalation, external collection');
     expect(byId['handoff.customer-phone-and-email'].effectBoundary)
       .toContain('no sent, delivered, replied, or successful evidence');
   });

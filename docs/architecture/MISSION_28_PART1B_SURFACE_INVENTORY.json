@@ -524,10 +524,15 @@
       "facets": ["collection_label", "reminder", "retry", "manual_quick_send"],
       "disposition": "mission28_owned_reusable_after_later_authority",
       "owner": "Mission 27 source boundary reserved for Mission 28",
-      "effectBoundary": "The handoff is currently unavailable; due/aging/review labels do not authorize reminders, retry, charges, fees, legal escalation, or external collection.",
+      "effectBoundary": "The mounted owner/admin tenant-private collection-review and reviewed-handoff GET boundaries expose due/aging/review labels, but the Mission 28 receiving adapter remains unavailable. These reads do not authorize reminders, resend, retry, charges, fees, legal escalation, external collection, or any receiver effect.",
       "sourceRefs": [
-        { "path": "src/customerFinancial/collectionHandoffReadiness.js", "anchors": ["mission28_handoff_unavailable", "automatic_reminder_unsupported", "automatic_payment_retry_unsupported", "currentReceivingAdapterAvailable !== false"] },
-        { "path": "src/customerFinancial/collectionReview.js", "anchors": ["collection_communication_unsupported", "automatic_collection_unsupported"] }
+        { "path": "src/customerFinancial/collectionReview.js", "anchors": ["const CONTRACT_VERSION = 'm27-collection-review-v1'", "collection_communication_unsupported", "automatic_collection_unsupported"] },
+        { "path": "src/customerFinancial/collectionReviewRepository.js", "anchors": ["const receivableAgingRepository = require('./receivableAgingRepository')", "async function read(source, options = {})", "return contract.unavailable(sourceWitness)"] },
+        { "path": "src/routes/customerFinancialCollectionReview.js", "anchors": ["const repository = require('../customerFinancial/collectionReviewRepository')", "requireRole('owner','admin')", "CUSTOMER_FINANCIAL_COLLECTION_REVIEW_METHOD_NOT_ALLOWED"] },
+        { "path": "src/customerFinancial/collectionHandoffReadiness.js", "anchors": ["const CONTRACT_VERSION = 'm27-collection-handoff-readiness-v1'", "mission28_handoff_unavailable", "automatic_reminder_unsupported", "automatic_payment_retry_unsupported", "currentReceivingAdapterAvailable !== false"] },
+        { "path": "src/customerFinancial/collectionHandoffReadinessRepository.js", "anchors": ["const collectionReviewRepository = require('./collectionReviewRepository')", "async function read(source, options = {})", "return contract.unavailable(sourceWitness)"] },
+        { "path": "src/routes/customerFinancialCollectionHandoff.js", "anchors": ["const repository = require('../customerFinancial/collectionHandoffReadinessRepository')", "requireRole('owner','admin')", "CUSTOMER_FINANCIAL_COLLECTION_HANDOFF_METHOD_NOT_ALLOWED"] },
+        { "path": "src/server.js", "anchors": ["app.use('/api/v1/customer-financial/collection-review'", "createCustomerFinancialCollectionReviewRouter()", "app.use('/api/v1/customer-financial/collection-handoff'", "createCustomerFinancialCollectionHandoffRouter()"] }
       ]
     },
     {

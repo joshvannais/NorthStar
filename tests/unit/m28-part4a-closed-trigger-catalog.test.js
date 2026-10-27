@@ -45,6 +45,8 @@ const ACTIONS = Object.freeze([
   'unsupported_upstream_mutation_or_money_movement',
 ]);
 const ELIGIBLE = Object.freeze(['internal_read_digest_task', 'owner_approval_request', 'collection_escalation']);
+const EVENT_TIME_SELECTOR = 'event_kind_selects_exactly_one_source_field_no_precedence';
+const EVENT_TIME_AMBIGUITY = 'deny_missing_unknown_or_multiple_event_kind_candidates';
 const REQUIRED_TRIGGER_IDS = Object.freeze([
   'm20.lead_contact_state', 'm20.communication_preference_state',
   'm21.reviewed_knowledge_version', 'm22.appointment_state',
@@ -58,25 +60,25 @@ const REQUIRED_TRIGGER_IDS = Object.freeze([
   'm27.reviewed_collection_handoff',
 ]);
 const TRIGGER_DIGESTS = Object.freeze({
-  'm20.lead_contact_state': 'A73DF5E8A5CF87514F618EC6B670624E9E087605F3A57B4ACA70D43C39E08A50',
-  'm20.communication_preference_state': 'D8F051A95C3BF501D6A3E291CDDFD9D0E085AA7979665C9BAA60AB7C31FDECF7',
-  'm21.reviewed_knowledge_version': 'CA9AAF051D0ED8246E1A72BED171EEA9A1E9311CC6D6ACD4D415476C38147B7D',
-  'm22.appointment_state': '9B97B7B2EF4A8FD6E62416E08950CAE1B6CDFB108A6E3D6D00EABF3A967DA806',
-  'm22.assignment_dispatch_state': '770257B9600C904604F04E4E3B0A47B730BFB63F87C7FCD7F664E10D9A147A93',
-  'm23.work_progress_state': 'FD3D40FE4312C1E8AA506D1BE59D2C5ADEEDB5AC7880C58753FEDD9CC57054CE',
-  'm23.work_completion_reopening_state': '1F762B0A1FF947DD1B023AD5ACA35B15F7A7855F06F54548B56D20D8083D0084',
-  'm24.commercial_revision_state': '41D069B7C3BCD55D98E3B535A749CFED65F42B8753E0A26BB103BE5EC961A8A4',
-  'm24.issued_quote_version': '6EC2E60F2E49198BF2DF94F2A9B1615A88037A32E2A076AEA54AA6E0538E25F4',
-  'm24.customer_quote_response_state': '826AC98243212F9AE602F26F9B6A9E7DE54D74000EBD15453BAE2433FE21FE76',
-  'm25.current_reviewed_outcome_summary': '93ECCE6CD697CB28E7DA8B9B5B13EE3E341C19A0FA7E7E2D410A4F61E385B191',
-  'm25.current_reviewed_recommendation': 'E962CB87DC0CEA53DF9EE606FE66D7BE53D9F288CB08189E876EB335DC8547E4',
-  'm26.reviewed_advisory_handoff': 'A229BD4A8915CE60CDC68088A15C538E9755E5C897B879A648500F3C89CD4307',
-  'm27.invoice_lifecycle_state': '712453DAA7066226C64B78DFCEAEE80DD265F0F86C6F6C1CE5A6A5F13B234595',
-  'm27.receivable_due_aging_state': 'CA9829F93E09D9F614D23D1D0EA49CBB43BF95FE54BA479F781CD639B18B6902',
-  'm27.payment_receipt_settlement_state': '37B2420F19C6EADEA1CA570BC5A3AF8D6B563CE98730E134406E138973DFE5DD',
-  'm27.refund_dispute_correction_state': 'BA05275DD0271D201A148C28F18D2FB64AD6CA68E7766C95213449F36342BBCF',
-  'm27.offline_payment_state': '3570E10C6AB7B963796A3F4AF99F97EF6F2F8645FB22F366496379E3928D59E5',
-  'm27.reviewed_collection_handoff': 'CB636144346919F4637C413C8E116E9B028005F848FAFFBE06C43C022C50B17D',
+  'm20.lead_contact_state': '556823EAFA6B9FFE5AEA78676905F0777216ACAB7F1FF464C9085A358EAE0B09',
+  'm20.communication_preference_state': 'BA4E2FFF6855EBD3478FE559FC6960D3F2455A8ECE01FC2653AF81EBDB065512',
+  'm21.reviewed_knowledge_version': '707672306CD48691DFF4E34A37FDF8C10F36CD01544C38F40ADDE745512602F8',
+  'm22.appointment_state': '9AB920A3048FD0AE368407EAF78AF19DBCD0FBADD60F45FEF84F58E5F883C6AE',
+  'm22.assignment_dispatch_state': '18049EEB25D1C2FAE183807D236AB14DEFE7D540C13CB74069ADF916387F0B01',
+  'm23.work_progress_state': 'E9F0C550D299E95043F8DCC18B2500030FAE9B30F8FD9966E4070D11821D3FB2',
+  'm23.work_completion_reopening_state': '0CCECD02153A73D70E6481CD1C234DE70B44DD77C944E2A5B673068452391249',
+  'm24.commercial_revision_state': '4104A56A7D85971E2B40EB2956F9B85E23C392E90CA1C3C3A3B63AC98D14EF70',
+  'm24.issued_quote_version': 'C0EADCDC8B93EF43F42C0B15C13A8ED077CE6AD695B913E106C986E0061866F7',
+  'm24.customer_quote_response_state': 'A8DDE97F00DF5468A28E42C067682F11473F1E17271E6C69823F274A5E2145ED',
+  'm25.current_reviewed_outcome_summary': '7122428FA172D68575C8E275FE2244602DBC56F3F5E6794B456B8D7EB1776284',
+  'm25.current_reviewed_recommendation': '93BA30BCC26918E40485B53E150C802C955F346FFD7814232C5552D78D0F223C',
+  'm26.reviewed_advisory_handoff': 'C2CEDBFFA6E0789F71E50A328872F67B6F8EC52D0837FFEBA826443CE968572A',
+  'm27.invoice_lifecycle_state': 'E34C70E03514F27531C353BEF908CB835A9559EDECAF4F9ADB79F85169C67E6A',
+  'm27.receivable_due_aging_state': '9A64F7720E57D22EA6F3EE125473BA06BAB06020F7D88C5358A69E7B3670A3A9',
+  'm27.payment_receipt_settlement_state': 'B5527A223231D461CE5DD83BA38B9C8E4FDA02A7114113C88B85E63849DC6BA5',
+  'm27.refund_dispute_correction_state': 'BEF863BF539987F6B47BCB8D4F99F5ADDE9AAB45A0FE972C964D664967B442D1',
+  'm27.offline_payment_state': 'D61C1BB845E6C3643867571465C48143864150A158CFDF5634FE10AB5C6B5EB5',
+  'm27.reviewed_collection_handoff': '243406855DD1445BAD315A1C712E090FD7C940FCBD00AB580A7989392A3AE32C',
 });
 
 function normalizedLfSha256(relative) {
@@ -97,6 +99,22 @@ function strings(value, label, min = 1) {
   if (new Set(value).size !== value.length) throw new Error(`${label} duplicates`);
 }
 
+function selectEventTime(trigger, candidate) {
+  exact(candidate, ['eventKind','sourceTimes'], `event candidate ${trigger.id}`);
+  if (typeof candidate.eventKind !== 'string' || !candidate.eventKind) throw new Error('event kind missing');
+  exact(candidate.sourceTimes, Object.keys(candidate.sourceTimes), `source times ${trigger.id}`);
+  const selected = trigger.eventTime.kinds.filter(item => item.eventKind === candidate.eventKind);
+  if (selected.length !== 1) throw new Error('event kind unsupported or ambiguous');
+  const fields = Object.keys(candidate.sourceTimes);
+  if (fields.length !== 1 || fields[0] !== selected[0].sourceField) throw new Error('event time candidate ambiguous');
+  const value = candidate.sourceTimes[fields[0]];
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)) {
+    throw new Error('event time invalid');
+  }
+  return Object.freeze({ eventKind: candidate.eventKind, eventTime: value,
+    sourceField: selected[0].sourceField, sourceStateSelector: selected[0].sourceStateSelector });
+}
+
 function validateCatalog(value) {
   exact(value, ['contractVersion','authority','part3DRelease','closedCatalogRules','actionFamilyOrder',
     'currentlyCatalogEligibleActionFamilies','sourceClassOrder','triggerOrder','triggers',
@@ -114,7 +132,9 @@ function validateCatalog(value) {
   if (value.closedCatalogRules.closedWorld !== true ||
       value.closedCatalogRules.sourceFactGrantsActionAuthority !== false ||
       value.closedCatalogRules.catalogMembershipGrantsActionAuthority !== false ||
-      !value.closedCatalogRules.eventTimeRule.includes('source_owned') ||
+      !value.closedCatalogRules.eventTimeRule.includes('closed_event_kind_selects_one_exact_source_owned') ||
+      !value.closedCatalogRules.eventTimeRule.includes('unknown_missing_or_multiple_candidates_deny') ||
+      !value.closedCatalogRules.eventTimeRule.includes('no_precedence_fallback') ||
       !value.closedCatalogRules.observationTimeRule.includes('distinct') ||
       !value.closedCatalogRules.currentnessRule.includes('fails_closed') ||
       !value.closedCatalogRules.unsupportedFamilyRule.includes('remain_unavailable')) throw new Error('catalog rules');
@@ -143,20 +163,48 @@ function validateCatalog(value) {
     exact(trigger.sourceAuthority, ['sourceRefs','binding'], `source authority ${trigger.id}`);
     if (!Array.isArray(trigger.sourceAuthority.sourceRefs) || !trigger.sourceAuthority.sourceRefs.length) throw new Error(`source refs ${trigger.id}`);
     strings(trigger.sourceAuthority.binding, `source binding ${trigger.id}`);
+    if (!trigger.sourceAuthority.binding.includes('eventKind') || !trigger.sourceAuthority.binding.includes('eventTime')) {
+      throw new Error(`event binding ${trigger.id}`);
+    }
     for (const ref of trigger.sourceAuthority.sourceRefs) {
       exact(ref, ['path','anchors'], `source ref ${trigger.id}`);
       if (typeof ref.path !== 'string' || !/^(?:src|migrations|docs\/architecture)\//.test(ref.path)) throw new Error(`source path ${trigger.id}`);
       strings(ref.anchors, `anchors ${trigger.id}`);
     }
-    exact(trigger.eventTime, ['field','semantics'], `event time ${trigger.id}`);
+    exact(trigger.eventTime, ['eventKindField','selector','ambiguityRule','kinds','semantics'], `event time ${trigger.id}`);
     exact(trigger.observationTime, ['field','semantics'], `observation time ${trigger.id}`);
-    if (!trigger.eventTime.field || trigger.eventTime.field === trigger.observationTime.field ||
+    if (trigger.eventTime.eventKindField !== 'eventKind' ||
+        trigger.eventTime.selector !== EVENT_TIME_SELECTOR ||
+        trigger.eventTime.ambiguityRule !== EVENT_TIME_AMBIGUITY ||
+        typeof trigger.eventTime.semantics !== 'string' || !trigger.eventTime.semantics ||
+        !Array.isArray(trigger.eventTime.kinds) || !trigger.eventTime.kinds.length ||
         trigger.observationTime.field !== 'observedAt' || !trigger.observationTime.semantics.includes('trusted capture time')) {
       throw new Error(`time separation ${trigger.id}`);
     }
+    const sourceAnchors = trigger.sourceAuthority.sourceRefs.flatMap(ref => ref.anchors);
+    const eventKinds = [];
+    for (const event of trigger.eventTime.kinds) {
+      exact(event, ['eventKind','sourceField','sourceStateSelector'], `event kind ${trigger.id}`);
+      if (typeof event.eventKind !== 'string' || !/^[a-z][a-z0-9_]*$/.test(event.eventKind) ||
+          typeof event.sourceField !== 'string' || !/^[A-Za-z][A-Za-z0-9_.]*$/.test(event.sourceField) ||
+          event.sourceField.includes('_or_') || event.sourceField === trigger.observationTime.field ||
+          typeof event.sourceStateSelector !== 'string' || !event.sourceStateSelector ||
+          /(?:fallback|precedence)/i.test(event.sourceStateSelector)) {
+        throw new Error(`event kind values ${trigger.id}`);
+      }
+      const sourceLeaf = event.sourceField.split('.').at(-1);
+      if (!sourceAnchors.some(anchor => anchor.includes(sourceLeaf))) {
+        throw new Error(`event source anchor ${trigger.id}:${event.eventKind}`);
+      }
+      eventKinds.push(event.eventKind);
+    }
+    if (new Set(eventKinds).size !== eventKinds.length) throw new Error(`event kind duplicates ${trigger.id}`);
     exact(trigger.currentness, ['requiredState','pins','deny'], `currentness ${trigger.id}`);
     if (trigger.currentness.requiredState !== 'exact_current') throw new Error(`currentness state ${trigger.id}`);
     strings(trigger.currentness.pins, `pins ${trigger.id}`, 2);
+    if (!trigger.currentness.pins.includes('eventKind') || !trigger.currentness.pins.includes('eventTime')) {
+      throw new Error(`event currentness ${trigger.id}`);
+    }
     strings(trigger.currentness.deny, `deny ${trigger.id}`, 4);
     if (!trigger.currentness.deny.includes('missing') || !trigger.currentness.deny.includes('stale') ||
         !trigger.currentness.deny.includes('mixed') || !trigger.currentness.deny.includes('unavailable')) {
@@ -220,6 +268,49 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(anchors).toBeGreaterThanOrEqual(75);
   });
 
+  test('binds 36 closed subevent kinds to exact source-owned fields with no fallback precedence', () => {
+    const canonical = parse(CONTRACT_PATH);
+    expect(canonical.triggers.flatMap(trigger => trigger.eventTime.kinds)).toHaveLength(36);
+    expect(canonical.triggers.every(trigger =>
+      trigger.eventTime.selector === EVENT_TIME_SELECTOR &&
+      trigger.eventTime.ambiguityRule === EVENT_TIME_AMBIGUITY &&
+      trigger.sourceAuthority.binding.includes('eventKind') &&
+      trigger.sourceAuthority.binding.includes('eventTime'))).toBe(true);
+    const attacks = [
+      value => { value.triggers[0].eventTime.kinds.pop(); },
+      value => { value.triggers[0].eventTime.kinds[0].eventKind = 'unknown_event'; },
+      value => { value.triggers[0].eventTime.kinds[0].sourceField = 'timestamps.transcriptOccurredAt_or_opportunityUpdatedAt'; },
+      value => { value.triggers[0].eventTime.kinds[1].eventKind = value.triggers[0].eventTime.kinds[0].eventKind; },
+      value => { value.triggers[0].eventTime.selector = 'first_present_source_field_wins'; },
+      value => { value.triggers[0].eventTime.ambiguityRule = 'prefer_first_candidate'; },
+      value => { value.triggers[0].eventTime.kinds[0].sourceStateSelector = 'fallback_to_latest'; },
+    ];
+    for (const mutate of attacks) {
+      const candidate = clone(canonical);
+      mutate(candidate);
+      expect(() => validateCatalog(candidate)).toThrow();
+    }
+  });
+
+  test('selects one exact event-kind field and rejects missing unknown substituted or simultaneous candidates', () => {
+    const trigger = parse(CONTRACT_PATH).triggers.find(item => item.id === 'm20.lead_contact_state');
+    const at = '2026-10-27T21:30:00.000Z';
+    expect(selectEventTime(trigger, {
+      eventKind: 'transcript_occurred', sourceTimes: { 'timestamps.transcriptOccurredAt': at },
+    })).toEqual({ eventKind: 'transcript_occurred', eventTime: at,
+      sourceField: 'timestamps.transcriptOccurredAt', sourceStateSelector: 'ids.transcript=present' });
+    const attacks = [
+      { eventKind: '', sourceTimes: { 'timestamps.transcriptOccurredAt': at } },
+      { eventKind: 'unknown_event', sourceTimes: { 'timestamps.transcriptOccurredAt': at } },
+      { eventKind: 'transcript_occurred', sourceTimes: { 'timestamps.opportunityUpdatedAt': at } },
+      { eventKind: 'transcript_occurred', sourceTimes: {
+        'timestamps.transcriptOccurredAt': at, 'timestamps.opportunityUpdatedAt': at,
+      } },
+      { eventKind: 'transcript_occurred', sourceTimes: {} },
+    ];
+    for (const candidate of attacks) expect(() => selectEventTime(trigger, candidate)).toThrow();
+  });
+
   test('denies semantic, authority, timing, currentness, source, order and action-family drift', () => {
     const canonical = parse(CONTRACT_PATH);
     const attacks = [
@@ -234,7 +325,15 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
       value => { value.triggers[0].grain = ['canonicalGraphId']; },
       value => { value.triggers[0].sourceAuthority.sourceRefs = []; },
       value => { value.triggers[0].sourceAuthority.sourceRefs[0].path = 'src/unknown.js'; },
-      value => { value.triggers[0].eventTime.field = 'observedAt'; },
+      value => { value.triggers[0].eventTime.kinds.pop(); },
+      value => { value.triggers[0].eventTime.kinds[0].eventKind = 'unknown_event'; },
+      value => { value.triggers[0].eventTime.kinds[0].sourceField = 'observedAt'; },
+      value => { value.triggers[0].eventTime.kinds[1].eventKind = value.triggers[0].eventTime.kinds[0].eventKind; },
+      value => { value.triggers[0].eventTime.selector = 'first_present_source_field_wins'; },
+      value => { value.triggers[0].eventTime.ambiguityRule = 'prefer_first_candidate'; },
+      value => { value.triggers[0].eventTime.kinds[0].sourceStateSelector = 'fallback_to_latest'; },
+      value => { value.triggers[0].sourceAuthority.binding = value.triggers[0].sourceAuthority.binding.filter(item => item !== 'eventTime'); },
+      value => { value.triggers[0].currentness.pins = value.triggers[0].currentness.pins.filter(item => item !== 'eventKind'); },
       value => { value.triggers[0].observationTime.field = 'eventTime'; },
       value => { value.triggers[0].currentness.requiredState = 'stale'; },
       value => { value.triggers[0].currentness.deny = ['missing','mixed','unavailable','corrected']; },

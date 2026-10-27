@@ -7,8 +7,9 @@ The normative executable catalog is [MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.js
 ## Closed-world rule
 
 - Unknown trigger IDs and unknown source classes are denied.
-- Every trigger identifies its exact tenant-private grain, source authority and source-code anchors, upstream event time, distinct Mission 28 observation time, exact currentness pins, allowed action families, and ownership boundary.
-- Event time is the upstream business occurrence or effective time. Observation time is a later trusted Mission 28 capture time and remains unimplemented until Part 4B. Neither may silently substitute for the other.
+- Every trigger identifies its exact tenant-private grain, source authority and source-code anchors, a closed upstream event-kind map, distinct Mission 28 observation time, exact currentness pins, allowed action families, and ownership boundary.
+- Each accepted event kind selects exactly one named source-owned occurrence/effective-time field and one exact source-state selector. There is no fallback or precedence between alternative fields. Missing, unknown, duplicate, or simultaneously ambiguous candidates fail closed; distinct source events remain distinct observations.
+- Event time is the selected upstream business occurrence or effective time. Observation time is a later trusted Mission 28 capture time and remains unimplemented until Part 4B. Neither may silently substitute for the other.
 - Missing, stale, mixed, unavailable, fixture, cross-tenant, corrected, partially current, or unsupported source authority fails closed.
 - Corrections append new evidence. They never rewrite prior evidence or silently grant action authority.
 
@@ -29,7 +30,7 @@ The released Part 1D matrix currently permits these facts to make only `internal
 
 ## Time and currentness
 
-Each row names the upstream event-time field or exact upstream effective-time semantics. A future Part 4B observation must carry a distinct trusted `observedAt` and exact tenant, grain, identity, version/revision, digest, and state pins. For multi-source facts, every member must be exact current and from the same tenant. Elapsed time, provider arrival order, prediction, recommendation, fixture state, content generation, or a source read by itself cannot create a trigger fact or action permission.
+Each row contains a closed event-kind map. The event kind, selected event time, and exact source-state selector are part of the source binding. A future Part 4B observation must resolve one supported kind, read only that kind's named source field, and carry a distinct trusted `observedAt` plus exact tenant, grain, identity, version/revision, digest, and state pins. A source event may never be selected by field-presence fallback or precedence; more than one candidate for one observation is ambiguous and denied. For multi-source facts, every member must be exact current and from the same tenant. Elapsed time, provider arrival order, prediction, recommendation, fixture state, content generation, or a source read by itself cannot create a trigger fact or action permission.
 
 ## Important boundaries
 

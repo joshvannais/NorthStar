@@ -39,7 +39,7 @@
     "catalogMembershipGrantsActionAuthority": false,
     "allowedActionFamiliesMeaning": "families_for_which_an_exact_current_fact_may_later_be_evaluated_under_separate_policy_capability_approval_limit_suppression_and_runtime_authority",
     "allowedActionFamiliesNeverMean": "eligible_authorized_scheduled_sent_delivered_paid_mutated_or_successful",
-    "eventTimeRule": "source_owned_business_occurrence_or_effective_time_only_never_observation_or_processing_time",
+    "eventTimeRule": "closed_event_kind_selects_one_exact_source_owned_business_occurrence_or_effective_time_field; unknown_missing_or_multiple_candidates_deny; no_precedence_fallback_or_observation_processing_time_substitution",
     "observationTimeRule": "trusted_Mission28_capture_time_distinct_from_event_time_and_unimplemented_until_Part4B",
     "currentnessRule": "exact_tenant_grain_identity_version_revision_digest_and_latest_state_required; missing_stale_mixed_unavailable_fixture_or_corrected_source_fails_closed",
     "correctionRule": "a_source_correction_never_rewrites_prior_evidence_or_silently_grants_action_authority",
@@ -100,14 +100,24 @@
       "grain": ["tenantId", "canonicalGraphId", "customerId", "opportunityId"],
       "sourceAuthority": {
         "sourceRefs": [
-          {"path": "src/routes/canonicalPolaris.js", "anchors": ["op.status AS opportunity_status", "t.occurred_at AS transcript_occurred_at", "snapshot_digest", "projectionDigest"]},
+          {"path": "src/routes/canonicalPolaris.js", "anchors": ["op.status AS opportunity_status", "transcriptOccurredAt: timestamp(row.transcript_occurred_at", "communicationOccurredAt: timestamp(row.communication_occurred_at", "opportunityUpdatedAt: timestamp(row.opportunity_updated_at", "snapshot_digest", "projectionDigest"]},
           {"path": "src/routes/canonicalLeads.js", "anchors": ["listCanonicalGraphs", "status: item.opportunity.status"]}
         ],
-        "binding": ["tenantId", "canonicalGraphId", "customerId", "opportunityId", "sourceType", "sourceVersion", "projectionDigest"]
+        "binding": ["tenantId", "canonicalGraphId", "customerId", "opportunityId", "sourceType", "sourceVersion", "projectionDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "source.transcriptOccurredAt_or_latest_canonical_status_occurrence", "semantics": "Mission20 source-owned occurrence time; no inferred contact time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "transcript_occurred", "sourceField": "timestamps.transcriptOccurredAt", "sourceStateSelector": "ids.transcript=present"},
+          {"eventKind": "communication_occurred", "sourceField": "timestamps.communicationOccurredAt", "sourceStateSelector": "ids.communication=present"},
+          {"eventKind": "opportunity_state_changed", "sourceField": "timestamps.opportunityUpdatedAt", "sourceStateSelector": "metadata.opportunityStatus=exact"}
+        ],
+        "semantics": "Mission20 event kind selects its exact source occurrence; no inferred contact time or fallback precedence"
+      },
       "observationTime": {"field": "observedAt", "semantics": "distinct trusted capture time assigned only by later Part4B authority"},
-      "currentness": {"requiredState": "exact_current", "pins": ["sourceType", "sourceVersion", "projectionDigest", "opportunityStatus"], "deny": ["missing", "stale", "mixed", "unavailable", "cross_tenant", "corrected"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["sourceType", "sourceVersion", "projectionDigest", "opportunityStatus", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "cross_tenant", "corrected"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Lead or contact state is a source fact only; it cannot authorize outreach, modify the lead, or infer consent."
     },
@@ -122,11 +132,17 @@
           {"path": "src/accounts/repository.js", "anchors": ["notification.email_new_lead", "notification.notification_email", "preference_version"]},
           {"path": "src/routes/account.js", "anchors": ["router.get('/preferences'", "version: preferenceVersion(stored)"]}
         ],
-        "binding": ["tenantId", "preferenceVersion", "preferenceDigest_or_exact_projection"]
+        "binding": ["tenantId", "preferenceVersion", "preferenceDigest_or_exact_projection", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "preferenceVersion", "semantics": "Mission20 authoritative preference mutation instant"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "preferences_updated", "sourceField": "preferenceVersion", "sourceStateSelector": "exact_preference_projection=present"}],
+        "semantics": "Mission20 preferenceVersion is the authoritative mutation instant for the exact projection"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time; never substituted for preferenceVersion"},
-      "currentness": {"requiredState": "exact_current", "pins": ["preferenceVersion", "preferenceDigest_or_exact_projection"], "deny": ["missing", "stale", "mixed", "unavailable", "cross_tenant", "recipient_or_consent_inferred"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["preferenceVersion", "preferenceDigest_or_exact_projection", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "cross_tenant", "recipient_or_consent_inferred"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Tenant settings are not recipient consent, channel availability, or permission to communicate."
     },
@@ -141,11 +157,17 @@
           {"path": "src/knowledge/repository.js", "anchors": ["canonicalDigest: normalizeStoredDigest", "publishedAt: row.published_at", "publishKnowledgeVersion"]},
           {"path": "src/routes/knowledgeManagement.js", "anchors": ["router.post('/items/:entryId/publish'", "expectedCanonicalDigest"]}
         ],
-        "binding": ["tenantId", "knowledgeEntryId", "knowledgeVersionId", "versionNumber", "canonicalDigest", "publicationId"]
+        "binding": ["tenantId", "knowledgeEntryId", "knowledgeVersionId", "versionNumber", "canonicalDigest", "publicationId", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "publishedAt", "semantics": "Mission21 source-owned publication time of the reviewed exact version"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "knowledge_version_published", "sourceField": "publishedAt", "sourceStateSelector": "publicationId_and_reviewed_version=exact"}],
+        "semantics": "Mission21 source-owned publication time of the reviewed exact version"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time distinct from publication"},
-      "currentness": {"requiredState": "exact_current", "pins": ["knowledgeVersionId", "versionNumber", "canonicalDigest", "publicationId"], "deny": ["draft", "unreviewed", "tombstoned", "superseded", "missing", "stale", "mixed", "unavailable"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["knowledgeVersionId", "versionNumber", "canonicalDigest", "publicationId", "eventKind", "eventTime"], "deny": ["draft", "unreviewed", "tombstoned", "superseded", "missing", "stale", "mixed", "unavailable"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Reviewed knowledge may ground an internal decision only; publication, projection and content authority remain Mission21."
     },
@@ -158,13 +180,22 @@
       "sourceAuthority": {
         "sourceRefs": [
           {"path": "src/scheduling/contract.js", "anchors": ["const STATUSES = new Set(['preferred', 'scheduled', 'cancelled', 'completed'])", "expectedRevision", "expectedDigest", "scheduledStart"]},
-          {"path": "src/scheduling/repository.js", "anchors": ["updateAppointmentSchedule", "canonical_schedule_assignments"]}
+          {"path": "src/scheduling/repository.js", "anchors": ["updateAppointmentSchedule", "canonical_schedule_assignments", "scheduled_start: timestamp(appointment.scheduled_start)", "updated_at: timestamp(appointment.updated_at)"]}
         ],
-        "binding": ["tenantId", "appointmentId", "revision", "digest", "status", "scheduledStart", "scheduledEnd", "timeZone"]
+        "binding": ["tenantId", "appointmentId", "revision", "digest", "status", "scheduledStart", "scheduledEnd", "timeZone", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "scheduledStart_or_source_status_changedAt", "semantics": "exact source schedule/status time; elapsed clock alone is not a trigger fact"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "appointment_state_changed", "sourceField": "appointment.updated_at", "sourceStateSelector": "revision_digest_and_status=exact"},
+          {"eventKind": "appointment_schedule_effective", "sourceField": "appointment.scheduled_start", "sourceStateSelector": "status=scheduled_and_scheduled_start=present"}
+        ],
+        "semantics": "Mission22 event kind selects the exact state-change or schedule-effective source time; elapsed clock is not a trigger fact"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["revision", "digest", "status", "scheduledStart", "scheduledEnd", "timeZone"], "deny": ["missing", "stale", "mixed", "unavailable", "cancelled_or_corrected_without_revalidation"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["revision", "digest", "status", "scheduledStart", "scheduledEnd", "timeZone", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "cancelled_or_corrected_without_revalidation"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Appointment facts cannot schedule, reschedule, cancel, dispatch, or contact a customer."
     },
@@ -177,13 +208,23 @@
       "sourceAuthority": {
         "sourceRefs": [
           {"path": "src/routes/canonicalPolaris.js", "anchors": ["sa.revision", "sa.canonical_digest", "sa.appointment_status AS assignment_appointment_status"]},
-          {"path": "src/scheduling/overviewRepository.js", "anchors": ["assignment", "digest"]}
+          {"path": "src/scheduling/overviewRepository.js", "anchors": ["assignment", "digest"]},
+          {"path": "src/scheduling/repository.js", "anchors": ["scheduledStart: timestamp(row.scheduled_start)", "updatedAt: timestamp(row.assignment_updated_at || row.updated_at)"]}
         ],
-        "binding": ["tenantId", "appointmentId", "assignmentId", "assignmentRevision", "assignmentDigest", "appointmentStatus"]
+        "binding": ["tenantId", "appointmentId", "assignmentId", "assignmentRevision", "assignmentDigest", "appointmentStatus", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "source_assignment_updatedAt_or_scheduledStart", "semantics": "Mission22 source-owned assignment or dispatch occurrence time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "assignment_state_changed", "sourceField": "appointment.scheduleAuthority.updatedAt", "sourceStateSelector": "assignment_revision_digest_and_state=exact"},
+          {"eventKind": "assignment_schedule_effective", "sourceField": "appointment.scheduleAuthority.scheduledStart", "sourceStateSelector": "appointment_status=scheduled_and_scheduled_start=present"}
+        ],
+        "semantics": "Mission22 event kind selects the exact assignment change or schedule-effective source time"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["assignmentRevision", "assignmentDigest", "appointmentStatus"], "deny": ["missing", "stale", "mixed", "unavailable", "assignment_appointment_mismatch"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["assignmentRevision", "assignmentDigest", "appointmentStatus", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "assignment_appointment_mismatch"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Assignment or dispatch state never grants routing, scheduling, reassignment or customer-contact authority."
     },
@@ -195,14 +236,20 @@
       "grain": ["tenantId", "executionId", "progressRecordId"],
       "sourceAuthority": {
         "sourceRefs": [
-          {"path": "src/progress/contract.js", "anchors": ["expectedExecutionRevision", "expectedExecutionDigest", "expectedRecordRevision", "expectedRecordDigest"]},
+          {"path": "src/progress/contract.js", "anchors": ["expectedExecutionRevision", "expectedExecutionDigest", "expectedRecordRevision", "expectedRecordDigest", "observedAt:instant(value.observedAt)"]},
           {"path": "src/operations/intelligence.js", "anchors": ["sourceSetDigest", "completed: q.completed", "execution.lifecycleState"]}
         ],
-        "binding": ["tenantId", "executionId", "executionRevision", "executionDigest", "progressRecordId", "progressRevision", "progressDigest"]
+        "binding": ["tenantId", "executionId", "executionRevision", "executionDigest", "progressRecordId", "progressRevision", "progressDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "progressRecord.recordedAt_or_observed_interval_end", "semantics": "Mission23 source-owned reviewed field occurrence time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "progress_observed", "sourceField": "progressRecord.observedAt", "sourceStateSelector": "progress_record_revision_digest_and_review_state=exact"}],
+        "semantics": "Mission23 reviewed progress uses the exact source observation time carried by the immutable progress record"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time; never replaces field evidence time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["executionRevision", "executionDigest", "progressRevision", "progressDigest"], "deny": ["missing", "unreviewed", "stale", "mixed", "unavailable", "unit_or_source_conflict"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["executionRevision", "executionDigest", "progressRevision", "progressDigest", "eventKind", "eventTime"], "deny": ["missing", "unreviewed", "stale", "mixed", "unavailable", "unit_or_source_conflict"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Progress evidence cannot complete, reopen, edit, or otherwise mutate work truth."
     },
@@ -215,13 +262,24 @@
       "sourceAuthority": {
         "sourceRefs": [
           {"path": "src/operations/intelligence.js", "anchors": ["completion_pending", "completed", "reopened", "execution.sourceAssignmentRevision"]},
-          {"path": "src/customerFinancial/billableWorkContext.js", "anchors": ["intelligence.execution.lifecycleState !== 'completed'", "mission23.current_completion", "sourceSnapshot.execution"]}
+          {"path": "src/customerFinancial/billableWorkContext.js", "anchors": ["intelligence.execution.lifecycleState !== 'completed'", "mission23.current_completion", "sourceSnapshot.execution"]},
+          {"path": "migrations/049_canonical_completion_reopening_authority.sql", "anchors": ["'recordKind',record_value.record_kind", "'lifecycleAfter',record_value.lifecycle_after", "'action',record_value.action_code", "'decidedAt',to_char(record_value.decided_at"]}
         ],
-        "binding": ["tenantId", "executionId", "executionRevision", "executionDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "lifecycleState"]
+        "binding": ["tenantId", "executionId", "executionRevision", "executionDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "lifecycleState", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "source_lifecycle_transition_recordedAt", "semantics": "Mission23 source-owned completion, reopening or cancellation transition time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "completion_approved", "sourceField": "completionRecord.decidedAt", "sourceStateSelector": "completionRecord.action=approve_completion"},
+          {"eventKind": "work_reopened", "sourceField": "completionRecord.decidedAt", "sourceStateSelector": "completionRecord.action=reopen_execution"},
+          {"eventKind": "work_cancelled", "sourceField": "completionRecord.decidedAt", "sourceStateSelector": "completionRecord.action=cancel_execution"}
+        ],
+        "semantics": "Mission23 event kind and action select the exact immutable completion-decision time"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["executionRevision", "executionDigest", "assignmentRevision", "assignmentDigest", "lifecycleState"], "deny": ["missing", "completion_pending", "stale", "mixed", "unavailable", "reopened_or_cancelled_after_capture"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["executionRevision", "executionDigest", "assignmentRevision", "assignmentDigest", "lifecycleState", "eventKind", "eventTime"], "deny": ["missing", "completion_pending", "stale", "mixed", "unavailable", "reopened_or_cancelled_after_capture"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Completion or reopening evidence may make a later policy evaluable; it never approves billing or rewrites work."
     },
@@ -233,14 +291,20 @@
       "grain": ["tenantId", "estimateId", "commercialDecisionId"],
       "sourceAuthority": {
         "sourceRefs": [
-          {"path": "src/estimating/commercialContract.js", "anchors": ["termsPin", "evidenceDigest", "expectedDecisionRevision", "sources.decision.action==='approve'"]},
+          {"path": "src/estimating/commercialContract.js", "anchors": ["termsPin", "evidenceDigest", "expectedDecisionRevision", "sources.decision.action==='approve'", "createdAt"]},
           {"path": "src/estimating/commercialRepository.js", "anchors": ["canonical_commercial", "revision"]}
         ],
-        "binding": ["tenantId", "estimateId", "termsId", "termsRevision", "termsDigest", "decisionId", "decisionRevision", "decisionDigest", "sourceDigest"]
+        "binding": ["tenantId", "estimateId", "termsId", "termsRevision", "termsDigest", "decisionId", "decisionRevision", "decisionDigest", "sourceDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "commercialDecision.createdAt", "semantics": "Mission24 source-owned human decision time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "commercial_decision_approved", "sourceField": "commercialDecision.createdAt", "sourceStateSelector": "commercialDecision.action=approve"}],
+        "semantics": "Mission24 source-owned human commercial approval time"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["termsRevision", "termsDigest", "decisionRevision", "decisionDigest", "sourceDigest"], "deny": ["missing", "draft", "rejected", "stale", "mixed", "unavailable", "commercial_source_changed"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["termsRevision", "termsDigest", "decisionRevision", "decisionDigest", "sourceDigest", "eventKind", "eventTime"], "deny": ["missing", "draft", "rejected", "stale", "mixed", "unavailable", "commercial_source_changed"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Commercial approval remains Mission24 authority and cannot be inferred or altered by automation."
     },
@@ -255,11 +319,17 @@
           {"path": "src/estimating/customerEstimateVersionContract.js", "anchors": ["state:'issued'", "documentDigest", "approvalPin", "createdAt"]},
           {"path": "src/estimating/customerEstimateVersionRepository.js", "anchors": ["canonical_customer_estimate_version_read", "canonical_customer_estimate_version_issue"]}
         ],
-        "binding": ["tenantId", "estimateId", "issuedVersionId", "revision", "documentDigest", "approvalPinId", "approvalPinDigest"]
+        "binding": ["tenantId", "estimateId", "issuedVersionId", "revision", "documentDigest", "approvalPinId", "approvalPinDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "createdAt", "semantics": "Mission24 source-owned issuance time for the exact version"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "quote_version_issued", "sourceField": "issuedVersion.createdAt", "sourceStateSelector": "issuedVersion.state=issued"}],
+        "semantics": "Mission24 source-owned issuance time for the exact version"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["issuedVersionId", "revision", "documentDigest", "approvalPinDigest"], "deny": ["missing", "draft", "superseded", "stale", "mixed", "unavailable"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["issuedVersionId", "revision", "documentDigest", "approvalPinDigest", "eventKind", "eventTime"], "deny": ["missing", "draft", "superseded", "stale", "mixed", "unavailable"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "An issued quote version does not authorize automated delivery, acceptance, pricing changes or work creation."
     },
@@ -272,13 +342,25 @@
       "sourceAuthority": {
         "sourceRefs": [
           {"path": "src/estimating/customerEstimateDeliveryRepository.js", "anchors": ["customer_estimate_delivery_public_mutate", "canonical_customer_estimate_delivery_revoke", "customer_estimate_delivery_public_read"]},
-          {"path": "src/estimating/customerEstimateDeliveryContract.js", "anchors": ["accept", "question", "tokenHash"]}
+          {"path": "src/estimating/customerEstimateDeliveryContract.js", "anchors": ["accept", "question", "tokenHash"]},
+          {"path": "migrations/080_customer_estimate_delivery.sql", "anchors": ["'createdAt',link_row.created_at", "'expiresAt',link_row.expires_at", "'kind',kind_value", "'createdAt',inserted_at"]}
         ],
-        "binding": ["tenantId", "estimateId", "issuedVersionId", "deliveryLinkId", "responseId", "responseRevision", "responseDigest", "state"]
+        "binding": ["tenantId", "estimateId", "issuedVersionId", "deliveryLinkId", "responseId", "responseRevision", "responseDigest", "state", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "response.recordedAt_or_link.expiresAt_or_revokedAt", "semantics": "Mission24 source-owned response, expiry or revocation time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "customer_accepted", "sourceField": "deliveryEvent.createdAt", "sourceStateSelector": "deliveryEvent.kind=accepted"},
+          {"eventKind": "customer_questioned", "sourceField": "deliveryEvent.createdAt", "sourceStateSelector": "deliveryEvent.kind=question"},
+          {"eventKind": "delivery_link_revoked", "sourceField": "deliveryEvent.createdAt", "sourceStateSelector": "deliveryEvent.kind=revoked"},
+          {"eventKind": "delivery_link_expired", "sourceField": "deliveryLink.expiresAt", "sourceStateSelector": "deliveryLink.state=expired"}
+        ],
+        "semantics": "Mission24 event kind selects the exact response/revocation event time or link expiry; no precedence among simultaneous source events"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["issuedVersionId", "deliveryLinkId", "responseRevision", "responseDigest", "state"], "deny": ["missing", "stale", "mixed", "unavailable", "expired_or_revoked_link_treated_as_acceptance"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["issuedVersionId", "deliveryLinkId", "responseRevision", "responseDigest", "state", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "expired_or_revoked_link_treated_as_acceptance"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Customer response is upstream commercial evidence only; automation cannot create, reinterpret or revoke it."
     },
@@ -293,11 +375,17 @@
           {"path": "src/learning/jobOutcomeSummaryRepository.js", "anchors": ["canonical_job_outcome_summary_read", "expectedEvaluationRevision", "expectedEvaluationDigest"]},
           {"path": "migrations/126_canonical_job_outcome_summary.sql", "anchors": ["'fresh',fresh_value", "'digest',rtrim(value.canonical_digest)", "'createdAt',value.created_at"]}
         ],
-        "binding": ["tenantId", "estimateId", "summaryId", "revision", "digest", "sourceDigest", "evaluationRevision", "evaluationDigest"]
+        "binding": ["tenantId", "estimateId", "summaryId", "revision", "digest", "sourceDigest", "evaluationRevision", "evaluationDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "createdAt", "semantics": "Mission25 source-owned reviewed summary record time; underlying outcome times remain separately pinned"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "reviewed_summary_created", "sourceField": "summary.createdAt", "sourceStateSelector": "summary.revision_digest_and_fresh=exact"}],
+        "semantics": "Mission25 source-owned reviewed summary record time; underlying outcome times remain separately pinned"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["revision", "digest", "sourceDigest", "evaluationRevision", "evaluationDigest", "fresh"], "deny": ["missing", "not_fresh", "stale", "mixed", "unavailable", "consent_revoked"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["revision", "digest", "sourceDigest", "evaluationRevision", "evaluationDigest", "fresh", "eventKind", "eventTime"], "deny": ["missing", "not_fresh", "stale", "mixed", "unavailable", "consent_revoked"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "A reviewed outcome is advisory tenant-private evidence; it cannot change estimates, work, financial records or company settings."
     },
@@ -310,13 +398,20 @@
       "sourceAuthority": {
         "sourceRefs": [
           {"path": "src/learning/jobOutcomeProposalRepository.js", "anchors": ["canonical_job_outcome_cross_job_proposal_read", "Every selected summary must be current"]},
-          {"path": "src/learning/jobOutcomeProposalContract.js", "anchors": ["expectedConsentRevision", "expectedConsentDigest", "summaryIds"]}
+          {"path": "src/learning/jobOutcomeProposalContract.js", "anchors": ["expectedConsentRevision", "expectedConsentDigest", "summaryIds"]},
+          {"path": "migrations/127_canonical_job_outcome_cross_job_proposals.sql", "anchors": ["'fresh',fresh_value", "'createdAt',value.created_at"]}
         ],
-        "binding": ["tenantId", "serviceKey", "proposalId", "revision", "digest", "consentRevision", "consentDigest", "sourceSummarySetDigest"]
+        "binding": ["tenantId", "serviceKey", "proposalId", "revision", "digest", "consentRevision", "consentDigest", "sourceSummarySetDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "proposal.createdAt", "semantics": "Mission25 source-owned reviewed recommendation creation time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "reviewed_recommendation_created", "sourceField": "proposal.createdAt", "sourceStateSelector": "proposal.revision_digest_and_fresh=exact"}],
+        "semantics": "Mission25 source-owned reviewed recommendation creation time"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["revision", "digest", "consentRevision", "consentDigest", "sourceSummarySetDigest"], "deny": ["missing", "stale", "mixed", "unavailable", "consent_revoked", "graduated_trust_or_evidence_quality_unavailable"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["revision", "digest", "consentRevision", "consentDigest", "sourceSummarySetDigest", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "consent_revoked", "graduated_trust_or_evidence_quality_unavailable"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "A recommendation is advice, never permission, and cannot silently become a policy or action."
     },
@@ -328,14 +423,23 @@
       "grain": ["tenantId", "forecastRunId", "handoffId"],
       "sourceAuthority": {
         "sourceRefs": [
-          {"path": "src/forecasting/forecastHandoffRepository.js", "anchors": ["m26-forecast-reviewed-handoff-v1", "currentnessDigest", "outboundCommunicationAuthorized", "advisoryOnly"]},
+          {"path": "src/forecasting/forecastHandoffRepository.js", "anchors": ["m26-forecast-reviewed-handoff-v1", "currentnessDigest", "outboundCommunicationAuthorized", "advisoryOnly", "['requested','dismissed','consumed','withdrawn']", "event.recordedAt", "value.createdAt"]},
           {"path": "docs/architecture/MISSION_26_PART11D_REVIEWED_HANDOFF_GATE.md", "anchors": ["reviewed", "proposal"]}
         ],
-        "binding": ["tenantId", "forecastRunId", "runDigest", "outputDigest", "currentnessRevision", "currentnessDigest", "handoffId", "handoffRevision", "handoffDigest"]
+        "binding": ["tenantId", "forecastRunId", "runDigest", "outputDigest", "currentnessRevision", "currentnessDigest", "handoffId", "handoffRevision", "handoffDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "handoff.createdAt_or_latestHistory.recordedAt", "semantics": "Mission26 source-owned reviewed handoff occurrence time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "handoff_created", "sourceField": "handoff.createdAt", "sourceStateSelector": "handoff.revision=1"},
+          {"eventKind": "handoff_review_event_recorded", "sourceField": "handoff.history.recordedAt", "sourceStateSelector": "history.action=requested|dismissed|consumed|withdrawn"}
+        ],
+        "semantics": "Mission26 event kind selects the immutable handoff creation time or one exact reviewed history event time"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["runDigest", "outputDigest", "currentnessRevision", "currentnessDigest", "handoffRevision", "handoffDigest"], "deny": ["run_stale", "proposal_expired", "missing", "stale", "mixed", "unavailable", "unreviewed_prediction"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["runDigest", "outputDigest", "currentnessRevision", "currentnessDigest", "handoffRevision", "handoffDigest", "eventKind", "eventTime"], "deny": ["run_stale", "proposal_expired", "missing", "stale", "mixed", "unavailable", "unreviewed_prediction"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Forecasts, alerts, uncertainty and reviewed handoffs remain advisory; prediction never becomes fact or action authority."
     },
@@ -343,18 +447,25 @@
       "id": "m27.invoice_lifecycle_state",
       "ownerMission": 27,
       "sourceClassId": "mission27_financial_collection",
-      "factKind": "exact_current_invoice_lifecycle_state",
-      "grain": ["tenantId", "issuedInvoiceId"],
+      "factKind": "exact_current_invoice_draft_lifecycle_state",
+      "grain": ["tenantId", "estimateId", "invoiceDraftOriginId"],
       "sourceAuthority": {
         "sourceRefs": [
-          {"path": "src/customerFinancial/invoiceLifecycleProjection.js", "anchors": ["CONTRACT_VERSION", "AXIS_ORDER", "issuedInvoiceCurrent"]},
-          {"path": "src/customerFinancial/invoiceLifecycleProjectionRepository.js", "anchors": ["read", "invoice"]}
+          {"path": "src/customerFinancial/invoiceDraftRevision.js", "anchors": ["m27-invoice-draft-revision-v1", "raw.revision", "raw.draftDigest", "raw.sourceCurrent"]},
+          {"path": "src/customerFinancial/invoiceDraftRevisionRepository.js", "anchors": ["canonical_customer_financial_invoice_draft_revision_v1_read", "normalize"]},
+          {"path": "migrations/269_customer_financial_invoice_draft_revisions_v1.sql", "anchors": ["'revision',revision_value", "'draftDigest'", "'updatedAt',public.canonical_customer_financial_billing_identity_v1_utc(created_value)"]}
         ],
-        "binding": ["tenantId", "issuedInvoiceId", "invoiceRevision", "issuedInvoiceVersionDigest", "lifecycleState", "projectionDigest"]
+        "binding": ["tenantId", "estimateId", "invoiceDraftOriginId", "invoiceDraftRevision", "invoiceDraftDigest", "invoiceDraftState", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "source_lifecycle_event.occurredAt", "semantics": "Mission27 source-owned invoice occurrence time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "invoice_draft_revision_updated", "sourceField": "invoiceDraft.updatedAt", "sourceStateSelector": "invoiceDraft.state=current_and_revision_digest=exact"}],
+        "semantics": "Mission27 source-owned invoice-draft revision time; issued invoice lifecycle remains unavailable and cannot be inferred"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["invoiceRevision", "issuedInvoiceVersionDigest", "lifecycleState", "projectionDigest"], "deny": ["missing", "draft_when_issued_required", "stale", "mixed", "unavailable", "corrected_or_voided_after_capture"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["invoiceDraftRevision", "invoiceDraftDigest", "invoiceDraftState", "sourceCurrent", "eventKind", "eventTime"], "deny": ["missing", "issued_or_post_issue_state_without_exact_event_time", "stale", "mixed", "unavailable", "corrected_after_capture"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Invoice state cannot issue, send, void, correct, tax, recognize revenue or move money."
     },
@@ -369,11 +480,17 @@
           {"path": "src/customerFinancial/receivableAging.js", "anchors": ["issuedDueDate", "agingBucket", "outstandingMinorUnits"]},
           {"path": "src/customerFinancial/receivableAgingRepository.js", "anchors": ["read", "receivable"]}
         ],
-        "binding": ["tenantId", "issuedInvoiceId", "issuedInvoiceVersionDigest", "receivableProjectionId", "projectionRevision", "projectionDigest", "currency", "collectibleBalanceMinorUnits"]
+        "binding": ["tenantId", "issuedInvoiceId", "issuedInvoiceVersionDigest", "receivableProjectionId", "projectionRevision", "projectionDigest", "currency", "collectibleBalanceMinorUnits", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "dueAt_or_source_projection_effectiveAt", "semantics": "Mission27 due/effective time; elapsed time alone does not prove a current balance"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "receivable_due_boundary", "sourceField": "receivable.issuedDueDate", "sourceStateSelector": "due_state_balance_currency_revision_and_digest=exact"}],
+        "semantics": "Mission27 exact issued due date is the only due-boundary event time; elapsed time alone cannot prove current balance"
+      },
       "observationTime": {"field": "observedAt", "semantics": "trusted capture time used to derive aging only with an exact source snapshot"},
-      "currentness": {"requiredState": "exact_current", "pins": ["issuedInvoiceVersionDigest", "projectionRevision", "projectionDigest", "currency", "collectibleBalanceMinorUnits", "dueState", "agingBucket"], "deny": ["missing", "stale", "mixed", "unavailable", "balance_or_due_axis_unknown", "pending_tender_or_dispute_unresolved"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["issuedInvoiceVersionDigest", "projectionRevision", "projectionDigest", "currency", "collectibleBalanceMinorUnits", "dueState", "agingBucket", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "balance_or_due_axis_unknown", "pending_tender_or_dispute_unresolved"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Due or aging state is not permission to contact, retry payment, add fees, write off, escalate legally or treat missing amounts as zero."
     },
@@ -385,15 +502,26 @@
       "grain": ["tenantId", "issuedInvoiceId", "paymentId", "allocationId"],
       "sourceAuthority": {
         "sourceRefs": [
-          {"path": "src/customerFinancial/paymentOutcomeReadiness.js", "anchors": ["providerOutcomePolicy", "exactProviderOccurrenceSequenceAndCurrentSnapshotRequired", "settlement_unavailable"]},
+          {"path": "src/customerFinancial/paymentOutcomeReadiness.js", "anchors": ["providerOutcomePolicy", "exactProviderOccurrenceSequenceAndCurrentSnapshotRequired", "settlement_unavailable", "outcomeOccurredAt"]},
           {"path": "src/customerFinancial/paymentAllocationBalance.js", "anchors": ["allocation", "balance"]},
-          {"path": "src/customerFinancial/paymentProviderEventReceipt.js", "anchors": ["providerEventIdentity", "receiptRowCount"]}
+          {"path": "src/customerFinancial/paymentProviderEventReceipt.js", "anchors": ["providerEventIdentity", "receiptRowCount"]},
+          {"path": "src/customerFinancial/paymentProviderEventNormalization.js", "anchors": ["providerOccurredAt", "providerSequence", "receivedAtMaySelectProjection: false"]}
         ],
-        "binding": ["tenantId", "issuedInvoiceId", "paymentId", "paymentRevision", "paymentDigest", "receiptId", "receiptDigest", "allocationId", "allocationDigest", "settlementState"]
+        "binding": ["tenantId", "issuedInvoiceId", "paymentId", "paymentRevision", "paymentDigest", "receiptId", "receiptDigest", "allocationId", "allocationDigest", "settlementState", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "authenticated_payment_event.occurredAt_or_offline_receipt.receivedAt", "semantics": "Mission27 source-owned occurrence time, not arrival order or observation time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "provider_event_occurred", "sourceField": "providerEvent.providerOccurredAt", "sourceStateSelector": "provider_event_identity_and_sequence=exact"},
+          {"eventKind": "payment_outcome_occurred", "sourceField": "paymentOutcome.outcomeOccurredAt", "sourceStateSelector": "payment_outcome_revision_digest_and_state=exact"},
+          {"eventKind": "offline_payment_outcome_occurred", "sourceField": "paymentOutcome.outcomeOccurredAt", "sourceStateSelector": "offline_outcome_revision_digest_and_state=exact"}
+        ],
+        "semantics": "Mission27 event kind selects provider occurrence or exact payment-outcome occurrence; receipt arrival and observation order never select event time"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time distinct from provider or offline occurrence"},
-      "currentness": {"requiredState": "exact_current", "pins": ["paymentRevision", "paymentDigest", "receiptDigest", "allocationDigest", "settlementState", "providerOccurrenceSequence_or_offlineRevision"], "deny": ["missing", "stale", "mixed", "unavailable", "pending", "uncertain", "provider_account_or_mode_mismatch", "arrival_order_only"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["paymentRevision", "paymentDigest", "receiptDigest", "allocationDigest", "settlementState", "providerOccurrenceSequence_or_offlineRevision", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "pending", "uncertain", "provider_account_or_mode_mismatch", "arrival_order_only"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Payment, receipt or settlement evidence cannot authorize charging, retry, refund, allocation changes, payout claims or money movement."
     },
@@ -406,14 +534,23 @@
       "sourceAuthority": {
         "sourceRefs": [
           {"path": "src/customerFinancial/creditRefundReadiness.js", "anchors": ["refundPolicy", "requestIsCompletedRefund", "settlement_unavailable"]},
-          {"path": "src/customerFinancial/invoicePostIssueCorrection.js", "anchors": ["correction_sequence", "original_issued_version_digest", "correction"]},
-          {"path": "src/customerFinancial/paymentOutcomeReadiness.js", "anchors": ["disputeOutcome", "paymentReversal", "reopenedBalance"]}
+          {"path": "src/customerFinancial/invoicePostIssueCorrection.js", "anchors": ["correction_sequence", "original_issued_version_digest", "'recorded_at'", "correction"]},
+          {"path": "src/customerFinancial/paymentOutcomeReadiness.js", "anchors": ["disputeOutcome", "paymentReversal", "reopenedBalance", "outcomeOccurredAt"]}
         ],
-        "binding": ["tenantId", "issuedInvoiceId", "issuedInvoiceVersionDigest", "financialCorrectionId", "correctionRevision", "correctionDigest", "refundOrDisputeState", "projectionDigest"]
+        "binding": ["tenantId", "issuedInvoiceId", "issuedInvoiceVersionDigest", "financialCorrectionId", "correctionRevision", "correctionDigest", "refundOrDisputeState", "projectionDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "source_correction_refund_or_dispute.occurredAt", "semantics": "Mission27 source-owned event time; request or acknowledgement is not settlement"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "invoice_correction_recorded", "sourceField": "correction.recorded_at", "sourceStateSelector": "correction_sequence_revision_and_digest=exact"},
+          {"eventKind": "refund_or_dispute_outcome_occurred", "sourceField": "paymentOutcome.outcomeOccurredAt", "sourceStateSelector": "refund_or_dispute_outcome_revision_digest_and_state=exact"}
+        ],
+        "semantics": "Mission27 event kind selects an immutable correction record time or exact outcome time; request or acknowledgement is not settlement"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["issuedInvoiceVersionDigest", "correctionRevision", "correctionDigest", "refundOrDisputeState", "projectionDigest"], "deny": ["missing", "stale", "mixed", "unavailable", "request_treated_as_settlement", "dispute_treated_as_erasure"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["issuedInvoiceVersionDigest", "correctionRevision", "correctionDigest", "refundOrDisputeState", "projectionDigest", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "request_treated_as_settlement", "dispute_treated_as_erasure"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Correction, refund or dispute state cannot submit evidence, concede, refund, write off, change tax/revenue or contact a customer."
     },
@@ -426,13 +563,25 @@
       "sourceAuthority": {
         "sourceRefs": [
           {"path": "src/customerFinancial/offlinePaymentReadiness.js", "anchors": ["check_clearance_unknown", "check_returned", "offline_reversed"]},
-          {"path": "src/customerFinancial/paymentOutcomeReadiness.js", "anchors": ["receivedCheckState: 'check_clearance_unknown'", "returnedCheckState: 'check_returned'", "offlineReversalState: 'offline_reversed'"]}
+          {"path": "src/customerFinancial/paymentOutcomeReadiness.js", "anchors": ["receivedCheckState: 'check_clearance_unknown'", "returnedCheckState: 'check_returned'", "offlineReversalState: 'offline_reversed'", "outcomeOccurredAt"]}
         ],
-        "binding": ["tenantId", "issuedInvoiceId", "offlineReceiptId", "offlineRevision", "offlineDigest", "offlineState", "allocationDigest"]
+        "binding": ["tenantId", "issuedInvoiceId", "offlineReceiptId", "offlineRevision", "offlineDigest", "offlineState", "allocationDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "offline_receipt_or_return_or_reversal.occurredAt", "semantics": "Mission27 reviewed offline occurrence time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [
+          {"eventKind": "cash_received", "sourceField": "paymentOutcome.outcomeOccurredAt", "sourceStateSelector": "offlineState=offline_received_and_tender=cash"},
+          {"eventKind": "check_received", "sourceField": "paymentOutcome.outcomeOccurredAt", "sourceStateSelector": "offlineState=check_clearance_unknown"},
+          {"eventKind": "check_cleared", "sourceField": "paymentOutcome.outcomeOccurredAt", "sourceStateSelector": "offlineState=check_cleared_and_authenticated_bank_clearance=exact"},
+          {"eventKind": "check_returned", "sourceField": "paymentOutcome.outcomeOccurredAt", "sourceStateSelector": "offlineState=check_returned"},
+          {"eventKind": "offline_reversed", "sourceField": "paymentOutcome.outcomeOccurredAt", "sourceStateSelector": "offlineState=offline_reversed"}
+        ],
+        "semantics": "Mission27 exact offline outcome kind selects its immutable outcome occurrence; received check remains clearance-unknown"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["offlineRevision", "offlineDigest", "offlineState", "allocationDigest"], "deny": ["missing", "stale", "mixed", "unavailable", "check_clearance_unknown_treated_as_cleared", "return_authority_unavailable", "physical_cash_return_inferred"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["offlineRevision", "offlineDigest", "offlineState", "allocationDigest", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "check_clearance_unknown_treated_as_cleared", "return_authority_unavailable", "physical_cash_return_inferred"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
       "boundary": "Cash or check evidence never implies bank clearance, physical return, fee authority or provider settlement."
     },
@@ -445,14 +594,20 @@
       "sourceAuthority": {
         "sourceRefs": [
           {"path": "src/customerFinancial/collectionReview.js", "anchors": ["request_mission28_reviewed_handoff", "current_due_dispute_and_pending_tender_axes", "mission28_handoff_unavailable"]},
-          {"path": "src/customerFinancial/collectionHandoffReadiness.js", "anchors": ["mission28_reviewed_reminder_handoff", "currentReceivingAdapterAvailable", "automaticExecutionSupported"]},
+          {"path": "src/customerFinancial/collectionHandoffReadiness.js", "anchors": ["mission28_reviewed_reminder_handoff", "currentReceivingAdapterAvailable", "automaticExecutionSupported", "requestedAt"]},
           {"path": "src/customerFinancial/collectionHandoffReadinessRepository.js", "anchors": ["read", "collection"]}
         ],
-        "binding": ["tenantId", "issuedInvoiceId", "issuedInvoiceVersionDigest", "collectionReviewId", "reviewRevision", "reviewDigest", "handoffRequestId", "requestRevision", "requestDigest", "receivableProjectionDigest"]
+        "binding": ["tenantId", "issuedInvoiceId", "issuedInvoiceVersionDigest", "collectionReviewId", "reviewRevision", "reviewDigest", "handoffRequestId", "requestRevision", "requestDigest", "receivableProjectionDigest", "eventKind", "eventTime"]
       },
-      "eventTime": {"field": "reviewed_handoff.requestedAt", "semantics": "Mission27 source-owned human-reviewed request time"},
+      "eventTime": {
+        "eventKindField": "eventKind",
+        "selector": "event_kind_selects_exactly_one_source_field_no_precedence",
+        "ambiguityRule": "deny_missing_unknown_or_multiple_event_kind_candidates",
+        "kinds": [{"eventKind": "collection_handoff_requested", "sourceField": "reviewedHandoff.requestedAt", "sourceStateSelector": "request_revision_digest_and_receivable_projection=exact"}],
+        "semantics": "Mission27 source-owned human-reviewed collection handoff request time"
+      },
       "observationTime": {"field": "observedAt", "semantics": "later trusted capture time"},
-      "currentness": {"requiredState": "exact_current", "pins": ["issuedInvoiceVersionDigest", "reviewRevision", "reviewDigest", "requestRevision", "requestDigest", "receivableProjectionDigest"], "deny": ["missing", "stale", "mixed", "unavailable", "balance_due_dispute_refund_or_pending_tender_changed", "receiving_adapter_unavailable_treated_as_execution"]},
+      "currentness": {"requiredState": "exact_current", "pins": ["issuedInvoiceVersionDigest", "reviewRevision", "reviewDigest", "requestRevision", "requestDigest", "receivableProjectionDigest", "eventKind", "eventTime"], "deny": ["missing", "stale", "mixed", "unavailable", "balance_due_dispute_refund_or_pending_tender_changed", "receiving_adapter_unavailable_treated_as_execution"]},
       "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request", "collection_escalation"],
       "boundary": "The reviewed handoff may later support one internal owner work item only; no reminder, resend, customer contact, agency/legal escalation, automatic retry, fee or money effect is authorized."
     }

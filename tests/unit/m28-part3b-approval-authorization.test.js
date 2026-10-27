@@ -754,8 +754,8 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–4A released; Part 4B implementation candidate only.');
-      expect(document).toContain('Parts 4C–14G');
+      expect(document).toContain('Parts 1A–4B released; Part 4C implementation candidate only.');
+      expect(document).toContain('Parts 4D–14G');
       expect(document).toContain('05a541792adac121f8c51b2cf200c0d18fcfbbf1');
       expect(document).toContain('1e62336afe2c9e65cccbe1629a62b86855da3ff8');
       expect(document).toContain('7ca335a1-7bf6-4f8d-ae98-a188b891f85d');
@@ -766,11 +766,12 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     expect(ledger).toContain('| 11 | 3C | Owner limits and mandatory minimum constraints | **Released** |');
     expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Released** |');
     expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Released** |');
-    expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Implementation candidate** |');
+    expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Released** |');
+    expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Implementation candidate** |');
     expect(roadmap).toContain('Released Part 3B artifacts');
     expect(roadmap).toContain('Released Part 3C artifacts');
     expect(roadmap).toContain('Released Part 3D artifacts');
-    expect(roadmap).toContain('Current Part 4B artifacts');
+    expect(roadmap).toContain('Current Part 4C artifacts');
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 

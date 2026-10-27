@@ -782,8 +782,8 @@ describe('Mission 28 Part 2B immutable record model', () => {
   test('records Parts 1A–3D released, only Part 4A current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–4A released; Part 4B implementation candidate only.');
-    expect(roadmap).toContain('Parts 4C–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–4B released; Part 4C implementation candidate only.');
+    expect(roadmap).toContain('Parts 4D–14G remain planned and unimplemented.');
     for (const identity of [PART2A_HEAD, BASE, PART2A_DEPLOYMENT, PART2A_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -808,11 +808,13 @@ describe('Mission 28 Part 2B immutable record model', () => {
     expect(rows[11][5]).toContain('PR #560');
     expect(rows[12][4]).toBe('**Released**');
     expect(rows[12][5]).toContain('PR #561');
-    expect(rows[13][4]).toBe('**Implementation candidate**');
-    expect(rows[13][5]).toContain('no mounted runtime ingestion/resolver');
-    expect(rows.slice(14).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[13][4]).toBe('**Released**');
+    expect(rows[13][5]).toContain('PR #562');
+    expect(rows[14][4]).toBe('**Implementation candidate**');
+    expect(rows[14][5]).toContain('no mounted resolver');
+    expect(rows.slice(15).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(52);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(51);
   });
 
   test('adds no runtime, database, migration, provider, scheduling, route, UI or demo behavior', () => {

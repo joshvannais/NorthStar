@@ -355,7 +355,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–4A released; Part 4B implementation candidate only.');
+      expect(document).toContain('Parts 1A–4B released; Part 4C implementation candidate only.');
       expect(document).toContain('797be4a33bb2128ae2efd79b5347ef43f94da0f6');
       expect(document).toContain('041971bb190998e1444087482941686c4166573d');
       expect(document).toContain('7e0ef15f-1275-4578-aade-70b8c8277bef');
@@ -366,10 +366,12 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(rows[11]).toMatchObject({ id: '3D', state: '**Released**' });
     expect(rows[12]).toMatchObject({ id: '4A', state: '**Released**' });
     expect(rows[12].evidence).toContain('PR #561');
-    expect(rows[13]).toMatchObject({ id: '4B', state: '**Implementation candidate**' });
-    expect(rows[13].evidence).toContain('no mounted runtime ingestion/resolver');
-    expect(rows.slice(14).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(52);
+    expect(rows[13]).toMatchObject({ id: '4B', state: '**Released**' });
+    expect(rows[13].evidence).toContain('PR #562');
+    expect(rows[14]).toMatchObject({ id: '4C', state: '**Implementation candidate**' });
+    expect(rows[14].evidence).toContain('no mounted resolver');
+    expect(rows.slice(15).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(51);
   });
 
   test('keeps runtime, migrations and later Part 4 authority outside the slice', () => {

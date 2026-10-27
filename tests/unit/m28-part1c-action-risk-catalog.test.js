@@ -421,11 +421,11 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(contract).toContain('founder visual approval remain unavailable and unclaimed');
   });
 
-  test('records released Parts 1A–1D and 2A, exactly Part 2B current and all later slices planned', () => {
+  test('records released Parts 1A–1D and 2A–2B, exactly Part 2C current and all later slices planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–1D and 2A released; Part 2B implementation candidate only.');
-    expect(roadmap).toContain('Parts 2C–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–1D and 2A–2B released; Part 2C implementation candidate only.');
+    expect(roadmap).toContain('Parts 2D–14G remain planned and unimplemented.');
     for (const identity of [PART1B_HEAD, BASE, PART1B_DEPLOYMENT, PART1B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -440,11 +440,13 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(rows[3][5]).toContain('PR #552');
     expect(rows[4][4]).toBe('**Released**');
     expect(rows[4][5]).toContain('PR #553');
-    expect(rows[5][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(6).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[5][4]).toBe('**Released**');
+    expect(rows[5][5]).toContain('PR #554');
+    expect(rows[6][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(7).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(60);
-    expect(ledger).toContain('Part 2B has no independent acceptance, PR, merge, deployment, or release evidence.');
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(59);
+    expect(ledger).toContain('Part 2C has no independent acceptance, PR, merge, deployment, or release evidence.');
   });
 
   test('does not activate the static catalog from production source or add a migration', () => {

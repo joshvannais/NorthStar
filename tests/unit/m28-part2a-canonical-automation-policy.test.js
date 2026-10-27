@@ -403,11 +403,11 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
     }
   });
 
-  test('records Part 1 and Part 2A released, Part 2B as the sole candidate, and every later slice planned', () => {
+  test('records Part 1 and Parts 2A–2B released, Part 2C as the sole candidate, and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–1D and 2A released; Part 2B implementation candidate only.');
-    expect(roadmap).toContain('Parts 2C–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–1D and 2A–2B released; Part 2C implementation candidate only.');
+    expect(roadmap).toContain('Parts 2D–14G remain planned and unimplemented.');
     for (const identity of [PART1D_HEAD, BASE, PART1D_DEPLOYMENT, PART1D_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -418,11 +418,13 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
     expect(rows[3][5]).toContain('PR #552');
     expect(rows[4][4]).toBe('**Released**');
     expect(rows[4][5]).toContain('PR #553');
-    expect(rows[5][4]).toBe('**Implementation candidate**');
-    expect(rows[5][5]).toContain('source-only immutable record contract');
-    expect(rows.slice(6).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[5][4]).toBe('**Released**');
+    expect(rows[5][5]).toContain('PR #554');
+    expect(rows[6][4]).toBe('**Implementation candidate**');
+    expect(rows[6][5]).toContain('source-only policy lifecycle contract');
+    expect(rows.slice(7).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(60);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(59);
   });
 
   test('does not activate policy runtime or add a schema migration', () => {

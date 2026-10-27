@@ -639,6 +639,14 @@ BEGIN
  -- current or related-version read. A successor cannot become terminal between
  -- supersession validation and append.
  PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-lifecycle-policy:'||policy::text,0));
+ SELECT * INTO stored FROM public.canonical_automation_lifecycle_events_v1
+  WHERE organization_id=org AND lifecycle_event_id=event_value FOR SHARE;
+ IF stored.lifecycle_event_id IS NOT NULL THEN
+  IF stored.event_digest=event_digest_value AND stored.canonical_text=canonical_text_value THEN
+   RETURN jsonb_build_object('state','stored','replayed',TRUE,'eventDigest',event_digest_value,
+    'recordedAt',public.canonical_automation_utc_v1(stored.recorded_at)); END IF;
+  RAISE EXCEPTION 'Mission 28 lifecycle event conflict' USING ERRCODE='23505';
+ END IF;
  SELECT canonical_digest,previous_version_digest,expires_at
   INTO policy_digest_value,policy_previous_digest,policy_expires_at
   FROM public.canonical_automation_policy_versions_v1 WHERE organization_id=org
@@ -746,13 +754,6 @@ BEGIN
   RAISE EXCEPTION 'Mission 28 expired policy active authority denied' USING ERRCODE='40001'; END IF;
  IF operation_value='expire' AND policy_expires_at>now_value THEN
   RAISE EXCEPTION 'Mission 28 policy expiry is not due' USING ERRCODE='40001'; END IF;
- SELECT * INTO stored FROM public.canonical_automation_lifecycle_events_v1
-  WHERE organization_id=org AND lifecycle_event_id=event_value FOR SHARE;
- IF stored.lifecycle_event_id IS NOT NULL THEN
-  IF stored.event_digest=event_digest_value AND stored.canonical_text=canonical_text_value THEN
-   RETURN jsonb_build_object('state','stored','replayed',TRUE,'eventDigest',event_digest_value,
-    'recordedAt',public.canonical_automation_utc_v1(stored.recorded_at)); END IF;
-  RAISE EXCEPTION 'Mission 28 lifecycle event conflict' USING ERRCODE='23505'; END IF;
  SELECT lifecycle_event_id,event_digest,operation,to_state,lifecycle_sequence INTO prior
   FROM public.canonical_automation_lifecycle_events_v1 WHERE organization_id=org AND policy_id=policy
    AND policy_version=version_value ORDER BY lifecycle_sequence DESC LIMIT 1 FOR SHARE;
@@ -798,11 +799,12 @@ SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE doc JSONB; org UUID; record_value UUID; run_value UUID; policy UUID; version_value BIGINT;
  ordinal_value BIGINT; type_value TEXT; authority_value TEXT; source_digest_value TEXT; retention_value TEXT;
  payload_digest_value TEXT; record_digest_value TEXT; parent JSONB; parent_row RECORD; parent_count INTEGER:=0;
- now_value TIMESTAMPTZ; stored RECORD; source_binding JSONB; marker_value TEXT;
+ now_value TIMESTAMPTZ; stored RECORD; historical_row RECORD; source_binding JSONB; marker_value TEXT;
  expected_authority TEXT; expected_record_class TEXT; expected_effect_claim TEXT; allowed_parent_types TEXT[];
  expected_minimum INTEGER; expected_maximum INTEGER; source_key_count INTEGER; source_distinct_count INTEGER;
  source_fixture_count INTEGER; source_stale_count INTEGER; source_unavailable_count INTEGER;
- parent_ids UUID[]:=ARRAY[]::UUID[]; unresolved_id UUID; reconciliation_ids UUID[]; source_set_marker TEXT;
+ parent_ids UUID[]:=ARRAY[]::UUID[]; unresolved_id UUID; reconciliation_ids UUID[];
+ unresolved_ids UUID[]; ordered_unresolved_ids UUID[]; current_max_ordinal BIGINT; source_set_marker TEXT;
  expected_source_state TEXT; expected_source_set_marker TEXT; expected_record_marker TEXT;
  policy_state_value TEXT; source_state_value TEXT;
 BEGIN
@@ -1020,6 +1022,19 @@ BEGIN
    RETURN jsonb_build_object('state','stored','replayed',TRUE,'recordDigest',record_digest_value,
     'recordedAt',public.canonical_automation_utc_v1(stored.recorded_at)); END IF;
   RAISE EXCEPTION 'Mission 28 record conflict' USING ERRCODE='23505'; END IF;
+ SELECT policy_id,policy_version,source_set_digest INTO historical_row
+  FROM public.canonical_automation_historical_run_bindings_v1
+  WHERE organization_id=org AND run_id=run_value FOR SHARE;
+ IF historical_row.policy_id IS NOT NULL AND
+    (historical_row.policy_id<>policy OR historical_row.policy_version<>version_value OR
+     historical_row.source_set_digest<>source_digest_value) THEN
+  RAISE EXCEPTION 'Mission 28 historical run binding mismatch' USING ERRCODE='40001';
+ END IF;
+ SELECT max(causal_ordinal) INTO current_max_ordinal
+  FROM public.canonical_automation_records_v1 WHERE organization_id=org AND run_id=run_value;
+ IF current_max_ordinal IS NOT NULL AND ordinal_value<=current_max_ordinal THEN
+  RAISE EXCEPTION 'Mission 28 causal ordinal must strictly append' USING ERRCODE='40001';
+ END IF;
  FOR parent IN SELECT value FROM jsonb_array_elements(doc->'causalParents') LOOP
   parent_count:=parent_count+1;
   IF (SELECT count(*) FROM jsonb_object_keys(parent))<>3 OR
@@ -1055,6 +1070,9 @@ BEGIN
    RAISE EXCEPTION 'Mission 28 reconciliation subjects invalid' USING ERRCODE='22023'; END IF;
  END IF;
  IF type_value='terminal_outcome' THEN
+  SELECT COALESCE(array_agg(value::uuid ORDER BY ordinal),ARRAY[]::UUID[]) INTO unresolved_ids
+   FROM jsonb_array_elements_text(doc#>'{payload,unresolvedRecordIds}')
+    WITH ORDINALITY values(value,ordinal);
   FOR unresolved_id IN SELECT value::uuid FROM jsonb_array_elements_text(doc#>'{payload,unresolvedRecordIds}') values(value) LOOP
    IF NOT unresolved_id=ANY(parent_ids) THEN
     RAISE EXCEPTION 'Mission 28 terminal unresolved subject invalid' USING ERRCODE='22023'; END IF;
@@ -1062,6 +1080,11 @@ BEGIN
   IF (SELECT count(*) FROM jsonb_array_elements_text(doc#>'{payload,unresolvedRecordIds}'))<>
      (SELECT count(DISTINCT value) FROM jsonb_array_elements_text(doc#>'{payload,unresolvedRecordIds}') values(value)) THEN
    RAISE EXCEPTION 'Mission 28 duplicate unresolved subject denied' USING ERRCODE='22023'; END IF;
+  SELECT COALESCE(array_agg(parent_id ORDER BY ordinal),ARRAY[]::UUID[]) INTO ordered_unresolved_ids
+   FROM unnest(parent_ids) WITH ORDINALITY parents(parent_id,ordinal)
+   WHERE parent_id=ANY(unresolved_ids);
+  IF ordered_unresolved_ids IS DISTINCT FROM unresolved_ids THEN
+   RAISE EXCEPTION 'Mission 28 terminal unresolved order invalid' USING ERRCODE='22023'; END IF;
  END IF;
  retention_value:=CASE authority_value WHEN 'effect_evidence' THEN 'effect_evidence_history' ELSE 'decision_history' END;
  INSERT INTO public.canonical_automation_records_v1 VALUES(org,record_value,run_value,type_value,ordinal_value,

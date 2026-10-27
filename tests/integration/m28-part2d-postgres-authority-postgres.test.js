@@ -292,7 +292,8 @@ realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', ()
 
     const foreignRoot = JSON.parse(JSON.stringify(storedFixture.records[0]));
     foreignRoot.recordId = '00000000-0000-4000-8000-000000000215';
-    foreignRoot.causalOrdinal = 15;
+    foreignRoot.runId = '00000000-0000-4000-8000-000000000220';
+    foreignRoot.causalOrdinal = 1;
     foreignRoot.policyBinding = policyBinding(foreignPolicy);
     redigestRecord(foreignRoot, recordModel);
     await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
@@ -300,12 +301,99 @@ realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', ()
 
     const crossPolicyChild = JSON.parse(JSON.stringify(storedFixture.records[1]));
     crossPolicyChild.recordId = '00000000-0000-4000-8000-000000000216';
-    crossPolicyChild.causalOrdinal = 16;
+    crossPolicyChild.runId = foreignRoot.runId;
+    crossPolicyChild.causalOrdinal = 2;
     crossPolicyChild.causalParents = [{ recordId: foreignRoot.recordId,
       recordType: foreignRoot.recordType, recordDigest: foreignRoot.recordDigest }];
     redigestRecord(crossPolicyChild, recordModel);
     await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
       [canonical.canonicalize(crossPolicyChild)])).rejects.toThrow(/record parent invalid/);
+  }, 120000);
+
+  test('permanently binds every later run record to its historical policy and source snapshot', async () => {
+    expect((await ownerPool.query('SELECT public.canonical_automation_store_record_v1($1) result',
+      [canonical.canonicalize(storedFixture.records[0])])).rows[0].result)
+      .toMatchObject({ state: 'stored', replayed: true });
+
+    const foreignPolicy = clonePolicyFor(policyModel, policyModel.canonicalExamples[0],
+      '00000000-0000-4000-8000-00000000002d');
+    await ownerPool.query('SELECT public.canonical_automation_store_policy_v1($1)',
+      [canonical.canonicalize(foreignPolicy)]);
+    const crossPolicy = JSON.parse(JSON.stringify(storedFixture.records[0]));
+    crossPolicy.recordId = '00000000-0000-4000-8000-000000000233';
+    crossPolicy.causalOrdinal = 15;
+    crossPolicy.policyBinding = policyBinding(foreignPolicy);
+    redigestRecord(crossPolicy, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(crossPolicy)])).rejects.toThrow(/historical run binding mismatch/);
+
+    const alternateSource = { ...storedFixture.source,
+      sourceRecordId: '00000000-0000-4000-8000-000000000234',
+      sourceDigest: `sha256:${'4'.repeat(64)}` };
+    await ownerPool.query('SELECT public.canonical_automation_store_source_binding_v1($1)',
+      [canonical.canonicalize(alternateSource)]);
+    const alternateSet = { tenantId: TENANT, sourceBindings: [alternateSource],
+      currentnessMarker: 'contract_fixture_unverified',
+      sourceSetDigest: digest(recordModel.canonicalization.sourceSetNamespace, [alternateSource]) };
+    await ownerPool.query('SELECT public.canonical_automation_store_source_set_v1($1)',
+      [canonical.canonicalize(alternateSet)]);
+    const crossSource = JSON.parse(JSON.stringify(storedFixture.records[0]));
+    crossSource.recordId = '00000000-0000-4000-8000-000000000235';
+    crossSource.causalOrdinal = 15;
+    crossSource.sourceBindings = [alternateSource];
+    crossSource.payload.sourceSetDigest = alternateSet.sourceSetDigest;
+    redigestRecord(crossSource, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(crossSource)])).rejects.toThrow(/historical run binding mismatch/);
+  }, 120000);
+
+  test('strictly appends new causal ordinals while preserving exact record replay', async () => {
+    const high = JSON.parse(JSON.stringify(storedFixture.records[0]));
+    high.recordId = '00000000-0000-4000-8000-000000000236';
+    high.runId = high.recordId;
+    high.causalOrdinal = 100;
+    redigestRecord(high, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(high)])).resolves.toBeDefined();
+    expect((await ownerPool.query('SELECT public.canonical_automation_store_record_v1($1) result',
+      [canonical.canonicalize(high)])).rows[0].result).toMatchObject({ state: 'stored', replayed: true });
+
+    const backdated = JSON.parse(JSON.stringify(high));
+    backdated.recordId = '00000000-0000-4000-8000-000000000237';
+    backdated.causalOrdinal = 1;
+    redigestRecord(backdated, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(backdated)])).rejects.toThrow(/causal ordinal must strictly append/);
+
+    const next = JSON.parse(JSON.stringify(high));
+    next.recordId = '00000000-0000-4000-8000-000000000238';
+    next.causalOrdinal = 101;
+    redigestRecord(next, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(next)])).resolves.toBeDefined();
+  }, 120000);
+
+  test('requires terminal unresolved records to preserve direct-parent order', async () => {
+    const parentRecords = ['action_unit', 'internal_task']
+      .map(type => storedFixture.records.find(record => record.recordType === type));
+    const terminal = JSON.parse(JSON.stringify(
+      storedFixture.records.find(record => record.recordType === 'terminal_outcome')));
+    terminal.recordId = '00000000-0000-4000-8000-000000000239';
+    terminal.causalOrdinal = 15;
+    terminal.causalParents = parentRecords.map(parent => ({ recordId: parent.recordId,
+      recordType: parent.recordType, recordDigest: parent.recordDigest }));
+    terminal.payload.unresolvedRecordIds = parentRecords.map(parent => parent.recordId);
+    redigestRecord(terminal, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(terminal)])).resolves.toBeDefined();
+
+    const reordered = JSON.parse(JSON.stringify(terminal));
+    reordered.recordId = '00000000-0000-4000-8000-000000000240';
+    reordered.causalOrdinal = 16;
+    reordered.payload.unresolvedRecordIds.reverse();
+    redigestRecord(reordered, recordModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_record_v1($1)',
+      [canonical.canonicalize(reordered)])).rejects.toThrow(/terminal unresolved order invalid/);
   }, 120000);
 
   test('derives source currentness only from sources while policy state controls the overall record marker', async () => {
@@ -392,6 +480,40 @@ realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', ()
       [canonical.canonicalize(postTerminalBinding)])).rejects.toThrow(/historical authority unavailable/);
   }, 120000);
 
+  test('replays an exact activation after expiry without regranting authority', async () => {
+    const policyId = '00000000-0000-4000-8000-000000000033';
+    const expiringPolicy = clonePolicyFor(policyModel, policyModel.canonicalExamples[0], policyId);
+    expiringPolicy.expiresAt = (await ownerPool.query(`SELECT to_char(
+      (clock_timestamp()+interval '8 seconds') AT TIME ZONE 'UTC',
+      'YYYY-MM-DD"T"HH24:MI:SS"Z"') expires_at`)).rows[0].expires_at;
+    const withoutDigest = { ...expiringPolicy }; delete withoutDigest.canonicalDigest;
+    expiringPolicy.canonicalDigest = digest(policyModel.canonicalization.namespace, withoutDigest);
+    await ownerPool.query('SELECT public.canonical_automation_store_policy_v1($1)',
+      [canonical.canonicalize(expiringPolicy)]);
+    const sourceSnapshot = { tenantId: TENANT, sourceSetDigest: storedFixture.sourceSet.sourceSetDigest,
+      currentnessMarker: storedFixture.sourceSet.currentnessMarker };
+    const events = [];
+    for (const operation of ['draft_create', 'validate', 'preview', 'activate']) {
+      const event = buildLifecycle(lifecycleModel, operation, events.at(-1), events, sourceSnapshot,
+        { eventIdBase: 1000, policyBinding: policyBinding(expiringPolicy) });
+      events.push(event);
+      await ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+        [canonical.canonicalize(event)]);
+    }
+    const activation = events.at(-1);
+    await ownerPool.query(`SELECT pg_sleep(GREATEST(0,
+      EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())) + 0.25))`, [expiringPolicy.expiresAt]);
+    expect((await ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1) result',
+      [canonical.canonicalize(activation)])).rows[0].result)
+      .toMatchObject({ state: 'stored', replayed: true, eventDigest: activation.eventDigest });
+
+    const conflict = JSON.parse(JSON.stringify(activation));
+    conflict.payload.reasonCode = 'same_identity_conflicting_canonical_event';
+    redigestLifecycle(conflict, lifecycleModel);
+    await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
+      [canonical.canonicalize(conflict)])).rejects.toThrow(/lifecycle event conflict/);
+  }, 120000);
+
   test('resolves supersession and bounded rollback against exact stored policies and lifecycle evidence', async () => {
     const sourceSnapshot = { tenantId: TENANT, sourceSetDigest: storedFixture.sourceSet.sourceSetDigest,
       currentnessMarker: storedFixture.sourceSet.currentnessMarker };
@@ -475,6 +597,9 @@ realPostgres('Mission 28 Part 2D PostgreSQL authority through migration 273', ()
     rollbackEvents.push(retireSuccessor);
     await expect(ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1)',
       [canonical.canonicalize(retireSuccessor)])).resolves.toBeDefined();
+    expect((await ownerPool.query('SELECT public.canonical_automation_store_lifecycle_event_v1($1) result',
+      [canonical.canonicalize(supersede)])).rows[0].result)
+      .toMatchObject({ state: 'stored', replayed: true, eventDigest: supersede.eventDigest });
     const terminalSuccessorAttempt = JSON.parse(JSON.stringify(supersede));
     terminalSuccessorAttempt.lifecycleEventId = '00000000-0000-4000-8000-000000000395';
     redigestLifecycle(terminalSuccessorAttempt, lifecycleModel);

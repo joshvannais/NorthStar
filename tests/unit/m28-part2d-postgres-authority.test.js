@@ -69,9 +69,13 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
       causalParentScope: 'exact_same_tenant_run_policy_id_and_policy_version',
       historicalRunCausality: 'policy_and_run_locked_bound_active_event_strictly_precedes_every_run_record_and_is_latest_lifecycle_state_at_first_record',
       historicalRunScope: 'every_run_record_has_exact_policy_id_policy_version_and_source_set_digest',
+      historicalRunProspectiveRule: 'existing_binding_permanently_rejects_later_record_policy_or_source_rebinding_under_run_lock_exact_record_replay_preserved',
+      recordLedgerOrderingRule: 'new_record_causal_ordinal_strictly_exceeds_current_run_maximum_under_run_lock_exact_record_replay_preserved',
+      terminalUnresolvedRule: 'ordered_unique_subset_of_direct_terminal_parent_record_ids',
       sourceStateAggregation: 'source_state_and_source_set_marker_derive_only_from_exact_source_bindings',
       recordMarkerAggregation: 'record_marker_derives_from_policy_state_plus_independently_derived_source_state',
       lifecycleSerialization: 'one_tenant_policy_lock_before_current_or_related_version_lifecycle_reads',
+      lifecycleReplayRule: 'same_event_id_digest_and_canonical_text_replays_before_later_expiry_or_related_policy_state_revalidation_conflicting_identity_denied',
       unrelatedLifecycleBindings: 'deny',
       nonCurrentMayGrantActiveAuthority: false,
     });
@@ -145,6 +149,13 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
     expect(sql).toContain('AND policy_id=policy AND policy_version=version_value');
     expect(sql).toContain('event_row.recorded_at>=first_record_at');
     expect(sql).toContain('latest_event_row.lifecycle_event_id IS DISTINCT FROM event_row.lifecycle_event_id');
+    expect(sql).toContain('Mission 28 historical run binding mismatch');
+    expect(sql).toContain('Mission 28 causal ordinal must strictly append');
+    expect(sql).toContain('Mission 28 terminal unresolved order invalid');
+    const replayIndex = sql.indexOf('SELECT * INTO stored FROM public.canonical_automation_lifecycle_events_v1');
+    expect(replayIndex).toBeGreaterThan(0);
+    expect(replayIndex).toBeLessThan(sql.indexOf('SELECT canonical_digest,previous_version_digest,expires_at', replayIndex));
+    expect(replayIndex).toBeLessThan(sql.indexOf("IF operation_value IN('activate','resume') AND policy_expires_at", replayIndex));
     expect(sql).not.toMatch(/DROP\s+(TABLE|COLUMN)|ALTER\s+COLUMN\s+.*TYPE|DELETE\s+FROM|UPDATE\s+public\./i);
   });
 

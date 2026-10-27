@@ -176,6 +176,39 @@
       ]
     },
     {
+      "id": "voice.legacy-retell-tool-registry",
+      "facets": ["provider_adapter", "demo_action"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "unmounted legacy Retell tool execution",
+      "effectBoundary": "Retell-compatible handlers can mutate the file-era lead store and in-memory notes, tags, and timeline, while appointment and availability handlers return fictional success. No mounted tenant authority, calendar confirmation, provider execution, or Mission 28 reuse authority exists.",
+      "sourceRefs": [
+        { "path": "src/voice/toolRegistry.js", "anchors": ["Provides Retell-compatible function definitions and handlers", "function createLead", "function updateLeadFields", "function scheduleAppointment", "success: true", "confirmed: true", "function createNote", "function tagCall", "function updateTimeline"] },
+        { "path": "src/leads/store.js", "anchors": ["function addLead(lead)", "function updateLead(id, updates)"] }
+      ]
+    },
+    {
+      "id": "voice.legacy-call-completion-pipeline",
+      "facets": ["worker", "event_listener", "reminder"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "unmounted legacy post-call processing",
+      "effectBoundary": "The unmounted call-ended pipeline can generate follow-up/action labels, mutate the file-era lead store, and attempt a voice-session database write. It is not a subscribed canonical event worker, tenant-current action authority, message sender, or effect evidence.",
+      "sourceRefs": [
+        { "path": "src/voice/callCompletion.js", "anchors": ["Triggered when call_ended event fires", "function generateActionItems", "function generateFollowUpRecommendations", "function updateLeadFromCall", "async function persistVoiceSession", "async function executeCallCompletion"] },
+        { "path": "src/leads/store.js", "anchors": ["function addLead(lead)", "function updateLead(id, updates)"] },
+        { "path": "src/voice/eventIntelligence.js", "anchors": ["function getContext()", "module.exports"] }
+      ]
+    },
+    {
+      "id": "voice.legacy-human-handoff",
+      "facets": ["event_listener", "notification", "manual_quick_send"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "unmounted legacy voice escalation state",
+      "effectBoundary": "Automatic keyword and confidence triggers only create an in-memory escalation record and a claimed resolution. They do not contact a human, transfer a call, establish consent, or prove a received or completed handoff.",
+      "sourceRefs": [
+        { "path": "src/voice/humanHandoff.js", "anchors": ["Six escalation triggers", "function checkEscalation", "function initiateEscalation", "triggeredBy: 'system'", "function resolveEscalation"] }
+      ]
+    },
+    {
       "id": "event.browser-simulation-notification",
       "facets": ["event_listener", "notification", "demo_action"],
       "disposition": "simulated_or_demo_only",
@@ -498,13 +531,44 @@
     },
     {
       "id": "provider.mission27-payment-boundary",
-      "facets": ["provider_adapter", "webhook", "retry", "collection_label"],
+      "facets": ["provider_adapter", "webhook", "retry", "queue", "notification", "collection_label"],
       "disposition": "upstream_or_subscription_owned_excluded",
       "owner": "Mission 27 financial lifecycle",
-      "effectBoundary": "The provider contract is frozen provider-disabled; event, retry, checkout, settlement, refund, and accounting labels are evidence boundaries, not reusable effect authority.",
+      "effectBoundary": "The mounted connection, lifecycle health/retention/recovery/acceptance, event receipt/normalization, and base payment reads are frozen provider-disabled. Queue, backpressure, retry, failover, alert, webhook, checkout, settlement, refund, and accounting fields are unavailable evidence boundaries, not adapters or reusable effect authority.",
       "sourceRefs": [
         { "path": "src/customerFinancial/paymentProviderBoundary.js", "anchors": ["policyState !== 'frozen_provider_disabled'", "const REASON = 'payment_provider_unavailable'"] },
-        { "path": "src/customerFinancial/paymentProviderEventReceipt.js", "anchors": ["server_side_webhook_signing_credential"] }
+        { "path": "src/customerFinancial/paymentProviderBoundaryRepository.js", "anchors": ["async function read(source)", "return contract.unavailable()"] },
+        { "path": "src/customerFinancial/paymentProviderConnection.js", "anchors": ["const REASON = 'provider_connection_prerequisites_unavailable'", "function unavailable()"] },
+        { "path": "src/customerFinancial/paymentProviderConnectionRepository.js", "anchors": ["async function read(source)", "async function attempt(source, body)"] },
+        { "path": "src/customerFinancial/paymentProviderEventReceipt.js", "anchors": ["server_side_webhook_signing_credential", "providerRetryState: 'unavailable'"] },
+        { "path": "src/customerFinancial/paymentProviderEventReceiptRepository.js", "anchors": ["async function read(source, options = {})", "return contract.unavailable(providerBoundary)"] },
+        { "path": "src/customerFinancial/paymentProviderEventNormalization.js", "anchors": ["const REASON = 'provider_event_receipt_unavailable'", "function unavailable(receiptRaw"] },
+        { "path": "src/customerFinancial/paymentProviderEventNormalizationRepository.js", "anchors": ["async function read(source, options = {})", "return contract.unavailable(receipt)"] },
+        { "path": "src/customerFinancial/providerLifecycleHealth.js", "anchors": ["const REASON = 'provider_lifecycle_authority_unavailable'", "provider_webhook_authority_unavailable"] },
+        { "path": "src/customerFinancial/providerLifecycleHealthHttpBoundary.js", "anchors": ["function isProviderLifecycleHealthPath", "ABSOLUTE_PATH_PATTERN"] },
+        { "path": "src/customerFinancial/providerLifecycleHealthRepository.js", "anchors": ["function createRepository(options = {})", "read: production.read"] },
+        { "path": "src/customerFinancial/providerLifecycleRetention.js", "anchors": ["const REASON = 'retention_deletion_authority_unavailable'", "provider_event_receipt_unavailable"] },
+        { "path": "src/customerFinancial/providerLifecycleRetentionHttpBoundary.js", "anchors": ["function isProviderLifecycleRetentionPath", "ABSOLUTE_PATH_PATTERN"] },
+        { "path": "src/customerFinancial/providerLifecycleRetentionRepository.js", "anchors": ["function createRepository(options = {})", "read: production.read"] },
+        { "path": "src/customerFinancial/providerLifecycleRecovery.js", "anchors": ["bounded_durable_queue_and_backpressure", "tested_provider_failover_target", "retryAuthorized: false", "alertingAuthorized: false"] },
+        { "path": "src/customerFinancial/providerLifecycleRecoveryHttpBoundary.js", "anchors": ["function isProviderLifecycleRecoveryPath", "ABSOLUTE_PATH_PATTERN"] },
+        { "path": "src/customerFinancial/providerLifecycleRecoveryRepository.js", "anchors": ["function createRepository(options = {})", "read: production.read"] },
+        { "path": "src/customerFinancial/providerLifecycleAcceptance.js", "anchors": ["const REASON = 'provider_lifecycle_acceptance_unavailable'", "function unavailable"] },
+        { "path": "src/customerFinancial/providerLifecycleAcceptanceHttpBoundary.js", "anchors": ["function isProviderLifecycleAcceptancePath", "ABSOLUTE_PATH_PATTERN"] },
+        { "path": "src/customerFinancial/providerLifecycleAcceptanceRepository.js", "anchors": ["function createRepository(options)", "read: production.read"] },
+        { "path": "src/middleware/providerLifecycleHealthBoundary.js", "anchors": ["function providerLifecycleHealthBoundary", "providerLifecycleHealthHttpBoundary"] },
+        { "path": "src/middleware/providerLifecycleRetentionBoundary.js", "anchors": ["function providerLifecycleRetentionBoundary", "providerLifecycleRetentionHttpBoundary"] },
+        { "path": "src/middleware/providerLifecycleRecoveryBoundary.js", "anchors": ["function providerLifecycleRecoveryBoundary", "providerLifecycleRecoveryHttpBoundary"] },
+        { "path": "src/middleware/providerLifecycleAcceptanceBoundary.js", "anchors": ["function providerLifecycleAcceptanceBoundary", "providerLifecycleAcceptanceHttpBoundary"] },
+        { "path": "src/routes/customerFinancialPaymentProvider.js", "anchors": ["function createCustomerFinancialPaymentProviderRouter", "paymentProviderBoundaryRepository"] },
+        { "path": "src/routes/customerFinancialProviderConnection.js", "anchors": ["function createCustomerFinancialProviderConnectionRouter", "paymentProviderConnectionRepository"] },
+        { "path": "src/routes/customerFinancialProviderLifecycle.js", "anchors": ["function createCustomerFinancialProviderLifecycleRouter", "providerLifecycleHealthRepository"] },
+        { "path": "src/routes/customerFinancialProviderRetention.js", "anchors": ["function createCustomerFinancialProviderRetentionRouter", "providerLifecycleRetentionRepository"] },
+        { "path": "src/routes/customerFinancialProviderRecovery.js", "anchors": ["function createCustomerFinancialProviderRecoveryRouter", "providerLifecycleRecoveryRepository"] },
+        { "path": "src/routes/customerFinancialProviderAcceptance.js", "anchors": ["function createCustomerFinancialProviderAcceptanceRouter", "providerLifecycleAcceptanceRepository"] },
+        { "path": "src/routes/customerFinancialProviderEventReceipt.js", "anchors": ["function createCustomerFinancialProviderEventReceiptRouter", "paymentProviderEventReceiptRepository"] },
+        { "path": "src/routes/customerFinancialProviderEventNormalization.js", "anchors": ["function createCustomerFinancialProviderEventNormalizationRouter", "paymentProviderEventNormalizationRepository"] },
+        { "path": "src/server.js", "anchors": ["'/api/v1/customer-financial/payment-provider/connection'", "'/api/v1/customer-financial/payment-provider/lifecycle-health'", "'/api/v1/customer-financial/payment-provider/lifecycle-retention'", "'/api/v1/customer-financial/payment-provider/lifecycle-recovery'", "'/api/v1/customer-financial/payment-provider/lifecycle-acceptance'", "'/api/v1/customer-financial/payment-provider/event-receipt'", "'/api/v1/customer-financial/payment-provider/event-normalization'", "'/api/v1/customer-financial/payment-provider'"] }
       ]
     },
     {

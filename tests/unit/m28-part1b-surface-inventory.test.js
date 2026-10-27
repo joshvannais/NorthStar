@@ -99,6 +99,12 @@ const NOTIFICATION_PREFERENCE_PATHS = [
   'src/routes/api.js',
 ];
 
+const LEGACY_VOICE_AUTOMATION_PATHS = [
+  'src/voice/callCompletion.js',
+  'src/voice/humanHandoff.js',
+  'src/voice/toolRegistry.js',
+];
+
 const PROVIDER_IMPLEMENTATION_PATHS = [
   'public/js/retell-provider.js',
   'src/browser/retellWebEntry.mjs',
@@ -153,6 +159,42 @@ const CUSTOMER_ESTIMATE_HANDOFF_PATHS = [
   'src/routes/canonicalPolaris.js',
   'src/routes/customerEstimateDelivery.js',
   'src/routes/demo.js',
+  'src/server.js',
+];
+
+const MISSION27_PAYMENT_PROVIDER_LIFECYCLE_PATHS = [
+  'src/customerFinancial/paymentProviderBoundary.js',
+  'src/customerFinancial/paymentProviderBoundaryRepository.js',
+  'src/customerFinancial/paymentProviderConnection.js',
+  'src/customerFinancial/paymentProviderConnectionRepository.js',
+  'src/customerFinancial/paymentProviderEventNormalization.js',
+  'src/customerFinancial/paymentProviderEventNormalizationRepository.js',
+  'src/customerFinancial/paymentProviderEventReceipt.js',
+  'src/customerFinancial/paymentProviderEventReceiptRepository.js',
+  'src/customerFinancial/providerLifecycleAcceptance.js',
+  'src/customerFinancial/providerLifecycleAcceptanceHttpBoundary.js',
+  'src/customerFinancial/providerLifecycleAcceptanceRepository.js',
+  'src/customerFinancial/providerLifecycleHealth.js',
+  'src/customerFinancial/providerLifecycleHealthHttpBoundary.js',
+  'src/customerFinancial/providerLifecycleHealthRepository.js',
+  'src/customerFinancial/providerLifecycleRecovery.js',
+  'src/customerFinancial/providerLifecycleRecoveryHttpBoundary.js',
+  'src/customerFinancial/providerLifecycleRecoveryRepository.js',
+  'src/customerFinancial/providerLifecycleRetention.js',
+  'src/customerFinancial/providerLifecycleRetentionHttpBoundary.js',
+  'src/customerFinancial/providerLifecycleRetentionRepository.js',
+  'src/middleware/providerLifecycleAcceptanceBoundary.js',
+  'src/middleware/providerLifecycleHealthBoundary.js',
+  'src/middleware/providerLifecycleRecoveryBoundary.js',
+  'src/middleware/providerLifecycleRetentionBoundary.js',
+  'src/routes/customerFinancialPaymentProvider.js',
+  'src/routes/customerFinancialProviderAcceptance.js',
+  'src/routes/customerFinancialProviderConnection.js',
+  'src/routes/customerFinancialProviderEventNormalization.js',
+  'src/routes/customerFinancialProviderEventReceipt.js',
+  'src/routes/customerFinancialProviderLifecycle.js',
+  'src/routes/customerFinancialProviderRecovery.js',
+  'src/routes/customerFinancialProviderRetention.js',
   'src/server.js',
 ];
 
@@ -248,7 +290,7 @@ function validate(value) {
   if (value.authority.baselineCommit !== BASE || value.authority.baselineTree !== BASE_TREE) throw new Error('base');
   if (JSON.stringify(value.dispositions) !== JSON.stringify(DISPOSITIONS)) throw new Error('dispositions');
   if (JSON.stringify(value.requiredFacets) !== JSON.stringify(FACETS)) throw new Error('facets');
-  if (!Array.isArray(value.surfaces) || value.surfaces.length !== 46) throw new Error('surface count');
+  if (!Array.isArray(value.surfaces) || value.surfaces.length !== 49) throw new Error('surface count');
   const ids = value.surfaces.map(surface => surface.id);
   if (new Set(ids).size !== ids.length) throw new Error('duplicate surface');
   for (const surface of value.surfaces) {
@@ -271,7 +313,7 @@ function validate(value) {
     mission28_owned_reusable_after_later_authority: 2,
     upstream_or_subscription_owned_excluded: 19,
     simulated_or_demo_only: 8,
-    legacy_unsupported_or_quarantined: 11,
+    legacy_unsupported_or_quarantined: 14,
     manual_handoff: 3,
     ambiguous_fail_closed: 3,
   })) throw new Error('disposition counts');
@@ -279,7 +321,7 @@ function validate(value) {
 }
 
 describe('Mission 28 Part 1B automation-surface inventory', () => {
-  test('is an exact bounded candidate with six dispositions, forty-six unique surfaces and all required facets', () => {
+  test('is an exact bounded candidate with six dispositions, forty-nine unique surfaces and all required facets', () => {
     const value = validate(inventory());
     expect(value.authority.state).toBe('implementation_candidate');
     expect(value.authority.part1A).toEqual({
@@ -296,7 +338,7 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
       mission28_owned_reusable_after_later_authority: 2,
       upstream_or_subscription_owned_excluded: 19,
       simulated_or_demo_only: 8,
-      legacy_unsupported_or_quarantined: 11,
+      legacy_unsupported_or_quarantined: 14,
       manual_handoff: 3,
       ambiguous_fail_closed: 3,
     });
@@ -433,6 +475,58 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
       .toContain('do not establish recipient consent');
   });
 
+  test('discovers and quarantines every unmounted legacy voice automation engine', () => {
+    const voiceFiles = walk(path.join(ROOT, 'src', 'voice')).filter(file => file.endsWith('.js'));
+    const discovered = matchingPaths(voiceFiles,
+      /Provides Retell-compatible function definitions and handlers|Triggered when call_ended event fires|Six escalation triggers/);
+    expect(discovered).toEqual(LEGACY_VOICE_AUTOMATION_PATHS);
+    const byId = Object.fromEntries(inventory().surfaces.map(surface => [surface.id, surface]));
+    for (const id of ['voice.legacy-retell-tool-registry', 'voice.legacy-call-completion-pipeline',
+      'voice.legacy-human-handoff']) {
+      expect(byId[id].disposition).toBe('legacy_unsupported_or_quarantined');
+    }
+    expect(byId['voice.legacy-retell-tool-registry'].effectBoundary)
+      .toContain('No mounted tenant authority');
+    expect(byId['voice.legacy-call-completion-pipeline'].effectBoundary)
+      .toContain('not a subscribed canonical event worker');
+    expect(byId['voice.legacy-human-handoff'].effectBoundary)
+      .toContain('do not contact a human');
+    const covered = sourcePaths(inventory());
+    for (const candidate of discovered) expect(covered.has(candidate)).toBe(true);
+  });
+
+  test('discovers the complete mounted Mission 27 provider lifecycle and keeps every effect unavailable', () => {
+    const discovered = walk(path.join(ROOT, 'src')).map(file => slash(path.relative(ROOT, file)))
+      .filter(file => file === 'src/server.js' ||
+        /^src\/middleware\/providerLifecycle(?:Health|Retention|Recovery|Acceptance)Boundary\.js$/.test(file) ||
+        /^src\/routes\/customerFinancial(?:PaymentProvider|Provider(?:Connection|Lifecycle|Retention|Recovery|Acceptance|EventReceipt|EventNormalization))\.js$/.test(file) ||
+        /^src\/customerFinancial\/(?:paymentProvider(?:Boundary|Connection|EventReceipt|EventNormalization)(?:Repository)?|providerLifecycle(?:Health|Retention|Recovery|Acceptance)(?:HttpBoundary|Repository)?)\.js$/.test(file))
+      .sort();
+    expect(discovered).toEqual(MISSION27_PAYMENT_PROVIDER_LIFECYCLE_PATHS);
+    const surface = inventory().surfaces.find(item => item.id === 'provider.mission27-payment-boundary');
+    expect(surface.sourceRefs.map(reference => reference.path).sort())
+      .toEqual(MISSION27_PAYMENT_PROVIDER_LIFECYCLE_PATHS);
+    const server = read('src/server.js');
+    for (const route of [
+      '/api/v1/customer-financial/payment-provider/connection',
+      '/api/v1/customer-financial/payment-provider/lifecycle-health',
+      '/api/v1/customer-financial/payment-provider/lifecycle-retention',
+      '/api/v1/customer-financial/payment-provider/lifecycle-recovery',
+      '/api/v1/customer-financial/payment-provider/lifecycle-acceptance',
+      '/api/v1/customer-financial/payment-provider/event-receipt',
+      '/api/v1/customer-financial/payment-provider/event-normalization',
+      '/api/v1/customer-financial/payment-provider',
+    ]) expect(server).toContain(`'${route}'`);
+    const recovery = read('src/customerFinancial/providerLifecycleRecovery.js');
+    for (const denial of ['enqueueAuthorized: false', 'dequeueAuthorized: false',
+      'retryAuthorized: false', 'failoverAuthorized: false', 'alertingAuthorized: false',
+      'queueMutationAuthorized: false', 'alertMutationAuthorized: false']) {
+      expect(recovery).toContain(denial);
+    }
+    expect(surface.effectBoundary).toContain('frozen provider-disabled');
+    expect(surface.effectBoundary).toContain('not adapters or reusable effect authority');
+  });
+
   test('discovers every outbound provider implementation and its active direct consumers', () => {
     const covered = sourcePaths(inventory());
     const scripts = [
@@ -551,7 +645,8 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
       'notification.legacy-simulated-lead-fanout', 'provider.google-sheets-lead-append',
       'provider.jobber-oauth-and-lead-push', 'browser.legacy-communications-provider-registry',
       'browser.legacy-retell-provider', 'workflow.legacy-polaris-reminders-followups',
-      'demo.retired-call-mutations',
+      'demo.retired-call-mutations', 'voice.legacy-retell-tool-registry',
+      'voice.legacy-call-completion-pipeline', 'voice.legacy-human-handoff',
     ]) expect(byId[id].disposition).toBe('legacy_unsupported_or_quarantined');
     expect(byId['demo.legacy-browser-call-simulator'].disposition)
       .toBe('upstream_or_subscription_owned_excluded');

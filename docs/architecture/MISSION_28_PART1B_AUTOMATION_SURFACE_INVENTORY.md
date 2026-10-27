@@ -6,14 +6,14 @@ The executable inventory is [MISSION_28_PART1B_SURFACE_INVENTORY.json](MISSION_2
 
 ## What was inventoried
 
-The source review found 46 automation-like surface families. The family boundary is intentional: one surface represents one current authority/effect boundary and may list every exact route, concrete provider implementation, event producer, durable write, and active consumer it owns. It does not collapse different owners or dispositions.
+The source review found 49 automation-like surface families. The family boundary is intentional: one surface represents one current authority/effect boundary and may list every exact route, concrete provider implementation, event producer, durable write, and active consumer it owns. It does not collapse different owners or dispositions.
 
 | Disposition | Count | Meaning in Part 1B |
 | --- | ---: | --- |
 | `mission28_owned_reusable_after_later_authority` | 2 | The upstream source explicitly reserves a handoff for Mission 28, but no current receiver or external action is authorized. A later slice must still establish policy, currentness, recipient, provider, approval, execution, and evidence. |
 | `upstream_or_subscription_owned_excluded` | 19 | The surface is active only inside another mission or account/subscription workflow. Mission 28 may not borrow its facts, credentials, recipients, retries, or effects. |
 | `simulated_or_demo_only` | 8 | The surface is isolated fictional/demo behavior. It may support a later demo only after exact parity acceptance and may never escape into paid/private/provider state. |
-| `legacy_unsupported_or_quarantined` | 11 | Code exists, but its authority chain is incomplete, retired, global, client-held, or otherwise unsupported for reuse. It remains fail-closed. |
+| `legacy_unsupported_or_quarantined` | 14 | Code exists, but its authority chain is incomplete, retired, global, client-held, or otherwise unsupported for reuse. It remains fail-closed. |
 | `manual_handoff` | 3 | NorthStar opens or creates a user-controlled native/file handoff. The handoff is not sent, delivered, answered, or successful evidence. |
 | `ambiguous_fail_closed` | 3 | A label, preference, or conditional adapter exists without enough authority to classify it as an executable Mission 28 path. It stays unavailable. |
 
@@ -27,11 +27,12 @@ The inventory tags every required Part 1B facet: cron job, worker, queue, event 
 - The legacy simulator is loaded on four paid dashboard pages. It generates a fictional call, mutates browser-local AppStore lead state, emits `call:generated`, and the main paid dashboard can POST that synthetic input through the authenticated/idempotent canonical PostgreSQL graph pipeline. The committed record has explicit simulation provenance; it is not a real lead or Mission 28 effect authority.
 - `canonical-intelligence.js` emits local `canonical:loaded` and `canonical:rejected` events for server-owned projections. Those events remain presentation/currentness signals, not automation decisions or effect evidence.
 - The legacy file-backed Polaris workflow engine implements reminders, follow-ups, appointments, and workflow records through the legacy communications/store modules. It is not mounted tenant-private scheduling or delivery authority and remains quarantined.
+- Three unmounted legacy voice engines expose Retell-compatible lead/tool mutations, a call-ended follow-up/session-persistence pipeline, and automatic human-escalation state. Their file-era writes, fictional appointment confirmation, action labels, and in-memory escalation claims are unsupported and quarantined; none proves an appointment, message, call transfer, or human receipt.
 - Current PostgreSQL-backed account notification preferences and destination fields are tenant input facts. Even where the separate quarantined lead-simulation route consumes them, they are not recipient consent, sender/channel authority, or delivery evidence.
 - Legacy nodemailer, Twilio, Google Sheets, Google Calendar, Jobber, Retell, OpenAI, tax-acquisition, equipment-extraction, and knowledge-projection code retain their existing upstream or unsupported boundaries. The inventory binds the concrete transports and their active consumers rather than treating a factory or route label as the adapter. Nothing in Part 1B invokes them.
 - Mission 21 Retell knowledge projection, Mission 24 public tax-source acquisition, Mission 26 inbound-call reconciliation, canonical voice-session creation, and the homepage Retell Web client remain five distinct owner/effect boundaries. Sharing a Retell client or provider name does not collapse their authority.
 - Mission 27's collection handoff is deliberately labeled for Mission 28, but its current receiving adapter is unavailable. Due, aging, promise, retry, and collection labels do not authorize reminders, charges, fees, legal escalation, or an external collection effect.
-- Mission 27's payment-provider lifecycle remains frozen provider-disabled. Provider-event, checkout, settlement, refund, reconciliation, and accounting labels remain evidence boundaries only.
+- Mission 27's complete mounted payment-provider namespace—connection, lifecycle health/retention/recovery/acceptance, event receipt/normalization, and the base boundary—remains frozen provider-disabled. Queue, backpressure, retry, failover, alert, provider-event, checkout, settlement, refund, reconciliation, and accounting labels remain unavailable evidence boundaries only.
 - `tel:`, `mailto:`, the contact-page email composer, and ICS export/import are manual handoffs. NorthStar receives no delivery evidence from opening them.
 - No source invokes `navigator.share`. This absence is recorded so a later implementation cannot be mistaken for a pre-existing accepted capability.
 
@@ -58,6 +59,8 @@ The Part 1B test suite verifies that:
 - source-wide provider-implementation signals and their relative-import consumers resolve to the exact inventoried source set, including concrete tax, Retell knowledge, call-reconciliation, canonical-voice, and homepage browser transports;
 - the dependency-injected OpenAI Polaris chain is separately discovered from production runtime construction through paid, fictional-demo, connected-call, usage-ledger, and execution consumers, so injection cannot hide an active provider consumer;
 - the paid and fictional-demo secure-estimate creation/copy/open/revoke flow, its shared contract/repository/body boundary, and the public read/accept/question boundary are one source-linked manual handoff; none is classified as automatic delivery;
+- source-wide legacy voice automation discovery binds the unmounted Retell tool registry, call-completion pipeline, and human-handoff trigger state to separate quarantined surfaces;
+- name-bounded source discovery and exact server mount assertions bind all 33 files in the mounted Mission 27 payment-provider lifecycle, including its unavailable queue/retry/failover/alert and webhook projections;
 - the known business-event sources, external provider paths, webhook boundaries, manual handoffs, collection labels, and demo mutation route files remain represented;
 - all exact demo command-center mutation entry points in the inventory still occur in the mounted demo router, including dynamically registered path families;
 - `node-cron` remains unimported and `navigator.share` remains absent;

@@ -39,14 +39,33 @@ const WORKER_PATHS = [
 
 const BUSINESS_EVENT_PATHS = [
   'public/js/app-store.js',
+  'public/js/canonical-intelligence.js',
   'public/js/communications-engine.js',
   'public/js/event-bus.js',
   'public/js/notification-service.js',
   'public/js/retell-provider.js',
+  'public/js/simulator.js',
   'src/voice/businessEvents.js',
   'src/voice/eventIntelligence.js',
   'src/voice/transcriptStream.js',
   'src/voice/webhook.js',
+];
+
+const BROWSER_EVENT_PRODUCER_PATHS = [
+  'public/js/app-store.js',
+  'public/js/calendar-engine.js',
+  'public/js/canonical-intelligence.js',
+  'public/js/communications-engine.js',
+  'public/js/notification-service.js',
+  'public/js/retell-provider.js',
+  'public/js/simulator.js',
+];
+
+const SIMULATOR_CONSUMER_PATHS = [
+  'public/dashboard.html',
+  'public/dashboard/calendar.html',
+  'public/dashboard/communications.html',
+  'public/dashboard/leads.html',
 ];
 
 const PROVIDER_IMPLEMENTATION_PATHS = [
@@ -173,7 +192,7 @@ function validate(value) {
   if (value.authority.baselineCommit !== BASE || value.authority.baselineTree !== BASE_TREE) throw new Error('base');
   if (JSON.stringify(value.dispositions) !== JSON.stringify(DISPOSITIONS)) throw new Error('dispositions');
   if (JSON.stringify(value.requiredFacets) !== JSON.stringify(FACETS)) throw new Error('facets');
-  if (!Array.isArray(value.surfaces) || value.surfaces.length !== 43) throw new Error('surface count');
+  if (!Array.isArray(value.surfaces) || value.surfaces.length !== 44) throw new Error('surface count');
   const ids = value.surfaces.map(surface => surface.id);
   if (new Set(ids).size !== ids.length) throw new Error('duplicate surface');
   for (const surface of value.surfaces) {
@@ -196,7 +215,7 @@ function validate(value) {
     mission28_owned_reusable_after_later_authority: 2,
     upstream_or_subscription_owned_excluded: 17,
     simulated_or_demo_only: 8,
-    legacy_unsupported_or_quarantined: 10,
+    legacy_unsupported_or_quarantined: 11,
     manual_handoff: 3,
     ambiguous_fail_closed: 3,
   })) throw new Error('disposition counts');
@@ -204,7 +223,7 @@ function validate(value) {
 }
 
 describe('Mission 28 Part 1B automation-surface inventory', () => {
-  test('is an exact bounded candidate with six dispositions, forty-three unique surfaces and all required facets', () => {
+  test('is an exact bounded candidate with six dispositions, forty-four unique surfaces and all required facets', () => {
     const value = validate(inventory());
     expect(value.authority.state).toBe('implementation_candidate');
     expect(value.authority.part1A).toEqual({
@@ -221,7 +240,7 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
       mission28_owned_reusable_after_later_authority: 2,
       upstream_or_subscription_owned_excluded: 17,
       simulated_or_demo_only: 8,
-      legacy_unsupported_or_quarantined: 10,
+      legacy_unsupported_or_quarantined: 11,
       manual_handoff: 3,
       ambiguous_fail_closed: 3,
     });
@@ -283,6 +302,30 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
         /canonical_operations|account_email_outbox|support_case_email_outbox|canonical_knowledge_sync_outbox/),
     ];
     for (const discovered of discoveries.flat()) expect(covered.has(discovered)).toBe(true);
+  });
+
+  test('discovers active browser event producers, local-store writers and simulator consumers', () => {
+    const covered = sourcePaths(inventory());
+    const browserScripts = walk(path.join(ROOT, 'public', 'js'))
+      .filter(file => file.endsWith('.js') && !slash(file).includes('/vendor/'));
+    const producers = matchingPaths(browserScripts,
+      /(?:window|global)\.EventBus\.emit\(|\bbus\.emit\(|window\.AppStore\.[A-Za-z]+\(/);
+    expect(producers).toEqual(BROWSER_EVENT_PRODUCER_PATHS);
+    const consumers = matchingPaths(walk(path.join(ROOT, 'public')).filter(file => file.endsWith('.html')),
+      /<script src=["']\/js\/simulator\.js["']><\/script>/);
+    expect(consumers).toEqual(SIMULATOR_CONSUMER_PATHS);
+    for (const candidate of [...producers, ...consumers]) expect(covered.has(candidate)).toBe(true);
+
+    const simulator = inventory().surfaces.find(surface =>
+      surface.id === 'demo.legacy-browser-call-simulator');
+    expect(simulator.disposition).toBe('legacy_unsupported_or_quarantined');
+    expect(simulator.entryPoints).toEqual([
+      'window.ccSimulateLead()', 'window.genCall()', 'window.AppStore.addLead(call)',
+      "window.EventBus.emit('call:generated', call)",
+    ]);
+    const localBus = inventory().surfaces.find(surface => surface.id === 'event.browser-local-store-bus');
+    expect(localBus.sourceRefs.map(reference => reference.path))
+      .toContain('public/js/canonical-intelligence.js');
   });
 
   test('discovers every outbound provider implementation and its active direct consumers', () => {
@@ -362,7 +405,8 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
       'notification.legacy-lead-email', 'notification.legacy-lead-sms',
       'notification.legacy-simulated-lead-fanout', 'provider.google-sheets-lead-append',
       'provider.jobber-oauth-and-lead-push', 'browser.legacy-communications-provider-registry',
-      'browser.legacy-retell-provider', 'demo.retired-call-mutations',
+      'browser.legacy-retell-provider', 'demo.legacy-browser-call-simulator',
+      'demo.retired-call-mutations',
     ]) expect(byId[id].disposition).toBe('legacy_unsupported_or_quarantined');
     expect(byId['collection.mission27-reviewed-handoff-labels'].effectBoundary)
       .toContain('do not authorize reminders, retry, charges, fees, legal escalation, or external collection');

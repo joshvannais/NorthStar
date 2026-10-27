@@ -184,6 +184,21 @@
       "sourceRefs": [{ "path": "public/js/notification-service.js", "anchors": ["bus.on('simulation:completed'", "bus.emit('notification:created'"] }]
     },
     {
+      "id": "demo.legacy-browser-call-simulator",
+      "facets": ["demo_action", "event_listener"],
+      "disposition": "legacy_unsupported_or_quarantined",
+      "owner": "legacy paid-dashboard browser simulator",
+      "effectBoundary": "The simulator creates fictional call/lead objects, writes browser-local AppStore state, and emits a local event from paid dashboard pages; it has no accepted tenant record, provider, recipient, delivery, or Mission 28 effect authority and remains quarantined.",
+      "entryPoints": ["window.ccSimulateLead()", "window.genCall()", "window.AppStore.addLead(call)", "window.EventBus.emit('call:generated', call)"],
+      "sourceRefs": [
+        { "path": "public/js/simulator.js", "anchors": ["function genCall()", "window.AppStore.addLead(call)", "window.EventBus.emit('call:generated', call)", "window.genCall = routedGenCall"] },
+        { "path": "public/dashboard.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
+        { "path": "public/dashboard/calendar.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
+        { "path": "public/dashboard/leads.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] },
+        { "path": "public/dashboard/communications.html", "anchors": ["<script src=\"/js/simulator.js\"></script>"] }
+      ]
+    },
+    {
       "id": "email.resend-transactional-adapter-and-templates",
       "facets": ["provider_adapter", "email_sms_path", "template", "notification"],
       "disposition": "upstream_or_subscription_owned_excluded",
@@ -361,7 +376,8 @@
       "effectBoundary": "The local browser event bus and store notifications coordinate presentation only; an emitted or observed event is not durable automation authority or evidence of an external effect.",
       "sourceRefs": [
         { "path": "public/js/event-bus.js", "anchors": ["window.EventBus = (function()", "emit(event, data)"] },
-        { "path": "public/js/app-store.js", "anchors": ["bus.emit('legacy:mutation-blocked'", "window.addEventListener('canonical:loaded'"] }
+        { "path": "public/js/app-store.js", "anchors": ["bus.emit('legacy:mutation-blocked'", "window.addEventListener('canonical:loaded'"] },
+        { "path": "public/js/canonical-intelligence.js", "anchors": ["global.EventBus.emit(name, detail)", "emit('canonical:rejected'", "emit('canonical:loaded'"] }
       ]
     },
     {

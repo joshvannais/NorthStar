@@ -46,6 +46,12 @@ const KNOWLEDGE_SYNCHRONIZATION_CHAIN_PATHS = [
   'src/server.js',
 ];
 
+const CAPACITY_ADVISORY_CONTINUATION_CHAIN_PATHS = [
+  'src/routes/forecastCapacityAdvisory.js',
+  'src/server.js',
+  'src/services/capacityAdvisoryContinuationWorker.js',
+];
+
 const BUSINESS_EVENT_PATHS = [
   'public/js/app-store.js',
   'public/js/canonical-intelligence.js',
@@ -442,6 +448,32 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(server).toContain('app.locals.connectedKnowledgeTransports instanceof Map&&app.locals.connectedKnowledgeTransports.size');
     expect(surface.effectBoundary).toContain('Mission 21 authority');
     expect(surface.effectBoundary).toContain('not a Mission 28 trigger, customer communication');
+  });
+
+  test('binds the mounted Mission 26 advisory-continuation producer, queue and worker edge', () => {
+    const discovered = walk(path.join(ROOT, 'src')).map(file => slash(path.relative(ROOT, file)))
+      .filter(file => file === 'src/server.js' ||
+        file === 'src/routes/forecastCapacityAdvisory.js' ||
+        file === 'src/services/capacityAdvisoryContinuationWorker.js')
+      .sort();
+    expect(discovered).toEqual(CAPACITY_ADVISORY_CONTINUATION_CHAIN_PATHS);
+
+    const surface = inventory().surfaces.find(item =>
+      item.id === 'worker.capacity-advisory-continuation');
+    expect(surface.sourceRefs.map(reference => reference.path).sort())
+      .toEqual(CAPACITY_ADVISORY_CONTINUATION_CHAIN_PATHS);
+
+    const route = read('src/routes/forecastCapacityAdvisory.js');
+    expect(route).toContain("router.post('/origins/:id/continuations'");
+    expect(route).toContain('canonical_forecast_capacity_advisory_v1_continuation_reserve');
+    const worker = read('src/services/capacityAdvisoryContinuationWorker.js');
+    expect(worker).toContain('canonical_forecast_capacity_advisory_v1_continuation_claim_due');
+    expect(worker).toContain('canonical_forecast_capacity_advisory_v1_continuation_activate');
+    const server = read('src/server.js');
+    expect(server).toContain("app.use('/api/v1/forecast/capacity-advice', createForecastCapacityAdvisoryRouter())");
+    expect(server).toContain('productionCapacityAdvisoryContinuationWorker.start()');
+    expect(surface.effectBoundary).toContain('Mission 26 authority');
+    expect(surface.effectBoundary).toContain('not a Mission 28 trigger, external action');
   });
 
   test('covers the current business-event, provider, webhook, notification and handoff source set', () => {

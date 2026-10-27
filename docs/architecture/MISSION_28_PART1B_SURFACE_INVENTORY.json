@@ -120,10 +120,11 @@
       "facets": ["worker", "queue", "retry"],
       "disposition": "upstream_or_subscription_owned_excluded",
       "owner": "Mission 26 advisory continuation",
-      "effectBoundary": "It continues accepted tenant-private advisory work only; a prediction or advisory reservation is not Mission 28 action authority.",
+      "effectBoundary": "The mounted tenant-private reviewed advisory route can reserve a durable continuation that the worker claims and idempotently activates under Mission 26 authority. This internal advisory continuation is not a Mission 28 trigger, external action, customer communication, financial effect, or effect evidence.",
       "sourceRefs": [
-        { "path": "src/services/capacityAdvisoryContinuationWorker.js", "anchors": ["class CapacityAdvisoryContinuationWorker", "Durable reservations and idempotent activation preserve retry"] },
-        { "path": "src/server.js", "anchors": ["productionCapacityAdvisoryContinuationWorker.start()"] }
+        { "path": "src/routes/forecastCapacityAdvisory.js", "anchors": ["function createForecastCapacityAdvisoryRouter", "router.post('/origins/:id/continuations'", "requirePermission('forecast', 'update')", "canonical_forecast_capacity_advisory_v1_continuation_reserve"] },
+        { "path": "src/services/capacityAdvisoryContinuationWorker.js", "anchors": ["class CapacityAdvisoryContinuationWorker", "canonical_forecast_capacity_advisory_v1_continuation_claim_due", "canonical_forecast_capacity_advisory_v1_continuation_activate", "Durable reservations and idempotent activation preserve retry"] },
+        { "path": "src/server.js", "anchors": ["createForecastCapacityAdvisoryRouter", "const productionCapacityAdvisoryContinuationWorker = new CapacityAdvisoryContinuationWorker", "app.use('/api/v1/forecast/capacity-advice', createForecastCapacityAdvisoryRouter())", "productionCapacityAdvisoryContinuationWorker.start()"] }
       ]
     },
     {

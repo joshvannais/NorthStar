@@ -68,17 +68,21 @@
     "runId": "required_exact_uuid_stable_for_one_causal_automation_history",
     "recordType": "required_exact_record_definition_id",
     "causalOrdinal": "positive_safe_integer_strictly_greater_than_every_parent",
+    "policyAndEverySourceBindingTenantIdMustEqualRecordTenantId": true,
+    "acceptanceRequiresSeparatelyTrustedTenantPolicyAndSourceResolution": true,
     "crossTenantCrossPolicyAliasCloneReplayOrIdentityReuse": "deny",
     "missingAmbiguousDuplicateOrMutableIdentity": "unavailable"
   },
   "bindingSchemas": {
-    "policyBindingExactKeys": ["policyId", "policyVersion", "policyDigest"],
+    "policyBindingExactKeys": ["tenantId", "policyId", "policyVersion", "policyDigest"],
     "policyBinding": {
+      "tenantId": "exact_uuid_equal_to_record_tenant_id_and_trusted_policy_owner",
       "policyId": "exact_uuid",
       "policyVersion": "positive_safe_integer",
       "policyDigest": "sha256_lowercase_hex"
     },
     "sourceBindingExactKeys": [
+      "tenantId",
       "sourceClassId",
       "ownerMission",
       "sourceRecordId",
@@ -106,6 +110,7 @@
     ],
     "sourceVersion": "positive_safe_integer",
     "sourceDigest": "sha256_lowercase_hex",
+    "sourceTenantRule": "exact_uuid_equal_to_record_tenant_id_and_separately_trusted_source_owner",
     "sourceCurrentnessMarkers": [
       "captured_exact_current",
       "captured_stale",
@@ -114,6 +119,7 @@
     ],
     "causalParentExactKeys": ["recordId", "recordType", "recordDigest"],
     "causalParentRule": "same_tenant_same_run_same_policy_exact_existing_immutable_record_with_lower_ordinal",
+    "trustedResolutionRule": "A record is accepted only when a separately trusted tenant-private resolver returns the exact tenant, policy tenant/id/version/digest and every source tenant/class/owner/id/version/digest/currentness tuple. Record-supplied tuples never establish their own authority. Part 2B proves this rule with a locked fictional fixture; Part 2D owns the production resolver.",
     "emptySourceBindings": "deny",
     "duplicateSourceOrParentBindings": "deny"
   },
@@ -138,6 +144,21 @@
       "captured_unavailable_fail_closed",
       "contract_fixture_unverified"
     ],
+    "sourceAggregationRules": {
+      "all_captured_exact_current": "exact_bound",
+      "all_captured_stale": "stale",
+      "all_captured_unavailable": "unavailable",
+      "mixed_non_fixture_markers": "mixed",
+      "all_contract_fixture_unverified": "contract_fixture_unverified",
+      "fixture_marker_mixed_with_any_non_fixture_marker": "deny"
+    },
+    "recordMarkerRules": {
+      "policy_or_any_source_unavailable": "captured_unavailable_fail_closed",
+      "otherwise_policy_or_any_source_stale": "captured_stale_fail_closed",
+      "exact_policy_and_all_sources_exact": ["captured_not_runtime_revalidated", "captured_runtime_revalidation_required"],
+      "fixture_policy_and_all_sources_fixture": "contract_fixture_unverified",
+      "every_other_combination": "deny"
+    },
     "currentnessAuthority": "Part 4 and later runtime slices must capture and revalidate currentness; this contract only separates immutable markers."
   },
   "payloadValueTypes": [
@@ -163,7 +184,7 @@
         { "field": "reasonCode", "type": "enum", "allowedValues": ["contract_fixture", "exact_match", "source_stale", "authority_missing", "suppressed"] },
         { "field": "sourceSetDigest", "type": "digest", "allowedValues": [] }
       ],
-      "fixturePayload": { "resultState": "approval_required", "reasonCode": "contract_fixture", "sourceSetDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111" },
+      "fixturePayload": { "resultState": "approval_required", "reasonCode": "contract_fixture", "sourceSetDigest": "sha256:c58524ad2a6b17dbcec967b340837cddd93c2a402741cc9deb8d9fcc88e76b32" },
       "effectBoundary": "Eligibility is an internal decision only; it never proves approval, scheduling, execution or effect."
     },
     {
@@ -263,7 +284,7 @@
         { "field": "providerAttemptDigest", "type": "digest", "allowedValues": [] },
         { "field": "strongerEffectProven", "type": "boolean", "allowedValues": [] }
       ],
-      "fixturePayload": { "ackState": "unavailable_contract_fixture", "authenticated": false, "providerAttemptDigest": "sha256:6666666666666666666666666666666666666666666666666666666666666666", "strongerEffectProven": false },
+      "fixturePayload": { "ackState": "unavailable_contract_fixture", "authenticated": false, "providerAttemptDigest": "sha256:63a3256dae08c96c0bba949e5c1ebe12f64409c8a7e87934f1fc3b1bc155101e", "strongerEffectProven": false },
       "effectBoundary": "Acknowledgement evidence cannot prove sent, delivered, viewed, replied, paid, collected or successful."
     },
     {
@@ -379,6 +400,40 @@
       "effectBoundary": "Terminal means only that one automation run reached a typed endpoint; it never proves customer, provider, payment, collection or business success."
     }
   ],
+  "relationalPayloadRules": [
+    {
+      "recordType": "eligibility_evaluation",
+      "field": "sourceSetDigest",
+      "rule": "equals_source_set_digest_of_the_record_exact_sourceBindings"
+    },
+    {
+      "recordType": "provider_acknowledgement",
+      "field": "providerAttemptDigest",
+      "rule": "equals_recordDigest_of_the_single_direct_provider_attempt_parent"
+    },
+    {
+      "recordType": "cancellation",
+      "field": "targetRecordId",
+      "rule": "equals_recordId_of_the_single_direct_cancellation_subject_parent"
+    },
+    {
+      "recordType": "reconciliation",
+      "field": "reconciledRecordIds",
+      "rule": "equals_the_ordered_unique_recordIds_of_all_direct_reconciliation_parents"
+    },
+    {
+      "recordType": "terminal_outcome",
+      "field": "unresolvedRecordIds",
+      "rule": "ordered_unique_subset_of_direct_terminal_parent_recordIds"
+    }
+  ],
+  "opaqueDigestFields": [
+    "approval.actorBindingDigest",
+    "approval.previewDigest",
+    "scheduled_run.scheduleBindingDigest",
+    "action_unit.idempotencyKeyDigest",
+    "provider_attempt.providerRequestIdentityDigest"
+  ],
   "immutabilityContract": {
     "recordsAppendOnly": true,
     "recordMutationDeletionReplacementOrInPlaceCorrection": "deny",
@@ -402,6 +457,7 @@
   },
   "canonicalization": {
     "algorithm": "mission28_record_sorted_json_v1",
+    "sourceSetNamespace": "mission28.record.source-set.v1\n",
     "payloadNamespace": "mission28.record.payload.v1\n",
     "recordNamespace": "mission28.record.v1\n",
     "encoding": "UTF-8",
@@ -410,17 +466,20 @@
     "numbers": "safe_integers_only_negative_zero_denied",
     "dataModel": "plain_json_data_only_no_sparse_arrays_aliases_cycles_symbols_accessors_toJSON_custom_prototypes_or_proxies",
     "payloadDigestInput": "payload_namespace_plus_canonical_json_of_payload",
+    "sourceSetDigestInput": "source_set_namespace_plus_canonical_json_of_exact_sourceBindings_array",
     "recordDigestInput": "record_namespace_plus_canonical_json_of_all_record_fields_except_recordDigest",
     "digestAlgorithm": "SHA-256",
     "digestFormat": "sha256:lowercase_hex",
     "implementationBoundary": "Part 2D owns production canonicalization, persistence, RLS, trusted time, retention, indexes, migration and restart behavior."
   },
   "structuralRules": [
-    "Every record is tenant-private and binds one exact run, one exact immutable Part 2A policy version and at least one exact source snapshot.",
+    "Every record is tenant-private and binds one exact run, one exact immutable Part 2A policy version and at least one exact source snapshot; record-supplied bindings are accepted only after separately trusted tenant-private policy and source resolution.",
     "Every non-root record names each direct parent by record identity, record type and canonical record digest.",
     "A parent from another tenant or policy, a stale digest, a missing parent, a duplicate parent, a disallowed parent type or a non-lower ordinal fails closed.",
     "Eligibility, proposal, approval, schedule, action unit, attempt, acknowledgement, delivery, response, task, suppression, cancellation, reconciliation and terminal outcome are never represented by one conflated record.",
     "A provider attempt is the only record class that may describe an attempted external effect; it is not acknowledgement, delivery, reply, payment, collection or success.",
+    "Every relational payload subject is tied to exact direct parent identity, type and digest; opaque content digests are explicitly not record links or authority.",
+    "Currentness source aggregation and record marker precedence are exact; contradictory or mixed fixture/non-fixture currentness fails closed.",
     "Evidence records cannot create or retroactively widen action authority, mutate upstream truth, move money, or claim a stronger state than authenticated evidence.",
     "Corrections, suppression, cancellation and reconciliation append records; they never mutate or erase prior intent, attempts or evidence.",
     "Terminal outcome is an automation endpoint only and must identify unresolved uncertainty rather than convert it to success."
@@ -432,6 +491,7 @@
     "policyVersion": 2,
     "policyDigest": "sha256:c71ef8d1c9b94ef047e7988a8bbb0195f08fac9f016bbe8843b22a857dc55f84",
     "sourceBinding": {
+      "tenantId": "00000000-0000-4000-8000-000000000028",
       "sourceClassId": "mission23_work_execution",
       "ownerMission": "Mission 23",
       "sourceRecordId": "00000000-0000-4000-8000-000000000023",

@@ -18,7 +18,7 @@ const PART2A_HEAD = '6f1c299193456afd756542da43c72c6517101661';
 const PART2A_DEPLOYMENT = '9e976ab1-733d-4d85-b1f6-6c33073dc3aa';
 const PART2A_IMAGE = 'a4fffc825163c836e10a59a60fd64586531d6a365b96eced5b0ce3a880fa5372';
 const POLICY_SHA = 'B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8';
-const MODEL_SHA = 'A281A841761BF7F82C29E850756D28D1ADC93E0F2A0B10309809580FA10C36F4';
+const MODEL_SHA = '3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5';
 
 const RECORD_TYPES = [
   'eligibility_evaluation', 'proposed_action', 'approval', 'scheduled_run',
@@ -119,6 +119,10 @@ function digestPayload(payload, model) {
   return sha256(model.canonicalization.payloadNamespace, payload);
 }
 
+function digestSourceSet(sourceBindings, model) {
+  return sha256(model.canonicalization.sourceSetNamespace, sourceBindings);
+}
+
 function digestRecord(record, model) {
   const payload = {};
   for (const key of model.recordFields) if (key !== 'recordDigest') payload[key] = record[key];
@@ -146,8 +150,56 @@ function samePolicy(left, right) {
   return canonicalJson(left) === canonicalJson(right);
 }
 
-function validateRecord(record, model, priorRecords = []) {
+function fixtureAuthority(model) {
+  return {
+    tenantId: model.fixtureContract.tenantId,
+    policyBinding: {
+      tenantId: model.fixtureContract.tenantId,
+      policyId: model.fixtureContract.policyId,
+      policyVersion: model.fixtureContract.policyVersion,
+      policyDigest: model.fixtureContract.policyDigest,
+    },
+    sourceBindings: [clone(model.fixtureContract.sourceBinding)],
+  };
+}
+
+function validateCurrentness(record, model) {
+  const sourceMarkers = record.sourceBindings.map(binding => binding.currentnessMarker);
+  const uniqueMarkers = new Set(sourceMarkers);
+  const fixture = 'contract_fixture_unverified';
+  let expectedSourceState;
+  if (uniqueMarkers.has(fixture) && uniqueMarkers.size > 1) throw new Error('fixture and non-fixture currentness cannot mix');
+  if (uniqueMarkers.size === 1 && uniqueMarkers.has(fixture)) expectedSourceState = fixture;
+  else if (uniqueMarkers.size === 1 && uniqueMarkers.has('captured_exact_current')) expectedSourceState = 'exact_bound';
+  else if (uniqueMarkers.size === 1 && uniqueMarkers.has('captured_stale')) expectedSourceState = 'stale';
+  else if (uniqueMarkers.size === 1 && uniqueMarkers.has('captured_unavailable')) expectedSourceState = 'unavailable';
+  else expectedSourceState = 'mixed';
+  expect(record.currentness.sourceState).toBe(expectedSourceState);
+
+  const policyState = record.currentness.policyState;
+  const hasUnavailable = policyState === 'unavailable' || uniqueMarkers.has('captured_unavailable');
+  const hasStale = policyState === 'stale' || uniqueMarkers.has('captured_stale');
+  if (policyState === fixture || expectedSourceState === fixture) {
+    expect(policyState).toBe(fixture);
+    expect(expectedSourceState).toBe(fixture);
+    expect(record.currentness.marker).toBe(fixture);
+  } else if (hasUnavailable) {
+    expect(record.currentness.marker).toBe('captured_unavailable_fail_closed');
+  } else if (hasStale) {
+    expect(record.currentness.marker).toBe('captured_stale_fail_closed');
+  } else {
+    expect(policyState).toBe('exact_bound');
+    expect(expectedSourceState).toBe('exact_bound');
+    expect([
+      'captured_not_runtime_revalidated',
+      'captured_runtime_revalidation_required',
+    ]).toContain(record.currentness.marker);
+  }
+}
+
+function validateRecord(record, model, priorRecords, trustedAuthority) {
   assertPlainJsonData(record);
+  assertPlainJsonData(trustedAuthority);
   exactKeySet(record, model.recordFields);
   expect(record.schemaVersion).toBe('mission28.record.v1');
   expect(record.tenantId).toMatch(UUID);
@@ -156,20 +208,25 @@ function validateRecord(record, model, priorRecords = []) {
   expect(Number.isSafeInteger(record.causalOrdinal)).toBe(true);
   expect(record.causalOrdinal).toBeGreaterThan(0);
   expect(priorRecords.some(item => item.recordId === record.recordId)).toBe(false);
+  exactKeySet(trustedAuthority, ['tenantId', 'policyBinding', 'sourceBindings']);
+  expect(record.tenantId).toBe(trustedAuthority.tenantId);
 
   const definition = model.recordDefinitions.find(item => item.recordType === record.recordType);
   expect(definition).toBeDefined();
   exactKeySet(record.policyBinding, model.bindingSchemas.policyBindingExactKeys);
+  expect(record.policyBinding.tenantId).toBe(record.tenantId);
   expect(record.policyBinding.policyId).toMatch(UUID);
   expect(Number.isSafeInteger(record.policyBinding.policyVersion)).toBe(true);
   expect(record.policyBinding.policyVersion).toBeGreaterThan(0);
   expect(record.policyBinding.policyDigest).toMatch(DIGEST);
+  expect(record.policyBinding).toEqual(trustedAuthority.policyBinding);
 
   expect(Array.isArray(record.sourceBindings)).toBe(true);
   expect(record.sourceBindings.length).toBeGreaterThan(0);
   const sourceKeys = new Set();
   for (const binding of record.sourceBindings) {
     exactKeySet(binding, model.bindingSchemas.sourceBindingExactKeys);
+    expect(binding.tenantId).toBe(record.tenantId);
     const sourceIndex = model.bindingSchemas.sourceClassIds.indexOf(binding.sourceClassId);
     expect(sourceIndex).toBeGreaterThanOrEqual(0);
     expect(binding.ownerMission).toBe(model.bindingSchemas.sourceOwnerMissions[sourceIndex]);
@@ -182,6 +239,7 @@ function validateRecord(record, model, priorRecords = []) {
     expect(sourceKeys.has(key)).toBe(false);
     sourceKeys.add(key);
   }
+  expect(record.sourceBindings).toEqual(trustedAuthority.sourceBindings);
 
   expect(record.causalParents.length).toBeGreaterThanOrEqual(definition.minimumParents);
   expect(record.causalParents.length).toBeLessThanOrEqual(definition.maximumParents);
@@ -211,9 +269,28 @@ function validateRecord(record, model, priorRecords = []) {
   expect(model.currentnessSchema.policyStates).toContain(record.currentness.policyState);
   expect(model.currentnessSchema.sourceStates).toContain(record.currentness.sourceState);
   expect(model.currentnessSchema.markers).toContain(record.currentness.marker);
+  validateCurrentness(record, model);
 
   expect(definition.payloadSchema.map(item => item.field)).toEqual(Reflect.ownKeys(record.payload));
   for (const schema of definition.payloadSchema) validatePayloadValue(record.payload[schema.field], schema);
+  if (record.recordType === 'eligibility_evaluation') {
+    expect(record.payload.sourceSetDigest).toBe(digestSourceSet(record.sourceBindings, model));
+  }
+  if (record.recordType === 'provider_acknowledgement') {
+    expect(record.payload.providerAttemptDigest).toBe(record.causalParents[0].recordDigest);
+  }
+  if (record.recordType === 'cancellation') {
+    expect(record.payload.targetRecordId).toBe(record.causalParents[0].recordId);
+  }
+  if (record.recordType === 'reconciliation') {
+    expect(record.payload.reconciledRecordIds).toEqual(record.causalParents.map(parent => parent.recordId));
+  }
+  if (record.recordType === 'terminal_outcome') {
+    const parentIds = record.causalParents.map(parent => parent.recordId);
+    expect(record.payload.unresolvedRecordIds).toEqual(
+      parentIds.filter(recordIdValue => record.payload.unresolvedRecordIds.includes(recordIdValue)),
+    );
+  }
   expect(record.payloadDigest).toBe(digestPayload(record.payload, model));
   expect(record.recordDigest).toBe(digestRecord(record, model));
 
@@ -277,6 +354,7 @@ function buildFixtureLedger(model) {
       recordType: definition.recordType,
       causalOrdinal: index + 1,
       policyBinding: {
+        tenantId: model.fixtureContract.tenantId,
         policyId: model.fixtureContract.policyId,
         policyVersion: model.fixtureContract.policyVersion,
         policyDigest: model.fixtureContract.policyDigest,
@@ -301,21 +379,33 @@ function buildFixtureLedger(model) {
       payloadDigest: '',
       recordDigest: '',
     };
+    if (record.recordType === 'eligibility_evaluation') {
+      record.payload.sourceSetDigest = digestSourceSet(record.sourceBindings, model);
+    }
+    if (record.recordType === 'provider_acknowledgement') {
+      record.payload.providerAttemptDigest = parent.recordDigest;
+    }
+    if (record.recordType === 'cancellation') {
+      record.payload.targetRecordId = parent.recordId;
+    }
+    if (record.recordType === 'reconciliation') {
+      record.payload.reconciledRecordIds = record.causalParents.map(link => link.recordId);
+    }
     record.payloadDigest = digestPayload(record.payload, model);
     record.recordDigest = digestRecord(record, model);
-    validateRecord(record, model, records);
+    validateRecord(record, model, records, fixtureAuthority(model));
     records.push(record);
   }
   return records;
 }
 
-function validateLedger(records, model) {
+function validateLedger(records, model, trustedAuthority) {
   assertPlainJsonData(records);
   const accepted = [];
   let previousOrdinal = 0;
   for (const record of records) {
     expect(record.causalOrdinal).toBeGreaterThan(previousOrdinal);
-    validateRecord(record, model, accepted);
+    validateRecord(record, model, accepted, trustedAuthority);
     accepted.push(record);
     previousOrdinal = record.causalOrdinal;
   }
@@ -330,13 +420,30 @@ function redigest(record, model) {
   return record;
 }
 
+function redigestLedger(records, model) {
+  const priorById = new Map();
+  for (const record of records) {
+    for (const parentLink of record.causalParents) {
+      const parent = priorById.get(parentLink.recordId);
+      if (parent) {
+        parentLink.recordType = parent.recordType;
+        parentLink.recordDigest = parent.recordDigest;
+      }
+    }
+    redigest(record, model);
+    priorById.set(record.recordId, record);
+  }
+  return records;
+}
+
 function validateModel(model) {
   assertPlainJsonData(model);
   exactKeySet(model, [
     'contractVersion', 'authority', 'part2ARelease', 'frozenInputs',
     'recordFields', 'identityContract', 'bindingSchemas', 'classificationSchema',
     'currentnessSchema', 'payloadValueTypes', 'recordDefinitions',
-    'immutabilityContract', 'part2BAvailability', 'canonicalization',
+    'relationalPayloadRules', 'opaqueDigestFields', 'immutabilityContract',
+    'part2BAvailability', 'canonicalization',
     'structuralRules', 'fixtureContract', 'unavailableEvidence',
   ]);
   expect(model.contractVersion).toBe('mission28.part2b.immutable-record-model.v1');
@@ -371,6 +478,19 @@ function validateModel(model) {
   expect(model.recordDefinitions.filter(item => item.authorityClass === 'effect_evidence').map(item => item.recordType)).toEqual(EFFECT_EVIDENCE);
   expect(model.bindingSchemas.sourceClassIds).toEqual(SOURCE_IDS);
   expect(model.bindingSchemas.sourceOwnerMissions).toEqual(SOURCE_OWNERS);
+  expect(model.bindingSchemas.policyBindingExactKeys).toEqual(['tenantId', 'policyId', 'policyVersion', 'policyDigest']);
+  expect(model.bindingSchemas.sourceBindingExactKeys[0]).toBe('tenantId');
+  expect(model.identityContract).toMatchObject({
+    policyAndEverySourceBindingTenantIdMustEqualRecordTenantId: true,
+    acceptanceRequiresSeparatelyTrustedTenantPolicyAndSourceResolution: true,
+  });
+  expect(model.relationalPayloadRules).toEqual([
+    { recordType: 'eligibility_evaluation', field: 'sourceSetDigest', rule: 'equals_source_set_digest_of_the_record_exact_sourceBindings' },
+    { recordType: 'provider_acknowledgement', field: 'providerAttemptDigest', rule: 'equals_recordDigest_of_the_single_direct_provider_attempt_parent' },
+    { recordType: 'cancellation', field: 'targetRecordId', rule: 'equals_recordId_of_the_single_direct_cancellation_subject_parent' },
+    { recordType: 'reconciliation', field: 'reconciledRecordIds', rule: 'equals_the_ordered_unique_recordIds_of_all_direct_reconciliation_parents' },
+    { recordType: 'terminal_outcome', field: 'unresolvedRecordIds', rule: 'ordered_unique_subset_of_direct_terminal_parent_recordIds' },
+  ]);
   expect(model.part2BAvailability).toMatchObject({
     policyActivation: false,
     providerModesAllowed: ['provider_disabled'],
@@ -403,7 +523,12 @@ function validateModel(model) {
       validatePayloadValue(definition.fixturePayload[schema.field], schema);
     }
   }
-  validateLedger(buildFixtureLedger(model), model);
+  const fixtureRecords = buildFixtureLedger(model);
+  for (const record of fixtureRecords) {
+    const definition = model.recordDefinitions.find(item => item.recordType === record.recordType);
+    expect(record.payload).toEqual(definition.fixturePayload);
+  }
+  validateLedger(fixtureRecords, model, fixtureAuthority(model));
 }
 
 describe('Mission 28 Part 2B immutable record model', () => {
@@ -424,7 +549,7 @@ describe('Mission 28 Part 2B immutable record model', () => {
     expect(records.every(item => item.runId === model.fixtureContract.runId)).toBe(true);
     expect(records.every(item => samePolicy(item.policyBinding, records[0].policyBinding))).toBe(true);
     expect(records.every(item => item.sourceBindings[0].sourceDigest === model.fixtureContract.sourceBinding.sourceDigest)).toBe(true);
-    validateLedger(records, model);
+    validateLedger(records, model, fixtureAuthority(model));
   });
 
   test('rejects cross-tenant, cross-run and cross-policy parent substitution after recomputed digests', () => {
@@ -442,7 +567,56 @@ describe('Mission 28 Part 2B immutable record model', () => {
       const mutation = clone(records);
       alter(mutation[proposedIndex]);
       redigest(mutation[proposedIndex], model);
-      expect(() => validateLedger(mutation, model)).toThrow();
+      expect(() => validateLedger(mutation, model, fixtureAuthority(model))).toThrow();
+    }
+  });
+
+  test('rejects coherent whole-ledger tenant, policy or source retargeting after every affected digest is recomputed', () => {
+    const model = parse(MODEL_PATH);
+    const records = buildFixtureLedger(model);
+    const cases = [
+      list => {
+        for (const record of list) {
+          record.tenantId = '00000000-0000-4000-8000-000000000029';
+          record.policyBinding.tenantId = record.tenantId;
+          for (const source of record.sourceBindings) source.tenantId = record.tenantId;
+        }
+      },
+      list => {
+        for (const record of list) {
+          record.policyBinding.policyId = '00000000-0000-4000-8000-00000000002d';
+          record.policyBinding.policyVersion = 99;
+          record.policyBinding.policyDigest = `sha256:${'9'.repeat(64)}`;
+        }
+      },
+      list => {
+        for (const record of list) record.sourceBindings[0].sourceDigest = `sha256:${'9'.repeat(64)}`;
+      },
+    ];
+    for (const alter of cases) {
+      const mutation = clone(records);
+      alter(mutation);
+      redigestLedger(mutation, model);
+      expect(() => validateLedger(mutation, model, fixtureAuthority(model))).toThrow();
+    }
+  });
+
+  test('rejects every relational payload subject substitution after affected digests and links are recomputed', () => {
+    const model = parse(MODEL_PATH);
+    const records = buildFixtureLedger(model);
+    const unrelatedId = '00000000-0000-4000-8000-000000000199';
+    const cases = [
+      list => { list.find(item => item.recordType === 'eligibility_evaluation').payload.sourceSetDigest = `sha256:${'9'.repeat(64)}`; },
+      list => { list.find(item => item.recordType === 'provider_acknowledgement').payload.providerAttemptDigest = `sha256:${'9'.repeat(64)}`; },
+      list => { list.find(item => item.recordType === 'cancellation').payload.targetRecordId = unrelatedId; },
+      list => { list.find(item => item.recordType === 'reconciliation').payload.reconciledRecordIds = [unrelatedId]; },
+      list => { list.find(item => item.recordType === 'terminal_outcome').payload.unresolvedRecordIds = [unrelatedId]; },
+    ];
+    for (const alter of cases) {
+      const mutation = clone(records);
+      alter(mutation);
+      redigestLedger(mutation, model);
+      expect(() => validateLedger(mutation, model, fixtureAuthority(model))).toThrow();
     }
   });
 
@@ -466,8 +640,43 @@ describe('Mission 28 Part 2B immutable record model', () => {
       const mutation = clone(records);
       alter(mutation[proposedIndex]);
       redigest(mutation[proposedIndex], model);
-      expect(() => validateLedger(mutation, model)).toThrow();
+      expect(() => validateLedger(mutation, model, fixtureAuthority(model))).toThrow();
     }
+  });
+
+  test('enforces the exact currentness coherence and multi-source precedence rules', () => {
+    const model = parse(MODEL_PATH);
+    const baseline = buildFixtureLedger(model)[1];
+    const currentnessCase = (sourceMarkers, policyState, sourceState, marker) => {
+      const record = clone(baseline);
+      record.sourceBindings = sourceMarkers.map((currentnessMarker, index) => ({
+        ...clone(record.sourceBindings[0]),
+        sourceRecordId: `00000000-0000-4000-8000-${String(23 + index).padStart(12, '0')}`,
+        currentnessMarker,
+      }));
+      record.currentness = { policyState, sourceState, marker };
+      return record;
+    };
+    const valid = [
+      currentnessCase(['captured_exact_current'], 'exact_bound', 'exact_bound', 'captured_not_runtime_revalidated'),
+      currentnessCase(['captured_exact_current'], 'exact_bound', 'exact_bound', 'captured_runtime_revalidation_required'),
+      currentnessCase(['captured_stale'], 'exact_bound', 'stale', 'captured_stale_fail_closed'),
+      currentnessCase(['captured_unavailable'], 'exact_bound', 'unavailable', 'captured_unavailable_fail_closed'),
+      currentnessCase(['captured_exact_current', 'captured_stale'], 'exact_bound', 'mixed', 'captured_stale_fail_closed'),
+      currentnessCase(['captured_exact_current', 'captured_unavailable'], 'stale', 'mixed', 'captured_unavailable_fail_closed'),
+      currentnessCase(['contract_fixture_unverified'], 'contract_fixture_unverified', 'contract_fixture_unverified', 'contract_fixture_unverified'),
+    ];
+    for (const record of valid) expect(() => validateCurrentness(record, model)).not.toThrow();
+
+    const invalid = [
+      currentnessCase(['captured_exact_current'], 'exact_bound', 'stale', 'captured_unavailable_fail_closed'),
+      currentnessCase(['captured_exact_current'], 'stale', 'exact_bound', 'captured_unavailable_fail_closed'),
+      currentnessCase(['captured_exact_current', 'captured_stale'], 'exact_bound', 'exact_bound', 'captured_stale_fail_closed'),
+      currentnessCase(['captured_exact_current', 'captured_unavailable'], 'exact_bound', 'mixed', 'captured_stale_fail_closed'),
+      currentnessCase(['contract_fixture_unverified', 'captured_exact_current'], 'contract_fixture_unverified', 'mixed', 'contract_fixture_unverified'),
+      currentnessCase(['contract_fixture_unverified'], 'exact_bound', 'contract_fixture_unverified', 'contract_fixture_unverified'),
+    ];
+    for (const record of invalid) expect(() => validateCurrentness(record, model)).toThrow();
   });
 
   test('rejects identity tampering, missing or duplicated links, stale parent digests and event reordering', () => {
@@ -486,7 +695,7 @@ describe('Mission 28 Part 2B immutable record model', () => {
     for (const alter of cases) {
       const mutation = clone(records);
       alter(mutation);
-      expect(() => validateLedger(mutation, model)).toThrow();
+      expect(() => validateLedger(mutation, model, fixtureAuthority(model))).toThrow();
     }
   });
 
@@ -508,7 +717,7 @@ describe('Mission 28 Part 2B immutable record model', () => {
     for (const alter of cases) {
       const mutation = clone(records);
       alter(mutation);
-      expect(() => validateLedger(mutation, model)).toThrow();
+      expect(() => validateLedger(mutation, model, fixtureAuthority(model))).toThrow();
     }
   });
 
@@ -521,14 +730,14 @@ describe('Mission 28 Part 2B immutable record model', () => {
     redigest(rewritten, model);
     expect(rewritten.recordId).toBe(delivery.recordId);
     expect(rewritten.recordDigest).not.toBe(delivery.recordDigest);
-    expect(() => validateRecord(rewritten, model, records)).toThrow();
+    expect(() => validateRecord(rewritten, model, records, fixtureAuthority(model))).toThrow();
 
     const secondTerminal = clone(records.at(-1));
     secondTerminal.recordId = '00000000-0000-4000-8000-000000000199';
     secondTerminal.causalOrdinal = records.at(-1).causalOrdinal + 1;
     redigest(secondTerminal, model);
     const ambiguous = [...records, secondTerminal];
-    expect(() => validateLedger(ambiguous, model)).toThrow();
+    expect(() => validateLedger(ambiguous, model, fixtureAuthority(model))).toThrow();
   });
 
   test('rejects malformed, non-plain, structurally inexact and digest-tampered records', () => {
@@ -553,7 +762,9 @@ describe('Mission 28 Part 2B immutable record model', () => {
     const negativeZero = clone(original); negativeZero.causalOrdinal = -0; mutations.push(negativeZero);
     const payloadTamper = clone(original); payloadTamper.payload.recipientClassId = 'tenant_admin'; mutations.push(payloadTamper);
     const recordTamper = clone(original); recordTamper.recordDigest = `sha256:${'f'.repeat(64)}`; mutations.push(recordTamper);
-    for (const mutation of mutations) expect(() => validateRecord(mutation, model, [records[0]])).toThrow();
+    for (const mutation of mutations) {
+      expect(() => validateRecord(mutation, model, [records[0]], fixtureAuthority(model))).toThrow();
+    }
   });
 
   test('binds the narrative to separation, immutability, causal ordering and Part 2D exclusions', () => {

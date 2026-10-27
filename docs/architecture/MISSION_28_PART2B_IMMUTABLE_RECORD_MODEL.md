@@ -14,11 +14,13 @@ Provider-attempt existence does not prove provider acknowledgement. Acknowledgem
 
 ## Identity, binding, and causal order
 
-Every record has an exact tenant UUID, unique record UUID, one exact run UUID shared by its causal history, record type, positive causal ordinal, immutable Part 2A policy ID/version/digest, one or more exact upstream source bindings, direct causal parents, classification, currentness marker, typed payload, payload digest, and record digest.
+Every record has an exact tenant UUID, unique record UUID, one exact run UUID shared by its causal history, record type, positive causal ordinal, immutable Part 2A policy tenant/ID/version/digest, one or more tenant-bound exact upstream source bindings, direct causal parents, classification, currentness marker, typed payload, payload digest, and record digest. Record-supplied tuples cannot establish their own authority: acceptance requires a separately trusted tenant-private resolution of the exact tenant, policy tuple, and every source tuple. Part 2B locks that rule to its fictional fixture; Part 2D owns the production resolver.
 
 Every parent is bound by record ID, type, and digest. It must already exist at a lower ordinal under the same tenant and exact policy binding, and its type must be allowed by the child definition. Cross-tenant or cross-policy parents, missing or duplicate links, stale digests, forward links, cycles, aliases, clones, replays, reordered events and unsupported parent types fail closed.
 
-Source bindings keep source ownership outside Mission 28. Captured currentness is immutable evidence about what a record knew; it is not continuing authority. Runtime currentness revalidation remains later work.
+Source bindings keep source ownership outside Mission 28. Eligibility's source-set digest is derived from the exact ordered source bindings. Provider acknowledgement's attempt digest must equal its direct provider-attempt parent's record digest; cancellation's target ID must equal its direct subject parent; reconciliation IDs must exactly equal its ordered direct parents; and terminal unresolved IDs must be an ordered subset of its direct parents. Other named content digests are explicitly opaque and cannot act as record links or authority.
+
+Captured currentness is immutable evidence about what a record knew; it is not continuing authority. All-exact, all-stale, all-unavailable, mixed non-fixture, and fixture-only source markers have exact aggregate states. Unavailable takes precedence over stale, stale takes precedence over exact, and fixture markers cannot mix with non-fixture markers. Contradictory policy/source/record markers fail closed. Runtime currentness revalidation remains later work.
 
 ## Immutability and correction
 
@@ -28,6 +30,6 @@ Payload and record digests use source-only sorted-JSON contracts with separate n
 
 ## Acceptance and unavailable evidence
 
-Part 2B acceptance requires all fourteen types and their exact classifications, payload schemas, parent relationships, policy/source/currentness bindings, causal and digest rules, append-only correction behavior, exhaustive cross-tenant/cross-policy/conflation/reorder/replay/tamper tests, zero runtime/schema/migration change, and a fresh independent whole-head audit with P0=P1=P2=P3=0.
+Part 2B acceptance requires all fourteen types and their exact classifications, payload schemas, parent and relational-subject relationships, trusted policy/source/currentness bindings, causal and digest rules, append-only correction behavior, exhaustive whole-ledger cross-tenant/cross-policy/source retargeting, conflation, reorder, replay, relational-substitution, currentness-contradiction and recomputed-digest tamper tests, zero runtime/schema/migration change, and a fresh independent whole-head audit with P0=P1=P2=P3=0.
 
 Part 2B has no independent acceptance, PR, merge, deployment or release evidence. Part 2C lifecycle, Part 2D storage/canonicalization, providers, real recipients/messages/effects, professional legal/privacy/consent/collections/debt/regulatory/provider/security review, live money, private-production evidence, hosted load/SLA, exercised restore, physical Safari/devices, manual assistive-technology review, and founder visual approval remain unavailable and unclaimed.

@@ -161,13 +161,13 @@ describe('Mission 28 Part 7A exact sender and recipient authority', () => {
     expect((sql.match(/CREATE TABLE public\.canonical_automation_(sender_recipient|recipient_authority)/g) || [])).toHaveLength(2);
   });
 
-  test('records Part 6F released, only Part 7A candidate, migration281/no282 and Part 7B+ planned', () => {
+  test('records Part 6F released, Part 7A released, only Part 7B candidate, migration282/no283 and Part 7C+ planned', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
-      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–6F released; Part 7A implementation candidate only.'); expect(document).toContain('Parts 7B–14G remain planned and unimplemented.'); expect(document).toContain('020491c14f54f8a849f87ea197cdff462a930f6a');
+      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–7A released; Part 7B implementation candidate only.'); expect(document).toContain('Parts 7C–14G remain planned and unimplemented.'); expect(document).toContain('020491c14f54f8a849f87ea197cdff462a930f6a');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     expect(ledger).toContain('| 26 | 6F | Restart/migration/outage/restore and orphan-authority recovery | **Released** |');
-    expect(ledger).toContain('| 27 | 7A | Exact sender and recipient authority | **Implementation candidate** |');
-    expect(ledger).toContain('through additive `281_canonical_automation_sender_recipient_authority_v1.sql` with no 282');
+    expect(ledger).toContain('| 27 | 7A | Exact sender and recipient authority | **Released** |');
+    expect(ledger).toContain('through additive `282_canonical_automation_communication_permission_v1.sql` with no 283');
   });
 });

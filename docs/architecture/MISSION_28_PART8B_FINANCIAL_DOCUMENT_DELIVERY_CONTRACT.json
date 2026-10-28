@@ -1,0 +1,112 @@
+{
+  "contractVersion": "mission28.part8b.financial-document-delivery.v1",
+  "authority": {
+    "mission": 28,
+    "part": "8B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "81c53384ce3e6f4e8f137d57fb08aa4e169f559a",
+    "baselineTree": "754684ce5d2f9bb8e30a37403a88a32b33eb7347",
+    "scope": "mission27_financial_document_source_availability_and_no_effect_delivery_boundary",
+    "documentDeliveryAuthorityGranted": false,
+    "financialMutationAuthorityGranted": false,
+    "part8COrLaterAuthorityGranted": false
+  },
+  "part8ARelease": {
+    "acceptedSourceHead": "5f6037e1c5c5f7ab8b50d65a8cd3b6bed12b81a8",
+    "acceptedTree": "754684ce5d2f9bb8e30a37403a88a32b33eb7347",
+    "auditState": "fresh_root_audit_accepted_P0_P1_P2_P3_zero",
+    "auditReportHash": "unavailable_to_writer_unclaimed",
+    "pullRequest": 581,
+    "mergedMain": "81c53384ce3e6f4e8f137d57fb08aa4e169f559a",
+    "deployment": "60fd4934-d7cc-4f1f-8366-894e6fd03393",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "fd443b16-cc57-4cd6-9218-28363b6bf5cf",
+    "imageSha256": "945ade8157852c110f3910051aaf2e2ed80fefedd5cb3401cdef757509fb2f82",
+    "productionMigration": "287_exactly_once_no_288",
+    "health": ["health_200", "root_200", "dashboard_200", "demo_200", "paid_demo_bytes_match"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART8A_ESTIMATE_QUOTE_SENDING_CONTRACT.json", "normalizedLfSha256": "0D225D46B156B0C8774C6CDE1AD6640C0885EB6349D570160CDDB3A499EC70C4"},
+    {"path": "src/customerFinancial/invoiceDocument.js", "normalizedLfSha256": "13F891FA3C6B8C27F17B2FF23B0A58790F15157CFB9641D63F848B9ED10B9BEB"},
+    {"path": "src/customerFinancial/invoicePostIssueCorrection.js", "normalizedLfSha256": "4F640B36DD4042CC1677CF60268C0C6EA4ACCBCCC8878C6E5B77E9DA332D4726"},
+    {"path": "src/customerFinancial/creditRefundReadiness.js", "normalizedLfSha256": "9E91D0351B694E5EE35749F98E0E1249917F0118E20A4CFD269300789AA14855"},
+    {"path": "src/customerFinancial/paymentPart9Acceptance.js", "normalizedLfSha256": "6FEAC113AFFBA699FC0DFDABE0327734D29FED09EE6AC7B610F457D62C3A170F"},
+    {"path": "src/customerFinancial/paymentOutcomeReadiness.js", "normalizedLfSha256": "DB1DDFE708F61AB15836876D2070E782042355FA3C6B2E42E3171F86125EAFC3"},
+    {"path": "docs/architecture/MISSION_27_PART6A_CUSTOMER_INVOICE_DOCUMENT.md", "normalizedLfSha256": "948627A1BAE6403B15251C3B85C8AEAF576BCF87772824422262C491358E2F37"},
+    {"path": "docs/architecture/MISSION_27_PART9C_CREDIT_NOTE_REFUND_REQUEST.md", "normalizedLfSha256": "88240AAD8176DB7E7A5B1BD55E7264EFEAD5B3F3BE57D5D295517E6C6C270A3F"},
+    {"path": "docs/architecture/MISSION_27_PART9E_PAYMENT_OUTCOMES.md", "normalizedLfSha256": "BDDE848850B5501A93B3134D5D189FCB665DB80A7F8F8BD63AD09131B09BC22A"}
+  ],
+  "financialDocumentCatalog": [
+    {"documentType": "invoice", "sourceContractVersion": "m27-customer-invoice-document-v1", "sourceReason": "issued_invoice_unavailable"},
+    {"documentType": "receipt", "sourceContractVersion": "m27-payment-part9-acceptance-v1", "sourceReason": "part9_financial_evidence_unavailable"},
+    {"documentType": "credit_note", "sourceContractVersion": "m27-credit-note-refund-request-readiness-v1", "sourceReason": "credit_refund_source_evidence_unavailable"},
+    {"documentType": "debit_note", "sourceContractVersion": "m27-invoice-post-issue-correction-v1", "sourceReason": "issued_invoice_unavailable"},
+    {"documentType": "replacement", "sourceContractVersion": "m27-invoice-post-issue-correction-v1", "sourceReason": "issued_invoice_unavailable"},
+    {"documentType": "void_notice", "sourceContractVersion": "m27-invoice-post-issue-correction-v1", "sourceReason": "issued_invoice_unavailable"},
+    {"documentType": "refund_notice", "sourceContractVersion": "m27-payment-outcome-readiness-v1", "sourceReason": "financial_outcome_source_evidence_unavailable"},
+    {"documentType": "dispute_notice", "sourceContractVersion": "m27-payment-outcome-readiness-v1", "sourceReason": "financial_outcome_source_evidence_unavailable"}
+  ],
+  "sourceAvailabilityContract": {
+    "requiredSourceState": "unavailable_no_exact_issued_current_customer_safe_version",
+    "requiredResultState": "financial_document_source_unavailable_no_delivery_or_mutation",
+    "sourceResolution": "server_owned_closed_mapping_only",
+    "candidateMayNotSupplySourceDocumentCustomerRecipientContactMessageChannelProviderDeliveryResponseOrMutationMaterial": true,
+    "unavailableSourceMayNotCreateResolutionRecord": true,
+    "migrationRequired": false,
+    "migrationReason": "no_exact_financial_document_subject_exists_to_bind_or_persist",
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "exactMission27Truth": {
+    "invoice": {"issuedDocumentCurrent": false, "customerSafeProjectionCurrent": false, "deliveryAuthorized": false},
+    "correction": {"issuedInvoiceCurrent": false, "creditRecordAuthorized": false, "debitRecordAuthorized": false, "replacementRecordAuthorized": false, "voidRecordAuthorized": false},
+    "receipt": {"customerReceiptAvailable": false, "acceptedPaymentEvidenceAvailable": false},
+    "refundAndDispute": {"refundSettlementRecorded": false, "disputeOutcomeRecorded": false, "customerContactAuthorized": false, "invoiceBalanceMutationAuthorized": false}
+  },
+  "noEffectContract": {
+    "resolutionRows": 0,
+    "documentBodies": 0,
+    "customerOrRecipientValues": 0,
+    "messages": 0,
+    "linksOrTokens": 0,
+    "providerAttempts": 0,
+    "deliveriesOrCustomerResponses": 0,
+    "chargeMutations": 0,
+    "refundMutations": 0,
+    "writeOffMutations": 0,
+    "accountingMutations": 0,
+    "balanceMutations": 0,
+    "externalEffects": 0
+  },
+  "deniedCombinations": [
+    "candidate_or_trusted_input_used_to_invent_an_exact_issued_current_customer_safe_document",
+    "unknown_missing_duplicated_reordered_or_substituted_financial_document_type_or_source_mapping",
+    "cross_tenant_customer_invoice_payment_correction_refund_dispute_or_authorization_retarget",
+    "stale_superseded_corrected_tombstoned_voided_reversed_or_unavailable_source_treated_as_deliverable",
+    "invoice_receipt_credit_debit_replacement_void_refund_or_dispute_notice_body_or_identity_fabricated",
+    "customer_recipient_contact_message_channel_link_token_provider_delivery_open_reply_or_response_fabricated",
+    "charge_refund_write_off_accounting_balance_tax_revenue_or_upstream_fact_mutation",
+    "runtime_route_UI_scheduler_worker_queue_provider_callback_receiver_or_effect_authority",
+    "legacy_Mission27_evidence_or_demo_fixture_adopted_as_current_Mission28_authority"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableOrFunction": false,
+    "mountedRuntimeConsumer": false,
+    "routeOrUI": false,
+    "schedulerWorkerOrQueue": false,
+    "providerOrReceiver": false,
+    "effectExecutor": false
+  },
+  "unavailableEvidence": [
+    "exact issued current customer-safe Mission27 invoice receipt correction replacement credit debit void refund or dispute document",
+    "accepted customer recipient channel template link token provider adapter sender credential delivery callback response or outcome evidence",
+    "private production financial documents provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications financial accounting tax consumer-protection regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part8C": "shared_quick_send_native_policy_version_and_idempotency_not_implemented",
+    "part8D": "delivery_acknowledgement_revoke_resend_recovery_and_exact_labels_not_implemented",
+    "part9Plus": "inquiries_followups_collections_feedback_integrations_analytics_UI_demo_and_release_readiness_remain_planned_unimplemented"
+  }
+}

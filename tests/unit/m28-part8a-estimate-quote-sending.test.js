@@ -216,12 +216,13 @@ describe('Mission 28 Part 8A estimate, proposal and quote sending authority', ()
     expect(sql).not.toMatch(/\b(customer_name|customer_email|customer_phone|customer_address|document_body|price_value|scope_value|message_body|access_token|link_url|response_body|provider_metadata)\b\s+(?:TEXT|BYTEA|JSONB)/i);
   });
 
-  test('roadmap and ledger record Part7F released, Part8A candidate-only, migration287/no288 and later slices planned', () => {
+  test('roadmap and ledger preserve the released Part8A while Part8B alone is candidate', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8'); const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
-    expect(roadmap).toContain('Parts 1A–7F are released. Part 8A is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–8A are released. Part 8B is the sole implementation candidate.');
     expect(ledger).toContain('| 32 | 7F | Delivery corrections, replies, opt-outs and minimized provider evidence | **Released** |');
-    expect(ledger).toContain('| 33 | 8A | Mission 24 estimate/proposal/quote sending | **Implementation candidate** |');
-    expect(ledger).toContain('283 migrations through additive `287_canonical_automation_estimate_quote_resolution_v1.sql` with no 288');
+    expect(ledger).toContain('| 33 | 8A | Mission 24 estimate/proposal/quote sending | **Released** |');
+    expect(ledger).toContain('| 34 | 8B | Mission 27 financial-document delivery without financial mutation | **Implementation candidate** |');
+    expect(ledger).toContain('Released main and production contain 283 migrations through exact `287_canonical_automation_estimate_quote_resolution_v1.sql` with no 288');
     expect(markdown).toContain('It does not send anything.');
   });
 });

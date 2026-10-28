@@ -1,0 +1,108 @@
+{
+  "contractVersion": "mission28.part7a.sender-recipient-authority.v1",
+  "authority": {
+    "mission": 28,
+    "part": "7A",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "020491c14f54f8a849f87ea197cdff462a930f6a",
+    "scope": "exact_current_tenant_sender_and_recipient_identity_resolution_without_permission_content_channel_provider_or_effect_authority",
+    "messageProviderRecipientContactOrEffectAuthorityGranted": false
+  },
+  "part6FRelease": {
+    "acceptedSource": "ccd98574bfb8c0148a742a1df601478b806a0dd8",
+    "acceptedTree": "6baf159a1f54bd79b6d288cd98edf1fc9acfbbb0",
+    "pullRequest": 574,
+    "mergedMain": "020491c14f54f8a849f87ea197cdff462a930f6a",
+    "releaseState": "independently_accepted_and_live",
+    "deploymentIdentityImageAndHealth": "not_supplied_to_part7a_writer_and_unclaimed",
+    "migrationState": "276_through_280_no_281"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART6A_TRANSACTIONAL_OUTBOX_CONTRACT.json", "normalizedLfSha256": "F79502C0793CD62A78442046CD04CFC88083C941A6D15D83C037ECB4C6A5FC9A"},
+    {"path": "docs/architecture/MISSION_28_PART6F_RECOVERY_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "639B6B383B599DA2AD0B16FA07696BF406FD0B64390FF2970956D60FB1B679D8"},
+    {"path": "migrations/260_customer_financial_billing_identity_v1.sql", "normalizedLfSha256": "B4CCED6A574F8AF7FFC8957FE4CBBBA78DFC3D52E8618FFAEE353853640A590C"},
+    {"path": "migrations/261_customer_financial_billing_identity_review_v1.sql", "normalizedLfSha256": "51DB8B75EEDCD6913ED2450C61372752B68FEB6E383F5C0CE55F31F342F7D170"},
+    {"path": "migrations/275_canonical_automation_transactional_outbox_v1.sql", "normalizedLfSha256": "174404ECC14CC8E87F6C2B205C0E3A56D8834CCDFCF11D63870665F2DBCD4838"},
+    {"path": "migrations/280_canonical_automation_recovery_authority_v1.sql", "normalizedLfSha256": "CDB2471266EF9C36D059ACAB2014EB8B2AB6002A159B8F887F6E6FAF32C63A34"}
+  ],
+  "resolutionEnvelope": {
+    "schemaVersion": "mission28.sender-recipient-resolution.v1",
+    "exactFields": ["schemaVersion", "tenantId", "resolutionId", "transactionId", "unitId", "senderBinding", "recipients", "actorBinding", "requestDigest"],
+    "senderBindingExactFields": ["senderClass", "businessProfileId", "businessProfileVersion", "businessProfileDigest"],
+    "recipientExactFields": ["recipientIndex", "recipientClass", "recipientRecordId", "parentCustomerId", "membershipId", "role", "sourceDigest", "contactIdentityDigest"],
+    "actorBindingExactFields": ["actorId", "sessionId", "membershipId", "membershipRole", "requestedAt"],
+    "requestDigestNamespace": "mission28.sender-recipient-resolution.v1\n",
+    "recipientSetDigestNamespace": "mission28.recipient-set.v1\n",
+    "sourceDigestNamespace": "mission28.recipient-source.v1\n",
+    "contactIdentityDigestNamespace": "mission28.recipient-contact.v1\n",
+    "contactIdentityDigestMaterial": "exact_source_owned_email_and_phone_values_only_without_recipient_class_record_or_customer_context_so_exact_cross_class_or_cross_customer_reuse_collides_and_is_denied",
+    "resolutionDigestNamespace": "mission28.sender-recipient-evidence.v1\n",
+    "maximumCanonicalRequestBytes": 32768,
+    "maximumRecipients": 16,
+    "plainDataRule": "ordinary_objects_dense_standard_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_alias_or_coercion"
+  },
+  "senderAuthority": {
+    "acceptedClass": "tenant_business_profile",
+    "source": "organization_onboarding.complete plus its exact active canonical_business_profiles row",
+    "identity": ["tenantId", "businessProfileId", "businessProfileVersion", "businessProfileDigest"],
+    "providerSenderAddressOrNumber": "unavailable_until_later_accepted_channel_and_provider_authority",
+    "freeFormSender": "deny"
+  },
+  "recipientClasses": [
+    {"id": "customer", "recordAuthority": "exact same-tenant canonical_customers row", "parentRule": "parentCustomerId_equals_recipientRecordId", "membershipRule": "null", "roleRule": "null"},
+    {"id": "authorized_billing_contact", "recordAuthority": "latest exact current reviewed Mission27 billing identity bound to one canonical customer", "parentRule": "exact reviewed customerId", "membershipRule": "null", "roleRule": "null"},
+    {"id": "lead_or_prospect", "recordAuthority": "exact same-tenant canonical_opportunities row plus its exact canonical customer", "parentRule": "exact opportunity customerId", "membershipRule": "null", "roleRule": "null"},
+    {"id": "staff_member", "recordAuthority": "exact active same-subject users and organization_memberships rows", "parentRule": "null", "membershipRule": "exact active membershipId", "roleRule": "exact canonical owner_admin_member_or_viewer"}
+  ],
+  "unsupportedRecipients": [
+    "collection_agency_legal_credit_or_other_external",
+    "free_form_email_phone_or_address",
+    "fuzzy_name_or_contact_match",
+    "unreviewed_billing_contact",
+    "cross_customer_contact_reuse",
+    "inactive_suspended_revoked_or_cross_tenant_staff",
+    "ambiguous_or_duplicate_contact_identity"
+  ],
+  "bindingContract": {
+    "actionUnit": "one exact Part6A tenant transaction unit and its immutable recipientSetDigest",
+    "recipientSet": "ordered unique 1_to_16 exact server-resolved recipients whose canonical derived set digest equals the action unit recipientSetDigest",
+    "contactData": "raw name_email_phone_address_or_message_content_is_never_persisted_in_Part7A; the contact-identity digest covers only exact source-owned email and phone values so exact reuse across recipient classes or customers collides; only exact source and contact-identity digests are retained",
+    "currentness": "every mutable source row is locked and resolved inside the authoritative transaction; billing review uses the same customer-lineage serialization as Mission27",
+    "replay": "same resolutionId exact canonical request replays immutable historical evidence before mutable source revalidation; conflicting identity or cloned material under another identity fails closed",
+    "noAuthorityWidening": "identity resolution does not establish permission consent preference channel availability content provider attempt delivery reply outcome or external effect authority"
+  },
+  "storageContract": {
+    "migration": "281_canonical_automation_sender_recipient_authority_v1.sql",
+    "tables": ["canonical_automation_sender_recipient_resolutions_v1", "canonical_automation_recipient_authority_items_v1"],
+    "ownerOnlyFunction": "canonical_automation_record_sender_recipient_resolution_v1",
+    "runtimeExecuteGranted": false,
+    "publicPrivileges": "none",
+    "tenantRls": "enabled_and_forced",
+    "immutability": "update_delete_truncate_denied",
+    "legacyAdoption": "none",
+    "providerOrEffectAuthority": "none"
+  },
+  "denials": [
+    "unknown_extra_missing_null_nonplain_accessor_symbol_toJSON_proxy_wrapper_alias_or_coercible_material",
+    "candidate_or_trusted_resolution_shape_digest_or_identity_mismatch",
+    "cross_tenant_transaction_unit_sender_customer_billing_contact_lead_staff_session_membership_or_source_alias",
+    "inactive_incomplete_retired_stale_changed_unreviewed_ambiguous_or_missing_source_authority",
+    "recipient_set_order_duplicate_count_or_digest_mismatch",
+    "free_form_fuzzy_normalized_partial_or_cross_customer_contact_substitution",
+    "same_contact_identity_reused_across_recipient_classes_or_customers",
+    "unsupported_recipient_or_candidate_supplied_raw_contact_value",
+    "cloned_material_under_a_new_resolution_or_cross_request_replay",
+    "permission_consent_opt_out_quiet_hours_content_template_channel_provider_message_external_effect_upstream_mutation_accounting_or_money"
+  ],
+  "laterSliceBoundary": {
+    "part7B": "permission_preference_consent_opt_out_quiet_hours_and_suppression_not_implemented",
+    "part7C": "template_content_locale_escape_link_and_attachment_authority_not_implemented",
+    "part7DPlus": "channel_provider_delivery_reply_document_and_outcome_authority_not_implemented"
+  },
+  "unavailableEvidence": ["independent_acceptance", "pull_request", "merge", "deployment", "private_production", "mounted_runtime_resolver", "permission_or_consent", "channel_availability", "template_or_content", "provider_adapter", "provider_sandbox_or_live", "real_recipient_or_message", "external_effect", "live_money", "legal_or_regulatory_review", "hosted_load_or_sla", "physical_safari_or_devices", "manual_assistive_technology", "founder_visual_approval"]
+}

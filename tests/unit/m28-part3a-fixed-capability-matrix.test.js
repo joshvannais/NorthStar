@@ -483,7 +483,7 @@ describe('Mission 28 Part 3A fixed capability matrix', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–6E released; Part 6F implementation candidate only.');
+      expect(document).toContain('Parts 1A–6F released; Part 7A implementation candidate only.');
       expect(document).toContain('98c4b3562ad48787472584ca64c601d584c2427f');
       expect(document).toContain('f40e401a-649f-42b3-a1cc-71dbd0ffce4d');
       expect(document).toContain('586afe8103acc0e4f27d5967e8a8554876d7f5f51dc38bd7c7f4a98e2c320337');

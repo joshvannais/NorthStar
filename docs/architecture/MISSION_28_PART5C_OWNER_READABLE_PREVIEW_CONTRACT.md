@@ -10,7 +10,7 @@ A preview consumes one complete immutable Part 5B output plus separately trusted
 
 The source projection names the exact Part 4 trigger, record identity, event kind, transition head, effective snapshot, source-owned event time, trusted observation time, currentness and source-set digest used by the evaluation. Changed material requires a new evaluation and a new preview. A digest recomputation cannot repair a retargeted source or viewer.
 
-Source reason coherence is bidirectional: `source_not_latest_exact_current` appears exactly when the preview source currentness is unavailable. A Part 5B unavailable result caused by policy, suppression, authorization or fact evidence may retain a latest-exact-current source, but it must use the corresponding closed Part 5B reason instead of implying a source-currentness failure.
+Source reason coherence is bidirectional: `source_not_latest_exact_current` appears exactly when the preview source currentness is unavailable. Suppression is independently coherent with its own closed reason, match identity and expiry. A higher-precedence unavailable result may therefore retain exact-current clear or matched suppression evidence. Policy, source, authorization, fact and suppression failures never rewrite one another's trusted resolution.
 
 ## What the owner can read
 

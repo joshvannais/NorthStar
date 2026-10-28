@@ -122,8 +122,9 @@ function evaluation(result = 'eligible') {
   return value;
 }
 
-function trusted(result = 'eligible') {
+function trusted(result = 'eligible', suppressionOverride = null) {
   const e = evaluation(result);
+  const suppressionState = suppressionOverride || (result === 'suppressed' ? 'exact_current_matched' : 'exact_current_clear');
   const material = {
     schemaVersion: CONTRACT.previewEnvelope.schemaVersion,
     tenantId: TENANT,
@@ -157,11 +158,11 @@ function trusted(result = 'eligible') {
       ownerLimitProfileDigest: `sha256:${'0d'.repeat(32)}`, effectiveLimitDigest: `sha256:${'0e'.repeat(32)}`,
       dimensionIds: copy(PART3C.dimensionOrder),
       resolutionState: 'contract_only_runtime_enforcement_unavailable'},
-    suppression: {state: result === 'suppressed' ? 'exact_current_matched' : result === 'unavailable' ? 'unavailable' : 'exact_current_clear',
+    suppression: {state: suppressionState,
       snapshotId: '00000000-0000-4000-8000-000000000518', snapshotDigest: `sha256:${'0f'.repeat(32)}`,
-      matchedSuppressionId: result === 'suppressed' ? '00000000-0000-4000-8000-000000000519' : null,
-      matchedSuppressionDigest: result === 'suppressed' ? `sha256:${'10'.repeat(32)}` : null,
-      endsAt: result === 'suppressed' ? '2026-11-03T15:00:00.000Z' : null, resolutionDigest: `sha256:${'11'.repeat(32)}`},
+      matchedSuppressionId: suppressionState === 'exact_current_matched' ? '00000000-0000-4000-8000-000000000519' : null,
+      matchedSuppressionDigest: suppressionState === 'exact_current_matched' ? `sha256:${'10'.repeat(32)}` : null,
+      endsAt: suppressionState === 'exact_current_matched' ? '2026-11-03T15:00:00.000Z' : null, resolutionDigest: `sha256:${'11'.repeat(32)}`},
     governance: {resolutionState: 'contract_only_runtime_unavailable', tenantStopState: 'unknown_runtime_unavailable',
       policyControlState: 'unknown_runtime_unavailable', governanceDigest: `sha256:${'12'.repeat(32)}`,
       stopConditionCodes: ['tenant_wide_stop','policy_pause_or_revoke','source_or_authorization_material_change','suppression_match','limit_or_channel_unavailable']},
@@ -269,11 +270,19 @@ function validateMaterial(candidate, separate, evaluationValue) {
   if (candidate.limits.resolutionState !== 'contract_only_runtime_enforcement_unavailable') throw new Error('limit state');
   if (candidate.limits.mandatoryManifestDigest!==PART3C.mandatoryConstraints.manifestDigest ||
       JSON.stringify(candidate.limits.dimensionIds) !== JSON.stringify(PART3C.dimensionOrder)) throw new Error('limits');
-  const expectedSuppression = evaluationValue.result === 'suppressed' ? 'exact_current_matched' : evaluationValue.result === 'unavailable' ? 'unavailable' : 'exact_current_clear';
-  if (candidate.suppression.state !== expectedSuppression) throw new Error('suppression');
+  if (!['exact_current_clear','exact_current_matched','unavailable'].includes(candidate.suppression.state)) throw new Error('suppression');
+  const suppressionUnavailableReason=evaluationValue.reasonCodes.includes('suppression_resolution_unavailable');
+  const suppressionMatchedReason=evaluationValue.reasonCodes.includes('suppression_matched');
+  const matchedResultAllowed=evaluationValue.result==='suppressed' || evaluationValue.result==='unavailable' ||
+    evaluationValue.result==='expired' || (evaluationValue.result==='ineligible' && evaluationValue.reasonCodes.includes('source_lineage_ineligible'));
+  if ((candidate.suppression.state==='unavailable')!==suppressionUnavailableReason ||
+      (candidate.suppression.state==='exact_current_matched')!==suppressionMatchedReason ||
+      (candidate.suppression.state==='unavailable' && evaluationValue.result!=='unavailable') ||
+      (candidate.suppression.state==='exact_current_matched' && !matchedResultAllowed) ||
+      (evaluationValue.result==='suppressed' && candidate.suppression.state!=='exact_current_matched')) throw new Error('suppression');
   uuid(candidate.suppression.snapshotId,'suppression snapshot'); hash(candidate.suppression.snapshotDigest,'suppression snapshot');
   hash(candidate.suppression.resolutionDigest,'suppression resolution');
-  if (expectedSuppression === 'exact_current_matched') {
+  if (candidate.suppression.state === 'exact_current_matched') {
     uuid(candidate.suppression.matchedSuppressionId,'suppression'); hash(candidate.suppression.matchedSuppressionDigest,'suppression'); utc(candidate.suppression.endsAt,'suppression end');
     if (candidate.suppression.endsAt <= b.evaluatedAt) throw new Error('suppression expired');
   } else if ([candidate.suppression.matchedSuppressionId,candidate.suppression.matchedSuppressionDigest,candidate.suppression.endsAt].some(x=>x!==null)) throw new Error('suppression nulls');
@@ -375,7 +384,7 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
     contradictory.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,contradictory.material,'inputDigest');
     expect(()=>project(contradictory.material,contradictory.material,contradictory.evaluation)).toThrow('source result coherence');
 
-    const legitimate=trusted('unavailable'); legitimate.evaluation.reasonCodes=['suppression_resolution_unavailable'];
+    const legitimate=trusted('unavailable','unavailable'); legitimate.evaluation.reasonCodes=['suppression_resolution_unavailable'];
     legitimate.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,legitimate.evaluation,'outputDigest');
     legitimate.material.evaluationBinding.outputDigest=legitimate.evaluation.outputDigest;
     legitimate.material.source.currentnessState='latest_exact_current';
@@ -383,6 +392,43 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
     expect(project(legitimate.material,legitimate.material,legitimate.evaluation)).toEqual(expect.objectContaining({
       displayState:'unavailable', reasonCodes:['suppression_resolution_unavailable']
     }));
+  });
+
+  test('preserves clear suppression under source-unavailable and other higher-precedence unavailable causes', () => {
+    const sourceUnavailable=trusted('unavailable');
+    expect(project(sourceUnavailable.material,sourceUnavailable.material,sourceUnavailable.evaluation).suppression.state).toBe('exact_current_clear');
+    for(const reason of ['trusted_policy_unavailable','authorization_resolution_unavailable','fact_unavailable','fact_unknown']){
+      const fixture=trusted('unavailable'); fixture.evaluation.reasonCodes=[reason];
+      fixture.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,fixture.evaluation,'outputDigest');
+      fixture.material.evaluationBinding.outputDigest=fixture.evaluation.outputDigest;
+      fixture.material.source.currentnessState='latest_exact_current';
+      fixture.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,fixture.material,'inputDigest');
+      expect(project(fixture.material,fixture.material,fixture.evaluation).suppression.state).toBe('exact_current_clear');
+    }
+  });
+
+  test('preserves matched suppression under a higher-precedence unavailable cause and rejects reason-state contradictions', () => {
+    const matched=trusted('unavailable','exact_current_matched');
+    matched.evaluation.reasonCodes=['trusted_policy_unavailable','suppression_matched'];
+    matched.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,matched.evaluation,'outputDigest');
+    matched.material.evaluationBinding.outputDigest=matched.evaluation.outputDigest;
+    matched.material.source.currentnessState='latest_exact_current';
+    matched.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,matched.material,'inputDigest');
+    expect(project(matched.material,matched.material,matched.evaluation).suppression.state).toBe('exact_current_matched');
+
+    const attacks=[
+      {fixture:trusted('eligible','unavailable'), reasons:['rule_match','all_required_contract_authority_current']},
+      {fixture:trusted('eligible'), reasons:['rule_match','all_required_contract_authority_current','suppression_resolution_unavailable']},
+      {fixture:trusted('eligible','exact_current_matched'), reasons:['rule_match','all_required_contract_authority_current']},
+      {fixture:trusted('eligible'), reasons:['rule_match','all_required_contract_authority_current','suppression_matched']},
+      {fixture:trusted('eligible','unavailable'), reasons:['rule_match','all_required_contract_authority_current','suppression_resolution_unavailable']},
+      {fixture:trusted('eligible','exact_current_matched'), reasons:['rule_match','all_required_contract_authority_current','suppression_matched']}
+    ];
+    for(const attack of attacks){attack.fixture.evaluation.reasonCodes=attack.reasons;
+      attack.fixture.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,attack.fixture.evaluation,'outputDigest');
+      attack.fixture.material.evaluationBinding.outputDigest=attack.fixture.evaluation.outputDigest;
+      attack.fixture.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,attack.fixture.material,'inputDigest');
+      expect(()=>project(attack.fixture.material,attack.fixture.material,attack.fixture.evaluation)).toThrow('suppression');}
   });
 
   test('accepts an exact canonical non-Eastern tenant timezone and rejects invalid or alias zones', () => {

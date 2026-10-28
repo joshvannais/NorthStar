@@ -84,7 +84,7 @@
     "contentRule": "not_applicable_no_external_document_or_message_with_null_id_version_digest",
     "timingRule": "not_scheduled_part6_unavailable_with_null_execution_instants; exact separately trusted canonical IANA tenant timezone and Part5B reevaluation hint are explanatory only",
     "limitRule": "exact_Part3C_manifest_profile_effective_digest_and_all_eleven_dimension_ids; contract_only_runtime_enforcement_unavailable",
-    "suppressionRule": "exact_Part5B_suppression_resolution_and_no_claim_that_an_effect_stopped",
+    "suppressionRule": "exact_Part5B_suppression_resolution_bound_to_its_own_closed_reason_and_identifiers_independent_of_higher_precedence_final_result; no_claim_that_an_effect_stopped",
     "stopRule": "closed_Part3D_stop_condition_codes_only_and_no_claim_that_an_in_flight_effect_stopped",
     "expectedEffectRule": "hypothetical_internal_record_only_projection_with_exactly_one_nonexecuted_internal_record_and_every_external_provider_message_money_and_upstream_count_zero",
     "assumptionCodes": ["policy_source_and_rule_exact_at_evaluation", "currentness_must_be_revalidated_before_any_later_effect", "runtime_schedule_and_effect_executor_unavailable", "no_external_document_message_provider_or_money_authority"]

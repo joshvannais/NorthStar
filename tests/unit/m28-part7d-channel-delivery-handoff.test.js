@@ -204,11 +204,11 @@ describe('Mission 28 Part 7D provider-neutral channel and handoff truth', () => 
 
   test('roadmap and ledger keep Part 7D candidate-only and later slices planned', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
-    expect(roadmap).toContain('Parts 1A–7C are released. Part 7D is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–7D are released. Part 7E is the sole implementation candidate.');
     expect(ledger).toContain('| 29 | 7C | Approved templates, bounded variables and AI-draft boundary | **Released** |');
-    expect(ledger).toContain('| 30 | 7D | Provider-neutral email/SMS and truthful native handoff | **Implementation candidate** |');
-    expect(ledger).toContain('| 31 | 7E | Scoped links and customer-safe attachments | Planned / unimplemented |');
-    expect(ledger).toContain('280 migrations through additive `284_canonical_automation_channel_delivery_handoff_v1.sql` with no 285');
+    expect(ledger).toContain('| 30 | 7D | Provider-neutral email/SMS and truthful native handoff | **Released** |');
+    expect(ledger).toContain('| 31 | 7E | Scoped links and customer-safe attachments | **Implementation candidate** |');
+    expect(ledger).toContain('281 migrations through additive `285_canonical_automation_scoped_link_attachment_v1.sql` with no 286');
     expect(markdown).toContain('composer-open event would remain a handoff only');
   });
 });

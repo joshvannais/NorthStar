@@ -8,6 +8,11 @@ const canonical = require('../../src/automation/canonicalJson');
 const ROOT = path.resolve(__dirname, '../..');
 const CONTRACT_PATH = 'docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json';
 const CONTRACT = JSON.parse(fs.readFileSync(path.join(ROOT, CONTRACT_PATH), 'utf8'));
+const PART3B = JSON.parse(fs.readFileSync(path.join(ROOT,
+  'docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json'), 'utf8'));
+const PART4A = JSON.parse(fs.readFileSync(path.join(ROOT,
+  'docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json'), 'utf8'));
+const PART4A_SHA = '5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19';
 const TENANT = '00000000-0000-4000-8000-000000000028';
 const OTHER_TENANT = '00000000-0000-4000-8000-000000000029';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -45,6 +50,58 @@ function exact(value, keys, label) {
   }
 }
 
+function same(value, expected) {
+  return canonical.canonicalize(value) === canonical.canonicalize(expected);
+}
+
+function part4ATrigger(triggerId) {
+  return PART4A.triggers.find(trigger => trigger.id === triggerId);
+}
+
+function configureTrigger(value, triggerId, eventKind) {
+  const trigger = part4ATrigger(triggerId);
+  if (!trigger) throw new Error('unknown trigger fixture');
+  const kind = trigger.eventTime.kinds.find(candidate => candidate.eventKind === eventKind);
+  if (!kind) throw new Error('unknown event kind fixture');
+  value.sourceBindings[0].triggerId = trigger.id;
+  value.sourceBindings[0].sourceClassId = trigger.sourceClassId;
+  value.sourceBindings[0].eventKind = kind.eventKind;
+  value.sourceBindings[0].triggerAllowedActionFamilies = copy(trigger.allowedActionFamilies);
+  return value;
+}
+
+function syncAuthorization(value) {
+  const authorization = value.authorizationBinding;
+  const subject = value.actionSubjectBinding;
+  authorization.policyId = value.policyBinding.policyId;
+  authorization.policyVersion = value.policyBinding.policyVersion;
+  authorization.policyDigest = value.policyBinding.policyDigest;
+  authorization.sourceSetDigest = subject.sourceSetDigest;
+  authorization.previewId = subject.previewId;
+  authorization.previewDigest = subject.previewDigest;
+  authorization.recipientSetId = subject.recipientSetId;
+  authorization.recipientSetDigest = subject.recipientSetDigest;
+  authorization.effectSetId = subject.effectSetId;
+  authorization.effectSetDigest = subject.effectSetDigest;
+  authorization.actionFamilyId = value.actionFamily;
+  authorization.recipientClassIds = [value.recipientBinding.recipientClass];
+  authorization.channelIds = [value.channelBinding.channel];
+  authorization.providerModeIds = [value.channelBinding.providerMode];
+  authorization.effectClass = 'internal_only_no_external_effect';
+  if (authorization.authorizationKind === 'per_run_approval') {
+    authorization.kindSubjectRecordType = 'proposed_action';
+    authorization.kindSubjectRecordId = subject.proposedActionRecordId;
+    authorization.kindSubjectRecordDigest = subject.proposedActionRecordDigest;
+    authorization.kindRunId = subject.runId;
+  } else if (authorization.authorizationKind === 'standing_authorization') {
+    authorization.kindSubjectRecordType = 'policy_version';
+    authorization.kindSubjectRecordId = value.policyBinding.policyId;
+    authorization.kindSubjectRecordDigest = value.policyBinding.policyDigest;
+    authorization.kindRunId = null;
+  }
+  return value;
+}
+
 function binding(namespaceKey, value, digestField = 'bindingDigest') {
   const result = copy(value);
   delete result[digestField];
@@ -59,7 +116,7 @@ function materialOf(value) {
     delete result[digestField];
     return result;
   };
-  const authorizationBinding = semantic(value.authorizationBinding, 'materialBindingDigest');
+  const authorizationBinding = semantic(value.authorizationBinding, 'unusedDerivedDigest');
   return {
     tenantId: value.tenantId,
     decisionId: value.decisionId,
@@ -80,7 +137,6 @@ function materialOf(value) {
 
 function finish(value) {
   value.materialBindingDigest = seal(CONTRACT.revalidationEnvelope.materialDigestNamespace, materialOf(value));
-  value.authorizationBinding.materialBindingDigest = value.materialBindingDigest;
   const base = copy(value);
   delete base.revalidationDigest;
   value.revalidationDigest = seal(CONTRACT.revalidationEnvelope.revalidationDigestNamespace, base);
@@ -125,7 +181,12 @@ function evaluation() {
     actionSubjectBinding: binding('actionSubjectBinding', {
       tenantId: TENANT, runId: '00000000-0000-4000-8000-000000000701',
       proposedActionRecordId: '00000000-0000-4000-8000-000000000801',
-      proposedActionRecordDigest: `sha256:${'1'.repeat(64)}`, idempotencyKey: 'm28-p4c-idem-1', actionSubjectDigest: '',
+      proposedActionRecordDigest: `sha256:${'1'.repeat(64)}`,
+      previewId: '00000000-0000-4000-8000-000000000802', previewDigest: `sha256:${'c'.repeat(64)}`,
+      sourceSetDigest: `sha256:${'d'.repeat(64)}`,
+      recipientSetId: '00000000-0000-4000-8000-000000000803', recipientSetDigest: `sha256:${'e'.repeat(64)}`,
+      effectSetId: '00000000-0000-4000-8000-000000000804', effectSetDigest: `sha256:${'f'.repeat(64)}`,
+      idempotencyKey: 'm28-p4c-idem-1', actionSubjectDigest: '',
     }, 'actionSubjectDigest'),
     resolutionEpoch: epoch('evaluation_time'),
     policyBinding: binding('policyBinding', {
@@ -138,13 +199,17 @@ function evaluation() {
     sourceBindings: [binding('sourceBinding', {
       tenantId: TENANT, resolutionEpochId: '00000000-0000-4000-8000-000000000901',
       snapshotId: '00000000-0000-4000-8000-000000000301',
-      snapshotDigest: `sha256:${'4'.repeat(64)}`, triggerId: 'm20.lead_contact_state',
+      snapshotDigest: `sha256:${'4'.repeat(64)}`, sourceSetDigest: `sha256:${'d'.repeat(64)}`,
+      triggerCatalogNormalizedLfSha256: PART4A_SHA,
+      triggerId: 'm20.lead_contact_state', sourceClassId: 'mission20_business_contact_preferences',
       recordIdentityDigest: `sha256:${'5'.repeat(64)}`, eventKind: 'transcript_occurred',
+      triggerAllowedActionFamilies: ['internal_read_digest_task', 'owner_approval_request'],
       currentnessPinsDigest: `sha256:${'6'.repeat(64)}`, lineageSequence: 1,
       currentnessState: 'latest_exact_current', bindingDigest: '',
     })],
     recipientBinding: binding('recipientBinding', {
       tenantId: TENANT, resolutionEpochId: '00000000-0000-4000-8000-000000000901',
+      recipientSetId: '00000000-0000-4000-8000-000000000803', recipientSetDigest: `sha256:${'e'.repeat(64)}`,
       recipientClass: 'tenant_owner', recipientId: '00000000-0000-4000-8000-000000000128',
       membershipSubjectId: '00000000-0000-4000-8000-000000000128', state: 'internal_exact_current', bindingDigest: '',
     }),
@@ -155,7 +220,8 @@ function evaluation() {
     }),
     channelBinding: binding('channelBinding', {
       tenantId: TENANT, resolutionEpochId: '00000000-0000-4000-8000-000000000901',
-      channel: 'in_app_passive', providerMode: 'none_internal',
+      effectSetId: '00000000-0000-4000-8000-000000000804', effectSetDigest: `sha256:${'f'.repeat(64)}`,
+      channel: 'in_app_passive', providerMode: 'provider_disabled',
       availability: 'in_app_passive_available', revision: 1, bindingDigest: '',
     }),
     limitBinding: binding('limitBinding', {
@@ -177,8 +243,21 @@ function evaluation() {
     authorizationBinding: {
       tenantId: TENANT, resolutionEpochId: '00000000-0000-4000-8000-000000000901',
       authorizationId: '00000000-0000-4000-8000-000000000403',
-      authorizationKind: 'fixed_internal_capability', authorizationDigest: `sha256:${'a'.repeat(64)}`,
-      materialBindingDigest: '', expiresAt: '2026-10-27T23:05:00.000Z', state: 'exact_current_unexpired',
+      authorizationKind: 'per_run_approval',
+      authorizationRecordDigest: `sha256:${'a'.repeat(64)}`,
+      authorizationMaterialBindingDigest: `sha256:${'0'.repeat(64)}`,
+      policyId: '00000000-0000-4000-8000-000000000101', policyVersion: 1,
+      policyDigest: `sha256:${'2'.repeat(64)}`, sourceSetDigest: `sha256:${'d'.repeat(64)}`,
+      previewId: '00000000-0000-4000-8000-000000000802', previewDigest: `sha256:${'c'.repeat(64)}`,
+      recipientSetId: '00000000-0000-4000-8000-000000000803', recipientSetDigest: `sha256:${'e'.repeat(64)}`,
+      effectSetId: '00000000-0000-4000-8000-000000000804', effectSetDigest: `sha256:${'f'.repeat(64)}`,
+      actionFamilyId: 'internal_read_digest_task', recipientClassIds: ['tenant_owner'],
+      channelIds: ['in_app_passive'], providerModeIds: ['provider_disabled'],
+      effectClass: 'internal_only_no_external_effect', kindSubjectRecordType: 'proposed_action',
+      kindSubjectRecordId: '00000000-0000-4000-8000-000000000801',
+      kindSubjectRecordDigest: `sha256:${'1'.repeat(64)}`,
+      kindRunId: '00000000-0000-4000-8000-000000000701',
+      expiresAt: '2026-10-27T23:05:00.000Z', state: 'exact_current_unexpired',
     },
     governanceBinding: {
       tenantId: TENANT, resolutionEpochId: '00000000-0000-4000-8000-000000000901',
@@ -266,6 +345,10 @@ function validate(candidate, trusted, trustedEvaluation = null) {
   }
   if (!UUID.test(candidate.actionSubjectBinding.runId) || !UUID.test(candidate.actionSubjectBinding.proposedActionRecordId) ||
       !DIGEST.test(candidate.actionSubjectBinding.proposedActionRecordDigest) ||
+      !UUID.test(candidate.actionSubjectBinding.previewId) || !DIGEST.test(candidate.actionSubjectBinding.previewDigest) ||
+      !DIGEST.test(candidate.actionSubjectBinding.sourceSetDigest) ||
+      !UUID.test(candidate.actionSubjectBinding.recipientSetId) || !DIGEST.test(candidate.actionSubjectBinding.recipientSetDigest) ||
+      !UUID.test(candidate.actionSubjectBinding.effectSetId) || !DIGEST.test(candidate.actionSubjectBinding.effectSetDigest) ||
       typeof candidate.actionSubjectBinding.idempotencyKey !== 'string' || candidate.actionSubjectBinding.idempotencyKey.trim() === '' ||
       !UUID.test(candidate.resolutionEpoch.epochId) || !UTC.test(candidate.resolutionEpoch.resolvedAt) ||
       candidate.resolutionEpoch.trustedClockContract !== 'postgresql_statement_timestamp_v1' ||
@@ -274,19 +357,26 @@ function validate(candidate, trusted, trustedEvaluation = null) {
       !DIGEST.test(candidate.policyBinding.lifecycleEventDigest) ||
       candidate.policyBinding.lifecycleState !== 'active' || candidate.policyBinding.currentnessState !== 'active_exact_current' ||
       !UUID.test(candidate.sourceBindings[0].snapshotId) || !DIGEST.test(candidate.sourceBindings[0].snapshotDigest) ||
+      !DIGEST.test(candidate.sourceBindings[0].sourceSetDigest) ||
+      candidate.sourceBindings[0].triggerCatalogNormalizedLfSha256 !== PART4A_SHA ||
       typeof candidate.sourceBindings[0].triggerId !== 'string' || candidate.sourceBindings[0].triggerId.trim() === '' ||
+      typeof candidate.sourceBindings[0].sourceClassId !== 'string' || candidate.sourceBindings[0].sourceClassId.trim() === '' ||
       typeof candidate.sourceBindings[0].eventKind !== 'string' || candidate.sourceBindings[0].eventKind.trim() === '' ||
+      !Array.isArray(candidate.sourceBindings[0].triggerAllowedActionFamilies) ||
       !DIGEST.test(candidate.sourceBindings[0].recordIdentityDigest) || !DIGEST.test(candidate.sourceBindings[0].currentnessPinsDigest) ||
       candidate.sourceBindings[0].currentnessState !== 'latest_exact_current' ||
       !Number.isInteger(candidate.sourceBindings[0].lineageSequence) || candidate.sourceBindings[0].lineageSequence < 1 ||
+      !UUID.test(candidate.recipientBinding.recipientSetId) || !DIGEST.test(candidate.recipientBinding.recipientSetDigest) ||
       !UUID.test(candidate.recipientBinding.recipientId) || !UUID.test(candidate.recipientBinding.membershipSubjectId) ||
       candidate.recipientBinding.recipientId !== candidate.recipientBinding.membershipSubjectId ||
       !CONTRACT.actionFamilyAdmission.recipientClassesByActionFamily[candidate.actionFamily].includes(candidate.recipientBinding.recipientClass) ||
       candidate.recipientBinding.state !== 'internal_exact_current' ||
       candidate.consentBinding.basis !== 'authenticated_tenant_membership_and_exact_capability' ||
       !UUID.test(candidate.consentBinding.evidenceId) || candidate.consentBinding.evidenceId !== candidate.recipientBinding.membershipSubjectId ||
-      candidate.consentBinding.state !== 'internal_membership_only' || candidate.channelBinding.channel !== 'in_app_passive' ||
-      candidate.channelBinding.providerMode !== 'none_internal' || candidate.channelBinding.availability !== 'in_app_passive_available' ||
+      candidate.consentBinding.state !== 'internal_membership_only' ||
+      !UUID.test(candidate.channelBinding.effectSetId) || !DIGEST.test(candidate.channelBinding.effectSetDigest) ||
+      candidate.channelBinding.channel !== 'in_app_passive' ||
+      candidate.channelBinding.providerMode !== 'provider_disabled' || candidate.channelBinding.availability !== 'in_app_passive_available' ||
       !Number.isInteger(candidate.channelBinding.revision) || candidate.channelBinding.revision < 1 ||
       !DIGEST.test(candidate.limitBinding.limitProfileDigest) || !UUID.test(candidate.limitBinding.usageSnapshotId) ||
       !DIGEST.test(candidate.limitBinding.usageDigest) ||
@@ -298,14 +388,62 @@ function validate(candidate, trusted, trustedEvaluation = null) {
       !Number.isSafeInteger(candidate.priorEffectsBinding.uncertainCount) || candidate.priorEffectsBinding.uncertainCount !== 0 ||
       !UUID.test(candidate.suppressionBinding.snapshotId) ||
       !DIGEST.test(candidate.suppressionBinding.snapshotDigest) || candidate.suppressionBinding.state !== 'exact_current_clear' ||
-      !UUID.test(candidate.authorizationBinding.authorizationId) || !DIGEST.test(candidate.authorizationBinding.authorizationDigest) ||
-      candidate.authorizationBinding.authorizationKind !== 'fixed_internal_capability' ||
+      !UUID.test(candidate.authorizationBinding.authorizationId) ||
+      !DIGEST.test(candidate.authorizationBinding.authorizationRecordDigest) ||
+      !DIGEST.test(candidate.authorizationBinding.authorizationMaterialBindingDigest) ||
+      !CONTRACT.trustedResolutionContract.part3BAuthorizationResolution.acceptedAuthorizationKinds
+        .includes(candidate.authorizationBinding.authorizationKind) ||
       !UTC.test(candidate.authorizationBinding.expiresAt) ||
       candidate.authorizationBinding.state !== 'exact_current_unexpired' ||
-      candidate.authorizationBinding.materialBindingDigest !== candidate.materialBindingDigest ||
       candidate.governanceBinding.tenantStopState !== 'normal' || candidate.governanceBinding.policyControlState !== 'active' ||
       !DIGEST.test(candidate.governanceBinding.governanceDigest) ||
       candidate.governanceBinding.state !== 'exact_current_allowing_internal_decision') throw new Error('coherent current state');
+
+  const trigger = part4ATrigger(candidate.sourceBindings[0].triggerId);
+  if (!trigger || trigger.sourceClassId !== candidate.sourceBindings[0].sourceClassId ||
+      !trigger.eventTime.kinds.some(kind => kind.eventKind === candidate.sourceBindings[0].eventKind) ||
+      !same(candidate.sourceBindings[0].triggerAllowedActionFamilies, trigger.allowedActionFamilies) ||
+      !trigger.allowedActionFamilies.includes(candidate.actionFamily)) {
+    throw new Error('Part4A trigger action compatibility');
+  }
+
+  const authorization = candidate.authorizationBinding;
+  const subject = candidate.actionSubjectBinding;
+  const launchRule = PART3B.recordGrammar.firstLaunchBindingRules[candidate.actionFamily];
+  if (!launchRule ||
+      candidate.sourceBindings[0].sourceSetDigest !== subject.sourceSetDigest ||
+      candidate.recipientBinding.recipientSetId !== subject.recipientSetId ||
+      candidate.recipientBinding.recipientSetDigest !== subject.recipientSetDigest ||
+      candidate.channelBinding.effectSetId !== subject.effectSetId ||
+      candidate.channelBinding.effectSetDigest !== subject.effectSetDigest ||
+      authorization.policyId !== candidate.policyBinding.policyId ||
+      authorization.policyVersion !== candidate.policyBinding.policyVersion ||
+      authorization.policyDigest !== candidate.policyBinding.policyDigest ||
+      authorization.sourceSetDigest !== subject.sourceSetDigest ||
+      authorization.previewId !== subject.previewId || authorization.previewDigest !== subject.previewDigest ||
+      authorization.recipientSetId !== subject.recipientSetId ||
+      authorization.recipientSetDigest !== subject.recipientSetDigest ||
+      authorization.effectSetId !== subject.effectSetId || authorization.effectSetDigest !== subject.effectSetDigest ||
+      authorization.actionFamilyId !== candidate.actionFamily ||
+      !same(authorization.recipientClassIds, [candidate.recipientBinding.recipientClass]) ||
+      !same(authorization.recipientClassIds, launchRule.recipientClassIds.filter(
+        recipientClass => recipientClass === candidate.recipientBinding.recipientClass)) ||
+      !same(authorization.channelIds, launchRule.channelIds) ||
+      !same(authorization.providerModeIds, launchRule.providerModeIds) ||
+      authorization.effectClass !== launchRule.effectClass) {
+    throw new Error('canonical Part3B authorization material');
+  }
+  if (authorization.authorizationKind === 'per_run_approval') {
+    if (authorization.kindSubjectRecordType !== 'proposed_action' ||
+        authorization.kindSubjectRecordId !== subject.proposedActionRecordId ||
+        authorization.kindSubjectRecordDigest !== subject.proposedActionRecordDigest ||
+        authorization.kindRunId !== subject.runId) throw new Error('per-run authorization subject');
+  } else if (authorization.authorizationKind === 'standing_authorization') {
+    if (authorization.kindSubjectRecordType !== 'policy_version' ||
+        authorization.kindSubjectRecordId !== candidate.policyBinding.policyId ||
+        authorization.kindSubjectRecordDigest !== candidate.policyBinding.policyDigest ||
+        authorization.kindRunId !== null) throw new Error('standing authorization subject');
+  }
 
   if (Date.parse(candidate.authorizationBinding.expiresAt) <= Date.parse(candidate.resolutionEpoch.resolvedAt)) {
     throw new Error('authorization time');
@@ -359,12 +497,21 @@ describe('Mission 28 Part 4C coherent currentness revalidation', () => {
       preEffectReceiptMayNotBeCachedReplayedOrUsedAsBearerAuthority: true,
       currentRuntimeEffectExecutorAvailable: false, currentFailClosedOutcome: 'no_effect_can_be_claimed_or_executed' });
     expect(CONTRACT.revalidationEnvelope.materialDigestProjection)
-      .toBe('semantic_material_fields_with_resolutionEpochId_and_derived_binding_digests_omitted_and_authorizationBinding.materialBindingDigest_omitted_to_avoid_self_reference');
+      .toBe('semantic_material_fields_with_resolutionEpochId_and_derived_Part4C_binding_digests_omitted_while_canonical_Part3B_authorization_record_and_material_digests_remain_bound');
     expect(CONTRACT.trustedResolutionContract).toMatchObject({
       candidateMayNotSupplyReplaceOrRetargetTrustedResolution: true,
       candidateDigestsNeverCreateAuthority: true,
       evaluationReceiptMustResolveToExactStoredMaterialDigest: true,
       currentRuntimeResolverAvailable: false,
+      part3BAuthorizationResolution: {
+        acceptedAuthorizationKinds: ['per_run_approval', 'standing_authorization'],
+        fullPart3BRecordMustValidateBeforeProjection: true,
+        Part4CProjectionNeverCreatesOrRedefinesAuthorization: true,
+      },
+      part4ATriggerResolution: {
+        catalogNormalizedLfSha256: PART4A_SHA,
+        requestedActionFamilyMustBeInExactTriggerAllowedActionFamilies: true,
+      },
     });
   });
 
@@ -406,7 +553,7 @@ describe('Mission 28 Part 4C coherent currentness revalidation', () => {
       value => { value.policyBinding.policyDigest = `sha256:${'c'.repeat(64)}`; },
       value => { value.sourceBindings[0].snapshotDigest = `sha256:${'d'.repeat(64)}`; },
       value => { value.recipientBinding.recipientId = '00000000-0000-4000-8000-000000000129'; },
-      value => { value.authorizationBinding.authorizationDigest = `sha256:${'e'.repeat(64)}`; },
+      value => { value.authorizationBinding.authorizationRecordDigest = `sha256:${'e'.repeat(64)}`; },
       value => {
         value.tenantId = OTHER_TENANT;
         for (const bound of [value.actionSubjectBinding, value.resolutionEpoch, value.policyBinding,
@@ -419,7 +566,7 @@ describe('Mission 28 Part 4C coherent currentness revalidation', () => {
       const candidate = copy(canonicalEvaluation);
       mutate(candidate);
       resealBindings(candidate);
-      expect(() => validate(finish(candidate), trusted)).toThrow(/trusted|tenant|digest|coherent/);
+      expect(() => validate(finish(candidate), trusted)).toThrow(/trusted|tenant|digest|coherent|authorization/);
     }
   });
 
@@ -460,18 +607,84 @@ describe('Mission 28 Part 4C coherent currentness revalidation', () => {
     expect(calls).toBe(0);
   });
 
-  test('enforces exact first-launch internal recipient classes and subject binding', () => {
-    for (const actionFamily of ['owner_approval_request', 'collection_escalation']) {
-      const valid = evaluation(); valid.actionFamily = actionFamily; resealBindings(valid); finish(valid);
-      expect(validate(valid, trustedFrom(valid))).toBe(true);
-      const wrongClass = copy(valid); wrongClass.recipientBinding.recipientClass = 'assigned_staff';
-      resealBindings(wrongClass); finish(wrongClass);
-      expect(() => validate(wrongClass, trustedFrom(wrongClass))).toThrow(/coherent/);
-    }
+  test('enforces exact first-launch recipient classes and Part4A trigger compatibility', () => {
+    const ownerApproval = evaluation();
+    ownerApproval.actionFamily = 'owner_approval_request';
+    syncAuthorization(ownerApproval); resealBindings(ownerApproval); finish(ownerApproval);
+    expect(validate(ownerApproval, trustedFrom(ownerApproval))).toBe(true);
+
+    const leadCollection = evaluation();
+    leadCollection.actionFamily = 'collection_escalation';
+    syncAuthorization(leadCollection); resealBindings(leadCollection); finish(leadCollection);
+    expect(() => validate(leadCollection, trustedFrom(leadCollection))).toThrow(/trigger action compatibility/);
+
+    const collection = evaluation();
+    collection.actionFamily = 'collection_escalation';
+    configureTrigger(collection, 'm27.reviewed_collection_handoff', 'collection_handoff_requested');
+    syncAuthorization(collection); resealBindings(collection); finish(collection);
+    expect(validate(collection, trustedFrom(collection))).toBe(true);
+    const wrongClass = copy(collection); wrongClass.recipientBinding.recipientClass = 'assigned_staff';
+    syncAuthorization(wrongClass); resealBindings(wrongClass); finish(wrongClass);
+    expect(() => validate(wrongClass, trustedFrom(wrongClass))).toThrow(/coherent|authorization/);
+
     const wrongSubject = evaluation();
     wrongSubject.recipientBinding.membershipSubjectId = '00000000-0000-4000-8000-000000000129';
     resealBindings(wrongSubject); finish(wrongSubject);
     expect(() => validate(wrongSubject, trustedFrom(wrongSubject))).toThrow(/coherent/);
+  });
+
+  test('consumes only canonical Part3B authorization kinds and exact material bindings', () => {
+    expect(PART3B.authorizationKinds.map(kind => kind.id))
+      .toEqual(['per_run_approval', 'standing_authorization']);
+    expect(PART3B.recordGrammar.firstLaunchBindingRules.internal_read_digest_task.providerModeIds)
+      .toEqual(['provider_disabled']);
+
+    const perRun = evaluation();
+    expect(validate(perRun, trustedFrom(perRun))).toBe(true);
+    const standing = evaluation();
+    standing.authorizationBinding.authorizationKind = 'standing_authorization';
+    syncAuthorization(standing); finish(standing);
+    expect(validate(standing, trustedFrom(standing))).toBe(true);
+
+    const trusted = trustedFrom(perRun);
+    const attacks = [
+      value => { value.authorizationBinding.authorizationKind = 'fixed_internal_capability'; },
+      value => { value.authorizationBinding.authorizationRecordDigest = `sha256:${'9'.repeat(64)}`; },
+      value => { value.authorizationBinding.authorizationMaterialBindingDigest = `sha256:${'8'.repeat(64)}`; },
+      value => { value.authorizationBinding.sourceSetDigest = `sha256:${'7'.repeat(64)}`; },
+      value => { value.authorizationBinding.previewDigest = `sha256:${'6'.repeat(64)}`; },
+      value => { value.authorizationBinding.recipientSetDigest = `sha256:${'5'.repeat(64)}`; },
+      value => { value.authorizationBinding.effectSetDigest = `sha256:${'4'.repeat(64)}`; },
+      value => { value.authorizationBinding.actionFamilyId = 'owner_approval_request'; },
+      value => { value.authorizationBinding.kindRunId = '00000000-0000-4000-8000-000000000799'; },
+      value => {
+        value.channelBinding.providerMode = 'none_internal';
+        value.authorizationBinding.providerModeIds = ['none_internal'];
+      },
+    ];
+    for (const mutate of attacks) {
+      const candidate = copy(perRun);
+      mutate(candidate);
+      resealBindings(candidate); finish(candidate);
+      expect(() => validate(candidate, trusted)).toThrow();
+    }
+  });
+
+  test('rejects unknown, substituted and candidate-widened Part4A trigger rows', () => {
+    const attacks = [
+      value => { value.sourceBindings[0].triggerId = 'm27.reviewed_collection_handoff'; },
+      value => { value.sourceBindings[0].sourceClassId = 'mission27_financial_collection'; },
+      value => { value.sourceBindings[0].eventKind = 'collection_handoff_requested'; },
+      value => { value.sourceBindings[0].triggerAllowedActionFamilies.push('collection_escalation'); },
+      value => { value.sourceBindings[0].triggerId = 'm99.invented'; },
+    ];
+    for (const mutate of attacks) {
+      const candidate = evaluation();
+      candidate.actionFamily = 'collection_escalation';
+      mutate(candidate);
+      syncAuthorization(candidate); resealBindings(candidate); finish(candidate);
+      expect(() => validate(candidate, trustedFrom(candidate))).toThrow(/trigger action compatibility/);
+    }
   });
 
   test('roadmap and ledger release Part 4B, name only Part 4C candidate, and retain migration 274/no275', () => {

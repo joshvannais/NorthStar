@@ -41,7 +41,7 @@
     "unavailableExternalFamilies": ["customer_communication", "secure_document_delivery", "financial_reminder"],
     "permanentlyUnsupportedFamilies": ["unsupported_upstream_mutation_or_money_movement"],
     "channel": "in_app_passive",
-    "providerMode": "none_internal",
+    "providerMode": "provider_disabled",
     "maximumSources": 1,
     "maximumInternalRecipients": 1,
     "maximumExternalRecipientsProviderAttemptsUpstreamMutationsOrMoneyMovements": 0,
@@ -60,17 +60,17 @@
       "authorizationBinding", "governanceBinding", "evaluationBinding", "materialBindingDigest",
       "decisionState", "revalidationDigest"
     ],
-    "actionSubjectBindingExactFields": ["tenantId", "runId", "proposedActionRecordId", "proposedActionRecordDigest", "idempotencyKey", "actionSubjectDigest"],
+    "actionSubjectBindingExactFields": ["tenantId", "runId", "proposedActionRecordId", "proposedActionRecordDigest", "previewId", "previewDigest", "sourceSetDigest", "recipientSetId", "recipientSetDigest", "effectSetId", "effectSetDigest", "idempotencyKey", "actionSubjectDigest"],
     "resolutionEpochExactFields": ["tenantId", "epochId", "resolvedAt", "trustedClockContract", "resolutionDigest"],
     "policyBindingExactFields": ["tenantId", "resolutionEpochId", "policyId", "policyVersion", "policyDigest", "lifecycleEventId", "lifecycleEventDigest", "lifecycleState", "currentnessState", "bindingDigest"],
-    "sourceBindingExactFields": ["tenantId", "resolutionEpochId", "snapshotId", "snapshotDigest", "triggerId", "recordIdentityDigest", "eventKind", "currentnessPinsDigest", "lineageSequence", "currentnessState", "bindingDigest"],
-    "recipientBindingExactFields": ["tenantId", "resolutionEpochId", "recipientClass", "recipientId", "membershipSubjectId", "state", "bindingDigest"],
+    "sourceBindingExactFields": ["tenantId", "resolutionEpochId", "snapshotId", "snapshotDigest", "sourceSetDigest", "triggerCatalogNormalizedLfSha256", "triggerId", "sourceClassId", "recordIdentityDigest", "eventKind", "triggerAllowedActionFamilies", "currentnessPinsDigest", "lineageSequence", "currentnessState", "bindingDigest"],
+    "recipientBindingExactFields": ["tenantId", "resolutionEpochId", "recipientSetId", "recipientSetDigest", "recipientClass", "recipientId", "membershipSubjectId", "state", "bindingDigest"],
     "consentBindingExactFields": ["tenantId", "resolutionEpochId", "basis", "evidenceId", "state", "bindingDigest"],
-    "channelBindingExactFields": ["tenantId", "resolutionEpochId", "channel", "providerMode", "availability", "revision", "bindingDigest"],
+    "channelBindingExactFields": ["tenantId", "resolutionEpochId", "effectSetId", "effectSetDigest", "channel", "providerMode", "availability", "revision", "bindingDigest"],
     "limitBindingExactFields": ["tenantId", "resolutionEpochId", "limitProfileDigest", "usageSnapshotId", "usageDigest", "state", "bindingDigest"],
     "priorEffectsBindingExactFields": ["tenantId", "resolutionEpochId", "ledgerHighWatermark", "idempotencyKeyAvailable", "effectCount", "uncertainCount", "state", "bindingDigest"],
     "suppressionBindingExactFields": ["tenantId", "resolutionEpochId", "snapshotId", "snapshotDigest", "state", "bindingDigest"],
-    "authorizationBindingExactFields": ["tenantId", "resolutionEpochId", "authorizationId", "authorizationKind", "authorizationDigest", "materialBindingDigest", "expiresAt", "state"],
+    "authorizationBindingExactFields": ["tenantId", "resolutionEpochId", "authorizationId", "authorizationKind", "authorizationRecordDigest", "authorizationMaterialBindingDigest", "policyId", "policyVersion", "policyDigest", "sourceSetDigest", "previewId", "previewDigest", "recipientSetId", "recipientSetDigest", "effectSetId", "effectSetDigest", "actionFamilyId", "recipientClassIds", "channelIds", "providerModeIds", "effectClass", "kindSubjectRecordType", "kindSubjectRecordId", "kindSubjectRecordDigest", "kindRunId", "expiresAt", "state"],
     "governanceBindingExactFields": ["tenantId", "resolutionEpochId", "tenantStopState", "policyControlState", "governanceDigest", "state"],
     "evaluationBindingExactFields": ["evaluationRevalidationId", "evaluationRevalidationDigest", "evaluationMaterialBindingDigest"],
     "bindingDigestNamespaces": {
@@ -86,7 +86,7 @@
       "suppressionBinding": "mission28.currentness-suppression.v1\n"
     },
     "digestAlgorithm": "SHA-256",
-    "materialDigestProjection": "semantic_material_fields_with_resolutionEpochId_and_derived_binding_digests_omitted_and_authorizationBinding.materialBindingDigest_omitted_to_avoid_self_reference",
+    "materialDigestProjection": "semantic_material_fields_with_resolutionEpochId_and_derived_Part4C_binding_digests_omitted_while_canonical_Part3B_authorization_record_and_material_digests_remain_bound",
     "materialDigestNamespace": "mission28.currentness-material.v1\n",
     "revalidationDigestNamespace": "mission28.currentness-revalidation.v1\n",
     "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_or_coercion"
@@ -96,7 +96,7 @@
     {"id": "sources", "acceptedState": "latest_exact_current", "rule": "ordered_unique_latest_Part4B_snapshot_ID_and_digest_for_exact_trigger_record_and_event_kind"},
     {"id": "recipient", "acceptedState": "internal_exact_current", "rule": "one_server_resolved_same_tenant_owner_admin_or_assigned_staff_subject_allowed_by_the_exact_launch_cell"},
     {"id": "consent", "acceptedState": "internal_membership_only", "rule": "authenticated_tenant_membership_is_internal_product_authority_only_and_never_external_contact_consent"},
-    {"id": "channel", "acceptedState": "in_app_passive_available", "rule": "in_app_passive_with_none_internal_provider_mode_only"},
+    {"id": "channel", "acceptedState": "in_app_passive_available", "rule": "exact_canonical_Part3B_effect_binding_with_in_app_passive_and_provider_disabled_only"},
     {"id": "limits", "acceptedState": "exact_current_within_limits", "rule": "exact_Part3C_profile_and_current_usage_with_every_mandatory_minimum_preserved"},
     {"id": "prior_effects", "acceptedState": "exact_current_no_collision_or_uncertainty", "rule": "exact_ledger_high_watermark_zero_unreconciled_or_uncertain_effect_and_available_idempotency_key"},
     {"id": "suppressions", "acceptedState": "exact_current_clear", "rule": "exact_current_suppression_snapshot_has_no_matching_pause_stop_opt_out_collision_or_other_suppression"}
@@ -108,7 +108,23 @@
     "evaluationReceiptLookupKey": ["tenantId", "decisionId", "evaluationRevalidationId", "evaluationRevalidationDigest"],
     "evaluationReceiptMustResolveToExactStoredMaterialDigest": true,
     "allDimensionBindingsMustMatchOneResolutionEpochExactly": true,
-    "currentRuntimeResolverAvailable": false
+    "currentRuntimeResolverAvailable": false,
+    "part3BAuthorizationResolution": {
+      "acceptedAuthorizationKinds": ["per_run_approval", "standing_authorization"],
+      "source": "server_resolved_full_canonical_Part3B_authorization_record",
+      "fullPart3BRecordMustValidateBeforeProjection": true,
+      "authorizationRecordDigestMustEqualPart3BRecordDigest": true,
+      "authorizationMaterialBindingDigestMustEqualPart3BMaterialBindingDigest": true,
+      "Part4CProjectionNeverCreatesOrRedefinesAuthorization": true,
+      "effectBindingMustEqualCurrentActionFamilyRecipientSetChannelProviderModeAndEffectSet": true,
+      "policySourcePreviewAndKindBindingsMustEqualCurrentMaterial": true
+    },
+    "part4ATriggerResolution": {
+      "source": "server_resolved_exact_frozen_Part4A_catalog_row",
+      "catalogNormalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19",
+      "triggerIdSourceClassEventKindAndAllowedActionFamiliesMustMatchCatalogExactly": true,
+      "requestedActionFamilyMustBeInExactTriggerAllowedActionFamilies": true
+    }
   },
   "evaluationContract": {
     "stage": "evaluation_time",
@@ -145,6 +161,8 @@
     "deny_stale_unavailable_mixed_or_changed_material",
     "deny_cross_tenant_cross_policy_cross_run_cross_action_or_cross_recipient",
     "deny_unknown_unsupported_or_external_action_family",
+    "deny_noncanonical_Part3B_authorization_kind_record_material_or_effect_binding",
+    "deny_Part4A_trigger_source_class_event_kind_or_allowed_action_family_mismatch",
     "deny_source_not_latest_or_correction_lineage_changed",
     "deny_recipient_consent_channel_limit_prior_effect_or_suppression_not_current",
     "deny_policy_paused_stopped_terminal_or_not_active",

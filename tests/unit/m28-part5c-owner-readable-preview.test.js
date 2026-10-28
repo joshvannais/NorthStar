@@ -25,6 +25,22 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const copy = value => JSON.parse(JSON.stringify(value));
+const PART5B_PRECEDENCE = CONTRACT.trustedResolutionContract.part5BResultPrecedence;
+const EXPECTED_PART5B_PRECEDENCE = [
+  ['trusted_policy_unavailable','unavailable',['trusted_policy_unavailable'],'unavailable'],
+  ['source_not_latest_exact_current','unavailable',['source_not_latest_exact_current'],'unavailable'],
+  ['suppression_resolution_unavailable','unavailable',['suppression_resolution_unavailable'],'unavailable'],
+  ['authorization_resolution_unavailable','unavailable',['authorization_resolution_unavailable'],'unavailable'],
+  ['fact_unavailable','unavailable',['fact_unavailable'],'unavailable'],
+  ['fact_unknown','unavailable',['fact_unknown'],'partial_unknown'],
+  ['policy_expired','expired',['policy_expired'],'complete_exact'],
+  ['source_lineage_ineligible','ineligible',['source_lineage_ineligible'],'complete_exact'],
+  ['suppression_matched','suppressed',['suppression_matched'],'complete_exact'],
+  ['rule_no_match','ineligible',['rule_no_match'],'complete_exact'],
+  ['authorization_required','approval_required',['rule_match','authorization_required'],'complete_exact'],
+  ['authorization_expired','approval_required',['rule_match','authorization_expired'],'complete_exact'],
+  ['eligible','eligible',['rule_match','all_required_contract_authority_current'],'complete_exact']
+].map(([id,result,reasons,quality])=>({id,result,reasons,quality}));
 
 function normalizedLfSha256(relative) {
   const text = fs.readFileSync(path.join(ROOT, relative), 'utf8').replace(/\r\n/g, '\n');
@@ -174,6 +190,40 @@ function trusted(result = 'eligible', suppressionOverride = null) {
   return {evaluation: e, material};
 }
 
+function branchFor(value) {
+  return PART5B_PRECEDENCE.find(item => item.result === value.result && same(item.reasons, value.reasonCodes));
+}
+
+function exactPart5BFixture(branchId, overrides = {}) {
+  const branch = PART5B_PRECEDENCE.find(item => item.id === branchId);
+  if (!branch) throw new Error('unknown Part5B branch fixture');
+  const suppressionState = overrides.suppressionState ||
+    (branchId === 'suppression_resolution_unavailable' ? 'unavailable' :
+      branchId === 'suppression_matched' ? 'exact_current_matched' : 'exact_current_clear');
+  const fixture = trusted(branch.result, suppressionState);
+  fixture.evaluation.reasonCodes = copy(branch.reasons);
+  fixture.evaluation.evidenceQuality = branch.quality;
+  const explanation = fixture.evaluation.predicateExplanations[0];
+  if (branchId === 'fact_unavailable') Object.assign(explanation,
+    {factState:'unavailable',comparisonResult:'unavailable',reasonCode:'fact_unavailable'});
+  else if (branchId === 'fact_unknown') Object.assign(explanation,
+    {factState:'unknown',comparisonResult:'unknown',reasonCode:'fact_unknown'});
+  else if (branchId === 'rule_no_match') Object.assign(explanation,
+    {factState:'known',comparisonResult:'no_match',reasonCode:'rule_no_match'});
+  else Object.assign(explanation,{factState:'known',comparisonResult:'match',reasonCode:'rule_match'});
+  fixture.evaluation.outputDigest = digest(PART5B.outputEnvelope.outputDigestNamespace,
+    fixture.evaluation, 'outputDigest');
+  fixture.material.evaluationBinding.outputDigest = fixture.evaluation.outputDigest;
+  fixture.material.evaluationBinding.result = branch.result;
+  fixture.material.source.currentnessState = overrides.sourceCurrentness ||
+    (branchId === 'source_not_latest_exact_current' ? 'unavailable' : 'latest_exact_current');
+  fixture.material.source.headState = overrides.headState ||
+    (branchId === 'source_lineage_ineligible' ? 'tombstoned' : 'active');
+  fixture.material.inputDigest = digest(CONTRACT.previewEnvelope.inputDigestNamespace,
+    fixture.material, 'inputDigest');
+  return fixture;
+}
+
 function validateEvaluation(value) {
   exact(value, PART5B.outputEnvelope.exactFields, 'evaluation');
   if (value.schemaVersion !== PART5B.outputEnvelope.schemaVersion || !PART5B.resultContract.states.includes(value.result)) throw new Error('evaluation state');
@@ -196,14 +246,8 @@ function validateEvaluation(value) {
   }
   if (digest(PART5B.outputEnvelope.outputDigestNamespace, value, 'outputDigest') !== value.outputDigest) throw new Error('output digest');
   if (!Array.isArray(value.reasonCodes) || value.reasonCodes.some(code => !PART5B.reasonContract.closedCodes.includes(code))) throw new Error('reason');
-  const requiredReason = {eligible:'all_required_contract_authority_current', ineligible:'rule_no_match',
-    suppressed:'suppression_matched', expired:'policy_expired',
-    approval_required:'authorization_required'}[value.result];
-  if (requiredReason && !value.reasonCodes.includes(requiredReason)) throw new Error('result reason coherence');
-  if (value.result === 'unavailable' && !value.reasonCodes.some(code => [
-    'trusted_policy_unavailable','source_not_latest_exact_current','suppression_resolution_unavailable',
-    'authorization_resolution_unavailable','fact_unavailable','fact_unknown'
-  ].includes(code))) throw new Error('unavailable reason coherence');
+  const branch = branchFor(value);
+  if (!branch || value.evidenceQuality !== branch.quality) throw new Error('Part5B result reason precedence');
 }
 
 function validateMaterial(candidate, separate, evaluationValue) {
@@ -238,11 +282,11 @@ function validateMaterial(candidate, separate, evaluationValue) {
   if (!Number.isSafeInteger(s.headSequence) || s.headSequence < 1 || s.sourceBindingDigest !== b.sourceBindingDigest ||
       !['active','tombstoned','reversed'].includes(s.headState) || !['latest_exact_current','unavailable'].includes(s.currentnessState)) throw new Error('source shape');
   if (s.observedAt > b.evaluatedAt) throw new Error('source observed after evaluation');
-  if (s.currentnessState === 'latest_exact_current' && s.headState !== 'active') throw new Error('source coherence');
-  const sourceUnavailableReason=evaluationValue.reasonCodes.includes('source_not_latest_exact_current');
-  if ((s.currentnessState === 'unavailable') !== sourceUnavailableReason ||
-      (s.currentnessState === 'unavailable' && evaluationValue.result !== 'unavailable')) {
-    throw new Error('source result coherence');
+  const branchIndex=PART5B_PRECEDENCE.indexOf(branchFor(evaluationValue));
+  if ((s.currentnessState === 'unavailable' && branchIndex > 1) ||
+      (s.currentnessState === 'latest_exact_current' && branchIndex === 1) ||
+      (s.headState !== 'active' && branchIndex > 7) || (s.headState === 'active' && branchIndex === 7)) {
+    throw new Error('source result precedence');
   }
   uuid(candidate.recipient.recipientSetId,'recipient set'); hash(candidate.recipient.recipientSetDigest,'recipient set');
   if (candidate.recipient.recipientScope !== 'one_internal_recipient_maximum' ||
@@ -271,15 +315,10 @@ function validateMaterial(candidate, separate, evaluationValue) {
   if (candidate.limits.mandatoryManifestDigest!==PART3C.mandatoryConstraints.manifestDigest ||
       JSON.stringify(candidate.limits.dimensionIds) !== JSON.stringify(PART3C.dimensionOrder)) throw new Error('limits');
   if (!['exact_current_clear','exact_current_matched','unavailable'].includes(candidate.suppression.state)) throw new Error('suppression');
-  const suppressionUnavailableReason=evaluationValue.reasonCodes.includes('suppression_resolution_unavailable');
-  const suppressionMatchedReason=evaluationValue.reasonCodes.includes('suppression_matched');
-  const matchedResultAllowed=evaluationValue.result==='suppressed' || evaluationValue.result==='unavailable' ||
-    evaluationValue.result==='expired' || (evaluationValue.result==='ineligible' && evaluationValue.reasonCodes.includes('source_lineage_ineligible'));
-  if ((candidate.suppression.state==='unavailable')!==suppressionUnavailableReason ||
-      (candidate.suppression.state==='exact_current_matched')!==suppressionMatchedReason ||
-      (candidate.suppression.state==='unavailable' && evaluationValue.result!=='unavailable') ||
-      (candidate.suppression.state==='exact_current_matched' && !matchedResultAllowed) ||
-      (evaluationValue.result==='suppressed' && candidate.suppression.state!=='exact_current_matched')) throw new Error('suppression');
+  if ((candidate.suppression.state==='unavailable' && branchIndex > 2) ||
+      (candidate.suppression.state!=='unavailable' && branchIndex === 2) ||
+      (candidate.suppression.state==='exact_current_matched' && branchIndex > 8) ||
+      (candidate.suppression.state!=='exact_current_matched' && branchIndex === 8)) throw new Error('suppression precedence');
   uuid(candidate.suppression.snapshotId,'suppression snapshot'); hash(candidate.suppression.snapshotDigest,'suppression snapshot');
   hash(candidate.suppression.resolutionDigest,'suppression resolution');
   if (candidate.suppression.state === 'exact_current_matched') {
@@ -326,6 +365,8 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
     for (const item of CONTRACT.frozenInputs) expect(normalizedLfSha256(item.path)).toBe(item.normalizedLfSha256);
     expect(CONTRACT.frozenInputs).toHaveLength(11);
     expect(CONTRACT.outputContract.previewNeverCreatesOrProvesAnEffect).toBe(true);
+    expect(PART5B_PRECEDENCE).toEqual(EXPECTED_PART5B_PRECEDENCE);
+    expect(PART5B.resultContract.precedence).toHaveLength(8);
     expect(CONTRACT.authorizationCycleContract).toEqual({
       approvalRequiredEvaluationMayProduceOneNoEffectPreview:true,
       Part3BPerRunApprovalMayBindThatExactPreviewIdAndDigest:true,
@@ -373,62 +414,52 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
       expect(()=>project(attacked,attacked,fixture.evaluation)).toThrow();}
   });
 
-  test('requires unavailable source currentness to remain a Part5B unavailable result', () => {
-    const fixture=trusted(); const attacked=copy(fixture.material); attacked.source.currentnessState='unavailable';
-    attacked.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,attacked,'inputDigest');
-    expect(()=>project(attacked,attacked,fixture.evaluation)).toThrow('source result coherence');
+  test.each(PART5B_PRECEDENCE)('accepts the exact Part5B-produced $id branch', branch => {
+    const fixture=exactPart5BFixture(branch.id);
+    const output=project(fixture.material,fixture.material,fixture.evaluation);
+    expect(output).toEqual(expect.objectContaining({displayState:branch.result,reasonCodes:branch.reasons}));
   });
 
-  test('rejects a source-currentness reason paired with exact-current source and permits unrelated unavailable causes', () => {
-    const contradictory=trusted('unavailable'); contradictory.material.source.currentnessState='latest_exact_current';
-    contradictory.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,contradictory.material,'inputDigest');
-    expect(()=>project(contradictory.material,contradictory.material,contradictory.evaluation)).toThrow('source result coherence');
-
-    const legitimate=trusted('unavailable','unavailable'); legitimate.evaluation.reasonCodes=['suppression_resolution_unavailable'];
-    legitimate.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,legitimate.evaluation,'outputDigest');
-    legitimate.material.evaluationBinding.outputDigest=legitimate.evaluation.outputDigest;
-    legitimate.material.source.currentnessState='latest_exact_current';
-    legitimate.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,legitimate.material,'inputDigest');
-    expect(project(legitimate.material,legitimate.material,legitimate.evaluation)).toEqual(expect.objectContaining({
-      displayState:'unavailable', reasonCodes:['suppression_resolution_unavailable']
-    }));
-  });
-
-  test('preserves clear suppression under source-unavailable and other higher-precedence unavailable causes', () => {
-    const sourceUnavailable=trusted('unavailable');
-    expect(project(sourceUnavailable.material,sourceUnavailable.material,sourceUnavailable.evaluation).suppression.state).toBe('exact_current_clear');
-    for(const reason of ['trusted_policy_unavailable','authorization_resolution_unavailable','fact_unavailable','fact_unknown']){
-      const fixture=trusted('unavailable'); fixture.evaluation.reasonCodes=[reason];
-      fixture.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,fixture.evaluation,'outputDigest');
-      fixture.material.evaluationBinding.outputDigest=fixture.evaluation.outputDigest;
-      fixture.material.source.currentnessState='latest_exact_current';
-      fixture.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,fixture.material,'inputDigest');
-      expect(project(fixture.material,fixture.material,fixture.evaluation).suppression.state).toBe('exact_current_clear');
-    }
-  });
-
-  test('preserves matched suppression under a higher-precedence unavailable cause and rejects reason-state contradictions', () => {
-    const matched=trusted('unavailable','exact_current_matched');
-    matched.evaluation.reasonCodes=['trusted_policy_unavailable','suppression_matched'];
-    matched.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,matched.evaluation,'outputDigest');
-    matched.material.evaluationBinding.outputDigest=matched.evaluation.outputDigest;
-    matched.material.source.currentnessState='latest_exact_current';
-    matched.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,matched.material,'inputDigest');
-    expect(project(matched.material,matched.material,matched.evaluation).suppression.state).toBe('exact_current_matched');
-
-    const attacks=[
-      {fixture:trusted('eligible','unavailable'), reasons:['rule_match','all_required_contract_authority_current']},
-      {fixture:trusted('eligible'), reasons:['rule_match','all_required_contract_authority_current','suppression_resolution_unavailable']},
-      {fixture:trusted('eligible','exact_current_matched'), reasons:['rule_match','all_required_contract_authority_current']},
-      {fixture:trusted('eligible'), reasons:['rule_match','all_required_contract_authority_current','suppression_matched']},
-      {fixture:trusted('eligible','unavailable'), reasons:['rule_match','all_required_contract_authority_current','suppression_resolution_unavailable']},
-      {fixture:trusted('eligible','exact_current_matched'), reasons:['rule_match','all_required_contract_authority_current','suppression_matched']}
+  test('preserves masked lower source and suppression states under the exact winning Part5B branch', () => {
+    const cases=[
+      exactPart5BFixture('trusted_policy_unavailable',{sourceCurrentness:'unavailable'}),
+      exactPart5BFixture('source_not_latest_exact_current',{suppressionState:'unavailable'}),
+      exactPart5BFixture('source_not_latest_exact_current',{suppressionState:'exact_current_matched'}),
+      exactPart5BFixture('policy_expired',{suppressionState:'exact_current_matched'}),
+      exactPart5BFixture('source_lineage_ineligible',{headState:'reversed'}),
+      exactPart5BFixture('authorization_expired')
     ];
-    for(const attack of attacks){attack.fixture.evaluation.reasonCodes=attack.reasons;
-      attack.fixture.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,attack.fixture.evaluation,'outputDigest');
-      attack.fixture.material.evaluationBinding.outputDigest=attack.fixture.evaluation.outputDigest;
-      attack.fixture.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,attack.fixture.material,'inputDigest');
-      expect(()=>project(attack.fixture.material,attack.fixture.material,attack.fixture.evaluation)).toThrow('suppression');}
+    for(const fixture of cases){
+      const output=project(fixture.material,fixture.material,fixture.evaluation);
+      expect(output.reasonCodes).toEqual(fixture.evaluation.reasonCodes);
+      expect(output.suppression).toEqual(fixture.material.suppression);
+    }
+    expect(cases[0].evaluation.reasonCodes).toEqual(['trusted_policy_unavailable']);
+    expect(cases[2].evaluation.reasonCodes).toEqual(['source_not_latest_exact_current']);
+    expect(cases[3].evaluation.reasonCodes).toEqual(['policy_expired']);
+    expect(cases[4].evaluation.reasonCodes).toEqual(['source_lineage_ineligible']);
+    expect(cases[5].evaluation.reasonCodes).toEqual(['rule_match','authorization_expired']);
+  });
+
+  test('rejects lower winning branches that contradict independently trusted source or suppression state', () => {
+    const attacks=[
+      exactPart5BFixture('eligible',{sourceCurrentness:'unavailable'}),
+      exactPart5BFixture('source_not_latest_exact_current',{sourceCurrentness:'latest_exact_current'}),
+      exactPart5BFixture('rule_no_match',{headState:'tombstoned'}),
+      exactPart5BFixture('source_lineage_ineligible',{headState:'active'}),
+      exactPart5BFixture('authorization_resolution_unavailable',{suppressionState:'unavailable'}),
+      exactPart5BFixture('suppression_resolution_unavailable',{suppressionState:'exact_current_clear'}),
+      exactPart5BFixture('eligible',{suppressionState:'exact_current_matched'}),
+      exactPart5BFixture('suppression_matched',{suppressionState:'exact_current_clear'})
+    ];
+    for(const fixture of attacks) expect(()=>project(fixture.material,fixture.material,fixture.evaluation)).toThrow(/precedence/);
+
+    const fabricated=exactPart5BFixture('trusted_policy_unavailable');
+    fabricated.evaluation.reasonCodes=['trusted_policy_unavailable','suppression_matched'];
+    fabricated.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,fabricated.evaluation,'outputDigest');
+    fabricated.material.evaluationBinding.outputDigest=fabricated.evaluation.outputDigest;
+    fabricated.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,fabricated.material,'inputDigest');
+    expect(()=>project(fabricated.material,fabricated.material,fabricated.evaluation)).toThrow('Part5B result reason precedence');
   });
 
   test('accepts an exact canonical non-Eastern tenant timezone and rejects invalid or alias zones', () => {

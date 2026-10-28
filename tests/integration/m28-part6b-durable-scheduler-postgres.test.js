@@ -19,6 +19,7 @@ const SNAPSHOT_DIGEST = `sha256:${'2'.repeat(64)}`;
 const SOURCE_DIGEST = `sha256:${'3'.repeat(64)}`;
 const SOURCE_SET_DIGEST = `sha256:${'4'.repeat(64)}`;
 const RLS_ROLE = `m28_part6b_rls_${process.pid}`;
+let timeEvidence;
 const copy = value => JSON.parse(JSON.stringify(value));
 const hash = value => `sha256:${crypto.createHash('sha256').update(value).digest('hex')}`;
 const uuid = number => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
@@ -57,14 +58,15 @@ function reseal(value) {
 
 function schedule(action, suffix = 0) {
   const unit = action.actionUnits[0];
+  const ordinary = timeEvidence.ordinary;
   return reseal({ schemaVersion: 'mission28.action-schedule.request.v1', tenantId: TENANT,
     scheduleId: uuid(12000 + suffix), transactionId: action.transactionId, runId: action.runId,
     unitBinding: { unitId: unit.unitId, outboxId: unit.outboxId, unitDigest: unit.unitDigest },
     policyBinding: { policyId: POLICY, policyVersion: 1, policyDigest: POLICY_DIGEST },
     sourceBinding: { sourceSetDigest: SOURCE_SET_DIGEST },
-    localSchedule: { tenantTimeZone: 'America/New_York', localDate: '2027-01-07', localTime: '10:00:00', utcInstant: '2027-01-07T15:00:00.000000Z', foldResolution: 'not_ambiguous' },
-    calendarBinding: { calendarId: uuid(13000), calendarVersion: 1, calendarDigest: '', calendarState: 'exact_current', tenantTimeZone: 'America/New_York', allowedWeeklyWindows: [{ dayId: 4, startMinuteInclusive: 540, endMinuteExclusive: 1020 }], quietWeeklyWindows: [{ dayId: 4, startMinuteInclusive: 720, endMinuteExclusive: 780 }], holidayDates: [] },
-    expirationBinding: { expiresAt: '2027-01-08T15:00:00.000000Z' },
+    localSchedule: { tenantTimeZone: 'UTC', localDate: ordinary.localDate, localTime: ordinary.localTime, utcInstant: ordinary.utcInstant, foldResolution: 'not_ambiguous' },
+    calendarBinding: { calendarId: uuid(13000), calendarVersion: 1, calendarDigest: '', calendarState: 'exact_current', tenantTimeZone: 'UTC', allowedWeeklyWindows: [{ dayId: ordinary.dayId, startMinuteInclusive: 540, endMinuteExclusive: 1020 }], quietWeeklyWindows: [], holidayDates: [] },
+    expirationBinding: { expiresAt: ordinary.expiresAt },
     trustedClockBinding: { contract: 'postgresql_statement_timestamp_v1' }, scheduleBindingDigest: '', requestDigest: '' });
 }
 
@@ -127,6 +129,40 @@ realPostgres('Mission 28 Part 6B PostgreSQL durable scheduler through migration 
     migrations = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m28-p6b-through276-'));
     for (const name of fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name) && Number(name.slice(0, 3)) <= 276)) fs.copyFileSync(path.join(ROOT, 'migrations', name), path.join(migrations, name));
     const db = require('../../src/db'); await db.runMigrations({ pool, migrationsDirectory: migrations });
+    const ordinary = (await pool.query(`WITH moment AS (
+      SELECT (date_trunc('day',statement_timestamp() AT TIME ZONE 'UTC')+INTERVAL '7 days 12 hours') AT TIME ZONE 'UTC' instant)
+     SELECT to_char(instant AT TIME ZONE 'UTC','YYYY-MM-DD') local_date,
+      to_char(instant AT TIME ZONE 'UTC','HH24:MI:SS') local_time,
+      extract(isodow FROM instant AT TIME ZONE 'UTC')::integer day_id,
+      public.canonical_automation_utc_v1(instant) utc_instant,
+      public.canonical_automation_utc_v1(instant+INTERVAL '1 day') expires_at,
+      public.canonical_automation_utc_v1(statement_timestamp()) database_now FROM moment`)).rows[0];
+    const transitions = (await pool.query(`WITH zones(zone) AS (VALUES ('America/New_York'),('Australia/Sydney')),
+     moments AS (
+      SELECT zone,instant,instant AT TIME ZONE zone local_before,
+       (instant+INTERVAL '1 hour') AT TIME ZONE zone local_after
+      FROM zones CROSS JOIN LATERAL generate_series(
+       date_trunc('hour',statement_timestamp())+INTERVAL '1 hour',
+       date_trunc('hour',statement_timestamp())+INTERVAL '365 days',INTERVAL '1 hour') instant),
+     transitions AS (
+      SELECT *,CASE WHEN local_after-local_before=INTERVAL '0 hours' THEN 'fold'
+       WHEN local_after-local_before=INTERVAL '2 hours' THEN 'gap' END kind FROM moments)
+     SELECT kind,zone,
+      to_char(local_before+CASE WHEN kind='fold' THEN INTERVAL '30 minutes' ELSE INTERVAL '90 minutes' END,'YYYY-MM-DD') local_date,
+      to_char(local_before+CASE WHEN kind='fold' THEN INTERVAL '30 minutes' ELSE INTERVAL '90 minutes' END,'HH24:MI:SS') local_time,
+      extract(isodow FROM local_before+CASE WHEN kind='fold' THEN INTERVAL '30 minutes' ELSE INTERVAL '90 minutes' END)::integer day_id,
+      public.canonical_automation_utc_v1(instant+INTERVAL '30 minutes') first_utc,
+      public.canonical_automation_utc_v1(instant+INTERVAL '90 minutes') second_utc,
+      public.canonical_automation_utc_v1(instant+INTERVAL '1 day 2 hours') expires_at
+     FROM transitions WHERE kind IS NOT NULL ORDER BY instant`)).rows;
+    const fold = transitions.find(item => item.kind === 'fold'); const gap = transitions.find(item => item.kind === 'gap');
+    if (!fold || !gap) throw new Error('A future database-owned DST fold and gap are required inside the bounded horizon');
+    timeEvidence = {
+      databaseNow: ordinary.database_now,
+      ordinary: { localDate: ordinary.local_date, localTime: ordinary.local_time, dayId: ordinary.day_id, utcInstant: ordinary.utc_instant, expiresAt: ordinary.expires_at },
+      fold: { zone: fold.zone, localDate: fold.local_date, localTime: fold.local_time, dayId: fold.day_id, earlierUtc: fold.first_utc, laterUtc: fold.second_utc, expiresAt: fold.expires_at },
+      gap: { zone: gap.zone, localDate: gap.local_date, localTime: gap.local_time, dayId: gap.day_id, utcInstant: gap.first_utc, expiresAt: gap.expires_at },
+    };
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -175,6 +211,12 @@ realPostgres('Mission 28 Part 6B PostgreSQL durable scheduler through migration 
     expect((await pool.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='canonical_automation_action_schedules_v1'`)).rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
     expect((await pool.query(`SELECT has_function_privilege('public','public.canonical_automation_store_action_schedule_v1(text,jsonb)','EXECUTE') allowed`)).rows[0].allowed).toBe(false);
     expect((await pool.query(`SELECT count(*)::integer count FROM information_schema.routines WHERE routine_schema='public' AND routine_name LIKE 'canonical_automation%claim%'`)).rows[0].count).toBe(0);
+    expect((await pool.query(`SELECT count(*)::integer count FROM public.canonical_automation_canonical_time_zones_v1`)).rows[0].count).toBe(419);
+    expect((await pool.query(`SELECT name FROM pg_catalog.pg_timezone_names WHERE name=ANY($1::text[]) ORDER BY name`,
+      [['America/Shiprock', 'Canada/Eastern', 'US/Eastern']])).rows.map(row => row.name)).toEqual(['America/Shiprock', 'Canada/Eastern', 'US/Eastern']);
+    expect(new Date(timeEvidence.ordinary.utcInstant).getTime()).toBeGreaterThan(new Date(timeEvidence.databaseNow).getTime());
+    expect(new Date(timeEvidence.fold.earlierUtc).getTime()).toBeGreaterThan(new Date(timeEvidence.databaseNow).getTime());
+    expect(new Date(timeEvidence.gap.utcInstant).getTime()).toBeGreaterThan(new Date(timeEvidence.databaseNow).getTime());
   });
 
   test('stores an ordinary exact schedule, returns exact replay and leaves Part 6A outbox unpublished', async () => {
@@ -185,27 +227,29 @@ realPostgres('Mission 28 Part 6B PostgreSQL durable scheduler through migration 
     expect(row).toEqual({ state: 'scheduled_unpublished', outbox_state: 'committed_unpublished', queue_publication_id: null, claim_id: null });
   }, 120000);
 
-  test.each([['earlier', '2026-11-01T05:30:00.000000Z'], ['later', '2026-11-01T06:30:00.000000Z']])('stores explicit DST fold %s evidence', async (foldResolution, instant) => {
+  test.each([['earlier', 'earlierUtc'], ['later', 'laterUtc']])('stores explicit DST fold %s evidence', async (foldResolution, instantField) => {
     const suffix = foldResolution === 'earlier' ? 2 : 3; const action = await seedAction(suffix); const value = schedule(action, suffix);
-    Object.assign(value.localSchedule, { localDate: '2026-11-01', localTime: '01:30:00', utcInstant: instant, foldResolution });
-    value.calendarBinding.allowedWeeklyWindows = [{ dayId: 7, startMinuteInclusive: 0, endMinuteExclusive: 1440 }]; value.calendarBinding.quietWeeklyWindows = []; value.expirationBinding.expiresAt = '2026-11-02T12:00:00.000000Z'; reseal(value);
+    Object.assign(value.localSchedule, { tenantTimeZone: timeEvidence.fold.zone, localDate: timeEvidence.fold.localDate, localTime: timeEvidence.fold.localTime, utcInstant: timeEvidence.fold[instantField], foldResolution });
+    Object.assign(value.calendarBinding, { tenantTimeZone: timeEvidence.fold.zone, allowedWeeklyWindows: [{ dayId: timeEvidence.fold.dayId, startMinuteInclusive: 0, endMinuteExclusive: 1440 }], quietWeeklyWindows: [], holidayDates: [] }); value.expirationBinding.expiresAt = timeEvidence.fold.expiresAt; reseal(value);
     await expect(store(value)).resolves.toEqual(expect.objectContaining({ replayed: false }));
   }, 120000);
 
   test.each([
-    ['DST gap', 10, value => { Object.assign(value.localSchedule, { localDate: '2027-03-14', localTime: '02:30:00', utcInstant: '2027-03-14T07:30:00.000000Z' }); value.calendarBinding.allowedWeeklyWindows = [{ dayId: 7, startMinuteInclusive: 0, endMinuteExclusive: 1440 }]; value.calendarBinding.quietWeeklyWindows = []; value.expirationBinding.expiresAt = '2027-03-15T12:00:00.000000Z'; }],
-    ['fold ambiguity', 11, value => { Object.assign(value.localSchedule, { localDate: '2026-11-01', localTime: '01:30:00', utcInstant: '2026-11-01T05:30:00.000000Z', foldResolution: 'not_ambiguous' }); value.calendarBinding.allowedWeeklyWindows = [{ dayId: 7, startMinuteInclusive: 0, endMinuteExclusive: 1440 }]; value.calendarBinding.quietWeeklyWindows = []; value.expirationBinding.expiresAt = '2026-11-02T12:00:00.000000Z'; }],
-    ['wrong fold instant', 12, value => { Object.assign(value.localSchedule, { localDate: '2026-11-01', localTime: '01:30:00', utcInstant: '2026-11-01T06:30:00.000000Z', foldResolution: 'earlier' }); value.calendarBinding.allowedWeeklyWindows = [{ dayId: 7, startMinuteInclusive: 0, endMinuteExclusive: 1440 }]; value.calendarBinding.quietWeeklyWindows = []; value.expirationBinding.expiresAt = '2026-11-02T12:00:00.000000Z'; }],
+    ['DST gap', 10, value => { Object.assign(value.localSchedule, { tenantTimeZone: timeEvidence.gap.zone, localDate: timeEvidence.gap.localDate, localTime: timeEvidence.gap.localTime, utcInstant: timeEvidence.gap.utcInstant }); Object.assign(value.calendarBinding, { tenantTimeZone: timeEvidence.gap.zone, allowedWeeklyWindows: [{ dayId: timeEvidence.gap.dayId, startMinuteInclusive: 0, endMinuteExclusive: 1440 }], quietWeeklyWindows: [], holidayDates: [] }); value.expirationBinding.expiresAt = timeEvidence.gap.expiresAt; }],
+    ['fold ambiguity', 11, value => { Object.assign(value.localSchedule, { tenantTimeZone: timeEvidence.fold.zone, localDate: timeEvidence.fold.localDate, localTime: timeEvidence.fold.localTime, utcInstant: timeEvidence.fold.earlierUtc, foldResolution: 'not_ambiguous' }); Object.assign(value.calendarBinding, { tenantTimeZone: timeEvidence.fold.zone, allowedWeeklyWindows: [{ dayId: timeEvidence.fold.dayId, startMinuteInclusive: 0, endMinuteExclusive: 1440 }], quietWeeklyWindows: [], holidayDates: [] }); value.expirationBinding.expiresAt = timeEvidence.fold.expiresAt; }],
+    ['wrong fold instant', 12, value => { Object.assign(value.localSchedule, { tenantTimeZone: timeEvidence.fold.zone, localDate: timeEvidence.fold.localDate, localTime: timeEvidence.fold.localTime, utcInstant: timeEvidence.fold.laterUtc, foldResolution: 'earlier' }); Object.assign(value.calendarBinding, { tenantTimeZone: timeEvidence.fold.zone, allowedWeeklyWindows: [{ dayId: timeEvidence.fold.dayId, startMinuteInclusive: 0, endMinuteExclusive: 1440 }], quietWeeklyWindows: [], holidayDates: [] }); value.expirationBinding.expiresAt = timeEvidence.fold.expiresAt; }],
   ])('rejects %s with zero schedule residue', async (_label, suffix, mutate) => {
     const action = await seedAction(suffix); const value = schedule(action, suffix); mutate(value); reseal(value); const before = await scheduleCount(); await expect(store(value)).rejects.toThrow(); expect(await scheduleCount()).toBe(before);
   }, 120000);
 
   test.each([
-    ['closed time', 210, value => { value.localSchedule.localTime = '08:00:00'; value.localSchedule.utcInstant = '2027-01-07T13:00:00.000000Z'; }],
-    ['quiet time', 211, value => { value.localSchedule.localTime = '12:30:00'; value.localSchedule.utcInstant = '2027-01-07T17:30:00.000000Z'; }],
-    ['holiday', 212, value => { value.calendarBinding.holidayDates = ['2027-01-07']; }],
-    ['overlap', 213, value => { value.calendarBinding.allowedWeeklyWindows = [{ dayId: 4, startMinuteInclusive: 500, endMinuteExclusive: 700 }, { dayId: 4, startMinuteInclusive: 600, endMinuteExclusive: 800 }]; }],
-    ['alias zone', 214, value => { value.localSchedule.tenantTimeZone = 'US/Eastern'; value.calendarBinding.tenantTimeZone = 'US/Eastern'; }],
+    ['closed time', 210, value => { value.localSchedule.localTime = '08:00:00'; value.localSchedule.utcInstant = `${value.localSchedule.localDate}T08:00:00.000000Z`; }],
+    ['quiet time', 211, value => { value.calendarBinding.quietWeeklyWindows = [{ dayId: timeEvidence.ordinary.dayId, startMinuteInclusive: 720, endMinuteExclusive: 780 }]; }],
+    ['holiday', 212, value => { value.calendarBinding.holidayDates = [timeEvidence.ordinary.localDate]; }],
+    ['overlap', 213, value => { value.calendarBinding.allowedWeeklyWindows = [{ dayId: timeEvidence.ordinary.dayId, startMinuteInclusive: 500, endMinuteExclusive: 700 }, { dayId: timeEvidence.ordinary.dayId, startMinuteInclusive: 600, endMinuteExclusive: 800 }]; }],
+    ['alias zone US', 214, value => { value.localSchedule.tenantTimeZone = 'US/Eastern'; value.calendarBinding.tenantTimeZone = 'US/Eastern'; }],
+    ['alias zone Canada', 215, value => { value.localSchedule.tenantTimeZone = 'Canada/Eastern'; value.calendarBinding.tenantTimeZone = 'Canada/Eastern'; }],
+    ['alias zone America', 216, value => { value.localSchedule.tenantTimeZone = 'America/Shiprock'; value.calendarBinding.tenantTimeZone = 'America/Shiprock'; }],
   ])('rejects %s calendar/time-zone material without residue', async (_label, suffix, mutate) => {
     const action = await seedAction(suffix); const value = schedule(action, suffix); mutate(value); reseal(value); const before = await scheduleCount(); await expect(store(value)).rejects.toThrow(); expect(await scheduleCount()).toBe(before);
   }, 120000);

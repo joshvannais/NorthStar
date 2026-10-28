@@ -8,7 +8,7 @@ Part 6A is released at source `af2b777a3d146f24e95052add626784186d4b0df`, PR #56
 
 ## Exact schedule and calendar
 
-The candidate and a separately trusted server resolution must agree on the complete schedule material. The time-zone identifier is the exact current tenant/limit-authority IANA identifier and must match the calendar. The explicit local date and local time must round-trip from the exact UTC instant in that zone. Abbreviations, fixed offsets, aliases, case variants, unknown zones and candidate-supplied fallback zones fail closed.
+The candidate and a separately trusted server resolution must agree on the complete schedule material. The time-zone identifier is the exact current tenant/limit-authority IANA identifier and must match the calendar. Migration 276 freezes the complete 419-identifier catalog produced by exact Node 22.23.3 `Intl.supportedValuesOf('timeZone')` plus `UTC`; PostgreSQL storage requires membership in that catalog and availability in its own time-zone data. The explicit local date and local time must round-trip from the exact UTC instant in that zone. Abbreviations, fixed offsets, aliases, case variants, unknown zones and candidate-supplied fallback zones fail closed.
 
 The UTC candidate search is fixed at 2,881 minute-aligned instants centered on the supplied UTC instant. A daylight-saving gap has no match and is denied. An ordinary local instant has exactly one match and requires `not_ambiguous`. A fold has exactly two matches and requires the explicit `earlier` or `later` choice to equal the corresponding UTC instant. More than two matches or unresolved transformations fail closed.
 

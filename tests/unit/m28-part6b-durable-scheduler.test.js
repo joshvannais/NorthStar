@@ -196,7 +196,7 @@ describe('Mission 28 Part 6B durable scheduler', () => {
   });
 
   test('rejects unknown, alias, fixed-offset, conflicting or candidate-only time-zone material', () => {
-    for (const zone of ['US/Eastern', 'Etc/GMT+5', 'EST', 'america/New_York', 'Not/AZone']) {
+    for (const zone of ['US/Eastern', 'Canada/Eastern', 'America/Shiprock', 'Etc/GMT+5', 'EST', 'america/New_York', 'Not/AZone']) {
       const value = fixture(20); value.localSchedule.tenantTimeZone = zone; value.calendarBinding.tenantTimeZone = zone; reseal(value);
       expect(() => validate(value, trusted(value))).toThrow('zone');
     }
@@ -238,7 +238,12 @@ describe('Mission 28 Part 6B durable scheduler', () => {
 
   test('migration is tenant-private, immutable, owner-only and contains no publication or effect path', () => {
     const sql = fs.readFileSync(path.join(ROOT, 'migrations/276_canonical_automation_durable_scheduler_v1.sql'), 'utf8');
-    for (const token of ['canonical_automation_action_schedules_v1', 'canonical_automation_store_action_schedule_v1', 'ENABLE ROW LEVEL SECURITY', 'FORCE ROW LEVEL SECURITY', 'scheduled_unpublished', "SET TimeZone='UTC'", "INTERVAL '24 hours'", 'statement_timestamp']) expect(sql).toContain(token);
+    for (const token of ['canonical_automation_canonical_time_zones_v1', 'canonical_automation_action_schedules_v1', 'canonical_automation_store_action_schedule_v1', 'ENABLE ROW LEVEL SECURITY', 'FORCE ROW LEVEL SECURITY', 'scheduled_unpublished', "SET TimeZone='UTC'", "INTERVAL '24 hours'", 'statement_timestamp']) expect(sql).toContain(token);
+    const sqlZones = [...sql.matchAll(/\('([^']+)','node22\.23\.3_intl_supported_values_v1'\)/g)].map(match => match[1]).sort();
+    const nodeZones = ['UTC', ...Intl.supportedValuesOf('timeZone')].sort();
+    expect(sqlZones).toHaveLength(CONTRACT.bounds.canonicalTimeZoneIdentifierCount);
+    expect(sqlZones).toEqual(nodeZones);
+    expect(sqlZones).not.toEqual(expect.arrayContaining(['Canada/Eastern', 'America/Shiprock', 'US/Eastern']));
     for (const forbidden of ['GRANT EXECUTE', 'CREATE FUNCTION public.canonical_automation_claim', 'queue_published_at=', 'provider_attempt', 'twilio', 'retell', 'fetch(', 'axios']) expect(sql).not.toContain(forbidden);
   });
 

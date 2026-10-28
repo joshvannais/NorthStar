@@ -35,6 +35,7 @@
     "maximumAllowedWeeklyWindows": 32,
     "maximumQuietWeeklyWindows": 32,
     "maximumHolidayDates": 64,
+    "canonicalTimeZoneIdentifierCount": 419,
     "dstCandidateScanMinutesEachSide": 1440,
     "dstCandidateProbeCountMaximum": 2881,
     "windowMinuteRange": [0, 1440]
@@ -59,6 +60,7 @@
   },
   "timeZoneAndDstContract": {
     "timeZoneRule": "exact_separately_trusted_current_canonical_IANA_identifier_matching_the_business_calendar_and_tenant_limit_authority",
+    "canonicalIdentifierCatalog": "exact_Node_22.23.3_Intl_supportedValuesOf_timeZone_plus_UTC_frozen_in_migration_276",
     "acceptedIdentifierPattern": "^(?:UTC|[A-Za-z]+(?:[_-][A-Za-z]+)*(?:/[A-Za-z]+(?:[_-][A-Za-z]+)*)+)$",
     "abbreviationFixedOffsetUnknownAliasOrCaseVariant": "deny",
     "localDateFormat": "YYYY-MM-DD",
@@ -91,6 +93,7 @@
   },
   "storageContract": {
     "migration": "276_canonical_automation_durable_scheduler_v1.sql",
+    "canonicalTimeZoneCatalogTable": "canonical_automation_canonical_time_zones_v1",
     "table": "canonical_automation_action_schedules_v1",
     "ownerOnlyFunction": "canonical_automation_store_action_schedule_v1",
     "runtimeExecuteGranted": false,

@@ -355,7 +355,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–5D released; Part 6A implementation candidate only.');
+      expect(document).toContain('Parts 1A–6A released; Part 6B implementation candidate only.');
       expect(document).toContain('797be4a33bb2128ae2efd79b5347ef43f94da0f6');
       expect(document).toContain('041971bb190998e1444087482941686c4166573d');
       expect(document).toContain('7e0ef15f-1275-4578-aade-70b8c8277bef');
@@ -376,9 +376,10 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(rows[17]).toMatchObject({ id: '5B', state: '**Released**' });
     expect(rows[18]).toMatchObject({ id: '5C', state: '**Released**' });
     expect(rows[19]).toMatchObject({ id: '5D', state: '**Released**' });
-    expect(rows[20]).toMatchObject({ id: '6A', state: '**Implementation candidate**' });
-    expect(rows.slice(21).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(45);
+    expect(rows[20]).toMatchObject({ id: '6A', state: '**Released**' });
+    expect(rows[21]).toMatchObject({ id: '6B', state: '**Implementation candidate**' });
+    expect(rows.slice(22).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(44);
   });
 
   test('keeps runtime, migrations and later Part 4 authority outside the slice', () => {
@@ -390,7 +391,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
       part5Plus: 'rule evaluation scheduling execution providers recipients and effects remain planned and unimplemented',
     });
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name));
-    expect(migrations).toHaveLength(271);
+    expect(migrations).toHaveLength(272);
     expect(migrations.some(name => name.startsWith('273_'))).toBe(true);
     expect(migrations.filter(name => name.startsWith('274_'))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });

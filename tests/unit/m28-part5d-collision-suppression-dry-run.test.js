@@ -385,9 +385,9 @@ describe('Mission 28 Part 5D collision, suppression and no-effect analysis',()=>
   test('records Part5C released, only Part5D candidate, later slices planned and migration274/no275',()=>{
     const roadmap=fs.readFileSync(path.join(ROOT,'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'),'utf8');
     const ledger=fs.readFileSync(path.join(ROOT,'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'),'utf8');
-    for(const document of [roadmap,ledger]){expect(document).toContain('Parts 1A–5D released; Part 6A implementation candidate only.');expect(document).toContain('Parts 6B–14G remain planned and unimplemented.');expect(document).toContain('4533cc9be115ecd4195193d2ec7a2e196defe729');expect(document).toContain('08ee5c3c-1bf8-497d-b90e-96111210b8df');}
+    for(const document of [roadmap,ledger]){expect(document).toContain('Parts 1A–6A released; Part 6B implementation candidate only.');expect(document).toContain('Parts 6C–14G remain planned and unimplemented.');expect(document).toContain('4533cc9be115ecd4195193d2ec7a2e196defe729');expect(document).toContain('08ee5c3c-1bf8-497d-b90e-96111210b8df');}
     expect(ledger).toContain('| 19 | 5C | Owner-readable no-effect preview | **Released** |');expect(ledger).toContain('| 20 | 5D | Collision/suppression engine and no-effect dry run | **Released** |');
-    expect((ledger.match(/\*\*Implementation candidate\*\*/g)||[])).toHaveLength(1);expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(45);
-    const migrations=fs.readdirSync(path.join(ROOT,'migrations')).filter(name=>/^\d+.*\.sql$/.test(name)).sort();expect(migrations.at(-1)).toBe('275_canonical_automation_transactional_outbox_v1.sql');expect(migrations.some(name=>name.startsWith('276_'))).toBe(false);
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g)||[])).toHaveLength(1);expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(44);
+    const migrations=fs.readdirSync(path.join(ROOT,'migrations')).filter(name=>/^\d+.*\.sql$/.test(name)).sort();expect(migrations.at(-1)).toBe('276_canonical_automation_durable_scheduler_v1.sql');expect(migrations.some(name=>name.startsWith('277_'))).toBe(false);
   });
 });

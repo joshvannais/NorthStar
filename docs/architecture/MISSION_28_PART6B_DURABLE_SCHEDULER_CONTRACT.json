@@ -1,0 +1,141 @@
+{
+  "contractVersion": "mission28.part6b.durable-scheduler.v1",
+  "authority": {
+    "mission": 28,
+    "part": "6B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "41b509e493cf6489aeed32c3c729b1493264df5c",
+    "baselineTree": "c6305aeb2224aafb914ceb24acf40607ccfb9724",
+    "scope": "durable_tenant_timezone_local_and_utc_schedule_with_calendar_quiet_holiday_expiration_and_trusted_clock_evidence",
+    "routeUiPublisherQueueConsumerWorkerLeaseProviderRecipientMessageEffectOrMoneyAuthorityGranted": false
+  },
+  "part6ARelease": {
+    "acceptedSourceHead": "af2b777a3d146f24e95052add626784186d4b0df",
+    "pullRequest": 569,
+    "mergedMain": "41b509e493cf6489aeed32c3c729b1493264df5c",
+    "deployment": "62521b53-9b1b-44c8-af98-97b91f256138",
+    "deploymentState": "SUCCESS_RUNNING",
+    "image": "sha256:0f9e9e1a6119bc647e58c9f13dca4b746ae677c89ca080fa7cefeeda77cd804f",
+    "migrationState": "271_of_271_through_275_no_276",
+    "health": ["/api/health_200", "/_200", "/dashboard_200", "/demo/_200"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json", "normalizedLfSha256": "03F32F3C66EF525DF9ACA541F8A7D0C08935E1DD2EDB661468F78CC2A763308A"},
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART5D_COLLISION_SUPPRESSION_DRY_RUN_CONTRACT.json", "normalizedLfSha256": "3F82B37864D8B16DB6E8B7E8C5DCF27787D7A2675BE92091857601A0EA467BB0"},
+    {"path": "docs/architecture/MISSION_28_PART6A_TRANSACTIONAL_OUTBOX_CONTRACT.json", "normalizedLfSha256": "F79502C0793CD62A78442046CD04CFC88083C941A6D15D83C037ECB4C6A5FC9A"},
+    {"path": "migrations/275_canonical_automation_transactional_outbox_v1.sql", "normalizedLfSha256": "174404ECC14CC8E87F6C2B205C0E3A56D8834CCDFCF11D63870665F2DBCD4838"}
+  ],
+  "bounds": {
+    "maximumCanonicalRequestBytes": 65536,
+    "maximumScheduleHorizonDays": 366,
+    "maximumExpirationHorizonDays": 367,
+    "maximumAllowedWeeklyWindows": 32,
+    "maximumQuietWeeklyWindows": 32,
+    "maximumHolidayDates": 64,
+    "dstCandidateScanMinutesEachSide": 1440,
+    "dstCandidateProbeCountMaximum": 2881,
+    "windowMinuteRange": [0, 1440]
+  },
+  "scheduleEnvelope": {
+    "schemaVersion": "mission28.action-schedule.request.v1",
+    "exactFields": ["schemaVersion", "tenantId", "scheduleId", "transactionId", "runId", "unitBinding", "policyBinding", "sourceBinding", "localSchedule", "calendarBinding", "expirationBinding", "trustedClockBinding", "scheduleBindingDigest", "requestDigest"],
+    "unitBindingExactFields": ["unitId", "outboxId", "unitDigest"],
+    "policyBindingExactFields": ["policyId", "policyVersion", "policyDigest"],
+    "sourceBindingExactFields": ["sourceSetDigest"],
+    "localScheduleExactFields": ["tenantTimeZone", "localDate", "localTime", "utcInstant", "foldResolution"],
+    "calendarBindingExactFields": ["calendarId", "calendarVersion", "calendarDigest", "calendarState", "tenantTimeZone", "allowedWeeklyWindows", "quietWeeklyWindows", "holidayDates"],
+    "expirationBindingExactFields": ["expiresAt"],
+    "trustedClockBindingExactFields": ["contract"],
+    "windowExactFields": ["dayId", "startMinuteInclusive", "endMinuteExclusive"],
+    "calendarDigestNamespace": "mission28.business-calendar.v1\n",
+    "scheduleBindingDigestNamespace": "mission28.action-schedule-binding.v1\n",
+    "requestDigestNamespace": "mission28.action-schedule.request.v1\n",
+    "storedState": "scheduled_unpublished",
+    "calendarState": "exact_current",
+    "trustedClockContract": "postgresql_statement_timestamp_v1"
+  },
+  "timeZoneAndDstContract": {
+    "timeZoneRule": "exact_separately_trusted_current_canonical_IANA_identifier_matching_the_business_calendar_and_tenant_limit_authority",
+    "acceptedIdentifierPattern": "^(?:UTC|[A-Za-z]+(?:[_-][A-Za-z]+)*(?:/[A-Za-z]+(?:[_-][A-Za-z]+)*)+)$",
+    "abbreviationFixedOffsetUnknownAliasOrCaseVariant": "deny",
+    "localDateFormat": "YYYY-MM-DD",
+    "localTimeFormat": "HH:mm:ss",
+    "utcInstantFormat": "YYYY-MM-DDTHH:mm:ss.ffffffZ",
+    "roundTripRule": "utc_instant_in_exact_zone_must_equal_the_explicit_local_date_and_time",
+    "gap": "zero_matching_utc_instants_deny",
+    "ordinary": "one_matching_utc_instant_requires_foldResolution_not_ambiguous",
+    "fold": "two_matching_utc_instants_require_explicit_earlier_or_later_and_exact_corresponding_utc_instant",
+    "moreThanTwoMatchesOrUnresolvedTransformation": "deny",
+    "candidateSearch": "fixed_2881_minute_probes_centered_on_the_supplied_utc_instant_not_input_length_dependent"
+  },
+  "businessCalendarContract": {
+    "allowedWindows": "one_to_32_same_day_half_open_windows_strictly_ordered_and_nonoverlapping",
+    "quietWindows": "zero_to_32_same_day_half_open_windows_strictly_ordered_and_nonoverlapping",
+    "holidayDates": "zero_to_64_strictly_increasing_unique_valid_local_dates",
+    "scheduleAdmission": "local_minute_must_be_in_an_allowed_window_not_in_any_quiet_window_and_local_date_not_a_holiday",
+    "calendarTimeZoneMustEqualScheduleAndTrustedTenantTimeZone": true,
+    "missingStaleUnavailableMixedConflictingOrCandidateSuppliedCalendar": "deny",
+    "quietHolidayOrClosedBusinessTimeMayRerouteOrAuthorize": false
+  },
+  "trustedClockAndExpirationContract": {
+    "clock": "PostgreSQL_statement_timestamp_with_transaction_TimeZone_UTC",
+    "candidateClockValueAccepted": false,
+    "newScheduleMustBeStrictlyFutureAtStatementStart": true,
+    "newScheduleMustBeWithinMaximumHorizon": true,
+    "expirationMustBeAfterScheduledUtcAndWithinMaximumHorizon": true,
+    "exactStoredRequestReplayAfterTimeOrCalendarChanges": "same_receipt_no_new_row_without_reinterpreting_historical_evidence",
+    "materialChange": "new_Part6A_decision_action_unit_and_schedule_required"
+  },
+  "storageContract": {
+    "migration": "276_canonical_automation_durable_scheduler_v1.sql",
+    "table": "canonical_automation_action_schedules_v1",
+    "ownerOnlyFunction": "canonical_automation_store_action_schedule_v1",
+    "runtimeExecuteGranted": false,
+    "publicPrivileges": "none",
+    "tenantRls": "enabled_and_forced",
+    "immutability": "update_delete_truncate_denied",
+    "oneSchedulePerActionUnitAndOutbox": true,
+    "outboxStateMutation": "none",
+    "queuePublicationClaimLeaseDispatchProviderAttemptAndEffect": "unavailable_later_slices",
+    "retentionClass": "decision_history_no_automatic_deletion_authority",
+    "legacyAdoption": "none"
+  },
+  "trustedResolutionContract": {
+    "candidateMayNotCreateReplaceRetargetOrSelfAttestTenantTimeZoneCalendarClockUnitPolicySourceOrSchedule": true,
+    "resolverMustBeServerOwnedTenantPrivateAndIndependentOfCandidate": true,
+    "exactPart6ATransactionUnitAndOutboxMustAlreadyExist": true,
+    "exactPolicyMustRemainActiveAndUnexpiredAtNewScheduleStorage": true,
+    "exactSourceSnapshotsMustRemainLatestAcceptedLineageHeadsAtNewScheduleStorage": true,
+    "trustedResolutionMustEqualTheCompleteScheduleMaterial": true,
+    "currentRuntimeResolverAvailable": false
+  },
+  "replayAndIsolationContract": {
+    "sameScheduleIdAndRequestDigestAndCanonicalText": "same_receipt_no_new_row",
+    "sameScheduleIdDifferentRequest": "deny",
+    "sameUnitOrOutboxSecondSchedule": "deny",
+    "crossTenantTransactionRunUnitOutboxPolicySourceCalendarTimeZoneOrDigestReuse": "deny",
+    "aliasCloneProxyAccessorToJSONSymbolCustomPrototypeCoercibleOrNonplainInput": "deny_before_projection",
+    "rollback": "any_failure_leaves_zero_schedule_residue_and_does_not_modify_Part6A_rows"
+  },
+  "denials": [
+    "unknown_or_untrusted_time_zone_calendar_or_clock",
+    "invalid_local_or_utc_timestamp_or_substitution",
+    "daylight_saving_gap_fold_ambiguity_or_wrong_fold_choice",
+    "closed_business_time_quiet_window_holiday_or_expired_schedule",
+    "unsorted_overlapping_cross_day_out_of_range_or_duplicate_calendar_material",
+    "stale_unavailable_mixed_corrected_or_retargeted_policy_source_unit_or_outbox",
+    "queue_publication_claim_lease_retry_provider_attempt_recipient_message_delivery_outcome_or_effect",
+    "upstream_mutation_accounting_or_money_movement"
+  ],
+  "laterSliceBoundary": {
+    "part6C": "leases_fencing_ordering_idempotency_provider_request_identity_and_publication_not_implemented",
+    "part6D": "retry_backoff_and_uncertain_outcome_reconciliation_not_implemented",
+    "part6E": "cancel_pause_revoke_drain_dead_letter_and_reviewed_retry_not_implemented",
+    "part6F": "restart_outage_restore_and_orphan_recovery_not_implemented",
+    "parts7Plus": "sender_recipient_content_channel_provider_delivery_and_effect_authority_not_implemented"
+  },
+  "unavailableEvidence": ["independent_acceptance", "pull_request", "merge", "deployment", "private_production", "mounted_runtime_resolver", "scheduler_worker_or_timer", "queue_publication", "provider_sandbox_or_live", "real_recipient_or_message", "external_effect", "live_money", "hosted_load_or_sla", "restore", "physical_safari_or_devices", "manual_assistive_technology", "professional_review", "founder_visual_approval"]
+}

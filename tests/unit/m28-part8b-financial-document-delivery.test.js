@@ -161,13 +161,13 @@ describe('Mission 28 Part 8B financial-document delivery authority', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8');
     const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
     for (const document of [roadmap,ledger]) {
-      expect(document).toContain('Parts 1A–8A are released. Part 8B is the sole implementation candidate.');
-      expect(document).toContain('Parts 8C–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–8B are released. Part 8C is the sole implementation candidate.');
+      expect(document).toContain('Parts 8D–14G remain planned and unimplemented.');
       expect(document).toContain('60fd4934-d7cc-4f1f-8366-894e6fd03393');
       expect(document).toContain('287'); expect(document).toMatch(/no 288|migration 288 is absent/);
     }
     expect(ledger).toContain('| 33 | 8A | Mission 24 estimate/proposal/quote sending | **Released** |');
-    expect(ledger).toContain('| 34 | 8B | Mission 27 financial-document delivery without financial mutation | **Implementation candidate** |');
+    expect(ledger).toContain('| 34 | 8B | Mission 27 financial-document delivery without financial mutation | **Released** |');
     expect(markdown).toContain('no Part 8B resolution row is created');
   });
 });

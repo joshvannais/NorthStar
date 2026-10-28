@@ -1,0 +1,131 @@
+{
+  "contractVersion": "mission28.part6e.delivery-control.v1",
+  "authority": {
+    "mission": 28,
+    "part": "6E",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "68ec10f0bdfd8b289c6305f1a14a6f247dd5d78d",
+    "scope": "cancel_pause_revoke_supersede_drain_resume_expire_dead_letter_owner_reviewed_retry_and_bulk_stop_with_exact_action_phase_treatment_without_effect",
+    "schedulerWorkerQueueProviderCallbackRecipientMessageEffectOrMoneyAuthorityGranted": false
+  },
+  "part6DRelease": {
+    "acceptedSource": "9e426488cf5027210c6947af3d3b2d95aa49030b",
+    "acceptedTree": "7b640ca044bf7e11aeab59e9a36b89538b796994",
+    "pullRequest": 572,
+    "mergedMain": "68ec10f0bdfd8b289c6305f1a14a6f247dd5d78d",
+    "deployment": "823c8bc1-f895-4e1c-91a6-0ceaf211fe85",
+    "deploymentState": "SUCCESS_RUNNING",
+    "instance": "371435e8-ef70-44ea-9458-75680a62ad06",
+    "image": "sha256:e64e2878d32d60144e67336e86a8183d7c54688105cc58c1a2f88582ab1b0ce0",
+    "migrationState": "274_through_278_no_279",
+    "health": ["api_health_200", "root_200", "dashboard_200", "demo_200"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.json", "normalizedLfSha256": "D1DA31C44602127C6DDF95FE96B59FA57D1E23DA291717D64F658DD0B2E3AF81"},
+    {"path": "docs/architecture/MISSION_28_PART6A_TRANSACTIONAL_OUTBOX_CONTRACT.json", "normalizedLfSha256": "F79502C0793CD62A78442046CD04CFC88083C941A6D15D83C037ECB4C6A5FC9A"},
+    {"path": "docs/architecture/MISSION_28_PART6B_DURABLE_SCHEDULER_CONTRACT.json", "normalizedLfSha256": "30B2E2472DDC6DC8EB204D0544535C91302E47355971ACBA0800544D5B626687"},
+    {"path": "docs/architecture/MISSION_28_PART6C_DELIVERY_COORDINATION_CONTRACT.json", "normalizedLfSha256": "D9D00F6496DF95465257C427EA3674ECC7FB960780E495D1807C551F040835A3"},
+    {"path": "docs/architecture/MISSION_28_PART6D_RETRY_RECONCILIATION_CONTRACT.json", "normalizedLfSha256": "47F52068E81EC6D8AC5EBF2139F18C3FC77BF074923F718C22D1A94EAF416B5F"},
+    {"path": "migrations/275_canonical_automation_transactional_outbox_v1.sql", "normalizedLfSha256": "174404ECC14CC8E87F6C2B205C0E3A56D8834CCDFCF11D63870665F2DBCD4838"},
+    {"path": "migrations/276_canonical_automation_durable_scheduler_v1.sql", "normalizedLfSha256": "746343D185947BBBAB472CE6874669DC2BECE416DDDBEB29DE61C3962319BD59"},
+    {"path": "migrations/277_canonical_automation_delivery_coordination_v1.sql", "normalizedLfSha256": "48A2D5E29BD607C0B1DEF5392AB2D169F75BB213217CA9AFF2E9D5CCFD145A20"},
+    {"path": "migrations/278_canonical_automation_retry_reconciliation_v1.sql", "normalizedLfSha256": "76F5F9511E33980A78FB4F4458CFFEEA8960A5BD49A9DD2107E0C8F8786F0897"}
+  ],
+  "controlEnvelope": {
+    "schemaVersion": "mission28.delivery-control-decision.v1",
+    "exactFields": ["schemaVersion", "tenantId", "controlId", "operation", "targetBinding", "actorBinding", "successorBinding", "reviewBinding", "requestDigest"],
+    "targetBindingExactFields": ["targetKind", "policyId", "policyVersion", "policyDigest", "scheduleId", "transactionId", "runId", "unitId", "outboxId", "receiptId", "unitDigest", "providerRequestIdentity", "providerRequestDigest"],
+    "actorBindingExactFields": ["actorId", "sessionId", "membershipId", "membershipRole", "requestedAt"],
+    "successorBindingExactFields": ["policyId", "policyVersion", "policyDigest"],
+    "reviewBindingExactFields": ["reviewId", "reviewDigest", "reviewOutcome", "reviewedAt"],
+    "requestDigestNamespace": "mission28.delivery-control-decision.v1\n",
+    "decisionDigestNamespace": "mission28.delivery-control-evidence.v1\n",
+    "maximumCanonicalRequestBytes": 32768,
+    "plainDataRule": "ordinary_objects_dense_standard_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_alias_or_coercion"
+  },
+  "operations": [
+    {"id": "pause_scope", "targetKinds": ["tenant", "policy_version"], "roles": ["owner", "admin"], "direction": "reduce_only", "result": "paused"},
+    {"id": "revoke_policy", "targetKinds": ["policy_version"], "roles": ["owner"], "direction": "terminal_reduce_only", "result": "revoked_terminal"},
+    {"id": "supersede_policy", "targetKinds": ["policy_version"], "roles": ["owner"], "direction": "terminal_reduce_only", "result": "superseded_terminal"},
+    {"id": "drain_scope", "targetKinds": ["tenant", "policy_version"], "roles": ["owner", "admin"], "direction": "reduce_only", "result": "draining_or_drained"},
+    {"id": "resume_scope", "targetKinds": ["policy_version"], "roles": ["owner"], "direction": "increase_requires_current_authority", "result": "active_resumed"},
+    {"id": "cancel_action", "targetKinds": ["action_schedule"], "roles": ["owner", "admin"], "direction": "terminal_reduce_only", "result": "cancelled_terminal"},
+    {"id": "expire_action", "targetKinds": ["action_schedule"], "roles": ["owner", "admin"], "direction": "terminal_reduce_only", "result": "expired_terminal"},
+    {"id": "dead_letter_action", "targetKinds": ["action_schedule"], "roles": ["owner"], "direction": "terminal_reduce_only", "result": "dead_lettered_terminal"},
+    {"id": "owner_reviewed_retry", "targetKinds": ["action_schedule"], "roles": ["owner"], "direction": "review_only_no_same_action_reopen", "result": "reviewed_retry_new_action_required"},
+    {"id": "bulk_stop", "targetKinds": ["tenant", "policy_version"], "roles": ["owner", "admin"], "direction": "terminal_reduce_only", "result": "bulk_stopped_terminal"}
+  ],
+  "phaseTreatment": {
+    "queued": "cancel_expire_pause_revoke_supersede_drain_or_bulk_stop_may_block_future_claim; no effect is claimed",
+    "leased": "cancel_denied; reducing scope records no-new-claim and no-renewal intent but cannot claim the existing lease or any in-flight work stopped",
+    "in_flight": "accepted durable evidence is unavailable; cancellation retry and completion claims fail closed; only scope reduction may block later new attempts",
+    "uncertain": "cancel and resend denied; exact Part6D reconciliation remains allowed; dead-letter preserves unresolved evidence and never claims no effect",
+    "completed": "immutable effect evidence is never cancelled revoked rewritten or converted into no-effect evidence; accepted durable completion evidence is unavailable in this slice",
+    "permanent_stop_no_effect": "may be dead-lettered; owner-reviewed retry records review only and requires a separately created new action identity",
+    "permanent_stop_effect_or_unknown": "may be dead-lettered as effect-observed-or-unresolved; retry is permanently denied"
+  },
+  "transitionContract": {
+    "pauseScope": "blocks later schedule lease and retry-classification creation while preserving reconciliation evidence",
+    "revokePolicy": "terminal for the exact policy version and never resumes",
+    "supersedePolicy": "requires an exact distinct active successor and terminally blocks the old policy version",
+    "drainScope": "drained only when leased uncertain in-flight and completed-unresolved counts are zero; otherwise remains draining",
+    "resumeScope": "only an exact paused or drained policy version with current active unexpired policy and exact-current latest sources may resume",
+    "cancelAction": "only exact queued unclaimed action with no uncertainty or completed evidence",
+    "expireAction": "requires schedule or policy expiry at the trusted clock and never claims leased uncertain or effect evidence was undone",
+    "deadLetterAction": "requires exact Part6D permanent stop or uncertainty plus owner review; it never creates outcome proof",
+    "ownerReviewedRetry": "requires dead-lettered exact definite-no-effect attempt-ceiling evidence and an active current policy/source set; the stopped action remains blocked and a later retry must be a new run/action/receipt identity",
+    "bulkStop": "terminally blocks later schedules claims and retry classifications for the exact tenant or policy scope without rewriting existing action/effect evidence"
+  },
+  "reviewContract": {
+    "reviewRequiredFor": ["dead_letter_action", "owner_reviewed_retry"],
+    "reviewOutcomes": ["no_effect_terminal", "effect_or_unknown_unresolved", "new_action_required_no_reuse"],
+    "ownerReviewedRetryOutcome": "new_action_required_no_reuse",
+    "reviewEvidence": "exact_non_null_UUID_digest_and_trusted_clock_bounded_instant",
+    "sameActionProviderRequestReuseForReviewedRetry": "deny",
+    "reviewCreatesProviderAttemptOrOutcomeEvidence": false
+  },
+  "currentnessAndConcurrencyContract": {
+    "trustedClock": "postgresql_statement_timestamp_v1",
+    "actor": "exact_active_user_session_membership_same_tenant_and_allowed_fixed_role",
+    "recentAuthenticationForAuthorityIncrease": "active_session_created_within_900_seconds",
+    "scopeFanoutBound": 32,
+    "scopeCounts": ["queued", "leased", "uncertain", "permanent_stop", "in_flight_unavailable", "completed_unavailable"],
+    "tenantPolicyActionLockOrder": "tenant_control_then_policy_control_then_action_schedule_control",
+    "newScheduleLeaseAndRetryClassificationGuards": "database_triggers_consult_exact_control_heads_under_the_same_locks",
+    "reconciliationUnderReducingControl": "allowed_evidence_only_no_resend",
+    "sameControlIdDigestAndCanonicalText": "historical_replay_before_mutable_currentness_no_new_event_or_head_change",
+    "sameControlIdDifferentMaterial": "deny",
+    "reducingControlWinsConcurrentScheduleClaimOrRetry": true
+  },
+  "storageContract": {
+    "migration": "279_canonical_automation_delivery_controls_v1.sql",
+    "tables": ["canonical_automation_delivery_control_heads_v1", "canonical_automation_delivery_control_events_v1"],
+    "ownerOnlyFunction": "canonical_automation_record_delivery_control_v1",
+    "runtimeExecuteGranted": false,
+    "publicPrivileges": "none",
+    "tenantRls": "enabled_and_forced",
+    "eventImmutability": "update_delete_truncate_denied",
+    "existingOutboxScheduleLeaseRetryReceiptOrEffectMutation": "none",
+    "legacyAdoption": "none"
+  },
+  "denials": [
+    "unknown_extra_missing_null_nonplain_accessor_symbol_toJSON_proxy_wrapper_alias_or_coercible_material",
+    "cross_tenant_policy_schedule_transaction_run_unit_outbox_receipt_provider_identity_actor_session_membership_review_or_successor_alias",
+    "inactive_suspended_disabled_expired_revoked_cross_actor_or_wrong_role_identity",
+    "cancel_leased_inflight_uncertain_completed_permanent_stop_or_effect_evidence",
+    "resume_tenant_bulk_stop_revoked_superseded_expired_cancelled_dead_lettered_or_other_terminal_identity",
+    "resume_without_exact_active_unexpired_policy_latest_exact_current_sources_and_zero_unsafe_counts",
+    "dead_letter_without_exact_uncertain_or_permanent_stop_evidence_and_owner_review",
+    "owner_reviewed_retry_without_definite_no_effect_attempt_ceiling_dead_letter_current_authority_or_new_action_requirement",
+    "same_action_same_run_same_receipt_provider_request_resend_after_dead_letter",
+    "supersede_without_exact_distinct_active_successor_or_with_cross_tenant_policy_material",
+    "bulk_scope_more_than_32_actions_or_ambiguous_mixed_unresolved_counts",
+    "candidate_supplied_execution_phase_counts_result_state_or_decision_digest",
+    "queue_publish_worker_provider_callback_recipient_message_external_effect_upstream_mutation_accounting_or_money"
+  ],
+  "laterSliceBoundary": {
+    "part6F": "restart_migration_worker_crash_database_or_provider_outage_partial_callback_deployment_restore_or_orphan_recovery_not_implemented",
+    "parts7Plus": "sender_recipient_content_channel_provider_delivery_effect_and_reply_authority_not_implemented"
+  },
+  "unavailableEvidence": ["independent_acceptance", "pull_request", "merge", "deployment", "private_production", "mounted_runtime_resolver", "scheduler_or_worker", "queue_publication", "provider_adapter", "provider_sandbox_or_live", "real_recipient_or_message", "provider_attempt_or_acknowledgement", "callback", "in_flight_or_completed_effect_evidence", "delivery_or_business_outcome", "external_effect", "live_money", "hosted_load_or_sla", "restart_outage_or_restore", "physical_safari_or_devices", "manual_assistive_technology", "professional_review", "founder_visual_approval"]
+}

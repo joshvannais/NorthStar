@@ -166,7 +166,7 @@ describe('Mission 28 Part 4B durable source snapshots', () => {
   test('roadmap and ledger release Part 5A, state only Part 5B as candidate and keep later slices planned', () => {
     const roadmap = read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md');
     const ledger = read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md');
-    expect(roadmap).toContain('Parts 1A–6C released; Part 6D implementation candidate only.');
+    expect(roadmap).toContain('Parts 1A–6D released; Part 6E implementation candidate only.');
     expect(roadmap).toContain('additive migration `274_canonical_automation_trigger_snapshots_v1.sql`');
     expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Released** |');
     expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Released** |');
@@ -179,7 +179,7 @@ describe('Mission 28 Part 4B durable source snapshots', () => {
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
     expect(migrations).toContain('274_canonical_automation_trigger_snapshots_v1.sql');
     expect(migrations).toContain('275_canonical_automation_transactional_outbox_v1.sql');
-    expect(migrations.at(-1)).toBe('278_canonical_automation_retry_reconciliation_v1.sql');
-    expect(migrations.some(name => name.startsWith('279_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('279_canonical_automation_delivery_controls_v1.sql');
+    expect(migrations.some(name => name.startsWith('280_'))).toBe(false);
   });
 });

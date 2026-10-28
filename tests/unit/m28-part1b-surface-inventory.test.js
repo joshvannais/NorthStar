@@ -876,8 +876,8 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
   test('records Parts 1A–5A released, Part 5B as the sole candidate and every later slice as planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–5B released; Part 5C implementation candidate only.');
-    expect(roadmap).toContain('Parts 5D–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–5C released; Part 5D implementation candidate only.');
+    expect(roadmap).toContain('Parts 6A–14G remain planned and unimplemented.');
     const rows = [...ledger.matchAll(/^\| (\d{2}) \| (\d{1,2}[A-G]) \| (.+) \| (.+) \| (.+) \|$/gm)];
     expect(rows).toHaveLength(66);
     expect(rows[0][4]).toBe('**Released**');
@@ -913,8 +913,9 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(rows[15][4]).toBe('**Released**');
     expect(rows[15][5]).toContain('PR #564');
     expect(rows[16][4]).toBe('**Released**');
-    expect(rows[18][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(19).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[18][4]).toBe('**Released**');
+    expect(rows[19][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(20).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
   });
 

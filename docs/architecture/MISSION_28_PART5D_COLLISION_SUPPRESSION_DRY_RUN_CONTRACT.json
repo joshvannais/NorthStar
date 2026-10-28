@@ -1,0 +1,168 @@
+{
+  "contractVersion": "mission28.part5d.collision-suppression-dry-run.v1",
+  "authority": {
+    "mission": 28,
+    "part": "5D",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "cff573851f853e3e729fdd6a964c8b031352c00b",
+    "baselineTree": "51e1513401928200d4f676630339afc0021637dd",
+    "sourceContractAndExecutableAcceptanceOnly": true,
+    "mountedResolverStoreRouteUiSchedulerWorkerProviderOrEffectAvailable": false,
+    "decisionCreatesEligibilityApprovalScheduleClaimRecipientProviderEffectUpstreamMutationAccountingMoneyOrOutcomeAuthority": false
+  },
+  "part5CRelease": {
+    "acceptedSourceHead": "4533cc9be115ecd4195193d2ec7a2e196defe729",
+    "acceptedTree": "51e1513401928200d4f676630339afc0021637dd",
+    "pullRequest": 567,
+    "mergedMain": "cff573851f853e3e729fdd6a964c8b031352c00b",
+    "deployment": "08ee5c3c-1bf8-497d-b90e-96111210b8df",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "db41c5f3-0991-4fc3-853a-4877597e9019",
+    "imageSha256": "abd9e05fc5d06d43a89cbb0a051c9207a2cbbbd26eed101cda0d938fba7286e4",
+    "health": ["canonical_startup_ready", "migrations_270_latest_274_no_275", "api_health_200", "root_200", "dashboard_200", "demo_200"],
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.json", "normalizedLfSha256": "D1DA31C44602127C6DDF95FE96B59FA57D1E23DA291717D64F658DD0B2E3AF81"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART5A_DECLARATIVE_RULE_GRAMMAR.json", "normalizedLfSha256": "7EF24ECE536F4407EE402620B6122ABB0B067E85DB1F0A9E43D79BC7A2CDEE3B"},
+    {"path": "docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json", "normalizedLfSha256": "62A4EE942017E789D7F0F73DD9A6FA73125A52A9C09EB6E3726A3345CA8820A0"},
+    {"path": "docs/architecture/MISSION_28_PART5C_OWNER_READABLE_PREVIEW_CONTRACT.json", "normalizedLfSha256": "5EC38A5233F72400A6AB89464D420A40EFD4EC58C8D045E1DAC0C84B25A162B9"}
+  ],
+  "bounds": {
+    "maximumCandidates": 64,
+    "controlsPerCandidate": 11,
+    "maximumTokenBytes": 96,
+    "maximumAnalysisWindowDays": 90,
+    "maximumHistoricalAgeDays": 3650,
+    "priorityRankMinimum": 1,
+    "priorityRankMaximum": 1000000
+  },
+  "analysisEnvelope": {
+    "schemaVersion": "mission28.collision-analysis.v1",
+    "exactFields": ["schemaVersion", "tenantId", "analysisId", "mode", "asOf", "windowStartedAt", "candidates", "controls", "inputDigest"],
+    "modes": ["dry_run", "historical_backtest"],
+    "inputDigestNamespace": "mission28.collision-analysis-input.v1\n",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_cycles_aliases_or_coercion",
+    "canonicalOrder": "candidates_strictly_by_candidateId; controls_grouped_by_candidateId_then_exact_control_order; no_silent_reorder",
+    "trustedClockRule": "asOf_and_windowStartedAt_are_separately_trusted_UTC_instants; windowStartedAt_not_after_asOf_and_within_the_bounded_mode_window"
+  },
+  "trustedResolutionContract": {
+    "candidateMayNotSupplyReplaceRetargetOrSelfAttestTrustedAnalysis": true,
+    "analysisIdMustBeServerIssuedAndSeparatelyTrusted": true,
+    "resolverMustBeServerOwnedTenantPrivateAndIndependentOfCandidateInput": true,
+    "candidateOrRecomputedDigestNeverCreatesPolicyEvaluationPreviewPriorityCollisionScopeControlClockOrEvidenceAuthority": true,
+    "candidateMaterialMustEqualTheExactAcceptedPart5BOutputAndPart5CPreview": true,
+    "priorityAndCollisionScopeMustResolveFromExactCurrentPolicyRecipientCustomerDocumentChannelAndActionMaterial": true,
+    "everyControlMustResolveIndependentlyForItsExactKindAndDerivedScope": true,
+    "allCandidateAndControlResolutionsMustShareOneTrustedAsOfBoundary": true,
+    "crossTenantPolicyEvaluationPreviewSourceRecipientCustomerDocumentChannelControlEvidenceAliasCloneOrReplayReuse": "deny",
+    "currentRuntimeResolverAvailable": false
+  },
+  "candidateEnvelope": {
+    "exactFields": ["candidateId", "tenantId", "policyId", "policyVersion", "policyDigest", "evaluationId", "evaluationOutputDigest", "evaluationResult", "previewId", "previewDigest", "previewDisplayState", "previewEffectAuthorityState", "actionFamilyId", "actionTemplateId", "actionTemplateDigest", "authorizationDigest", "sourceSetDigest", "recipientSetDigest", "channelId", "providerModeId", "effectClass", "actionMaterialDigest", "collisionScopeDigest", "priorityRank", "customerId", "customerDigest", "documentId", "documentVersion", "documentDigest", "preparedAt", "candidateDigest"],
+    "candidateDigestNamespace": "mission28.collision-candidate.v1\n",
+    "requiredPart5Bindings": "one_exact_Part5B_eligible_output_and_its_exact_Part5C_preview_policy_rule_source_recipient_channel_template_authorization_and_no_effect_material",
+    "firstLaunchBoundary": "action_family_template_recipient_channel_provider_mode_effect_class_must_equal_the_exact_released_Part1D_Part5A_Part5B_Part5C_material",
+    "priorityRule": "priorityRank_is_separately_trusted_policy_material; lower_positive_integer_is_higher_priority; candidate_or_rule_content_never_self_assigns_priority",
+    "scopeRule": "collisionScopeDigest_is_server_derived_from_the_exact_tenant_action_recipient_customer_document_and_channel_scope; nullable_customer_or_document_fields_are_all_or_none",
+    "noContentRule": "actionMaterialDigest_is_a_digest_only; no_message_document_customer_or_provider_content_is_accepted"
+  },
+  "controlEnvelope": {
+    "exactFields": ["candidateId", "tenantId", "kind", "state", "scopeDigest", "evidenceId", "evidenceDigest", "observedAt", "acceptedAt", "expiresAt", "resolutionDigest"],
+    "resolutionDigestNamespace": "mission28.collision-control-resolution.v1\n",
+    "controlOrder": ["global_pause", "tenant_pause", "customer_pause", "document_pause", "recipient_opt_out", "provider_uncertainty", "source_change", "active_conversation", "recent_manual_activity", "duplicate_content", "higher_priority_action"],
+    "states": ["exact_current_clear", "exact_current_matched", "unavailable", "not_applicable"],
+    "requiredAlwaysApplicable": ["global_pause", "tenant_pause", "provider_uncertainty", "source_change", "recent_manual_activity", "duplicate_content", "higher_priority_action"],
+    "conditionalApplicability": {
+      "customer_pause": "applicable_when_candidate_has_exact_customer_binding_else_not_applicable",
+      "document_pause": "applicable_when_candidate_has_exact_document_binding_else_not_applicable",
+      "recipient_opt_out": "conservatively_applicable_when_candidate_has_exact_customer_binding_else_not_applicable",
+      "active_conversation": "applicable_when_candidate_has_exact_customer_binding_else_not_applicable"
+    },
+    "scopeRule": {
+      "global_pause": "digest_of_kind_only_global_scope",
+      "tenant_pause": "digest_of_kind_and_exact_tenant",
+      "customer_pause": "digest_of_kind_tenant_customer_id_and_customer_digest",
+      "document_pause": "digest_of_kind_tenant_document_id_version_and_digest",
+      "recipient_opt_out": "digest_of_kind_tenant_recipient_set_and_customer_binding",
+      "provider_uncertainty": "digest_of_kind_tenant_channel_and_provider_mode",
+      "source_change": "digest_of_kind_tenant_and_source_set",
+      "active_conversation": "digest_of_kind_tenant_customer_id_and_customer_digest",
+      "recent_manual_activity": "digest_of_kind_tenant_customer_binding_recipient_set_and_action_family",
+      "duplicate_content": "digest_of_kind_tenant_recipient_set_action_material_channel_and_action_family",
+      "higher_priority_action": "digest_of_kind_tenant_and_collision_scope"
+    },
+    "scopeDigestNamespace": "mission28.collision-control-scope.v1\n",
+    "acceptedEvidenceRule": "exact_current_clear_or_matched_controls_require_one_exact_tenant_private_accepted_evidence_id_digest_observedAt_and_acceptedAt; observedAt_not_after_acceptedAt_not_after_asOf; clear_expiry_is_null; matched_expiry_is_null_or_strictly_afterAsOf",
+    "notApplicableRule": "not_applicable_requires_all_evidence_and_time_fields_null_and_is_allowed_only_by_the_exact_conditional_applicability_rule",
+    "unavailableRule": "missing_ambiguous_stale_mixed_unaccepted_cross_tenant_future_or_digest_mismatched_evidence_is_unavailable_never_clear; unavailable_uses_null_evidence_and_time_fields_and_the_resolution_digest_binds_that_fail_closed_state"
+  },
+  "decisionContract": {
+    "resultStates": ["selected_no_effect", "suppressed", "superseded", "unavailable"],
+    "precedence": [
+      {"reasonCode": "required_evidence_unavailable", "result": "unavailable", "condition": "any_applicable_control_unavailable"},
+      {"reasonCode": "source_material_changed", "result": "unavailable", "condition": "source_change_matched"},
+      {"reasonCode": "provider_outcome_uncertain", "result": "unavailable", "condition": "provider_uncertainty_matched"},
+      {"reasonCode": "global_pause_active", "result": "suppressed", "condition": "global_pause_matched"},
+      {"reasonCode": "tenant_pause_active", "result": "suppressed", "condition": "tenant_pause_matched"},
+      {"reasonCode": "customer_pause_active", "result": "suppressed", "condition": "customer_pause_matched"},
+      {"reasonCode": "document_pause_active", "result": "suppressed", "condition": "document_pause_matched"},
+      {"reasonCode": "recipient_opt_out_active", "result": "suppressed", "condition": "recipient_opt_out_matched"},
+      {"reasonCode": "active_conversation_present", "result": "suppressed", "condition": "active_conversation_matched"},
+      {"reasonCode": "recent_manual_activity_present", "result": "suppressed", "condition": "recent_manual_activity_matched"},
+      {"reasonCode": "duplicate_content_recent", "result": "suppressed", "condition": "duplicate_content_matched"},
+      {"reasonCode": "higher_priority_action_active", "result": "superseded", "condition": "higher_priority_action_matched"},
+      {"reasonCode": "ambiguous_equal_priority_overlap", "result": "unavailable", "condition": "two_or_more_otherwise_clear_candidates_share_collision_scope_and_minimum_priority"},
+      {"reasonCode": "higher_priority_policy_overlap", "result": "superseded", "condition": "one_otherwise_clear_candidate_has_a_strictly_lower_priorityRank_in_the_same_collision_scope"},
+      {"reasonCode": "selected_no_effect", "result": "selected_no_effect", "condition": "all_controls_clear_or_exactly_not_applicable_and_candidate_is_the_unique_highest_priority_in_scope"}
+    ],
+    "overlapRule": "arbitration_occurs_only_after_control_precedence; equal_minimum_priority_fails_the_entire_clear_scope_closed; unique_minimum_is_selected_no_effect_and_all_other_clear_candidates_are_superseded",
+    "blockingEvidenceRule": "control_results_bind_the_exact_winning_control_evidence_only; overlap_results_bind_candidate_ids_only; no_lower_reason_is_fabricated",
+    "replayRule": "same_exact_input_digest_produces_the_same_ordered_decisions_and_output_digest; changed_candidate_control_clock_or_mode_requires_a_new_analysis",
+    "selectionMeaning": "selected_no_effect_is_counterfactual_collision_output_only_never_eligibility_approval_schedule_claim_or_effect_authority"
+  },
+  "outputEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "analysisId", "mode", "asOf", "inputDigest", "decisions", "effectCount", "providerProofState", "outcomeProofState", "outputDigest"],
+    "schemaVersion": "mission28.collision-analysis-output.v1",
+    "decisionExactFields": ["candidateId", "result", "reasonCode", "blockingEvidenceIds", "dominantCandidateId", "decisionDigest"],
+    "decisionDigestNamespace": "mission28.collision-decision.v1\n",
+    "outputDigestNamespace": "mission28.collision-analysis-output.v1\n",
+    "effectCount": 0,
+    "providerProofState": "not_provider_proof",
+    "outcomeProofState": "not_outcome_proof"
+  },
+  "dryRunAndBacktest": {
+    "dryRun": "uses_only_exact_current_tenant_private_accepted_evidence_at_the_trusted_asOf_and_creates_no_record_schedule_provider_recipient_or_effect",
+    "historicalBacktest": "uses_only_tenant_private_evidence_accepted_at_or_before_the_historical_asOf_with_no_future_leakage_and_creates_no_external_effect",
+    "neverPresentedAs": ["provider_delivery_proof", "provider_outcome_proof", "customer_response_proof", "business_outcome_proof", "approval", "schedule", "effect"],
+    "currentAuthorityRule": "a_backtest_or_dry_run_is_immutable_counterfactual_evidence_only_and_cannot_be_reused_as_current_authority"
+  },
+  "denials": [
+    "malformed_extra_missing_reordered_nonplain_accessor_symbol_toJSON_custom_prototype_proxy_wrapper_cycle_alias_or_coercible_input",
+    "candidate_supplied_or_retargeted_tenant_policy_evaluation_preview_source_recipient_channel_template_authorization_priority_scope_control_clock_or_evidence_authority",
+    "cross_tenant_cross_policy_cross_source_cross_recipient_cross_customer_cross_document_alias_clone_or_replay_reuse",
+    "duplicate_candidate_control_evidence_or_collision_identity",
+    "unbounded_candidate_control_text_collection_window_or_priority",
+    "unknown_control_state_reason_result_action_channel_provider_effect_or_mode",
+    "missing_stale_mixed_ambiguous_future_or_unaccepted_evidence_treated_as_clear",
+    "equal_priority_overlap_silently_resolved_by_input_order_or_identifier",
+    "provider_uncertainty_source_change_opt_out_pause_manual_activity_conversation_or_duplicate_evidence_ignored",
+    "dry_run_or_backtest_presented_as_provider_delivery_customer_response_business_outcome_or_effect_proof",
+    "selection_used_as_eligibility_approval_schedule_claim_recipient_provider_effect_upstream_mutation_accounting_or_money_authority"
+  ],
+  "laterSliceBoundary": {
+    "part6": "outbox_action_units_scheduler_leases_idempotency_retry_reconciliation_dead_letter_restart_restore_and_effect_execution_remain_planned_unimplemented",
+    "part7Plus": "recipient_sender_permission_template_provider_delivery_reply_opt_out_customer_workflow_financial_effect_observability_and_operations_remain_planned_unimplemented"
+  },
+  "unavailableEvidence": [
+    "mounted_collision_or_suppression_resolver_store_route_or_UI",
+    "runtime_control_resolution_or_enforcement",
+    "scheduler_queue_worker_provider_or_recipient_execution",
+    "provider_sandbox_live_provider_private_production_real_recipient_live_money_or_external_effect",
+    "hosted_load_SLA_physical_Safari_devices_manual_assistive_technology_professional_legal_privacy_provider_regulatory_review_or_founder_visual_verdict"
+  ]
+}

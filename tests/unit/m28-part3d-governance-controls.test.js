@@ -833,7 +833,7 @@ describe('Mission 28 Part 3D governance controls', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–4B released; Part 4C implementation candidate only.');
+      expect(document).toContain('Parts 1A–4C released; Part 4D implementation candidate only.');
       expect(document).toContain('3cd41fe5379d92fe629c62e0ebc3a51d8886c3cc');
       expect(document).toContain(BASE);
       expect(document).toContain('b745a483-1031-4020-9ab2-38c0044e599d');
@@ -843,7 +843,7 @@ describe('Mission 28 Part 3D governance controls', () => {
     expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Released** |');
     expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Released** |');
     expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Released** |');
-    expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Implementation candidate** |');
+    expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Released** |');
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 

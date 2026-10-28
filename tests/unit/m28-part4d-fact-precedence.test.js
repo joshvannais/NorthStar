@@ -547,7 +547,7 @@ describe('Mission 28 Part 4D deterministic fact precedence', () => {
   test('roadmap and ledger release Part4C, name only Part4D candidate and retain migration274/no275', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
-    expect(roadmap).toContain('Parts 1A–5A released; Part 5B implementation candidate only.');
+    expect(roadmap).toContain('Parts 1A–5B released; Part 5C implementation candidate only.');
     expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Released** |');
     expect(ledger).toContain('| 16 | 4D | Duplicate/replay/reorder/correction/tombstone/concurrency handling | **Released** |');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();

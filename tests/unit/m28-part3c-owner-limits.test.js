@@ -775,7 +775,7 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–6C released; Part 6D implementation candidate only.');
+      expect(document).toContain('Parts 1A–6D released; Part 6E implementation candidate only.');
       expect(document).toContain('56a39854325826982283d78dffed4e039c61335b');
       expect(document).toContain('d88a0fe294619fa982bc1541affc8052031cc406');
       expect(document).toContain('81bc25de-eb77-413e-8745-97882bdd7c09');
@@ -812,13 +812,14 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     });
     expect(contract.unavailableEvidence).toHaveLength(7);
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'));
-    expect(migrationNames).toHaveLength(274);
-    expect(Math.max(...migrationNames.map(name => Number(name.match(/^(\d+)/)?.[1] || 0)))).toBe(278);
+    expect(migrationNames).toHaveLength(275);
+    expect(Math.max(...migrationNames.map(name => Number(name.match(/^(\d+)/)?.[1] || 0)))).toBe(279);
     expect(migrationNames.filter(name => /^274/.test(name))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
     expect(migrationNames.filter(name => /^275/.test(name))).toEqual(['275_canonical_automation_transactional_outbox_v1.sql']);
     expect(migrationNames.filter(name => /^276/.test(name))).toEqual(['276_canonical_automation_durable_scheduler_v1.sql']);
     expect(migrationNames.filter(name => /^277/.test(name))).toEqual(['277_canonical_automation_delivery_coordination_v1.sql']);
     expect(migrationNames.filter(name => /^278/.test(name))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
+    expect(migrationNames.filter(name => /^279/.test(name))).toEqual(['279_canonical_automation_delivery_controls_v1.sql']);
     expect(read(NARRATIVE_PATH)).toContain('This is a source contract, not a runtime limit resolver or authority grant.');
   });
 });

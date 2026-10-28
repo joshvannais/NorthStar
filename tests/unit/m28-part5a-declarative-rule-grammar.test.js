@@ -600,16 +600,16 @@ describe('Mission 28 Part 5A bounded declarative rule grammar', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–5C released; Part 5D implementation candidate only.');
-      expect(document).toContain('Parts 6A–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–5D released; Part 6A implementation candidate only.');
+      expect(document).toContain('Parts 6B–14G remain planned and unimplemented.');
       expect(document).toContain('`41be176abfddae512f34da25a9d3564b1fea6e1b`');
       expect(document).toContain('`82b50c73-5414-4e7f-bb07-72d71f65dc92`');
     }
     expect(ledger).toContain('| 16 | 4D | Duplicate/replay/reorder/correction/tombstone/concurrency handling | **Released** |');
     expect(ledger).toContain('| 17 | 5A | Bounded declarative rule grammar | **Released** |');
     expect(ledger).toContain('| 19 | 5C | Owner-readable no-effect preview | **Released** |');
-    expect(ledger).toContain('| 20 | 5D | Collision/suppression engine and no-effect dry run | **Implementation candidate** |');
+    expect(ledger).toContain('| 20 | 5D | Collision/suppression engine and no-effect dry run | **Released** |');
     expect(roadmap).toContain('Released Part 5A artifacts:');
-    expect(roadmap).toContain('Current Part 5D artifacts:');
+    expect(roadmap).toContain('Released Part 5D artifacts:');
   });
 });

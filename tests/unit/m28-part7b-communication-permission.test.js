@@ -154,8 +154,8 @@ describe('Mission 28 Part 7B communication permission and suppression authority'
 
   test('records Parts 7A-7C released, only Part 7D candidate, migration284/no285 and Part 7E+ planned', () => {
     for (const document of [fs.readFileSync(ROADMAP, 'utf8'), fs.readFileSync(LEDGER, 'utf8')]) {
-      expect(document).toContain('Parts 1A–7D are released. Part 7E is the sole implementation candidate.');
-      expect(document).toContain('Parts 7F–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–7E are released. Part 7F is the sole implementation candidate.');
+      expect(document).toContain('Parts 8A–14G remain planned and unimplemented.');
       expect(document).toContain('3a64444e-1094-41c0-9d45-7c5375af74a8');
     }
     const ledger = fs.readFileSync(LEDGER, 'utf8');
@@ -164,7 +164,7 @@ describe('Mission 28 Part 7B communication permission and suppression authority'
     expect(ledger).toContain('| 29 | 7C | Approved templates, bounded variables and AI-draft boundary | **Released** |');
     expect(ledger).toContain('| 30 | 7D | Provider-neutral email/SMS and truthful native handoff | **Released** |');
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort((a, b) => Number(a.slice(0, 3)) - Number(b.slice(0, 3)));
-    expect(names).toHaveLength(281); expect(names.at(-1)).toBe('285_canonical_automation_scoped_link_attachment_v1.sql'); expect(names.some(name => name.startsWith('286_'))).toBe(false);
+    expect(names).toHaveLength(282); expect(names.at(-1)).toBe('286_canonical_automation_delivery_evidence_v1.sql'); expect(names.some(name => name.startsWith('287_'))).toBe(false);
   });
 
   test('keeps Part 7C+ and every provider, message, effect, money, legal and founder boundary unavailable', () => {

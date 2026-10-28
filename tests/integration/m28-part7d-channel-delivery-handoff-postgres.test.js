@@ -12,6 +12,7 @@ const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ROOT = path.resolve(__dirname, '../..');
 const CONTENT = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/architecture/MISSION_28_PART7C_CONTENT_TEMPLATE_PREVIEW_CONTRACT.json'), 'utf8'));
 const CHANNELS = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/architecture/MISSION_28_PART7D_CHANNEL_DELIVERY_HANDOFF_CONTRACT.json'), 'utf8'));
+const DELIVERY_EVIDENCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/architecture/MISSION_28_PART7F_DELIVERY_EVIDENCE_CONTRACT.json'), 'utf8'));
 const TENANT = '00000000-0000-4000-8000-000000000028';
 const OTHER = '00000000-0000-4000-8000-000000000029';
 const OWNER = '00000000-0000-4000-8000-000000000010';
@@ -28,7 +29,7 @@ const quoteIdentifier = value => `"${String(value).replace(/"/g, '""')}"`;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const ACTIONS = Object.fromEntries(CONTENT.approvedTemplateCatalog.map(entry => [entry.actionTemplateId, entry]));
 
-realPostgres('Mission 28 Parts 7D-7E PostgreSQL channel and no-access link truth through migration 285', () => {
+realPostgres('Mission 28 Parts 7D-7F PostgreSQL channel, no-access link and no-evidence truth through migration 286', () => {
   let database; let pool; let migrations;
   async function enter(client, tenant = TENANT) { await client.query('SELECT public.canonical_automation_enter_tenant_v1($1)', [tenant]); }
   async function tenantQuery(text, values = [], tenant = TENANT) {
@@ -134,11 +135,25 @@ realPostgres('Mission 28 Parts 7D-7E PostgreSQL channel and no-access link truth
     return value;
   }
   async function storeLink(value, trusted = linkTrusted(value)) { return (await pool.query('SELECT public.canonical_automation_record_link_attachment_resolution_v1($1,$2::jsonb) result', [canonical.canonicalize(value), JSON.stringify(trusted)])).rows[0].result; }
+  function deliveryTrusted(value) { return Object.fromEntries(['tenantId','transactionId','unitId','contentPreviewId','channelResolutionId','linkAttachmentResolutionId','senderRecipientResolutionId','permissionResolutionId','requestedProfileId','actorBinding','evaluatedAt'].map(key => [key, copy(value[key])])); }
+  async function deliveryValue(source, channel, link, suffix) {
+    const value = { schemaVersion: 'mission28.delivery-evidence-resolution.v1', tenantId: TENANT,
+      deliveryEvidenceResolutionId: uuid(930000 + suffix), transactionId: source.transactionId, unitId: source.unitId,
+      contentPreviewId: source.previewValue.contentPreviewId, channelResolutionId: channel.channelResolutionId,
+      linkAttachmentResolutionId: link.linkAttachmentResolutionId, senderRecipientResolutionId: source.senderResolutionId,
+      permissionResolutionId: source.permissionValue.permissionResolutionId,
+      requestedProfileId: DELIVERY_EVIDENCE.currentLaunchProfile.profileId,
+      actorBinding: { actorId: OWNER, sessionId: SESSION, membershipId: OWNER, membershipRole: 'owner' },
+      evaluatedAt: await now(), requestDigest: '' };
+    value.requestDigest = canonical.digest('mission28.delivery-evidence-resolution.v1\n', Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'requestDigest')));
+    return value;
+  }
+  async function storeDelivery(value, trusted = deliveryTrusted(value)) { return (await pool.query('SELECT public.canonical_automation_record_delivery_evidence_resolution_v1($1,$2::jsonb) result', [canonical.canonicalize(value), JSON.stringify(trusted)])).rows[0].result; }
 
   beforeAll(async () => {
     database = await createSuiteDatabase('m28-p7d-channel'); pool = new Pool({ connectionString: database.connectionString, max: 6 });
-    migrations = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m28-p7de-through285-'));
-    for (const name of fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name) && Number(name.slice(0, 3)) <= 285)) fs.copyFileSync(path.join(ROOT, 'migrations', name), path.join(migrations, name));
+    migrations = fs.mkdtempSync(path.join(os.tmpdir(), 'northstar-m28-p7df-through286-'));
+    for (const name of fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name) && Number(name.slice(0, 3)) <= 286)) fs.copyFileSync(path.join(ROOT, 'migrations', name), path.join(migrations, name));
     const db = require('../../src/db'); await db.runMigrations({ pool, migrationsDirectory: migrations });
     await pool.query(`INSERT INTO public.organizations(id,name,email) VALUES($1,'Part 7D tenant','part7d@example.test'),($2,'Part 7D other','part7d-other@example.test')`, [TENANT, OTHER]);
     await pool.query(`INSERT INTO public.users(id,organization_id,name,email,password_hash,role,status,phone)
@@ -157,19 +172,22 @@ realPostgres('Mission 28 Parts 7D-7E PostgreSQL channel and no-access link truth
     await pool.query(`CREATE ROLE ${quoteIdentifier(RLS_ROLE)} NOLOGIN`);
     await pool.query(`GRANT SELECT ON public.canonical_automation_channel_resolutions_v1 TO ${quoteIdentifier(RLS_ROLE)}`);
     await pool.query(`GRANT SELECT ON public.canonical_automation_link_attachment_resolutions_v1 TO ${quoteIdentifier(RLS_ROLE)}`);
+    await pool.query(`GRANT SELECT ON public.canonical_automation_delivery_evidence_resolutions_v1 TO ${quoteIdentifier(RLS_ROLE)}`);
   }, 300000);
 
   afterAll(async () => {
-    if (pool) { await pool.query(`REVOKE ALL ON public.canonical_automation_channel_resolutions_v1 FROM ${quoteIdentifier(RLS_ROLE)}`).catch(() => {}); await pool.query(`REVOKE ALL ON public.canonical_automation_link_attachment_resolutions_v1 FROM ${quoteIdentifier(RLS_ROLE)}`).catch(() => {}); await pool.query(`DROP ROLE IF EXISTS ${quoteIdentifier(RLS_ROLE)}`).catch(() => {}); await pool.end(); }
+    if (pool) { await pool.query(`REVOKE ALL ON public.canonical_automation_channel_resolutions_v1 FROM ${quoteIdentifier(RLS_ROLE)}`).catch(() => {}); await pool.query(`REVOKE ALL ON public.canonical_automation_link_attachment_resolutions_v1 FROM ${quoteIdentifier(RLS_ROLE)}`).catch(() => {}); await pool.query(`REVOKE ALL ON public.canonical_automation_delivery_evidence_resolutions_v1 FROM ${quoteIdentifier(RLS_ROLE)}`).catch(() => {}); await pool.query(`DROP ROLE IF EXISTS ${quoteIdentifier(RLS_ROLE)}`).catch(() => {}); await pool.end(); }
     if (database) await database.cleanup(); if (migrations && path.dirname(migrations) === os.tmpdir()) fs.rmSync(migrations, { recursive: true, force: true });
   }, 180000);
 
-  test('migrations 284-285 are additive immutable forced-RLS and expose no public authority', async () => {
-    expect((await pool.query('SELECT max(substring(filename,1,3)::integer) latest,count(*)::integer total FROM public._migrations')).rows[0]).toEqual({ latest: 285, total: 281 });
+  test('migrations 284-286 are additive immutable forced-RLS and expose no public authority', async () => {
+    expect((await pool.query('SELECT max(substring(filename,1,3)::integer) latest,count(*)::integer total FROM public._migrations')).rows[0]).toEqual({ latest: 286, total: 282 });
     expect((await pool.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='canonical_automation_channel_resolutions_v1'`)).rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
     expect((await pool.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='canonical_automation_link_attachment_resolutions_v1'`)).rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
+    expect((await pool.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='canonical_automation_delivery_evidence_resolutions_v1'`)).rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
     expect((await pool.query(`SELECT has_function_privilege('public','canonical_automation_record_channel_resolution_v1(text,jsonb)','EXECUTE') allowed`)).rows[0].allowed).toBe(false);
     expect((await pool.query(`SELECT has_function_privilege('public','canonical_automation_record_link_attachment_resolution_v1(text,jsonb)','EXECUTE') allowed`)).rows[0].allowed).toBe(false);
+    expect((await pool.query(`SELECT has_function_privilege('public','canonical_automation_record_delivery_evidence_resolution_v1(text,jsonb)','EXECUTE') allowed`)).rows[0].allowed).toBe(false);
   });
 
   test('stores all four exact channel dispositions without handoff, provider, attempt, send or delivery', async () => {
@@ -300,5 +318,99 @@ realPostgres('Mission 28 Parts 7D-7E PostgreSQL channel and no-access link truth
     const client = await pool.connect();
     try { await client.query('BEGIN'); await client.query(`SET LOCAL ROLE ${quoteIdentifier(RLS_ROLE)}`); await client.query(`SELECT set_config('northstar.automation_tenant_id',$1,TRUE)`, [OTHER]); expect((await client.query('SELECT count(*)::integer count FROM public.canonical_automation_link_attachment_resolutions_v1')).rows[0].count).toBe(0); await client.query('ROLLBACK'); }
     finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
+  });
+
+  test('stores and replays only immutable no-evidence truth with no provider, recipient, suppression or effect evidence', async () => {
+    const source = await seedContent(100); const channel = await channelValue(source, 100); await storeChannel(channel);
+    const link = await linkValue(source, channel, 100); await storeLink(link); const value = await deliveryValue(source, channel, link, 100);
+    const first = await storeDelivery(value);
+    expect(first).toMatchObject({ resultState: 'unavailable_no_effect_evidence', replayed: false,
+      providerEventIngested: false, callbackAccepted: false, receiptPersisted: false, openPersisted: false,
+      replyPersisted: false, questionPersisted: false, optOutPersisted: false, complaintPersisted: false,
+      correctionPersisted: false, suppressionCreated: false, messageSent: false, delivered: false, effectCreated: false });
+    expect(await storeDelivery(copy(value))).toMatchObject({ deliveryEvidenceResolutionDigest: first.deliveryEvidenceResolutionDigest,
+      replayed: true, providerEventIngested: false, effectCreated: false });
+    const row = (await tenantQuery('SELECT * FROM public.canonical_automation_delivery_evidence_resolutions_v1 WHERE organization_id=$1 AND delivery_evidence_resolution_id=$2', [TENANT, value.deliveryEvidenceResolutionId])).rows[0];
+    expect(row).toMatchObject({ requested_profile_id: 'current_launch_no_provider_or_recipient_evidence', provider_attempt_state: 'not_created',
+      provider_acknowledgement_state: 'unavailable_no_attempt', callback_state: 'not_received_no_callback_authority',
+      delivery_state: 'unavailable_no_message_or_evidence', open_state: 'unavailable_not_supported',
+      reply_state: 'unavailable_no_authenticated_inbound', opt_out_state: 'unavailable_no_authenticated_inbound',
+      strongest_claim: 'none', result_state: 'unavailable_no_effect_evidence' });
+    const columns = (await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='canonical_automation_delivery_evidence_resolutions_v1' ORDER BY ordinal_position`)).rows.map(rowValue => rowValue.column_name);
+    expect(columns).not.toEqual(expect.arrayContaining(['raw_payload','provider_metadata','provider_status_text','callback_body','message_body','reply_body','recipient_address','contact_value','secret','token']));
+    expect(JSON.stringify(row)).not.toContain('part7d-staff-100@example.test');
+  });
+
+  test('rejects malformed or candidate-supplied events, callbacks, outcomes, responses, corrections and suppression with zero residue', async () => {
+    const source = await seedContent(110); const channel = await channelValue(source, 110); await storeChannel(channel);
+    const link = await linkValue(source, channel, 110); await storeLink(link); const original = await deliveryValue(source, channel, link, 110);
+    for (const mutate of [
+      value => { value.unexpected = 'customer@example.test'; }, value => { value.providerEvent = { status: 'delivered' }; },
+      value => { value.callback = { signature: 'secret' }; }, value => { value.receipt = { delivered: true }; },
+      value => { value.openedAt = value.evaluatedAt; }, value => { value.reply = 'customer text'; },
+      value => { value.customerQuestion = 'private question'; }, value => { value.optOut = true; },
+      value => { value.complaint = true; }, value => { value.correctionOfEventId = uuid(99); },
+      value => { value.suppressionCreated = true; }, value => { value.resultState = 'delivered'; },
+      value => { delete value.permissionResolutionId; }, value => { value.requestedProfileId = 'provider_delivery'; }
+    ]) {
+      const value = copy(original); mutate(value);
+      value.requestDigest = canonical.digest('mission28.delivery-evidence-resolution.v1\n', Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'requestDigest')));
+      await expect(storeDelivery(value, deliveryTrusted(value))).rejects.toThrow();
+    }
+    const wrongTrust = deliveryTrusted(original); wrongTrust.linkAttachmentResolutionId = uuid(99);
+    await expect(storeDelivery(original, wrongTrust)).rejects.toThrow(/trusted resolution/i);
+    expect((await tenantQuery('SELECT count(*)::integer count FROM public.canonical_automation_delivery_evidence_resolutions_v1 WHERE organization_id=$1 AND unit_id=$2', [TENANT, source.unitId])).rows[0].count).toBe(0);
+  });
+
+  test('rejects stale recipient source and superseded permission before a new no-evidence resolution', async () => {
+    const stale = await seedContent(120); const staleChannel = await channelValue(stale, 120); await storeChannel(staleChannel);
+    const staleLink = await linkValue(stale, staleChannel, 120); await storeLink(staleLink);
+    const staleValue = await deliveryValue(stale, staleChannel, staleLink, 120);
+    await pool.query(`UPDATE public.users SET email='part7f-corrected@example.test',email_normalized='part7f-corrected@example.test',updated_at=clock_timestamp() WHERE id=$1`, [stale.item.recipientRecordId]);
+    await expect(storeDelivery(staleValue)).rejects.toThrow(/delivery evidence authority unavailable/i);
+    const superseded = await seedContent(121); const channel = await channelValue(superseded, 121); await storeChannel(channel);
+    const link = await linkValue(superseded, channel, 121); await storeLink(link); const oldValue = await deliveryValue(superseded, channel, link, 121);
+    const second = await permissionVersion(superseded, superseded.permissionId, 2, superseded.version.permissionDigest); await storeVersion(second);
+    await expect(storeDelivery(oldValue)).rejects.toThrow(/delivery evidence authority unavailable/i);
+  });
+
+  test('serializes recipient correction and permission append before new no-evidence truth', async () => {
+    const sourceRace = await seedContent(130); const sourceChannel = await channelValue(sourceRace, 130); await storeChannel(sourceChannel);
+    const sourceLink = await linkValue(sourceRace, sourceChannel, 130); await storeLink(sourceLink);
+    const sourceValue = await deliveryValue(sourceRace, sourceChannel, sourceLink, 130); const sourceBlocker = await pool.connect(); let sourceDone = false;
+    try {
+      await sourceBlocker.query('BEGIN'); await sourceBlocker.query(`UPDATE public.users SET email='part7f-race@example.test',email_normalized='part7f-race@example.test',updated_at=clock_timestamp() WHERE id=$1`, [sourceRace.item.recipientRecordId]);
+      const pending = storeDelivery(sourceValue).then(result => ({ result }), error => ({ error })).finally(() => { sourceDone = true; });
+      await wait(100); expect(sourceDone).toBe(false); await sourceBlocker.query('COMMIT');
+      expect((await pending).error.message).toMatch(/delivery evidence authority unavailable/i);
+    } finally { await sourceBlocker.query('ROLLBACK').catch(() => {}); sourceBlocker.release(); }
+    const permissionRace = await seedContent(131); const channel = await channelValue(permissionRace, 131); await storeChannel(channel);
+    const link = await linkValue(permissionRace, channel, 131); await storeLink(link);
+    const permissionValue = await deliveryValue(permissionRace, channel, link, 131); const blocker = await pool.connect(); let permissionDone = false;
+    try {
+      await blocker.query('BEGIN'); const second = await permissionVersion(permissionRace, permissionRace.permissionId, 2, permissionRace.version.permissionDigest);
+      await storeVersion(second, versionTrusted(second), blocker);
+      const pending = storeDelivery(permissionValue).then(result => ({ result }), error => ({ error })).finally(() => { permissionDone = true; });
+      await wait(100); expect(permissionDone).toBe(false); await blocker.query('COMMIT');
+      expect((await pending).error.message).toMatch(/delivery evidence authority unavailable/i);
+    } finally { await blocker.query('ROLLBACK').catch(() => {}); blocker.release(); }
+  });
+
+  test('rejects replay conflicts, cloned material and cross-tenant reads of no-evidence truth', async () => {
+    const source = await seedContent(140); const channel = await channelValue(source, 140); await storeChannel(channel);
+    const link = await linkValue(source, channel, 140); await storeLink(link); const value = await deliveryValue(source, channel, link, 140); await storeDelivery(value);
+    const conflict = copy(value); conflict.linkAttachmentResolutionId = uuid(920999);
+    conflict.requestDigest = canonical.digest('mission28.delivery-evidence-resolution.v1\n', Object.fromEntries(Object.entries(conflict).filter(([key]) => key !== 'requestDigest')));
+    await expect(storeDelivery(conflict, deliveryTrusted(conflict))).rejects.toThrow(/replay conflict/i);
+    const clone = copy(value); clone.deliveryEvidenceResolutionId = uuid(930141);
+    clone.requestDigest = canonical.digest('mission28.delivery-evidence-resolution.v1\n', Object.fromEntries(Object.entries(clone).filter(([key]) => key !== 'requestDigest')));
+    await expect(storeDelivery(clone, deliveryTrusted(clone))).rejects.toThrow(/duplicate key|unique/i);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN'); await client.query(`SET LOCAL ROLE ${quoteIdentifier(RLS_ROLE)}`);
+      await client.query(`SELECT set_config('northstar.automation_tenant_id',$1,TRUE)`, [OTHER]);
+      expect((await client.query('SELECT count(*)::integer count FROM public.canonical_automation_delivery_evidence_resolutions_v1')).rows[0].count).toBe(0);
+      await client.query('ROLLBACK');
+    } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
   });
 });

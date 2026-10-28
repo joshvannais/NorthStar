@@ -181,9 +181,9 @@ describe('Mission 28 Part 7C approved content and no-effect preview contract', (
 
   test('roadmap and ledger record 7C released, 7D candidate-only, and every later slice planned', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const narrative = fs.readFileSync(CONTRACT_MD, 'utf8');
-    expect(roadmap).toContain('Parts 1A–7D are released. Part 7E is the sole implementation candidate');
-    expect(ledger).toContain('Parts 1A–7D are released. Part 7E is the sole implementation candidate');
-    expect(ledger).toContain('Parts 7F–14G'); expect(narrative).toContain('AI-assisted wording remains a labeled unapproved draft boundary');
+    expect(roadmap).toContain('Parts 1A–7E are released. Part 7F is the sole implementation candidate');
+    expect(ledger).toContain('Parts 1A–7E are released. Part 7F is the sole implementation candidate');
+    expect(ledger).toContain('Parts 8A–14G'); expect(narrative).toContain('AI-assisted wording remains a labeled unapproved draft boundary');
     expect(narrative).toContain('No route, UI, scheduler, publisher, consumer, worker, provider, callback, recipient/message, delivery, reply, outcome, or effect path is mounted.');
   });
 });

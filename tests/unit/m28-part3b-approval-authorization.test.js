@@ -750,12 +750,12 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     expect(contract.unavailableEvidence).toHaveLength(8);
   });
 
-  test('roadmap and ledger record Parts 1A-4D released and only Part 5A current', () => {
+  test('roadmap and ledger record Parts 1A-5A released and only Part 5B current', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–4D released; Part 5A implementation candidate only.');
-      expect(document).toContain('Parts 5B–14G');
+      expect(document).toContain('Parts 1A–5A released; Part 5B implementation candidate only.');
+      expect(document).toContain('Parts 5C–14G');
       expect(document).toContain('05a541792adac121f8c51b2cf200c0d18fcfbbf1');
       expect(document).toContain('1e62336afe2c9e65cccbe1629a62b86855da3ff8');
       expect(document).toContain('7ca335a1-7bf6-4f8d-ae98-a188b891f85d');
@@ -773,7 +773,8 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     expect(roadmap).toContain('Released Part 3D artifacts');
     expect(roadmap).toContain('Released Part 4C artifacts');
     expect(roadmap).toContain('Released Part 4D artifacts');
-    expect(roadmap).toContain('Current Part 5A artifacts');
+    expect(roadmap).toContain('Released Part 5A artifacts');
+    expect(roadmap).toContain('Current Part 5B artifacts');
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 

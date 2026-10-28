@@ -155,8 +155,9 @@ function validateLedger(document) {
   expect(rows[14].evidence).toContain('PR #563');
   expect(rows[15]).toMatchObject({ id: '4D', state: '**Released**' });
   expect(rows[15].evidence).toContain('PR #564');
-  expect(rows[16]).toMatchObject({ id: '5A', state: '**Implementation candidate**' });
-  expect(rows.slice(17).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+  expect(rows[16]).toMatchObject({ id: '5A', state: '**Released**' });
+  expect(rows[17]).toMatchObject({ id: '5B', state: '**Implementation candidate**' });
+  expect(rows.slice(18).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
 }
 
 describe('Mission 28 Part 1A authority ratification', () => {
@@ -172,8 +173,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       expect(document).toContain(BASE);
       expect(document).toContain(BASE_TREE);
     }
-    expect(roadmap).toContain('Parts 1A–4D released; Part 5A implementation candidate only.');
-    expect(roadmap).toContain('Parts 5B–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–5A released; Part 5B implementation candidate only.');
+    expect(roadmap).toContain('Parts 5C–14G remain planned and unimplemented.');
     for (const identity of [PART1A_HEAD, PART1A_MAIN, PART1A_DEPLOYMENT, PART1A_AUDIT]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -257,7 +258,7 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const ledger = read(LEDGER_PATH);
     validateLedger(ledger);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(49);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(48);
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
     expect(ledger).toContain(`Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 \`${PART1A_AUDIT}\``);
   });

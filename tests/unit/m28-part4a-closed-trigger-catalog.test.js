@@ -351,11 +351,11 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     }
   });
 
-  test('records Parts 1A-4D released, Part 5A candidate only and later slices planned', () => {
+  test('records Parts 1A-5A released, Part 5B candidate only and later slices planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–4D released; Part 5A implementation candidate only.');
+      expect(document).toContain('Parts 1A–5A released; Part 5B implementation candidate only.');
       expect(document).toContain('797be4a33bb2128ae2efd79b5347ef43f94da0f6');
       expect(document).toContain('041971bb190998e1444087482941686c4166573d');
       expect(document).toContain('7e0ef15f-1275-4578-aade-70b8c8277bef');
@@ -372,9 +372,10 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(rows[14].evidence).toContain('PR #563');
     expect(rows[15]).toMatchObject({ id: '4D', state: '**Released**' });
     expect(rows[15].evidence).toContain('PR #564');
-    expect(rows[16]).toMatchObject({ id: '5A', state: '**Implementation candidate**' });
-    expect(rows.slice(17).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(49);
+    expect(rows[16]).toMatchObject({ id: '5A', state: '**Released**' });
+    expect(rows[17]).toMatchObject({ id: '5B', state: '**Implementation candidate**' });
+    expect(rows.slice(18).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(48);
   });
 
   test('keeps runtime, migrations and later Part 4 authority outside the slice', () => {

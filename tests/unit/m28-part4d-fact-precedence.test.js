@@ -171,7 +171,7 @@ function resultState(operation) {
   return 'active';
 }
 
-function validateNew(candidate, trusted, currentHead, snapshotIdentities) {
+function validateEnvelope(candidate, trusted, authorityLineage, currentHead) {
   ownPlain(candidate, 'candidate');
   ownPlain(trusted, 'trusted');
   exact(candidate, CONTRACT.transitionEnvelope.exactFields, 'transition');
@@ -209,7 +209,8 @@ function validateNew(candidate, trusted, currentHead, snapshotIdentities) {
     tenantId: candidate.tenantId, triggerId: candidate.triggerId, sourceClassId: candidate.sourceClassId,
     recordIdentityDigest: candidate.recordIdentityDigest, eventKind: candidate.eventKind,
   };
-  if (!same(candidateLineage, trusted.lineageIdentity) ||
+  if (!same(candidateLineage, authorityLineage) ||
+      !same(candidateLineage, trusted.lineageIdentity) ||
       !same(candidate.snapshotBinding, trusted.snapshotBinding) ||
       !same(candidate.trustedDispositionBinding, trusted.dispositionBinding) ||
       !same(headBinding(currentHead), trusted.currentHead)) {
@@ -218,7 +219,10 @@ function validateNew(candidate, trusted, currentHead, snapshotIdentities) {
   if (candidate.requestDigest !== digest(CONTRACT.transitionEnvelope.requestDigestNamespace, requestDigestBase(candidate)) ||
       candidate.transitionDigest !== digest(CONTRACT.transitionEnvelope.transitionDigestNamespace,
         transitionDigestBase(candidate))) throw new Error('transition digest');
+  return true;
+}
 
+function validateNew(candidate, currentHead, snapshotIdentities) {
   const rule = CONTRACT.transitionRules[candidate.operation];
   const priorState = currentHead ? currentHead.state : null;
   if (!rule.allowedPriorStates.includes(priorState) || candidate.sequence !== (currentHead ? currentHead.sequence + 1 : 1) ||
@@ -274,18 +278,7 @@ class FactStore {
   }
 
   apply(candidate, trusted) {
-    ownPlain(candidate, 'candidate');
-    ownPlain(trusted, 'trusted');
-    exact(trusted, ['lineageIdentity', 'snapshotBinding', 'dispositionBinding', 'currentHead'], 'trusted resolution');
-    exact(trusted.lineageIdentity, CONTRACT.lineageIdentity.exactFields, 'trusted lineage');
-    const candidateLineage = { tenantId: candidate.tenantId, triggerId: candidate.triggerId,
-      sourceClassId: candidate.sourceClassId, recordIdentityDigest: candidate.recordIdentityDigest,
-      eventKind: candidate.eventKind };
-    if (!same(candidateLineage, this.authorityLineage) ||
-        !same(candidateLineage, trusted.lineageIdentity) ||
-        !same(candidate.snapshotBinding, trusted.snapshotBinding) ||
-        !same(candidate.trustedDispositionBinding, trusted.dispositionBinding) ||
-        !same(headBinding(this.head), trusted.currentHead)) throw new Error('trusted resolution mismatch');
+    validateEnvelope(candidate, trusted, this.authorityLineage, this.head);
     const stored = this.byId.get(candidate.transitionId);
     if (stored) {
       if (stored.requestDigest === candidate.requestDigest && stored.transitionDigest === candidate.transitionDigest &&
@@ -297,7 +290,7 @@ class FactStore {
     if (duplicate) return { ...duplicate.result, coalesced: true,
       currentHead: copy(this.head), eligibilityState: 'replay_or_duplicate_not_currentness_authority' };
 
-    validateNew(candidate, trusted, this.head, { ids: this.snapshotIds, digests: this.snapshotDigests });
+    validateNew(candidate, this.head, { ids: this.snapshotIds, digests: this.snapshotDigests });
     const head = {
       transitionId: candidate.transitionId,
       transitionDigest: candidate.transitionDigest,
@@ -382,6 +375,31 @@ describe('Mission 28 Part 4D deterministic fact precedence', () => {
       snapshotBinding: { ...copy(original.snapshotBinding), eventTime: '2026-10-27T23:59:59.000Z' },
       trustedDispositionBinding: copy(original.trustedDispositionBinding) });
     expect(() => append(store, falseDuplicate)).toThrow(/state or sequence|snapshot alias/);
+  });
+
+  test('validates the complete envelope before same-ID replay or new-ID coalescing lookup', () => {
+    const store = new FactStore();
+    const original = nextTransition('original', 1);
+    append(store, original);
+
+    const malformedReplay = copy(original);
+    malformedReplay.unexpected = 'must_be_rejected';
+    expect(() => store.apply(malformedReplay, trustedFor(malformedReplay, store.head))).toThrow(/transition shape/);
+
+    const missingSchemaReplay = copy(original);
+    delete missingSchemaReplay.schemaVersion;
+    expect(() => store.apply(missingSchemaReplay, trustedFor(missingSchemaReplay, store.head)))
+      .toThrow(/transition shape/);
+
+    const malformedAlias = nextTransition('original', 1, null, { transitionId: id(597),
+      snapshotBinding: copy(original.snapshotBinding),
+      trustedDispositionBinding: copy(original.trustedDispositionBinding) });
+    delete malformedAlias.requestDigest;
+    delete malformedAlias.transitionDigest;
+    expect(() => store.apply(malformedAlias, trustedFor(malformedAlias, store.head))).toThrow(/transition shape/);
+
+    expect(store.byId.size).toBe(1);
+    expect(store.head.transitionId).toBe(original.transitionId);
   });
 
   test('rejects every skipped, reordered, stale or illegal state transition', () => {

@@ -421,11 +421,11 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(contract).toContain('founder visual approval remain unavailable and unclaimed');
   });
 
-  test('records released Parts 1A–4C, exactly Part 4D current and all later slices planned', () => {
+  test('records released Parts 1A–4D, exactly Part 5A current and all later slices planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–4C released; Part 4D implementation candidate only.');
-    expect(roadmap).toContain('Parts 5A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–4D released; Part 5A implementation candidate only.');
+    expect(roadmap).toContain('Parts 5B–14G remain planned and unimplemented.');
     for (const identity of [PART1B_HEAD, BASE, PART1B_DEPLOYMENT, PART1B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -460,11 +460,12 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(rows[13][5]).toContain('PR #562');
     expect(rows[14][4]).toBe('**Released**');
     expect(rows[14][5]).toContain('PR #563');
-    expect(rows[15][4]).toBe('**Implementation candidate**');
-    expect(rows[15][5]).toContain('no mounted runtime resolver');
-    expect(rows.slice(16).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[15][4]).toBe('**Released**');
+    expect(rows[15][5]).toContain('PR #564');
+    expect(rows[16][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(17).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(50);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(49);
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 

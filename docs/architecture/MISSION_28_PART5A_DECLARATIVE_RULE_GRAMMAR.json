@@ -1,0 +1,209 @@
+{
+  "contractVersion": "mission28.part5a.declarative-rule-grammar.v1",
+  "authority": {
+    "mission": 28,
+    "part": "5A",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "7308a529f7f6e295d786fd2c52073705eebaa2f2",
+    "baselineTree": "df150a26d03642cb4930de8914b85bf5d8b73510",
+    "contractOnlyNoRuntimeEvaluatorMounted": true,
+    "newDatabaseObjectOrMigrationAdded": false,
+    "eligibilityApprovalSchedulingRecipientProviderEffectUpstreamMutationAccountingOrMoneyAuthorityGranted": false
+  },
+  "part4DRelease": {
+    "acceptedSourceHead": "41be176abfddae512f34da25a9d3564b1fea6e1b",
+    "acceptedTree": "df150a26d03642cb4930de8914b85bf5d8b73510",
+    "pullRequest": 564,
+    "mergedMain": "7308a529f7f6e295d786fd2c52073705eebaa2f2",
+    "deployment": "82b50c73-5414-4e7f-bb07-72d71f65dc92",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "99c20fdd-cf03-4b8b-98cf-20f05d8bd72f",
+    "imageSha256": "2ac7426c032f38de4b1715e59ed382cb92b0af9486baf8be43150a8c5cc9371b",
+    "health": ["canonical_startup_ready", "migrations_270_latest_274_no_275", "api_health_200", "root_200", "demo_200"],
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json", "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"}
+  ],
+  "ruleEnvelope": {
+    "schemaVersion": "mission28.declarative-rule.v1",
+    "exactFields": ["schemaVersion", "tenantId", "ruleId", "policyBinding", "sourceBinding", "condition", "actionTemplateBinding", "bounds", "ruleDigest"],
+    "policyBindingExactFields": ["tenantId", "policyId", "policyVersion", "policyDigest"],
+    "sourceBindingExactFields": ["tenantId", "triggerId", "sourceClassId", "recordIdentityDigest", "eventKind", "headTransitionId", "headTransitionDigest", "headSequence", "effectiveSnapshotId", "effectiveSnapshotDigest"],
+    "actionTemplateBindingExactFields": ["tenantId", "templateId", "templateVersion", "templateDigest", "actionFamilyId", "capabilityId", "channelId", "providerMode", "effectClass"],
+    "boundsExactFields": ["maxConditionDepth", "maxConditionNodes", "maxGroupChildren", "maxCollectionMembers", "maxTokenLength", "maxTextLength", "maxDecimalScale", "maxCanonicalRuleBytes", "safeIntegerMinimum", "safeIntegerMaximum", "missingNegativeFractionalNonFiniteOrAboveBound"],
+    "digestAlgorithm": "SHA-256",
+    "ruleDigestNamespace": "mission28.declarative-rule.v1\n",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_cycles_or_aliases",
+    "identityRule": "exact_same_tenant_policy_trigger_lineage_snapshot_and_template_resolution_required; candidate_fields_or_recomputed_digests_never_create_authority"
+  },
+  "bounds": {
+    "maxConditionDepth": 4,
+    "maxConditionNodes": 32,
+    "maxGroupChildren": 8,
+    "maxCollectionMembers": 16,
+    "maxTokenLength": 64,
+    "maxTextLength": 128,
+    "maxDecimalScale": 6,
+    "maxCanonicalRuleBytes": 32768,
+    "safeIntegerMinimum": -1000000000,
+    "safeIntegerMaximum": 1000000000,
+    "missingNegativeFractionalNonFiniteOrAboveBound": "deny"
+  },
+  "conditionGrammar": {
+    "nodeKinds": ["group", "predicate"],
+    "groupExactFields": ["kind", "operator", "conditions"],
+    "groupOperators": ["all", "any"],
+    "groupRule": "nonempty_dense_ordered_array_within_depth_node_and_child_bounds; evaluation_order_never_changes_semantics",
+    "predicateExactFields": ["kind", "factRef", "valueType", "operator", "expected", "unknownResult", "unavailableResult"],
+    "unknownResult": "unknown",
+    "unavailableResult": "unavailable",
+    "missingFactResult": "deny_malformed_not_false_zero_empty_or_unknown",
+    "unsupportedOrAmbiguousResult": "deny",
+    "shortCircuitAuthority": "short_circuiting_may_optimize_later_evaluation_but_cannot_hide_malformed_unknown_or_unavailable_nodes",
+    "arbitraryCodeRegexScriptFunctionExpressionTemplateInterpolationDynamicPropertyOrProviderLogic": "deny"
+  },
+  "catalogShapes": {
+    "factEntryExactFields": ["factRef", "valueType", "source", "literalDomain"],
+    "typeCompatibilityExactFields": ["valueType", "operators", "literal"],
+    "actionTemplateDefinitionExactFields": ["templateId", "templateVersion", "templateDigest", "actionFamilyId", "capabilityId", "channelId", "providerMode", "effectClass", "meaning"]
+  },
+  "factCatalog": [
+    {"factRef": "source.trigger_id", "valueType": "token", "source": "exact_Part4A_trigger_ID", "literalDomain": "exact_resolved_Part4A_trigger_ID_only"},
+    {"factRef": "source.event_kind", "valueType": "token", "source": "exact_Part4A_event_kind", "literalDomain": "one_event_kind_from_exact_resolved_Part4A_trigger_row"},
+    {"factRef": "source.currentness_state", "valueType": "token", "source": "exact_Part4C_source_currentness_state", "literalDomain": ["latest_exact_current"]},
+    {"factRef": "source.lineage_state", "valueType": "token", "source": "exact_Part4D_head_state", "literalDomain": ["active", "tombstoned", "reversed"]},
+    {"factRef": "source.event_time", "valueType": "utc_instant", "source": "exact_Part4A_selected_source_owned_event_time", "literalDomain": "exact_typed_literal"},
+    {"factRef": "source.observed_at", "valueType": "utc_instant", "source": "exact_Part4B_trusted_observation_time", "literalDomain": "exact_typed_literal"},
+    {"factRef": "source.lineage_sequence", "valueType": "integer", "source": "exact_Part4D_head_sequence", "literalDomain": "exact_typed_literal"},
+    {"factRef": "source.record_identity_digest", "valueType": "digest", "source": "exact_Part4B_record_identity_digest", "literalDomain": "exact_typed_literal"},
+    {"factRef": "source.snapshot_digest", "valueType": "digest", "source": "exact_Part4D_effective_snapshot_digest", "literalDomain": "exact_typed_literal"}
+  ],
+  "factValueEnvelope": {
+    "exactFields": ["state", "value"],
+    "states": ["known", "unknown", "unavailable"],
+    "knownRule": "value_is_present_and_exactly_matches_the_catalog_value_type",
+    "unknownRule": "value_is_null_and_result_is_unknown_never_false_zero_empty_or_permission",
+    "unavailableRule": "value_is_null_and_result_is_unavailable_never_false_zero_empty_or_permission",
+    "missingEnvelopeOrState": "deny_malformed",
+    "laterEvaluatorBoundary": "Part5B_must_resolve_this_envelope_from_separately_trusted_exact_current_sources; candidate_values_never_establish_facts"
+  },
+  "resultSemantics": {
+    "states": ["match", "no_match", "unknown", "unavailable"],
+    "predicateKnown": "one_exact_typed_comparison_returns_match_or_no_match",
+    "predicateUnknown": "unknown",
+    "predicateUnavailable": "unavailable",
+    "groupValidation": "the_complete_group_is_structurally_and_semantically_validated_before_any_later_evaluation_optimization",
+    "absencePrecedence": ["unavailable", "unknown"],
+    "all": "unavailable_if_any_unavailable_else_unknown_if_any_unknown_else_match_only_if_every_child_matches_else_no_match",
+    "any": "unavailable_if_any_unavailable_else_unknown_if_any_unknown_else_match_if_any_child_matches_else_no_match",
+    "authorityRule": "match_is_a_rule_result_only_and_never_eligibility_approval_scheduling_or_effect_authority"
+  },
+  "typeCompatibilityMatrix": [
+    {"valueType": "boolean", "operators": ["equals", "not_equals"], "literal": "primitive_boolean"},
+    {"valueType": "token", "operators": ["equals", "not_equals", "in", "not_in"], "literal": "bounded_canonical_token_or_ordered_unique_token_collection"},
+    {"valueType": "bounded_text", "operators": ["equals", "not_equals", "in", "not_in"], "literal": "bounded_primitive_string_or_ordered_unique_string_collection_no_pattern_or_interpolation"},
+    {"valueType": "integer", "operators": ["equals", "not_equals", "less_than", "less_than_or_equal", "greater_than", "greater_than_or_equal", "between_inclusive"], "literal": "bounded_safe_integer_or_ordered_low_high_pair"},
+    {"valueType": "decimal", "operators": ["equals", "not_equals", "less_than", "less_than_or_equal", "greater_than", "greater_than_or_equal", "between_inclusive"], "literal": "canonical_base10_string_or_ordered_low_high_pair_no_exponent_or_coercion"},
+    {"valueType": "utc_instant", "operators": ["equals", "not_equals", "before", "on_or_before", "after", "on_or_after", "between_inclusive"], "literal": "exact_UTC_millisecond_instant_or_ordered_low_high_pair"},
+    {"valueType": "uuid", "operators": ["equals", "not_equals", "in", "not_in"], "literal": "canonical_UUID_or_ordered_unique_UUID_collection"},
+    {"valueType": "digest", "operators": ["equals", "not_equals"], "literal": "sha256_lowercase_hex_digest"}
+  ],
+  "actionTemplateDigestNamespace": "mission28.action-template.v1\n",
+  "approvedActionTemplates": [
+    {
+      "templateId": "internal_fact_digest_v1",
+      "templateVersion": 1,
+      "templateDigest": "sha256:e937f4b70e4129230e844e20b073b2fef80d0f456bd8868069ae83fde5c352c1",
+      "actionFamilyId": "internal_read_digest_task",
+      "capabilityId": "automation_internal_action_prepare",
+      "channelId": "in_app_passive",
+      "providerMode": "provider_disabled",
+      "effectClass": "internal_record_only",
+      "meaning": "reference_only_for_a_later_owner_readable_internal_digest_or_task"
+    },
+    {
+      "templateId": "owner_approval_request_v1",
+      "templateVersion": 1,
+      "templateDigest": "sha256:595425c52a9e09476539524f36de8c93def2152c4143d13638054c695d345e7f",
+      "actionFamilyId": "owner_approval_request",
+      "capabilityId": "automation_approval_request_create",
+      "channelId": "in_app_passive",
+      "providerMode": "provider_disabled",
+      "effectClass": "internal_record_only",
+      "meaning": "reference_only_for_a_later_internal_owner_approval_request"
+    },
+    {
+      "templateId": "reviewed_collection_work_item_v1",
+      "templateVersion": 1,
+      "templateDigest": "sha256:1256045656b32a8f5edbb57fa8f135b7ea82f2db8b179f4ac982beed5481a2f5",
+      "actionFamilyId": "collection_escalation",
+      "capabilityId": "automation_collection_work_item_prepare",
+      "channelId": "in_app_passive",
+      "providerMode": "provider_disabled",
+      "effectClass": "internal_record_only",
+      "meaning": "reference_only_for_the_exact_reviewed_Mission27_collection_handoff_internal_work_item"
+    }
+  ],
+  "trustedResolutionContract": {
+    "candidateMayNotSupplyReplaceOrRetargetTrustedResolution": true,
+    "resolverMustBeServerOwnedTenantPrivateAndIndependentOfCandidate": true,
+    "requiredResolution": ["tenantId", "exactPolicyVersion", "exactPart4ATriggerRow", "exactPart4DHeadAndEffectiveSnapshot", "exactApprovedActionTemplate"],
+    "policyBindingMustEqualExactResolvedTenantPolicyTuple": true,
+    "sourceBindingMustEqualExactResolvedPart4DHeadAndEffectiveSnapshot": true,
+    "triggerEventKindAndSourceClassMustEqualTheExactPart4ARow": true,
+    "requestedActionFamilyMustBeInTheExactTriggerAllowedActionFamilies": true,
+    "actionTemplateMustEqualOneExactApprovedCatalogEntryAndSameTenantUseBinding": true,
+    "templateActionFamilyCapabilityChannelProviderModeAndEffectClassMustRemainExact": true,
+    "crossTenantCrossPolicyCrossTriggerCrossSourceCrossSnapshotCrossTemplateCloneAliasOrReplayReuse": "deny",
+    "candidateDigestOrCanonicalCloneCreatesAuthority": false,
+    "currentRuntimeResolverAvailable": false
+  },
+  "canonicalizationContract": {
+    "exactObjectKeyOrderRequired": true,
+    "arraysRemainOrdered": true,
+    "collectionLiteralsMustBeOrderedUniqueAndCanonical": true,
+    "numbers": "safe_bounded_integers_only; decimals_are_canonical_strings",
+    "strings": "primitive_bounded_strings_only_no_control_characters_unpaired_surrogates_or_normalization_aliases",
+    "null": "allowed_only_for_unknown_or_unavailable_fact_values_not_in_rule_literals",
+    "digestProjection": "the_complete_rule_envelope_except_ruleDigest",
+    "sameDigestReplayMeaning": "same_immutable_definition_only_never_eligibility_approval_or_effect_authority"
+  },
+  "denials": [
+    "missing_extra_reordered_or_unknown_rule_condition_or_binding_fields",
+    "unsupported_fact_reference_value_type_operator_or_type_operator_pair",
+    "missing_fact_or_null_coerced_to_false_zero_empty_collection_or_empty_string",
+    "unknown_or_unavailable_fact_treated_as_match_no_match_or_permission",
+    "regex_script_function_expression_dynamic_property_template_interpolation_or_provider_logic",
+    "depth_node_child_collection_string_decimal_or_canonical_byte_bound_exceeded",
+    "non_plain_accessor_symbol_toJSON_custom_prototype_wrapper_proxy_cycle_or_alias_input",
+    "coercible_boxed_nonfinite_fractional_or_out_of_range_literal",
+    "cross_tenant_policy_trigger_source_lineage_snapshot_or_action_template_reuse",
+    "action_family_not_allowed_by_exact_Part4A_trigger",
+    "candidate_created_modified_or_unknown_action_template",
+    "digest_recomputation_after_material_binding_or_template_tamper",
+    "grammar_membership_used_as_eligibility_approval_schedule_recipient_provider_effect_upstream_accounting_or_money_authority"
+  ],
+  "laterSliceBoundary": {
+    "part5B": "deterministic_evaluation_reasons_evidence_quality_next_evaluation_and_result_states_remain_planned_unimplemented",
+    "part5C": "owner_readable_preview_remains_planned_unimplemented",
+    "part5D": "collision_suppression_dry_run_and_historical_backtest_remain_planned_unimplemented",
+    "part6Plus": "scheduling_execution_queue_worker_provider_recipient_message_effect_accounting_and_money_remain_planned_unimplemented"
+  },
+  "unavailableEvidence": [
+    "mounted_rule_resolver_or_evaluator",
+    "runtime_eligibility_reasoning_preview_collision_or_suppression",
+    "scheduler_queue_worker_or_effect_executor",
+    "provider_sandbox_live_provider_real_recipient_or_live_money",
+    "private_production_hosted_load_or_SLA",
+    "professional_legal_privacy_provider_or_regulatory_review",
+    "physical_Safari_or_devices_manual_assistive_technology_or_founder_visual_verdict"
+  ]
+}

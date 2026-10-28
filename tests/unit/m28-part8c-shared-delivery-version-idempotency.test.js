@@ -52,9 +52,15 @@ function requestOf(input) {
   return request;
 }
 
+function idempotencyMaterialOf(input) {
+  const material = copy(input);
+  delete material.deliveryRequestId; delete material.evaluatedAt; delete material.materialDigest; delete material.idempotencyKeyDigest; delete material.requestDigest;
+  return material;
+}
+
 function seal(input) {
   input.materialDigest = hash(materialOf(input));
-  input.idempotencyKeyDigest = hash({namespace:'mission28.part8c.delivery-idempotency.v1',material:materialOf(input)});
+  input.idempotencyKeyDigest = hash({namespace:'mission28.part8c.delivery-idempotency.v1',material:idempotencyMaterialOf(input)});
   input.requestDigest = hash(requestOf(input));
   return input;
 }
@@ -107,7 +113,7 @@ function validate(input, trusted) {
   }
   if (input.deliveryMode === 'native_handoff' && (input.channelBinding.requestedChannelId !== 'native_manual_handoff' || input.channelBinding.channelResultState !== 'unavailable_manual_handoff_not_opened')) throw new Error('native channel');
   if (input.deliveryMode !== 'native_handoff' && (!['email','sms'].includes(input.channelBinding.requestedChannelId) || input.channelBinding.channelResultState !== 'unavailable_external_channel')) throw new Error('external channel');
-  if (input.materialDigest !== hash(materialOf(input)) || input.idempotencyKeyDigest !== hash({namespace:'mission28.part8c.delivery-idempotency.v1',material:materialOf(input)}) || input.requestDigest !== hash(requestOf(input))) throw new Error('canonical digest');
+  if (input.materialDigest !== hash(materialOf(input)) || input.idempotencyKeyDigest !== hash({namespace:'mission28.part8c.delivery-idempotency.v1',material:idempotencyMaterialOf(input)}) || input.requestDigest !== hash(requestOf(input))) throw new Error('canonical digest');
   return Object.freeze({deliveryRequestId:input.deliveryRequestId,materialDigest:input.materialDigest,idempotencyKeyDigest:input.idempotencyKeyDigest,
     resultState:mode.currentResult,intentCreated:false,providerRequestIdentityCreated:false,messageCreated:false,externalEffectCreated:false});
 }
@@ -156,6 +162,15 @@ describe('Mission 28 Part 8C shared delivery version and idempotency authority',
     const clone=copy(first); clone.deliveryRequestId='00000000-0000-4000-8000-000000000099'; seal(clone); expect(()=>history.record(clone,copy(clone))).toThrow('clone');
     const relabel=copy(first); relabel.deliveryRequestId='00000000-0000-4000-8000-000000000098'; relabel.deliveryMode='native_handoff'; relabel.channelBinding.requestedChannelId='native_manual_handoff'; relabel.channelBinding.channelResultState='unavailable_manual_handoff_not_opened'; seal(relabel); expect(relabel.materialDigest).not.toBe(first.materialDigest); expect(()=>validate(relabel,copy(relabel))).not.toThrow();
     const sameIdentityRelabel=copy(first); sameIdentityRelabel.deliveryMode='native_handoff'; sameIdentityRelabel.channelBinding.requestedChannelId='native_manual_handoff'; sameIdentityRelabel.channelBinding.channelResultState='unavailable_manual_handoff_not_opened'; seal(sameIdentityRelabel); expect(()=>history.record(sameIdentityRelabel,copy(sameIdentityRelabel))).toThrow('identity conflict');
+  });
+
+  test('keeps idempotency stable across request identity and evaluation time while material and request digests remain truthful', () => {
+    const history=new History(); const first=fixture(); history.record(first,copy(first));
+    const later=copy(first); later.deliveryRequestId='00000000-0000-4000-8000-000000000097'; later.evaluatedAt='2026-10-28T12:05:00.000000Z'; seal(later);
+    expect(later.materialDigest).not.toBe(first.materialDigest); expect(later.requestDigest).not.toBe(first.requestDigest); expect(later.idempotencyKeyDigest).toBe(first.idempotencyKeyDigest);
+    expect(()=>history.record(later,copy(later))).toThrow('clone');
+    const sameIdentityLater=copy(first); sameIdentityLater.evaluatedAt='2026-10-28T12:05:00.000000Z'; seal(sameIdentityLater);
+    expect(sameIdentityLater.idempotencyKeyDigest).toBe(first.idempotencyKeyDigest); expect(()=>history.record(sameIdentityLater,copy(sameIdentityLater))).toThrow('identity conflict');
   });
 
   test('requires a new preview, authorization material and idempotency key for a new document revision', () => {

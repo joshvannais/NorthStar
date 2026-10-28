@@ -104,7 +104,7 @@
     "authorizationMaterial": "the canonical Part3B authorizationMaterialBindingDigest remains the Part3B envelope digest and is never redefined by Part8C",
     "policy": "policy-driven delivery binds exact policy ID version and digest; manual and native modes must not carry or infer standing policy",
     "materialDigest": "server_recomputed_canonical_digest_over_every_trusted_material_field_except_deliveryRequestId_materialDigest_idempotencyKeyDigest_and_requestDigest",
-    "idempotencyKeyDigest": "server_recomputed_stable_digest_over_tenant_delivery_mode_exact_document_version_preview_recipient_permission_channel_authorization_and_policy_material",
+    "idempotencyKeyDigest": "server_recomputed_stable_digest_over_tenant_delivery_mode_exact_document_version_preview_recipient_permission_channel_authorization_and_policy_material_excluding_deliveryRequestId_evaluatedAt_materialDigest_idempotencyKeyDigest_and_requestDigest",
     "requestDigest": "server_recomputed_canonical_digest_over_the_complete_request_with_digest_fields_omitted",
     "sameIdentitySameCanonicalMaterial": "idempotent_no_effect_replay",
     "sameIdentityDifferentMaterialOrDigest": "deny",

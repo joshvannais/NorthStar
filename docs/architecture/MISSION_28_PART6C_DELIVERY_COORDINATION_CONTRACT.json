@@ -1,0 +1,118 @@
+{
+  "contractVersion": "mission28.part6c.delivery-coordination.v1",
+  "authority": {
+    "mission": 28,
+    "part": "6C",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "c16af605a675870272ee9135dbcba6234ff357e7",
+    "scope": "tenant_scoped_leases_monotonic_fencing_deterministic_order_bounded_fanout_idempotency_receipts_and_stable_provider_request_identity_without_effect",
+    "queueWorkerProviderRecipientMessageEffectOrMoneyAuthorityGranted": false
+  },
+  "part6BRelease": {
+    "pullRequest": 570,
+    "mergedMain": "c16af605a675870272ee9135dbcba6234ff357e7",
+    "deployment": "061e8ae7-eb47-49ff-b015-3adbe3c352f1",
+    "deploymentState": "SUCCESS_RUNNING",
+    "instance": "4bfa0c11-f1cd-4006-bf18-e792b83764de",
+    "image": "sha256:43107511062f5dda9fa1deb039bdaf923f6fa281d8b92030cb77f998a8fc6dbe",
+    "migrationState": "272_through_276_no_277",
+    "health": ["api_health_200", "root_200", "dashboard_200", "demo_200"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART5D_COLLISION_SUPPRESSION_DRY_RUN_CONTRACT.json", "normalizedLfSha256": "3F82B37864D8B16DB6E8B7E8C5DCF27787D7A2675BE92091857601A0EA467BB0"},
+    {"path": "docs/architecture/MISSION_28_PART6A_TRANSACTIONAL_OUTBOX_CONTRACT.json", "normalizedLfSha256": "F79502C0793CD62A78442046CD04CFC88083C941A6D15D83C037ECB4C6A5FC9A"},
+    {"path": "docs/architecture/MISSION_28_PART6B_DURABLE_SCHEDULER_CONTRACT.json", "normalizedLfSha256": "30B2E2472DDC6DC8EB204D0544535C91302E47355971ACBA0800544D5B626687"},
+    {"path": "migrations/275_canonical_automation_transactional_outbox_v1.sql", "normalizedLfSha256": "174404ECC14CC8E87F6C2B205C0E3A56D8834CCDFCF11D63870665F2DBCD4838"},
+    {"path": "migrations/276_canonical_automation_durable_scheduler_v1.sql", "normalizedLfSha256": "746343D185947BBBAB472CE6874669DC2BECE416DDDBEB29DE61C3962319BD59"}
+  ],
+  "leaseRequestEnvelope": {
+    "schemaVersion": "mission28.delivery-lease.request.v1",
+    "exactFields": ["schemaVersion", "tenantId", "leaseRequestId", "scheduleBinding", "workerBinding", "leaseBinding", "requestDigest"],
+    "scheduleBindingExactFields": ["scheduleId", "transactionId", "runId", "unitId", "outboxId", "unitDigest", "scheduleBindingDigest"],
+    "workerBindingExactFields": ["workerId", "processId", "deploymentId", "regionId", "workerIdentityDigest"],
+    "leaseBindingExactFields": ["leaseId", "expectedPriorFenceToken", "durationSeconds"],
+    "workerIdentityDigestNamespace": "mission28.delivery-worker.v1\n",
+    "requestDigestNamespace": "mission28.delivery-lease.request.v1\n",
+    "maximumCanonicalRequestBytes": 32768
+  },
+  "leaseAndFencingContract": {
+    "minimumLeaseSeconds": 5,
+    "maximumLeaseSeconds": 300,
+    "trustedClock": "postgresql_statement_timestamp_v1",
+    "initialExpectedPriorFenceToken": 0,
+    "initialFenceToken": 1,
+    "takeover": "only_after_exact_current_head_expiry_with_expected_prior_fence_and_new_lease_identity",
+    "fenceProgression": "strictly_increasing_by_one_per_schedule",
+    "activeLeaseConflict": "deny",
+    "staleFenceOrLease": "deny_before_provider_identity_reservation",
+    "sameLeaseRequestDigestAndCanonicalText": "same_historical_receipt_no_new_event_or_head_change",
+    "sameLeaseRequestIdDifferentMaterial": "deny",
+    "workerProcessDeploymentRegionOrTenantAliasCloneReplay": "deny",
+    "currentHeadMutationAuthority": "owner_only_claim_function",
+    "immutableEvidence": "one_append_only_event_per_successful_fence"
+  },
+  "orderingAndFanOutContract": {
+    "minimumActionUnits": 1,
+    "maximumActionUnits": 32,
+    "completeTransactionScheduleSetRequiredBeforeFirstClaim": true,
+    "canonicalOrder": "Part6A_contiguous_zero_based_unitIndex",
+    "firstClaimForUnit": "every_lower_unitIndex_requires_at_least_one_immutable_lease_event",
+    "independentTransactions": "may_progress_without_cross_transaction_locking",
+    "sameTransactionConcurrentClaims": "serialized_by_tenant_transaction_advisory_lock",
+    "partialOrOutOfOrderFanOut": "deny",
+    "scheduleAdmission": "utcInstant_at_or_before_trusted_clock_and_expiration_strictly_after_trusted_clock"
+  },
+  "currentnessContract": {
+    "exactPart6ASourcePolicyRunUnitOutboxIdentityRequired": true,
+    "exactPart6BScheduleBindingRequired": true,
+    "policyMustRemainActiveAndUnexpiredAtNewClaim": true,
+    "everySourceSnapshotMustRemainLatestAvailableExactCurrentLineageHead": true,
+    "candidateMayNotCreateReplaceOrRetargetTrustedWorkerOrScheduleResolution": true,
+    "historicalExactReplayDoesNotReinterpretLaterCurrentness": true
+  },
+  "providerRequestIdentityContract": {
+    "meaning": "stable_reserved_identity_and_idempotency_evidence_only_not_a_provider_attempt_acknowledgement_delivery_or_effect",
+    "providerRequestIdentity": "m28_colon_exact_Part6A_unitId",
+    "providerRequestDigestNamespace": "mission28.provider-request-identity.v1\n",
+    "idempotencyReceiptDigestNamespace": "mission28.idempotency-receipt.v1\n",
+    "derivedFrom": ["tenantId", "scheduleId", "transactionId", "runId", "unitId", "outboxId", "unitDigest", "materialDigest", "idempotencyKeyDigest", "providerMode"],
+    "oneReceiptPerScheduleAndUnit": true,
+    "tenantGlobalProviderIdentityAndDigestUniqueness": true,
+    "reservationRequiresExactCurrentUnexpiredLeaseIdAndFence": true,
+    "exactReceiptReplay": "same_receipt_under_exact_current_unexpired_fenced_lease_no_new_row",
+    "newProviderIdentityForRetryOrUncertainAcknowledgement": "deny_Part6D_must_reuse_this_identity",
+    "storedState": "identity_reserved_no_provider_attempt_or_ack"
+  },
+  "storageContract": {
+    "migration": "277_canonical_automation_delivery_coordination_v1.sql",
+    "tables": ["canonical_automation_delivery_lease_heads_v1", "canonical_automation_delivery_lease_events_v1", "canonical_automation_provider_request_receipts_v1"],
+    "ownerOnlyFunctions": ["canonical_automation_claim_scheduled_action_v1", "canonical_automation_reserve_provider_request_identity_v1"],
+    "runtimeExecuteGranted": false,
+    "publicPrivileges": "none",
+    "tenantRls": "enabled_and_forced",
+    "eventAndReceiptImmutability": "update_delete_truncate_denied",
+    "Part6AOutboxMutation": "none",
+    "Part6BScheduleMutation": "none",
+    "legacyAdoption": "none"
+  },
+  "denials": [
+    "unknown_extra_missing_nonplain_accessor_symbol_toJSON_proxy_alias_or_coercible_material",
+    "cross_tenant_transaction_run_schedule_unit_outbox_policy_source_worker_process_deployment_region_alias_clone_or_replay",
+    "active_lease_takeover_stale_fence_nonmonotonic_fence_or_unbounded_duration",
+    "incomplete_or_out_of_order_fanout",
+    "future_expired_stale_unavailable_mixed_corrected_or_retargeted_schedule_policy_or_source",
+    "second_provider_request_identity_or_digest_for_one_action_unit",
+    "queue_publish_provider_call_acknowledgement_delivery_outcome_retry_reconciliation_or_dead_letter",
+    "recipient_message_upstream_mutation_accounting_or_money_effect"
+  ],
+  "laterSliceBoundary": {
+    "part6D": "retry_backoff_and_uncertain_outcome_reconciliation_must_reuse_reserved_identity_not_implemented",
+    "part6E": "cancel_pause_revoke_drain_dead_letter_and_reviewed_retry_not_implemented",
+    "part6F": "restart_outage_restore_and_orphan_recovery_not_implemented",
+    "parts7Plus": "sender_recipient_content_channel_provider_delivery_and_effect_authority_not_implemented"
+  },
+  "unavailableEvidence": ["independent_acceptance", "pull_request", "merge", "deployment", "private_production", "mounted_runtime_resolver", "scheduler_or_worker", "queue_publication", "provider_sandbox_or_live", "real_recipient_or_message", "provider_attempt_or_acknowledgement", "external_effect", "live_money", "hosted_load_or_sla", "restore", "physical_safari_or_devices", "manual_assistive_technology", "professional_review", "founder_visual_approval"]
+}

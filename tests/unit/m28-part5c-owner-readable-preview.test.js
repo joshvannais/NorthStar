@@ -506,8 +506,8 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
     const roadmap=fs.readFileSync(path.join(ROOT,'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'),'utf8');
     const ledger=fs.readFileSync(path.join(ROOT,'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'),'utf8');
     for(const document of [roadmap,ledger]){
-      expect(document).toContain('Parts 1A–7C are released. Part 7D is the sole implementation candidate.');
-      expect(document).toContain('Parts 7E–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–7D are released. Part 7E is the sole implementation candidate.');
+      expect(document).toContain('Parts 7F–14G remain planned and unimplemented.');
       expect(document).toContain('1ed57934cd127b083a3accacc9735ae6b3b9f5cd');
       expect(document).toContain('cb9fcc37-473e-43c9-b243-37ce1860b17d');
       expect(document).toContain('99d66b682bcd53d9b6822a6ced0a663b6591b7aa4156f7bbe8c084c3833b4ce2');
@@ -516,10 +516,10 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
     expect(ledger).toContain('| 19 | 5C | Owner-readable no-effect preview | **Released** |');
     expect(ledger).toContain('| 20 | 5D | Collision/suppression engine and no-effect dry run | **Released** |');
     expect((ledger.match(/\*\*Implementation candidate\*\*/g)||[])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(36);
+    expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(35);
     const migrations=fs.readdirSync(path.join(ROOT,'migrations')).filter(n=>/^\d+.*\.sql$/.test(n)).sort();
-    expect(migrations.at(-1)).toBe('284_canonical_automation_channel_delivery_handoff_v1.sql');
-    expect(migrations.some(name => name.startsWith('285_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('285_canonical_automation_scoped_link_attachment_v1.sql');
+    expect(migrations.some(name => name.startsWith('286_'))).toBe(false);
     expect(migrations.filter(n=>n.startsWith('281_'))).toEqual(['281_canonical_automation_sender_recipient_authority_v1.sql']);
   });
 });

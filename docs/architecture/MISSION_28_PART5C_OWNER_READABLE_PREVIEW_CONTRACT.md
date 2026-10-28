@@ -12,7 +12,7 @@ The source projection names the exact Part 4 trigger, record identity, event kin
 
 ## What the owner can read
 
-The output states, using closed codes only: what would happen; why; which exact source assumptions were used; the intended internal recipient class; the provider-disabled in-app channel; the absence of an external document or message version; the tenant time zone and the fact that Part 6 scheduling is unavailable; the exact Part 3C limit manifest and profile; the exact suppression evidence; hypothetical internal-only expected effects; and the closed Part 3D conditions that would stop later work.
+The output states, using closed codes only: what would happen; why; which exact source assumptions were used; the UUID/digest-bound intended internal recipient set; the provider-disabled in-app channel with closed unavailable runtime state; the absence of an external document or message version; the separately trusted canonical IANA tenant time zone and the fact that Part 6 scheduling is unavailable; the exact Part 3C limit manifest and profile; the exact suppression evidence; one hypothetical, nonexecuted internal record and zero external effects; and the closed Part 3D conditions that would stop later work.
 
 Part 5B reasons and predicate explanations are copied exactly and remain deterministic. Unknown or unavailable values are displayed as unavailable; they are never filled in or narrated as facts. The Part 5B reevaluation hint is not an execution time. Current first-launch templates have no external document/message body or version, no provider, one internal recipient maximum and zero external/message/money/upstream effects.
 

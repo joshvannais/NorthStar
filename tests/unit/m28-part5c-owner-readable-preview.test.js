@@ -73,6 +73,25 @@ function uuid(value, label) { if (typeof value !== 'string' || !UUID.test(value)
 function hash(value, label) { if (typeof value !== 'string' || !DIGEST.test(value)) throw new Error(`${label} digest`); }
 function utc(value, label) { if (typeof value !== 'string' || !UTC.test(value) || new Date(value).toISOString() !== value) throw new Error(`${label} UTC`); }
 
+function canonicalTimeZone(value) {
+  if (typeof value !== 'string' || value.length > 64 || !/^(?:UTC|[A-Za-z]+(?:[_-][A-Za-z]+)*(?:\/[A-Za-z]+(?:[_-][A-Za-z]+)*)+)$/.test(value)) {
+    throw new Error('tenant timezone');
+  }
+  let resolved;
+  try { resolved = new Intl.DateTimeFormat('en-US', {timeZone:value}).resolvedOptions().timeZone; } catch { throw new Error('tenant timezone'); }
+  if (resolved !== value) throw new Error('tenant timezone canonical');
+}
+
+function rejectPrivateStrings(value) {
+  if (typeof value === 'string') {
+    if (/[^\s@]+@[^\s@]+\.[^\s@]+/u.test(value) || /https?:\/\//iu.test(value) ||
+        /(?:^|[^a-z0-9])(?:sk_|secret|credential|password)(?:[^a-z0-9]|$)/iu.test(value)) throw new Error('private string');
+    return;
+  }
+  if (Array.isArray(value)) return value.forEach(rejectPrivateStrings);
+  if (value && typeof value === 'object') Object.values(value).forEach(rejectPrivateStrings);
+}
+
 function evaluation(result = 'eligible') {
   const value = {
     schemaVersion: PART5B.outputEnvelope.schemaVersion,
@@ -184,6 +203,7 @@ function validateEvaluation(value) {
 
 function validateMaterial(candidate, separate, evaluationValue) {
   ownPlain(candidate); ownPlain(separate); ownPlain(evaluationValue);
+  rejectPrivateStrings(candidate);
   exact(candidate, CONTRACT.previewEnvelope.exactFields, 'preview input');
   if (!same(candidate, separate)) throw new Error('candidate cannot establish trusted material');
   if (candidate.schemaVersion !== CONTRACT.previewEnvelope.schemaVersion || candidate.tenantId !== TENANT) throw new Error('preview authority');
@@ -214,9 +234,16 @@ function validateMaterial(candidate, separate, evaluationValue) {
       !['active','tombstoned','reversed'].includes(s.headState) || !['latest_exact_current','unavailable'].includes(s.currentnessState)) throw new Error('source shape');
   if (s.observedAt > b.evaluatedAt) throw new Error('source observed after evaluation');
   if (s.currentnessState === 'latest_exact_current' && s.headState !== 'active') throw new Error('source coherence');
-  if (!Array.isArray(candidate.recipient.recipientClassIds) || candidate.recipient.recipientClassIds.length !== 1 ||
+  if (s.currentnessState === 'unavailable' &&
+      (evaluationValue.result !== 'unavailable' || !evaluationValue.reasonCodes.includes('source_not_latest_exact_current'))) {
+    throw new Error('source result coherence');
+  }
+  uuid(candidate.recipient.recipientSetId,'recipient set'); hash(candidate.recipient.recipientSetDigest,'recipient set');
+  if (candidate.recipient.recipientScope !== 'one_internal_recipient_maximum' ||
+      !Array.isArray(candidate.recipient.recipientClassIds) || candidate.recipient.recipientClassIds.length !== 1 ||
       !['tenant_owner','tenant_admin','assigned_staff'].includes(candidate.recipient.recipientClassIds[0])) throw new Error('recipient');
-  if (candidate.channel.channelId !== 'in_app_passive' || candidate.channel.providerModeId !== 'provider_disabled') throw new Error('channel');
+  if (candidate.channel.channelId !== 'in_app_passive' || candidate.channel.providerModeId !== 'provider_disabled' ||
+      candidate.channel.availabilityState !== 'contract_only_runtime_unavailable') throw new Error('channel');
   const template=PART5A.approvedActionTemplates.find(item=>item.templateId===b.actionTemplateId);
   const launchCell=PART1D.launchCells.find(item=>item.actionFamily===b.actionFamilyId);
   const trigger=PART4A.triggers.find(item=>item.id===s.triggerId);
@@ -229,7 +256,8 @@ function validateMaterial(candidate, separate, evaluationValue) {
       !trigger.eventTime.kinds.some(item=>item.eventKind===s.eventKind) || !launchCell.sourceClassIds.includes(s.sourceClassId)) throw new Error('template material');
   if (candidate.contentVersion.contentKind !== 'not_applicable_no_external_document_or_message' ||
       [candidate.contentVersion.documentOrMessageId,candidate.contentVersion.documentOrMessageVersion,candidate.contentVersion.documentOrMessageDigest].some(x => x !== null)) throw new Error('content');
-  if (candidate.timing.tenantTimeZoneId !== 'America/New_York' || candidate.timing.executionTimeState !== 'not_scheduled_part6_unavailable' || candidate.timing.scheduledUtc !== null || candidate.timing.scheduledLocal !== null ||
+  canonicalTimeZone(candidate.timing.tenantTimeZoneId);
+  if (candidate.timing.executionTimeState !== 'not_scheduled_part6_unavailable' || candidate.timing.scheduledUtc !== null || candidate.timing.scheduledLocal !== null ||
       candidate.timing.nextEvaluationAt !== evaluationValue.nextEvaluationAt) throw new Error('timing');
   [candidate.limits.mandatoryManifestDigest,candidate.limits.ownerLimitProfileDigest,candidate.limits.effectiveLimitDigest].forEach((x,i)=>hash(x,`limit${i}`));
   uuid(candidate.limits.ownerLimitProfileId,'limit profile');
@@ -249,6 +277,8 @@ function validateMaterial(candidate, separate, evaluationValue) {
       candidate.governance.policyControlState !== 'unknown_runtime_unavailable' || !same(candidate.governance.stopConditionCodes,stop)) throw new Error('governance');
   hash(candidate.governance.governanceDigest,'governance');
   if (candidate.expectedEffects.projectionState !== 'hypothetical_no_effect' || candidate.expectedEffects.effectClass !== 'internal_record_only' ||
+      candidate.expectedEffects.internalRecordCount !== 1 ||
+      !['internalRecordCount','externalEffectCount','providerAttemptCount','recipientMessageCount','moneyEffectCount','upstreamMutationCount'].every(k => Number.isSafeInteger(candidate.expectedEffects[k]) && candidate.expectedEffects[k] >= 0) ||
       ['externalEffectCount','providerAttemptCount','recipientMessageCount','moneyEffectCount','upstreamMutationCount'].some(k => candidate.expectedEffects[k] !== 0)) throw new Error('effects');
   if (digest(CONTRACT.previewEnvelope.inputDigestNamespace, candidate, 'inputDigest') !== candidate.inputDigest) throw new Error('input digest');
   JSON.stringify(candidate).toLowerCase().split(/[^a-z_]+/).forEach(token => {
@@ -316,6 +346,32 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
       candidate.inputDigest = digest(CONTRACT.previewEnvelope.inputDigestNamespace, candidate, 'inputDigest');
       expect(() => project(candidate, fixture.material, fixture.evaluation)).toThrow();
     }
+  });
+
+  test('rejects malformed recipient identities, open scope, arbitrary availability, negative counts and value-level private text', () => {
+    const mutations=[
+      x=>{x.recipient.recipientSetId='not-a-uuid';}, x=>{x.recipient.recipientSetDigest='not-a-digest';},
+      x=>{x.recipient.recipientScope='unbounded';}, x=>{x.channel.availabilityState='customer@example.test';},
+      x=>{x.expectedEffects.internalRecordCount=-7;}, x=>{x.channel.availabilityState='secret provider credential';}
+    ];
+    for(const mutate of mutations){const fixture=trusted();const attacked=copy(fixture.material);mutate(attacked);
+      attacked.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,attacked,'inputDigest');
+      expect(()=>project(attacked,attacked,fixture.evaluation)).toThrow();}
+  });
+
+  test('requires unavailable source currentness to remain a Part5B unavailable result', () => {
+    const fixture=trusted(); const attacked=copy(fixture.material); attacked.source.currentnessState='unavailable';
+    attacked.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,attacked,'inputDigest');
+    expect(()=>project(attacked,attacked,fixture.evaluation)).toThrow('source result coherence');
+  });
+
+  test('accepts an exact canonical non-Eastern tenant timezone and rejects invalid or alias zones', () => {
+    const fixture=trusted(); fixture.material.timing.tenantTimeZoneId='America/Chicago';
+    fixture.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,fixture.material,'inputDigest');
+    expect(project(fixture.material,fixture.material,fixture.evaluation).timing.tenantTimeZoneId).toBe('America/Chicago');
+    for(const zone of ['Not/AZone','US/Central',' customer@example.test ']){const next=trusted();next.material.timing.tenantTimeZoneId=zone;
+      next.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,next.material,'inputDigest');
+      expect(()=>project(next.material,next.material,next.evaluation)).toThrow();}
   });
 
   test('rejects Part5B reason result explanation and next-evaluation substitution even after full redigest', () => {

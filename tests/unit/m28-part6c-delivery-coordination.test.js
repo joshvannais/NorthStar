@@ -158,16 +158,17 @@ describe('Mission 28 Part 6C delivery coordination', () => {
     for (const forbidden of ['GRANT EXECUTE', 'fetch(', 'axios', 'twilio', 'retell', 'queue_published_at=', "state='delivered'", 'provider_attempt_id']) expect(sql).not.toContain(forbidden);
   });
 
-  test('records Part 6B released, only Part 6C candidate, and migration277/no278', () => {
+  test('records Part 6C released, only Part 6D candidate, and migration278/no279', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
       const document = fs.readFileSync(path.join(ROOT, relative), 'utf8');
-      expect(document).toContain('Parts 1A–6B released; Part 6C implementation candidate only.');
-      expect(document).toContain('Parts 6D–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–6C released; Part 6D implementation candidate only.');
+      expect(document).toContain('Parts 6E–14G remain planned and unimplemented.');
       expect(document).toContain('061e8ae7-eb47-49ff-b015-3adbe3c352f1');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     expect(ledger).toContain('| 22 | 6B | Durable time-zone-aware scheduler | **Released** |');
-    expect(ledger).toContain('| 23 | 6C | Leases, fencing, ordering, idempotency and provider request identity | **Implementation candidate** |');
-    expect(ledger).toContain('through additive `277_canonical_automation_delivery_coordination_v1.sql` with no 278');
+    expect(ledger).toContain('| 23 | 6C | Leases, fencing, ordering, idempotency and provider request identity | **Released** |');
+    expect(ledger).toContain('| 24 | 6D | Bounded retry/backoff and uncertain-outcome reconciliation | **Implementation candidate** |');
+    expect(ledger).toContain('through additive `278_canonical_automation_retry_reconciliation_v1.sql` with no 279');
   });
 });

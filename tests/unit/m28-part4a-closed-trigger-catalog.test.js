@@ -355,7 +355,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–6B released; Part 6C implementation candidate only.');
+      expect(document).toContain('Parts 1A–6C released; Part 6D implementation candidate only.');
       expect(document).toContain('797be4a33bb2128ae2efd79b5347ef43f94da0f6');
       expect(document).toContain('041971bb190998e1444087482941686c4166573d');
       expect(document).toContain('7e0ef15f-1275-4578-aade-70b8c8277bef');
@@ -378,9 +378,10 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(rows[19]).toMatchObject({ id: '5D', state: '**Released**' });
     expect(rows[20]).toMatchObject({ id: '6A', state: '**Released**' });
     expect(rows[21]).toMatchObject({ id: '6B', state: '**Released**' });
-  expect(rows[22]).toMatchObject({ id: '6C', state: '**Implementation candidate**' });
-    expect(rows.slice(23).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(43);
+    expect(rows[22]).toMatchObject({ id: '6C', state: '**Released**' });
+    expect(rows[23]).toMatchObject({ id: '6D', state: '**Implementation candidate**' });
+    expect(rows.slice(24).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(42);
   });
 
   test('keeps runtime, migrations and later Part 4 authority outside the slice', () => {
@@ -392,8 +393,9 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
       part5Plus: 'rule evaluation scheduling execution providers recipients and effects remain planned and unimplemented',
     });
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name));
-    expect(migrations).toHaveLength(273);
+    expect(migrations).toHaveLength(274);
     expect(migrations.some(name => name.startsWith('273_'))).toBe(true);
     expect(migrations.filter(name => name.startsWith('274_'))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
+    expect(migrations.filter(name => name.startsWith('278_'))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
   });
 });

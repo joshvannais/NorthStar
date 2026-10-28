@@ -1,0 +1,148 @@
+{
+  "contractVersion": "mission28.part6d.retry-reconciliation.v1",
+  "authority": {
+    "mission": 28,
+    "part": "6D",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "d6e53b52d205e7d8e7a624eb0f951337a3c0fb4f",
+    "scope": "per_action_retry_backoff_terminal_classification_bounded_retry_after_deterministic_jitter_attempt_ceiling_timeout_reconciliation_and_permanent_unsafe_stop_without_effect",
+    "schedulerWorkerQueueProviderRecipientMessageEffectOrMoneyAuthorityGranted": false
+  },
+  "part6CRelease": {
+    "acceptedSource": "943011665fd52cd18fe4105f26fbd0b59891ab56",
+    "acceptedTree": "63500af21d7e5c75af74e361e604680edb93de23",
+    "pullRequest": 571,
+    "mergedMain": "d6e53b52d205e7d8e7a624eb0f951337a3c0fb4f",
+    "deployment": "3d7689ff-79cc-457a-95f7-542acbc20409",
+    "deploymentState": "SUCCESS_RUNNING",
+    "instance": "7ed64d7d-a980-4eac-ace1-95c4f75af529",
+    "image": "sha256:f98506fd410fcf25889a9204ccb58f97cf99b2fdb0915e70542641134ae9f209",
+    "migrationState": "273_through_277_no_278",
+    "health": ["api_health_200", "root_200", "dashboard_200", "demo_200"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART6A_TRANSACTIONAL_OUTBOX_CONTRACT.json", "normalizedLfSha256": "F79502C0793CD62A78442046CD04CFC88083C941A6D15D83C037ECB4C6A5FC9A"},
+    {"path": "docs/architecture/MISSION_28_PART6B_DURABLE_SCHEDULER_CONTRACT.json", "normalizedLfSha256": "30B2E2472DDC6DC8EB204D0544535C91302E47355971ACBA0800544D5B626687"},
+    {"path": "docs/architecture/MISSION_28_PART6C_DELIVERY_COORDINATION_CONTRACT.json", "normalizedLfSha256": "D9D00F6496DF95465257C427EA3674ECC7FB960780E495D1807C551F040835A3"},
+    {"path": "migrations/275_canonical_automation_transactional_outbox_v1.sql", "normalizedLfSha256": "174404ECC14CC8E87F6C2B205C0E3A56D8834CCDFCF11D63870665F2DBCD4838"},
+    {"path": "migrations/276_canonical_automation_durable_scheduler_v1.sql", "normalizedLfSha256": "746343D185947BBBAB472CE6874669DC2BECE416DDDBEB29DE61C3962319BD59"},
+    {"path": "migrations/277_canonical_automation_delivery_coordination_v1.sql", "normalizedLfSha256": "48A2D5E29BD607C0B1DEF5392AB2D169F75BB213217CA9AFF2E9D5CCFD145A20"}
+  ],
+  "decisionEnvelope": {
+    "schemaVersion": "mission28.delivery-retry-decision.v1",
+    "exactFields": ["schemaVersion", "tenantId", "decisionId", "decisionKind", "actionBinding", "leaseBinding", "retryPolicy", "attemptObservation", "reconciliation", "requestDigest"],
+    "actionBindingExactFields": ["scheduleId", "transactionId", "runId", "unitId", "outboxId", "receiptId", "unitDigest", "providerRequestIdentity", "providerRequestDigest", "idempotencyReceiptDigest"],
+    "leaseBindingExactFields": ["leaseId", "fenceToken"],
+    "retryPolicyExactFields": ["attemptCeiling", "baseDelaySeconds", "maximumDelaySeconds", "maximumRetryAfterSeconds", "maximumJitterSeconds", "retryPolicyDigest"],
+    "attemptObservationExactFields": ["observationId", "observationKind", "observationDigest", "attemptOrdinal", "attemptLeaseId", "attemptFenceToken", "occurredAt", "retryAfterSeconds", "providerTimeoutSeconds"],
+    "reconciliationExactFields": ["state", "evidenceId", "evidenceDigest", "observedAt"],
+    "decisionKinds": ["classify_attempt", "record_reconciliation"],
+    "requestDigestNamespace": "mission28.delivery-retry-decision.v1\n",
+    "retryPolicyDigestNamespace": "mission28.delivery-retry-policy.v1\n",
+    "observationDigestNamespace": "mission28.delivery-attempt-observation.v1\n",
+    "maximumCanonicalRequestBytes": 32768
+  },
+  "classificationContract": {
+    "observationKinds": {
+      "provider_retryable_definite_no_acceptance": "retryable",
+      "provider_rate_limited_definite_no_acceptance": "retryable",
+      "provider_terminal_rejection": "terminal",
+      "provider_timeout_uncertain": "uncertain",
+      "provider_acknowledgement_uncertain": "uncertain",
+      "unknown_or_unsafe_outcome": "unsafe"
+    },
+    "retryAfter": "nullable_only_for_retryable_kinds_integer_seconds_between_1_and_policy_maximum",
+    "providerTimeout": "required_only_for_provider_timeout_uncertain_integer_seconds_between_1_and_120",
+    "uncertainFirstDecision": "reconciliation_required_no_resend",
+    "terminal": "permanent_stop_terminal",
+    "unknownOrUnsafe": "permanent_stop_unknown_or_unsafe",
+    "attemptCeiling": "permanent_stop_attempt_ceiling",
+    "candidateMayNotSelectClassificationOrOutputState": true
+  },
+  "retryPolicyContract": {
+    "minimumAttemptCeiling": 1,
+    "maximumAttemptCeiling": 8,
+    "minimumBaseDelaySeconds": 1,
+    "maximumBaseDelaySeconds": 900,
+    "maximumDelaySeconds": 3600,
+    "maximumRetryAfterSeconds": 3600,
+    "maximumJitterSeconds": 60,
+    "retryAfterMaximumMustNotExceedMaximumDelay": true,
+    "exponentialBackoff": "min(maximumDelaySeconds,baseDelaySeconds_times_2_power_attemptOrdinal_minus_1)",
+    "retryAfterComposition": "max_exponential_and_bounded_retry_after_before_jitter",
+    "deterministicJitter": "sha256_provider_request_digest_and_attempt_ordinal_modulo_bounded_remaining_window",
+    "totalDelayNeverExceedsMaximumDelaySeconds": true,
+    "sameActionRetryPolicy": "immutable_exact_digest_for_entire_action_history"
+  },
+  "reconciliationContract": {
+    "initialClassificationState": "not_performed",
+    "states": ["not_performed", "no_effect_confirmed", "effect_confirmed", "unknown_or_unsafe"],
+    "performedEvidence": "exact_non_null_evidence_id_digest_and_observed_at_after_attempt_and_not_after_trusted_clock",
+    "noEffectConfirmed": "may_schedule_next_attempt_only_below_ceiling",
+    "effectConfirmed": "permanent_stop_effect_confirmed",
+    "unknownOrUnsafe": "permanent_stop_unknown_or_unsafe",
+    "sameAttemptObservation": "exact_id_digest_kind_ordinal_and_occurred_at_required_for_reconciliation",
+    "resendBeforeNoEffectReconciliation": "deny",
+    "secondProviderRequestIdentity": "deny_always_reuse_Part6C_receipt_identity"
+  },
+  "currentnessAndConcurrencyContract": {
+    "trustedClock": "postgresql_statement_timestamp_v1",
+    "exactPart6AUnitOutboxPart6BScheduleAndPart6CReceiptLeaseFenceRequired": true,
+    "policyMustRemainActiveAndUnexpiredForEveryNewDecision": true,
+    "everySourceSnapshotMustRemainLatestAvailableExactCurrentLineageHead": true,
+    "newObservationMustBindCurrentLeaseAndOccurWithinItsWindow": true,
+    "reconciliationMustRepeatExactHistoricalAttemptLeaseAndUseASeparatelyCurrentDecisionLease": true,
+    "retryDecisionBeforePreviouslyComputedNextAttemptAt": "deny",
+    "tenantScheduleSerialization": "transaction_advisory_lock",
+    "decisionSequence": "strictly_increasing_by_one_per_schedule",
+    "attemptSequence": "classifications_strictly_increase_by_one_reconciliation_reuses_pending_attempt",
+    "sameDecisionIdDigestAndCanonicalText": "historical_replay_no_new_event_or_head_change",
+    "sameDecisionIdDifferentMaterial": "deny",
+    "historicalReplayDoesNotReinterpretLaterCurrentness": true
+  },
+  "stateContract": {
+    "retry_scheduled_no_effect": "bounded_next_attempt_authority_only_no_provider_attempt_or_effect",
+    "reconciliation_required_no_resend": "permanent_block_until_exact_reconciliation_decision",
+    "permanent_stop_terminal": "no_retry",
+    "permanent_stop_attempt_ceiling": "no_retry",
+    "permanent_stop_effect_confirmed": "no_retry_and_not_delivery_proof",
+    "permanent_stop_unknown_or_unsafe": "no_retry",
+    "providerAttemptAcknowledgementDeliveryOrBusinessOutcomeEvidence": "none_created_by_Part6D"
+  },
+  "storageContract": {
+    "migration": "278_canonical_automation_retry_reconciliation_v1.sql",
+    "tables": ["canonical_automation_delivery_retry_heads_v1", "canonical_automation_delivery_retry_events_v1"],
+    "ownerOnlyFunction": "canonical_automation_record_retry_decision_v1",
+    "runtimeExecuteGranted": false,
+    "publicPrivileges": "none",
+    "tenantRls": "enabled_and_forced",
+    "eventImmutability": "update_delete_truncate_denied",
+    "Part6AOutboxMutation": "none",
+    "Part6BScheduleMutation": "none",
+    "Part6CReceiptOrLeaseMutation": "none",
+    "legacyAdoption": "none"
+  },
+  "denials": [
+    "unknown_extra_missing_nonplain_accessor_symbol_toJSON_proxy_alias_or_coercible_material",
+    "cross_tenant_schedule_transaction_run_unit_outbox_receipt_provider_identity_policy_source_lease_fence_observation_or_reconciliation_alias_clone_replay",
+    "new_or_changed_provider_request_identity_digest_or_idempotency_receipt_for_retry",
+    "retry_after_out_of_bounds_fractional_negative_untrusted_or_on_nonretryable_kind",
+    "provider_timeout_missing_out_of_bounds_or_on_non_timeout_kind",
+    "attempt_ceiling_zero_exceeded_changed_or_bypassed",
+    "random_unbounded_or_nondeterministic_jitter",
+    "resend_after_timeout_uncertain_acknowledgement_unknown_or_unsafe_without_exact_no_effect_reconciliation",
+    "effect_confirmed_terminal_unknown_unsafe_or_ceiling_state_reopened",
+    "stale_expired_future_mixed_unavailable_corrected_retargeted_policy_source_schedule_lease_or_fence",
+    "queue_publish_provider_call_callback_acknowledgement_delivery_outcome_dead_letter_cancel_pause_revoke_or_drain",
+    "recipient_message_upstream_mutation_accounting_money_or_external_effect"
+  ],
+  "laterSliceBoundary": {
+    "part6E": "cancel_pause_revoke_supersede_drain_resume_expire_dead_letter_owner_reviewed_retry_and_bulk_stop_not_implemented",
+    "part6F": "restart_outage_restore_partial_callback_deployment_and_orphan_recovery_not_implemented",
+    "parts7Plus": "sender_recipient_content_channel_provider_delivery_and_effect_authority_not_implemented"
+  },
+  "unavailableEvidence": ["independent_acceptance", "pull_request", "merge", "deployment", "private_production", "mounted_runtime_resolver", "scheduler_or_worker", "queue_publication", "provider_adapter", "provider_sandbox_or_live", "real_recipient_or_message", "provider_attempt_or_acknowledgement", "callback", "delivery_or_business_outcome", "external_effect", "live_money", "hosted_load_or_sla", "restore", "physical_safari_or_devices", "manual_assistive_technology", "professional_review", "founder_visual_approval"]
+}

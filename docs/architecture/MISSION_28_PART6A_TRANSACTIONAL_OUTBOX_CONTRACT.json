@@ -1,0 +1,130 @@
+{
+  "contractVersion": "mission28.part6a.transactional-outbox.v1",
+  "authority": {
+    "mission": 28,
+    "part": "6A",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "8e83cf96a8f8102dd04d88e1458389ce21219dbf",
+    "scope": "atomic_conversion_of_one_accepted_current_decision_into_bounded_action_units_and_committed_unpublished_outbox_rows"
+  },
+  "part5DRelease": {
+    "acceptedSourceHead": "244a3cddb4e67a375aeab507294b87426dbfcfda",
+    "pullRequest": 568,
+    "mergedMain": "8e83cf96a8f8102dd04d88e1458389ce21219dbf",
+    "deployment": "9ddb846c-bcbc-4024-aebe-83ca2a9c8cbf",
+    "deploymentState": "SUCCESS_RUNNING",
+    "instance": "f384b83f-520a-40ca-b544-8dc567c184d1",
+    "image": "sha256:02002ac870993b765e3cef94f55c1b17f51bbca49b95fe5f2a1ebb6b63a05998",
+    "migrationState": "270_through_274_no_275",
+    "health": ["startup_ready", "api_health_200", "root_200", "dashboard_200", "demo_200", "paid_demo_title_and_byte_parity"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json", "normalizedLfSha256": "3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5"},
+    {"path": "docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json", "normalizedLfSha256": "03F32F3C66EF525DF9ACA541F8A7D0C08935E1DD2EDB661468F78CC2A763308A"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.json", "normalizedLfSha256": "D1DA31C44602127C6DDF95FE96B59FA57D1E23DA291717D64F658DD0B2E3AF81"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART5A_DECLARATIVE_RULE_GRAMMAR.json", "normalizedLfSha256": "7EF24ECE536F4407EE402620B6122ABB0B067E85DB1F0A9E43D79BC7A2CDEE3B"},
+    {"path": "docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json", "normalizedLfSha256": "62A4EE942017E789D7F0F73DD9A6FA73125A52A9C09EB6E3726A3345CA8820A0"},
+    {"path": "docs/architecture/MISSION_28_PART5C_OWNER_READABLE_PREVIEW_CONTRACT.json", "normalizedLfSha256": "5EC38A5233F72400A6AB89464D420A40EFD4EC58C8D045E1DAC0C84B25A162B9"},
+    {"path": "docs/architecture/MISSION_28_PART5D_COLLISION_SUPPRESSION_DRY_RUN_CONTRACT.json", "normalizedLfSha256": "3F82B37864D8B16DB6E8B7E8C5DCF27787D7A2675BE92091857601A0EA467BB0"}
+  ],
+  "bounds": {
+    "minimumActionUnits": 1,
+    "maximumActionUnits": 32,
+    "minimumSourceSnapshots": 1,
+    "maximumSourceSnapshots": 8,
+    "duplicateSourceSnapshotIdOrDigest": "deny",
+    "maximumCanonicalRequestBytes": 65536,
+    "unitIndexes": "contiguous_zero_based_strict_order",
+    "duplicateUnitIdMaterialOrIdempotencyDigest": "deny",
+    "fanOutBeyondBound": "deny_without_partial_rows"
+  },
+  "transactionEnvelope": {
+    "schemaVersion": "mission28.action-transaction.request.v1",
+    "exactFields": ["schemaVersion", "tenantId", "transactionId", "runId", "policyBinding", "sourceBinding", "decisionBinding", "authorizationBinding", "currentnessBinding", "actionUnits", "requestDigest"],
+    "policyBindingExactFields": ["tenantId", "policyId", "policyVersion", "policyDigest"],
+    "sourceBindingExactFields": ["tenantId", "sourceSetDigest", "snapshotIds", "snapshotDigests"],
+    "sourceSetDigestNamespace": "mission28.action-source-set.v1\n",
+    "sourceSetDigestProjection": ["tenantId", "snapshotIds", "snapshotDigests"],
+    "decisionBindingExactFields": ["evaluationId", "evaluationOutputDigest", "previewId", "previewDigest", "analysisId", "analysisOutputDigest", "candidateId", "collisionDecisionDigest", "collisionResult", "actionMaterialDigest", "actionUnitSetDigest"],
+    "actionUnitSetDigestNamespace": "mission28.action-unit-set.v1\n",
+    "authorizationBindingExactFields": ["authorizationId", "authorizationKind", "authorizationRecordDigest", "authorizationMaterialBindingDigest"],
+    "currentnessBindingExactFields": ["evaluationRevalidationId", "evaluationRevalidationDigest", "preEffectRevalidationId", "preEffectRevalidationDigest", "acceptedState"],
+    "requestDigestNamespace": "mission28.action-transaction.request.v1\n",
+    "acceptedCollisionResult": "selected_no_effect",
+    "acceptedCurrentnessState": "current_contract_only_no_effect_authority"
+  },
+  "actionUnitEnvelope": {
+    "exactFields": ["unitId", "outboxId", "unitIndex", "actionFamilyId", "actionTemplateId", "actionTemplateDigest", "recipientSetDigest", "channelId", "providerMode", "effectClass", "materialDigest", "idempotencyKeyDigest", "unitDigest"],
+    "unitDigestNamespace": "mission28.action-unit.v1\n",
+    "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request", "collection_escalation"],
+    "allowedTemplates": ["internal_fact_digest_v1", "owner_approval_request_v1", "reviewed_collection_work_item_v1"],
+    "channelId": "in_app_passive",
+    "providerMode": "provider_disabled",
+    "effectClass": "internal_record_only",
+    "meaning": "bounded_internal_intent_only_not_attempt_acknowledgement_delivery_outcome_or_effect"
+  },
+  "atomicityContract": {
+    "singleAuthoritativeTransaction": true,
+    "sameTenantPolicySourceRunAndDecisionOnEveryUnit": true,
+    "transactionReceiptActionUnitsAndOutboxRowsCommitOrRollbackTogether": true,
+    "outboxRowCreatedForEveryAndOnlyActionUnit": true,
+    "outboxStateAtCommit": "committed_unpublished",
+    "queuePublicationBeforeCommit": "impossible_and_denied",
+    "publicationClaimLeaseDispatchProviderAttemptAndEffect": "unavailable_later_slices",
+    "partialSuccess": "deny",
+    "sameRequestDigestReplay": "same_receipt_no_new_rows",
+    "sameTransactionIdDifferentCanonicalRequest": "deny",
+    "crossRequestCrossTenantCrossPolicyCrossSourceCrossRunAliasCloneOrReplayReuse": "deny"
+  },
+  "trustedResolutionContract": {
+    "requestMayNotCreateReplaceRetargetOrSelfAttestAcceptedDecision": true,
+    "resolverMustBeServerOwnedTenantPrivateAndIndependentOfRequest": true,
+    "fullPart3BAuthorizationMustValidateBeforeProjection": true,
+    "part4ATriggerAndActionFamilyAdmissionMustRemainExact": true,
+    "part4BSourceSnapshotsMustBeExactLatestAcceptedLineageHeads": true,
+    "part4CPreEffectRevalidationMustBeFreshAndAcceptedInTheSameTransaction": true,
+    "part4DPrecedenceHeadMustRemainExact": true,
+    "part5BEvaluationMustBeEligibleAndExact": true,
+    "part5CPreviewMustBeNoEffectAndExact": true,
+    "part5DCandidateMustBeTheExactSelectedNoEffectDecision": true,
+    "materialChangeRequiresNewDecisionRevalidationAndTransaction": true,
+    "currentRuntimeResolverAvailable": false
+  },
+  "storageContract": {
+    "migration": "275_canonical_automation_transactional_outbox_v1.sql",
+    "tables": ["canonical_automation_action_transactions_v1", "canonical_automation_action_units_v1", "canonical_automation_action_outbox_v1"],
+    "ownerOnlyFunction": "canonical_automation_store_action_transaction_v1",
+    "runtimeExecuteGranted": false,
+    "publicPrivileges": "none",
+    "tenantRls": "enabled_and_forced",
+    "immutability": "update_delete_truncate_denied",
+    "trustedClock": "statement_timestamp_utc",
+    "retentionClass": "internal_decision_history_no_automatic_deletion_authority",
+    "legacyAdoption": "none"
+  },
+  "denials": [
+    "candidate_supplied_or_recomputed_digest_as_authority",
+    "unknown_stale_unavailable_mixed_or_changed_source_or_policy",
+    "suppressed_superseded_unavailable_or_ambiguous_collision_result",
+    "missing_expired_revoked_retargeted_or_materially_changed_authorization",
+    "unknown_extra_missing_nonplain_accessor_symbol_toJSON_proxy_alias_or_coercible_field",
+    "unbounded_fanout_duplicate_unit_or_noncontiguous_unit_order",
+    "external_provider_customer_message_document_money_accounting_or_upstream_mutation_effect",
+    "queue_publish_claim_lease_schedule_retry_reconciliation_dead_letter_or_worker_authority"
+  ],
+  "laterSliceBoundary": {
+    "part6B": "durable_timezone_aware_scheduling_not_implemented",
+    "part6C": "leases_fencing_ordering_provider_request_identity_and_publication_not_implemented",
+    "part6D": "retry_backoff_and_uncertain_outcome_reconciliation_not_implemented",
+    "part6E": "cancel_pause_revoke_drain_dead_letter_and_reviewed_retry_not_implemented",
+    "part6F": "restart_outage_restore_and_orphan_recovery_not_implemented",
+    "parts7Plus": "recipient_sender_content_channel_provider_delivery_and_effect_authority_not_implemented"
+  },
+  "unavailableEvidence": ["independent_acceptance", "pull_request", "merge", "deployment", "private_production", "runtime_resolver", "queue_worker", "provider_sandbox_or_live", "real_recipient_or_message", "external_effect", "live_money", "hosted_load_or_sla", "restore", "physical_safari_or_devices", "manual_assistive_technology", "professional_review", "founder_visual_approval"]
+}

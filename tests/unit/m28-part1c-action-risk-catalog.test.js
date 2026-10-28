@@ -424,8 +424,8 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
   test('records released Parts 1A–4D, exactly Part 5A current and all later slices planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–5C released; Part 5D implementation candidate only.');
-    expect(roadmap).toContain('Parts 6A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–5D released; Part 6A implementation candidate only.');
+    expect(roadmap).toContain('Parts 6B–14G remain planned and unimplemented.');
     for (const identity of [PART1B_HEAD, BASE, PART1B_DEPLOYMENT, PART1B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -464,10 +464,11 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(rows[15][5]).toContain('PR #564');
     expect(rows[16][4]).toBe('**Released**');
     expect(rows[18][4]).toBe('**Released**');
-    expect(rows[19][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(20).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[19][4]).toBe('**Released**');
+    expect(rows[20][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(21).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(46);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(45);
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 
@@ -486,8 +487,8 @@ describe('Mission 28 Part 1C action and risk catalog', () => {
     expect(productionSource).not.toContain('mission28.part1c.action-risk-catalog.v1');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(migrations).toHaveLength(270);
-    expect(migrations.at(-1)).toBe('274_canonical_automation_trigger_snapshots_v1.sql');
+    expect(migrations).toHaveLength(271);
+    expect(migrations.at(-1)).toBe('275_canonical_automation_transactional_outbox_v1.sql');
     expect(migrations.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
     expect(migrations.filter(name => /^274_/.test(name))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });

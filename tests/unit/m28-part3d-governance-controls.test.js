@@ -833,7 +833,7 @@ describe('Mission 28 Part 3D governance controls', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–6A released; Part 6B implementation candidate only.');
+      expect(document).toContain('Parts 1A–6B released; Part 6C implementation candidate only.');
       expect(document).toContain('3cd41fe5379d92fe629c62e0ebc3a51d8886c3cc');
       expect(document).toContain(BASE);
       expect(document).toContain('b745a483-1031-4020-9ab2-38c0044e599d');
@@ -862,8 +862,8 @@ describe('Mission 28 Part 3D governance controls', () => {
       expect.stringContaining('founder visual approval'),
     ]));
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'));
-    expect(migrations).toHaveLength(272);
-    expect(migrations.at(-1)).toBe('276_canonical_automation_durable_scheduler_v1.sql');
+    expect(migrations).toHaveLength(273);
+    expect(migrations.at(-1)).toBe('277_canonical_automation_delivery_coordination_v1.sql');
     expect(migrations.filter(name => name.startsWith('274'))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });
 });

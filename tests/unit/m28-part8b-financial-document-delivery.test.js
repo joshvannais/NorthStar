@@ -78,6 +78,8 @@ describe('Mission 28 Part 8B financial-document delivery authority', () => {
       mergedMain: '81c53384ce3e6f4e8f137d57fb08aa4e169f559a',
       deployment: '60fd4934-d7cc-4f1f-8366-894e6fd03393',
       deploymentState: 'SUCCESS_RUNNING',
+      runningInstance: 'fd443b16-cc57-4cd6-9218-28363b6bf5cf',
+      imageSha256: '945ade8157852c110f3910051aaf2e2ed80fefedd5cb3401cdef757509fb2f82',
       productionMigration: '287_exactly_once_no_288'
     });
     for (const input of contract.frozenInputs) expect(digestLf(input.path)).toBe(input.normalizedLfSha256);

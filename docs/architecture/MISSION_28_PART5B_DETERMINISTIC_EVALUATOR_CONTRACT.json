@@ -77,6 +77,7 @@
     "fullPart3BRecordMustValidateBeforeProjection": true,
     "authorizationMustBeTheExactCanonicalPart3BRecordAndMaterialBinding": true,
     "authorizationEffectMaterialMustEqualRuleActionTemplatePolicySourceRecipientChannelProviderAndEffect": true,
+    "authorizationRecipientClassesMustBeAnOrderedUniqueSubsetInExactPart3BFirstLaunchOrder": true,
     "templateToAuthorizationEffectClassMapping": {"internal_record_only": "internal_only_no_external_effect"},
     "currentnessOrMaterialChangeInvalidatesThisEvaluationAndRequiresAFullNewEvaluation": true,
     "crossTenantPolicyRuleTriggerSourceSnapshotTemplateSuppressionAuthorizationClockCloneAliasOrReplayReuse": "deny",
@@ -92,6 +93,7 @@
     "policyCoherence": "active_exact_current_requires_evaluatedAt_before_expiresAt_or_null_expiry; expired_requires_nonnull_expiresAt_at_or_before_evaluatedAt",
     "authorizationCoherence": "exact_current_satisfied_requires_one_nonexpired_exact_Part3B_record; required_has_no_record; expired_requires_one_exact_record_with_expiry_at_or_before_evaluatedAt",
     "sourceCoherence": "latest_exact_current_requires_exact_Part4C_evaluation_epoch_and_exact_Part4D_head; stale_mixed_or_unavailable can never produce eligible ineligible suppressed or approval_required; an exact tombstoned or reversed head is deterministically ineligible",
+    "sourceTemporalCoherence": "eventTime is the exact Part4A source-owned occurrence or effective time and may be before equal to or after observedAt; observedAt is the distinct trusted capture time and must be at or before evaluatedAt",
     "suppressionCoherence": "matched_requires_exact_snapshot_match_identity_digest_and_null_or_strictly_future_end; clear_has_no_match; unavailable_can_never_produce_authority"
   },
   "conditionEvaluation": {

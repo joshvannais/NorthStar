@@ -406,7 +406,7 @@ function validateResolutionPrimitives(context, evaluatedAt) {
   validateDigest(source.effectiveSnapshotDigest, 'snapshot');
   validateUtc(source.eventTime, 'source event time');
   validateUtc(source.observedAt, 'source observed at');
-  if (source.observedAt < source.eventTime) throw new Error('source time order');
+  if (source.observedAt > evaluatedAt) throw new Error('source observed after evaluation');
   validateDigest(source.sourceBindingDigest, 'source binding');
   validateDigest(source.sourceSetDigest, 'source set');
   if (!CONTRACT.resolutionStates.source.includes(source.currentnessState)) throw new Error('source currentness');
@@ -460,10 +460,12 @@ function validateResolutionPrimitives(context, evaluatedAt) {
     validateUuid(authorization.effectSetId, 'effect set');
     validateDigest(authorization.effectSetDigest, 'effect set');
     const launchRule = AUTH_CONTRACT.recordGrammar.firstLaunchBindingRules[authorization.actionFamilyId];
-    if (!launchRule || !Array.isArray(authorization.recipientClassIds) ||
-        authorization.recipientClassIds.length < 1 ||
-        authorization.recipientClassIds.some((item, index) =>
-          !launchRule.recipientClassIds.includes(item) || authorization.recipientClassIds.indexOf(item) !== index) ||
+    const recipients = authorization.recipientClassIds;
+    const orderedRecipients = launchRule && Array.isArray(recipients) && recipients.length > 0 &&
+      new Set(recipients).size === recipients.length &&
+      recipients.every((item, index) => launchRule.recipientClassIds.indexOf(item) >
+        (index === 0 ? -1 : launchRule.recipientClassIds.indexOf(recipients[index - 1])));
+    if (!orderedRecipients ||
         !same(authorization.channelIds, launchRule.channelIds) ||
         !same(authorization.providerModeIds, launchRule.providerModeIds) ||
         authorization.effectClass !== launchRule.effectClass) throw new Error('authorization effect');
@@ -689,7 +691,7 @@ function makeFixture() {
       headTransitionDigest: sourceBinding.headTransitionDigest, headSequence: sourceBinding.headSequence,
       headState: 'active', effectiveSnapshotId: sourceBinding.effectiveSnapshotId,
       effectiveSnapshotDigest: sourceBinding.effectiveSnapshotDigest,
-      eventTime: '2026-10-28T11:50:00.000Z', observedAt: '2026-10-28T11:55:00.000Z',
+      eventTime: '2026-10-28T11:45:00.000Z', observedAt: '2026-10-28T11:30:00.000Z',
       sourceBindingDigest: '', sourceSetDigest: `sha256:${'9'.repeat(64)}`,
       currentnessState: 'latest_exact_current',
       Part4CResolutionEpochId: '00000000-0000-4000-8000-000000000506',
@@ -818,6 +820,21 @@ describe('Mission 28 Part 5B deterministic explainable evaluator', () => {
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.reasonCodes)).toBe(true);
     expect(Object.isFrozen(first.predicateExplanations[0])).toBe(true);
+    expect(fixture.input.trustedContext.sourceResolution.eventTime >
+      fixture.input.trustedContext.sourceResolution.observedAt).toBe(true);
+    expect(fixture.input.trustedContext.sourceResolution.observedAt <= fixture.input.evaluatedAt).toBe(true);
+  });
+
+  test('allows future-effective source time but rejects observation after the trusted evaluation clock', () => {
+    const accepted = makeFixture();
+    expect(() => validateAndEvaluate(accepted.input, accepted.trusted)).not.toThrow();
+    const futureObservation = makeFixture();
+    futureObservation.input.trustedContext.sourceResolution.observedAt = '2026-10-28T12:30:00.000Z';
+    futureObservation.input.trustedContext = sealContext(futureObservation.input.trustedContext);
+    futureObservation.input = sealInput(futureObservation.input);
+    futureObservation.trusted.context = copy(futureObservation.input.trustedContext);
+    expect(() => validateAndEvaluate(futureObservation.input, futureObservation.trusted))
+      .toThrow('source observed after evaluation');
   });
 
   test('evaluates every released Part5A type/operator pair without coercion or floating decimal aliases', () => {
@@ -988,6 +1005,8 @@ describe('Mission 28 Part 5B deterministic explainable evaluator', () => {
       fixture => { fixture.input.trustedContext.authorizationResolution.providerModeIds = ['provider_live']; },
       fixture => { fixture.input.trustedContext.authorizationResolution.effectClass = 'external_message'; },
       fixture => { fixture.input.trustedContext.authorizationResolution.actionFamilyId = 'customer_communication'; },
+      fixture => { fixture.input.trustedContext.authorizationResolution.recipientClassIds =
+        ['assigned_staff', 'tenant_owner']; },
     ];
     for (const attack of attacks) {
       const fixture = makeFixture();
@@ -997,6 +1016,13 @@ describe('Mission 28 Part 5B deterministic explainable evaluator', () => {
       fixture.trusted.context = copy(fixture.input.trustedContext);
       expect(() => validateAndEvaluate(fixture.input, fixture.trusted)).toThrow();
     }
+    const orderedSubset = makeFixture();
+    orderedSubset.input.trustedContext.authorizationResolution.recipientClassIds =
+      ['tenant_owner', 'assigned_staff'];
+    orderedSubset.input.trustedContext = sealContext(orderedSubset.input.trustedContext);
+    orderedSubset.input = sealInput(orderedSubset.input);
+    orderedSubset.trusted.context = copy(orderedSubset.input.trustedContext);
+    expect(validateAndEvaluate(orderedSubset.input, orderedSubset.trusted).result).toBe('eligible');
   });
 
   test('validates the entire Part5A rule before lookup and rejects digest, operator, template and bound attacks', () => {

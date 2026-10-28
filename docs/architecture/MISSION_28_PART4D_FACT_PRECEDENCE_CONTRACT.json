@@ -1,0 +1,200 @@
+{
+  "contractVersion": "mission28.part4d.fact-precedence.v1",
+  "authority": {
+    "mission": 28,
+    "part": "4D",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "e66a03a89b8fe8102627d896e70ea73bef8d6fed",
+    "baselineTree": "5b24886c445df8ee314a82569949d40af88c6217",
+    "contractOnlyNoRuntimeResolverMounted": true,
+    "newDatabaseObjectOrMigrationAdded": false,
+    "routeUiSchedulerWorkerQueueProviderRecipientOrMoneyAuthorityGranted": false,
+    "sourceFactOrPrecedenceResultGrantsActionAuthority": false
+  },
+  "part4CRelease": {
+    "acceptedSourceHead": "cd18dc20cb7882b01ebca260220a7c5dc1427df7",
+    "acceptedTree": "5b24886c445df8ee314a82569949d40af88c6217",
+    "pullRequest": 563,
+    "mergedMain": "e66a03a89b8fe8102627d896e70ea73bef8d6fed",
+    "deployment": "f8877912-3064-4ad7-a80b-93fe232d551e",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "4d28dedd-b642-4284-8d88-4091b6666d1b",
+    "imageSha256": "9bd4ec8fc0824a8b4c0bce498d6e11e6c606dc9ad03ba60f3552b89191b8f911",
+    "health": ["canonical_startup_ready", "migration_274_current", "api_health_200", "root_200", "demo_200"],
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json", "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"},
+    {"path": "docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json", "normalizedLfSha256": "3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5"},
+    {"path": "docs/architecture/MISSION_28_PART2C_POLICY_LIFECYCLE.json", "normalizedLfSha256": "91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD"},
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.json", "normalizedLfSha256": "D1DA31C44602127C6DDF95FE96B59FA57D1E23DA291717D64F658DD0B2E3AF81"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"}
+  ],
+  "lineageIdentity": {
+    "exactFields": ["tenantId", "triggerId", "sourceClassId", "recordIdentityDigest", "eventKind"],
+    "rule": "one immutable tenant trigger record and event-kind lineage; no field may be aliased cloned inferred or retargeted",
+    "lockKeyProjection": ["tenantId", "triggerId", "sourceClassId", "recordIdentityDigest", "eventKind"],
+    "crossTenantOrCrossLineageReuse": "deny"
+  },
+  "transitionEnvelope": {
+    "schemaVersion": "mission28.fact-precedence-transition.v1",
+    "exactFields": [
+      "schemaVersion", "tenantId", "transitionId", "triggerId", "sourceClassId",
+      "recordIdentityDigest", "eventKind", "operation", "sequence", "snapshotBinding",
+      "predecessorBinding", "targetBinding", "trustedDispositionBinding", "requestDigest",
+      "transitionDigest"
+    ],
+    "snapshotBindingExactFields": [
+      "snapshotId", "snapshotDigest", "lineageKind", "lineageSequence",
+      "predecessorSnapshotId", "predecessorSnapshotDigest", "eventTime", "observedAt"
+    ],
+    "predecessorBindingExactFields": [
+      "transitionId", "transitionDigest", "sequence", "state", "effectiveSnapshotId",
+      "effectiveSnapshotDigest"
+    ],
+    "targetBindingExactFields": ["transitionId", "transitionDigest", "snapshotId", "snapshotDigest"],
+    "trustedDispositionBindingExactFields": [
+      "resolverId", "resolverDigest", "operation", "sourceStateDigest"
+    ],
+    "operations": ["original", "correction", "tombstone", "reopen", "reverse", "replace"],
+    "states": ["active", "tombstoned", "reversed"],
+    "requestDigestNamespace": "mission28.fact-precedence-request.v1\n",
+    "transitionDigestNamespace": "mission28.fact-precedence-transition.v1\n",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_or_coercion"
+  },
+  "trustedResolutionContract": {
+    "candidateMayNotSupplyReplaceOrRetargetTrustedResolution": true,
+    "source": "server_resolved_exact_Part4A_catalog_row_plus_exact_stored_Part4B_snapshot_and_disposition",
+    "requiredValues": [
+      "tenantId", "triggerId", "sourceClassId", "recordIdentityDigest", "eventKind",
+      "snapshotId", "snapshotDigest", "snapshotLineage", "eventTime", "observedAt",
+      "operation", "sourceStateDigest", "currentHead"
+    ],
+    "operationMustBeDerivedFromExactUpstreamStateNotCandidateText": true,
+    "snapshotMustResolveFromImmutablePart4BStorage": true,
+    "catalogIdentityMustResolveFromFrozenPart4A": true,
+    "currentHeadMustBeReadUnderOneLineageLock": true,
+    "cachedCandidateCloneAliasOrReplayTokenCreatesAuthority": false,
+    "currentRuntimeResolverAvailable": false
+  },
+  "transitionRules": {
+    "original": {
+      "allowedPriorStates": [null],
+      "resultState": "active",
+      "sequenceRule": "exactly_one",
+      "snapshotRule": "exact_Part4B_original_sequence_one_with_null_snapshot_predecessor",
+      "targetRule": "null"
+    },
+    "correction": {
+      "allowedPriorStates": ["active"],
+      "resultState": "active",
+      "sequenceRule": "current_head_sequence_plus_one",
+      "snapshotRule": "exact_next_Part4B_correction_whose_snapshot_predecessor_is_current_effective_snapshot",
+      "targetRule": "null"
+    },
+    "tombstone": {
+      "allowedPriorStates": ["active"],
+      "resultState": "tombstoned",
+      "sequenceRule": "current_head_sequence_plus_one",
+      "snapshotRule": "exact_next_Part4B_correction_carrying_separately_resolved_tombstone_source_state",
+      "targetRule": "exact_current_head_and_effective_snapshot"
+    },
+    "reopen": {
+      "allowedPriorStates": ["tombstoned"],
+      "resultState": "active",
+      "sequenceRule": "current_head_sequence_plus_one",
+      "snapshotRule": "exact_next_Part4B_correction_with_new_snapshot_ID_and_digest_old_snapshot_reuse_denied",
+      "targetRule": "exact_current_tombstone_head_and_prior_effective_snapshot"
+    },
+    "reverse": {
+      "allowedPriorStates": ["active"],
+      "resultState": "reversed",
+      "sequenceRule": "current_head_sequence_plus_one",
+      "snapshotRule": "exact_next_Part4B_correction_carrying_separately_resolved_reversal_source_state",
+      "targetRule": "exact_current_head_and_effective_snapshot"
+    },
+    "replace": {
+      "allowedPriorStates": ["active", "tombstoned", "reversed"],
+      "resultState": "active",
+      "sequenceRule": "current_head_sequence_plus_one",
+      "snapshotRule": "exact_next_Part4B_correction_with_new_replacement_snapshot_ID_and_digest",
+      "targetRule": "exact_current_head_and_effective_snapshot"
+    }
+  },
+  "coalescingAndPrecedence": {
+    "orderedRules": [
+      "deny_non_plain_malformed_cross_tenant_or_untrusted_input_before_digest_or_lookup",
+      "same_transition_ID_same_request_digest_same_transition_digest_returns_immutable_replay_evidence_plus_a_fresh_authoritative_head_read_never_currentness_or_eligibility",
+      "same_transition_ID_different_material_is_identity_conflict",
+      "same_exact_snapshot_and_complete_trusted_disposition_under_a_new_transition_ID_coalesces_to_the_existing_transition_and_returns_a_fresh_authoritative_head_read_without_currentness_or_eligibility",
+      "different_material_reusing_a_snapshot_ID_or_digest_is_conflict_not_duplicate",
+      "late_or_reordered_non_head_predecessor_is_historical_only_and_cannot_change_the_head",
+      "one_exact_next_transition_under_the_current_authoritative_head_may_advance_the_lineage",
+      "eventTime_or_observedAt_never_overrides_lineage_sequence_predecessor_or_separately_trusted_operation"
+    ],
+    "duplicateFingerprint": ["tenantId", "triggerId", "sourceClassId", "recordIdentityDigest", "eventKind", "operation", "sequence", "completeSnapshotBinding", "completePredecessorBinding", "completeTargetBinding", "completeTrustedDispositionBinding"],
+    "replayOrDuplicateResult": "immutable_historical_evidence_plus_fresh_authoritative_head_never_an_eligibility_or_currentness_decision",
+    "lateFactOutcome": "historical_only_ineligible_no_head_change",
+    "reorderedFactOutcome": "deny_stale_predecessor_no_silent_sort",
+    "sameTimestampTieBreaker": "no_timestamp_tie_breaking_exact_lineage_only",
+    "unknownOrAmbiguousOutcome": "deny"
+  },
+  "concurrencyContract": {
+    "serializationKey": ["tenantId", "triggerId", "sourceClassId", "recordIdentityDigest", "eventKind"],
+    "authoritativeHeadReadAndAdvance": "one_database_transaction_under_one_lineage_lock",
+    "compareAndSwap": "candidate_predecessor_ID_digest_sequence_state_and_effective_snapshot_must_equal_current_head",
+    "concurrentDifferentCandidates": "one_exact_winner_other_rereads_and_fails_stale_unless_it_is_an_exact_duplicate",
+    "concurrentExactDuplicate": "one_transition_persists_all_others_return_the_exact_coalesced_result",
+    "crossRequestCache": "never_authoritative_reread_current_head_inside_lock",
+    "rollback": "no_partial_head_or_transition",
+    "currentRuntimeImplementationAvailable": false
+  },
+  "currentnessHandoff": {
+    "eligibleHeadState": "active",
+    "part4CRequiredBinding": [
+      "tenantId", "triggerId", "recordIdentityDigest", "eventKind", "headTransitionId",
+      "headTransitionDigest", "headSequence", "effectiveSnapshotId", "effectiveSnapshotDigest"
+    ],
+    "tombstonedOrReversed": "ineligible",
+    "replacement": "only_the_new_exact_replacement_snapshot_may_be_effective",
+    "evaluationRule": "Part4C_evaluation_must_resolve_the_exact_current_Part4D_head",
+    "preEffectRule": "Part4C_pre_effect_must_reread_the_head_and_any_change_invalidates_the_prior_decision",
+    "headResultCreatesActionOrEffectAuthority": false
+  },
+  "denials": [
+    "cross_tenant_cross_trigger_cross_record_or_cross_event_kind",
+    "candidate_created_disposition_operation_or_head",
+    "duplicate_with_conflicting_identity_digest_or_provenance",
+    "replay_reuse_under_another_tenant_lineage_or_material",
+    "late_or_reordered_non_head_transition_used_as_current",
+    "correction_tombstone_reopen_reverse_or_replace_without_exact_next_snapshot_lineage",
+    "reopen_or_replace_reusing_an_old_snapshot_identity_or_digest",
+    "target_predecessor_sequence_state_or_effective_snapshot_mismatch",
+    "stale_cache_compare_and_swap_or_cross_request_alias",
+    "clone_wrapper_proxy_accessor_symbol_toJSON_or_mutable_alias",
+    "mixed_before_after_head_or_Part4C_currentness",
+    "source_fact_resolution_or_coalescing_result_treated_as_eligibility_authorization_or_effect_evidence"
+  ],
+  "laterSliceBoundary": {
+    "part5": "rule_grammar_evaluation_preview_collision_suppression_and_dry_run_remain_planned_unimplemented",
+    "part6Plus": "outbox_scheduling_execution_provider_recipient_message_and_effect_authority_remain_planned_unimplemented",
+    "runtimeMount": "a_future_slice_must_implement_the_locked_store_and_resolver_before_any_runtime_consumer_exists"
+  },
+  "unavailableEvidence": [
+    "mounted_fact_precedence_resolver_or_transactional_head_store",
+    "cross_process_database_lock_or_restart_execution_evidence",
+    "runtime_evaluation_or_effect_claim",
+    "provider_sandbox_private_production_or_live_provider",
+    "real_recipient_message_document_or_external_effect",
+    "upstream_mutation_accounting_or_live_money",
+    "professional_legal_privacy_provider_or_regulatory_review",
+    "hosted_load_SLA_physical_devices_manual_assistive_technology_or_founder_visual_approval"
+  ]
+}

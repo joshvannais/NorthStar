@@ -187,8 +187,8 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
   test('roadmap and ledger retain released Part 2D through Part 3C while advancing only Part 3D', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–4B released; Part 4C implementation candidate only.');
-    expect(ledger).toContain('Parts 1A–4B released; Part 4C implementation candidate only.');
+    expect(roadmap).toContain('Parts 1A–4C released; Part 4D implementation candidate only.');
+    expect(ledger).toContain('Parts 1A–4C released; Part 4D implementation candidate only.');
     expect(ledger).toContain('| 07 | 2C | Policy lifecycle and historical binding | **Released** |');
     expect(ledger).toContain('| 08 | 2D | PostgreSQL authority, canonicalization, retention and restart contract | **Released** |');
     expect(ledger).toContain('| 09 | 3A | Fixed action capability matrix | **Released** |');
@@ -197,7 +197,7 @@ describe('Mission 28 Part 2D PostgreSQL authority', () => {
     expect(ledger).toContain('| 12 | 3D | Pause/revoke/kill/drain/cancel/resume and governance boundary | **Released** |');
     expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Released** |');
     expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Released** |');
-    expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Implementation candidate** |');
+    expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Released** |');
     expect(roadmap).toContain('source has 270 migrations through 274/no275');
   });
 

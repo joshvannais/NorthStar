@@ -1128,8 +1128,8 @@ describe('Mission 28 Part 5B deterministic explainable evaluator', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–7B are released. Part 7C is the sole implementation candidate.');
-      expect(document).toContain('Parts 7D–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–7C are released. Part 7D is the sole implementation candidate.');
+      expect(document).toContain('Parts 7E–14G remain planned and unimplemented.');
       expect(document).toContain('973175776028b563bd5f4a8b1d1282c1ddd9aa05');
       expect(document).toContain('9973fa71-fbfc-4079-b345-cdf2c5f3ab1b');
       expect(document).toContain('3066db7c0cbcb190753545db4ba3df4d8e3db8cc475135dbcf940df4b1cc1e9d');
@@ -1138,10 +1138,10 @@ describe('Mission 28 Part 5B deterministic explainable evaluator', () => {
     expect(ledger).toContain('| 19 | 5C | Owner-readable no-effect preview | **Released** |');
     expect(ledger).toContain('| 20 | 5D | Collision/suppression engine and no-effect dry run | **Released** |');
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(37);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(36);
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
-    expect(migrations.at(-1)).toBe('283_canonical_automation_content_template_preview_v1.sql');
-    expect(migrations.some(name => name.startsWith('284_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('284_canonical_automation_channel_delivery_handoff_v1.sql');
+    expect(migrations.some(name => name.startsWith('285_'))).toBe(false);
     expect(migrations.filter(name => name.startsWith('281_'))).toEqual(['281_canonical_automation_sender_recipient_authority_v1.sql']);
   });
 });

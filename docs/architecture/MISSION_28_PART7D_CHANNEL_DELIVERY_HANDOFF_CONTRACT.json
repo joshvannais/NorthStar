@@ -1,0 +1,199 @@
+{
+  "contractVersion": "mission28.part7d.channel-delivery-handoff.v1",
+  "authority": {
+    "mission": 28,
+    "part": "7D",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "9dfa3da1beb738dd781ffac736d8f033f86ccd7c",
+    "baselineTree": "8c65f6b558851981e5acb6f88efb41192676eb38",
+    "scope": "provider_neutral_channel_capability_and_truthful_no_effect_delivery_or_native_handoff_disposition_for_one_exact_current_content_preview",
+    "runtimeRouteUiWorkerQueueSchedulerProviderCallbackOrOperatingSystemHandoffGranted": false,
+    "recipientMessageExternalEffectUpstreamMutationAccountingOrMoneyGranted": false,
+    "legalProviderOutcomeOrFounderVerdictClaimed": false
+  },
+  "part7CRelease": {
+    "acceptedSourceHead": "12c01d6aacd1a96d7425f65a62e0be4f5effef22",
+    "acceptedTree": "8c65f6b558851981e5acb6f88efb41192676eb38",
+    "pullRequest": 577,
+    "mergedMain": "9dfa3da1beb738dd781ffac736d8f033f86ccd7c",
+    "deployment": "12131ce9-796c-4bf1-ac62-6166611319db",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "1dd2685a-291d-4630-94ea-dd540bca1b99",
+    "imageSha256": "66a2a8d303827f1842f45d19c21493a38f259ef36365e43f36d7a1a798b15f42",
+    "productionMigration": "283_exactly_once_no_284",
+    "health": ["health_200", "root_200", "dashboard_200", "demo_200", "paid_demo_bytes_match"]
+  },
+  "frozenInputs": [
+    { "path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52" },
+    { "path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575" },
+    { "path": "docs/architecture/MISSION_28_PART6C_DELIVERY_COORDINATION_CONTRACT.json", "normalizedLfSha256": "D9D00F6496DF95465257C427EA3674ECC7FB960780E495D1807C551F040835A3" },
+    { "path": "docs/architecture/MISSION_28_PART7A_SENDER_RECIPIENT_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "DDCFCD0B110AFE39A6FC5C00C5BC518C44112A8753F0BDD4B78DC9B947288871" },
+    { "path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF" },
+    { "path": "docs/architecture/MISSION_28_PART7C_CONTENT_TEMPLATE_PREVIEW_CONTRACT.json", "normalizedLfSha256": "B0070106EFC642299B4C1F8334AA9EB3206078C93AA0412B33DC2EC71D639D91" }
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateChannelCapabilityProviderFallbackCostPrefillAttachmentHandoffAttemptOrOutputNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "channelCatalogEntries": 4,
+    "channelResolutionsPerPreview": 4,
+    "recipientsPerResolution": 1,
+    "fallbackChannelsPerResolution": 0,
+    "recipientPrefillValuesPerResolution": 0,
+    "attachmentsPerResolution": 0,
+    "providerAttemptsPerResolution": 0,
+    "nativeHandoffsOpenedPerResolution": 0,
+    "canonicalRequestOctetsMaximum": 16384
+  },
+  "channelCatalog": [
+    {
+      "channelId": "in_app_passive",
+      "transportClass": "none_internal",
+      "capabilityState": "available_internal_no_effect",
+      "resultState": "ready_internal_no_effect",
+      "providerMode": "provider_disabled",
+      "providerRequestIdentityState": "not_created",
+      "fallbackState": "none",
+      "costState": "zero_no_provider",
+      "recipientPrefillState": "not_applicable_internal_identity_only",
+      "attachmentState": "none",
+      "handoffState": "not_applicable",
+      "attemptState": "not_created"
+    },
+    {
+      "channelId": "native_manual_handoff",
+      "transportClass": "native_os_handoff",
+      "capabilityState": "manual_excluded_current_launch",
+      "resultState": "unavailable_manual_handoff_not_opened",
+      "providerMode": "provider_disabled",
+      "providerRequestIdentityState": "not_created",
+      "fallbackState": "none",
+      "costState": "unknown_unavailable",
+      "recipientPrefillState": "forbidden_current_launch",
+      "attachmentState": "forbidden_current_launch",
+      "handoffState": "not_opened",
+      "attemptState": "not_created"
+    },
+    {
+      "channelId": "email",
+      "transportClass": "provider_neutral_email",
+      "capabilityState": "external_unavailable",
+      "resultState": "unavailable_external_channel",
+      "providerMode": "provider_disabled",
+      "providerRequestIdentityState": "not_created",
+      "fallbackState": "none",
+      "costState": "unknown_unavailable",
+      "recipientPrefillState": "forbidden_current_launch",
+      "attachmentState": "forbidden_current_launch",
+      "handoffState": "not_applicable",
+      "attemptState": "not_created"
+    },
+    {
+      "channelId": "sms",
+      "transportClass": "provider_neutral_sms",
+      "capabilityState": "external_unavailable",
+      "resultState": "unavailable_external_channel",
+      "providerMode": "provider_disabled",
+      "providerRequestIdentityState": "not_created",
+      "fallbackState": "none",
+      "costState": "unknown_unavailable",
+      "recipientPrefillState": "forbidden_current_launch",
+      "attachmentState": "forbidden_current_launch",
+      "handoffState": "not_applicable",
+      "attemptState": "not_created"
+    }
+  ],
+  "resolutionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "channelResolutionId", "transactionId", "unitId", "contentPreviewId", "senderRecipientResolutionId", "permissionResolutionId", "requestedChannelId", "actorBinding", "evaluatedAt", "requestDigest"],
+    "actorBindingExactFields": ["actorId", "sessionId", "membershipId", "membershipRole"],
+    "outputFieldsCreatedOnlyByTrustedResolution": ["contentPreviewDigest", "transportClass", "capabilityState", "resultState", "providerMode", "providerRequestIdentityState", "fallbackState", "costState", "recipientPrefillState", "attachmentState", "handoffState", "attemptState", "channelResolutionDigest"],
+    "noCandidateProviderFallbackCostPrefillAttachmentHandoffAttemptSentDeliveredOrOutcomeFields": true
+  },
+  "resolutionContract": {
+    "requiredAuthority": "one exact current Part6A action unit plus exact current Part7A sender-recipient resolution latest Part7B permission resolution and immutable Part7C content preview",
+    "currentLaunchReadyCell": "only in_app_passive plus provider_disabled plus internal_record_only plus clear_internal_passive_no_effect resolves ready_internal_no_effect",
+    "nativeManualHandoff": "the contract names native app share and composer handoff but current Part1D marks it manual_excluded; no operating-system handoff source is mounted and the resolution remains unavailable_manual_handoff_not_opened",
+    "emailAndSms": "provider-neutral channel names and truth fields are frozen but both remain unavailable because no accepted external launch cell consent legal provider sender credential callback deliverability or effect authority exists",
+    "fallback": "no automatic or silent fallback; an unavailable requested channel remains unavailable rather than substituting in-app native email SMS or another provider",
+    "cost": "only in-app no-provider cost is exactly zero; email SMS and native costs remain unknown_unavailable and cannot be guessed or presented as zero",
+    "recipientPrefill": "no candidate or stored raw recipient contact value is retained or prefilled; native email and SMS prefill remain forbidden",
+    "attachments": "no attachment is selected or handed off; secure links and attachments belong to Part7E or later accepted document authority",
+    "providerRequestIdentity": "none is created because no provider attempt exists; the stable Part6C provider-request identity cannot be synthesized by this resolution",
+    "sameDigestSameCanonicalRecord": "idempotent_historical_replay_no_new_authority",
+    "sameIdentityDifferentDigestOrCanonicalRecord": "deny",
+    "latestPermissionRecipientSourceAndPreviewBindingsRequiredForNewResolution": true,
+    "noEffect": true
+  },
+  "handoffEvidenceContract": {
+    "openingRule": "only a separately trusted mounted operating-system integration event after explicit user action could establish handoff_opened",
+    "currentMountedOperatingSystemIntegration": "unavailable",
+    "candidateClaimCanEstablishOpened": false,
+    "composerOpenedMeansSent": false,
+    "composerOpenedMeansDelivered": false,
+    "composerOpenedMeansProviderAccepted": false,
+    "composerOpenedMeansRecipientPrefilled": false,
+    "futureEvidenceMustRemainSeparateFromProviderAttemptDeliveryReplyOrOutcome": true
+  },
+  "deliveryTruthContract": {
+    "queuedMeansSent": false,
+    "previewedMeansSent": false,
+    "resolvedReadyMeansSent": false,
+    "handoffOpenedMeansSent": false,
+    "providerAcceptedMeansDelivered": false,
+    "noProviderOrOperatingSystemOutcomeMayBeFabricated": true
+  },
+  "deniedCombinations": [
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "cross_tenant_transaction_unit_preview_sender_recipient_permission_actor_session_membership_or_channel_retarget",
+    "stale_corrected_superseded_nonlatest_or_unavailable_recipient_permission_source_preview_or_action_binding_treated_as_ready",
+    "external_native_email_or_sms_channel_treated_as_ready_from_internal_in_app_permission",
+    "candidate_supplied_transport_capability_result_provider_fallback_cost_prefill_attachment_handoff_attempt_sent_delivered_or_outcome_state",
+    "provider_specific_identifier_credential_payload_template_status_or_callback_treated_as_business_authority",
+    "automatic_fallback_channel_substitution_provider_rotation_or_retry",
+    "raw_name_email_phone_address_contact_token_message_body_document_content_link_or_attachment_persisted_or_prefilled",
+    "native_composer_share_or_app_open_claim_without_separately_trusted_mounted_platform_evidence",
+    "preview_resolution_queue_or_composer_open_presented_as_attempt_sent_delivered_reply_or_outcome",
+    "same_material_under_another_resolution_identity_or_same_identity_with_changed_material",
+    "runtime_route_ui_scheduler_worker_queue_publisher_consumer_provider_callback_operating_system_handoff_message_delivery_reply_or_effect",
+    "upstream_mutation_accounting_collection_enforcement_money_legal_provider_outcome_or_founder_claim"
+  ],
+  "runtimeBoundary": {
+    "migration": "284_canonical_automation_channel_delivery_handoff_v1.sql",
+    "table": "canonical_automation_channel_resolutions_v1",
+    "ownerOnlyFunction": "canonical_automation_record_channel_resolution_v1",
+    "publicExecuteRevoked": true,
+    "forcedTenantRls": true,
+    "immutableAppendOnly": true,
+    "mountedRuntimeConsumer": false,
+    "providerAdapterOrCallback": false,
+    "operatingSystemHandoffIntegration": false,
+    "part7EPlusLinkAttachmentReplyOutcomeAuthority": false
+  },
+  "privacyAndEffects": {
+    "persistedRawRecipientOrContactValues": 0,
+    "persistedMessageBodies": 0,
+    "persistedLinks": 0,
+    "persistedAttachments": 0,
+    "providerRequestIdentities": 0,
+    "providerAttempts": 0,
+    "nativeHandoffsOpened": 0,
+    "recipientMessages": 0,
+    "externalEffects": 0,
+    "upstreamMutations": 0,
+    "accountingMutations": 0,
+    "moneyEffects": 0
+  },
+  "unavailableEvidence": [
+    "accepted external customer email SMS native app share composer secure-link attachment or financial-document channel authority",
+    "mounted operating-system handoff event source recipient prefill cost attachment or sent evidence",
+    "provider account capability credential sender adapter request callback deliverability receipt reply opt-out or outcome authority",
+    "professional legal privacy communications-consent collections debt consumer-protection regulatory provider or security review",
+    "real recipients messages documents external effects upstream mutations accounting collections enforcement or money effects",
+    "private-production customer evidence provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval"
+  ]
+}

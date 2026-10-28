@@ -161,8 +161,8 @@ describe('Mission 28 Part 6C delivery coordination', () => {
   test('records Part 6D released, only Part 6E candidate, and migration279/no280', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
       const document = fs.readFileSync(path.join(ROOT, relative), 'utf8');
-      expect(document).toContain('Parts 1A–7B are released. Part 7C is the sole implementation candidate.');
-      expect(document).toContain('Parts 7D–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–7C are released. Part 7D is the sole implementation candidate.');
+      expect(document).toContain('Parts 7E–14G remain planned and unimplemented.');
       expect(document).toContain('061e8ae7-eb47-49ff-b015-3adbe3c352f1');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
@@ -172,6 +172,6 @@ describe('Mission 28 Part 6C delivery coordination', () => {
     expect(ledger).toContain('| 25 | 6E | Cancel/pause/revoke/drain/dead-letter and reviewed retry | **Released** |');
     expect(ledger).toContain('| 26 | 6F | Restart/migration/outage/restore and orphan-authority recovery | **Released** |');
     expect(ledger).toContain('| 27 | 7A | Exact sender and recipient authority | **Released** |');
-    expect(ledger).toContain('through additive `283_canonical_automation_content_template_preview_v1.sql` with no 284');
+    expect(ledger).toContain('through additive `284_canonical_automation_channel_delivery_handoff_v1.sql` with no 285');
   });
 });

@@ -224,7 +224,7 @@ realPostgres('Mission 28 Part 6E PostgreSQL delivery controls through migration 
     expect(new Set(concurrent.map(item => item.state))).toEqual(new Set(['paused', 'drained']));
   }, 120000);
 
-  test('schedule, claim and retry serialize lifecycle before reducing controls without a lock cycle', async () => {
+  test('the first exact lifecycle-lock holder completes before the reducing control commits', async () => {
     async function runRace(policyId, policyDigest, suffix, operation) {
       let action; let prepared; let request; let operationResult;
       if (operation === 'claim') { action = await seedAction(suffix, policyId, policyDigest); request = leaseRequest(action, suffix); }
@@ -246,15 +246,19 @@ realPostgres('Mission 28 Part 6E PostgreSQL delivery controls through migration 
         const controlResult = await controlPromise;
         if (controlResult.error) throw controlResult.error;
         expect(controlResult.value).toEqual(expect.objectContaining({ state: 'paused', replayed: false }));
-        return operationResult;
+        return { operationResult, reducingControlResult: controlResult.value };
       } finally {
         await legacyClient.query('ROLLBACK').catch(() => {}); legacyClient.release();
         await controlClient.query('RESET statement_timeout').catch(() => {}); controlClient.release();
       }
     }
-    expect((await runRace(SCHEDULE_RACE_POLICY, SCHEDULE_RACE_POLICY_DIGEST, 70, 'schedule')).scheduleId).toBe(uuid(14070));
-    expect((await runRace(CLAIM_RACE_POLICY, CLAIM_RACE_POLICY_DIGEST, 71, 'claim')).state).toBe('lease_acquired_no_effect');
-    expect((await runRace(DECISION_RACE_POLICY, DECISION_RACE_POLICY_DIGEST, 72, 'retry')).state).toBe('retry_scheduled_no_effect');
+    const scheduled = await runRace(SCHEDULE_RACE_POLICY, SCHEDULE_RACE_POLICY_DIGEST, 70, 'schedule');
+    const claimed = await runRace(CLAIM_RACE_POLICY, CLAIM_RACE_POLICY_DIGEST, 71, 'claim');
+    const retried = await runRace(DECISION_RACE_POLICY, DECISION_RACE_POLICY_DIGEST, 72, 'retry');
+    expect(scheduled.operationResult.scheduleId).toBe(uuid(14070));
+    expect(claimed.operationResult.state).toBe('lease_acquired_no_effect');
+    expect(retried.operationResult.state).toBe('retry_scheduled_no_effect');
+    for (const raced of [scheduled, claimed, retried]) expect(raced.reducingControlResult.state).toBe('paused');
   }, 120000);
 
   test('expires only an exact queued action after trusted expiry and terminally revokes an exact policy', async () => {

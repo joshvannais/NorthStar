@@ -173,7 +173,7 @@ describe('Mission 28 Part 6E delivery controls', () => {
     expect(CONTRACT.currentnessAndConcurrencyContract).toEqual(expect.objectContaining({
       legacyAndControlLockOrder: 'exact_policy_lifecycle_then_tenant_control_then_policy_control_then_action_schedule_control; exact_source_lineage_is_locked_before_latest_head_resolution_while_lifecycle_remains_held',
       resumeAndReviewedRetrySourceLock: 'migration274_exact_lineage_lock_is_held_through_latest_head_validation_and_control_commit',
-      reducingControlWinsConcurrentScheduleClaimOrRetry: true,
+      concurrentScheduleClaimOrRetryPrecedence: 'first_exact_lifecycle_lock_holder_completes_first_then_reducing_control_commits_and_blocks_later_work',
     }));
   });
 

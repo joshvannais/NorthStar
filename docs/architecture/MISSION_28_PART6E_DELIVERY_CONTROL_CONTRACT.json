@@ -96,7 +96,7 @@
     "reconciliationUnderReducingControl": "allowed_evidence_only_no_resend",
     "sameControlIdDigestAndCanonicalText": "historical_replay_before_mutable_currentness_no_new_event_or_head_change",
     "sameControlIdDifferentMaterial": "deny",
-    "reducingControlWinsConcurrentScheduleClaimOrRetry": true
+    "concurrentScheduleClaimOrRetryPrecedence": "first_exact_lifecycle_lock_holder_completes_first_then_reducing_control_commits_and_blocks_later_work"
   },
   "storageContract": {
     "migration": "279_canonical_automation_delivery_controls_v1.sql",

@@ -289,17 +289,18 @@ describe('Mission 28 Part 6A transactional outbox and action units', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–5D released; Part 6A implementation candidate only.');
-      expect(document).toContain('Parts 6B–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–6A released; Part 6B implementation candidate only.');
+      expect(document).toContain('Parts 6C–14G remain planned and unimplemented.');
       expect(document).toContain('244a3cddb4e67a375aeab507294b87426dbfcfda');
       expect(document).toContain('9ddb846c-bcbc-4024-aebe-83ca2a9c8cbf');
     }
     expect(ledger).toContain('| 20 | 5D | Collision/suppression engine and no-effect dry run | **Released** |');
-    expect(ledger).toContain('| 21 | 6A | Transactional outbox and action units | **Implementation candidate** |');
+    expect(ledger).toContain('| 21 | 6A | Transactional outbox and action units | **Released** |');
+    expect(ledger).toContain('| 22 | 6B | Durable time-zone-aware scheduler | **Implementation candidate** |');
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(45);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(44);
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
-    expect(migrations.at(-1)).toBe('275_canonical_automation_transactional_outbox_v1.sql');
-    expect(migrations.some(name => name.startsWith('276_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('276_canonical_automation_durable_scheduler_v1.sql');
+    expect(migrations.some(name => name.startsWith('277_'))).toBe(false);
   });
 });

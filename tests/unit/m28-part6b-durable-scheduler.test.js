@@ -251,18 +251,18 @@ describe('Mission 28 Part 6B durable scheduler', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–7B are released. Part 7C is the sole implementation candidate.');
-      expect(document).toContain('Parts 7D–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–7C are released. Part 7D is the sole implementation candidate.');
+      expect(document).toContain('Parts 7E–14G remain planned and unimplemented.');
       expect(document).toContain('af2b777a3d146f24e95052add626784186d4b0df');
       expect(document).toContain('62521b53-9b1b-44c8-af98-97b91f256138');
     }
     expect(ledger).toContain('| 21 | 6A | Transactional outbox and action units | **Released** |');
     expect(ledger).toContain('| 22 | 6B | Durable time-zone-aware scheduler | **Released** |');
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(37);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(36);
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
-    expect(migrations.at(-1)).toBe('283_canonical_automation_content_template_preview_v1.sql');
-    expect(migrations.some(name => name.startsWith('284_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('284_canonical_automation_channel_delivery_handoff_v1.sql');
+    expect(migrations.some(name => name.startsWith('285_'))).toBe(false);
     expect(migrations.filter(name => name.startsWith('281_'))).toEqual(['281_canonical_automation_sender_recipient_authority_v1.sql']);
   });
 });

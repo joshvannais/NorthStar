@@ -524,8 +524,8 @@ describe('Mission 28 Part 1D first-supported launch matrix', () => {
   test('records Parts 1A–5A released, only Part 5B current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–5A released; Part 5B implementation candidate only.');
-    expect(roadmap).toContain('Parts 5C–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–5B released; Part 5C implementation candidate only.');
+    expect(roadmap).toContain('Parts 5D–14G remain planned and unimplemented.');
     for (const identity of [PART1C_HEAD, BASE, PART1C_DEPLOYMENT, PART1C_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -557,10 +557,10 @@ describe('Mission 28 Part 1D first-supported launch matrix', () => {
     expect(rows[15][4]).toBe('**Released**');
     expect(rows[15][5]).toContain('PR #564');
     expect(rows[16][4]).toBe('**Released**');
-    expect(rows[17][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(18).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[18][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(19).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(48);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(47);
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 

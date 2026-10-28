@@ -1,0 +1,138 @@
+{
+  "contractVersion": "mission28.part5c.owner-readable-preview.v1",
+  "authority": {
+    "mission": 28,
+    "part": "5C",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "0f942b0758297b4514847783b49c6812fa50e71d",
+    "baselineTree": "584c7388e382c3cf071f65945991e7a17eec90d8",
+    "sourceContractAndExecutableAcceptanceOnly": true,
+    "mountedPreviewResolverStoreRouteOrUiAvailable": false,
+    "previewCreatesEligibilityApprovalScheduleRecipientProviderEffectUpstreamMutationAccountingOrMoneyAuthority": false
+  },
+  "part5BRelease": {
+    "acceptedSourceHead": "1ed57934cd127b083a3accacc9735ae6b3b9f5cd",
+    "acceptedTree": "584c7388e382c3cf071f65945991e7a17eec90d8",
+    "pullRequest": 566,
+    "mergedMain": "0f942b0758297b4514847783b49c6812fa50e71d",
+    "deployment": "cb9fcc37-473e-43c9-b243-37ce1860b17d",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "2edcb483-5388-4375-b43a-7a7841bf1807",
+    "imageSha256": "99d66b682bcd53d9b6822a6ced0a663b6591b7aa4156f7bbe8c084c3833b4ce2",
+    "health": ["canonical_startup_ready", "migrations_270_latest_274_no_275", "api_health_200", "root_200", "demo_200"],
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.json", "normalizedLfSha256": "D1DA31C44602127C6DDF95FE96B59FA57D1E23DA291717D64F658DD0B2E3AF81"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART5A_DECLARATIVE_RULE_GRAMMAR.json", "normalizedLfSha256": "7EF24ECE536F4407EE402620B6122ABB0B067E85DB1F0A9E43D79BC7A2CDEE3B"},
+    {"path": "docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json", "normalizedLfSha256": "62A4EE942017E789D7F0F73DD9A6FA73125A52A9C09EB6E3726A3345CA8820A0"}
+  ],
+  "previewEnvelope": {
+    "schemaVersion": "mission28.owner-readable-preview.v1",
+    "exactFields": ["schemaVersion", "tenantId", "previewId", "viewer", "evaluationBinding", "source", "recipient", "channel", "contentVersion", "timing", "limits", "suppression", "governance", "expectedEffects", "inputDigest"],
+    "viewerExactFields": ["actorId", "sessionId", "membershipId", "actorTenantId", "sessionTenantId", "membershipTenantId", "sessionSubjectActorId", "membershipSubjectActorId", "actorState", "sessionState", "membershipState", "roleId", "capabilityId", "recordScope"],
+    "evaluationBindingExactFields": ["evaluationId", "inputDigest", "outputDigest", "result", "policyId", "policyVersion", "policyDigest", "ruleId", "ruleDigest", "actionTemplateId", "actionTemplateDigest", "actionFamilyId", "sourceBindingDigest", "evaluatedAt"],
+    "sourceExactFields": ["triggerId", "sourceClassId", "recordIdentityDigest", "eventKind", "headTransitionId", "headTransitionDigest", "headSequence", "headState", "snapshotId", "snapshotDigest", "eventTime", "observedAt", "currentnessState", "sourceBindingDigest", "sourceSetDigest"],
+    "recipientExactFields": ["recipientSetId", "recipientSetDigest", "recipientClassIds", "recipientScope"],
+    "channelExactFields": ["channelId", "providerModeId", "availabilityState"],
+    "contentVersionExactFields": ["contentKind", "documentOrMessageId", "documentOrMessageVersion", "documentOrMessageDigest"],
+    "timingExactFields": ["tenantTimeZoneId", "executionTimeState", "scheduledUtc", "scheduledLocal", "nextEvaluationAt"],
+    "limitsExactFields": ["mandatoryManifestDigest", "ownerLimitProfileId", "ownerLimitProfileDigest", "effectiveLimitDigest", "dimensionIds", "resolutionState"],
+    "suppressionExactFields": ["state", "snapshotId", "snapshotDigest", "matchedSuppressionId", "matchedSuppressionDigest", "endsAt", "resolutionDigest"],
+    "governanceExactFields": ["resolutionState", "tenantStopState", "policyControlState", "governanceDigest", "stopConditionCodes"],
+    "expectedEffectsExactFields": ["projectionState", "effectClass", "internalRecordCount", "externalEffectCount", "providerAttemptCount", "recipientMessageCount", "moneyEffectCount", "upstreamMutationCount"],
+    "inputDigestNamespace": "mission28.owner-preview-input.v1\n",
+    "previewDigestNamespace": "mission28.owner-preview-output.v1\n",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_cycles_aliases_or_coercion"
+  },
+  "trustedResolutionContract": {
+    "candidateMayNotSupplyReplaceRetargetOrSelfAttestTrustedMaterial": true,
+    "viewerMustBeServerResolvedExactActiveTenantActorSessionMembershipWithAutomationViewCapability": true,
+    "ownerReadableRoles": ["tenant_owner", "tenant_admin"],
+    "evaluationMustBeOneExactImmutablePart5BOutput": true,
+    "evaluationResultNeverCreatesPreviewOrEffectAuthority": true,
+    "sourceMustEqualTheExactPart4A4B4DIdentityAndPart4CCurrentnessMaterialUsedByEvaluation": true,
+    "recipientChannelContentTimingLimitsSuppressionAndGovernanceMustBeSeparatelyTrustedAndTenantBound": true,
+    "crossTenantActorSessionMembershipEvaluationPolicyRuleSourceRecipientChannelLimitSuppressionGovernanceAliasCloneOrReplayReuse": "deny",
+    "changedMaterialRequiresANewEvaluationAndNewPreview": true,
+    "mountedTrustedResolverAvailable": false
+  },
+  "displayContract": {
+    "resultStates": ["eligible", "ineligible", "suppressed", "unavailable", "expired", "approval_required"],
+    "whatWillHappenCodes": {
+      "eligible": "would_prepare_internal_record_only_if_all_authority_remains_current",
+      "ineligible": "will_not_run_rule_ineligible",
+      "suppressed": "will_not_run_exact_suppression_matched",
+      "unavailable": "will_not_run_required_evidence_unavailable",
+      "expired": "will_not_run_policy_expired",
+      "approval_required": "will_not_run_until_new_exact_owner_authorization"
+    },
+    "why": "exact_ordered_Part5B_reason_codes_and_predicate_explanations_only_no_candidate_prose",
+    "sourceAssumptions": "exact_trigger_record_event_head_snapshot_eventTime_observedAt_currentness_and_source_set_digests_only",
+    "recipientRule": "exact_ordered_unique_subset_of_tenant_owner_tenant_admin_assigned_staff_with_one_internal_recipient_maximum",
+    "channelRule": "in_app_passive_and_provider_disabled_only",
+    "contentRule": "not_applicable_no_external_document_or_message_with_null_id_version_digest",
+    "timingRule": "not_scheduled_part6_unavailable_with_null_execution_instants; tenant_timezone_and_Part5B_reevaluation_hint_are_explanatory_only",
+    "limitRule": "exact_Part3C_manifest_profile_effective_digest_and_all_eleven_dimension_ids; contract_only_runtime_enforcement_unavailable",
+    "suppressionRule": "exact_Part5B_suppression_resolution_and_no_claim_that_an_effect_stopped",
+    "stopRule": "closed_Part3D_stop_condition_codes_only_and_no_claim_that_an_in_flight_effect_stopped",
+    "expectedEffectRule": "hypothetical_internal_record_only_projection_with_every_external_provider_message_money_and_upstream_count_zero",
+    "assumptionCodes": ["policy_source_and_rule_exact_at_evaluation", "currentness_must_be_revalidated_before_any_later_effect", "runtime_schedule_and_effect_executor_unavailable", "no_external_document_message_provider_or_money_authority"]
+  },
+  "authorizationCycleContract": {
+    "approvalRequiredEvaluationMayProduceOneNoEffectPreview": true,
+    "Part3BPerRunApprovalMayBindThatExactPreviewIdAndDigest": true,
+    "approvalRequiresACompleteNewPart5BEvaluation": true,
+    "previewNeverUpgradesApprovalRequiredToEligible": true,
+    "postAuthorizationEligiblePreviewIsDisplayEvidenceOnlyAndNeverReplacesThePreviewBoundByAuthorization": true
+  },
+  "privacyContract": {
+    "allowedOwnerReadableMaterial": "stable_ids_closed_codes_digests_versions_timestamps_timezone_and_internal_recipient_classes_only",
+    "forbiddenAtEveryDepth": ["email", "phone", "address", "customer_name", "recipient_name", "message_body", "document_body", "provider_token", "credential", "secret", "payment_instrument", "bank_data"],
+    "candidateFreeTextAllowed": false,
+    "unknownOrUnavailableMaterialMayNotBeFabricated": true
+  },
+  "outputContract": {
+    "exactFields": ["schemaVersion", "tenantId", "previewId", "viewerScope", "evaluationBinding", "displayState", "whatWillHappenCode", "reasonCodes", "predicateExplanations", "source", "recipient", "channel", "contentVersion", "timing", "limits", "suppression", "expectedEffects", "stopConditionCodes", "assumptionCodes", "effectAuthorityState", "previewDigest"],
+    "effectAuthorityState": "no_effect_authority",
+    "digestProjection": "complete_output_except_previewDigest",
+    "immutableReplayMeaning": "same_no_effect_owner_preview_evidence_only_never_current_authority",
+    "previewNeverCreatesOrProvesAnEffect": true
+  },
+  "denials": [
+    "malformed_extra_missing_reordered_nonplain_accessor_symbol_toJSON_custom_prototype_proxy_wrapper_cycle_alias_or_coercible_input",
+    "empty_whitespace_noncanonical_or_cross_actor_session_membership_viewer_identity",
+    "viewer_without_exact_automation_view_capability_or_owner_admin_tenant_scope",
+    "candidate_created_or_retargeted_evaluation_source_recipient_channel_content_timing_limit_suppression_or_governance_authority",
+    "changed_policy_rule_source_snapshot_currentness_recipient_channel_limit_suppression_governance_or_evaluation_digest",
+    "Part5B_result_reason_explanation_or_nextEvaluationAt_substitution",
+    "recipient_reorder_duplicate_external_recipient_fanout_or_cross_tenant_reuse",
+    "external_channel_provider_mode_document_message_content_version_or_delivery_claim",
+    "schedule_time_fabrication_or_reevaluation_hint_used_as_execution_time",
+    "unknown_or_unavailable_material_rendered_as_fact_or_permission",
+    "PII_contact_secret_credential_provider_payment_bank_message_or_document_material",
+    "preview_used_as_eligibility_approval_schedule_claim_provider_recipient_effect_upstream_accounting_or_money_authority"
+  ],
+  "laterSliceBoundary": {
+    "part5D": "collision_precedence_suppression_dry_run_historical_backtest_and_at_most_once_projection_remain_planned_unimplemented",
+    "part6Plus": "scheduling_claiming_queue_worker_provider_recipient_message_effect_accounting_and_money_remain_planned_unimplemented"
+  },
+  "unavailableEvidence": [
+    "mounted_preview_resolver_store_route_UI_or_rendered_surface",
+    "runtime_limit_suppression_governance_or_pre_effect_revalidation",
+    "scheduler_queue_worker_provider_recipient_message_or_effect_executor",
+    "provider_sandbox_live_provider_real_recipient_or_live_money",
+    "private_production_hosted_load_or_SLA",
+    "professional_legal_privacy_provider_or_regulatory_review",
+    "physical_Safari_or_devices_manual_assistive_technology_or_founder_visual_verdict"
+  ]
+}

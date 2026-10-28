@@ -99,7 +99,7 @@ function validateScalar(type, value) {
         value < bounds.safeIntegerMinimum || value > bounds.safeIntegerMaximum) throw new Error('integer literal');
   } else if (type === 'decimal') {
     if (typeof value !== 'string' || !/^-?(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(value) ||
-        value === '-0' || value.endsWith('0') || !Number.isFinite(Number(value)) ||
+        value === '-0' || (value.includes('.') && value.endsWith('0')) || !Number.isFinite(Number(value)) ||
         Number(value) < bounds.safeIntegerMinimum || Number(value) > bounds.safeIntegerMaximum) {
       throw new Error('decimal literal');
     }
@@ -417,7 +417,11 @@ describe('Mission 28 Part 5A bounded declarative rule grammar', () => {
     }
     expect(() => validateExpected('token', 'greater_than', 'exact_current')).toThrow();
     expect(() => validateExpected('integer', 'regex', 1)).toThrow();
+    expect(() => validateExpected('decimal', 'equals', '0')).not.toThrow();
+    expect(() => validateExpected('decimal', 'equals', '10')).not.toThrow();
     expect(() => validateExpected('decimal', 'equals', '01.20')).toThrow();
+    expect(() => validateExpected('decimal', 'equals', '1.20')).toThrow();
+    expect(() => validateExpected('decimal', 'equals', '-0')).toThrow();
     expect(() => validateExpected('decimal', 'equals', '1e3')).toThrow();
     expect(() => validateExpected('integer', 'equals', '1')).toThrow();
     expect(() => validateExpected('integer', 'equals', CONTRACT.bounds.safeIntegerMaximum + 1)).toThrow();

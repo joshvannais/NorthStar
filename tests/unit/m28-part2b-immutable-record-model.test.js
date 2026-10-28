@@ -782,8 +782,8 @@ describe('Mission 28 Part 2B immutable record model', () => {
   test('records Parts 1A–5A released, only Part 5B current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–7A released; Part 7B implementation candidate only.');
-    expect(roadmap).toContain('Parts 7C–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–7B are released. Part 7C is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 7D–14G remain planned and unimplemented.');
     for (const identity of [PART2A_HEAD, BASE, PART2A_DEPLOYMENT, PART2A_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -824,10 +824,11 @@ describe('Mission 28 Part 2B immutable record model', () => {
     expect(rows[24][4]).toBe('**Released**');
     expect(rows[25][4]).toBe('**Released**');
     expect(rows[26][4]).toBe('**Released**');
-    expect(rows[27][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(28).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[27][4]).toBe('**Released**');
+    expect(rows[28][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(29).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(38);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(37);
   });
 
   test('adds no runtime, database, migration, provider, scheduling, route, UI or demo behavior', () => {
@@ -845,9 +846,9 @@ describe('Mission 28 Part 2B immutable record model', () => {
     expect(productionSource).not.toContain('mission28.part2b.immutable-record-model.v1');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(migrations).toHaveLength(278);
-    expect(migrations.at(-1)).toBe('282_canonical_automation_communication_permission_v1.sql');
-    expect(migrations.some(name => name.startsWith('283_'))).toBe(false);
+    expect(migrations).toHaveLength(279);
+    expect(migrations.at(-1)).toBe('283_canonical_automation_content_template_preview_v1.sql');
+    expect(migrations.some(name => name.startsWith('284_'))).toBe(false);
     expect(migrations.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
     expect(migrations.filter(name => /^278_/.test(name))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
     expect(migrations.filter(name => /^279_/.test(name))).toEqual(['279_canonical_automation_delivery_controls_v1.sql']);

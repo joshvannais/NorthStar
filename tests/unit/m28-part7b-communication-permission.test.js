@@ -152,17 +152,18 @@ describe('Mission 28 Part 7B communication permission and suppression authority'
     expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.canonical_automation_record_communication_permission_resolution_v1/);
   });
 
-  test('records Part 7A released, only Part 7B candidate, migration282/no283 and Part 7C+ planned', () => {
+  test('records Parts 7A-7B released, only Part 7C candidate, migration283/no284 and Part 7D+ planned', () => {
     for (const document of [fs.readFileSync(ROADMAP, 'utf8'), fs.readFileSync(LEDGER, 'utf8')]) {
-      expect(document).toContain('Parts 1A–7A released; Part 7B implementation candidate only.');
-      expect(document).toContain('Parts 7C–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–7B are released. Part 7C is the sole implementation candidate.');
+      expect(document).toContain('Parts 7D–14G remain planned and unimplemented.');
       expect(document).toContain('3a64444e-1094-41c0-9d45-7c5375af74a8');
     }
     const ledger = fs.readFileSync(LEDGER, 'utf8');
     expect(ledger).toContain('| 27 | 7A | Exact sender and recipient authority | **Released** |');
-    expect(ledger).toContain('| 28 | 7B | Communication permission, preference, consent basis and suppression | **Implementation candidate** |');
+    expect(ledger).toContain('| 28 | 7B | Communication permission, preference, consent basis and suppression | **Released** |');
+    expect(ledger).toContain('| 29 | 7C | Approved templates, bounded variables and AI-draft boundary | **Implementation candidate** |');
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort((a, b) => Number(a.slice(0, 3)) - Number(b.slice(0, 3)));
-    expect(names).toHaveLength(278); expect(names.at(-1)).toBe('282_canonical_automation_communication_permission_v1.sql'); expect(names.some(name => name.startsWith('283_'))).toBe(false);
+    expect(names).toHaveLength(279); expect(names.at(-1)).toBe('283_canonical_automation_content_template_preview_v1.sql'); expect(names.some(name => name.startsWith('284_'))).toBe(false);
   });
 
   test('keeps Part 7C+ and every provider, message, effect, money, legal and founder boundary unavailable', () => {

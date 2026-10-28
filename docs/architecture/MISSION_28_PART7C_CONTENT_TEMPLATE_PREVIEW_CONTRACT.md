@@ -1,0 +1,17 @@
+# Mission 28 Part 7C — approved content templates and no-effect preview
+
+Part 7C freezes three versioned content templates corresponding exactly to the three released Part 5A/6A internal action-template identities. A new preview binds one immutable Part 6A action unit, its exact current Part 7A sender/recipient resolution, and the latest Part 7B `clear_internal_passive_no_effect` permission resolution. It creates tenant-private preview evidence only. It cannot enqueue, publish, notify, open a composer, contact a recipient, call a provider, create a document or link, mutate an upstream record, make an accounting entry, or move money.
+
+The current Part 1D launch matrix has no accepted external customer, email, SMS, secure-document, provider, country, language, consent, or legal-review cell. The catalog is therefore deliberately limited to the three passive internal action templates, exact `en-US`/`en` versions, plain text, and one closed catalog variable. There is no free text. Link and attachment selections are empty. This is a truthful current-launch bound, not a claim that English is a tenant preference or that an external template has been approved.
+
+## Projection and adversarial-text rules
+
+- Template ID, version, digest, action-template ID/digest/family, locale, language, format, wording origin, customer-safe rule, patterns, and variable schema are one immutable closed catalog. An action unit must match one catalog row exactly.
+- The only variable is `actionLabel`, and its value is selected from the catalog row. Candidate or stored names, contact values, customer text, amounts, dates, offers, threats, deadlines, legal statements, prompts, markup, expressions, object paths, URLs, tokens, or authority claims cannot enter the projection.
+- Output is deterministic plain text assembled from fixed ASCII patterns and a fixed ASCII value. HTML/Markdown/script interpretation is unavailable; control, invisible, bidirectional, markup, expression, prompt, and template injection are rejected as unknown variable material rather than sanitized into a different meaning.
+- AI-assisted wording remains a labeled unapproved draft boundary. This slice accepts only `approved_static_catalog`; generated or rewritten wording cannot be recorded as approved or previewed.
+- The output digest binds tenant, transaction, unit, run, exact sender/recipient and permission resolutions, template/version/digest, variable-set digest, locale/language, empty links/attachments, rendered text, and trusted preview time. Exact replay returns the stored evidence; changed material or cloned material under another ID fails closed.
+
+## Authority boundary
+
+Migration 283 adds one owner-only, forced-RLS, append-only content-preview table and one revoked storage function. New previews revalidate the exact source/contact resolution and latest permission under the same Part 7B permission-lineage and Part 7A unit locks. No route, UI, scheduler, publisher, consumer, worker, provider, callback, recipient/message, delivery, reply, outcome, or effect path is mounted. Part 7D owns channel/provider delivery, Part 7E owns secure links and customer-safe attachments, and Part 8 owns approved document delivery. Professional legal/privacy/provider review, external locale/translation approval, live recipients/messages, provider evidence, money, private-production evidence, physical-device/manual-AT evidence, and founder visual approval remain unavailable and unclaimed.

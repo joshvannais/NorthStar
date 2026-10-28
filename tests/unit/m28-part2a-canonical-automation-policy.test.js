@@ -406,8 +406,8 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
   test('records Parts 1A–5A released, Part 5B as the sole candidate, and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–6D released; Part 6E implementation candidate only.');
-    expect(roadmap).toContain('Parts 6F–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–6E released; Part 6F implementation candidate only.');
+    expect(roadmap).toContain('Parts 7A–14G remain planned and unimplemented.');
     for (const identity of [PART1D_HEAD, BASE, PART1D_DEPLOYMENT, PART1D_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -447,10 +447,11 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
     expect(rows[21][4]).toBe('**Released**');
     expect(rows[22][4]).toBe('**Released**');
     expect(rows[23][4]).toBe('**Released**');
-    expect(rows[24][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(25).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[24][4]).toBe('**Released**');
+    expect(rows[25][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(26).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(41);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(40);
   });
 
   test('does not activate policy runtime or add a schema migration', () => {
@@ -468,8 +469,8 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
     expect(productionSource).not.toContain('mission28.part2a.canonical-automation-policy.v1');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(migrations).toHaveLength(275);
-    expect(migrations.at(-1)).toBe('279_canonical_automation_delivery_controls_v1.sql');
+    expect(migrations).toHaveLength(276);
+    expect(migrations.at(-1)).toBe('280_canonical_automation_recovery_authority_v1.sql');
     expect(migrations.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
     expect(migrations.filter(name => /^278_/.test(name))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
     expect(migrations.filter(name => /^279_/.test(name))).toEqual(['279_canonical_automation_delivery_controls_v1.sql']);

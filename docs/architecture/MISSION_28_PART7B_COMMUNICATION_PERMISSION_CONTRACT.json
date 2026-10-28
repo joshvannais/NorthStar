@@ -1,0 +1,132 @@
+{
+  "contractVersion": "mission28.part7b.communication-permission.v1",
+  "authority": {
+    "mission": 28,
+    "part": "7B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "5cf2946de60576f5a0eb801cd8886597947264d4",
+    "baselineTree": "6e64a19e30cae0c77110128563a41b9985bfd5f5",
+    "part7ARelease": {
+      "acceptedSourceHead": "675ddc5ed0985b4c4d0d122f9299dce8abee46ac",
+      "acceptedTree": "6e64a19e30cae0c77110128563a41b9985bfd5f5",
+      "pullRequest": 575,
+      "mergedMain": "5cf2946de60576f5a0eb801cd8886597947264d4",
+      "deployment": "3a64444e-1094-41c0-9d45-7c5375af74a8",
+      "deploymentState": "SUCCESS_RUNNING",
+      "runningInstance": "c191a499-d538-4e42-8dba-11b09d069ce2",
+      "imageSha256": "d8bec0dfff806afe4d9890ee8c36f391ac9c29dd26d6ab03d1c0e21155229f66",
+      "auditVerdict": "P0=P1=P2=P3=0",
+      "productionMigration": "281_exactly_once_no_282",
+      "health": ["health_200", "root_200", "dashboard_200", "demo_200", "paid_demo_html_hashes_match"]
+    },
+    "runtimeRouteUiWorkerQueueSchedulerProviderOrCallbackGranted": false,
+    "recipientMessageExternalEffectUpstreamMutationAccountingOrMoneyGranted": false,
+    "legalConsentProviderOrFounderVerdictClaimed": false
+  },
+  "frozenInputs": [
+    { "path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52" },
+    { "path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321" },
+    { "path": "docs/architecture/MISSION_28_PART5D_COLLISION_SUPPRESSION_DRY_RUN_CONTRACT.json", "normalizedLfSha256": "3F82B37864D8B16DB6E8B7E8C5DCF27787D7A2675BE92091857601A0EA467BB0" },
+    { "path": "docs/architecture/MISSION_28_PART7A_SENDER_RECIPIENT_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "DDCFCD0B110AFE39A6FC5C00C5BC518C44112A8753F0BDD4B78DC9B947288871" }
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_or_coercion",
+    "candidatePermissionBasisPreferenceOrSuppressionNeverCreatesTrustedAuthority": true
+  },
+  "permissionSubject": {
+    "exactRecipientClasses": ["customer", "authorized_billing_contact", "lead_or_prospect", "staff_member"],
+    "exactChannels": ["in_app_passive", "email", "sms"],
+    "identity": "one_tenant_one_part7a_recipient_class_record_parent_membership_contact_digest_and_channel",
+    "rawContactPersistence": "forbidden",
+    "contactReuseAcrossClassCustomerOrPermissionLineage": "deny",
+    "sourceCurrentness": "rederive_exact_part7a_source_and_contact_digests_under_source_row_locks_for_every_new_version_and_resolution"
+  },
+  "versionedPermission": {
+    "permissionStates": ["unknown", "reported_opt_in_unverified", "opted_out", "do_not_contact", "conflicting", "internal_membership_current"],
+    "preferenceStates": ["unknown", "allowed", "preferred", "blocked"],
+    "basisStates": ["none_unknown", "owner_reviewed_reported_basis_unverified", "recipient_opt_out", "recipient_do_not_contact", "conflicting_evidence", "authenticated_tenant_membership"],
+    "jurisdictionStates": ["unknown", "restricted", "not_applicable_internal"],
+    "ageRestrictionStates": ["unknown", "restricted", "not_applicable_internal"],
+    "quietHoursStates": ["unknown", "restricted", "not_applicable_internal_passive"],
+    "suppressionStates": ["unavailable", "suppressed_opt_out", "suppressed_do_not_contact", "suppressed_conflicting", "suppressed_preference", "suppressed_jurisdiction", "suppressed_age", "suppressed_quiet_hours", "clear_internal_passive"],
+    "sequenceRule": "append_only_strictly_increasing_one_exact_previous_version_digest_no_fork_or_gap",
+    "externalOptInRule": "reported_opt_in_is_evidence_only_and_remains_unavailable_because_part1d_has_no_accepted_external_consent_country_channel_or_provider_cell",
+    "internalRule": "only_current_active_staff_membership_plus_in_app_passive_authenticated_membership_basis_can_be_clear_and_it_still_grants_no_message_or_effect",
+    "reducingEvidenceRule": "opt_out_do_not_contact_conflict_blocked_preference_restricted_jurisdiction_age_or_quiet_hours_suppresses_deterministically",
+    "unknownRule": "unknown_missing_mixed_ambiguous_or_conflicting_permission_preference_basis_jurisdiction_age_or_quiet_hours_is_unavailable_or_suppressed_never_allowed",
+    "legalBoundary": "a_recorded_owner_review_or_reported_opt_in_is_not_professional_legal_privacy_regulatory_or_provider_acceptance"
+  },
+  "suppressionPrecedence": [
+    "suppressed_do_not_contact",
+    "suppressed_opt_out",
+    "suppressed_conflicting",
+    "suppressed_preference",
+    "suppressed_jurisdiction",
+    "suppressed_age",
+    "suppressed_quiet_hours",
+    "unavailable",
+    "clear_internal_passive"
+  ],
+  "resolution": {
+    "exactInputs": ["tenant", "part6a_transaction_and_action_unit", "part7a_resolution_and_ordered_recipients", "latest_permission_version_per_recipient", "active_owner_actor_session_membership", "postgresql_trusted_clock"],
+    "currentLaunchConstraint": "one_recipient_in_app_passive_provider_disabled_internal_record_only",
+    "resultStates": ["clear_internal_passive_no_effect", "unavailable", "suppressed_opt_out", "suppressed_do_not_contact", "suppressed_conflicting", "suppressed_preference", "suppressed_jurisdiction", "suppressed_age", "suppressed_quiet_hours"],
+    "externalResult": "always_unavailable_or_suppressed_until_a_later_explicitly_accepted_launch_matrix_legal_provider_channel_and_effect_authority",
+    "sameDigestSameCanonicalRecord": "idempotent_historical_replay_no_new_authority",
+    "sameIdentityDifferentDigestOrCanonicalRecord": "deny",
+    "latestVersionRequired": true,
+    "sourceOnlyChangeRequiresNewPart7AResolutionAndNewPermissionVersion": true,
+    "contactIdentityChangeRequiresNewPart7AResolutionAndNewPermissionSubjectLineage": true,
+    "noEffect": true
+  },
+  "deniedCombinations": [
+    "raw_email_phone_name_address_message_token_provider_or_contact_value",
+    "free_form_fuzzy_partial_normalized_or_cross_customer_recipient",
+    "cross_tenant_cross_actor_cross_session_cross_membership_cross_unit_cross_resolution_or_cross_contact_reuse",
+    "unknown_recipient_class_channel_preference_permission_basis_jurisdiction_age_quiet_hour_or_suppression_state",
+    "missing_extra_null_malformed_noncanonical_or_coercible_field",
+    "permission_sequence_gap_fork_duplicate_reorder_or_wrong_previous_digest",
+    "stale_part7a_resolution_changed_source_contact_or_inactive_staff_membership",
+    "reported_opt_in_or_owner_review_treated_as_accepted_external_consent_or_legal_basis",
+    "external_recipient_or_email_sms_using_internal_only_jurisdiction_age_or_quiet_hour_states",
+    "legacy_notification_preference_or_destination_treated_as_customer_permission",
+    "billing_document_use_authority_treated_as_general_communication_consent",
+    "quiet_hour_unknown_or_restricted_reroutes_delays_or_authorizes_another_channel",
+    "opt_out_do_not_contact_conflict_or_suppression_overridden_by_preference_policy_content_or_provider_state",
+    "nonlatest_permission_version_or_candidate_supplied_trusted_resolution",
+    "external_recipient_email_sms_secure_document_provider_callback_message_attempt_delivery_or_outcome",
+    "upstream_mutation_accounting_collection_enforcement_or_money_effect",
+    "runtime_route_ui_scheduler_worker_queue_provider_callback_or_effect_authority"
+  ],
+  "privacyAndEffects": {
+    "persistedContactValues": 0,
+    "providerAttempts": 0,
+    "recipientMessages": 0,
+    "externalEffects": 0,
+    "upstreamMutations": 0,
+    "accountingMutations": 0,
+    "moneyEffects": 0,
+    "storedEvidence": "tenant_private_digests_identifiers_closed_states_and_append_only_no_effect_resolution_only"
+  },
+  "runtimeBoundary": {
+    "migration": "282_canonical_automation_communication_permission_v1.sql",
+    "ownerOnlyFunctions": ["canonical_automation_record_communication_permission_version_v1", "canonical_automation_record_communication_permission_resolution_v1"],
+    "publicExecuteRevoked": true,
+    "forcedTenantRls": true,
+    "immutableAppendOnly": true,
+    "mountedRuntimeConsumer": false,
+    "part7CContentAuthority": false,
+    "part7DChannelProviderAuthority": false,
+    "part7EOrLaterAuthority": false
+  },
+  "unavailableEvidence": [
+    "accepted external consent basis opt-in provenance legal basis country region age jurisdiction or quiet-hour review",
+    "email SMS secure-link native-composer provider sender credential template callback deliverability reply or opt-out ingestion",
+    "real recipients messages documents external effects upstream mutations accounting collections enforcement or money effects",
+    "professional legal privacy communications-consent collections debt consumer-protection regulatory provider or security opinion",
+    "private-production customer evidence provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval"
+  ]
+}

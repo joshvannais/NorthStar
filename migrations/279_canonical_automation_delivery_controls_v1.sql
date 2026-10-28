@@ -343,7 +343,6 @@ BEGIN
    RAISE EXCEPTION 'Mission 28 unexpected review binding' USING ERRCODE='22023'; END IF;
  END IF;
 
- PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-control:tenant',0));
  IF target_kind_value='tenant' THEN
   IF operation_value NOT IN('pause_scope','drain_scope','bulk_stop') OR
      doc#>'{targetBinding,policyId}' IS DISTINCT FROM 'null'::jsonb OR doc#>'{targetBinding,policyVersion}' IS DISTINCT FROM 'null'::jsonb OR
@@ -353,7 +352,8 @@ BEGIN
      doc#>'{targetBinding,receiptId}' IS DISTINCT FROM 'null'::jsonb OR doc#>'{targetBinding,unitDigest}' IS DISTINCT FROM 'null'::jsonb OR
      doc#>'{targetBinding,providerRequestIdentity}' IS DISTINCT FROM 'null'::jsonb OR doc#>'{targetBinding,providerRequestDigest}' IS DISTINCT FROM 'null'::jsonb THEN
    RAISE EXCEPTION 'Mission 28 tenant control target invalid' USING ERRCODE='22023'; END IF;
-  target_key_value:=org::text; execution_phase_value:='scope';
+   PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-control:tenant',0));
+   target_key_value:=org::text; execution_phase_value:='scope';
  ELSIF target_kind_value IN('policy_version','action_schedule') THEN
   IF COALESCE(doc#>>'{targetBinding,policyId}','')!~'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' OR
      jsonb_typeof(doc#>'{targetBinding,policyVersion}') IS DISTINCT FROM 'number' OR
@@ -372,6 +372,11 @@ BEGIN
   ELSE
    PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-lifecycle-policy:'||policy_value::text,0));
   END IF;
+   -- Parts 6B-6D already hold the lifecycle-policy lock before their source-lineage
+   -- locks and before the Part 6E INSERT guards take the control locks. Keep that
+   -- accepted outer lock order here so a reducing control can never hold a control
+   -- lock while waiting for a legacy lifecycle lock.
+   PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-control:tenant',0));
   PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-control:policy:'||policy_value::text||':'||policy_version_value::text,0));
   IF NOT EXISTS(SELECT 1 FROM public.canonical_automation_policy_versions_v1 WHERE organization_id=org AND policy_id=policy_value
      AND version=policy_version_value AND canonical_digest=doc#>>'{targetBinding,policyDigest}') THEN
@@ -482,6 +487,8 @@ BEGIN
       AND snapshot_digest=schedule_item.document#>>ARRAY['sourceBinding','snapshotDigests',source_index::text];
     IF snapshot_item.snapshot_id IS NULL OR snapshot_item.document#>>'{currentness,availability}' IS DISTINCT FROM 'available_exact_current' THEN
      RAISE EXCEPTION 'Mission 28 resume source unavailable' USING ERRCODE='42501'; END IF;
+     PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-source-lineage:'||snapshot_item.trigger_id||':'||
+      snapshot_item.record_identity_digest||':'||snapshot_item.event_kind,0));
     SELECT snapshot_id INTO latest_snapshot_id FROM public.canonical_automation_trigger_snapshots_v1
      WHERE organization_id=org AND trigger_id=snapshot_item.trigger_id AND record_identity_digest=snapshot_item.record_identity_digest
       AND event_kind=snapshot_item.event_kind ORDER BY lineage_sequence DESC LIMIT 1;
@@ -526,6 +533,8 @@ BEGIN
      AND snapshot_digest=schedule_item.document#>>ARRAY['sourceBinding','snapshotDigests',source_index::text];
    IF snapshot_item.snapshot_id IS NULL OR snapshot_item.document#>>'{currentness,availability}' IS DISTINCT FROM 'available_exact_current' THEN
     RAISE EXCEPTION 'Mission 28 reviewed retry source unavailable' USING ERRCODE='42501'; END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended(org::text||':m28-source-lineage:'||snapshot_item.trigger_id||':'||
+     snapshot_item.record_identity_digest||':'||snapshot_item.event_kind,0));
    SELECT snapshot_id INTO latest_snapshot_id FROM public.canonical_automation_trigger_snapshots_v1
     WHERE organization_id=org AND trigger_id=snapshot_item.trigger_id AND record_identity_digest=snapshot_item.record_identity_digest
      AND event_kind=snapshot_item.event_kind ORDER BY lineage_sequence DESC LIMIT 1;

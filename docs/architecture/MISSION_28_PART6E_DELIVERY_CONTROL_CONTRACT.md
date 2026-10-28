@@ -21,7 +21,7 @@ Pause and drain are reducing states. Revoke, supersede, bulk stop, cancellation,
 
 Supersession requires an exact distinct successor policy version whose latest lifecycle state is active. It blocks the old policy version only and never rebinds historical action evidence. Expiration is derived from the PostgreSQL clock and the exact schedule/policy expiry. Scope fan-out is limited to 32 actions and fails closed above that bound.
 
-The database uses a single tenant → policy → action lock order. Guards on new schedules, new delivery leases and new retry classifications consult the same control heads under those locks. A reducing control therefore wins a race without rewriting Part 6A–6D data. Exact Part 6D `record_reconciliation` remains allowed because it records evidence and cannot resend.
+The database preserves the released Part 6B–6D outer order: exact policy-lifecycle first, followed by tenant → policy → action control locks. Guards on new schedules, new delivery leases and new retry classifications reach those control locks only after their accepted lifecycle and source locks. A reducing control therefore serializes the race without a lifecycle/control cycle and without rewriting Part 6A–6D data. While the outer lifecycle lock remains held, resume and owner-reviewed retry additionally hold each exact migration-274 lineage lock before resolving the latest source head and until the control transaction commits, so a concurrent correction either wins first and makes the decision stale or waits behind the accepted decision. Exact Part 6D `record_reconciliation` remains allowed because it records evidence and cannot resend.
 
 ## Dead letter and owner-reviewed retry
 

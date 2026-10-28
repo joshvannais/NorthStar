@@ -165,6 +165,16 @@ describe('Mission 28 Part 6E delivery controls', () => {
     const sql = fs.readFileSync(path.join(ROOT, 'migrations/279_canonical_automation_delivery_controls_v1.sql'), 'utf8');
     for (const token of ['canonical_automation_delivery_control_heads_v1', 'canonical_automation_delivery_control_events_v1', 'canonical_automation_record_delivery_control_v1', 'canonical_automation_part6e_schedule_guard', 'canonical_automation_part6e_lease_guard', 'canonical_automation_part6e_retry_guard', 'ENABLE ROW LEVEL SECURITY', 'FORCE ROW LEVEL SECURITY', 'record_reconciliation', 'reviewed_retry_new_action_required']) expect(sql).toContain(token);
     for (const forbidden of ['GRANT EXECUTE', 'fetch(', 'axios', 'twilio', 'retell', "state='delivered'", 'INSERT INTO public.canonical_automation_provider_request_receipts_v1', 'UPDATE public.canonical_automation_delivery_retry_heads_v1']) expect(sql).not.toContain(forbidden);
+    const controlStart = sql.indexOf('CREATE FUNCTION public.canonical_automation_record_delivery_control_v1');
+    const lifecycleLock = sql.indexOf(":m28-lifecycle-policy:", controlStart);
+    const tenantControlLock = sql.indexOf(":m28-control:tenant", lifecycleLock);
+    expect(lifecycleLock).toBeGreaterThan(controlStart); expect(tenantControlLock).toBeGreaterThan(lifecycleLock);
+    expect((sql.match(/:m28-source-lineage:/g) || [])).toHaveLength(2);
+    expect(CONTRACT.currentnessAndConcurrencyContract).toEqual(expect.objectContaining({
+      legacyAndControlLockOrder: 'exact_policy_lifecycle_then_tenant_control_then_policy_control_then_action_schedule_control; exact_source_lineage_is_locked_before_latest_head_resolution_while_lifecycle_remains_held',
+      resumeAndReviewedRetrySourceLock: 'migration274_exact_lineage_lock_is_held_through_latest_head_validation_and_control_commit',
+      reducingControlWinsConcurrentScheduleClaimOrRetry: true,
+    }));
   });
 
   test('records Part 6D released, only Part 6E candidate, migration279/no280 and later slices planned', () => {

@@ -196,9 +196,13 @@ function validateEvaluation(value) {
   if (digest(PART5B.outputEnvelope.outputDigestNamespace, value, 'outputDigest') !== value.outputDigest) throw new Error('output digest');
   if (!Array.isArray(value.reasonCodes) || value.reasonCodes.some(code => !PART5B.reasonContract.closedCodes.includes(code))) throw new Error('reason');
   const requiredReason = {eligible:'all_required_contract_authority_current', ineligible:'rule_no_match',
-    suppressed:'suppression_matched', unavailable:'source_not_latest_exact_current', expired:'policy_expired',
+    suppressed:'suppression_matched', expired:'policy_expired',
     approval_required:'authorization_required'}[value.result];
-  if (!value.reasonCodes.includes(requiredReason)) throw new Error('result reason coherence');
+  if (requiredReason && !value.reasonCodes.includes(requiredReason)) throw new Error('result reason coherence');
+  if (value.result === 'unavailable' && !value.reasonCodes.some(code => [
+    'trusted_policy_unavailable','source_not_latest_exact_current','suppression_resolution_unavailable',
+    'authorization_resolution_unavailable','fact_unavailable','fact_unknown'
+  ].includes(code))) throw new Error('unavailable reason coherence');
 }
 
 function validateMaterial(candidate, separate, evaluationValue) {
@@ -234,8 +238,9 @@ function validateMaterial(candidate, separate, evaluationValue) {
       !['active','tombstoned','reversed'].includes(s.headState) || !['latest_exact_current','unavailable'].includes(s.currentnessState)) throw new Error('source shape');
   if (s.observedAt > b.evaluatedAt) throw new Error('source observed after evaluation');
   if (s.currentnessState === 'latest_exact_current' && s.headState !== 'active') throw new Error('source coherence');
-  if (s.currentnessState === 'unavailable' &&
-      (evaluationValue.result !== 'unavailable' || !evaluationValue.reasonCodes.includes('source_not_latest_exact_current'))) {
+  const sourceUnavailableReason=evaluationValue.reasonCodes.includes('source_not_latest_exact_current');
+  if ((s.currentnessState === 'unavailable') !== sourceUnavailableReason ||
+      (s.currentnessState === 'unavailable' && evaluationValue.result !== 'unavailable')) {
     throw new Error('source result coherence');
   }
   uuid(candidate.recipient.recipientSetId,'recipient set'); hash(candidate.recipient.recipientSetDigest,'recipient set');
@@ -363,6 +368,21 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
     const fixture=trusted(); const attacked=copy(fixture.material); attacked.source.currentnessState='unavailable';
     attacked.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,attacked,'inputDigest');
     expect(()=>project(attacked,attacked,fixture.evaluation)).toThrow('source result coherence');
+  });
+
+  test('rejects a source-currentness reason paired with exact-current source and permits unrelated unavailable causes', () => {
+    const contradictory=trusted('unavailable'); contradictory.material.source.currentnessState='latest_exact_current';
+    contradictory.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,contradictory.material,'inputDigest');
+    expect(()=>project(contradictory.material,contradictory.material,contradictory.evaluation)).toThrow('source result coherence');
+
+    const legitimate=trusted('unavailable'); legitimate.evaluation.reasonCodes=['suppression_resolution_unavailable'];
+    legitimate.evaluation.outputDigest=digest(PART5B.outputEnvelope.outputDigestNamespace,legitimate.evaluation,'outputDigest');
+    legitimate.material.evaluationBinding.outputDigest=legitimate.evaluation.outputDigest;
+    legitimate.material.source.currentnessState='latest_exact_current';
+    legitimate.material.inputDigest=digest(CONTRACT.previewEnvelope.inputDigestNamespace,legitimate.material,'inputDigest');
+    expect(project(legitimate.material,legitimate.material,legitimate.evaluation)).toEqual(expect.objectContaining({
+      displayState:'unavailable', reasonCodes:['suppression_resolution_unavailable']
+    }));
   });
 
   test('accepts an exact canonical non-Eastern tenant timezone and rejects invalid or alias zones', () => {

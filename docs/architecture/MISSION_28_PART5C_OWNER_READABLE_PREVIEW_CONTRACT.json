@@ -61,6 +61,7 @@
     "evaluationMustBeOneExactImmutablePart5BOutput": true,
     "evaluationResultNeverCreatesPreviewOrEffectAuthority": true,
     "sourceMustEqualTheExactPart4A4B4DIdentityAndPart4CCurrentnessMaterialUsedByEvaluation": true,
+    "sourceReasonCoherence": "source_not_latest_exact_current_if_and_only_if_the_preview_source_currentness_is_unavailable; other_Part5B_unavailable_causes_may_retain_latest_exact_current_source",
     "recipientChannelContentTimingLimitsSuppressionAndGovernanceMustBeSeparatelyTrustedAndTenantBound": true,
     "crossTenantActorSessionMembershipEvaluationPolicyRuleSourceRecipientChannelLimitSuppressionGovernanceAliasCloneOrReplayReuse": "deny",
     "changedMaterialRequiresANewEvaluationAndNewPreview": true,

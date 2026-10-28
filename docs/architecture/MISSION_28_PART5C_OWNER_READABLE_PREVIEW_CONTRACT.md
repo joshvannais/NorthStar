@@ -10,6 +10,8 @@ A preview consumes one complete immutable Part 5B output plus separately trusted
 
 The source projection names the exact Part 4 trigger, record identity, event kind, transition head, effective snapshot, source-owned event time, trusted observation time, currentness and source-set digest used by the evaluation. Changed material requires a new evaluation and a new preview. A digest recomputation cannot repair a retargeted source or viewer.
 
+Source reason coherence is bidirectional: `source_not_latest_exact_current` appears exactly when the preview source currentness is unavailable. A Part 5B unavailable result caused by policy, suppression, authorization or fact evidence may retain a latest-exact-current source, but it must use the corresponding closed Part 5B reason instead of implying a source-currentness failure.
+
 ## What the owner can read
 
 The output states, using closed codes only: what would happen; why; which exact source assumptions were used; the UUID/digest-bound intended internal recipient set; the provider-disabled in-app channel with closed unavailable runtime state; the absence of an external document or message version; the separately trusted canonical IANA tenant time zone and the fact that Part 6 scheduling is unavailable; the exact Part 3C limit manifest and profile; the exact suppression evidence; one hypothetical, nonexecuted internal record and zero external effects; and the closed Part 3D conditions that would stop later work.

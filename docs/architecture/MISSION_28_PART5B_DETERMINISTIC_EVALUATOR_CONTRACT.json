@@ -1,0 +1,213 @@
+{
+  "contractVersion": "mission28.part5b.deterministic-evaluator.v1",
+  "authority": {
+    "mission": 28,
+    "part": "5B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "0b86beab6d0ac3f81a079d47f8569e8e24c34de7",
+    "baselineTree": "12f4e02e10c4b507a8e9b76e81dcff078318059b",
+    "sourceContractAndExecutableAcceptanceOnly": true,
+    "mountedRuntimeEvaluatorResolverRouteSchedulerWorkerOrEffectExecutorAvailable": false,
+    "eligibilityResultCreatesApprovalSchedulingRecipientProviderEffectUpstreamMutationAccountingOrMoneyAuthority": false
+  },
+  "part5ARelease": {
+    "acceptedSourceHead": "973175776028b563bd5f4a8b1d1282c1ddd9aa05",
+    "acceptedTree": "12f4e02e10c4b507a8e9b76e81dcff078318059b",
+    "pullRequest": 565,
+    "mergedMain": "0b86beab6d0ac3f81a079d47f8569e8e24c34de7",
+    "deployment": "9973fa71-fbfc-4079-b345-cdf2c5f3ab1b",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "1b57682a-3f02-4892-a9a6-f0302f6438c2",
+    "imageSha256": "3066db7c0cbcb190753545db4ba3df4d8e3db8cc475135dbcf940df4b1cc1e9d",
+    "health": ["canonical_startup_ready", "migrations_270_latest_274_no_275", "api_health_200", "root_200", "demo_200"],
+    "auditVerdict": "P0=P1=P2=P3=0",
+    "auditReportSha256": null,
+    "auditEvidence": "Node22.23.3_17_of_17_suites_231_of_231_tests_syntax17_JSON16_frozen7_diff_clean_docs_tests_only"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json", "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART5A_DECLARATIVE_RULE_GRAMMAR.json", "normalizedLfSha256": "7EF24ECE536F4407EE402620B6122ABB0B067E85DB1F0A9E43D79BC7A2CDEE3B"}
+  ],
+  "evaluationEnvelope": {
+    "schemaVersion": "mission28.deterministic-evaluation.v1",
+    "exactFields": ["schemaVersion", "tenantId", "evaluationId", "rule", "facts", "trustedContext", "evaluatedAt", "inputDigest"],
+    "factExactFields": ["factRef", "valueType", "state", "value", "sourceBindingDigest", "factDigest"],
+    "trustedContextExactFields": ["tenantId", "policyResolution", "sourceResolution", "suppressionResolution", "authorizationResolution", "clockResolution", "nextEvaluationCandidates", "contextDigest"],
+    "policyResolutionExactFields": ["tenantId", "policyId", "policyVersion", "policyDigest", "lifecycleEventId", "lifecycleEventDigest", "state", "expiresAt", "resolutionDigest"],
+    "sourceResolutionExactFields": ["tenantId", "triggerId", "sourceClassId", "recordIdentityDigest", "eventKind", "headTransitionId", "headTransitionDigest", "headSequence", "headState", "effectiveSnapshotId", "effectiveSnapshotDigest", "eventTime", "observedAt", "sourceBindingDigest", "sourceSetDigest", "currentnessState", "Part4CResolutionEpochId", "Part4CResolutionDigest", "resolutionDigest"],
+    "suppressionResolutionExactFields": ["tenantId", "state", "snapshotId", "snapshotDigest", "matchedSuppressionId", "matchedSuppressionDigest", "endsAt", "resolutionDigest"],
+    "authorizationResolutionExactFields": ["tenantId", "state", "authorizationId", "authorizationKind", "authorizationRecordDigest", "authorizationMaterialBindingDigest", "policyId", "policyVersion", "policyDigest", "sourceSetDigest", "previewId", "previewDigest", "recipientSetId", "recipientSetDigest", "recipientClassIds", "effectSetId", "effectSetDigest", "actionFamilyId", "channelIds", "providerModeIds", "effectClass", "kindSubjectRecordType", "kindSubjectRecordId", "kindSubjectRecordDigest", "kindRunId", "expiresAt", "resolutionDigest"],
+    "clockResolutionExactFields": ["tenantId", "clockEvidenceId", "clockEvidenceDigest", "evaluatedAt", "resolutionDigest"],
+    "nextEvaluationCandidateExactFields": ["kind", "instant", "basisDigest"],
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_cycles_aliases_or_coercion",
+    "inputDigestNamespace": "mission28.deterministic-evaluation-input.v1\n",
+    "factDigestNamespace": "mission28.deterministic-evaluation-fact.v1\n",
+    "factSetDigestNamespace": "mission28.deterministic-evaluation-fact-set.v1\n",
+    "sourceBindingDigestNamespace": "mission28.deterministic-evaluation-source.v1\n",
+    "trustedContextDigestNamespace": "mission28.deterministic-evaluation-context.v1\n",
+    "resolutionDigestNamespaces": {
+      "policy": "mission28.deterministic-evaluation-policy-resolution.v1\n",
+      "source": "mission28.deterministic-evaluation-source-resolution.v1\n",
+      "suppression": "mission28.deterministic-evaluation-suppression-resolution.v1\n",
+      "authorization": "mission28.deterministic-evaluation-authorization-resolution.v1\n",
+      "clock": "mission28.deterministic-evaluation-clock-resolution.v1\n"
+    }
+  },
+  "trustedResolutionContract": {
+    "candidateMayNotSupplyReplaceRetargetOrSelfAttestTrustedContext": true,
+    "evaluationIdMustBeServerIssuedAndSeparatelyTrusted": true,
+    "resolverMustBeServerOwnedTenantPrivateAndIndependentOfRuleOrCandidate": true,
+    "candidateOrRecomputedDigestNeverCreatesPolicySourceSuppressionAuthorizationClockOrFactAuthority": true,
+    "ruleMustPassTheCompleteReleasedPart5AGrammarBeforeAnyFactLookupOrEvaluation": true,
+    "rulePolicySourceAndActionTemplateMustEqualTheSeparatelyResolvedPart5ATuples": true,
+    "factsMustResolveIndependentlyFromTheExactPart4DHeadAndPart5AFactCatalog": true,
+    "everyKnownFactValueMustEqualTheExactSeparatelyResolvedSourceProjection": true,
+    "everyFactDigestMustBindTheExactSourceBindingDigest": true,
+    "factsMustBeOrderedExactlyByFirstPredicateOccurrenceAndContainEveryReferencedFactOnce": true,
+    "policySourceSuppressionAuthorizationAndClockMustResolveInOneEvaluationContext": true,
+    "sourceResolutionMustBindTheExactPart4A4B4DIdentityAndPart4CEvaluationTimeEpoch": true,
+    "authorizationKinds": ["per_run_approval", "standing_authorization"],
+    "fullPart3BRecordMustValidateBeforeProjection": true,
+    "authorizationMustBeTheExactCanonicalPart3BRecordAndMaterialBinding": true,
+    "authorizationEffectMaterialMustEqualRuleActionTemplatePolicySourceRecipientChannelProviderAndEffect": true,
+    "authorizationRecipientClassesMustBeAnOrderedUniqueSubsetInExactPart3BFirstLaunchOrder": true,
+    "templateToAuthorizationEffectClassMapping": {"internal_record_only": "internal_only_no_external_effect"},
+    "currentnessOrMaterialChangeInvalidatesThisEvaluationAndRequiresAFullNewEvaluation": true,
+    "crossTenantPolicyRuleTriggerSourceSnapshotTemplateSuppressionAuthorizationClockCloneAliasOrReplayReuse": "deny",
+    "currentRuntimeResolverAvailable": false
+  },
+  "resolutionStates": {
+    "policy": ["active_exact_current", "expired", "unavailable"],
+    "source": ["latest_exact_current", "stale", "mixed", "unavailable"],
+    "sourceHead": ["active", "tombstoned", "reversed"],
+    "suppression": ["exact_current_clear", "exact_current_matched", "unavailable"],
+    "authorization": ["exact_current_satisfied", "required", "expired", "unavailable"],
+    "fact": ["known", "unknown", "unavailable"],
+    "policyCoherence": "active_exact_current_requires_evaluatedAt_before_expiresAt_or_null_expiry; expired_requires_nonnull_expiresAt_at_or_before_evaluatedAt",
+    "authorizationCoherence": "exact_current_satisfied_requires_one_nonexpired_exact_Part3B_record; required_has_no_record; expired_requires_one_exact_record_with_expiry_at_or_before_evaluatedAt",
+    "sourceCoherence": "latest_exact_current_requires_exact_Part4C_evaluation_epoch_and_exact_Part4D_head; stale_mixed_or_unavailable can never produce eligible ineligible suppressed or approval_required; an exact tombstoned or reversed head is deterministically ineligible",
+    "sourceTemporalCoherence": "eventTime is the exact Part4A source-owned occurrence or effective time and may be before equal to or after observedAt; observedAt is the distinct trusted capture time and must be at or before evaluatedAt",
+    "suppressionCoherence": "matched_requires_exact_snapshot_match_identity_digest_and_null_or_strictly_future_end; clear_has_no_match; unavailable_can_never_produce_authority"
+  },
+  "conditionEvaluation": {
+    "completeTreeMustValidateBeforeFactLookup": true,
+    "resultStates": ["match", "no_match", "unknown", "unavailable"],
+    "predicateKnown": "one_exact_Part5A_typed_comparison_only",
+    "predicateUnknown": "unknown",
+    "predicateUnavailable": "unavailable",
+    "all": "unavailable_if_any_unavailable_else_unknown_if_any_unknown_else_match_only_if_every_child_matches_else_no_match",
+    "any": "unavailable_if_any_unavailable_else_unknown_if_any_unknown_else_match_if_any_child_matches_else_no_match",
+    "absenceOrUnsupportedNeverBecomesFalseZeroEmptyOrMatch": true,
+    "comparisonNeverUsesCoercionLocaleRegexScriptExpressionFunctionTemplateOrProviderLogic": true
+  },
+  "resultContract": {
+    "states": ["eligible", "ineligible", "suppressed", "unavailable", "expired", "approval_required"],
+    "precedence": [
+      "unavailable_if_policy_or_source_or_suppression_or_authorization_resolution_is_unavailable_or_source_is_stale_or_mixed",
+      "unavailable_if_rule_result_is_unknown_or_unavailable",
+      "expired_if_exact_policy_resolution_is_expired",
+      "ineligible_if_the_exact_current_Part4D_head_is_tombstoned_or_reversed",
+      "suppressed_if_exact_current_suppression_match_exists",
+      "ineligible_if_exact_current_rule_result_is_no_match",
+      "approval_required_if_exact_current_rule_result_is_match_and_authorization_is_required_or_expired",
+      "eligible_only_if_every_resolution_is_exact_current_rule_matches_suppression_is_clear_and_exact_Part3B_authorization_is_satisfied"
+    ],
+    "eligibleMeaning": "deterministic_contract_result_only_never_approval_schedule_claim_recipient_provider_effect_or_money_authority",
+    "ineligibleMeaning": "exact_no_match_at_one_evaluation_context_only",
+    "suppressedMeaning": "exact_matching_suppression_evidence_only_never_proof_an_external_effect_stopped",
+    "unavailableMeaning": "fail_closed_no_eligibility_or_effect_authority",
+    "expiredMeaning": "exact_policy_expiry_at_the_trusted_clock_only",
+    "approvalRequiredMeaning": "no_action_authority_until_a_new_exact_Part3B_authorization_and_full_revalidation_exist"
+  },
+  "reasonContract": {
+    "orderedUnique": true,
+    "closedCodes": [
+      "policy_expired",
+      "trusted_policy_unavailable",
+      "source_not_latest_exact_current",
+      "source_lineage_ineligible",
+      "suppression_resolution_unavailable",
+      "authorization_resolution_unavailable",
+      "fact_unavailable",
+      "fact_unknown",
+      "suppression_matched",
+      "rule_no_match",
+      "rule_match",
+      "authorization_required",
+      "authorization_expired",
+      "all_required_contract_authority_current"
+    ],
+    "reasonDerivation": "derived_only_from_the_validated_result_precedence_and_ordered_predicate_explanations_never_supplied_by_the_candidate",
+    "unknownAndUnavailableRemainDistinct": true
+  },
+  "evidenceQualityContract": {
+    "states": ["complete_exact", "partial_unknown", "unavailable"],
+    "completeExact": "all_material_resolutions_and_referenced_facts_are_exact_even_when_the_exact_result_is_expired_suppressed_ineligible_or_approval_required",
+    "partialUnknown": "one_or_more_referenced_facts_are_explicitly_unknown_and_none_are_unavailable",
+    "unavailable": "one_or_more_material_resolutions_or_referenced_facts_are_unavailable_stale_or_mixed",
+    "qualityNeverGrantsAuthority": true
+  },
+  "nextEvaluationContract": {
+    "candidateKinds": ["source_recheck", "suppression_expiry", "policy_expiry"],
+    "candidateRule": "ordered_unique_separately_trusted_future_UTC_instants_with_exact_basis_digests_only",
+    "selection": "earliest_relevant_strictly_future_instant_then_closed_kind_order_tiebreak",
+    "relevantKindsByResult": {
+      "eligible": ["source_recheck", "policy_expiry"],
+      "ineligible": ["source_recheck", "policy_expiry"],
+      "suppressed": ["suppression_expiry"],
+      "unavailable": ["source_recheck"],
+      "expired": [],
+      "approval_required": ["policy_expiry"]
+    },
+    "basisCoherence": "source_recheck_basis_equals_exact_source_resolution_digest; suppression_expiry_instant_and_basis_equal_exact_matched_suppression_end_and_resolution_digest; policy_expiry_instant_and_basis_equal_exact_policy_expiry_and_resolution_digest",
+    "noRelevantFutureCandidate": null,
+    "meaning": "explainable_reevaluation_hint_only_never_a_schedule_timer_queue_job_or_execution_authority"
+  },
+  "outputEnvelope": {
+    "schemaVersion": "mission28.deterministic-evaluation-output.v1",
+    "exactFields": ["schemaVersion", "tenantId", "evaluationId", "policyBinding", "ruleBinding", "sourceBindingDigest", "factSetDigest", "inputDigest", "result", "reasonCodes", "evidenceQuality", "predicateExplanations", "nextEvaluationAt", "evaluatedAt", "outputDigest"],
+    "policyBindingExactFields": ["policyId", "policyVersion", "policyDigest"],
+    "ruleBindingExactFields": ["ruleId", "ruleDigest", "actionTemplateId", "actionTemplateDigest", "actionFamilyId"],
+    "predicateExplanationExactFields": ["conditionPath", "factRef", "valueType", "operator", "factState", "comparisonResult", "reasonCode"],
+    "explanationRule": "one_ordered_entry_per_predicate_in_complete_depth_first_rule_order_with_no_business_secret_or_candidate_text",
+    "outputDigestNamespace": "mission28.deterministic-evaluation-output.v1\n",
+    "digestProjection": "the_complete_output_except_outputDigest",
+    "sameDigestReplayMeaning": "same_immutable_no_effect_evaluation_evidence_only_never_current_authority",
+    "outputIsImmutableAndNeverCallerEditable": true
+  },
+  "denials": [
+    "missing_extra_reordered_unknown_nonplain_accessor_symbol_toJSON_custom_prototype_wrapper_proxy_cycle_alias_or_coercible_input",
+    "malformed_or_untrusted_Part5A_rule_or_candidate_created_rule_policy_source_fact_template_or_context_authority",
+    "cross_tenant_policy_rule_trigger_source_snapshot_template_suppression_authorization_clock_clone_alias_or_replay_reuse",
+    "missing_duplicate_extra_reordered_wrong_type_or_source_projection_mismatched_fact_binding",
+    "unknown_or_unavailable_fact_coerced_to_false_zero_empty_no_match_or_permission",
+    "stale_mixed_unavailable_or_materially_changed_policy_source_suppression_authorization_or_clock",
+    "unknown_reason_evidence_result_or_next_evaluation_kind",
+    "candidate_selected_result_reason_evidence_quality_next_evaluation_or_output_digest",
+    "Part3B_authorization_kind_record_material_effect_recipient_channel_provider_or_expiry_mismatch",
+    "Part4A_trigger_action_family_or_Part4D_head_currentness_mismatch",
+    "rule_match_or_eligible_result_used_as_approval_schedule_claim_recipient_provider_effect_upstream_accounting_or_money_authority",
+    "digest_recomputation_after_any_material_identity_currentness_fact_reason_or_time_tamper"
+  ],
+  "laterSliceBoundary": {
+    "part5C": "owner_readable_preview_with_source_assumptions_reasons_suppressions_and_expected_effects_remains_planned_unimplemented",
+    "part5D": "collision_precedence_suppression_dry_run_historical_backtest_and_at_most_once_projection_remain_planned_unimplemented",
+    "part6Plus": "scheduling_claiming_queue_worker_provider_recipient_message_effect_accounting_and_money_remain_planned_unimplemented"
+  },
+  "unavailableEvidence": [
+    "mounted_runtime_rule_fact_or_context_resolver",
+    "mounted_runtime_evaluator_result_store_preview_collision_or_suppression_engine",
+    "scheduler_queue_worker_or_effect_executor",
+    "provider_sandbox_live_provider_real_recipient_or_live_money",
+    "private_production_hosted_load_or_SLA",
+    "professional_legal_privacy_provider_or_regulatory_review",
+    "physical_Safari_or_devices_manual_assistive_technology_or_founder_visual_verdict"
+  ]
+}

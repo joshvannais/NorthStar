@@ -829,11 +829,11 @@ describe('Mission 28 Part 3D governance controls', () => {
     expect(validateReplay(decision, seal(changed), trusted)).toBe('deny_digest_or_replay_conflict');
   });
 
-  test('roadmap and ledger record Part 3C released and only Part 3D current', () => {
+  test('roadmap and ledger retain released history and only Part 5B current', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–4D released; Part 5A implementation candidate only.');
+      expect(document).toContain('Parts 1A–5A released; Part 5B implementation candidate only.');
       expect(document).toContain('3cd41fe5379d92fe629c62e0ebc3a51d8886c3cc');
       expect(document).toContain(BASE);
       expect(document).toContain('b745a483-1031-4020-9ab2-38c0044e599d');

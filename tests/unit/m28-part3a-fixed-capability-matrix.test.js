@@ -479,11 +479,11 @@ describe('Mission 28 Part 3A fixed capability matrix', () => {
     });
   });
 
-  test('roadmap and ledger record Parts 1A-4D released and Part 5A candidate only', () => {
+  test('roadmap and ledger record Parts 1A-5A released and Part 5B candidate only', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–4D released; Part 5A implementation candidate only.');
+      expect(document).toContain('Parts 1A–5A released; Part 5B implementation candidate only.');
       expect(document).toContain('98c4b3562ad48787472584ca64c601d584c2427f');
       expect(document).toContain('f40e401a-649f-42b3-a1cc-71dbd0ffce4d');
       expect(document).toContain('586afe8103acc0e4f27d5967e8a8554876d7f5f51dc38bd7c7f4a98e2c320337');
@@ -502,7 +502,8 @@ describe('Mission 28 Part 3A fixed capability matrix', () => {
     expect(roadmap).toContain('Released Part 3D artifacts');
     expect(roadmap).toContain('Released Part 4C artifacts');
     expect(roadmap).toContain('Released Part 4D artifacts');
-    expect(roadmap).toContain('Current Part 5A artifacts');
+    expect(roadmap).toContain('Released Part 5A artifacts');
+    expect(roadmap).toContain('Current Part 5B artifacts');
   });
 
   test('narrative states exact display-role, runtime and unavailable boundaries', () => {

@@ -596,18 +596,19 @@ describe('Mission 28 Part 5A bounded declarative rule grammar', () => {
     ]));
   });
 
-  test('records Part4D released, only Part5A candidate and every later slice planned', () => {
+  test('records Part5A released, only Part5B candidate and every later slice planned', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–4D released; Part 5A implementation candidate only.');
-      expect(document).toContain('Parts 5B–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–5A released; Part 5B implementation candidate only.');
+      expect(document).toContain('Parts 5C–14G remain planned and unimplemented.');
       expect(document).toContain('`41be176abfddae512f34da25a9d3564b1fea6e1b`');
       expect(document).toContain('`82b50c73-5414-4e7f-bb07-72d71f65dc92`');
     }
     expect(ledger).toContain('| 16 | 4D | Duplicate/replay/reorder/correction/tombstone/concurrency handling | **Released** |');
-    expect(ledger).toContain('| 17 | 5A | Bounded declarative rule grammar | **Implementation candidate** |');
-    expect(ledger).toContain('| 18 | 5B | Deterministic explainable evaluator | Planned / unimplemented |');
-    expect(roadmap).toContain('Current Part 5A artifacts:');
+    expect(ledger).toContain('| 17 | 5A | Bounded declarative rule grammar | **Released** |');
+    expect(ledger).toContain('| 18 | 5B | Deterministic explainable evaluator | **Implementation candidate** |');
+    expect(roadmap).toContain('Released Part 5A artifacts:');
+    expect(roadmap).toContain('Current Part 5B artifacts:');
   });
 });

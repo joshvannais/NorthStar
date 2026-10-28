@@ -109,10 +109,12 @@ CREATE TABLE public.canonical_automation_recovery_items_v1 (
  FOREIGN KEY(organization_id,receipt_id)
   REFERENCES public.canonical_automation_provider_request_receipts_v1(organization_id,receipt_id) ON DELETE RESTRICT,
  CHECK(retention_class='decision_history'),
- CHECK((schedule_id IS NULL AND item_state='committed_unpublished_unscheduled'
+ CHECK((schedule_id IS NULL AND item_state IN('committed_unpublished_unscheduled','control_preserved_no_new_work')
          AND lease_id IS NULL AND fence_token IS NULL AND lease_expires_at IS NULL
          AND receipt_id IS NULL AND provider_request_identity IS NULL AND provider_request_digest IS NULL
-         AND retry_decision_id IS NULL AND retry_decision_digest IS NULL AND control_id IS NULL AND control_decision_digest IS NULL)
+         AND retry_decision_id IS NULL AND retry_decision_digest IS NULL
+         AND ((item_state='committed_unpublished_unscheduled' AND control_id IS NULL AND control_decision_digest IS NULL)
+           OR (item_state='control_preserved_no_new_work' AND control_id IS NOT NULL AND control_decision_digest IS NOT NULL)))
     OR (schedule_id IS NOT NULL AND item_state<>'committed_unpublished_unscheduled')),
  CHECK((lease_id IS NULL AND fence_token IS NULL AND lease_expires_at IS NULL)
     OR (lease_id IS NOT NULL AND fence_token IS NOT NULL AND lease_expires_at IS NOT NULL)),
@@ -318,16 +320,53 @@ BEGIN
     AND policy_version=policy_version_value AND policy_digest=doc#>>'{transactionBinding,policyDigest}'
     AND source_set_digest=doc#>>'{transactionBinding,sourceSetDigest}';
   IF schedule_row.schedule_id IS NULL THEN
-   item_state_value:='committed_unpublished_unscheduled'; unscheduled_value:=unscheduled_value+1;
+   SELECT * INTO control_head FROM public.canonical_automation_delivery_control_heads_v1
+    WHERE organization_id=org AND control_state<>'active_resumed' AND
+     ((target_kind='policy_version' AND policy_id=policy_value AND policy_version=policy_version_value) OR
+      target_kind='tenant')
+    ORDER BY CASE target_kind WHEN 'policy_version' THEN 1 ELSE 2 END LIMIT 1;
+   IF control_head.last_control_id IS NOT NULL THEN
+    SELECT * INTO control_event FROM public.canonical_automation_delivery_control_events_v1
+     WHERE organization_id=org AND control_id=control_head.last_control_id
+      AND decision_digest=control_head.last_decision_digest AND target_kind=control_head.target_kind
+      AND target_key=control_head.target_key AND control_sequence=control_head.control_sequence
+      AND policy_id IS NOT DISTINCT FROM control_head.policy_id
+      AND policy_version IS NOT DISTINCT FROM control_head.policy_version
+      AND policy_digest IS NOT DISTINCT FROM control_head.policy_digest
+      AND schedule_id IS NOT DISTINCT FROM control_head.schedule_id
+      AND transaction_id IS NOT DISTINCT FROM control_head.transaction_id
+      AND run_id IS NOT DISTINCT FROM control_head.run_id
+      AND unit_id IS NOT DISTINCT FROM control_head.unit_id
+      AND outbox_id IS NOT DISTINCT FROM control_head.outbox_id
+      AND receipt_id IS NOT DISTINCT FROM control_head.receipt_id
+      AND unit_digest IS NOT DISTINCT FROM control_head.unit_digest
+      AND provider_request_identity IS NOT DISTINCT FROM control_head.provider_request_identity
+      AND provider_request_digest IS NOT DISTINCT FROM control_head.provider_request_digest
+      AND resulting_control_state=control_head.control_state AND execution_phase=control_head.execution_phase
+      AND queued_count=control_head.queued_count AND leased_count=control_head.leased_count
+      AND uncertain_count=control_head.uncertain_count AND permanent_stop_count=control_head.permanent_stop_count
+      AND in_flight_unavailable_count=control_head.in_flight_unavailable_count
+      AND completed_unavailable_count=control_head.completed_unavailable_count
+      AND recorded_at=control_head.updated_at AND trusted_clock_contract=control_head.trusted_clock_contract
+      AND recorded_time_zone=control_head.recorded_time_zone;
+    IF control_event.control_id IS NULL THEN RAISE EXCEPTION 'Mission 28 orphan control authority detected' USING ERRCODE='42501'; END IF;
+    item_state_value:='control_preserved_no_new_work'; controlled_value:=controlled_value+1;
+   ELSE
+    item_state_value:='committed_unpublished_unscheduled'; unscheduled_value:=unscheduled_value+1;
+   END IF;
   ELSE
    SELECT * INTO lease_head FROM public.canonical_automation_delivery_lease_heads_v1
     WHERE organization_id=org AND schedule_id=schedule_row.schedule_id;
    IF lease_head.lease_id IS NOT NULL THEN
     SELECT * INTO lease_event FROM public.canonical_automation_delivery_lease_events_v1
      WHERE organization_id=org AND schedule_id=schedule_row.schedule_id AND lease_id=lease_head.lease_id
-      AND fence_token=lease_head.current_fence_token AND transaction_id=transaction_value AND run_id=run_value
+      AND fence_token=lease_head.current_fence_token AND transaction_id=lease_head.transaction_id AND run_id=lease_head.run_id
       AND unit_id=unit_row.unit_id AND outbox_id=unit_row.outbox_id
-      AND worker_identity_digest=lease_head.worker_identity_digest;
+      AND unit_id=lease_head.unit_id AND outbox_id=lease_head.outbox_id
+      AND worker_identity_digest=lease_head.worker_identity_digest
+      AND transaction_id=transaction_value AND run_id=run_value
+      AND lease_acquired_at=lease_head.lease_acquired_at AND lease_expires_at=lease_head.lease_expires_at
+      AND trusted_clock_contract=lease_head.trusted_clock_contract AND recorded_time_zone=lease_head.recorded_time_zone;
     IF lease_event.lease_id IS NULL THEN RAISE EXCEPTION 'Mission 28 orphan lease authority detected' USING ERRCODE='42501'; END IF;
    END IF;
    SELECT * INTO receipt_row FROM public.canonical_automation_provider_request_receipts_v1
@@ -341,9 +380,24 @@ BEGIN
    IF retry_head.schedule_id IS NOT NULL THEN
     SELECT * INTO retry_event FROM public.canonical_automation_delivery_retry_events_v1
      WHERE organization_id=org AND decision_id=retry_head.last_decision_id
-      AND decision_digest=retry_head.last_decision_digest AND schedule_id=schedule_row.schedule_id
+      AND decision_digest=retry_head.last_decision_digest AND schedule_id=retry_head.schedule_id
+      AND retry_head.schedule_id=schedule_row.schedule_id
       AND transaction_id=transaction_value AND run_id=run_value AND unit_id=unit_row.unit_id
-      AND outbox_id=unit_row.outbox_id AND receipt_id=receipt_row.receipt_id;
+      AND outbox_id=unit_row.outbox_id AND receipt_id=receipt_row.receipt_id
+      AND transaction_id=retry_head.transaction_id AND run_id=retry_head.run_id
+      AND unit_id=retry_head.unit_id AND outbox_id=retry_head.outbox_id AND receipt_id=retry_head.receipt_id
+      AND provider_request_identity=retry_head.provider_request_identity
+      AND provider_request_digest=retry_head.provider_request_digest
+      AND idempotency_receipt_digest=retry_head.idempotency_receipt_digest
+      AND retry_policy_digest=retry_head.retry_policy_digest AND attempt_ceiling=retry_head.attempt_ceiling
+      AND decision_sequence=retry_head.last_decision_sequence AND attempt_ordinal=retry_head.last_attempt_ordinal
+      AND state=retry_head.state AND next_attempt_at IS NOT DISTINCT FROM retry_head.next_attempt_at
+      AND observation_id IS NOT DISTINCT FROM CASE WHEN retry_head.state='reconciliation_required_no_resend' THEN retry_head.pending_observation_id ELSE observation_id END
+      AND (retry_head.state<>'reconciliation_required_no_resend' OR
+       (observation_digest=retry_head.pending_observation_digest AND observation_kind=retry_head.pending_observation_kind
+        AND attempt_lease_id=retry_head.pending_attempt_lease_id AND attempt_fence_token=retry_head.pending_attempt_fence_token))
+      AND recorded_at=retry_head.updated_at AND trusted_clock_contract=retry_head.trusted_clock_contract
+      AND recorded_time_zone=retry_head.recorded_time_zone;
     IF retry_event.decision_id IS NULL THEN RAISE EXCEPTION 'Mission 28 orphan retry authority detected' USING ERRCODE='42501'; END IF;
    END IF;
    SELECT * INTO control_head FROM public.canonical_automation_delivery_control_heads_v1
@@ -356,7 +410,26 @@ BEGIN
     SELECT * INTO control_event FROM public.canonical_automation_delivery_control_events_v1
      WHERE organization_id=org AND control_id=control_head.last_control_id
       AND decision_digest=control_head.last_decision_digest AND target_kind=control_head.target_kind
-      AND target_key=control_head.target_key AND resulting_control_state=control_head.control_state;
+      AND target_key=control_head.target_key AND control_sequence=control_head.control_sequence
+      AND policy_id IS NOT DISTINCT FROM control_head.policy_id
+      AND policy_version IS NOT DISTINCT FROM control_head.policy_version
+      AND policy_digest IS NOT DISTINCT FROM control_head.policy_digest
+      AND schedule_id IS NOT DISTINCT FROM control_head.schedule_id
+      AND transaction_id IS NOT DISTINCT FROM control_head.transaction_id
+      AND run_id IS NOT DISTINCT FROM control_head.run_id
+      AND unit_id IS NOT DISTINCT FROM control_head.unit_id
+      AND outbox_id IS NOT DISTINCT FROM control_head.outbox_id
+      AND receipt_id IS NOT DISTINCT FROM control_head.receipt_id
+      AND unit_digest IS NOT DISTINCT FROM control_head.unit_digest
+      AND provider_request_identity IS NOT DISTINCT FROM control_head.provider_request_identity
+      AND provider_request_digest IS NOT DISTINCT FROM control_head.provider_request_digest
+      AND resulting_control_state=control_head.control_state AND execution_phase=control_head.execution_phase
+      AND queued_count=control_head.queued_count AND leased_count=control_head.leased_count
+      AND uncertain_count=control_head.uncertain_count AND permanent_stop_count=control_head.permanent_stop_count
+      AND in_flight_unavailable_count=control_head.in_flight_unavailable_count
+      AND completed_unavailable_count=control_head.completed_unavailable_count
+      AND recorded_at=control_head.updated_at AND trusted_clock_contract=control_head.trusted_clock_contract
+      AND recorded_time_zone=control_head.recorded_time_zone;
     IF control_event.control_id IS NULL THEN RAISE EXCEPTION 'Mission 28 orphan control authority detected' USING ERRCODE='42501'; END IF;
    END IF;
    IF control_head.last_control_id IS NOT NULL THEN item_state_value:='control_preserved_no_new_work'; controlled_value:=controlled_value+1;
@@ -389,7 +462,8 @@ BEGIN
 
  IF recovery_kind_value='disaster_restore' THEN result_state_value:='disaster_restore_evidence_gap_no_authority';
  ELSIF source_issue_value>0 THEN result_state_value:='blocked_source_not_latest_exact_current';
- ELSIF uncertain_value>0 THEN result_state_value:='reconciliation_required_no_resend';
+ ELSIF recovery_kind_value IN('provider_outage','partial_callback') OR uncertain_value>0 THEN
+  result_state_value:='reconciliation_required_no_resend';
  ELSIF active_lease_value>0 THEN result_state_value:='wait_for_active_lease_no_effect';
  ELSE result_state_value:='bounded_history_verified_no_effect'; END IF;
  assessment_digest_value:=public.canonical_automation_digest_v1('mission28.delivery-recovery-evidence.v1'||chr(10),jsonb_build_object(

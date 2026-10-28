@@ -81,7 +81,7 @@ class RecoveryStore {
     let resultState = 'bounded_history_verified_no_effect';
     if (value.recoveryKind === 'disaster_restore') resultState = 'disaster_restore_evidence_gap_no_authority';
     else if (derivedItems.some(item => item.sourceState !== 'latest_exact_current')) resultState = 'blocked_source_not_latest_exact_current';
-    else if (derivedItems.some(item => ['provider_identity_reserved_reconciliation_required_no_resend', 'reconciliation_required_no_resend'].includes(item.state))) resultState = 'reconciliation_required_no_resend';
+    else if (['provider_outage', 'partial_callback'].includes(value.recoveryKind) || derivedItems.some(item => ['provider_identity_reserved_reconciliation_required_no_resend', 'reconciliation_required_no_resend'].includes(item.state))) resultState = 'reconciliation_required_no_resend';
     else if (derivedItems.some(item => item.state === 'active_lease_wait_no_effect')) resultState = 'wait_for_active_lease_no_effect';
     const event = { input: copy(value), requestDigest: value.requestDigest, materialDigest: material, resultState, replayed: false };
     this.events.set(value.recoveryId, event); this.material.add(material); return event;
@@ -95,6 +95,8 @@ describe('Mission 28 Part 6F recovery authority', () => {
     expect(CONTRACT.part6ERelease).toEqual(expect.objectContaining({ acceptedSource: '51d40179122a8958a17c8b20ab4ecf2f5394121f', pullRequest: 573, deployment: 'eb089985-741b-4147-8af5-7bde9742e8dc' }));
     for (const item of CONTRACT.frozenInputs) expect(normalizedLfSha256(item.path)).toBe(item.normalizedLfSha256);
     expect(CONTRACT.storageContract.runtimeExecuteGranted).toBe(false);
+    expect(CONTRACT.completeRunHistoryContract.unscheduledControlRule).toContain('including_committed_unscheduled_units');
+    expect(CONTRACT.completeRunHistoryContract.orphanRule).toContain('all_shared_identity_sequence_state_count_time_and_digest_fields');
   });
 
   test('closes every incident/evidence pair and never converts assessment into operational authority', () => {
@@ -107,6 +109,7 @@ describe('Mission 28 Part 6F recovery authority', () => {
     expect(new RecoveryStore().apply(fixture(1), trusted(fixture(1)), items('committed_unpublished_unscheduled', 'queued_unpublished_preserved')).resultState).toBe('bounded_history_verified_no_effect');
     const active = fixture(2); expect(new RecoveryStore().apply(active, trusted(active), items('active_lease_wait_no_effect', 'queued_unpublished_preserved')).resultState).toBe('wait_for_active_lease_no_effect');
     const uncertain = fixture(3, 'partial_callback'); expect(new RecoveryStore().apply(uncertain, trusted(uncertain), items('provider_identity_reserved_reconciliation_required_no_resend', 'reconciliation_required_no_resend')).resultState).toBe('reconciliation_required_no_resend');
+    for (const kind of ['provider_outage', 'partial_callback']) { const incident = fixture(300 + kind.length, kind); expect(new RecoveryStore().apply(incident, trusted(incident), items('queued_unpublished_preserved', 'committed_unpublished_unscheduled')).resultState).toBe('reconciliation_required_no_resend'); }
     const staleItems = items('queued_unpublished_preserved', 'permanent_stop_preserved'); staleItems[1].sourceState = 'stale_or_unavailable'; const stale = fixture(4); expect(new RecoveryStore().apply(stale, trusted(stale), staleItems).resultState).toBe('blocked_source_not_latest_exact_current');
     const restore = fixture(5, 'disaster_restore'); expect(new RecoveryStore().apply(restore, trusted(restore), items('queued_unpublished_preserved', 'control_preserved_no_new_work')).resultState).toBe('disaster_restore_evidence_gap_no_authority');
   });

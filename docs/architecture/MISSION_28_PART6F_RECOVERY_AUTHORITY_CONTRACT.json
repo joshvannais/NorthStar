@@ -61,7 +61,8 @@
     "scope": "one_exact_Part6A_transaction_and_every_1_to_32_action_unit_in_unit_index_order",
     "requiredLinks": ["transaction", "unit", "outbox", "optional_schedule", "latest_lease_event", "optional_provider_request_receipt", "latest_retry_event", "effective_control_event"],
     "sourceRule": "every_bound_Part4B_snapshot_is_resolved_by_exact_id_digest_and_locked_lineage_then_compared_to_the_latest_available_exact_current_head",
-    "orphanRule": "a_head_receipt_or_control_without_its_exact_immutable_predecessor_event_fails_before_any_recovery_record",
+    "orphanRule": "every_mutable_lease_retry_or_control_head_must_equal_its_exact_immutable_predecessor_event_on_all_shared_identity_sequence_state_count_time_and_digest_fields_or_the_whole_assessment_fails",
+    "unscheduledControlRule": "an_effective_tenant_or_policy_control_is_preserved_for_every_unit_including_committed_unscheduled_units",
     "boundedResidueRule": "each_unit_has_exactly_one_closed_item_state_and_all_item_counts_sum_to_the_transaction_unit_count",
     "legacyAdoption": "none"
   },
@@ -79,7 +80,7 @@
   "resultStates": {
     "bounded_history_verified_no_effect": "durable evidence is complete for the bounded run; every future operation still requires its separately accepted Part6 authority",
     "wait_for_active_lease_no_effect": "an existing lease remains authoritative until expiry; no reclaim or effect is claimed",
-    "reconciliation_required_no_resend": "provider identity or uncertain evidence exists and no resend is allowed before exact Part6D reconciliation",
+    "reconciliation_required_no_resend": "provider identity, provider outage, partial callback or other uncertain evidence exists and no resend is allowed before exact Part6D reconciliation; a missing receipt never converts provider uncertainty into no-effect proof",
     "blocked_source_not_latest_exact_current": "historical evidence is preserved but no authority increase is permitted from stale or unavailable source lineage",
     "disaster_restore_evidence_gap_no_authority": "the source contract explicitly records that a real restore drill has not been exercised and grants no restored authority"
   },

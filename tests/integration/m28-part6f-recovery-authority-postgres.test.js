@@ -26,6 +26,27 @@ const hash = value => `sha256:${crypto.createHash('sha256').update(value).digest
 const copy = value => JSON.parse(JSON.stringify(value));
 const quoteIdentifier = value => `"${String(value).replace(/"/g, '""')}"`;
 
+function resealRetry(value) {
+  value.attemptObservation.observationDigest = canonical.digest('mission28.delivery-attempt-observation.v1\n', Object.fromEntries(Object.entries(value.attemptObservation).filter(([key]) => key !== 'observationDigest')));
+  value.retryPolicy.retryPolicyDigest = canonical.digest('mission28.delivery-retry-policy.v1\n', Object.fromEntries(Object.entries(value.retryPolicy).filter(([key]) => key !== 'retryPolicyDigest')));
+  value.requestDigest = canonical.digest('mission28.delivery-retry-decision.v1\n', Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'requestDigest')));
+  return value;
+}
+const trustedRetry = value => { const result = copy(value); delete result.schemaVersion; delete result.decisionId; delete result.requestDigest; return result; };
+function resealControl(value) {
+  value.requestDigest = canonical.digest('mission28.delivery-control-decision.v1\n', Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'requestDigest')));
+  return value;
+}
+const trustedControl = value => { const result = copy(value); delete result.schemaVersion; delete result.controlId; delete result.requestDigest; return result; };
+function scopeControl(targetKind, suffix, requestedAt) {
+  const targetBinding = { targetKind, policyId: null, policyVersion: null, policyDigest: null, scheduleId: null, transactionId: null, runId: null, unitId: null, outboxId: null, receiptId: null, unitDigest: null, providerRequestIdentity: null, providerRequestDigest: null };
+  if (targetKind === 'policy_version') Object.assign(targetBinding, { policyId: POLICY, policyVersion: 1, policyDigest: POLICY_DIGEST });
+  return resealControl({ schemaVersion: 'mission28.delivery-control-decision.v1', tenantId: TENANT, controlId: uuid(700000 + suffix), operation: 'pause_scope', targetBinding,
+    actorBinding: { actorId: ACTOR, sessionId: SESSION, membershipId: ACTOR, membershipRole: 'owner', requestedAt },
+    successorBinding: { policyId: null, policyVersion: null, policyDigest: null },
+    reviewBinding: { reviewId: null, reviewDigest: null, reviewOutcome: null, reviewedAt: null }, requestDigest: '' });
+}
+
 realPostgres('Mission 28 Part 6F PostgreSQL recovery authority through migration 280', () => {
   let database; let pool; let migrations;
   async function enter(client, tenant = TENANT) { await client.query('SELECT public.canonical_automation_enter_tenant_v1($1)', [tenant]); }
@@ -47,6 +68,8 @@ realPostgres('Mission 28 Part 6F PostgreSQL recovery authority through migration
     reseal(value);
     return (await client.query('SELECT public.canonical_automation_record_recovery_assessment_v1($1,$2::jsonb) result', [canonical.canonicalize(value), JSON.stringify(resolution || trusted(value))])).rows[0].result;
   }
+  async function decide(value, client = pool) { return (await client.query('SELECT public.canonical_automation_record_retry_decision_v1($1,$2::jsonb) result', [canonical.canonicalize(value), JSON.stringify(trustedRetry(value))])).rows[0].result; }
+  async function applyControl(value, client = pool) { return (await client.query('SELECT public.canonical_automation_record_delivery_control_v1($1,$2::jsonb) result', [canonical.canonicalize(value), JSON.stringify(trustedControl(value))])).rows[0].result; }
   async function seedRun(suffix, unitCount = 2, scheduleIndexes = [0]) {
     const transactionId = uuid(10000 + suffix); const runId = uuid(11000 + suffix); const units = [];
     for (let index = 0; index < unitCount; index += 1) units.push({ index, unitId: uuid(12000 + suffix * 10 + index), outboxId: uuid(13000 + suffix * 10 + index), unitDigest: hash(`unit-${suffix}-${index}`) });
@@ -88,7 +111,17 @@ realPostgres('Mission 28 Part 6F PostgreSQL recovery authority through migration
     const providerIdentity = `m28:${item.scheduleId}`; const providerDigest = hash(`provider-${suffix}`); const receiptDigest = hash(`receipt-${suffix}`);
     await tenantQuery(`INSERT INTO public.canonical_automation_provider_request_receipts_v1 VALUES($1,$2,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'identity_reserved_no_provider_attempt_or_ack',statement_timestamp(),'decision_history','postgresql_statement_timestamp_v1','UTC')`,
       [TENANT, item.scheduleId, run.transactionId, run.runId, item.unitId, item.outboxId, leaseId, fence, providerIdentity, providerDigest, receiptDigest]);
-    return { leaseId, workerDigest, providerIdentity, providerDigest };
+    return { leaseId, fence, workerDigest, providerIdentity, providerDigest, receiptDigest };
+  }
+  async function addRetry(run, suffix) {
+    const lease = await addLeaseAndReceipt(run, suffix); const item = run.units[0]; const occurredAt = await now();
+    const value = resealRetry({ schemaVersion: 'mission28.delivery-retry-decision.v1', tenantId: TENANT, decisionId: uuid(600000 + suffix), decisionKind: 'classify_attempt',
+      actionBinding: { scheduleId: item.scheduleId, transactionId: run.transactionId, runId: run.runId, unitId: item.unitId, outboxId: item.outboxId, receiptId: item.scheduleId, unitDigest: item.unitDigest, providerRequestIdentity: lease.providerIdentity, providerRequestDigest: lease.providerDigest, idempotencyReceiptDigest: lease.receiptDigest },
+      leaseBinding: { leaseId: lease.leaseId, fenceToken: lease.fence },
+      retryPolicy: { attemptCeiling: 3, baseDelaySeconds: 1, maximumDelaySeconds: 4, maximumRetryAfterSeconds: 4, maximumJitterSeconds: 0, retryPolicyDigest: '' },
+      attemptObservation: { observationId: uuid(610000 + suffix), observationKind: 'provider_retryable_definite_no_acceptance', observationDigest: '', attemptOrdinal: 1, attemptLeaseId: lease.leaseId, attemptFenceToken: lease.fence, occurredAt, retryAfterSeconds: null, providerTimeoutSeconds: null },
+      reconciliation: { state: 'not_performed', evidenceId: null, evidenceDigest: null, observedAt: null }, requestDigest: '' });
+    await decide(value); return { lease, value };
   }
 
   beforeAll(async () => {
@@ -135,7 +168,13 @@ realPostgres('Mission 28 Part 6F PostgreSQL recovery authority through migration
     ];
     for (let index = 0; index < kinds.length; index += 1) {
       const [kind, evidence] = kinds[index]; const value = request(run, 90 + index, kind, evidence); const result = await recover(value);
-      expect(result.resultState).toBe(kind === 'disaster_restore' ? 'disaster_restore_evidence_gap_no_authority' : 'bounded_history_verified_no_effect');
+      const expected = kind === 'disaster_restore' ? 'disaster_restore_evidence_gap_no_authority'
+        : ['provider_outage', 'partial_callback'].includes(kind) ? 'reconciliation_required_no_resend' : 'bounded_history_verified_no_effect';
+      expect(result.resultState).toBe(expected);
+      if (['provider_outage', 'partial_callback'].includes(kind)) {
+        const stored = (await tenantQuery(`SELECT result_state,uncertain_count FROM public.canonical_automation_recovery_assessments_v1 WHERE organization_id=$1 AND recovery_id=$2`, [TENANT, value.recoveryId])).rows[0];
+        expect(stored).toEqual({ result_state: 'reconciliation_required_no_resend', uncertain_count: 0 });
+      }
     }
     expect((await tenantQuery(`SELECT count(*)::integer count FROM public.canonical_automation_recovery_assessments_v1 WHERE organization_id=$1 AND run_id=$2`, [TENANT, run.runId])).rows[0].count).toBe(8);
   });
@@ -158,9 +197,19 @@ realPostgres('Mission 28 Part 6F PostgreSQL recovery authority through migration
 
   test('detects orphaned head authority and rolls the whole assessment back', async () => {
     const run = await seedRun(3, 1, [0]); const lease = await addLeaseAndReceipt(run, 3); const value = request(run, 3, 'worker_crash', 'worker_unavailable_database_available'); const client = await pool.connect();
-    try { await client.query('BEGIN'); await enter(client); await client.query(`UPDATE public.canonical_automation_delivery_lease_heads_v1 SET worker_identity_digest=$1 WHERE organization_id=$2 AND schedule_id=$3`, [hash('orphan'), TENANT, run.units[0].scheduleId]); await expect(recover(value, null, client)).rejects.toThrow(/orphan lease authority/i); await client.query('ROLLBACK'); }
+    try { await client.query('BEGIN'); await enter(client); await client.query(`UPDATE public.canonical_automation_delivery_lease_heads_v1 SET lease_expires_at=lease_expires_at+INTERVAL '1 second' WHERE organization_id=$1 AND schedule_id=$2`, [TENANT, run.units[0].scheduleId]); await expect(recover(value, null, client)).rejects.toThrow(/orphan lease authority/i); await client.query('ROLLBACK'); }
     finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
-    expect((await tenantQuery(`SELECT count(*)::integer count FROM public.canonical_automation_recovery_assessments_v1 WHERE organization_id=$1 AND recovery_id=$2`, [TENANT, value.recoveryId])).rows[0].count).toBe(0); expect(lease.workerDigest).not.toBe(hash('orphan'));
+    expect((await tenantQuery(`SELECT count(*)::integer count FROM public.canonical_automation_recovery_assessments_v1 WHERE organization_id=$1 AND recovery_id=$2`, [TENANT, value.recoveryId])).rows[0].count).toBe(0); expect(lease.workerDigest).toBe(hash('worker-3'));
+  });
+
+  test('rejects a retry head whose exact immutable sequence or state evidence was changed', async () => {
+    const run = await seedRun(10, 1, [0]); await addRetry(run, 10); const value = request(run, 10); const client = await pool.connect();
+    try {
+      await client.query('BEGIN'); await enter(client);
+      await client.query(`UPDATE public.canonical_automation_delivery_retry_heads_v1 SET last_decision_sequence=last_decision_sequence+1 WHERE organization_id=$1 AND schedule_id=$2`, [TENANT, run.units[0].scheduleId]);
+      await expect(recover(value, null, client)).rejects.toThrow(/orphan retry authority/i); await client.query('ROLLBACK');
+    } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
+    expect((await tenantQuery(`SELECT count(*)::integer count FROM public.canonical_automation_recovery_assessments_v1 WHERE organization_id=$1 AND recovery_id=$2`, [TENANT, value.recoveryId])).rows[0].count).toBe(0);
   });
 
   test('records the unexercised disaster-restore gap without claiming restored authority', async () => {
@@ -192,6 +241,30 @@ realPostgres('Mission 28 Part 6F PostgreSQL recovery authority through migration
       await locker.query('COMMIT');
       expect(await pending).toEqual(expect.objectContaining({ resultState: 'blocked_source_not_latest_exact_current' }));
     } finally { await locker.query('ROLLBACK').catch(() => {}); locker.release(); }
+  });
+
+  test('preserves exact tenant then policy control evidence for committed unscheduled units', async () => {
+    const tenantControl = scopeControl('tenant', 20, await now()); expect((await applyControl(tenantControl)).state).toBe('paused');
+    const tenantRun = await seedRun(20, 1, []); const tenantValue = request(tenantRun, 20); expect((await recover(tenantValue)).resultState).toBe('blocked_source_not_latest_exact_current');
+    const tenantDecisionDigest = (await tenantQuery(`SELECT decision_digest FROM public.canonical_automation_delivery_control_events_v1 WHERE organization_id=$1 AND control_id=$2`, [TENANT, tenantControl.controlId])).rows[0].decision_digest;
+    expect((await tenantQuery(`SELECT schedule_id,item_state,control_id,control_decision_digest FROM public.canonical_automation_recovery_items_v1 WHERE organization_id=$1 AND recovery_id=$2`, [TENANT, tenantValue.recoveryId])).rows[0]).toEqual({ schedule_id: null, item_state: 'control_preserved_no_new_work', control_id: tenantControl.controlId, control_decision_digest: tenantDecisionDigest });
+    const tenantCounts = (await tenantQuery(`SELECT controlled_count,unscheduled_count FROM public.canonical_automation_recovery_assessments_v1 WHERE organization_id=$1 AND recovery_id=$2`, [TENANT, tenantValue.recoveryId])).rows[0]; expect(tenantCounts).toEqual({ controlled_count: 1, unscheduled_count: 0 });
+
+    const policyControl = scopeControl('policy_version', 21, await now()); expect((await applyControl(policyControl)).state).toBe('paused');
+    const policyRun = await seedRun(21, 1, []); const policyValue = request(policyRun, 21); await recover(policyValue);
+    const policyDecisionDigest = (await tenantQuery(`SELECT decision_digest FROM public.canonical_automation_delivery_control_events_v1 WHERE organization_id=$1 AND control_id=$2`, [TENANT, policyControl.controlId])).rows[0].decision_digest;
+    const policyItem = (await tenantQuery(`SELECT schedule_id,item_state,control_id,control_decision_digest FROM public.canonical_automation_recovery_items_v1 WHERE organization_id=$1 AND recovery_id=$2`, [TENANT, policyValue.recoveryId])).rows[0];
+    expect(policyItem).toEqual({ schedule_id: null, item_state: 'control_preserved_no_new_work', control_id: policyControl.controlId, control_decision_digest: policyDecisionDigest });
+  });
+
+  test('rejects a control head whose exact immutable sequence or count evidence was changed', async () => {
+    const run = await seedRun(22, 1, []); const value = request(run, 22); const client = await pool.connect();
+    try {
+      await client.query('BEGIN'); await enter(client);
+      const changed = await client.query(`UPDATE public.canonical_automation_delivery_control_heads_v1 SET queued_count=queued_count+1 WHERE organization_id=$1 AND target_kind='policy_version' AND policy_id=$2 AND policy_version=1`, [TENANT, POLICY]); expect(changed.rowCount).toBe(1);
+      await expect(recover(value, null, client)).rejects.toThrow(/orphan control authority/i); await client.query('ROLLBACK');
+    } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
+    expect((await tenantQuery(`SELECT count(*)::integer count FROM public.canonical_automation_recovery_assessments_v1 WHERE organization_id=$1 AND recovery_id=$2`, [TENANT, value.recoveryId])).rows[0].count).toBe(0);
   });
 
   test('forced RLS hides both recovery tables from a role without entered tenant authority', async () => {

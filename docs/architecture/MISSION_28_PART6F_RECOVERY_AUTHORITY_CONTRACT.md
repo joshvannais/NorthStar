@@ -6,15 +6,15 @@ Part 6F closes the bounded Part 6 restart and recovery contract. It records an o
 
 Each request binds one tenant, recovery and incident identity; one exact transaction/run/policy/source-set tuple; the exact bounded unit count; and one active same-subject actor/session/membership. The incident kind has one closed evidence state. Candidate material and a separately trusted resolution must match canonically. Candidate state, residue, result, history digests, provider outcomes and effect claims are not accepted as input.
 
-The owner-only function resolves the transaction, every unit and outbox, any schedule, latest lease event, stable provider-request receipt, latest retry event and effective control event from PostgreSQL. It locks the accepted lifecycle/control/source authorities before resolving latest source heads. Any missing or mismatched immutable predecessor fails the complete request and leaves no recovery row. Cross-tenant, cross-run, cross-policy, cross-source and replayed material cannot create evidence.
+The owner-only function resolves the transaction, every unit and outbox, any schedule, latest lease event, stable provider-request receipt, latest retry event and effective control event from PostgreSQL. It locks the accepted lifecycle/control/source authorities before resolving latest source heads. Every mutable lease, retry or control head must equal its exact immutable predecessor event on all shared identity, sequence, state, count, time and digest fields. Any missing or mismatched immutable predecessor fails the complete request and leaves no recovery row. Cross-tenant, cross-run, cross-policy, cross-source and replayed material cannot create evidence.
 
 ## Closed recovery dispositions
 
-- Unscheduled or queued evidence stays committed/unpublished. The assessment does not schedule or claim it.
+- Unscheduled or queued evidence stays committed/unpublished. Any effective tenant or policy control is preserved even when the unit has no schedule. The assessment does not schedule or claim it.
 - An active lease remains authoritative until its trusted expiry; the assessment cannot steal or fence it.
 - An expired lease may only be reclaimed later through a new accepted Part 6C fence and all then-current authority.
 - A retry schedule stays no-effect evidence and remains subject to Parts 6D and 6E.
-- A reserved provider identity, partial callback, provider outage or uncertain retry state requires exact reconciliation with no resend.
+- A reserved provider identity, partial callback, provider outage or uncertain retry state requires exact reconciliation with no resend. A missing provider receipt is not no-effect proof for an incident that is itself provider-uncertain.
 - A permanent stop or reducing/terminal control is preserved exactly and never reopened.
 - Stale or unavailable source lineage preserves history but blocks every authority increase.
 - Disaster restore remains an explicit evidence gap. `restore_drill_unavailable` is not proof of a successful restore and grants no restored authority.

@@ -60,8 +60,8 @@ CREATE TABLE public.canonical_automation_action_units_v1 (
  recorded_at TIMESTAMPTZ(6) NOT NULL,
  PRIMARY KEY(organization_id,unit_id),
  UNIQUE(organization_id,transaction_id,unit_index),
- UNIQUE(organization_id,run_id,idempotency_key_digest),
- UNIQUE(organization_id,run_id,material_digest),
+ UNIQUE(organization_id,idempotency_key_digest),
+ UNIQUE(organization_id,material_digest),
  FOREIGN KEY(organization_id,transaction_id)
   REFERENCES public.canonical_automation_action_transactions_v1(organization_id,transaction_id) ON DELETE RESTRICT
 );

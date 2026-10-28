@@ -148,6 +148,12 @@ class TransactionalStore {
     validate(value, resolution);
     const prior = this.transactions.get(value.transactionId);
     if (prior) { if (prior.requestDigest !== value.requestDigest) throw new Error('transaction conflict'); return { replayed: true, commit() {} }; }
+    for (const proposed of value.actionUnits) {
+      for (const existing of this.units.values()) {
+        if (existing.materialDigest === proposed.materialDigest ||
+            existing.idempotencyKeyDigest === proposed.idempotencyKeyDigest) throw new Error('tenant-global unit replay');
+      }
+    }
     const staged = { receipt: copy(value), units: value.actionUnits.map(copy), outbox: value.actionUnits.map(item => ({ outboxId: item.outboxId, unitId: item.unitId, state: 'committed_unpublished', queuePublicationId: null })) };
     return { replayed: false, commit: () => {
       if (this.transactions.has(value.transactionId)) throw new Error('transaction conflict');
@@ -164,6 +170,8 @@ describe('Mission 28 Part 6A transactional outbox and action units', () => {
     expect(CONTRACT.part5DRelease).toEqual(expect.objectContaining({ acceptedSourceHead: '244a3cddb4e67a375aeab507294b87426dbfcfda', pullRequest: 568, deployment: '9ddb846c-bcbc-4024-aebe-83ca2a9c8cbf', deploymentState: 'SUCCESS_RUNNING' }));
     for (const item of CONTRACT.frozenInputs) expect(normalizedLfSha256(item.path)).toBe(item.normalizedLfSha256);
     expect(CONTRACT.atomicityContract).toEqual(expect.objectContaining({ singleAuthoritativeTransaction: true, queuePublicationBeforeCommit: 'impossible_and_denied', outboxStateAtCommit: 'committed_unpublished' }));
+    expect(CONTRACT.bounds.duplicateUnitIdOutboxIdMaterialOrIdempotencyDigest)
+      .toBe('deny_tenant_global_across_runs_and_transactions');
     expect(CONTRACT.trustedResolutionContract).toEqual(expect.objectContaining({ requestMayNotCreateReplaceRetargetOrSelfAttestAcceptedDecision: true, currentRuntimeResolverAvailable: false }));
     expect(CONTRACT.laterSliceBoundary.part6B).toContain('not_implemented');
   });
@@ -191,6 +199,22 @@ describe('Mission 28 Part 6A transactional outbox and action units', () => {
     const conflict = request([unit(0, 'owner_approval_request')]);
     expect(() => store.stage(conflict, trusted(conflict))).toThrow('transaction conflict');
     expect(store.transactions.size).toBe(1); expect(store.units.size).toBe(1); expect(store.outbox.size).toBe(1);
+  });
+
+  test('rejects material or idempotency replay under a different run and transaction', () => {
+    for (const field of ['materialDigest', 'idempotencyKeyDigest']) {
+      const store = new TransactionalStore(); const original = request(); store.stage(original, trusted(original)).commit();
+      const nextUnit = unit(0); nextUnit.unitId = uuid(701); nextUnit.outboxId = uuid(801);
+      nextUnit.materialDigest = hash('material-next'); nextUnit.idempotencyKeyDigest = hash('idempotency-next');
+      nextUnit[field] = original.actionUnits[0][field];
+      nextUnit.unitDigest = digest(CONTRACT.actionUnitEnvelope.unitDigestNamespace, nextUnit, 'unitDigest');
+      const replay = request([nextUnit]); replay.transactionId = uuid(601); replay.runId = uuid(501);
+      replay.decisionBinding.actionUnitSetDigest = canonical.digest(CONTRACT.transactionEnvelope.actionUnitSetDigestNamespace,
+        replay.actionUnits);
+      replay.requestDigest = digest(CONTRACT.transactionEnvelope.requestDigestNamespace, replay, 'requestDigest');
+      expect(() => store.stage(replay, trusted(replay))).toThrow('tenant-global unit replay');
+      expect(store.transactions.size).toBe(1); expect(store.units.size).toBe(1); expect(store.outbox.size).toBe(1);
+    }
   });
 
   test('rejects retargeted tenant, policy, source, run, decision, authorization and currentness even after redigest', () => {
@@ -253,7 +277,10 @@ describe('Mission 28 Part 6A transactional outbox and action units', () => {
     for (const token of ['canonical_automation_action_transactions_v1', 'canonical_automation_action_units_v1', 'canonical_automation_action_outbox_v1',
       'canonical_automation_store_action_transaction_v1', 'ENABLE ROW LEVEL SECURITY', 'FORCE ROW LEVEL SECURITY',
       'canonical_automation_action_outbox_v1_immutable', "state='committed_unpublished'", 'queue_publication_id IS NULL',
+      'UNIQUE(organization_id,idempotency_key_digest)', 'UNIQUE(organization_id,material_digest)',
       'REVOKE ALL ON FUNCTION public.canonical_automation_store_action_transaction_v1']) expect(sql).toContain(token);
+    expect(sql).not.toContain('UNIQUE(organization_id,run_id,idempotency_key_digest)');
+    expect(sql).not.toContain('UNIQUE(organization_id,run_id,material_digest)');
     for (const forbidden of ['CREATE FUNCTION public.canonical_automation_claim', 'CREATE FUNCTION public.canonical_automation_publish',
       'provider_attempt', 'delivery_state', 'fetch(', 'axios', 'twilio', 'retell']) expect(sql).not.toContain(forbidden);
   });

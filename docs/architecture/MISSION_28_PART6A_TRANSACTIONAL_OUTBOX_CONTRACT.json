@@ -41,7 +41,7 @@
     "duplicateSourceSnapshotIdOrDigest": "deny",
     "maximumCanonicalRequestBytes": 65536,
     "unitIndexes": "contiguous_zero_based_strict_order",
-    "duplicateUnitIdMaterialOrIdempotencyDigest": "deny",
+    "duplicateUnitIdOutboxIdMaterialOrIdempotencyDigest": "deny_tenant_global_across_runs_and_transactions",
     "fanOutBeyondBound": "deny_without_partial_rows"
   },
   "transactionEnvelope": {

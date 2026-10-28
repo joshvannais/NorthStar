@@ -297,6 +297,30 @@ realPostgres('Mission 28 Part 6A PostgreSQL transactional outbox through migrati
     } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
   }, 120000);
 
+  test.each(['materialDigest', 'idempotencyKeyDigest'])(
+    'rejects tenant-global cross-run reuse of %s and rolls the new transaction back without residue', async field => {
+      const originalUnit = unit(0, 1);
+      const suffix = field === 'materialDigest' ? 5 : 6;
+      const replayUnit = unit(0, suffix);
+      replayUnit[field] = originalUnit[field];
+      replayUnit.unitDigest = digest('mission28.action-unit.v1', replayUnit, 'unitDigest');
+      const replay = buildRequest(suffix, [replayUnit]);
+      const before = await transactionCount();
+      await expect(store(replay)).rejects.toThrow(/unique|duplicate/i);
+      expect(await transactionCount()).toBe(before);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN'); await enter(client);
+        expect((await client.query(`SELECT count(*)::integer count FROM public.canonical_automation_action_transactions_v1
+          WHERE organization_id=$1 AND transaction_id=$2`, [TENANT, replay.transactionId])).rows[0].count).toBe(0);
+        expect((await client.query(`SELECT count(*)::integer count FROM public.canonical_automation_action_units_v1
+          WHERE organization_id=$1 AND unit_id=$2`, [TENANT, replayUnit.unitId])).rows[0].count).toBe(0);
+        expect((await client.query(`SELECT count(*)::integer count FROM public.canonical_automation_action_outbox_v1
+          WHERE organization_id=$1 AND outbox_id=$2`, [TENANT, replayUnit.outboxId])).rows[0].count).toBe(0);
+        await client.query('COMMIT');
+      } finally { await client.query('ROLLBACK').catch(() => {}); client.release(); }
+    }, 120000);
+
   test('rejects separately trusted resolution substitution before storage', async () => {
     const request = buildRequest(4);
     const substituted = copy(trusted(request));

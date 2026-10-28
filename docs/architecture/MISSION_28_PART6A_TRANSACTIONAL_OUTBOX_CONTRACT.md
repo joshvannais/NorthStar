@@ -14,7 +14,7 @@ Part 5D selection remains no-effect analysis and never self-authorizes. Part 6A 
 
 Action units are ordered, contiguous and limited to the three provider-disabled first-launch internal templates. The source-set digest is derived from the exact tenant plus one to eight ordered, unique snapshot IDs and unique snapshot digests; the accepted decision binds a separately derived digest of the complete ordered action-unit array. Every unit therefore binds the same tenant, run, policy, exact source set, accepted decision and authorization, plus one distinct unit identity, material digest and idempotency digest. A unit is internal intent only—not a provider attempt, acknowledgement, delivery, recipient effect, outcome, upstream mutation, accounting fact or money movement.
 
-The authoritative transaction stores one immutable receipt, every unit and exactly one corresponding outbox row in state `committed_unpublished`. Duplicate identities/material/idempotency digests, gaps, fan-out overflow, partial rows and cross-request/tenant/policy/source/run reuse fail closed. Exact request replay returns the same receipt without adding rows; conflicting transaction-ID reuse fails.
+The authoritative transaction stores one immutable receipt, every unit and exactly one corresponding outbox row in state `committed_unpublished`. Unit and outbox identities, material digests and idempotency digests are tenant-global: none may be cloned or reused under a new transaction or run. Duplicate identities/material/idempotency digests, gaps, fan-out overflow, partial rows and cross-request/tenant/policy/source/run reuse fail closed. Exact request replay returns the same receipt without adding rows; conflicting transaction-ID reuse fails.
 
 ## Deliberately unavailable behavior
 

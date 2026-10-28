@@ -782,8 +782,8 @@ describe('Mission 28 Part 2B immutable record model', () => {
   test('records Parts 1A–5A released, only Part 5B current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–6B released; Part 6C implementation candidate only.');
-    expect(roadmap).toContain('Parts 6D–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–6C released; Part 6D implementation candidate only.');
+    expect(roadmap).toContain('Parts 6E–14G remain planned and unimplemented.');
     for (const identity of [PART2A_HEAD, BASE, PART2A_DEPLOYMENT, PART2A_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -819,10 +819,11 @@ describe('Mission 28 Part 2B immutable record model', () => {
     expect(rows[19][4]).toBe('**Released**');
     expect(rows[20][4]).toBe('**Released**');
     expect(rows[21][4]).toBe('**Released**');
-    expect(rows[22][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(23).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[22][4]).toBe('**Released**');
+    expect(rows[23][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(24).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(43);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(42);
   });
 
   test('adds no runtime, database, migration, provider, scheduling, route, UI or demo behavior', () => {
@@ -840,9 +841,10 @@ describe('Mission 28 Part 2B immutable record model', () => {
     expect(productionSource).not.toContain('mission28.part2b.immutable-record-model.v1');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(migrations).toHaveLength(273);
-    expect(migrations.at(-1)).toBe('277_canonical_automation_delivery_coordination_v1.sql');
+    expect(migrations).toHaveLength(274);
+    expect(migrations.at(-1)).toBe('278_canonical_automation_retry_reconciliation_v1.sql');
     expect(migrations.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
+    expect(migrations.filter(name => /^278_/.test(name))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
     expect(migrations.filter(name => /^274_/.test(name))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });
 });

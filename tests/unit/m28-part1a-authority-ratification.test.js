@@ -161,8 +161,9 @@ function validateLedger(document) {
   expect(rows[19]).toMatchObject({ id: '5D', state: '**Released**' });
   expect(rows[20]).toMatchObject({ id: '6A', state: '**Released**' });
   expect(rows[21]).toMatchObject({ id: '6B', state: '**Released**' });
-  expect(rows[22]).toMatchObject({ id: '6C', state: '**Implementation candidate**' });
-  expect(rows.slice(23).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+  expect(rows[22]).toMatchObject({ id: '6C', state: '**Released**' });
+  expect(rows[23]).toMatchObject({ id: '6D', state: '**Implementation candidate**' });
+  expect(rows.slice(24).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
 }
 
 describe('Mission 28 Part 1A authority ratification', () => {
@@ -178,8 +179,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       expect(document).toContain(BASE);
       expect(document).toContain(BASE_TREE);
     }
-    expect(roadmap).toContain('Parts 1A–6B released; Part 6C implementation candidate only.');
-    expect(roadmap).toContain('Parts 6D–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–6C released; Part 6D implementation candidate only.');
+    expect(roadmap).toContain('Parts 6E–14G remain planned and unimplemented.');
     for (const identity of [PART1A_HEAD, PART1A_MAIN, PART1A_DEPLOYMENT, PART1A_AUDIT]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -263,7 +264,7 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const ledger = read(LEDGER_PATH);
     validateLedger(ledger);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(43);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(42);
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
     expect(ledger).toContain(`Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 \`${PART1A_AUDIT}\``);
   });
@@ -303,9 +304,10 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const names = fs.readdirSync(path.join(ROOT, 'migrations'))
       .filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(names).toHaveLength(273);
-    expect(names.at(-1)).toBe('277_canonical_automation_delivery_coordination_v1.sql');
+    expect(names).toHaveLength(274);
+    expect(names.at(-1)).toBe('278_canonical_automation_retry_reconciliation_v1.sql');
     expect(names.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
     expect(names.filter(name => /^274_/.test(name))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
+    expect(names.filter(name => /^278_/.test(name))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
   });
 });

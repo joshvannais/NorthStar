@@ -1,0 +1,125 @@
+{
+  "contractVersion": "mission28.part6f.recovery-authority.v1",
+  "authority": {
+    "mission": 28,
+    "part": "6F",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "c78e2c1c47168949f07d1f760e841f96c2192c5b",
+    "scope": "restart_migration_worker_crash_database_or_provider_outage_partial_callback_deployment_restore_and_orphan_authority_recovery_evidence_without_effect",
+    "schedulerWorkerQueueProviderCallbackRecipientMessageEffectOrMoneyAuthorityGranted": false
+  },
+  "part6ERelease": {
+    "acceptedSource": "51d40179122a8958a17c8b20ab4ecf2f5394121f",
+    "acceptedTree": "726663ae5b8d047dc1b7ad459133084ab361c5a6",
+    "pullRequest": 573,
+    "mergedMain": "c78e2c1c47168949f07d1f760e841f96c2192c5b",
+    "deployment": "eb089985-741b-4147-8af5-7bde9742e8dc",
+    "deploymentState": "SUCCESS_RUNNING",
+    "instance": "fa1da0cc-5def-4043-8ad5-a2cd0c8e8add",
+    "image": "sha256:0c8c15b0dd0b88cf0cb971118f15528d1bb879853da7fe0790040f84fab8667c",
+    "migrationState": "275_through_279_no_280",
+    "health": ["api_health_200", "root_200", "dashboard_200", "demo_200"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json", "normalizedLfSha256": "03F32F3C66EF525DF9ACA541F8A7D0C08935E1DD2EDB661468F78CC2A763308A"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART6A_TRANSACTIONAL_OUTBOX_CONTRACT.json", "normalizedLfSha256": "F79502C0793CD62A78442046CD04CFC88083C941A6D15D83C037ECB4C6A5FC9A"},
+    {"path": "docs/architecture/MISSION_28_PART6B_DURABLE_SCHEDULER_CONTRACT.json", "normalizedLfSha256": "30B2E2472DDC6DC8EB204D0544535C91302E47355971ACBA0800544D5B626687"},
+    {"path": "docs/architecture/MISSION_28_PART6C_DELIVERY_COORDINATION_CONTRACT.json", "normalizedLfSha256": "D9D00F6496DF95465257C427EA3674ECC7FB960780E495D1807C551F040835A3"},
+    {"path": "docs/architecture/MISSION_28_PART6D_RETRY_RECONCILIATION_CONTRACT.json", "normalizedLfSha256": "47F52068E81EC6D8AC5EBF2139F18C3FC77BF074923F718C22D1A94EAF416B5F"},
+    {"path": "docs/architecture/MISSION_28_PART6E_DELIVERY_CONTROL_CONTRACT.json", "normalizedLfSha256": "57E953448270CAF870855662B5FE5A923821412B3B71F02B4D80178766ECB5FB"},
+    {"path": "migrations/275_canonical_automation_transactional_outbox_v1.sql", "normalizedLfSha256": "174404ECC14CC8E87F6C2B205C0E3A56D8834CCDFCF11D63870665F2DBCD4838"},
+    {"path": "migrations/276_canonical_automation_durable_scheduler_v1.sql", "normalizedLfSha256": "746343D185947BBBAB472CE6874669DC2BECE416DDDBEB29DE61C3962319BD59"},
+    {"path": "migrations/277_canonical_automation_delivery_coordination_v1.sql", "normalizedLfSha256": "48A2D5E29BD607C0B1DEF5392AB2D169F75BB213217CA9AFF2E9D5CCFD145A20"},
+    {"path": "migrations/278_canonical_automation_retry_reconciliation_v1.sql", "normalizedLfSha256": "76F5F9511E33980A78FB4F4458CFFEEA8960A5BD49A9DD2107E0C8F8786F0897"},
+    {"path": "migrations/279_canonical_automation_delivery_controls_v1.sql", "normalizedLfSha256": "B8A59C595068F03A8B198ED45843FCB5D9758151227E2167D23D65D2C85C136F"}
+  ],
+  "recoveryEnvelope": {
+    "schemaVersion": "mission28.delivery-recovery-assessment.v1",
+    "exactFields": ["schemaVersion", "tenantId", "recoveryId", "recoveryKind", "incidentBinding", "transactionBinding", "actorBinding", "requestDigest"],
+    "incidentBindingExactFields": ["incidentId", "incidentDigest", "evidenceState"],
+    "transactionBindingExactFields": ["transactionId", "runId", "policyId", "policyVersion", "policyDigest", "sourceSetDigest", "unitCount"],
+    "actorBindingExactFields": ["actorId", "sessionId", "membershipId", "membershipRole", "requestedAt"],
+    "requestDigestNamespace": "mission28.delivery-recovery-assessment.v1\n",
+    "materialDigestNamespace": "mission28.delivery-recovery-material.v1\n",
+    "assessmentDigestNamespace": "mission28.delivery-recovery-evidence.v1\n",
+    "maximumCanonicalRequestBytes": 32768,
+    "maximumRunUnits": 32,
+    "plainDataRule": "ordinary_objects_dense_standard_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_alias_or_coercion"
+  },
+  "incidentKinds": [
+    {"id": "process_restart", "evidenceState": "post_restart_database_available"},
+    {"id": "migration_restart", "evidenceState": "post_migration_database_available"},
+    {"id": "worker_crash", "evidenceState": "worker_unavailable_database_available"},
+    {"id": "database_outage", "evidenceState": "database_recovered_observation_only"},
+    {"id": "provider_outage", "evidenceState": "provider_unavailable"},
+    {"id": "partial_callback", "evidenceState": "callback_partial_or_unverified"},
+    {"id": "deployment_restore", "evidenceState": "deployment_database_available"},
+    {"id": "disaster_restore", "evidenceState": "restore_drill_unavailable"}
+  ],
+  "completeRunHistoryContract": {
+    "scope": "one_exact_Part6A_transaction_and_every_1_to_32_action_unit_in_unit_index_order",
+    "requiredLinks": ["transaction", "unit", "outbox", "optional_schedule", "latest_lease_event", "optional_provider_request_receipt", "latest_retry_event", "effective_control_event"],
+    "sourceRule": "every_bound_Part4B_snapshot_is_resolved_by_exact_id_digest_and_locked_lineage_then_compared_to_the_latest_available_exact_current_head",
+    "orphanRule": "every_mutable_lease_retry_or_control_head_must_equal_its_exact_immutable_predecessor_event_on_all_shared_identity_sequence_state_count_time_and_digest_fields_or_the_whole_assessment_fails",
+    "unscheduledControlRule": "an_effective_tenant_or_policy_control_is_preserved_for_every_unit_including_committed_unscheduled_units",
+    "boundedResidueRule": "each_unit_has_exactly_one_closed_item_state_and_all_item_counts_sum_to_the_transaction_unit_count",
+    "legacyAdoption": "none"
+  },
+  "itemStates": [
+    "committed_unpublished_unscheduled",
+    "queued_unpublished_preserved",
+    "active_lease_wait_no_effect",
+    "expired_lease_reclaim_requires_new_fence",
+    "retry_schedule_preserved_no_effect",
+    "provider_identity_reserved_reconciliation_required_no_resend",
+    "reconciliation_required_no_resend",
+    "permanent_stop_preserved",
+    "control_preserved_no_new_work"
+  ],
+  "resultStates": {
+    "bounded_history_verified_no_effect": "durable evidence is complete for the bounded run; every future operation still requires its separately accepted Part6 authority",
+    "wait_for_active_lease_no_effect": "an existing lease remains authoritative until expiry; no reclaim or effect is claimed",
+    "reconciliation_required_no_resend": "provider identity, provider outage, partial callback or other uncertain evidence exists and no resend is allowed before exact Part6D reconciliation; a missing receipt never converts provider uncertainty into no-effect proof",
+    "blocked_source_not_latest_exact_current": "historical evidence is preserved but no authority increase is permitted from stale or unavailable source lineage",
+    "disaster_restore_evidence_gap_no_authority": "the source contract explicitly records that a real restore drill has not been exercised and grants no restored authority"
+  },
+  "idempotencyAndConcurrency": {
+    "trustedClock": "postgresql_statement_timestamp_v1",
+    "actor": "exact_active_user_session_membership_same_tenant_and_allowed_fixed_role",
+    "sameRecoveryIdDigestAndCanonicalText": "historical_replay_before_mutable_currentness_no_new_record",
+    "sameRecoveryIdDifferentMaterial": "deny",
+    "sameIncidentAndMaterialDifferentRecoveryId": "deny_tenant_global_material_replay",
+    "lockOrder": "recovery_identity_then_policy_lifecycle_then_tenant_policy_action_controls_then_exact_source_lineages_then_read_one_statement_snapshot",
+    "historicalEvidenceRule": "later leases_retries_controls_sources_or_outcomes_do_not_rewrite_or_invalidate_an_accepted_assessment",
+    "recoveryAuthorityRule": "assessment_never_reclaims_resends_requeues_reopens_or_marks_an_effect"
+  },
+  "storageContract": {
+    "migration": "280_canonical_automation_recovery_authority_v1.sql",
+    "tables": ["canonical_automation_recovery_assessments_v1", "canonical_automation_recovery_items_v1"],
+    "ownerOnlyFunction": "canonical_automation_record_recovery_assessment_v1",
+    "runtimeExecuteGranted": false,
+    "publicPrivileges": "none",
+    "tenantRls": "enabled_and_forced",
+    "immutability": "update_delete_truncate_denied",
+    "existingPart6StateMutation": "none",
+    "providerOrEffectAuthority": "none"
+  },
+  "denials": [
+    "unknown_extra_missing_null_nonplain_accessor_symbol_toJSON_proxy_wrapper_alias_or_coercible_material",
+    "cross_tenant_transaction_run_policy_source_unit_outbox_schedule_lease_receipt_retry_control_actor_session_membership_or_incident_alias",
+    "inactive_suspended_disabled_expired_revoked_cross_actor_or_wrong_role_identity",
+    "candidate_supplied_item_state_result_counts_history_or_assessment_digest",
+    "missing_or_mismatched_transaction_unit_outbox_schedule_source_lease_receipt_retry_or_control_history",
+    "stale_or_unavailable_source_used_to_grant_reclaim_retry_resume_or_effect_authority",
+    "provider_identity_or_uncertain_callback_treated_as_no_effect_or_safe_resend",
+    "expired_lease_reused_without_a_new_Part6C_fence_and_exact_current_authority",
+    "disaster_restore_claimed_as_exercised_or_authoritative_without_separate_evidence",
+    "cross_request_clone_alias_or_replay_material_with_a_new_recovery_identity",
+    "queue_publish_worker_provider_callback_recipient_message_external_effect_upstream_mutation_accounting_or_money"
+  ],
+  "laterSliceBoundary": {
+    "parts7Plus": "sender_recipient_content_channel_provider_delivery_effect_reply_and_outcome_authority_not_implemented"
+  },
+  "unavailableEvidence": ["independent_acceptance", "pull_request", "merge", "deployment", "private_production", "mounted_runtime_resolver", "scheduler_or_worker", "queue_publication", "provider_adapter", "provider_sandbox_or_live", "real_recipient_or_message", "provider_attempt_or_acknowledgement", "callback_transport", "external_effect", "live_money", "actual_database_or_provider_outage", "actual_worker_crash", "actual_deployment_restore", "disaster_restore_drill", "hosted_load_or_sla", "physical_safari_or_devices", "manual_assistive_technology", "professional_review", "founder_visual_approval"]
+}

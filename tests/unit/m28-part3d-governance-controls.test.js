@@ -833,7 +833,7 @@ describe('Mission 28 Part 3D governance controls', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–7E are released. Part 7F is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–7F are released. Part 8A is the sole implementation candidate.');
       expect(document).toContain('3cd41fe5379d92fe629c62e0ebc3a51d8886c3cc');
       expect(document).toContain(BASE);
       expect(document).toContain('b745a483-1031-4020-9ab2-38c0044e599d');
@@ -862,9 +862,9 @@ describe('Mission 28 Part 3D governance controls', () => {
       expect.stringContaining('founder visual approval'),
     ]));
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'));
-    expect(migrations).toHaveLength(282);
-    expect(migrations.at(-1)).toBe('286_canonical_automation_delivery_evidence_v1.sql');
-    expect(migrations.some(name => name.startsWith('287_'))).toBe(false);
+    expect(migrations).toHaveLength(283);
+    expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
+    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
     expect(migrations.filter(name => name.startsWith('274'))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });
 });

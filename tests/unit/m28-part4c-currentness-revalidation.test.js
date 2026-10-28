@@ -690,13 +690,13 @@ describe('Mission 28 Part 4C coherent currentness revalidation', () => {
   test('roadmap and ledger release Part 5A, name only Part 5B candidate, and retain migration 274/no275', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
-    expect(roadmap).toContain('Parts 1A–7E are released. Part 7F is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–7F are released. Part 8A is the sole implementation candidate.');
     expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Released** |');
     expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Released** |');
     expect(ledger).toContain('| 16 | 4D | Duplicate/replay/reorder/correction/tombstone/concurrency handling | **Released** |');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort();
-    expect(migrations.at(-1)).toBe('286_canonical_automation_delivery_evidence_v1.sql');
-    expect(migrations.some(name => name.startsWith('287_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
+    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
     expect(migrations.filter(name => name.startsWith('281_'))).toEqual(['281_canonical_automation_sender_recipient_authority_v1.sql']);
   });
 });

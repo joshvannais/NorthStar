@@ -524,8 +524,8 @@ describe('Mission 28 Part 1D first-supported launch matrix', () => {
   test('records Parts 1A–5A released, only Part 5B current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–7E are released. Part 7F is the sole implementation candidate.');
-    expect(roadmap).toContain('Parts 8A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–7F are released. Part 8A is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 8B–14G remain planned and unimplemented.');
     for (const identity of [PART1C_HEAD, BASE, PART1C_DEPLOYMENT, PART1C_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -568,10 +568,11 @@ describe('Mission 28 Part 1D first-supported launch matrix', () => {
     expect(rows[26][4]).toBe('**Released**');
     expect(rows[27][4]).toBe('**Released**');
     expect(rows[28][4]).toBe('**Released**');
-    expect(rows[29][4]).toBe('**Released**'); expect(rows[30][4]).toBe('**Released**'); expect(rows[31][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(32).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[29][4]).toBe('**Released**'); expect(rows[30][4]).toBe('**Released**'); expect(rows[31][4]).toBe('**Released**');
+    expect(rows[32][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(33).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(34);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(33);
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
   });
 
@@ -590,9 +591,9 @@ describe('Mission 28 Part 1D first-supported launch matrix', () => {
     expect(productionSource).not.toContain('mission28.part1d.first-launch-matrix.v1');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(migrations).toHaveLength(282);
-    expect(migrations.at(-1)).toBe('286_canonical_automation_delivery_evidence_v1.sql');
-    expect(migrations.some(name => name.startsWith('287_'))).toBe(false);
+    expect(migrations).toHaveLength(283);
+    expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
+    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
     expect(migrations.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
     expect(migrations.filter(name => /^278_/.test(name))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
     expect(migrations.filter(name => /^279_/.test(name))).toEqual(['279_canonical_automation_delivery_controls_v1.sql']);

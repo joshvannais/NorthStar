@@ -250,12 +250,13 @@ describe('Mission 28 Part 7F delivery corrections, replies, opt-outs and minimiz
     expect(sql).not.toMatch(/CREATE\s+(?:OR\s+REPLACE\s+)?(?:ROUTE|VIEW)|INSERT\s+INTO\s+public\.(?:messages|provider)/i);
   });
 
-  test('roadmap and ledger record Part 7E released, Part 7F candidate-only and Part 8 onward planned', () => {
+  test('roadmap and ledger preserve Part 7F release truth while Part 8A alone is candidate', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
-    expect(roadmap).toContain('Parts 1A–7E are released. Part 7F is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–7F are released. Part 8A is the sole implementation candidate.');
     expect(ledger).toContain('| 31 | 7E | Scoped links and customer-safe attachments | **Released** |');
-    expect(ledger).toContain('| 32 | 7F | Delivery corrections, replies, opt-outs and minimized provider evidence | **Implementation candidate** |');
-    expect(ledger).toContain('282 migrations through additive `286_canonical_automation_delivery_evidence_v1.sql` with no 287');
+    expect(ledger).toContain('| 32 | 7F | Delivery corrections, replies, opt-outs and minimized provider evidence | **Released** |');
+    expect(ledger).toContain('| 33 | 8A | Mission 24 estimate/proposal/quote sending | **Implementation candidate** |');
+    expect(ledger).toContain('Released main and production contain 282 migrations through exact `286_canonical_automation_delivery_evidence_v1.sql` with no 287');
     expect(markdown).toContain('The current launch has no such evidence.');
   });
 });

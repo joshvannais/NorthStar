@@ -161,8 +161,8 @@ describe('Mission 28 Part 6C delivery coordination', () => {
   test('records Part 6D released, only Part 6E candidate, and migration279/no280', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
       const document = fs.readFileSync(path.join(ROOT, relative), 'utf8');
-      expect(document).toContain('Parts 1A–10B are released. Part 10C is the sole implementation candidate.');
-      expect(document).toContain('Parts 10D–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–10C are released. Part 10D is the sole implementation candidate.');
+      expect(document).toContain('Parts 11A–14G remain planned and unimplemented.');
       expect(document).toContain('061e8ae7-eb47-49ff-b015-3adbe3c352f1');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');

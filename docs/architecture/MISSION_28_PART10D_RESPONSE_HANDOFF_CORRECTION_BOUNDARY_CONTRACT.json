@@ -1,0 +1,151 @@
+{
+  "contractVersion": "mission28.part10d.response-handoff-correction-boundary.v1",
+  "authority": {
+    "mission": 28,
+    "part": "10D",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "762653d73dc88ecfd77c14d0bb66382fa15669c7",
+    "baselineTree": "9dbb4b713954d1755f8065e45e906f2a38a2be57",
+    "scope": "exact_current_Mission22_or_Mission23_response_target_and_source_correction_no_effect_boundary_only",
+    "authenticatedInboundResponseEvidenceAuthorityGranted": false,
+    "ownerOrStaffTaskAuthorityGranted": false,
+    "communicationRecipientProviderOrEffectAuthorityGranted": false,
+    "Mission22OrMission23MutationAuthorityGranted": false,
+    "part11OrLaterAuthorityGranted": false
+  },
+  "part10CRelease": {
+    "acceptedSourceHead": "348c9f4ea829e04478b89bc4a5f7a733a1fb1f19",
+    "acceptedTree": "9dbb4b713954d1755f8065e45e906f2a38a2be57",
+    "freshAudit": "P0_P1_P2_P3_zero",
+    "pullRequest": 591,
+    "mergedMain": "762653d73dc88ecfd77c14d0bb66382fa15669c7",
+    "deploymentIdentity": "unavailable_not_supplied",
+    "imageIdentity": "unavailable_not_supplied",
+    "runningInstance": "unavailable_not_supplied",
+    "migrationEvidence": "source_283_through_287_no_288; direct_applied_history_not_requeried_and_unclaimed",
+    "healthEvidence": "unavailable_not_supplied"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART7F_DELIVERY_EVIDENCE_CONTRACT.json", "normalizedLfSha256": "482B381597FCC60803F6BFDE8366468C8CDED2C731B24B74681B12A547B11706"},
+    {"path": "docs/architecture/MISSION_28_PART9A_INQUIRY_ACKNOWLEDGEMENT_INTERNAL_ALERT_CONTRACT.json", "normalizedLfSha256": "DC51DFF3451D140A5D079FD6C616A21BEF0354E9964A1FE041802886D2E7A03A"},
+    {"path": "docs/architecture/MISSION_28_PART10A_APPOINTMENT_COMMUNICATION_BOUNDARY_CONTRACT.json", "normalizedLfSha256": "98777312893A6A57B28B41CD3D8E1B23914A98E997FE93F5626198C408B1AF79"},
+    {"path": "docs/architecture/MISSION_28_PART10B_DISPATCH_COMMUNICATION_BOUNDARY_CONTRACT.json", "normalizedLfSha256": "9B0633BFF4670278B60DCEF88812ED71BC57E6EA3E59FF545631377DCC94A0A7"},
+    {"path": "docs/architecture/MISSION_28_PART10C_WORK_STATE_COMMUNICATION_BOUNDARY_CONTRACT.json", "normalizedLfSha256": "64FE2D33A57B8DE6F013DBF8339E2597FB83A0563979FBD1937979510452F71C"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateResponseTargetCorrectionHandoffOrTaskMaterialNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumCanonicalRequestBytes": 65536,
+    "missingUnknownUnauthorizedPrivateStaleMixedAmbiguousCorrectedOrChangedFallback": "deny"
+  },
+  "requestKinds": [
+    {"id": "customer_confirmation", "sourceTriggerId": "m22.appointment_state", "resultState": "unavailable_no_accepted_inbound_response_handoff", "reasonCode": "customer_confirmation_evidence_unavailable", "fixedLabel": "Customer confirmation unavailable — authenticated response handoff not launched"},
+    {"id": "customer_question", "sourceTriggerId": "m22.appointment_state", "resultState": "unavailable_no_accepted_inbound_response_handoff", "reasonCode": "customer_question_evidence_unavailable", "fixedLabel": "Customer question unavailable — authenticated response handoff not launched"},
+    {"id": "reschedule_request", "sourceTriggerId": "m22.appointment_state", "resultState": "unavailable_no_accepted_inbound_response_handoff", "reasonCode": "reschedule_request_evidence_unavailable", "fixedLabel": "Reschedule request unavailable — authenticated response handoff not launched"},
+    {"id": "cancellation_request", "sourceTriggerId": "m22.appointment_state", "resultState": "unavailable_no_accepted_inbound_response_handoff", "reasonCode": "cancellation_request_evidence_unavailable", "fixedLabel": "Cancellation request unavailable — authenticated response handoff not launched"},
+    {"id": "access_update", "sourceTriggerId": "m22.appointment_state", "resultState": "unavailable_no_accepted_inbound_response_handoff", "reasonCode": "access_update_evidence_unavailable", "fixedLabel": "Access update unavailable — authenticated response handoff not launched"},
+    {"id": "completion_concern", "sourceTriggerId": "m23.work_completion_reopening_state", "resultState": "unavailable_no_accepted_inbound_response_handoff", "reasonCode": "completion_concern_evidence_unavailable", "fixedLabel": "Completion concern unavailable — authenticated response handoff not launched"}
+  ],
+  "resolutionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "resolutionId", "requestedKind", "targetSourceBinding", "responseEvidenceBinding", "pendingCommunicationBinding", "correctionBinding", "handoffBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "targetSourceBindingExactFields": ["tenantId", "sourceMission", "sourceTriggerId", "sourceClassId", "sourceRecordType", "targetRecordId", "targetRevision", "targetDigest", "targetState", "appointmentId", "appointmentRevision", "appointmentDigest", "appointmentStatus", "scheduledStart", "scheduledEnd", "timeZone", "executionId", "executionRevision", "executionDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "lifecycleState", "eventKind", "eventTime", "sourceEventField", "sourceStateSelector", "observedAt", "snapshotId", "snapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState", "lineageState", "predecessorRecordRevision", "predecessorRecordDigest", "predecessorSnapshotId", "predecessorSnapshotDigest", "sourceRecordIdentityDigest", "sourceCurrentnessPinsDigest"],
+    "responseEvidenceBindingExactFields": ["state", "responseEventId", "responseEventDigest", "responseOccurredAt", "authenticatedRecipientIdentityDigest", "deliveryEvidenceDigest", "responseKind", "rawBodyRetained"],
+    "pendingCommunicationBindingExactFields": ["state", "pendingCount", "communicationRequestId", "actionUnitId", "actionUnitDigest"],
+    "correctionBindingExactFields": ["state", "affectedPendingCount", "cancelledPendingCount", "staledPendingCount", "rebuiltPendingCount", "currentProjectionRecomputed"],
+    "handoffBindingExactFields": ["state", "responseEvidenceRecordId", "responseEvidenceRecordDigest", "ownerStaffTaskId", "ownerStaffTaskDigest", "internalAlertId", "internalAlertDigest", "boundedResponseEvidenceCreated", "ownerStaffTaskCreated"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"]
+  },
+  "sourceAuthorityTruth": {
+    "appointmentTrigger": "m22.appointment_state",
+    "appointmentPins": ["tenantId", "appointmentId", "revision", "digest", "status", "scheduledStart", "scheduledEnd", "timeZone", "eventKind", "eventTime"],
+    "completionTrigger": "m23.work_completion_reopening_state",
+    "completionPins": ["tenantId", "executionId", "executionRevision", "executionDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "lifecycleState", "eventKind", "eventTime"],
+    "factBoundary": "exact Mission22 or Mission23 target facts never prove that a customer response occurred and never grant handoff task message mutation or effect authority"
+  },
+  "responseAndHandoffTruth": {
+    "authenticatedInboundReceiver": "unavailable_unimplemented",
+    "boundedResponseEvidenceStore": "unavailable_unimplemented",
+    "ownerOrStaffTaskCreation": "unavailable_unimplemented",
+    "part9AInternalAlert": "owner_readable_no_effect_projection_only_not_a_created_alert_task_or_notification",
+    "currentResult": "all_request_kinds_fixed_unavailable_no_effect"
+  },
+  "sourceCorrectionContract": {
+    "original": "original_exact_current_target_has_null_predecessor_and_no_pending_communication",
+    "correctedSuccessor": "same tenant trigger class record identity with revision exactly predecessor plus one new target digest exact predecessor record digest new snapshot and currentness resolution",
+    "pendingCommunicationOutcome": "Parts10A_through_10C_create_no_pending_communications_so_affected_cancelled_staled_and_rebuilt_counts_are_exactly_zero",
+    "projectionOutcome": "corrected source deterministically produces a new current no_effect projection while old projection remains immutable historical evidence only",
+    "deny": ["correction_without_exact_predecessor", "same_revision_or_digest", "cross_tenant_or_cross_record_predecessor", "partial_snapshot_or_currentness_graft", "stale_mixed_unavailable_tombstoned_or_ambiguous_lineage", "fabricated_pending_communication_or_rebuild"]
+  },
+  "digestAndReplayContract": {
+    "materialDigest": "server_recomputed_over_all_trusted_material_except_resolutionId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_request_kind_exact_target_source_response_unavailability_pending_none_correction_state_handoff_unavailability_and_actor_scope_excluding_resolutionId_evaluatedAt_and_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_projection_replay_no_record_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse"
+  },
+  "deniedCombinations": [
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "cross_tenant_actor_session_membership_target_snapshot_currentness_predecessor_or_idempotency_retarget",
+    "missing_stale_mixed_unavailable_tombstoned_ambiguous_or_nonlatest_target_source",
+    "candidate_created_customer_confirmation_question_reschedule_cancel_access_update_or_completion_concern_evidence",
+    "raw_response_body_contact_location_access_note_question_completion_concern_or_private_worker_data",
+    "candidate_created_task_worklist_alert_notification_recipient_channel_provider_policy_permission_or_effect_authority",
+    "direct_or_indirect_Mission22_schedule_assignment_dispatch_route_or_appointment_mutation",
+    "direct_or_indirect_Mission23_work_completion_evidence_or_reopening_mutation",
+    "fabricated_pending_communication_cancellation_staling_or_rebuild",
+    "runtime_route_UI_receiver_scheduler_worker_queue_provider_callback_message_delivery_or_effect",
+    "accounting_financial_or_money_mutation",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "authenticatedInboundReceiver": false,
+    "responseEvidenceStoreOrTaskCreator": false,
+    "mountedSchedulerWorkerQueueOrPolicyExecutor": false,
+    "providerAdapterCallbackOrMessage": false,
+    "Mission22ScheduleAssignmentDispatchOrAppointmentMutation": false,
+    "Mission23WorkCompletionEvidenceOrReopeningMutation": false,
+    "externalEffectOrUpstreamMutation": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "rawResponseBodiesOrContactValues": 0,
+    "boundedResponseEvidenceRecordsCreated": 0,
+    "ownerStaffWorklistRecordsOrTasksCreated": 0,
+    "internalAlertsOrNotificationsCreated": 0,
+    "recipientMessages": 0,
+    "providerAttempts": 0,
+    "pendingCommunicationsCreatedCancelledStaledOrRebuilt": 0,
+    "Mission22Mutations": 0,
+    "Mission23Mutations": 0,
+    "externalEffects": 0,
+    "upstreamMutations": 0,
+    "accountingOrMoneyEffects": 0
+  },
+  "unavailableEvidence": [
+    "accepted authenticated customer response receiver event identity signature replay permission retention and bounded evidence store",
+    "accepted owner or staff task worklist or internal alert creation handoff for these request kinds",
+    "accepted external customer communication launch recipient channel template sender provider callback effect and retention authority",
+    "real customer confirmation question reschedule cancellation access update completion concern staff response message provider delivery reply or outcome evidence",
+    "direct current-deployment applied migration history re-query",
+    "private production data provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent scheduling employment consumer protection regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part11Plus": "financial_collections_integrations_analytics_UI_demo_and_release_readiness_remain_planned_unimplemented"
+  }
+}

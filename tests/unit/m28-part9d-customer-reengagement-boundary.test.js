@@ -239,11 +239,11 @@ describe('Mission 28 Part 9D customer re-engagement boundary', () => {
   test('roadmap and ledger record Part9C released Part9D candidate and Part10+ planned', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–10B are released. Part 10C is the sole implementation candidate.'); expect(document).toContain('Parts 10D–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–10C are released. Part 10D is the sole implementation candidate.'); expect(document).toContain('Parts 11A–14G remain planned and unimplemented.');
       expect(document).toContain('6fa2248f-ff14-4bae-8815-10842b4a9d3d'); expect(document).toContain('sha256:b72b28a34816a3f278c5056b93aa094537fe48dd1567bcb5e3bfbd4c26e3cabf');
       expect(document).toMatch(/direct applied-history re-query was not repeated|direct applied migration-history re-query was not repeated/i);
     }
     expect(ledger).toContain('| 39 | 9C | Exact-current estimate/quote follow-up | **Released** |'); expect(ledger).toContain('| 40 | 9D | Explicitly reviewed customer re-engagement boundary | **Released** |');
-    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(23); expect(markdown).toContain('No migration 288');
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(22); expect(markdown).toContain('No migration 288');
   });
 });

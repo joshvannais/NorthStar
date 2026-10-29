@@ -166,7 +166,7 @@ describe('Mission 28 Part 4B durable source snapshots', () => {
   test('roadmap and ledger release Part 5A, state only Part 5B as candidate and keep later slices planned', () => {
     const roadmap = read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md');
     const ledger = read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md');
-    expect(roadmap).toContain('Parts 1A–10B are released. Part 10C is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–10C are released. Part 10D is the sole implementation candidate.');
     expect(roadmap).toContain('additive migration `274_canonical_automation_trigger_snapshots_v1.sql`');
     expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Released** |');
     expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Released** |');

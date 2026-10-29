@@ -407,15 +407,15 @@ describe('Mission 28 Part 13B connection and credential boundary', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     for (const value of [roadmap, ledger]) {
-      expect(value).toContain('Parts 1A–13A are released. Part 13B is the sole implementation candidate.');
-      expect(value).toContain('Parts 13C–14G remain planned and unimplemented.');
+      expect(value).toContain('Parts 1A–13B are released. Part 13C is the sole implementation candidate.');
+      expect(value).toContain('Parts 13D–14G remain planned and unimplemented.');
       for (const identity of ['8efea794a2345620c32f79a951613f222df38380','9311279da046ebcb4759e7f79119adf14091c047','8f2ab04524747f4e92b9f1116ed7ee51ff3d0c11','38ba7ba9-713b-4ad8-88c7-e86391cf65b1','776e7e8c-26d9-46b5-a5d5-91da85c18bd2','sha256:ec3db61950dd9fdb031b7bb253dbfc4a331906f7e200bea129f4cc3023163ab7']) expect(value).toContain(identity);
       expect(value).toMatch(/direct applied production migration history.*unavailable.*unclaimed/i);
     }
-    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(55);
+    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(56);
     expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1);
-    expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(10);
+    expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(9);
     expect(ledger).toContain('| 55 | 13A | Provider-neutral adapter and capability discovery | **Released** |');
-    expect(ledger).toContain('| 56 | 13B | Tenant-bound connection/credential/mode boundary | **Implementation candidate** |');
+    expect(ledger).toContain('| 56 | 13B | Tenant-bound connection/credential/mode boundary | **Released** |');
   });
 });

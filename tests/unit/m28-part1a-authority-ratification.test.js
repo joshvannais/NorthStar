@@ -171,8 +171,8 @@ function validateLedger(document) {
   expect(rows[29]).toMatchObject({ id: '7D', state: '**Released**' }); expect(rows[30]).toMatchObject({ id: '7E', state: '**Released**' }); expect(rows[31]).toMatchObject({ id: '7F', state: '**Released**' });
   expect(rows[32]).toMatchObject({ id: '8A', state: '**Released**' });
   expect(rows[33]).toMatchObject({ id: '8B', state: '**Released**' });
-  expect(rows[35]).toMatchObject({ id: '8D', state: '**Implementation candidate**' });
-  expect(rows.slice(36).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+  expect(rows[36]).toMatchObject({ id: '9A', state: '**Implementation candidate**' });
+  expect(rows.slice(37).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
 }
 
 describe('Mission 28 Part 1A authority ratification', () => {
@@ -188,8 +188,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       expect(document).toContain(BASE);
       expect(document).toContain(BASE_TREE);
     }
-    expect(roadmap).toContain('Parts 1A–8C are released. Part 8D is the sole implementation candidate.');
-    expect(roadmap).toContain('Parts 9A–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–8D are released. Part 9A is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 9B–14G remain planned and unimplemented.');
     for (const identity of [PART1A_HEAD, PART1A_MAIN, PART1A_DEPLOYMENT, PART1A_AUDIT]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -273,7 +273,7 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const ledger = read(LEDGER_PATH);
     validateLedger(ledger);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(30);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(29);
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
     expect(ledger).toContain(`Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 \`${PART1A_AUDIT}\``);
   });

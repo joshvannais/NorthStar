@@ -1,0 +1,193 @@
+{
+  "contractVersion": "mission28.part9a.inquiry-acknowledgement-internal-alert.v1",
+  "authority": {
+    "mission": 28,
+    "part": "9A",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "e5e84e3aa7189e1d8523812899877bc59f2a6c56",
+    "baselineTree": "ba01f65ce6195d157645812474dec3fdb7fcb272",
+    "scope": "owner_controlled_no_effect_resolution_for_one_exact_current_supported_inquiry_or_lead_customer_acknowledgement_unavailable_and_internal_alert_ready_only",
+    "runtimeRouteUiWorkerQueueSchedulerProviderOrCallbackGranted": false,
+    "customerOrInternalMessageRecipientDeliveryExternalEffectUpstreamMutationAccountingOrMoneyGranted": false,
+    "inquiryAcknowledgementAlertDeliveryProviderStaffCustomerOutcomeOrResponseEvidenceClaimed": false,
+    "legalProviderPrivateProductionOrFounderVerdictClaimed": false
+  },
+  "part8DRelease": {
+    "acceptedSourceHead": "c649e358ed9d5b8539774727b371254f173b08a9",
+    "acceptedTree": "ba01f65ce6195d157645812474dec3fdb7fcb272",
+    "freshCorrectedAudit": "P0_P1_P2_P3_zero",
+    "focusedTests": "16_of_16",
+    "cumulativeMission28Tests": "36_suites_481_tests",
+    "migrationHistoryTests": "2_suites_40_tests",
+    "combinedTests": "38_suites_521_tests",
+    "syntax": "36_of_36",
+    "json": "35_of_35",
+    "pullRequest": 584,
+    "mergedMain": "e5e84e3aa7189e1d8523812899877bc59f2a6c56",
+    "deployment": "f148d5f1-6874-4c2c-afb3-ef423e4e1abb",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "617a19ca-5e21-47c6-8db8-db25418f4b83",
+    "imageSha256": "c242868064ed096fed47d23939e424d242932994d8c2c2933e4d17581c0f5b85",
+    "productionMigration": "283_of_283_through_287_no_288",
+    "health": ["startup_ready", "health_200", "root_200", "dashboard_200", "demo_200", "paid_demo_byte_and_hash_parity"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json", "normalizedLfSha256": "62A4EE942017E789D7F0F73DD9A6FA73125A52A9C09EB6E3726A3345CA8820A0"},
+    {"path": "docs/architecture/MISSION_28_PART7A_SENDER_RECIPIENT_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "DDCFCD0B110AFE39A6FC5C00C5BC518C44112A8753F0BDD4B78DC9B947288871"},
+    {"path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF"},
+    {"path": "docs/architecture/MISSION_28_PART7C_CONTENT_TEMPLATE_PREVIEW_CONTRACT.json", "normalizedLfSha256": "B0070106EFC642299B4C1F8334AA9EB3206078C93AA0412B33DC2EC71D639D91"},
+    {"path": "docs/architecture/MISSION_28_PART7D_CHANNEL_DELIVERY_HANDOFF_CONTRACT.json", "normalizedLfSha256": "E4902F0B0251C4F973935F41A4632970F6DF84DA6413236C44FF50873A4378FB"},
+    {"path": "docs/architecture/MISSION_28_PART8C_SHARED_DELIVERY_VERSION_IDEMPOTENCY_CONTRACT.json", "normalizedLfSha256": "41E25758E1830E87D876319C141E6755D788B75C7FC75D5AF411AE38D82B1E2F"},
+    {"path": "docs/architecture/MISSION_28_PART8D_DELIVERY_ACKNOWLEDGEMENT_RECOVERY_CONTRACT.json", "normalizedLfSha256": "C01A1A23F46F32758C7ACD0106DF02E94A771A4865553F95BF2B02238A0EDB4E"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "opaqueIdentifierPattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateInquiryContactAvailabilityActorAuthorityAlertAcknowledgementLabelOrOutputNeverCreatesAuthority": true
+  },
+  "supportedInquirySource": {
+    "triggerId": "m20.lead_contact_state",
+    "sourceClassId": "mission20_business_contact_preferences",
+    "factKind": "lead_contact_state",
+    "exactEventKinds": ["transcript_occurred", "communication_occurred", "opportunity_state_changed"],
+    "requiredCurrentness": "latest_exact_current",
+    "requiredEvaluationResult": "eligible",
+    "allowedActionFamilies": ["internal_read_digest_task", "owner_approval_request"],
+    "customerCommunicationAllowed": false,
+    "rawContactOrInquiryTextRetained": false,
+    "boundary": "the_exact_current_Mission20_source_is_upstream_fact_only_and_never_grants_contact_acknowledgement_alert_delivery_or_response_authority"
+  },
+  "businessAvailabilityBoundary": {
+    "currentAcceptedExactAvailabilityBinding": "unavailable",
+    "currentEnvelopeValue": null,
+    "acknowledgementWhenUnavailable": "unavailable_no_invented_response_time_promise_estimate_price_booking_or_business_availability",
+    "candidateHoursCalendarPromiseEtaPriceScopeEstimateOrBookingNeverCreatesAvailability": true
+  },
+  "operations": [
+    {
+      "operation": "customer_acknowledgement_resolution",
+      "requiredActorCapabilityId": "automation_internal_action_view",
+      "actionFamilyState": "customer_communication_unavailable_part1d",
+      "internalAuthorityRequired": false,
+      "resultState": "unavailable_customer_acknowledgement_no_external_authority",
+      "labelId": "customer_acknowledgement_unavailable",
+      "fixedLabel": "Customer acknowledgement unavailable — no message sent"
+    },
+    {
+      "operation": "internal_alert_resolution",
+      "requiredActorCapabilityId": "automation_internal_action_prepare",
+      "actionFamilyState": "internal_read_digest_task_conditional_no_effect",
+      "internalAuthorityRequired": true,
+      "resultState": "ready_internal_alert_no_effect",
+      "labelId": "internal_alert_ready_no_effect",
+      "fixedLabel": "Internal alert ready — no message sent"
+    }
+  ],
+  "resolutionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "resolutionId", "operation", "inquirySourceBinding", "businessAvailabilityBinding", "actorAuthorityBinding", "internalAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "inquirySourceBindingExactFields": ["triggerId", "sourceClassId", "recordIdentity", "recordIdentityDigest", "snapshotId", "snapshotDigest", "sourceSetDigest", "eventKind", "eventTime", "observedAt", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState", "evaluationId", "evaluationOutputDigest", "evaluationResult"],
+    "recordIdentityExactFields": ["tenantId", "canonicalGraphId", "customerId", "opportunityId"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"],
+    "internalAuthorityBindingExactFields": ["tenantId", "transactionId", "actionUnitId", "actionUnitDigest", "actionFamilyId", "sourceSetDigest", "authorizationId", "authorizationKind", "authorizationRecordDigest", "authorizationMaterialBindingDigest", "authorizationBoundSourceSetDigest", "authorizationBoundContentPreviewDigest", "authorizationBoundRecipientResolutionDigest", "authorizationBoundActionFamilyId", "authorizationBoundChannelId", "authorizationBoundProviderMode", "recipientResolutionId", "recipientResolutionDigest", "recipientClassId", "permissionResolutionId", "permissionResolutionDigest", "permissionRecipientResolutionDigest", "permissionResultState", "contentPreviewId", "contentPreviewDigest", "contentTemplateId", "channelResolutionId", "channelResolutionDigest", "channelContentPreviewDigest", "channelId", "channelResultState", "providerMode"],
+    "businessAvailabilityBinding": "must_be_null_current_launch",
+    "customerAcknowledgementInternalAuthorityBinding": "must_be_null_because_customer_communication_is_unavailable_before_action_material_creation",
+    "outputFieldsCreatedOnlyByTrustedProjection": ["resultState", "labelId", "fixedLabel", "inquiryState", "acknowledgementCreated", "internalAlertCreated", "messageCreated", "taskCreated", "providerAttemptCreated", "externalEffectCreated"]
+  },
+  "internalAlertAuthority": {
+    "actionFamilyId": "internal_read_digest_task",
+    "recipientClassId": "tenant_owner",
+    "permissionResultState": "clear_internal_passive_no_effect",
+    "contentTemplateId": "internal_fact_digest_content_v1",
+    "channelId": "in_app_passive",
+    "channelResultState": "ready_internal_no_effect",
+    "providerMode": "provider_disabled",
+    "authorizationKinds": ["per_run_approval", "standing_authorization"],
+    "boundary": "the_projection_is_owner_readable_contract_evidence_only_and_does_not_create_an_in_app_record_notification_task_queue_message_or_effect"
+  },
+  "currentnessAndAuthorizationContract": {
+    "source": "server_resolved_exact_frozen_Part4A_row_latest_Part4B_snapshot_Part4C_currentness_and_Part5B_evaluation",
+    "actor": "server_resolved_active_owner_actor_session_and_membership_with_exact_subject_and_tenant_equality_and_operation_specific_Part1D_capability",
+    "internalAlert": "server_resolved_exact_Parts6A_7A_7B_7C_7D_and_3B_material_only_with_source_set_preview_recipient_action_family_channel_and_provider_cross_binding",
+    "customerAcknowledgement": "unavailable_because_Part1D_customer_communication_has_no_launch_cell_business_availability_is_unavailable_and_no_external_template_permission_channel_provider_or_effect_authority_exists",
+    "contactFacts": "source_identity_and_digests_only_no_name_email_phone_address_inquiry_body_transcript_or_message_text",
+    "businessAvailability": "no_hours_calendar_eta_response_time_estimate_price_scope_or_booking_is_inferred_or_generated",
+    "sourceFactNeverGrantsActionAuthority": true,
+    "candidateOrRecordSuppliedMaterialNeverCreatesTrustedResolution": true
+  },
+  "digestAndReplayContract": {
+    "materialDigest": "server_recomputed_canonical_digest_over_every_trusted_material_field_except_resolutionId_materialDigest_idempotencyKeyDigest_and_requestDigest",
+    "idempotencyKeyDigest": "server_recomputed_stable_digest_over_tenant_operation_exact_source_actor_business_availability_and_internal_authority_material_excluding_resolutionId_evaluatedAt_materialDigest_idempotencyKeyDigest_and_requestDigest",
+    "requestDigest": "server_recomputed_canonical_digest_over_the_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameCanonicalRequest": "idempotent_no_effect_projection_replay",
+    "sameIdentityDifferentRequestMaterialTimeOrDigest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse",
+    "immutableHistory": true
+  },
+  "fixedTruthContract": {
+    "labels": "closed_nonreflective_fixed_catalog_copy_only",
+    "internalReadyMeans": "exact_no_effect_material_can_be_presented_for_owner_review_only",
+    "internalReadyNeverMeans": "record_created_notification_sent_staff_alerted_task_created_seen_acknowledged_or_acted",
+    "customerAcknowledgementUnavailableNeverMeans": "queued_composed_sent_delivered_viewed_replied_or_customer_acknowledged",
+    "inquirySourceNeverMeans": "consent_permission_business_availability_response_time_estimate_price_scope_booking_or_customer_intent",
+    "unknownStaleMixedCorrectedUnavailableOrAmbiguousSource": "deny_before_projection"
+  },
+  "deniedCombinations": [
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "cross_tenant_source_snapshot_currentness_evaluation_actor_session_membership_action_unit_authorization_recipient_permission_content_or_channel_retarget",
+    "missing_stale_mixed_corrected_tombstoned_reversed_unavailable_or_ambiguous_inquiry_source_treated_as_current",
+    "unknown_or_substituted_Part4A_trigger_event_kind_source_class_or_action_family",
+    "candidate_free_text_contact_name_email_phone_address_inquiry_transcript_message_status_label_provider_payload_or_outcome",
+    "customer_communication_treated_as_available_from_internal_read_digest_task_owner_approval_or_in_app_permission",
+    "invented_business_hours_response_time_promise_eta_estimate_price_scope_booking_urgency_or_customer_intent",
+    "nonowner_cross_actor_inactive_session_or_membership_part1d_capability_substitution",
+    "external_customer_acknowledgement_template_permission_channel_provider_recipient_or_effect_material_supplied_as_current_authority",
+    "internal_alert_ready_presented_as_record_created_notification_sent_staff_alerted_task_created_seen_acknowledged_or_outcome",
+    "same_semantic_material_under_another_resolution_identity_or_same_identity_with_changed_material_time_or_digest",
+    "runtime_route_UI_scheduler_worker_queue_publisher_consumer_provider_callback_message_delivery_reply_or_effect",
+    "upstream_lead_contact_availability_schedule_estimate_price_scope_booking_accounting_financial_or_money_mutation",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "mountedSchedulerWorkerQueueOrPolicyExecutor": false,
+    "providerAdapterCallbackOrInboundReceiver": false,
+    "customerOrInternalMessageNotificationOrTask": false,
+    "externalEffectOrUpstreamMutation": false,
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "rawContactOrInquiryValues": 0,
+    "inventedAvailabilityPromiseEstimatePriceScopeOrBookingFields": 0,
+    "customerAcknowledgementsCreated": 0,
+    "internalAlertsOrTasksCreated": 0,
+    "recipientMessages": 0,
+    "providerAttempts": 0,
+    "externalEffects": 0,
+    "upstreamOrFinancialMutations": 0,
+    "moneyEffects": 0
+  },
+  "unavailableEvidence": [
+    "accepted customer communication action family business availability response-time promise external template permission channel provider sender credential callback or effect authority",
+    "real inquiry lead recipient customer or staff message acknowledgement alert delivery view reply opt-out response booking estimate price scope or outcome evidence",
+    "mounted inquiry resolver internal alert record notification task queue route UI scheduler worker provider or callback",
+    "private production customer evidence provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent consumer-protection regulatory provider deliverability tracking or security review"
+  ],
+  "laterSliceBoundary": {
+    "part9B": "contact_attempt_and_response_followup_cadence_not_implemented",
+    "part9C": "estimate_quote_followup_not_implemented",
+    "part9D": "customer_reengagement_not_implemented",
+    "parts10Plus": "appointment_work_financial_internal_queue_integrations_analytics_UI_demo_and_release_readiness_remain_planned_unimplemented"
+  }
+}

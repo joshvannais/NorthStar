@@ -317,8 +317,8 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
     const ledger = fs.readFileSync(LEDGER, 'utf8');
     const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–11E are released. Part 11F is the sole implementation candidate.');
-      expect(document).toContain('Parts 12A–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–11F are released. Part 12A is the sole implementation candidate.');
+      expect(document).toContain('Parts 12B–14G remain planned and unimplemented.');
       expect(document).toContain('927313ac-0e60-4552-8130-023fe266d327');
       expect(document).toContain('sha256:95251721696f9cd2afb33c6d07d7fbaf52f1e51600ef9c4e3d35e1da66fb2b6c');
     }

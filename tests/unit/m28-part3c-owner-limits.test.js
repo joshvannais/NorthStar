@@ -775,7 +775,7 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–8D are released. Part 9A is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–9A are released. Part 9B is the sole implementation candidate.');
       expect(document).toContain('56a39854325826982283d78dffed4e039c61335b');
       expect(document).toContain('d88a0fe294619fa982bc1541affc8052031cc406');
       expect(document).toContain('81bc25de-eb77-413e-8745-97882bdd7c09');

@@ -1196,8 +1196,8 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
   test('records Parts 1A–5A released, only Part 5B current and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–8D are released. Part 9A is the sole implementation candidate.');
-    expect(roadmap).toContain('Parts 9B–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–9A are released. Part 9B is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 9C–14G remain planned and unimplemented.');
     for (const identity of [PART2B_HEAD, BASE, PART2B_DEPLOYMENT, PART2B_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -1241,10 +1241,11 @@ describe('Mission 28 Part 2C policy lifecycle', () => {
     expect(rows[29][4]).toBe('**Released**'); expect(rows[30][4]).toBe('**Released**'); expect(rows[31][4]).toBe('**Released**');
     expect(rows[32][4]).toBe('**Released**');
     expect(rows[33][4]).toBe('**Released**');
-    expect(rows[36][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(37).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[36][4]).toBe('**Released**');
+    expect(rows[37][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(38).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(29);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(28);
   });
 
   test('adds no runtime activation, production source, package or migration', () => {

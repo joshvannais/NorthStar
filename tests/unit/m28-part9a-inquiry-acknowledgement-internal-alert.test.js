@@ -347,10 +347,10 @@ describe('Mission 28 Part 9A supported inquiry acknowledgement and internal aler
     const migrations=fs.readdirSync(path.join(ROOT,'migrations')).filter(name=>/^\d+_/.test(name)).sort(); expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql'); expect(migrations.some(name=>name.startsWith('288_'))).toBe(false);
   });
 
-  test('roadmap and ledger record Part8D released, Part9A candidate only and Part9B+ planned', () => {
+  test('roadmap and ledger record Part9A released, Part9B candidate only and Part9C+ planned', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8'); const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
-    for(const document of [roadmap,ledger]) { expect(document).toContain('Parts 1A–8D are released. Part 9A is the sole implementation candidate.'); expect(document).toContain('Parts 9B–14G remain planned and unimplemented.'); expect(document).toContain('f148d5f1-6874-4c2c-afb3-ef423e4e1abb'); expect(document).toContain('sha256:c242868064ed096fed47d23939e424d242932994d8c2c2933e4d17581c0f5b85'); }
-    expect(ledger).toContain('| 36 | 8D | Delivery acknowledgement, revoke/resend/recovery and exact labels | **Released** |'); expect(ledger).toContain('| 37 | 9A | Supported inquiry acknowledgement and internal alert | **Implementation candidate** |');
-    expect((ledger.match(/\*\*Implementation candidate\*\*/g)||[])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(29); expect(markdown).toContain('No migration 288');
+    for(const document of [roadmap,ledger]) { expect(document).toContain('Parts 1A–9A are released. Part 9B is the sole implementation candidate.'); expect(document).toContain('Parts 9C–14G remain planned and unimplemented.'); expect(document).toContain('f148d5f1-6874-4c2c-afb3-ef423e4e1abb'); expect(document).toContain('sha256:c242868064ed096fed47d23939e424d242932994d8c2c2933e4d17581c0f5b85'); }
+    expect(ledger).toContain('| 37 | 9A | Supported inquiry acknowledgement and internal alert | **Released** |'); expect(ledger).toContain('| 38 | 9B | Bounded contact-attempt and response-follow-up cadence | **Implementation candidate** |');
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g)||[])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(28); expect(markdown).toContain('No migration 288');
   });
 });

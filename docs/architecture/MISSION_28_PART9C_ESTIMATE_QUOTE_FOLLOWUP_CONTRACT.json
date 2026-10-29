@@ -1,0 +1,164 @@
+{
+  "contractVersion": "mission28.part9c.estimate-quote-followup.v1",
+  "authority": {
+    "mission": 28,
+    "part": "9C",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "94d3d0494e975b615c8a7ff0b1a0dd0c9c7772c3",
+    "baselineTree": "7172b89771e1f6157663b3af63f51ac06de5f745",
+    "scope": "exact_current_estimate_quote_followup_state_resolution_and_owner_readable_no_effect_projection_only",
+    "recipientMessageInvitationProviderOrEffectAuthorityGranted": false,
+    "termsPriceScopeOrUpstreamMutationAuthorityGranted": false,
+    "part9DOrLaterAuthorityGranted": false
+  },
+  "part9BRelease": {
+    "acceptedSourceHead": "a964822bdabb3835d4dfcdd9760f89ac16af8813",
+    "acceptedTree": "7172b89771e1f6157663b3af63f51ac06de5f745",
+    "independentAcceptance": "accepted_exact_source_head",
+    "pullRequest": 586,
+    "mergedMain": "94d3d0494e975b615c8a7ff0b1a0dd0c9c7772c3",
+    "deployment": "527aa9cb-cadb-444c-a657-55e630dbeb62",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "979c5bcd-fa3a-486b-b837-c220d992ef84",
+    "imageSha256": "efc0f8a03b7f6004dbc1ab0759a670a43633e44e9938fdbe5f64fb36d5e401b8",
+    "productionMigration": "283_of_283_through_287_no_288",
+    "health": ["startup_canonical_ready", "health_200", "root_200", "dashboard_200", "demo_200", "paid_demo_91314_byte_sha256_ab65083c5dd9bac308798171df2e65f711e89df9a6864ea15b569bf9f64ab757_parity", "live_main_demo_dashboard_blob_b77d2c7e915aa6ebd37d03d4c9a29651b9a4f5ca"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF"},
+    {"path": "docs/architecture/MISSION_28_PART8A_ESTIMATE_QUOTE_SENDING_CONTRACT.json", "normalizedLfSha256": "0D225D46B156B0C8774C6CDE1AD6640C0885EB6349D570160CDDB3A499EC70C4"},
+    {"path": "docs/architecture/MISSION_28_PART9B_CONTACT_FOLLOWUP_CADENCE_CONTRACT.json", "normalizedLfSha256": "4FE477863980C9829D24900D93AE6A0071EE0FF1C541697257ED234337D76F15"},
+    {"path": "migrations/078_canonical_customer_estimate_versions.sql", "normalizedLfSha256": "802651BCAC94B8CE2BFA957DA61783FA6285FE9DD195A5DEAC5622830BC03016"},
+    {"path": "migrations/080_customer_estimate_delivery.sql", "normalizedLfSha256": "803BC5205DC4EA3F0AC15ED3B05D50F2A1BA973924F406EB2FFD640D518748EE"},
+    {"path": "migrations/287_canonical_automation_estimate_quote_resolution_v1.sql", "normalizedLfSha256": "7DABF7BCCB82D02727C48207034F75DF5ABC17F762436EE2D9775B5932D68F33"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "mission24EstimateIdPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[45][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateStateEventCurrentnessCustomerActionInvitationTermsPriceScopeUrgencySilenceOrOutputNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "maximumResolutionObservationAgeSeconds": 300,
+    "maximumCanonicalRequestBytes": 65536,
+    "unboundedOrMissingStateCurrentnessExpirationOrFollowupFallback": "deny"
+  },
+  "resolutionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "followupResolutionId", "estimateBinding", "sourceStateBinding", "actorAuthorityBinding", "part9BBoundaryBinding", "requestedStateId", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "estimateBindingExactFields": ["estimateId", "customerEstimateVersionId", "revision", "customerEstimateVersionDigest", "documentDigest", "commercialApprovalId", "commercialApprovalDigest", "termsId", "termsDigest", "decisionId", "decisionDigest"],
+    "sourceStateBindingExactFields": ["tenantId", "estimateId", "customerEstimateVersionId", "customerEstimateVersionDigest", "documentDigest", "stateId", "availabilityState", "triggerId", "eventKind", "sourceState", "eventTime", "eventIdentityId", "eventIdentityDigest", "deliveryLinkId", "deliveryLinkDigest", "sourceRevision", "snapshotId", "snapshotDigest", "recordIdentityDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState", "observedAt"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"],
+    "part9BBoundaryBindingExactFields": ["contractDigest", "externalChannelState", "cadenceDisposition", "silenceState"],
+    "outputFieldsCreatedOnlyByTrustedProjection": ["followupResolutionId", "tenantId", "estimateId", "customerEstimateVersionId", "requestedStateId", "resolvedStateId", "sourceAvailabilityState", "resultState", "reasonCode", "labelId", "fixedLabel", "supportedCustomerActionId", "customerActionInvitationState", "silenceState", "expirationState", "termsExtensionState", "urgencyState", "messageCreated", "customerActionInvitationCreated", "providerAttemptCreated", "externalEffectCreated", "priceMutated", "scopeMutated", "termsMutated"]
+  },
+  "stateCatalog": [
+    {"stateId": "sent", "currentSourceAvailability": "unavailable_no_accepted_exact_sent_event", "triggerId": null, "eventKind": null, "sourceState": null, "terminal": false, "supportedCustomerActionId": "review_exact_current_estimate_quote", "fixedLabel": "Estimate follow-up unavailable — sent state not authenticated"},
+    {"stateId": "expiring", "currentSourceAvailability": "unavailable_no_accepted_exact_expiring_classification", "triggerId": null, "eventKind": null, "sourceState": null, "terminal": false, "supportedCustomerActionId": "review_before_existing_expiration", "fixedLabel": "Estimate follow-up unavailable — expiring state not authenticated"},
+    {"stateId": "expired", "currentSourceAvailability": "accepted_upstream_fact_only", "triggerId": "m24.customer_quote_response_state", "eventKind": "delivery_link_expired", "sourceState": "expired", "terminal": true, "supportedCustomerActionId": "request_owner_review_for_current_quote", "fixedLabel": "Estimate expired — owner review required"},
+    {"stateId": "accepted", "currentSourceAvailability": "accepted_upstream_fact_only", "triggerId": "m24.customer_quote_response_state", "eventKind": "customer_accepted", "sourceState": "accepted", "terminal": true, "supportedCustomerActionId": "none_terminal_acceptance_recorded", "fixedLabel": "Estimate accepted — follow-up stopped"},
+    {"stateId": "declined", "currentSourceAvailability": "unavailable_no_accepted_exact_decline_event", "triggerId": null, "eventKind": null, "sourceState": null, "terminal": true, "supportedCustomerActionId": "none_terminal_decline_if_later_authenticated", "fixedLabel": "Estimate follow-up unavailable — decline state not authenticated"},
+    {"stateId": "question", "currentSourceAvailability": "accepted_upstream_fact_only", "triggerId": "m24.customer_quote_response_state", "eventKind": "customer_questioned", "sourceState": "question", "terminal": false, "supportedCustomerActionId": "owner_review_question_before_any_reply", "fixedLabel": "Estimate question — owner review required"},
+    {"stateId": "revision", "currentSourceAvailability": "accepted_upstream_fact_only", "triggerId": "m24.issued_quote_version", "eventKind": "quote_version_issued", "sourceState": "issued", "terminal": false, "supportedCustomerActionId": "review_exact_current_revised_version", "fixedLabel": "Estimate revision ready for owner review"}
+  ],
+  "stateAuthorityContract": {
+    "closedOrder": ["sent", "expiring", "expired", "accepted", "declined", "question", "revision"],
+    "supportedCurrentSourceStates": ["expired", "accepted", "question", "revision"],
+    "unavailableCurrentSourceStates": ["sent", "expiring", "declined"],
+    "sourceResolution": "one separately trusted exact Part4A trigger row and Part4B snapshot with Part4C latest-exact-current resolution bound to the same tenant estimate issued version revision document and source-set digests",
+    "sent": "unavailable because no accepted Mission28 sent event or provider delivery fact exists; delivery request queued accepted or legacy link creation is not sent evidence",
+    "expiring": "unavailable because no accepted Part4A event kind or bounded current-source classification proves expiring; no threshold is invented from candidate time",
+    "expired": "only m24.customer_quote_response_state delivery_link_expired at the exact source-owned deliveryLink.expiresAt",
+    "accepted": "only m24.customer_quote_response_state customer_accepted with exact immutable accepted delivery event",
+    "declined": "unavailable because Mission24 has no accepted decline event; silence expiry revoke correction or missing response is never decline",
+    "question": "only m24.customer_quote_response_state customer_questioned with exact immutable question event identity; question content is not copied",
+    "revision": "only m24.issued_quote_version quote_version_issued for the exact latest current issued version; revision never changes price scope or terms",
+    "legacyBoundary": "Mission24 source facts may be referenced only as exact upstream fact snapshots; legacy token link contact value question text acceptance body or response payload is never copied into Mission28 or treated as action authority",
+    "silenceNeverMeans": ["sent", "expiring", "expired", "accepted", "declined", "question", "revision", "permission", "consent", "customer_action"]
+  },
+  "followupContract": {
+    "customerActionInvitation": "catalog identifies the only semantically supported action, but current launch creates no invitation because Part1D Part7B Part8A and Part9B retain external channel permission provider and effect authority as unavailable",
+    "expiration": "expired may preserve the exact source-owned expiry instant; expiring remains unavailable and no term expiry extension reopening reset replacement or urgency is inferred",
+    "terminalStates": "accepted stops follow-up; authenticated declined would stop follow-up if a later accepted source exists; expired does not silently extend or reopen terms",
+    "question": "question creates only an owner-readable source-state label; no automated answer acknowledgement recipient correction or customer reply is created",
+    "revision": "revision binds the exact latest issued version and can identify review of that version only; it cannot alter commercial approval terms price scope or prior history",
+    "silence": "absence of an accepted response is no response evidence and never acceptance decline urgency consent or permission",
+    "cadence": "Part9B remains no-effect and external-channel-unavailable; Part9C cannot reinterpret its stopped owner-review projection as permission to contact",
+    "noEffect": true
+  },
+  "decisionContract": {
+    "acceptedSourceResultStates": {
+      "expired": "owner_review_required_no_effect",
+      "accepted": "terminal_followup_stopped_no_effect",
+      "question": "owner_review_required_no_effect",
+      "revision": "owner_review_required_no_effect"
+    },
+    "unavailableSourceResultState": "followup_unavailable_no_accepted_source_no_effect",
+    "customerActionInvitationState": "unavailable_no_accepted_external_channel_template_or_provider",
+    "silenceState": "not_evidence",
+    "termsExtensionState": "forbidden_none",
+    "urgencyState": "forbidden_none",
+    "fixedLabels": "exact_stateCatalog_labels_only_no_free_text_or_reflection"
+  },
+  "digestAndReplayContract": {
+    "materialDigest": "server_recomputed_over_all_trusted_material_except_followupResolutionId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_exact_estimate_version_source_state_actor_and_Part9B_boundary_material_excluding_followupResolutionId_evaluatedAt_and_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_projection_replay_no_new_record_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse",
+    "immutableHistory": true
+  },
+  "deniedCombinations": [
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "cross_tenant_estimate_version_document_approval_terms_decision_source_event_actor_session_membership_or_idempotency_retarget",
+    "missing_stale_mixed_corrected_tombstoned_reversed_superseded_unavailable_or_ambiguous_source_treated_as_current",
+    "sent_expiring_or_declined_claimed_without_an_accepted_exact_source_event_or_classification",
+    "event_kind_trigger_state_identity_revision_digest_time_or_source_selector_substituted_or_ambiguous",
+    "legacy_link_token_contact_value_question_text_acceptance_body_or_response_payload_copied_or_used_as_action_authority",
+    "delivery_request_provider_acceptance_link_creation_queue_state_or_silence_treated_as_sent_delivery_acceptance_decline_question_or_customer_action",
+    "expiration_extended_reset_reopened_replaced_or_used_to_fabricate_urgency",
+    "price_scope_terms_approval_decision_document_or_upstream_fact_mutation",
+    "candidate_free_text_name_email_phone_address_question_message_urgency_label_provider_status_or_customer_outcome",
+    "Part9B_stopped_no_effect_projection_reinterpreted_as_contact_permission_cadence_or_send_authority",
+    "runtime_route_UI_scheduler_worker_queue_publisher_consumer_provider_callback_message_delivery_invitation_or_effect",
+    "real_recipient_message_provider_attempt_delivery_response_outcome_accounting_money_legal_or_founder_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "mountedSchedulerWorkerQueueOrPolicyExecutor": false,
+    "providerAdapterCallbackOrInboundReceiver": false,
+    "customerOrInternalMessageNotificationTaskInvitationOrWorklistRecord": false,
+    "externalEffectOrUpstreamMutation": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "rawContactQuestionResponseMessageOrDocumentValues": 0,
+    "customerActionInvitationsCreated": 0,
+    "ownerWorklistRecordsOrTasksCreated": 0,
+    "recipientMessages": 0,
+    "providerAttempts": 0,
+    "externalEffects": 0,
+    "priceScopeTermsOrUpstreamMutations": 0,
+    "accountingOrMoneyEffects": 0
+  },
+  "unavailableEvidence": [
+    "accepted sent expiring or declined source authority and authenticated external customer action invitation",
+    "accepted external customer email SMS secure-link native-handoff channel sender template provider credential callback delivery or effect authority",
+    "real recipient message invitation access grant provider delivery open reply acceptance decline question revision correction outcome or customer response evidence",
+    "private production customer data provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent electronic-signature consumer-protection regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part9D": "explicitly_reviewed_customer_reengagement_boundary_not_implemented",
+    "part10Plus": "appointment_dispatch_work_financial_collections_integrations_analytics_UI_demo_and_release_readiness_remain_planned_unimplemented"
+  }
+}

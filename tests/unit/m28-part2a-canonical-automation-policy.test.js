@@ -406,8 +406,8 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
   test('records Parts 1A–5A released, Part 5B as the sole candidate, and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–10B are released. Part 10C is the sole implementation candidate.');
-    expect(roadmap).toContain('Parts 10D–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–10C are released. Part 10D is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 11A–14G remain planned and unimplemented.');
     for (const identity of [PART1D_HEAD, BASE, PART1D_DEPLOYMENT, PART1D_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -461,10 +461,10 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
     expect(rows[39][4]).toBe('**Released**');
     expect(rows[40][4]).toBe('**Released**');
     expect(rows[41][4]).toBe('**Released**');
-    expect(rows[42][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(43).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[42][4]).toBe('**Released**'); expect(rows[43][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(44).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(23);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(22);
   });
 
   test('does not activate policy runtime or add a schema migration', () => {

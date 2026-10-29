@@ -12,12 +12,12 @@ Part 11A never collapses collection eligibility into one status. One candidate r
 
 1. immutable issued, customer-safe invoice version, excluding draft, void, replaced, superseded, or unknown documents;
 2. separate exact currency and positive outstanding balance, excluding zero, missing, stale, cross-version, and pending or uncertain tender;
-3. separate due and aging projection, including exact due instant, projection revision/digest, aging bucket, and days past due;
+3. separate due and aging projection, including exact issued due date, trusted tenant-business as-of date, projection revision/digest, canonical Mission 27 Part 10A aging bucket, and days past due;
 4. separate exact delivery evidence; unknown, unavailable, failed, or recalled delivery is ineligible;
 5. separate dispute, refund, and post-issue correction states;
 6. separate settlement and offline-tender states, including clearance-unknown, returned, and reversed evidence;
 7. separate accounting state and any blocking adjustment; and
-8. separate current customer relationship and contactability state.
+8. separate current reviewed contactability evidence from the same exact Mission 27 Part 10A receivable projection.
 
 Every axis is immutable trusted source evidence, not permission. Aging is evidence, not permission. Delivery or communication evidence never proves payment, cash, revenue, accounting, or collection success. Settlement, payment, allocation, balance, accounting, and collection outcomes remain distinct.
 
@@ -25,7 +25,11 @@ The complete ordered axis material is bound to one exact Part 4B source set and 
 
 ## Deterministic eligibility boundary
 
-The closed precedence is source availability, invoice, balance/tender, due/aging, delivery, dispute/refund/correction, settlement/offline tender, accounting, customer state, then owner-review eligibility. All results use fixed nonreflective reason codes and labels. Even the final result is only `eligible_for_owner_collection_review_only`; it does not create a review record, worklist, task, reminder, message, recipient, channel, provider call, fee, write-off, charge, refund, allocation, accounting entry, balance change, external effect, upstream mutation, or money movement.
+The exact Mission 27 Part 10A aging vocabulary is `not_due`, `due_today`, `overdue_1_30`, `overdue_31_60`, `overdue_61_90`, and `overdue_91_plus`. Each exact-current coherent phase may reach only the Part 11A owner-review eligibility grammar so that Part 11B can later decide pre-due, due, or overdue policy. Aging is evidence, never permission. Missing, unknown, stale, or bucket/date/day-incoherent evidence fails closed.
+
+The exact Mission 27 Part 10A contactability vocabulary is `contactable`, `not_contactable`, and `unknown`. Only exact-current `contactable` evidence may reach the owner-review grammar; it still does not authorize communication, while `not_contactable` and `unknown` fail closed.
+
+The closed precedence is source availability, invoice, balance/tender, due/aging coherence, delivery, dispute/refund/correction, settlement/offline tender, accounting, customer contactability, then owner-review eligibility. All results use fixed nonreflective reason codes and labels. Even the final result is only `eligible_for_owner_collection_review_only`; it does not create a review record, worklist, task, reminder, message, recipient, channel, provider call, fee, write-off, charge, refund, allocation, accounting entry, balance change, external effect, upstream mutation, or money movement.
 
 The accepted Mission 27 sources do not currently supply one mounted complete issued-invoice, delivery, accounting, customer-state, and receivable-population resolver. Consequently the current live result is fixed `ineligible_source_authority_unavailable`. The executable grammar describes what a separately trusted future resolver would have to prove; candidate material cannot create that resolver or establish its own authority.
 

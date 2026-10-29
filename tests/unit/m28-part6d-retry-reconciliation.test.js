@@ -180,8 +180,8 @@ describe('Mission 28 Part 6D bounded retry and reconciliation', () => {
   test('records Part 6D released, only Part 6E candidate, migration279/no280 and later slices planned', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
       const document = fs.readFileSync(path.join(ROOT, relative), 'utf8');
-      expect(document).toContain('Parts 1A–9A are released. Part 9B is the sole implementation candidate.');
-      expect(document).toContain('Parts 9C–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–9B are released. Part 9C is the sole implementation candidate.');
+      expect(document).toContain('Parts 9D–14G remain planned and unimplemented.');
       expect(document).toContain('3d7689ff-79cc-457a-95f7-542acbc20409');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');

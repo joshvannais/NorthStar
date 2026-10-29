@@ -433,10 +433,10 @@ describe('Mission 28 Part 9B bounded contact follow-up cadence', () => {
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql'); expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
   });
 
-  test('roadmap and ledger record Part9A released, Part9B candidate only and Part9C+ planned', () => {
+  test('roadmap and ledger preserve Part9A while recording Part9B released and Part9C candidate', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
-    for (const document of [roadmap, ledger]) { expect(document).toContain('Parts 1A–9A are released. Part 9B is the sole implementation candidate.'); expect(document).toContain('Parts 9C–14G remain planned and unimplemented.'); expect(document).toContain('f5d52e11-8e65-4a69-946e-801198360f42'); expect(document).toContain('sha256:e22da885e7999eb7843a23cceaf9c3ce38aed3a36d104b552f5758abf103053c'); }
-    expect(ledger).toContain('| 37 | 9A | Supported inquiry acknowledgement and internal alert | **Released** |'); expect(ledger).toContain('| 38 | 9B | Bounded contact-attempt and response-follow-up cadence | **Implementation candidate** |');
-    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(28); expect(markdown).toContain('No migration 288');
+    for (const document of [roadmap, ledger]) { expect(document).toContain('Parts 1A–9B are released. Part 9C is the sole implementation candidate.'); expect(document).toContain('Parts 9D–14G remain planned and unimplemented.'); expect(document).toContain('f5d52e11-8e65-4a69-946e-801198360f42'); expect(document).toContain('sha256:e22da885e7999eb7843a23cceaf9c3ce38aed3a36d104b552f5758abf103053c'); }
+    expect(ledger).toContain('| 37 | 9A | Supported inquiry acknowledgement and internal alert | **Released** |'); expect(ledger).toContain('| 38 | 9B | Bounded contact-attempt and response-follow-up cadence | **Released** |'); expect(ledger).toContain('| 39 | 9C | Exact-current estimate/quote follow-up | **Implementation candidate** |');
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(27); expect(markdown).toContain('No migration 288');
   });
 });

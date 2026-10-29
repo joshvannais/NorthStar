@@ -1,0 +1,203 @@
+{
+  "contractVersion": "mission28.part11e.owner-worklist-legal-boundary.v1",
+  "authority": {
+    "mission": 28,
+    "part": "11E",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "fdc05855e76ccb9a430114f99522fe1b4648ca62",
+    "baselineTree": "8d3820efd3c2c37e5ac89a603ce9481bbd79bba1",
+    "frozenSourceSha256": "DDBA5CA7523A1684330E136313F4416584D142A63167310EEABEC1EBFBB010B4",
+    "scope": "tenant_owner_readable_no_effect_graduated_late_stage_review_projection_and_prohibited_legal_escalation_boundary_only",
+    "worklistRecordOrTaskCreated": false,
+    "approvalRequestCallManualTaskOrFinalNoticeCreated": false,
+    "recipientMessageProviderOrExternalEffectGranted": false,
+    "feeWriteoffFinancialAccountingBalanceOrMoneyMutationGranted": false,
+    "legalEscalationConclusionOrProfessionalReviewGranted": false,
+    "part11FOrLaterAuthorityGranted": false
+  },
+  "part11DRelease": {
+    "acceptedSourceHead": "5204462d60b8dba20a8148152c1ddffb95da2015",
+    "acceptedTree": "8d3820efd3c2c37e5ac89a603ce9481bbd79bba1",
+    "freshAudit": "P0_P1_P2_P3_zero",
+    "freshAuditEvidence": "exact_Node_22.23.3; focused_13_of_13; Part11A_through_Part11D_60_of_60; cumulative_48_suites_662_tests; migration_history_2_suites_40_tests; syntax_48; JSON_47; migrations_283_through_287_no_288; protected_0; clean_remote_exact",
+    "pullRequest": 596,
+    "mergedAt": "2026-10-29T18:10:58Z",
+    "mergedMain": "fdc05855e76ccb9a430114f99522fe1b4648ca62",
+    "deploymentIdentity": "21b71cbc-c331-406a-8374-ff5ba98709c6_SUCCESS",
+    "imageIdentity": "sha256:734fa9842bcedba20499887f988964f59e6963cab9edd707985d2c40242a0a1e",
+    "runningInstance": "7ee4f747-38c2-4baa-a024-1d7db6e7c218",
+    "migrationEvidence": "source_283_through_287_no_288; direct_applied_history_not_requeried_and_unclaimed",
+    "healthEvidence": "canonical_startup_ready; api_health_root_dashboard_demo_HTTP_200; database_and_canonicalPersistence_healthy; dashboard_demo_exact_91681_byte_sha256_b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369_parity"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF"},
+    {"path": "docs/architecture/MISSION_28_PART9B_CONTACT_FOLLOWUP_CADENCE_CONTRACT.json", "normalizedLfSha256": "4FE477863980C9829D24900D93AE6A0071EE0FF1C541697257ED234337D76F15"},
+    {"path": "docs/architecture/MISSION_28_PART11A_COLLECTION_ELIGIBILITY_CONTRACT.json", "normalizedLfSha256": "5ADA756AB4C2C94332DE0DAD01E721DCD6F5548B3829D7D1A27F1AB5ACB158FA"},
+    {"path": "docs/architecture/MISSION_28_PART11B_REMINDER_POLICY_CONTRACT.json", "normalizedLfSha256": "B4E03ADDA4AF59229BDE852A04C56360967DC598A1D75976F4D17546CAA0FCA2"},
+    {"path": "docs/architecture/MISSION_28_PART11C_REMINDER_MATERIAL_CONTRACT.json", "normalizedLfSha256": "0066B55B7403087837480988D6229B394C489024EB5CC1C5946709F83DF2125C"},
+    {"path": "docs/architecture/MISSION_28_PART11D_SUPPRESSION_REBUILD_CONTRACT.json", "normalizedLfSha256": "07E3E33E63FF29AF4F995E388DE625404E5CFE5DD88CF51D3C19565B350FD3A9"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateWorklistLevelSourceRoleLegalOrEscalationMaterialNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumCanonicalRequestBytes": 131072,
+    "minimumDaysPastDue": 1,
+    "maximumDaysPastDue": 36500,
+    "missingUnknownStaleMixedCorrectedAmbiguousUnsupportedConflictingOrUnresolvedFallback": "owner_worklist_unavailable_no_effect"
+  },
+  "projectionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "projectionId", "part11AEligibilityBinding", "part11BPolicyBinding", "part11CMaterialBinding", "part11DChangeResolutionBinding", "dueAgingBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "part11AEligibilityBindingExactFields": ["tenantId", "resolutionId", "materialDigest", "resultState", "reasonCode", "issuedInvoiceId", "issuedVersionDigest", "customerId", "sourceSetId", "sourceSetDigest", "axisMaterialDigest", "headTransitionId", "headTransitionDigest", "headSequence", "recordedCurrentnessState"],
+    "part11BPolicyBindingExactFields": ["tenantId", "projectionId", "materialDigest", "resultState", "reasonCode", "policyId", "policyVersion", "policyCanonicalDigest", "phaseId", "issuedInvoiceId", "issuedVersionDigest", "recipientResolutionDigest", "channelId", "permissionResultState", "approvalState", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "recordedCurrentnessState"],
+    "part11CMaterialBindingExactFields": ["tenantId", "projectionId", "materialDigest", "resultState", "reasonCode", "issuedInvoiceId", "issuedVersionDigest", "customerId", "currency", "amountDueMinorUnits", "policyId", "policyVersion", "phaseId", "destinationState", "explanationId", "recipientResolutionDigest", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "recordedCurrentnessState"],
+    "part11DChangeResolutionBindingExactFields": ["tenantId", "resolutionState", "decisionId", "materialDigest", "idempotencyKeyDigest", "requestDigest", "selectedKind", "selectedAction", "reasonCode", "labelId", "priorSourceSetId", "priorSourceSetDigest", "priorHeadTransitionId", "priorHeadTransitionDigest", "priorHeadSequence", "currentSourceSetId", "currentSourceSetDigest", "currentHeadTransitionId", "currentHeadTransitionDigest", "currentHeadSequence", "clearResolutionId", "clearResolutionDigest", "currentnessState", "observedAt"],
+    "dueAgingBindingExactFields": ["tenantId", "issuedInvoiceId", "issuedVersionDigest", "projectionId", "projectionRevision", "projectionDigest", "issuedDueDate", "asOfBusinessDate", "agingBucket", "daysPastDue", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "currentnessState", "observedAt"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest", "recordScope"],
+    "outputFieldsCreatedOnlyByTrustedProjection": ["projectionId", "tenantId", "issuedInvoiceId", "issuedVersionDigest", "policyId", "policyVersion", "phaseId", "agingBucket", "selectedLevelId", "selectedSourceState", "currentHeadTransitionId", "currentHeadTransitionDigest", "currentHeadSequence", "evaluatedAt", "resultState", "reasonCode", "labelId", "fixedLabel", "ownerReadableProjectionOnly", "worklistRecordCreated", "taskCreated", "approvalRequestCreated", "manualCallCreated", "finalNoticeCreated", "messageCreated", "providerAttemptCreated", "feeCreated", "writeoffCreated", "legalActionCreated", "financialMutationCreated", "accountingMutationCreated", "balanceMutationCreated", "externalEffectCreated", "upstreamMutationCreated", "moneyEffectCreated"]
+  },
+  "sourceBindingContract": {
+    "acceptedPart11AResult": "eligible_for_owner_collection_review_only",
+    "acceptedPart11AReason": "exact_current_collection_review_eligible",
+    "acceptedPart11BResult": "reminder_policy_definition_valid_no_effect_external_authority_unavailable",
+    "acceptedPart11BReason": "financial_reminder_source_permission_approval_schedule_and_effect_authority_unavailable",
+    "acceptedPart11CResult": "reminder_material_unavailable_no_secure_destination_or_external_authority",
+    "acceptedPart11CReason": "secure_payment_destination_permission_approval_schedule_and_effect_authority_unavailable",
+    "acceptedPart11CDestinationState": "unavailable_no_accepted_secure_invoice_payment_destination",
+    "acceptedPart11CExplanationId": "current_invoice_balance_no_effect_v1",
+    "part11DResolutionStates": ["suppress_exact_current", "rebuild_exact_current", "clear_exact_current_no_trigger"],
+    "recordedAuthorityRule": "Part11A_Part11B_and_Part11C_bind_the_same_tenant_invoice_version_customer_policy_recipient_source_set_and_authoritative_head_that_created_the_review_material",
+    "changeResolutionRule": "suppress_or_rebuild_binds_one_exact_Part11D_decision_and_its_current_authoritative_head; clear_requires_a_separately_trusted_exact_current_absence_resolution_and_leaves_the_head_unchanged",
+    "agingRule": "one_separately_trusted_Mission27_due_aging_projection_binds_the_current_source_head; overdue_bucket_and_daysPastDue_are_exactly_coherent; event_or_observation_time_never_establishes_precedence",
+    "actorRule": "server_resolved_exact_active_actor_session_and_membership_subjects_equal_one_tenant_owner_with_the_released_Part3A_automation_view_capability_narrowed_to_this_exact_projection",
+    "laterSourceOrAuthorityInvalidation": "any_new_source_head_change_resolution_aging_projection_policy_recipient_actor_membership_or_currentness_resolution_invalidates_alias_clone_or_replay_reuse",
+    "eligibilityAgingSuppressionCommunicationOrWorklistEvidenceNeverCreatesRecipientChannelProviderDeliveryPaymentSettlementAccountingCollectionLegalOrEffectAuthority": true
+  },
+  "graduatedReviewCatalog": [
+    {"precedence": 1, "levelId": "pause_review", "sourceState": "suppress_exact_current", "allowedPhaseIds": ["pre_due", "due_today", "overdue"], "allowedAgingBuckets": ["not_due", "due_today", "overdue_1_30", "overdue_31_60", "overdue_61_90", "overdue_91_plus"], "resultState": "owner_pause_review_no_effect", "reasonCode": "exact_current_suppression_requires_owner_review", "labelId": "owner_review_suppressed", "fixedLabel": "Owner review — reminder remains suppressed"},
+    {"precedence": 2, "levelId": "rebuild_review", "sourceState": "rebuild_exact_current", "allowedPhaseIds": ["pre_due", "due_today", "overdue"], "allowedAgingBuckets": ["not_due", "due_today", "overdue_1_30", "overdue_31_60", "overdue_61_90", "overdue_91_plus"], "resultState": "owner_rebuild_review_no_effect", "reasonCode": "exact_current_source_change_requires_rebuild_review", "labelId": "owner_review_rebuild", "fixedLabel": "Owner review — reminder material must be rebuilt"},
+    {"precedence": 3, "levelId": "approval_request_review", "sourceState": "clear_exact_current_no_trigger", "allowedPhaseIds": ["overdue"], "allowedAgingBuckets": ["overdue_1_30"], "resultState": "owner_approval_request_review_no_effect", "reasonCode": "supported_late_stage_requires_owner_approval_review", "labelId": "owner_review_approval", "fixedLabel": "Owner review — approval is required before any reminder action"},
+    {"precedence": 4, "levelId": "manual_contact_review", "sourceState": "clear_exact_current_no_trigger", "allowedPhaseIds": ["overdue"], "allowedAgingBuckets": ["overdue_31_60"], "resultState": "owner_manual_contact_review_no_effect", "reasonCode": "supported_late_stage_allows_manual_contact_review_only", "labelId": "owner_review_manual_contact", "fixedLabel": "Owner review — manual contact may be considered"},
+    {"precedence": 5, "levelId": "final_supported_notice_review", "sourceState": "clear_exact_current_no_trigger", "allowedPhaseIds": ["overdue"], "allowedAgingBuckets": ["overdue_61_90", "overdue_91_plus"], "resultState": "owner_final_supported_notice_review_no_effect", "reasonCode": "supported_late_stage_allows_final_notice_review_only", "labelId": "owner_review_final_notice", "fixedLabel": "Owner review — a final supported notice may be considered"}
+  ],
+  "graduationAndPrecedenceContract": {
+    "reductionFirst": "exact_current_Part11D_suppress_or_rebuild_resolution_always_controls_before_late_stage_graduation",
+    "lateStageOnly": "clear_exact_current_no_trigger_can_select_only_an_overdue_bucket; pre_due_and_due_today_create_no_Part11E_worklist_projection",
+    "bucketMapping": "overdue_1_30_to_approval_request_review; overdue_31_60_to_manual_contact_review; overdue_61_90_or_overdue_91_plus_to_final_supported_notice_review",
+    "reviewOnly": "approval_request_call_manual_task_and_final_supported_notice_are_fixed_owner_review_labels_only_not_records_tasks_messages_instructions_or_effects",
+    "noAutomaticEscalation": true
+  },
+  "prohibitedEscalationCatalog": [
+    "external_collection_agency",
+    "legal_threat",
+    "credit_reporting",
+    "lien",
+    "repossession",
+    "financing",
+    "unsupported_fee",
+    "write_off",
+    "legal_conclusion"
+  ],
+  "prohibitedBoundary": {
+    "catalogStatus": "unavailable_without_separate_authority_and_professional_review",
+    "candidateCannotRequestModelPreviewRecommendScheduleCreatePersistSendOrClaimAnyCatalogItem": true,
+    "noThreatUrgencyDeadlineFeeConsequenceAgencyCourtLawyerCreditReportLienRepossessionFinancingWriteoffOrLegalAdviceText": true,
+    "separateProfessionalReviewStillUnavailable": true
+  },
+  "fixedUnavailableDecision": {
+    "resultState": "owner_worklist_resolution_unavailable_no_mounted_authority",
+    "reasonCode": "complete_current_Part11A_through_Part11D_and_late_stage_resolver_unavailable",
+    "labelId": "owner_worklist_unavailable",
+    "fixedLabel": "Owner worklist unavailable — complete current evidence is not available",
+    "neverMeans": "worklist_or_task_created_approval_requested_call_or_notice_created_message_sent_provider_called_payment_collected_financial_or_legal_action_taken_or_outcome_proven"
+  },
+  "digestAndReplayContract": {
+    "canonicalizationRule": "UTF8_JSON_with_lexicographically_sorted_object_keys_and_array_order_preserved",
+    "materialDigest": "server_recomputed_over_all_trusted_projection_material_except_projectionId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_exact_Part11A_Part11B_Part11C_Part11D_or_clear_resolution_due_aging_source_head_policy_recipient_and_actor_material_excluding_projectionId_evaluatedAt_and_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_projection_replay_no_record_task_message_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse"
+  },
+  "currentAvailability": {
+    "completeMountedPart11AThroughPart11DResolverAvailable": false,
+    "exactClearNoTriggerResolutionAvailable": false,
+    "ownerWorklistRecordOrTaskRuntimeAvailable": false,
+    "approvalRequestCallManualTaskOrFinalNoticeRuntimeAvailable": false,
+    "externalRecipientChannelProviderOrEffectAuthorityAvailable": false,
+    "legalOrExternalEscalationAuthorityAvailable": false,
+    "currentLiveResult": "owner_worklist_resolution_unavailable_no_mounted_authority",
+    "ownerReadableNoEffectGrammarDefined": true
+  },
+  "deniedCombinations": [
+    "missing_unknown_stale_mixed_ambiguous_unsupported_conflicting_corrected_or_unresolved_source_change_aging_role_or_currentness_evidence",
+    "cross_tenant_cross_actor_cross_session_cross_membership_cross_customer_cross_invoice_cross_version_cross_policy_cross_recipient_cross_source_lineage_or_cross_head_graft",
+    "suppression_or_rebuild_ignored_by_late_stage_bucket_or_clear_resolution_that_changes_the_source_head",
+    "pre_due_due_today_unknown_or_incoherent_bucket_used_to_create_a_late_stage_projection",
+    "skipped_reused_regressed_or_nonpredecessor_source_head_change_resolution_or_aging_revision",
+    "event_or_observation_time_used_to_override_source_head_change_resolution_or_fixed_precedence",
+    "candidate_supplied_clear_suppression_rebuild_eligibility_policy_material_actor_capability_or_aging_authority",
+    "admin_member_viewer_or_cross_actor_session_membership_substitution",
+    "free_text_customer_name_email_phone_address_invoice_number_amount_note_message_threat_fee_deadline_urgency_legal_or_provider_payload",
+    "external_collection_agency_legal_threat_credit_reporting_lien_repossession_financing_unsupported_fee_writeoff_or_legal_conclusion_operation",
+    "communication_worklist_or_collection_evidence_treated_as_payment_cash_revenue_settlement_accounting_collection_success_or_legal_outcome",
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "worklist_task_approval_request_call_notice_schedule_worker_queue_provider_callback_message_delivery_or_external_effect_created",
+    "invoice_balance_payment_refund_credit_fee_writeoff_accounting_upstream_or_money_mutation",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "worklistRecordOrTaskCreated": false,
+    "mountedResolverAvailable": false,
+    "schedulerWorkerQueue": false,
+    "recipientChannelProviderCallbackOrMessage": false,
+    "financialAccountingBalanceOrUpstreamMutation": false,
+    "legalExternalEscalationOrMoneyMovement": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "worklistRecordsCreated": 0,
+    "tasksCreated": 0,
+    "approvalRequestsCreated": 0,
+    "manualCallsCreated": 0,
+    "finalNoticesCreated": 0,
+    "messagesCreated": 0,
+    "providerAttemptsCreated": 0,
+    "feesCreated": 0,
+    "writeoffsCreated": 0,
+    "legalActionsCreated": 0,
+    "financialMutationsCreated": 0,
+    "accountingMutationsCreated": 0,
+    "balanceMutationsCreated": 0,
+    "externalEffectsCreated": 0,
+    "upstreamMutationsCreated": 0,
+    "moneyEffectsCreated": 0
+  },
+  "unavailableEvidence": [
+    "complete mounted exact-current Part11A through Part11E resolver clear-signal resolution or persisted owner worklist",
+    "accepted external financial-reminder recipient permission channel provider sender schedule delivery callback or effect authority",
+    "real owner worklist task approval call notice recipient communication provider delivery payment settlement accounting collection or outcome evidence",
+    "external collection agency legal threat credit reporting lien repossession financing unsupported fee writeoff or legal conclusion authority",
+    "direct current-deployment applied migration history re-query",
+    "private production data provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent debt collection consumer protection tax accounting regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part11F": "collection_communication_evidence_and_Mission27_reconciliation",
+    "part12A": "tenant_private_owner_staff_action_queue_persistence_and_lifecycle",
+    "laterAuthorityNotGranted": true
+  }
+}

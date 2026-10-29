@@ -1,0 +1,242 @@
+{
+  "contractVersion": "mission28.part12b.reviewed-attention-handoff.v1",
+  "authority": {
+    "mission": 28,
+    "part": "12B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "b7640e2b111bf09ef21b3094f0c2840209900c52",
+    "baselineTree": "32c3454a5923707cb33db51e5068f3085791778a",
+    "scope": "reviewed_Mission25_recommendation_or_Mission26_advisory_handoff_to_tenant_private_attention_item_or_owner_approval_request_contract_only",
+    "runtimeOrPersistenceAuthorityGranted": false,
+    "externalEffectAuthorityGranted": false
+  },
+  "part12ARelease": {
+    "acceptedSourceHead": "67a61f18e4fbc98ea4cc13ea8da5979bc0326aa3",
+    "acceptedTree": "32c3454a5923707cb33db51e5068f3085791778a",
+    "pullRequest": 599,
+    "mergedMain": "b7640e2b111bf09ef21b3094f0c2840209900c52",
+    "mergedAt": "2026-10-29T20:24:53Z",
+    "productionAccepted": true,
+    "freshAudit": {
+      "verdict": "P0=0_P1=0_P2=0_P3=0",
+      "nodeVersion": "22.23.3",
+      "focusedTests": "15/15",
+      "parts11ATo12A": "7_suites_105_tests",
+      "cumulativeMission28": "51_suites_707_tests",
+      "migrationHistory": "2_suites_40_tests",
+      "syntax": "51/51",
+      "json": "50/50",
+      "migrations": "283_through_287_no_288",
+      "changedPaths": "55_docs_tests_only",
+      "protectedPaths": 0,
+      "diffCheck": "clean",
+      "remoteAndWorktree": "clean_and_exact"
+    },
+    "release": {
+      "deploymentId": "1910f182-b342-424d-9d15-77c0a5c8e316",
+      "deploymentStatus": "SUCCESS",
+      "serviceInstanceId": "7ee4f747-38c2-4baa-a024-1d7db6e7c218",
+      "deploymentInstanceId": "dce382b6-d78d-4765-8ae1-597b801da8c2",
+      "deploymentInstanceStatus": "RUNNING",
+      "imageSha256": "sha256:4e194cb746a01384fbc7a19e2832f11efafefdab1b32274658319b5c3d0165d3",
+      "canonicalStartup": "ready",
+      "healthStatus": "HTTP_200_PostgreSQL_and_canonical_persistence_healthy",
+      "rootDashboardDemo": "HTTP_200",
+      "dashboardDemoParity": "91681_bytes_sha256:b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369"
+    },
+    "directAppliedProductionMigrationHistory": "unavailable_and_unclaimed"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART12A_TENANT_PRIVATE_ACTION_QUEUE_CONTRACT.json", "normalizedLfSha256": "496362CCE3CF2E83BE5D95BA374660C5544AEFF19EF1DF7A244655E322C68C8F"},
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART5A_DECLARATIVE_RULE_GRAMMAR.json", "normalizedLfSha256": "7EF24ECE536F4407EE402620B6122ABB0B067E85DB1F0A9E43D79BC7A2CDEE3B"},
+    {"path": "docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json", "normalizedLfSha256": "62A4EE942017E789D7F0F73DD9A6FA73125A52A9C09EB6E3726A3345CA8820A0"},
+    {"path": "src/learning/jobOutcomeProposalContract.js", "normalizedLfSha256": "F79106C0D73D264F8B804A3B91A351332FDF98657E5B86AFEAC6956F4ED9A555"},
+    {"path": "src/learning/jobOutcomeProposalRepository.js", "normalizedLfSha256": "8EDD5CFDB9CD457C91FC06AFB78BA1C59A906D5965C64F4154132816324C1B07"},
+    {"path": "migrations/127_canonical_job_outcome_cross_job_proposals.sql", "normalizedLfSha256": "C21289D2A2255A11BB95BEF417A9FB2E6CD8A439742A1BB40C8053F397491D30"},
+    {"path": "docs/architecture/MISSION_26_PART11D_REVIEWED_HANDOFF_GATE.md", "normalizedLfSha256": "4D4F5F7E578EF6A02E801D9155C8FC3FE8BA8F7E5B6BC694189C03F49AAEE958"},
+    {"path": "src/forecasting/forecastHandoffRepository.js", "normalizedLfSha256": "6A72A39CF855A5E5A79D93A1308BFC5E5B601D83D8BC07D7AFC2CC3B2E4B2DD1"},
+    {"path": "migrations/257_canonical_forecast_reviewed_handoffs_v1.sql", "normalizedLfSha256": "A8DD0E56DCB621ECC096E85AA8380E02655EFC5B1E945AB2CDFF5E857FD398A6"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "serviceKeyPattern": "^[a-z0-9][a-z0-9._-]{1,63}$",
+    "monthPattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-01$"
+  },
+  "bounds": {
+    "maximumCanonicalRequestBytes": 49152,
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumDueWindowSeconds": 2592000,
+    "maximumLineageSequence": 2147483647,
+    "maximumReasonCodeLength": 96,
+    "maximumReasonCodes": 8
+  },
+  "supportedHandoffs": [
+    {
+      "id": "mission25_reviewed_recommendation",
+      "triggerId": "m25.current_reviewed_recommendation",
+      "sourceClassId": "mission25_26_advisory",
+      "sourceMission": 25,
+      "acceptedReviewState": "reviewed_recommendation_exact_current",
+      "acceptedReviewAction": "reviewed_recommendation_created",
+      "evidenceQuality": "complete_exact_reviewed_cohort",
+      "trustStatus": "reviewed_advisory_only",
+      "uncertaintyState": "descriptive_sample_not_prediction",
+      "horizonKind": "historical_current_cohort",
+      "queueKinds": ["owner_attention_item", "owner_approval_request"],
+      "sourceSpecificRequired": ["serviceKey", "proposalId", "proposalRevision", "proposalDigest", "consentRevision", "consentDigest", "sourceSummarySetDigest"],
+      "sourceSpecificNull": ["forecastRunId", "runDigest", "outputDigest", "currentnessRevision", "currentnessDigest", "forecastHandoffId", "forecastHandoffRevision", "forecastHandoffDigest", "forecastHandoffState", "forecastReviewEventRevision", "forecastReviewEventDigest", "horizonLocalStart"]
+    },
+    {
+      "id": "mission26_reviewed_advisory_handoff",
+      "triggerId": "m26.reviewed_advisory_handoff",
+      "sourceClassId": "mission25_26_advisory",
+      "sourceMission": 26,
+      "acceptedReviewState": "requested_exact_current",
+      "acceptedReviewAction": "requested",
+      "evidenceQuality": "complete_exact_reviewed_forecast_run",
+      "trustStatus": "reviewed_advisory_only",
+      "uncertaintyState": "unquantified_visible",
+      "horizonKind": "calendar_month",
+      "queueKinds": ["owner_attention_item", "owner_approval_request"],
+      "sourceSpecificRequired": ["forecastRunId", "runDigest", "outputDigest", "currentnessRevision", "currentnessDigest", "forecastHandoffId", "forecastHandoffRevision", "forecastHandoffDigest", "forecastHandoffState", "forecastReviewEventRevision", "forecastReviewEventDigest", "horizonLocalStart"],
+      "sourceSpecificNull": ["serviceKey", "proposalId", "proposalRevision", "proposalDigest", "consentRevision", "consentDigest", "sourceSummarySetDigest"]
+    }
+  ],
+  "queueKinds": [
+    {"id": "owner_attention_item", "part12AQueueKind": "owner_task", "actionFamily": "internal_read_digest_task", "creatorCapability": "automation_internal_action_prepare", "recipientClass": "tenant_owner", "assigneeRole": "owner", "evaluationResult": "eligible", "reasonCode": "reviewed_advisory_requires_owner_attention", "priorities": ["normal", "high"]},
+    {"id": "owner_approval_request", "part12AQueueKind": "approval_request", "actionFamily": "owner_approval_request", "creatorCapability": "automation_approval_request_create", "recipientClass": "tenant_owner", "assigneeRole": "owner", "evaluationResult": "approval_required", "reasonCode": "reviewed_advisory_requires_owner_approval", "priorities": ["normal", "high"]}
+  ],
+  "envelope": {
+    "exactFields": ["schemaVersion", "tenantId", "attentionProjectionId", "queueKind", "sourceBinding", "advisoryEvidence", "reviewedHandoffBinding", "policyEvaluationBinding", "creatorAuthorityBinding", "assigneeBinding", "dueWindow", "reasonCode", "priority", "sourceLink", "completionEvidence", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "sourceBindingExactFields": ["tenantId", "triggerId", "sourceClassId", "actionFamily", "sourceRecordId", "sourceRecordRevision", "sourceRecordDigest", "sourceIdentityDigest", "snapshotId", "snapshotDigest", "lineageId", "lineageKind", "snapshotLineageSequence", "predecessorSnapshotId", "predecessorSnapshotDigest", "headTransitionId", "headTransitionDigest", "headSequence", "effectiveSnapshotId", "effectiveSnapshotDigest", "eventKind", "eventTime", "observedAt", "currentnessState"],
+    "advisoryEvidenceExactFields": ["handoffKind", "serviceKey", "proposalId", "proposalRevision", "proposalDigest", "consentRevision", "consentDigest", "sourceSummarySetDigest", "forecastRunId", "runDigest", "outputDigest", "currentnessRevision", "currentnessDigest", "forecastHandoffId", "forecastHandoffRevision", "forecastHandoffDigest", "forecastHandoffState", "forecastReviewEventRevision", "forecastReviewEventDigest", "evidenceQuality", "trustStatus", "uncertaintyState", "horizonKind", "horizonLocalStart", "unavailableState"],
+    "reviewedHandoffBindingExactFields": ["tenantId", "handoffKind", "handoffId", "handoffRevision", "handoffDigest", "reviewState", "reviewAction", "reviewEventId", "reviewEventRevision", "reviewEventDigest", "reviewedByActorId", "reviewedBySessionId", "reviewedByMembershipId", "reviewedBySessionSubjectActorId", "reviewedByMembershipSubjectActorId", "reviewedByTenantId", "reviewedBySessionTenantId", "reviewedByMembershipTenantId", "reviewedByActorState", "reviewedBySessionState", "reviewedByMembershipState", "reviewedByMembershipRoleId", "reviewedAt", "expiresAt", "receiverClass", "advisoryOnly", "automaticActionAuthorized", "externalEffectAuthorized"],
+    "policyEvaluationBindingExactFields": ["tenantId", "policyId", "policyVersion", "policyDigest", "sourceSetDigest", "ruleId", "ruleDigest", "actionTemplateId", "actionTemplateDigest", "actionFamilyId", "evaluationId", "evaluationOutputDigest", "result", "reasonCodes", "evidenceQuality", "evaluatedAt"],
+    "creatorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "part1DCapabilityId", "part3AVisibilityCapabilityId", "capabilityDecisionId", "capabilityDecisionDigest", "recordScope"],
+    "assigneeBindingExactFields": ["assigneeActorId", "assigneeMembershipId", "assigneeMembershipSubjectActorId", "assigneeTenantId", "assigneeMembershipState", "assigneeRoleId", "recipientClassId"],
+    "dueWindowExactFields": ["notBefore", "dueBy"],
+    "sourceLinkExactFields": ["linkKind", "tenantId", "sourceRecordId", "sourceRecordDigest", "snapshotId", "snapshotDigest", "reviewedHandoffId", "reviewedHandoffDigest"],
+    "completionEvidenceExactFields": ["state", "completionRecordId", "completionRecordDigest", "completedByActorId", "completedAt"],
+    "trustedResolutionExactFields": ["tenantId", "queueKind", "sourceBinding", "advisoryEvidence", "reviewedHandoffBinding", "policyEvaluationBinding", "creatorAuthorityBinding", "assigneeBinding", "dueWindow", "reasonCode", "priority", "sourceLink", "completionEvidence", "evaluatedAt"],
+    "outputFields": ["attentionProjectionId", "tenantId", "queueKind", "handoffKind", "sourceRecordId", "sourceRecordDigest", "reviewedHandoffId", "reviewedHandoffDigest", "policyId", "policyVersion", "policyDigest", "evaluationId", "evaluationOutputDigest", "assigneeActorId", "evidenceQuality", "trustStatus", "uncertaintyState", "horizonKind", "horizonLocalStart", "unavailableState", "evaluatedAt", "resultState", "reasonState", "labelId", "fixedLabel", "ownerReadableNoEffectOnly", "queueRecordCreated", "attentionItemCreated", "approvalRequestCreated", "completionEvidenceCreated", "messageCreated", "providerAttemptCreated", "externalEffectCreated", "upstreamMutationCreated", "financialEffectCreated", "moneyEffectCreated"]
+  },
+  "sourceAuthorityContract": {
+    "sourceCatalog": "exact_server_resolved_Part4A_trigger_row_and_Part4B_snapshot_plus_Part4D_authoritative_head",
+    "allowedTriggerIds": ["m25.current_reviewed_recommendation", "m26.reviewed_advisory_handoff"],
+    "sourceClassId": "mission25_26_advisory",
+    "lineageKind": "active",
+    "currentnessState": "latest_exact_current",
+    "snapshotAndHeadMustIdentifySameEffectiveSnapshot": true,
+    "sourceRecordIdentityRevisionDigestMustEqualTheExactTriggerSpecificAdvisoryEvidence": true,
+    "eventKindAndEventTimeMustMatchTheExactPart4ATriggerSelector": true,
+    "eventOrObservationTimeNeverEstablishesPrecedence": true,
+    "correctionReplacementOrTombstoneRequiresNewExactSnapshotHeadHandoffPolicyEvaluationAndProjectionMaterial": true,
+    "candidateSuppliedSourceSnapshotHeadOrAdvisoryNeverCreatesAuthority": true
+  },
+  "reviewedHandoffContract": {
+    "acceptedHandoffMustBeSeparatelyTrustedServerResolvedAndExactCurrent": true,
+    "mission25Rule": "the_exact_current_reviewed_recommendation_record_is_the_handoff_subject_and_must_bind_its_exact_proposal_review_identity_consent_and_current_cohort_evidence",
+    "mission26Rule": "the_exact_current_m26_handoff_must_be_state_requested_with_last_exact_immutable_history_action_requested_and_nonexpired",
+    "reviewerMustBeExactSameTenantActiveOwnerOrAdminActorSessionAndMembership": true,
+    "handoffIdentityDigestReviewEventAndSourceRecordMustCrossBind": true,
+    "dismissedConsumedWithdrawnExpiredUnreviewedUnavailableStaleCorrectedReplacedTombstonedOrMixedHandoff": "deny",
+    "advisoryOnly": true,
+    "automaticActionAuthorized": false,
+    "externalEffectAuthorized": false,
+    "learnedRecommendationPredictionOrReviewNeverCreatesFactPolicyPermissionApprovalOrActionAuthority": true
+  },
+  "policyEvaluationContract": {
+    "exactCurrentPart5APolicyAndRuleRequired": true,
+    "exactImmutablePart5BOutputRequired": true,
+    "policySourceSetMustIncludeTheExactAdvisorySnapshotAndReviewedHandoffMaterial": true,
+    "actionTemplateFamilyMustEqualQueueKindAndPart4ATriggerAllowedActionFamily": true,
+    "ownerAttentionItemRequiresEligibleCompleteExactEvaluation": true,
+    "ownerApprovalRequestRequiresApprovalRequiredCompleteExactEvaluation": true,
+    "approvalRequiredNeverMeansApprovalExists": true,
+    "policyOrEvaluationStaleExpiredSuppressedIneligibleUnavailableUnknownMixedCorrectedOrMateriallyChanged": "deny",
+    "candidateSuppliedPolicyRuleTemplateEvaluationResultReasonOrDigestNeverCreatesAuthority": true
+  },
+  "capabilityAndRecordScopeContract": {
+    "creatorMustResolveOneExactPart1DLaunchBinding": true,
+    "visibilityMustResolveExactPart3AAutomationViewGrant": true,
+    "actorMustEqualSessionAndMembershipSubjects": true,
+    "creatorAndAssigneeMustBeExactActiveSameTenantSubjects": true,
+    "ownerAttentionAndApprovalAssigneeIsExactTenantOwner": true,
+    "recordScope": "exact_tenant_all_automation",
+    "staffOrCandidateCannotCreateRetargetApproveOrReassignTheHandoff": true,
+    "candidateCapabilityRoleAssigneeOrScopeNeverCreatesAuthority": true
+  },
+  "recordContract": {
+    "part12AContractMustValidateBeforeProjection": true,
+    "dueWindowUsesTrustedEvaluatedAt": true,
+    "sourceLinkIsOpaqueInternalIdentityNotUrlOrFreeText": true,
+    "evidenceQualityTrustStatusUncertaintyHorizonAndUnavailableStateAreImmutableVisibleMaterial": true,
+    "completionEvidenceState": "unavailable_no_accepted_completion_authority",
+    "completionIdentityFieldsMustBeNull": true,
+    "sameSemanticMaterialSameIdempotencyDigest": true,
+    "requestIdentityAndEvaluationTimeExcludedFromStableIdempotencyMaterial": true,
+    "sameIdentityDifferentMaterialIsConflict": true,
+    "crossIdentitySameSemanticMaterialIsCloneReplayAndDenied": true,
+    "noFreeTextRecommendationPredictionEvidenceCustomerProviderOrPrivatePayloadInProjection": true
+  },
+  "fixedDecision": {
+    "resultState": "reviewed_advisory_attention_handoff_unavailable_no_mounted_authority",
+    "reasonState": "accepted_handoff_policy_evaluation_capability_queue_persistence_and_completion_authority_not_jointly_mounted",
+    "labelId": "reviewed_advisory_attention_unavailable",
+    "fixedLabel": "Reviewed advisory attention item unavailable — complete current authority is not mounted",
+    "unavailableState": "handoff_to_action_queue_runtime_unavailable",
+    "neverMeans": "recommendation_or_prediction_became_fact_permission_approval_action_queue_record_message_provider_effect_upstream_mutation_financial_effect_or_money_movement"
+  },
+  "denials": [
+    "missing_unknown_extra_null_coercible_noncanonical_oversized_or_free_text_field",
+    "symbol_accessor_toJSON_proxy_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "absent_unreviewed_dismissed_consumed_withdrawn_expired_stale_corrected_replaced_tombstoned_mixed_or_unavailable_handoff",
+    "cross_tenant_cross_source_cross_policy_cross_horizon_cross_identity_cross_lineage_cross_head_cross_handoff_cross_evaluation_or_cross_assignee_graft",
+    "unsupported_trigger_source_kind_queue_kind_action_family_template_recipient_capability_role_scope_quality_trust_uncertainty_horizon_or_unavailable_state",
+    "candidate_supplied_source_head_handoff_policy_evaluation_capability_assignee_due_reason_priority_or_completion_authority",
+    "recommendation_prediction_evidence_quality_trust_or_uncertainty_promoted_to_fact_permission_approval_action_or_effect",
+    "same_identity_conflict_or_cross_identity_semantic_clone_replay",
+    "fake_queue_attention_approval_completion_message_provider_delivery_outcome_external_upstream_financial_accounting_or_money_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteWorkerQueueSchedulerOrUi": false,
+    "mountedReviewedHandoffToQueueResolver": false,
+    "mountedTaskOrApprovalPersistence": false,
+    "acceptedRuntimeCapabilityResolver": false,
+    "acceptedCompletionAuthority": false,
+    "queueRecordsCreated": 0,
+    "attentionItemsCreated": 0,
+    "approvalRequestsCreated": 0,
+    "completionEvidenceCreated": 0,
+    "messagesCreated": 0,
+    "providerAttemptsCreated": 0,
+    "externalEffectsCreated": 0,
+    "upstreamMutationsCreated": 0,
+    "financialEffectsCreated": 0,
+    "moneyEffectsCreated": 0,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "unavailableEvidence": [
+    "mounted accepted Mission25 or Mission26 reviewed-handoff-to-queue resolver",
+    "mounted tenant-private attention-item or approval-request persistence and completion authority",
+    "accepted runtime capability and record-scope resolver",
+    "private-production attention-item approval-request or completion evidence",
+    "real recipients messages providers callbacks effects upstream mutations financial or money evidence",
+    "professional legal privacy communications employment accounting regulatory provider deliverability or security review",
+    "hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval"
+  ],
+  "laterSliceBoundary": {
+    "part12C": "dedupe_grouping_priority_digest_snooze_dismiss_assign_reassign_escalate_expire_reopen_and_source_correction_operations_not_implemented",
+    "part12D": "owner_explanation_and_cross_authority_drilldown_not_implemented",
+    "laterAuthorityNotGranted": true
+  }
+}

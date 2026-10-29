@@ -406,8 +406,8 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
   test('records Parts 1A–5A released, Part 5B as the sole candidate, and every later slice planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–11F are released. Part 12A is the sole implementation candidate.');
-    expect(roadmap).toContain('Parts 12B–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–12A are released. Part 12B is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 12C–14G remain planned and unimplemented.');
     for (const identity of [PART1D_HEAD, BASE, PART1D_DEPLOYMENT, PART1D_IMAGE]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -461,10 +461,10 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
     expect(rows[39][4]).toBe('**Released**');
     expect(rows[40][4]).toBe('**Released**');
     expect(rows[41][4]).toBe('**Released**');
-    expect(rows[42][4]).toBe('**Released**'); expect(rows[43][4]).toBe('**Released**'); expect(rows[44][4]).toBe('**Released**'); expect(rows[45][4]).toBe('**Released**'); expect(rows[46][4]).toBe('**Released**'); expect(rows[47][4]).toBe('**Released**'); expect(rows[48][4]).toBe('**Released**'); expect(rows[49][4]).toBe('**Released**'); expect(rows[50][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(51).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[42][4]).toBe('**Released**'); expect(rows[43][4]).toBe('**Released**'); expect(rows[44][4]).toBe('**Released**'); expect(rows[45][4]).toBe('**Released**'); expect(rows[46][4]).toBe('**Released**'); expect(rows[47][4]).toBe('**Released**'); expect(rows[48][4]).toBe('**Released**'); expect(rows[49][4]).toBe('**Released**'); expect(rows[50][4]).toBe('**Released**'); expect(rows[51][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(52).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(15);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(14);
   });
 
   test('does not activate policy runtime or add a schema migration', () => {

@@ -298,6 +298,9 @@ describe('Mission 28 Part 13A provider-neutral adapter capability contract', () 
       for (const identity of ['e0a4739e4b34110e2ef20a59e472a6c383fb96ac','523a7b059dbc3edda9926224233627a639536bd1','c391746060348df9f358feba49a8ee0679c2b465','eb46e43c-f153-4c02-82dd-53a5c1206f8a','b288d2b8-0c27-4ca9-8d89-d809abdf9d6c','sha256:66debb28f92855258835fc11fca1e80137547b85c26116172dfe08dce2ca3e48','0a1f73636ca4fe873330301107a9c3ed92edea9a4a2a285467b0aeede581fd38','b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369']) expect(value).toContain(identity);
       expect(value).toMatch(/direct applied production migration history.*unavailable.*unclaimed/i);
     }
+    expect(roadmap).toContain('Released Parts 12A–12D artifacts:');
+    expect(roadmap).toContain('../architecture/MISSION_28_PART12D_ACTION_EXPLANATION_DRILLDOWN_CONTRACT.md');
+    expect(roadmap).toContain('../architecture/MISSION_28_PART12D_ACTION_EXPLANATION_DRILLDOWN_CONTRACT.json');
     expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(54);
     expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1);
     expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(11);

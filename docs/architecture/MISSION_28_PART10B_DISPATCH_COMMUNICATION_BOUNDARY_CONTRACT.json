@@ -1,0 +1,149 @@
+{
+  "contractVersion": "mission28.part10b.dispatch-communication-boundary.v1",
+  "authority": {
+    "mission": 28,
+    "part": "10B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "9b0ecc3ccf21fcf997971e2c9fe12df71c413331",
+    "baselineTree": "41739ae3b11042110cd7d2b01838b8b0ea8ac58d",
+    "scope": "exact_current_Mission22_dispatch_on_the_way_delay_arrival_window_or_cancellation_communication_no_effect_boundary_only",
+    "communicationRecipientProviderTaskNotificationOrEffectAuthorityGranted": false,
+    "travelArrivalDelayRouteLocationOrWorkerTelemetryAuthorityGranted": false,
+    "schedulingAssignmentDispatchRouteAppointmentOrLocationMutationAuthorityGranted": false,
+    "part10COrLaterAuthorityGranted": false
+  },
+  "part10ARelease": {
+    "acceptedSourceHead": "954057afa821de5db94469bca13f37855978e82d",
+    "acceptedTree": "41739ae3b11042110cd7d2b01838b8b0ea8ac58d",
+    "freshAudit": "P0_P1_P2_P3_zero",
+    "pullRequest": 589,
+    "mergedMain": "9b0ecc3ccf21fcf997971e2c9fe12df71c413331",
+    "deployment": "23aec085-588a-4593-9220-afdff6e62bdc",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "a654a18b-73aa-4905-883c-48eeaadeb21c",
+    "imageSha256": "55303e99920f1d102ac2333c29ec66f5f1d2c91b837c05d25b34f21a894dc913",
+    "migrationEvidence": "source_283_through_287_no_288; direct_applied_history_not_requeried_no_registered_Railway_SSH_key_and_private_database_hostname",
+    "health": ["canonical_startup_ready", "api_health_root_dashboard_demo_HTTP_200", "database_and_canonical_persistence_healthy", "dashboard_demo_91314_byte_sha256_ab65083c5dd9bac308798171df2e65f711e89df9a6864ea15b569bf9f64ab757_parity"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF"},
+    {"path": "docs/architecture/MISSION_28_PART10A_APPOINTMENT_COMMUNICATION_BOUNDARY_CONTRACT.json", "normalizedLfSha256": "98777312893A6A57B28B41CD3D8E1B23914A98E997FE93F5626198C408B1AF79"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateAppointmentAssignmentDispatchTravelLocationWorkerPermissionPolicyOrSuppressionNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumCanonicalRequestBytes": 65536,
+    "missingUnknownStaleMixedAmbiguousOrChangedFallback": "deny"
+  },
+  "requestKinds": [
+    {"id": "dispatch_notice", "sourceRequirement": "exact_dispatched_Mission22_assignment", "resultState": "unavailable_no_accepted_external_authority", "reasonCode": "dispatch_communication_not_launched", "fixedLabel": "Dispatch update unavailable — communication authority not launched"},
+    {"id": "on_the_way_notice", "sourceRequirement": "exact_Mission22_on_the_way_fact_unavailable", "resultState": "unavailable_source_fact_not_supported", "reasonCode": "on_the_way_source_fact_unavailable", "fixedLabel": "On-the-way update unavailable — exact travel state not supported"},
+    {"id": "delay_notice", "sourceRequirement": "exact_Mission22_delay_fact_unavailable", "resultState": "unavailable_source_fact_not_supported", "reasonCode": "delay_source_fact_unavailable", "fixedLabel": "Delay update unavailable — exact delay state not supported"},
+    {"id": "arrival_window_notice", "sourceRequirement": "exact_Mission22_arrival_window_fact_unavailable", "resultState": "unavailable_source_fact_not_supported", "reasonCode": "arrival_window_source_fact_unavailable", "fixedLabel": "Arrival-window update unavailable — exact arrival state not supported"},
+    {"id": "appointment_cancellation_notice", "sourceRequirement": "exact_cancelled_Mission22_appointment_and_assignment", "resultState": "unavailable_no_accepted_external_authority", "reasonCode": "cancellation_communication_not_launched", "fixedLabel": "Cancellation update unavailable — communication authority not launched"}
+  ],
+  "resolutionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "resolutionId", "requestedKind", "appointmentBinding", "assignmentDispatchBinding", "operationalSignalBinding", "workerPrivacyBinding", "launchMatrixBinding", "communicationBasisBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "appointmentBindingExactFields": ["tenantId", "appointmentId", "sourceTriggerId", "sourceRecordIdentityDigest", "sourceCurrentnessPinsDigest", "appointmentRevision", "appointmentDigest", "appointmentStatus", "scheduledStart", "scheduledEnd", "timeZone", "sourceEventKind", "eventTime", "observedAt", "appointmentSnapshotId", "appointmentSnapshotDigest", "assignmentSnapshotId", "assignmentSnapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState"],
+    "assignmentDispatchBindingExactFields": ["tenantId", "appointmentId", "sourceTriggerId", "sourceRecordIdentityDigest", "sourceCurrentnessPinsDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "appointmentStatus", "targetState", "targetKind", "targetId", "scheduleState", "dispatchState", "scheduledStart", "scheduledEnd", "sourceEventKind", "eventTime", "observedAt", "assignmentSnapshotId", "assignmentSnapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState"],
+    "operationalSignalBindingExactFields": ["state", "dispatchFactAvailable", "cancellationFactAvailable", "onTheWayFactAvailable", "delayFactAvailable", "arrivalWindowFactAvailable", "travelOrRouteEvidenceAvailable"],
+    "workerPrivacyBindingExactFields": ["disclosureState", "fixedLabel", "workerNameIncluded", "workerContactIncluded", "locationIncluded", "coordinatesIncluded", "routeIncluded", "etaIncluded"],
+    "launchMatrixBindingExactFields": ["contractDigest", "actionFamily", "firstLaunchState", "acceptedSourceClassCount", "acceptedRoleCount", "acceptedCapabilityCount", "acceptedChannelCount", "acceptedRecipientClassCount", "externalEffectsEnabled"],
+    "communicationBasisBindingExactFields": ["contractDigest", "externalResult", "permissionResolutionId", "permissionResolutionDigest", "permissionBasisState", "channelId", "providerMode"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"]
+  },
+  "sourceAuthorityTruth": {
+    "appointmentTriggerId": "m22.appointment_state",
+    "assignmentTriggerId": "m22.assignment_dispatch_state",
+    "appointmentState": "one_exact_latest_Mission22_appointment tenant_identity_revision_digest_status_interval_timeZone_eventKind_eventTime_snapshot_sourceSet_and_currentness_resolution",
+    "assignmentDispatchState": "one_exact_latest_Mission22_assignment tenant_appointment_assignment_identity_revision_digest_appointmentStatus_target_scheduleState_dispatchState_interval_eventKind_eventTime_snapshot_sourceSet_and_currentness_resolution",
+    "dispatch": "dispatch_notice requires exact current dispatchState dispatched scheduleState scheduled targetState assigned and appointmentStatus scheduled",
+    "cancellation": "appointment_cancellation_notice requires exact current appointmentStatus cancelled and exact state-change event; it does not cancel or mutate anything",
+    "onTheWayDelayArrival": "no accepted Mission22 source currently records on_the_way delay arrival_window travel route coordinates or ETA; dispatch state scheduled time and elapsed clock must never infer them",
+    "factBoundary": "appointment_assignment_dispatch_and_cancellation_are_source_facts_only_and_never permission_approval_recipient_channel_provider_message_or_effect_authority"
+  },
+  "currentAuthorityTruth": {
+    "launchMatrix": "Part1D customer_communication remains unavailable with zero accepted source classes roles capabilities channels recipients or bindings and externalEffectsEnabled false",
+    "communicationBasis": "Part7B externalResult remains unavailable_or_suppressed until later accepted launch legal provider channel and effect authority",
+    "authorization": "no dispatch on_the_way delay arrival_window or cancellation communication authorization may be synthesized",
+    "effect": "all request kinds resolve to fixed owner-readable unavailable projections with zero record task notification message provider schedule assignment dispatch route appointment or other effect"
+  },
+  "decisionContract": {
+    "closedKindOrder": ["dispatch_notice", "on_the_way_notice", "delay_notice", "arrival_window_notice", "appointment_cancellation_notice"],
+    "precedence": ["malformed_or_untrusted_input", "appointment_or_assignment_not_exact_current_and_consistent", "requested_operational_fact_unavailable", "worker_privacy_boundary_invalid", "launch_matrix_unavailable", "communication_basis_unavailable"],
+    "dispatchStateVocabulary": ["not_dispatched", "dispatched", "revoked"],
+    "scheduleStateVocabulary": ["unscheduled", "scheduled"],
+    "currentLaunchOutcome": "all_kinds_unavailable_no_effect",
+    "fixedWorkerLabel": "Assigned worker recorded — private details withheld",
+    "fixedLabels": "exact_contract_labels_only_no_free_text_customer_worker_location_route_eta_contact_or_path_reflection"
+  },
+  "digestAndReplayContract": {
+    "materialDigest": "server_recomputed_over_all_trusted_material_except_resolutionId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_request_kind_exact_appointment_assignment_dispatch_operational_signal_worker_privacy_launch_and_communication_basis_excluding_resolutionId_evaluatedAt_and_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_projection_replay_no_record_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse"
+  },
+  "deniedCombinations": [
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "cross_tenant_appointment_assignment_snapshot_currentness_actor_session_membership_or_idempotency_retarget",
+    "unknown_stale_mixed_unavailable_corrected_reversed_tombstoned_superseded_or_nonlatest_source",
+    "dispatch_notice_without_exact_dispatched_scheduled_assigned_current_Mission22_state",
+    "cancellation_notice_without_exact_cancelled_current_Mission22_state_change",
+    "on_the_way_delay_arrival_window_or_ETA_inferred_from_dispatch_schedule_clock_distance_route_or_assignment",
+    "raw_worker_name_email_phone_address_coordinates_location_access_route_vehicle_telemetry_or_eta",
+    "candidate_created_recipient_permission_consent_channel_provider_policy_authorization_suppression_or_effect_authority",
+    "dispatch_or_cancellation_fact_treated_as_communication_permission_urgency_or_delivery_evidence",
+    "runtime_route_UI_scheduler_worker_queue_publisher_consumer_provider_callback_message_delivery_or_effect",
+    "upstream_schedule_assignment_dispatch_route_appointment_customer_work_financial_accounting_or_money_mutation",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "mountedSchedulerWorkerQueueOrPolicyExecutor": false,
+    "providerAdapterCallbackOrInboundReceiver": false,
+    "customerOrInternalMessageNotificationTaskOrWorklistRecord": false,
+    "scheduleAssignmentDispatchRouteAppointmentOrLocationMutation": false,
+    "externalEffectOrUpstreamMutation": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "rawCustomerOrWorkerContactValues": 0,
+    "rawAddressCoordinatesLocationAccessRouteVehicleTelemetryOrEtaValues": 0,
+    "ownerWorklistRecordsOrTasksCreated": 0,
+    "notificationsCreated": 0,
+    "recipientMessages": 0,
+    "providerAttempts": 0,
+    "scheduleAssignmentDispatchRouteAppointmentMutations": 0,
+    "externalEffects": 0,
+    "upstreamMutations": 0,
+    "accountingOrMoneyEffects": 0
+  },
+  "unavailableEvidence": [
+    "accepted customer communication launch cell country region consent reviewed basis recipient channel template provider sender callback effect and retention authority",
+    "exact on_the_way delay arrival_window travel route location coordinates vehicle telemetry or ETA source facts",
+    "customer_safe dispatch cancellation travel worker identity location route ETA or urgency wording",
+    "real recipient message provider attempt delivery reply dispatch on_the_way delay arrival cancellation customer action or outcome evidence",
+    "direct current_deployment applied migration history re_query because Railway SSH has no registered key and local Railway execution exposes only a private database hostname",
+    "private production customer data provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent scheduling dispatch location marketing consumer protection regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part10C": "work_progress_completion_reopening_or_aftercare_communication_not_implemented",
+    "part10D": "owner_worklist_assignment_and_bound_customer_response_action_not_implemented",
+    "part11Plus": "financial_collections_integrations_analytics_UI_demo_and_release_readiness_remain_planned_unimplemented"
+  }
+}

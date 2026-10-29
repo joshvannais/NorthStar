@@ -161,8 +161,8 @@ describe('Mission 28 Part 8B financial-document delivery authority', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8');
     const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
     for (const document of [roadmap,ledger]) {
-      expect(document).toContain('Parts 1A–12C are released. Part 12D is the sole implementation candidate.');
-      expect(document).toContain('Parts 13A–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–12D are released. Part 13A is the sole implementation candidate.');
+      expect(document).toContain('Parts 13B–14G remain planned and unimplemented.');
       expect(document).toContain('60fd4934-d7cc-4f1f-8366-894e6fd03393');
       expect(document).toContain('287'); expect(document).toMatch(/no 288|migration 288 is absent/);
     }

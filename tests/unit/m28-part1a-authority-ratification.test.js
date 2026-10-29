@@ -177,8 +177,8 @@ function validateLedger(document) {
   expect(rows[39]).toMatchObject({ id: '9D', state: '**Released**' });
   expect(rows[40]).toMatchObject({ id: '10A', state: '**Released**' });
   expect(rows[41]).toMatchObject({ id: '10B', state: '**Released**' });
-  expect(rows[42]).toMatchObject({ id: '10C', state: '**Released**' }); expect(rows[43]).toMatchObject({ id: '10D', state: '**Released**' }); expect(rows[44]).toMatchObject({ id: '11A', state: '**Released**' }); expect(rows[45]).toMatchObject({ id: '11B', state: '**Released**' }); expect(rows[46]).toMatchObject({ id: '11C', state: '**Released**' }); expect(rows[47]).toMatchObject({ id: '11D', state: '**Released**' }); expect(rows[48]).toMatchObject({ id: '11E', state: '**Implementation candidate**' });
-  expect(rows.slice(49).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+  expect(rows[42]).toMatchObject({ id: '10C', state: '**Released**' }); expect(rows[43]).toMatchObject({ id: '10D', state: '**Released**' }); expect(rows[44]).toMatchObject({ id: '11A', state: '**Released**' }); expect(rows[45]).toMatchObject({ id: '11B', state: '**Released**' }); expect(rows[46]).toMatchObject({ id: '11C', state: '**Released**' }); expect(rows[47]).toMatchObject({ id: '11D', state: '**Released**' }); expect(rows[48]).toMatchObject({ id: '11E', state: '**Released**' }); expect(rows[49]).toMatchObject({ id: '11F', state: '**Implementation candidate**' });
+  expect(rows.slice(50).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
 }
 
 describe('Mission 28 Part 1A authority ratification', () => {
@@ -194,8 +194,8 @@ describe('Mission 28 Part 1A authority ratification', () => {
       expect(document).toContain(BASE);
       expect(document).toContain(BASE_TREE);
     }
-    expect(roadmap).toContain('Parts 1A–11D are released. Part 11E is the sole implementation candidate.');
-    expect(roadmap).toContain('Parts 11F–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–11E are released. Part 11F is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 12A–14G remain planned and unimplemented.');
     for (const identity of [PART1A_HEAD, PART1A_MAIN, PART1A_DEPLOYMENT, PART1A_AUDIT]) {
       expect(roadmap).toContain(identity);
       expect(ledger).toContain(identity);
@@ -279,7 +279,7 @@ describe('Mission 28 Part 1A authority ratification', () => {
     const ledger = read(LEDGER_PATH);
     validateLedger(ledger);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(17);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(16);
     expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
     expect(ledger).toContain(`Part 1A audit | Accepted P0=P1=P2=P3=0; report SHA-256 \`${PART1A_AUDIT}\``);
   });

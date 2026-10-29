@@ -120,7 +120,6 @@ function project(input, trusted) {
     revokeEffectCreated: false,
     resendEffectCreated: false,
     recoveryEffectCreated: false,
-    customerResponseCreated: false,
     externalEffectCreated: false
   });
 }
@@ -161,7 +160,6 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
       revokeEffectCreated: false,
       resendEffectCreated: false,
       recoveryEffectCreated: false,
-      customerResponseCreated: false,
       externalEffectCreated: false
     }));
   });
@@ -182,7 +180,7 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
       providerAccepted: expect.stringMatching(/^never_/),
       sent: expect.stringMatching(/^never_/),
       delivered: expect.stringMatching(/^never_/),
-      viewed: expect.stringMatching(/^never_/),
+      viewed: 'strongest_claim_is_opened_only',
       ambiguousSimultaneousEvidence: 'fail_closed_to_delivery_status_unknown_reconciliation_required_no_resend'
     });
   });
@@ -190,23 +188,21 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
   test('maps every reserved evidence label to the exact Part7F vocabulary without making it current authority', () => {
     const evidenceKinds = new Set(part7F.futureAcceptedEvidenceKinds.map(item => item.eventKind));
     const requirements = contract.exactStatusLabels.filter(item => !item.currentLaunchAvailable).map(item => item.requiredEvidence).join(' ');
-    for (const kind of ['provider_accepted', 'sent', 'delivered', 'opened', 'reply_received', 'customer_question_received', 'bounced', 'blocked', 'complaint', 'undeliverable', 'provider_status_correction']) expect(evidenceKinds.has(kind)).toBe(true);
+    for (const kind of ['provider_accepted', 'sent', 'delivered', 'opened', 'bounced', 'blocked', 'complaint', 'undeliverable', 'provider_status_correction']) expect(evidenceKinds.has(kind)).toBe(true);
     expect(requirements).toMatch(/provider_accepted/);
     expect(requirements).toMatch(/sent_event/);
     expect(requirements).toMatch(/delivered_event/);
     expect(requirements).toMatch(/opened_event/);
     expect(contract.currentAvailability.deliveryAcknowledgement).toMatch(/^unavailable_/);
-    expect(contract.currentAvailability.customerReplyQuestionOrRevisionRequest).toMatch(/^unavailable_/);
   });
 
-  test('separates provider acknowledgement, sent, delivered, viewed and customer response evidence', () => {
+  test('separates provider acknowledgement, sent, delivered and viewed evidence', () => {
     expect(contract.acknowledgementContract).toMatchObject({
       providerAcknowledgement: expect.stringMatching(/provider_accepted_only_and_never_delivery/),
       sendAcknowledgement: expect.stringMatching(/sent_only_and_never_delivery/),
       deliveryAcknowledgement: expect.stringMatching(/exact_Part7F_delivered_event/),
-      viewAcknowledgement: expect.stringMatching(/never_implies_response/),
-      customerReplyOrQuestion: expect.stringMatching(/never_implies_revision_acceptance_or_outcome/),
-      currentLaunch: expect.stringMatching(/^no_provider_attempt_message_delivery_view_or_authenticated_inbound_exists/),
+      viewAcknowledgement: expect.stringMatching(/strongest_claim_is_opened_only/),
+      currentLaunch: expect.stringMatching(/^no_provider_attempt_message_delivery_or_view_exists/),
       candidateQueuePreviewResolutionComposerProviderStatusOrLabelNeverCreatesAcknowledgement: true
     });
   });
@@ -224,7 +220,7 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
     expect(contract.duplicatePreventionContract).toMatchObject({sameSemanticMaterialNewRequestOrTime: 'deny_clone_or_replay_reuse', sameRequestChangedTimeMaterialEvidenceOrOperation: 'deny_identity_conflict', sameProjectionSameRequestDigest: 'idempotent_no_effect_projection_replay'});
   });
 
-  test('denies candidate-created acknowledgement, revoke, resend, recovery and customer evidence', () => {
+  test('denies candidate-created acknowledgement, revoke, resend, recovery and status evidence', () => {
     for (const mutation of [
       value => { value.deliveryEvidenceBinding = {eventKind: 'delivered'}; },
       value => { value.recoveryBinding = {resultState: 'bounded_history_verified_no_effect'}; },
@@ -240,6 +236,10 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
       currentRevoke: expect.stringMatching(/^unavailable_/),
       currentResend: expect.stringMatching(/^unavailable_/),
       currentRecovery: expect.stringMatching(/^unavailable_/)
+    });
+    expect(contract.laterSliceBoundary).toMatchObject({
+      part9A: expect.stringMatching(/not_implemented$/),
+      laterRecipientResponseAndCorrection: expect.stringMatching(/unimplemented$/)
     });
   });
 
@@ -306,7 +306,7 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
 
   test('freezes zero-effect runtime and privacy boundaries with migration287 latest and no288', () => {
     expect(Object.values(contract.privacyAndEffects).every(value => value === 0)).toBe(true);
-    expect(contract.runtimeBoundary).toMatchObject({newMigration: false, newTableFunctionRouteOrUi: false, mountedSchedulerWorkerQueueOrPolicyExecutor: false, providerAdapterCallbackOrInboundReceiver: false, recipientMessageDeliveryViewReplyRevokeResendRecoveryOrCustomerResponse: false, nextMigrationAbsent: '288'});
+    expect(contract.runtimeBoundary).toMatchObject({newMigration: false, newTableFunctionRouteOrUi: false, mountedSchedulerWorkerQueueOrPolicyExecutor: false, providerAdapterCallbackOrInboundReceiver: false, recipientMessageDeliveryViewRevokeResendOrRecovery: false, nextMigrationAbsent: '288'});
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort();
     expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
     expect(migrations.some(name => name.startsWith('288_'))).toBe(false);

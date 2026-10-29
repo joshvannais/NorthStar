@@ -252,7 +252,7 @@ describe('Mission 28 Part 7F delivery corrections, replies, opt-outs and minimiz
 
   test('roadmap and ledger preserve Part 7F release truth while Part 8A alone is candidate', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
-    expect(roadmap).toContain('Parts 1A–9D are released. Part 10A is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–10A are released. Part 10B is the sole implementation candidate.');
     expect(ledger).toContain('| 31 | 7E | Scoped links and customer-safe attachments | **Released** |');
     expect(ledger).toContain('| 32 | 7F | Delivery corrections, replies, opt-outs and minimized provider evidence | **Released** |');
     expect(ledger).toContain('| 33 | 8A | Mission 24 estimate/proposal/quote sending | **Released** |');

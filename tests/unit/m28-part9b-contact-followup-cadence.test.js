@@ -142,15 +142,22 @@ function canonicalTimeZone(value) {
 }
 
 function utcMillis(value) {
-  if (!UTC.test(value)) return NaN;
-  const millis = Date.parse(value);
-  return Number.isFinite(millis) ? millis : NaN;
+  const micros = utcMicros(value);
+  return micros === null ? NaN : Number(micros / 1000n);
+}
+
+function utcMicros(value) {
+  const match = typeof value === 'string' ? /^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})\.([0-9]{6})Z$/.exec(value) : null;
+  if (!match) return null;
+  const millisecondForm = `${match[1]}.${match[2].slice(0, 3)}Z`; const millis = Date.parse(millisecondForm);
+  if (!Number.isFinite(millis) || new Date(millis).toISOString() !== millisecondForm) return null;
+  return BigInt(millis) * 1000n + BigInt(match[2].slice(3));
 }
 
 function requireFresh(observedAt, evaluatedAt) {
-  const observed = utcMillis(observedAt); const evaluated = utcMillis(evaluatedAt);
-  if (!Number.isFinite(observed) || !Number.isFinite(evaluated) || observed > evaluated ||
-      evaluated - observed > contract.bounds.maximumResolutionObservationAgeSeconds * 1000) throw new Error('stale resolution');
+  const observed = utcMicros(observedAt); const evaluated = utcMicros(evaluatedAt);
+  if (observed === null || evaluated === null || observed > evaluated ||
+      evaluated - observed > BigInt(contract.bounds.maximumResolutionObservationAgeSeconds) * 1000000n) throw new Error('stale resolution');
 }
 
 function validate(input, trusted) {
@@ -212,8 +219,12 @@ function validate(input, trusted) {
       utcMillis(frequency.cadenceExpiresAt) <= utcMillis(input.evaluatedAt) || utcMillis(frequency.cadenceExpiresAt) - utcMillis(input.evaluatedAt) > contract.bounds.cadenceHorizonSeconds * 1000) throw new Error('frequency');
   requireFresh(frequency.observedAt, input.evaluatedAt);
   if ((frequency.attemptsInWindow === 0) !== (frequency.lastAcceptedAttemptAt === null) || (frequency.attemptsInWindow === 0) !== (frequency.nextAttemptNotBefore === null)) throw new Error('attempt evidence');
-  if (frequency.lastAcceptedAttemptAt !== null && (!Number.isFinite(utcMillis(frequency.lastAcceptedAttemptAt)) || !Number.isFinite(utcMillis(frequency.nextAttemptNotBefore)) ||
-      frequency.lastAcceptedAttemptAt > input.evaluatedAt || Date.parse(frequency.nextAttemptNotBefore) !== Date.parse(frequency.lastAcceptedAttemptAt) + frequency.minimumIntervalSeconds * 1000)) throw new Error('attempt time');
+  if (frequency.lastAcceptedAttemptAt !== null) {
+    const lastAttempt = utcMicros(frequency.lastAcceptedAttemptAt); const nextAttempt = utcMicros(frequency.nextAttemptNotBefore); const evaluated = utcMicros(input.evaluatedAt);
+    if (lastAttempt === null || nextAttempt === null || evaluated === null || lastAttempt > evaluated ||
+        lastAttempt < evaluated - BigInt(frequency.attemptWindowSeconds) * 1000000n ||
+        nextAttempt !== lastAttempt + BigInt(frequency.minimumIntervalSeconds) * 1000000n) throw new Error('attempt time');
+  }
   if ((frequency.state === 'limit_reached') !== (frequency.attemptsInWindow === frequency.attemptCeiling) ||
       (frequency.state === 'clear' && (frequency.attemptsInWindow >= frequency.attemptCeiling || (frequency.nextAttemptNotBefore !== null && frequency.nextAttemptNotBefore > input.evaluatedAt))) ||
       (frequency.state === 'minimum_interval_active' && (frequency.attemptsInWindow === 0 || frequency.attemptsInWindow >= frequency.attemptCeiling || frequency.nextAttemptNotBefore <= input.evaluatedAt))) throw new Error('frequency state');
@@ -359,6 +370,21 @@ describe('Mission 28 Part 9B bounded contact follow-up cadence', () => {
       value => { value.frequencyBinding.attemptsInWindow = 1; }, value => { value.frequencyBinding.lastAcceptedAttemptAt = '2026-10-29T12:00:00.000000Z'; },
       value => { value.frequencyBinding.cadenceExpiresAt = '2026-11-12T12:05:00.000000Z'; }, value => { value.frequencyBinding.state = 'limit_reached'; }]) {
       const candidate = fixture(); mutation(candidate); seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow();
+    }
+  });
+
+  test('binds every positive count to the exact inclusive seven-day attempt window', () => {
+    const inside = fixture(); inside.frequencyBinding = frequencyBinding('clear', 1); seal(inside); expect(project(inside, copy(inside)).resultState).toBe(contract.decisionContract.resultState);
+    const threshold = fixture(); threshold.frequencyBinding = frequencyBinding('clear', 1);
+    threshold.frequencyBinding.lastAcceptedAttemptAt = '2026-10-21T12:05:00.000000Z'; threshold.frequencyBinding.nextAttemptNotBefore = '2026-10-22T12:05:00.000000Z'; seal(threshold);
+    expect(project(threshold, copy(threshold)).resultState).toBe(contract.decisionContract.resultState);
+    for (const [last, next] of [
+      ['2026-10-21T12:04:59.999999Z', '2026-10-22T12:04:59.999999Z'],
+      ['2026-10-21T12:04:59.000000Z', '2026-10-22T12:04:59.000000Z'],
+      ['2026-10-20T12:00:00.000000Z', '2026-10-21T12:00:00.000000Z']
+    ]) {
+      const stale = fixture(); stale.frequencyBinding = frequencyBinding('clear', 1); stale.frequencyBinding.lastAcceptedAttemptAt = last; stale.frequencyBinding.nextAttemptNotBefore = next; seal(stale);
+      expect(() => project(stale, copy(stale))).toThrow('attempt time');
     }
   });
 

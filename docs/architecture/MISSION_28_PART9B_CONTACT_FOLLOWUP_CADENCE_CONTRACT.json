@@ -94,6 +94,7 @@
     "states": ["clear", "minimum_interval_active", "limit_reached", "unavailable"],
     "zeroAttempts": "requires_lastAcceptedAttemptAt_and_nextAttemptNotBefore_null",
     "positiveAttempts": "requires_exact_lastAcceptedAttemptAt_not_after_evaluatedAt_and_nextAttemptNotBefore_equal_last_plus_minimum_interval",
+    "attemptWindowMembership": "positive_lastAcceptedAttemptAt_must_be_within_the_exact_inclusive_interval_from_evaluatedAt_minus_attemptWindowSeconds_through_evaluatedAt; exact_start_threshold_is_accepted_and_any_older_instant_is_denied",
     "minimumIntervalActive": "attempts_below_ceiling_and_nextAttemptNotBefore_strictly_after_evaluatedAt",
     "limitReached": "attemptsInWindow_equals_attemptCeiling",
     "clear": "attemptsInWindow_is_less_than_attemptCeiling",

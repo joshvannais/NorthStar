@@ -1,0 +1,146 @@
+{
+  "contractVersion": "mission28.part10c.work-state-communication-boundary.v1",
+  "authority": {
+    "mission": 28,
+    "part": "10C",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "aba9701e18ed02048c666aaa1334f1d5a2993e5b",
+    "baselineTree": "d093ba7d009d9fe032feb5db3bc8b4a8cb521c5e",
+    "scope": "exact_current_Mission23_customer_safe_work_progress_blocker_completion_reopening_no_effect_boundary_only",
+    "communicationRecipientProviderTaskNotificationOrEffectAuthorityGranted": false,
+    "workExecutionCompletionEvidenceOrUpstreamMutationAuthorityGranted": false,
+    "part10DOrLaterAuthorityGranted": false
+  },
+  "part10BRelease": {
+    "acceptedSourceHead": "99d5668de99807c0314cd20c32d18c16c677a4ac",
+    "acceptedTree": "d093ba7d009d9fe032feb5db3bc8b4a8cb521c5e",
+    "freshAudit": "P0_P1_P2_P3_zero",
+    "pullRequest": 590,
+    "mergedMain": "aba9701e18ed02048c666aaa1334f1d5a2993e5b",
+    "deployment": "f9f8199b-be1b-497c-ba80-e2c569a9f9ac",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "2297ca45-f10a-4558-b0ad-05f7e01adc9f",
+    "imageSha256": "6ef12845ec18fa87a1ef36471683bfea2010c98d9adf054ac8b12db21c5e34f6",
+    "migrationEvidence": "source_283_through_287_no_288; direct_applied_history_not_requeried_and_unclaimed",
+    "health": ["canonical_startup_ready", "database_and_canonical_persistence_healthy", "api_health_root_dashboard_demo_HTTP_200", "dashboard_demo_91314_byte_sha256_ab65083c5dd9bac308798171df2e65f711e89df9a6864ea15b569bf9f64ab757_parity"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF"},
+    {"path": "docs/architecture/MISSION_28_PART10B_DISPATCH_COMMUNICATION_BOUNDARY_CONTRACT.json", "normalizedLfSha256": "9B0633BFF4670278B60DCEF88812ED71BC57E6EA3E59FF545631377DCC94A0A7"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateWorkProgressCompletionReopeningPermissionOrEffectNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumCanonicalRequestBytes": 65536,
+    "missingUnknownUnreviewedStaleMixedAmbiguousCorrectedOrChangedFallback": "deny"
+  },
+  "requestKinds": [
+    {"id": "work_started_notice", "sourceMode": "unavailable", "resultState": "unavailable_source_fact_not_supported", "reasonCode": "work_started_source_fact_unavailable", "fixedLabel": "Work-started update unavailable — exact customer-safe source not supported"},
+    {"id": "work_progress_notice", "sourceMode": "progress", "resultState": "unavailable_no_accepted_external_authority", "reasonCode": "work_progress_communication_not_launched", "fixedLabel": "Work progress update unavailable — communication authority not launched"},
+    {"id": "work_blocked_notice", "sourceMode": "progress", "resultState": "unavailable_no_accepted_external_authority", "reasonCode": "work_blocked_communication_not_launched", "fixedLabel": "Work blocker update unavailable — communication authority not launched"},
+    {"id": "ready_for_review_notice", "sourceMode": "unavailable", "resultState": "unavailable_source_fact_not_supported", "reasonCode": "ready_for_review_source_fact_unavailable", "fixedLabel": "Review-ready update unavailable — exact customer-safe source not supported"},
+    {"id": "work_completed_notice", "sourceMode": "completion", "resultState": "unavailable_no_accepted_external_authority", "reasonCode": "work_completed_communication_not_launched", "fixedLabel": "Work completion update unavailable — communication authority not launched"},
+    {"id": "work_reopened_notice", "sourceMode": "completion", "resultState": "unavailable_no_accepted_external_authority", "reasonCode": "work_reopened_communication_not_launched", "fixedLabel": "Work reopening update unavailable — communication authority not launched"},
+    {"id": "aftercare_notice", "sourceMode": "unavailable", "resultState": "unavailable_source_fact_not_supported", "reasonCode": "aftercare_source_fact_unavailable", "fixedLabel": "Aftercare update unavailable — exact customer-safe source not supported"}
+  ],
+  "resolutionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "resolutionId", "requestedKind", "sourceBinding", "customerSafeBinding", "launchMatrixBinding", "communicationBasisBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "sourceBindingExactFields": ["tenantId", "sourceMode", "sourceTriggerId", "sourceRecordIdentityDigest", "sourceCurrentnessPinsDigest", "customerSafeEvidenceDigest", "executionId", "executionRevision", "executionDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "progressRecordId", "progressRevision", "progressDigest", "progressKind", "progressState", "progressReviewState", "progressUncertainty", "completionRecordId", "completionRecordRevision", "completionRecordDigest", "completionAction", "lifecycleState", "eventKind", "eventTime", "sourceEventField", "sourceStateSelector", "observedAt", "snapshotId", "snapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState", "lineageState", "sourceUnavailableReason"],
+    "customerSafeBindingExactFields": ["state", "fixedLabel", "rawDescriptionIncluded", "internalNotesIncluded", "staffIdentityIncluded", "staffContactIncluded", "costIncluded", "marginIncluded", "quantityIncluded", "predictionIncluded", "uncertainCompletionIncluded"],
+    "launchMatrixBindingExactFields": ["contractDigest", "actionFamily", "firstLaunchState", "acceptedSourceClassCount", "acceptedRoleCount", "acceptedCapabilityCount", "acceptedChannelCount", "acceptedRecipientClassCount", "externalEffectsEnabled"],
+    "communicationBasisBindingExactFields": ["contractDigest", "externalResult", "permissionResolutionId", "permissionResolutionDigest", "permissionBasisState", "channelId", "providerMode"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"]
+  },
+  "sourceAuthorityTruth": {
+    "progressTriggerId": "m23.work_progress_state",
+    "completionTriggerId": "m23.work_completion_reopening_state",
+    "progress": "one exact latest reviewed Mission23 progress record with tenant execution record identity revisions digests exact progressRecord.observedAt event field selector snapshot source set currentness and original lineage",
+    "blocked": "one exact latest reviewed Mission23 blocker or exception whose state remains open investigating or awaiting_follow_up; description category impact severity follow-up notes and staff details are not projected",
+    "completed": "one exact latest Mission23 completion_approved event with completionRecord.decidedAt action approve_completion selector and lifecycle completed",
+    "reopened": "one exact latest Mission23 work_reopened event with completionRecord.decidedAt action reopen_execution selector and lifecycle reopened; it invalidates any older completion projection",
+    "unsupported": "Part4A has no accepted customer-safe trigger for work_started ready_for_review or aftercare; in_progress completion_pending clocks quantities milestones or predictions must not synthesize one",
+    "factBoundary": "progress_blocker_completion_and_reopening_are_source_facts_only_and_never permission_approval_recipient_channel_provider_message_or_effect_authority"
+  },
+  "currentAuthorityTruth": {
+    "launchMatrix": "Part1D customer_communication remains unavailable with zero accepted source classes roles capabilities channels recipients or bindings and externalEffectsEnabled false",
+    "communicationBasis": "Part7B externalResult remains unavailable_or_suppressed until later accepted launch legal provider channel and effect authority",
+    "effect": "every request resolves to a fixed owner-readable unavailable projection with zero record task notification message provider work execution completion reopening or external effect"
+  },
+  "decisionContract": {
+    "closedKindOrder": ["work_started_notice", "work_progress_notice", "work_blocked_notice", "ready_for_review_notice", "work_completed_notice", "work_reopened_notice", "aftercare_notice"],
+    "precedence": ["malformed_or_untrusted_input", "source_kind_or_event_not_supported", "source_not_exact_current_reviewed_and_consistent", "customer_safe_projection_invalid", "launch_matrix_unavailable", "communication_basis_unavailable"],
+    "supportedProgressReviewStates": ["owner_confirmed", "worker_acknowledged"],
+    "supportedBlockingStates": ["open", "investigating", "awaiting_follow_up"],
+    "currentLaunchOutcome": "all_kinds_unavailable_no_effect",
+    "fixedLabels": "exact_contract_labels_only_no_free_text_customer_staff_work_note_cost_margin_quantity_prediction_contact_or_path_reflection"
+  },
+  "digestAndReplayContract": {
+    "materialDigest": "server_recomputed_over_all_trusted_material_except_resolutionId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_request_kind_exact_Mission23_source_customer_safe_projection_launch_and_communication_basis_excluding_resolutionId_evaluatedAt_and_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_projection_replay_no_record_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse"
+  },
+  "deniedCombinations": [
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "cross_tenant_execution_assignment_progress_completion_snapshot_currentness_actor_session_membership_or_idempotency_retarget",
+    "missing_unreviewed_stale_mixed_unavailable_corrected_tombstoned_superseded_or_nonlatest_source",
+    "work_started_ready_for_review_aftercare_or_completion_inferred_from_lifecycle_clock_quantity_milestone_note_prediction_or_silence",
+    "progress_or_blocker_notice_without_exact_reviewed_progress_record_and_supported_review_state",
+    "completed_notice_without_exact completion_approved approve_completion completed current state",
+    "reopened_notice_without_exact work_reopened reopen_execution reopened current state",
+    "older_completion_used_after_reopening_or_reopened_state_used_as_completed",
+    "raw_description_internal_note_staff_identity_contact_cost_margin_quantity_prediction_uncertain_completion_or_private_evidence",
+    "candidate_created_recipient_permission_consent_channel_provider_policy_authorization_suppression_or_effect_authority",
+    "runtime_route_UI_scheduler_worker_queue_publisher_consumer_provider_callback_message_delivery_or_effect",
+    "upstream_work_progress_completion_reopening_evidence_schedule_customer_financial_accounting_or_money_mutation",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "mountedSchedulerWorkerQueueOrPolicyExecutor": false,
+    "providerAdapterCallbackOrInboundReceiver": false,
+    "customerOrInternalMessageNotificationTaskOrWorklistRecord": false,
+    "workProgressCompletionReopeningOrEvidenceMutation": false,
+    "externalEffectOrUpstreamMutation": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "rawCustomerOrStaffContactValues": 0,
+    "rawWorkDescriptionsNotesCostMarginQuantityOrPredictionValues": 0,
+    "ownerWorklistRecordsOrTasksCreated": 0,
+    "notificationsCreated": 0,
+    "recipientMessages": 0,
+    "providerAttempts": 0,
+    "workProgressCompletionReopeningOrEvidenceMutations": 0,
+    "externalEffects": 0,
+    "upstreamMutations": 0,
+    "accountingOrMoneyEffects": 0
+  },
+  "unavailableEvidence": [
+    "accepted customer communication launch cell country region consent reviewed basis recipient channel template provider sender callback effect and retention authority",
+    "accepted customer_safe work_started ready_for_review or aftercare source trigger",
+    "customer_safe raw progress blocker completion reopening note staff cost margin quantity prediction or uncertainty wording",
+    "real recipient message provider attempt delivery reply work progress blocker completion reopening aftercare customer action or outcome evidence",
+    "direct current_deployment applied migration history re_query",
+    "private production customer data provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent employment customer update marketing consumer protection regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part10D": "customer_response_handoffs_owner_staff_tasks_and_source_correction_cancellation_not_implemented",
+    "part11Plus": "financial_collections_integrations_analytics_UI_demo_and_release_readiness_remain_planned_unimplemented"
+  }
+}

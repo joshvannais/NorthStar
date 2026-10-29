@@ -17,13 +17,14 @@
     "acceptedSourceHead": "348c9f4ea829e04478b89bc4a5f7a733a1fb1f19",
     "acceptedTree": "9dbb4b713954d1755f8065e45e906f2a38a2be57",
     "freshAudit": "P0_P1_P2_P3_zero",
+    "freshAuditEvidence": "exact_Node_22.23.3; focused_16_of_16; cumulative_43_suites_588_tests; migration_history_2_suites_40_tests; syntax_43; JSON_42",
     "pullRequest": 591,
     "mergedMain": "762653d73dc88ecfd77c14d0bb66382fa15669c7",
-    "deploymentIdentity": "unavailable_not_supplied",
-    "imageIdentity": "unavailable_not_supplied",
-    "runningInstance": "unavailable_not_supplied",
+    "deploymentIdentity": "8351d5f6-ff12-4879-817e-ae9fcbb2da88_SUCCESS",
+    "imageIdentity": "sha256:500667adc4caa5531b95a01c912f510f212594c7a96d85927e5df0fc65978f7c",
+    "runningInstance": "8afab154-8d56-4104-8f64-1acf6f456d7f",
     "migrationEvidence": "source_283_through_287_no_288; direct_applied_history_not_requeried_and_unclaimed",
-    "healthEvidence": "unavailable_not_supplied"
+    "healthEvidence": "canonical_startup_ready; api_health_root_dashboard_demo_HTTP_200; database_and_canonicalPersistence_healthy; dashboard_demo_exact_91314_byte_sha256_ab65083c5dd9bac308798171df2e65f711e89df9a6864ea15b569bf9f64ab757_parity"
   },
   "frozenInputs": [
     {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},

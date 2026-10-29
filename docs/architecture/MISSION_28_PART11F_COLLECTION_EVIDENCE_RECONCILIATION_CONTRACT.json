@@ -1,0 +1,201 @@
+{
+  "contractVersion": "mission28.part11f.collection-evidence-reconciliation.v1",
+  "authority": {
+    "mission": 28,
+    "part": "11F",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "f4c904f59bfc02999bd4fe23f4c3c158aee74c9e",
+    "baselineTree": "8895d7d25c28334d2cf234ed465c5ddf8059cba1",
+    "frozenSourceSha256": "DDBA5CA7523A1684330E136313F4416584D142A63167310EEABEC1EBFBB010B4",
+    "scope": "tenant_private_owner_readable_no_effect_collection_communication_evidence_and_exact_Mission27_outcome_reconciliation_only",
+    "communicationEvidenceCreatesPaymentCashRevenueAccountingSettlementCollectedBalanceOrCollectionSuccess": false,
+    "recipientMessageProviderPromisePaymentOrExternalEffectGranted": false,
+    "durableRuntimePersistenceOrMutationGranted": false,
+    "part12AOrLaterAuthorityGranted": false
+  },
+  "part11ERelease": {
+    "acceptedSourceHead": "ce5ea804c8d33b2ec1ba9eb9bf9c01cd99ccdda8",
+    "acceptedTree": "8895d7d25c28334d2cf234ed465c5ddf8059cba1",
+    "freshAudit": "P0_P1_P2_P3_zero",
+    "freshAuditEvidence": "exact_Node_22.23.3; focused_14_of_14; Part11A_through_Part11E_74_of_74; cumulative_49_suites_676_tests; migration_history_2_suites_40_tests; syntax_49_of_49; JSON_48_of_48; migrations_283_through_287_no_288; all_53_changed_paths_docs_tests; protected_0; diff_clean; clean_remote_exact",
+    "pullRequest": 597,
+    "mergedAt": "2026-10-29T18:40:50Z",
+    "mergedMain": "f4c904f59bfc02999bd4fe23f4c3c158aee74c9e",
+    "deploymentIdentity": "f92d6748-1ee9-436d-972e-daa980c2836f_SUCCESS",
+    "imageIdentity": "sha256:32d3283e1c6efa109a5981ffb9cb3a4c5b5165094b22ecc19c60312fce97096c",
+    "runningInstance": "7ee4f747-38c2-4baa-a024-1d7db6e7c218",
+    "migrationEvidence": "source_283_through_287_no_288; direct_applied_history_not_requeried_and_unclaimed",
+    "healthEvidence": "canonical_startup_ready; api_health_root_dashboard_demo_HTTP_200; database_and_canonicalPersistence_healthy; dashboard_demo_exact_91681_byte_sha256_b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369_parity"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1A_AUTHORITY_CONTRACT.md", "normalizedLfSha256": "92DAD00F8A7623A87C780FC1AC965B66569616650F53FDED8454F51872458179"},
+    {"path": "docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json", "normalizedLfSha256": "3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART7F_DELIVERY_EVIDENCE_CONTRACT.json", "normalizedLfSha256": "482B381597FCC60803F6BFDE8366468C8CDED2C731B24B74681B12A547B11706"},
+    {"path": "docs/architecture/MISSION_28_PART11A_COLLECTION_ELIGIBILITY_CONTRACT.json", "normalizedLfSha256": "5ADA756AB4C2C94332DE0DAD01E721DCD6F5548B3829D7D1A27F1AB5ACB158FA"},
+    {"path": "docs/architecture/MISSION_28_PART11B_REMINDER_POLICY_CONTRACT.json", "normalizedLfSha256": "B4E03ADDA4AF59229BDE852A04C56360967DC598A1D75976F4D17546CAA0FCA2"},
+    {"path": "docs/architecture/MISSION_28_PART11C_REMINDER_MATERIAL_CONTRACT.json", "normalizedLfSha256": "0066B55B7403087837480988D6229B394C489024EB5CC1C5946709F83DF2125C"},
+    {"path": "docs/architecture/MISSION_28_PART11D_SUPPRESSION_REBUILD_CONTRACT.json", "normalizedLfSha256": "07E3E33E63FF29AF4F995E388DE625404E5CFE5DD88CF51D3C19565B350FD3A9"},
+    {"path": "docs/architecture/MISSION_28_PART11E_OWNER_WORKLIST_LEGAL_BOUNDARY_CONTRACT.json", "normalizedLfSha256": "122E80E98CF6E81EA8D0349F4CC43C34381C0A071922EE417B0C4288F50EEBD7"},
+    {"path": "docs/architecture/MISSION_27_PART10D_COLLECTION_ACCEPTANCE.md", "normalizedLfSha256": "E34C76D363D53535DAED8F91BD72BBE2D8A5E1C4ED3AE3348C31760C03EECEDA"},
+    {"path": "src/customerFinancial/collectionPart10Acceptance.js", "normalizedLfSha256": "470F63B171B2D77FBA3CF05D2200CAF651EF83BAA8F16C63425137633BCF302A"},
+    {"path": "src/customerFinancial/collectionReview.js", "normalizedLfSha256": "F6BEF202C8A92FDFF8B844EF74254A503660ECF9627FA6D8063FBC6D942499C4"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateCommunicationEvidencePromiseSuppressionInterventionOrMission27OutcomeNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "evidenceHeadCount": 6,
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumSafeLineageRevision": 9007199254740991,
+    "maximumCanonicalRequestBytes": 131072,
+    "missingUnknownStaleMixedCorrectedAmbiguousUnsupportedConflictingOrUnresolvedFallback": "collection_reconciliation_unavailable_no_exact_current_evidence"
+  },
+  "reconciliationEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "reconciliationId", "acceptedChainBinding", "communicationEvidenceHeads", "mission27OutcomeBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "acceptedChainBindingExactFields": ["tenantId", "issuedInvoiceId", "issuedVersionDigest", "customerId", "policyId", "policyVersion", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "part11AResolutionId", "part11AMaterialDigest", "part11AResultState", "part11AReasonCode", "part11BProjectionId", "part11BMaterialDigest", "part11BResultState", "part11BReasonCode", "part11CProjectionId", "part11CMaterialDigest", "part11CResultState", "part11CReasonCode", "part11DDecisionId", "part11DMaterialDigest", "clearResolutionId", "clearResolutionDigest", "part11DResolutionState", "part11EProjectionId", "part11EMaterialDigest", "part11EResultState", "part11EReasonCode", "part11ELevelId", "recordedCurrentnessState"],
+    "communicationEvidenceHeadExactFields": ["evidenceKind", "sourceAuthorityId", "tenantId", "issuedInvoiceId", "issuedVersionDigest", "lineageId", "headEventId", "headRevision", "headDigest", "predecessorEventId", "predecessorEventDigest", "sourceRecordId", "sourceRecordRevision", "sourceRecordDigest", "evidenceState", "eventAt", "observedAt", "currentnessState"],
+    "mission27OutcomeBindingExactFields": ["tenantId", "issuedInvoiceId", "issuedVersionDigest", "sourceContractVersion", "sourceBundleVersion", "sourceAcceptanceState", "sourceAcceptanceReason", "sourceAcceptanceDigest", "outcomeAuthorityState", "outcomeRecordId", "outcomeRevision", "outcomeDigest", "outcomeState", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "currentnessState", "observedAt"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest", "recordScope"],
+    "outputFieldsCreatedOnlyByTrustedProjection": ["reconciliationId", "tenantId", "issuedInvoiceId", "issuedVersionDigest", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "evidenceSummaryDigest", "mission27OutcomeAuthorityState", "evaluatedAt", "resultState", "reasonCode", "labelId", "fixedLabel", "ownerReadableReconciliationOnly", "communicationAttemptCreated", "messageCreated", "providerAttemptCreated", "promiseCreated", "suppressionCreated", "ownerTaskCreated", "paymentCreated", "cashRecorded", "revenueRecorded", "settlementCreated", "accountingMutationCreated", "balanceMutationCreated", "collectionOutcomeCreated", "collectionSuccessClaimed", "externalEffectCreated", "upstreamMutationCreated", "moneyEffectCreated"]
+  },
+  "evidenceCatalog": [
+    {"order": 1, "evidenceKind": "attempt", "sourceAuthorityId": "mission28.part7f.delivery-evidence.v1:providerAttemptState", "closedStates": ["not_created", "attempt_recorded_no_delivery_claim", "attempt_uncertain"], "strongestMeaning": "attempt_only_never_sent_delivered_replied_paid_or_collected", "fixedLabel": "Communication attempt evidence — no delivery or collection outcome established"},
+    {"order": 2, "evidenceKind": "delivery", "sourceAuthorityId": "mission28.part7f.delivery-evidence.v1:deliveryState", "closedStates": ["unavailable_no_message_or_evidence", "provider_accepted", "sent", "delivered", "failed", "unknown"], "strongestMeaning": "exact_delivery_label_only_never_reply_payment_or_collection", "fixedLabel": "Delivery evidence — no payment or collection outcome established"},
+    {"order": 3, "evidenceKind": "reply", "sourceAuthorityId": "mission28.part7f.delivery-evidence.v1:authenticatedResponseStates", "closedStates": ["unavailable_no_authenticated_inbound", "reply_received", "customer_question_received", "opt_out_received"], "strongestMeaning": "authenticated_response_label_only_no_payment_promise_or_collection_inference", "fixedLabel": "Reply evidence — no payment or collection outcome established"},
+    {"order": 4, "evidenceKind": "promise", "sourceAuthorityId": "m27-collection-review-v1:promiseToPayState", "closedStates": ["none", "recorded", "due", "kept", "missed", "unavailable"], "strongestMeaning": "reviewed_customer_commitment_evidence_only_never_payment_authorization_settlement_or_collection", "fixedLabel": "Promise evidence — payment and collection remain separately unresolved"},
+    {"order": 5, "evidenceKind": "suppression", "sourceAuthorityByResolutionState": {"suppress_exact_current": "mission28.part11d.suppression-rebuild.v1:decision", "rebuild_exact_current": "mission28.part11d.suppression-rebuild.v1:decision", "clear_exact_current_no_trigger": "mission28.part11e.owner-worklist-legal-boundary.v1:clearResolution"}, "closedStates": ["clear_exact_current_no_trigger", "suppress_exact_current", "rebuild_exact_current"], "strongestMeaning": "current_material_control_only_never_financial_or_collection_outcome", "fixedLabel": "Suppression evidence — no collection outcome established"},
+    {"order": 6, "evidenceKind": "owner_intervention", "sourceAuthorityId": "mission28.part11e.owner-worklist-legal-boundary.v1:selectedLevelId", "closedStates": ["owner_worklist_unavailable", "pause_review", "rebuild_review", "approval_request_review", "manual_contact_review", "final_supported_notice_review"], "strongestMeaning": "owner_review_label_only_never_task_message_legal_or_collection_outcome", "fixedLabel": "Owner review evidence — no collection outcome established"}
+  ],
+  "acceptedChainCoherence": [
+    {"part11DResolutionState": "suppress_exact_current", "part11ELevelId": "pause_review", "part11EResultState": "owner_pause_review_no_effect", "part11EReasonCode": "exact_current_suppression_requires_owner_review"},
+    {"part11DResolutionState": "rebuild_exact_current", "part11ELevelId": "rebuild_review", "part11EResultState": "owner_rebuild_review_no_effect", "part11EReasonCode": "exact_current_source_change_requires_rebuild_review"},
+    {"part11DResolutionState": "clear_exact_current_no_trigger", "part11ELevelId": "approval_request_review", "part11EResultState": "owner_approval_request_review_no_effect", "part11EReasonCode": "supported_late_stage_requires_owner_approval_review"},
+    {"part11DResolutionState": "clear_exact_current_no_trigger", "part11ELevelId": "manual_contact_review", "part11EResultState": "owner_manual_contact_review_no_effect", "part11EReasonCode": "supported_late_stage_allows_manual_contact_review_only"},
+    {"part11DResolutionState": "clear_exact_current_no_trigger", "part11ELevelId": "final_supported_notice_review", "part11EResultState": "owner_final_supported_notice_review_no_effect", "part11EReasonCode": "supported_late_stage_allows_final_notice_review_only"}
+  ],
+  "acceptedChainResolutionIdentityContract": {
+    "suppressOrRebuild": "part11DDecisionId_and_part11DMaterialDigest_are_exact_nonnull_Part11D_decision_identity_and_digest_while_clearResolutionId_and_clearResolutionDigest_are_null",
+    "clear": "clearResolutionId_and_clearResolutionDigest_are_exact_nonnull_separately_trusted_Part11E_clear_resolution_identity_and_digest_while_part11DDecisionId_and_part11DMaterialDigest_are_null",
+    "suppressOrRebuildAuthority": "mission28.part11d.suppression-rebuild.v1:decision",
+    "clearAuthority": "mission28.part11e.owner-worklist-legal-boundary.v1:clearResolution",
+    "evidenceHeadBinding": "the_suppression_evidence_head_sourceAuthorityId_sourceRecordId_and_sourceRecordDigest_equal_the_single_active_branch_specific_mutually_exclusive_resolution_authority_identity_and_digest",
+    "candidateMayNotFabricateRetargetCombineOrSubstituteEitherResolutionIdentity": true
+  },
+  "lineageAndCurrentnessContract": {
+    "fixedEvidenceOrder": ["attempt", "delivery", "reply", "promise", "suppression", "owner_intervention"],
+    "oneExactHeadPerKind": true,
+    "appendOnlyCorrection": "a_changed_evidence_head_requires_the_same_tenant_invoice_version_kind_and_lineageId_exact_next_revision_exact_prior_head_identity_and_digest_and_a_materially_different_source_record_digest",
+    "firstHead": "revision_one_requires_null_predecessor_identity_and_digest",
+    "laterHead": "revision_greater_than_one_requires_nonnull_exact_immediate_predecessor_identity_and_digest",
+    "sourceBinding": "each_head_is_separately_server_resolved_to_its_named_accepted_source_authority_and_exact_source_record_identity_revision_digest",
+    "timeOrder": "eventAt_must_not_follow_observedAt_and_observedAt_must_not_follow_evaluatedAt; time_never_overrides_lineage_or_authoritative_head",
+    "latestCurrent": "every_communication_evidence_head_must_be_latest_exact_current; the_separately_trusted_Mission27_binding_must_be_a_fresh_exact_unavailable_resolution_until_a_later_accepted_outcome_authority_exists",
+    "crossRequestCrossTenantCrossInvoiceCrossVersionCrossKindCrossLineageAliasCloneOrReplayReuse": "deny"
+  },
+  "mission27OutcomeContract": {
+    "requiredSourceContractVersion": "m27-collection-part10-acceptance-v1",
+    "requiredSourceBundleVersion": "m27-collection-part10-preview-bundle-v1",
+    "currentSourceAcceptanceState": "unavailable",
+    "currentSourceAcceptanceReason": "part10_collection_evidence_unavailable",
+    "currentOutcomeAuthorityState": "unavailable_no_exact_current_collection_outcome",
+    "currentOutcomeIdentity": "all_outcome_record_revision_digest_state_source_set_and_head_fields_are_null_because_no_exact_current_Mission27_collection_outcome_exists",
+    "futurePositiveOutcomeRule": "only_a_later_separately_accepted_exact_current_Mission27_collection_outcome_authority_may_supply_a_nonnull_outcome_identity_state_source_set_and_authoritative_head",
+    "paymentSettlementAccountingOrBalanceEvidenceAloneNeverCreatesCollectionOutcome": true,
+    "attemptDeliveryReplyPromiseSuppressionOrOwnerInterventionNeverCreatesCollectionOutcome": true
+  },
+  "fixedDecision": {
+    "resultState": "collection_reconciliation_unavailable_no_exact_current_outcome_authority",
+    "reasonCode": "Mission27_collection_outcome_and_complete_communication_evidence_resolver_unavailable",
+    "labelId": "collection_reconciliation_unavailable",
+    "fixedLabel": "Collection reconciliation unavailable — exact current outcome evidence is not available",
+    "neverMeans": "attempt_message_delivery_reply_promise_suppression_task_payment_cash_revenue_settlement_accounting_balance_collection_success_or_effect_created_or_proven"
+  },
+  "digestAndReplayContract": {
+    "canonicalizationRule": "UTF8_JSON_with_lexicographically_sorted_object_keys_and_array_order_preserved",
+    "evidenceSummaryDigest": "server_recomputed_over_the_exact_ordered_six_current_evidence_heads",
+    "materialDigest": "server_recomputed_over_all_trusted_reconciliation_material_except_reconciliationId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_exact_Part11A_through_Part11E_chain_ordered_evidence_heads_Mission27_outcome_actor_and_authoritative_head_material_excluding_reconciliationId_evaluatedAt_and_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_readable_replay_no_record_message_payment_collection_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse"
+  },
+  "currentAvailability": {
+    "completeMountedPart11AThroughPart11FResolverAvailable": false,
+    "acceptedExternalAttemptDeliveryReplyOrProviderEvidenceAvailable": false,
+    "acceptedCurrentPromiseOrOwnerInterventionPersistenceAvailable": false,
+    "exactCurrentMission27CollectionOutcomeAvailable": false,
+    "durableReconciliationOrWorklistRuntimeAvailable": false,
+    "recipientProviderPaymentAccountingOrMoneyAuthorityAvailable": false,
+    "currentLiveResult": "collection_reconciliation_unavailable_no_exact_current_outcome_authority",
+    "ownerReadableNoEffectGrammarDefined": true
+  },
+  "deniedCombinations": [
+    "missing_unknown_stale_mixed_corrected_ambiguous_unsupported_conflicting_or_unresolved_accepted_chain_evidence_head_Mission27_outcome_actor_or_currentness",
+    "cross_tenant_cross_actor_cross_session_cross_membership_cross_customer_cross_invoice_cross_version_cross_policy_cross_source_set_cross_head_cross_kind_or_cross_lineage_graft",
+    "missing_duplicate_reordered_extra_or_unknown_evidence_kind",
+    "skipped_reused_regressed_nonpredecessor_or_same_material_lineage_revision",
+    "event_or_observation_time_arrival_order_or_array_order_used_to_override_lineage_or_authoritative_head",
+    "provider_accepted_sent_or_delivered_treated_as_reply_payment_cash_revenue_accounting_collection_or_success",
+    "reply_question_opt_out_or_promise_treated_as_payment_authorization_settlement_cash_collection_or_success",
+    "suppression_rebuild_or_owner_intervention_treated_as_attempt_message_payment_collection_legal_or_external_effect",
+    "payment_receipt_settlement_offline_tender_accounting_balance_or_zero_balance_evidence_treated_as_Mission27_collection_outcome_without_the_separate_exact_outcome_authority",
+    "candidate_supplied_attempt_delivery_reply_promise_suppression_owner_intervention_or_Mission27_outcome_authority",
+    "raw_name_email_phone_address_invoice_number_amount_message_reply_promise_note_provider_payload_secret_token_or_legal_text",
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "communication_worklist_task_promise_suppression_payment_settlement_accounting_balance_collection_or_external_record_created",
+    "recipient_message_provider_callback_payment_cash_revenue_financial_accounting_balance_upstream_collection_legal_or_money_effect",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "communicationEvidenceOrReconciliationRecordCreated": false,
+    "mountedResolverAvailable": false,
+    "schedulerWorklistTaskWorkerQueue": false,
+    "recipientChannelProviderCallbackOrMessage": false,
+    "paymentSettlementAccountingBalanceOrCollectionMutation": false,
+    "externalEffectUpstreamMutationOrMoneyMovement": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "communicationAttemptsCreated": 0,
+    "messagesCreated": 0,
+    "providerAttemptsCreated": 0,
+    "promisesCreated": 0,
+    "suppressionsCreated": 0,
+    "ownerTasksCreated": 0,
+    "paymentsCreated": 0,
+    "cashRecordsCreated": 0,
+    "revenueRecordsCreated": 0,
+    "settlementsCreated": 0,
+    "accountingMutationsCreated": 0,
+    "balanceMutationsCreated": 0,
+    "collectionOutcomesCreated": 0,
+    "collectionSuccessClaimsCreated": 0,
+    "externalEffectsCreated": 0,
+    "upstreamMutationsCreated": 0,
+    "moneyEffectsCreated": 0
+  },
+  "unavailableEvidence": [
+    "complete mounted exact-current Part11A through Part11F resolver immutable communication evidence history or durable reconciliation record",
+    "accepted recipient channel sender provider adapter attempt callback delivery reply opt-out or effect authority and real messages",
+    "current persisted reviewed customer promise owner intervention worklist task or suppression runtime",
+    "exact current Mission27 collection-outcome authority beyond the released unavailable Part10 acceptance",
+    "real payment cash revenue settlement accounting balance collection success or money evidence",
+    "private production provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent collections debt consumer protection accounting tax regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part12A": "tenant_private_owner_staff_action_queue_persistence_and_lifecycle",
+    "laterAuthorityNotGranted": true
+  }
+}

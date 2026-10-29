@@ -218,7 +218,7 @@ describe('Mission 28 Part 8A estimate, proposal and quote sending authority', ()
 
   test('roadmap and ledger preserve the released Part8A while Part8B alone is candidate', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8'); const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
-    expect(roadmap).toContain('Parts 1A–11D are released. Part 11E is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–11E are released. Part 11F is the sole implementation candidate.');
     expect(ledger).toContain('| 32 | 7F | Delivery corrections, replies, opt-outs and minimized provider evidence | **Released** |');
     expect(ledger).toContain('| 33 | 8A | Mission 24 estimate/proposal/quote sending | **Released** |');
     expect(ledger).toContain('| 34 | 8B | Mission 27 financial-document delivery without financial mutation | **Released** |');

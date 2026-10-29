@@ -204,7 +204,7 @@ describe('Mission 28 Part 7D provider-neutral channel and handoff truth', () => 
 
   test('roadmap and ledger keep Part 7D candidate-only and later slices planned', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
-    expect(roadmap).toContain('Parts 1A–11D are released. Part 11E is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–11E are released. Part 11F is the sole implementation candidate.');
     expect(ledger).toContain('| 29 | 7C | Approved templates, bounded variables and AI-draft boundary | **Released** |');
     expect(ledger).toContain('| 30 | 7D | Provider-neutral email/SMS and truthful native handoff | **Released** |');
     expect(ledger).toContain('| 31 | 7E | Scoped links and customer-safe attachments | **Released** |');

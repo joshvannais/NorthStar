@@ -220,7 +220,7 @@ describe('Mission 28 Part 11C reminder material', () => {
 
   test('roadmap and ledger record Part11B released Part11C candidate and later slices planned', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8'); const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
-    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–11D are released. Part 11E is the sole implementation candidate.'); expect(value).toContain('914f5d4424a300d8ab3649141ecab6b5a32bb625'); expect(value).toContain('fa5e57be-777b-4970-ab03-8f1c2040171d'); expect(value).toContain('sha256:02753e2605eadc2cdf8a00fae0a51c42b7f86f947086c0ab0318861e376f537d'); }
-    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(48); expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1); expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(17);
+    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–11E are released. Part 11F is the sole implementation candidate.'); expect(value).toContain('914f5d4424a300d8ab3649141ecab6b5a32bb625'); expect(value).toContain('fa5e57be-777b-4970-ab03-8f1c2040171d'); expect(value).toContain('sha256:02753e2605eadc2cdf8a00fae0a51c42b7f86f947086c0ab0318861e376f537d'); }
+    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(49); expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1); expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(16);
   });
 });

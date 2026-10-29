@@ -600,8 +600,8 @@ describe('Mission 28 Part 5A bounded declarative rule grammar', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–11D are released. Part 11E is the sole implementation candidate.');
-      expect(document).toContain('Parts 11F–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–11E are released. Part 11F is the sole implementation candidate.');
+      expect(document).toContain('Parts 12A–14G remain planned and unimplemented.');
       expect(document).toContain('`41be176abfddae512f34da25a9d3564b1fea6e1b`');
       expect(document).toContain('`82b50c73-5414-4e7f-bb07-72d71f65dc92`');
     }

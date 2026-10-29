@@ -53,8 +53,8 @@
   ],
   "resolutionEnvelope": {
     "exactFields": ["schemaVersion", "tenantId", "resolutionId", "requestedKind", "appointmentBinding", "assignedContactBinding", "localScheduleBinding", "locationSafetyBinding", "launchMatrixBinding", "communicationBasisBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
-    "appointmentBindingExactFields": ["tenantId", "appointmentId", "sourceTriggerId", "appointmentRevision", "appointmentDigest", "appointmentStatus", "scheduledStart", "scheduledEnd", "sourceEventKind", "eventTime", "observedAt", "appointmentSnapshotId", "appointmentSnapshotDigest", "assignmentSnapshotId", "assignmentSnapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState"],
-    "assignedContactBindingExactFields": ["tenantId", "appointmentId", "sourceTriggerId", "assignmentId", "assignmentRevision", "assignmentDigest", "targetState", "targetKind", "targetId", "contactClass", "contactDisclosureState"],
+    "appointmentBindingExactFields": ["tenantId", "appointmentId", "sourceTriggerId", "sourceRecordIdentityDigest", "sourceCurrentnessPinsDigest", "appointmentRevision", "appointmentDigest", "appointmentStatus", "scheduledStart", "scheduledEnd", "timeZone", "sourceEventKind", "eventTime", "observedAt", "appointmentSnapshotId", "appointmentSnapshotDigest", "assignmentSnapshotId", "assignmentSnapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState"],
+    "assignedContactBindingExactFields": ["tenantId", "appointmentId", "sourceTriggerId", "sourceRecordIdentityDigest", "sourceCurrentnessPinsDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "appointmentStatus", "sourceEventKind", "eventTime", "observedAt", "assignmentSnapshotId", "assignmentSnapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState", "targetState", "targetKind", "targetId", "contactClass", "contactDisclosureState"],
     "localScheduleBindingExactFields": ["scheduledStart", "scheduledEnd", "timeZone", "timeZoneAuthority", "timeZoneProfileId", "timeZoneProfileVersion", "timeZoneProfileDigest", "localStartDate", "localStartTime", "localEndDate", "localEndTime"],
     "locationSafetyBindingExactFields": ["disclosureState", "fixedLabel", "sourceLocationId", "addressIncluded", "coordinatesIncluded"],
     "launchMatrixBindingExactFields": ["contractDigest", "actionFamily", "firstLaunchState", "acceptedSourceClassCount", "acceptedRoleCount", "acceptedCapabilityCount", "acceptedChannelCount", "acceptedRecipientClassCount", "externalEffectsEnabled"],
@@ -64,8 +64,8 @@
   "sourceAuthorityTruth": {
     "appointmentTriggerId": "m22.appointment_state",
     "assignmentTriggerId": "m22.assignment_dispatch_state",
-    "appointmentState": "one_exact_latest_scheduled_Mission22_appointment_revision_digest_interval_snapshot_and_currentness_resolution",
-    "assignedContact": "one_exact_latest_assigned_Mission22_profile_or_crew_identity_revision_and_digest; generic_customer_safe_label_only; no_name_email_phone_address_or_private_worker_data",
+    "appointmentState": "one_exact_latest_scheduled_Mission22_appointment_revision_digest_interval_timeZone_event_snapshot_sourceSet_and_currentness_resolution_with_record_identity_and_currentness_pins_digests",
+    "assignedContact": "one_exact_latest_assigned_Mission22_profile_or_crew tenant_appointment_assignment identity_revision_digest_appointmentStatus_eventKind_eventTime_snapshot_sourceSet_and_currentness resolution with record identity and currentness pins digests; generic_customer_safe_label_only; no_name_email_phone_address_or_private_worker_data",
     "localTime": "scheduled UTC instants formatted from the exact canonical tenant IANA time zone; no browser locale system zone abbreviation offset or current-clock inference",
     "location": "withheld because no accepted customer_safe appointment location authority is frozen for Part10A; no raw address coordinates access details or route data",
     "changeCancellation": "status_revision_digest_interval_assignment_or_source_lineage_change requires a new snapshot currentness resolution and semantic idempotency material; cancelled_completed_preferred_unscheduled_stale_or_corrected facts deny",

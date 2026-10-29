@@ -62,6 +62,17 @@ function localParts(instant, timeZone) {
 function materialOf(input) { const value = copy(input); delete value.resolutionId; delete value.materialDigest; delete value.idempotencyKeyDigest; delete value.requestDigest; return value; }
 function idempotencyMaterialOf(input) { const value = materialOf(input); delete value.evaluatedAt; return value; }
 function requestOf(input) { const value = copy(input); delete value.materialDigest; delete value.idempotencyKeyDigest; delete value.requestDigest; return value; }
+function appointmentRecordIdentityOf(input) { return {tenantId: input.tenantId, appointmentId: input.appointmentBinding.appointmentId}; }
+function appointmentCurrentnessPinsOf(input) { const value = input.appointmentBinding; return {appointmentRevision: value.appointmentRevision, appointmentDigest: value.appointmentDigest, appointmentStatus: value.appointmentStatus, scheduledStart: value.scheduledStart, scheduledEnd: value.scheduledEnd, timeZone: value.timeZone, sourceEventKind: value.sourceEventKind, eventTime: value.eventTime}; }
+function assignmentRecordIdentityOf(input) { const value = input.assignedContactBinding; return {tenantId: input.tenantId, appointmentId: value.appointmentId, assignmentId: value.assignmentId}; }
+function assignmentCurrentnessPinsOf(input) { const value = input.assignedContactBinding; return {assignmentRevision: value.assignmentRevision, assignmentDigest: value.assignmentDigest, appointmentStatus: value.appointmentStatus, sourceEventKind: value.sourceEventKind, eventTime: value.eventTime, targetState: value.targetState, targetKind: value.targetKind, targetId: value.targetId}; }
+function bindSourceProof(input) {
+  input.appointmentBinding.sourceRecordIdentityDigest = hash({namespace: 'mission28.part4b.record-identity.v1', value: appointmentRecordIdentityOf(input)});
+  input.appointmentBinding.sourceCurrentnessPinsDigest = hash({namespace: 'mission28.part4b.currentness-pins.v1', value: appointmentCurrentnessPinsOf(input)});
+  input.assignedContactBinding.sourceRecordIdentityDigest = hash({namespace: 'mission28.part4b.record-identity.v1', value: assignmentRecordIdentityOf(input)});
+  input.assignedContactBinding.sourceCurrentnessPinsDigest = hash({namespace: 'mission28.part4b.currentness-pins.v1', value: assignmentCurrentnessPinsOf(input)});
+  return input;
+}
 function seal(input) {
   input.materialDigest = hash(materialOf(input));
   input.idempotencyKeyDigest = hash({namespace: 'mission28.part10a.appointment-communication-boundary-idempotency.v1', material: idempotencyMaterialOf(input)});
@@ -69,17 +80,17 @@ function seal(input) {
 }
 
 function fixture(requestedKind = 'appointment_confirmation') {
-  return seal({
+  return seal(bindSourceProof({
     schemaVersion: contract.contractVersion, tenantId: uuid(1), resolutionId: uuid(2), requestedKind,
-    appointmentBinding: {tenantId: uuid(1), appointmentId: uuid(10), sourceTriggerId: 'm22.appointment_state', appointmentRevision: 4, appointmentDigest: digest(10), appointmentStatus: 'scheduled', scheduledStart: '2026-10-30T14:00:00.000000Z', scheduledEnd: '2026-10-30T15:00:00.000000Z', sourceEventKind: 'appointment_schedule_effective', eventTime: '2026-10-30T14:00:00.000000Z', observedAt: '2026-10-29T12:04:00.000000Z', appointmentSnapshotId: uuid(11), appointmentSnapshotDigest: digest(11), assignmentSnapshotId: uuid(12), assignmentSnapshotDigest: digest(12), sourceSetDigest: digest(13), currentnessResolutionId: uuid(14), currentnessResolutionDigest: digest(14), currentnessState: 'latest_exact_current'},
-    assignedContactBinding: {tenantId: uuid(1), appointmentId: uuid(10), sourceTriggerId: 'm22.assignment_dispatch_state', assignmentId: uuid(15), assignmentRevision: 7, assignmentDigest: digest(15), targetState: 'assigned', targetKind: 'profile', targetId: uuid(16), contactClass: 'assigned_staff', contactDisclosureState: 'generic_customer_safe_label_only'},
+    appointmentBinding: {tenantId: uuid(1), appointmentId: uuid(10), sourceTriggerId: 'm22.appointment_state', sourceRecordIdentityDigest: '', sourceCurrentnessPinsDigest: '', appointmentRevision: 4, appointmentDigest: digest(10), appointmentStatus: 'scheduled', scheduledStart: '2026-10-30T14:00:00.000000Z', scheduledEnd: '2026-10-30T15:00:00.000000Z', timeZone: 'America/New_York', sourceEventKind: 'appointment_schedule_effective', eventTime: '2026-10-30T14:00:00.000000Z', observedAt: '2026-10-29T12:04:00.000000Z', appointmentSnapshotId: uuid(11), appointmentSnapshotDigest: digest(11), assignmentSnapshotId: uuid(12), assignmentSnapshotDigest: digest(12), sourceSetDigest: digest(13), currentnessResolutionId: uuid(14), currentnessResolutionDigest: digest(14), currentnessState: 'latest_exact_current'},
+    assignedContactBinding: {tenantId: uuid(1), appointmentId: uuid(10), sourceTriggerId: 'm22.assignment_dispatch_state', sourceRecordIdentityDigest: '', sourceCurrentnessPinsDigest: '', assignmentId: uuid(15), assignmentRevision: 7, assignmentDigest: digest(15), appointmentStatus: 'scheduled', sourceEventKind: 'assignment_schedule_effective', eventTime: '2026-10-30T14:00:00.000000Z', observedAt: '2026-10-29T12:04:00.000000Z', assignmentSnapshotId: uuid(12), assignmentSnapshotDigest: digest(12), sourceSetDigest: digest(13), currentnessResolutionId: uuid(14), currentnessResolutionDigest: digest(14), currentnessState: 'latest_exact_current', targetState: 'assigned', targetKind: 'profile', targetId: uuid(16), contactClass: 'assigned_staff', contactDisclosureState: 'generic_customer_safe_label_only'},
     localScheduleBinding: {scheduledStart: '2026-10-30T14:00:00.000000Z', scheduledEnd: '2026-10-30T15:00:00.000000Z', timeZone: 'America/New_York', timeZoneAuthority: 'exact_Mission22_tenant_authority', timeZoneProfileId: uuid(17), timeZoneProfileVersion: 3, timeZoneProfileDigest: digest(17), localStartDate: '2026-10-30', localStartTime: '10:00:00', localEndDate: '2026-10-30', localEndTime: '11:00:00'},
     locationSafetyBinding: {disclosureState: 'withheld_no_customer_safe_location_authority', fixedLabel: contract.decisionContract.fixedLocationLabel, sourceLocationId: null, addressIncluded: false, coordinatesIncluded: false},
     launchMatrixBinding: {contractDigest: `sha256:${digestLf('docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json').toLowerCase()}`, actionFamily: 'customer_communication', firstLaunchState: 'unavailable', acceptedSourceClassCount: 0, acceptedRoleCount: 0, acceptedCapabilityCount: 0, acceptedChannelCount: 0, acceptedRecipientClassCount: 0, externalEffectsEnabled: false},
     communicationBasisBinding: {contractDigest: `sha256:${digestLf('docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json').toLowerCase()}`, externalResult: 'always_unavailable_or_suppressed_until_a_later_explicitly_accepted_launch_matrix_legal_provider_channel_and_effect_authority', permissionResolutionId: null, permissionResolutionDigest: null, permissionBasisState: 'unavailable_no_accepted_external_basis', channelId: null, providerMode: 'provider_disabled'},
     actorAuthorityBinding: {actorId: uuid(20), sessionId: uuid(21), membershipId: uuid(22), sessionSubjectActorId: uuid(20), membershipSubjectActorId: uuid(20), actorTenantId: uuid(1), sessionTenantId: uuid(1), membershipTenantId: uuid(1), actorState: 'active', sessionState: 'active', membershipState: 'active', membershipRoleId: 'owner', capabilityId: 'automation_internal_action_view', capabilityDecisionId: uuid(23), capabilityDecisionDigest: digest(23)},
     evaluatedAt: '2026-10-29T12:05:00.000000Z', materialDigest: '', idempotencyKeyDigest: '', requestDigest: ''
-  });
+  }));
 }
 
 function validate(input, trusted) {
@@ -95,6 +106,7 @@ function validate(input, trusted) {
 
   const appointment = input.appointmentBinding;
   if (appointment.tenantId !== input.tenantId || appointment.sourceTriggerId !== contract.sourceAuthorityTruth.appointmentTriggerId || appointment.appointmentStatus !== 'scheduled' || appointment.sourceEventKind !== 'appointment_schedule_effective' || appointment.eventTime !== appointment.scheduledStart || appointment.currentnessState !== 'latest_exact_current' ||
+      appointment.sourceRecordIdentityDigest !== hash({namespace: 'mission28.part4b.record-identity.v1', value: appointmentRecordIdentityOf(input)}) || appointment.sourceCurrentnessPinsDigest !== hash({namespace: 'mission28.part4b.currentness-pins.v1', value: appointmentCurrentnessPinsOf(input)}) ||
       !Number.isSafeInteger(appointment.appointmentRevision) || appointment.appointmentRevision < 1 ||
       [appointment.appointmentId, appointment.appointmentSnapshotId, appointment.assignmentSnapshotId, appointment.currentnessResolutionId].some(value => !UUID.test(value)) ||
       [appointment.appointmentDigest, appointment.appointmentSnapshotDigest, appointment.assignmentSnapshotDigest, appointment.sourceSetDigest, appointment.currentnessResolutionDigest].some(value => !DIGEST.test(value))) throw new Error('appointment');
@@ -102,11 +114,14 @@ function validate(input, trusted) {
   if (start === null || end === null || end <= start || observed === null || evaluated === null || observed > evaluated || evaluated - observed > BigInt(contract.bounds.maximumAppointmentObservationAgeSeconds) * 1000000n) throw new Error('appointment currentness');
 
   const assignment = input.assignedContactBinding;
-  if (assignment.tenantId !== input.tenantId || assignment.appointmentId !== appointment.appointmentId || assignment.sourceTriggerId !== contract.sourceAuthorityTruth.assignmentTriggerId || !UUID.test(assignment.assignmentId) || !Number.isSafeInteger(assignment.assignmentRevision) || assignment.assignmentRevision < 1 || !DIGEST.test(assignment.assignmentDigest) || assignment.targetState !== 'assigned' || !['profile', 'crew'].includes(assignment.targetKind) || !UUID.test(assignment.targetId) ||
+  if (assignment.tenantId !== input.tenantId || assignment.appointmentId !== appointment.appointmentId || assignment.sourceTriggerId !== contract.sourceAuthorityTruth.assignmentTriggerId || assignment.appointmentStatus !== appointment.appointmentStatus || assignment.sourceEventKind !== 'assignment_schedule_effective' || assignment.eventTime !== appointment.scheduledStart || assignment.observedAt !== appointment.observedAt || assignment.currentnessState !== 'latest_exact_current' ||
+      assignment.assignmentSnapshotId !== appointment.assignmentSnapshotId || assignment.assignmentSnapshotDigest !== appointment.assignmentSnapshotDigest || assignment.sourceSetDigest !== appointment.sourceSetDigest || assignment.currentnessResolutionId !== appointment.currentnessResolutionId || assignment.currentnessResolutionDigest !== appointment.currentnessResolutionDigest ||
+      assignment.sourceRecordIdentityDigest !== hash({namespace: 'mission28.part4b.record-identity.v1', value: assignmentRecordIdentityOf(input)}) || assignment.sourceCurrentnessPinsDigest !== hash({namespace: 'mission28.part4b.currentness-pins.v1', value: assignmentCurrentnessPinsOf(input)}) ||
+      !UUID.test(assignment.assignmentId) || !UUID.test(assignment.assignmentSnapshotId) || !Number.isSafeInteger(assignment.assignmentRevision) || assignment.assignmentRevision < 1 || !DIGEST.test(assignment.assignmentDigest) || !DIGEST.test(assignment.assignmentSnapshotDigest) || !DIGEST.test(assignment.sourceSetDigest) || !UUID.test(assignment.currentnessResolutionId) || !DIGEST.test(assignment.currentnessResolutionDigest) || assignment.targetState !== 'assigned' || !['profile', 'crew'].includes(assignment.targetKind) || !UUID.test(assignment.targetId) ||
       assignment.contactClass !== (assignment.targetKind === 'profile' ? 'assigned_staff' : 'assigned_crew') || assignment.contactDisclosureState !== 'generic_customer_safe_label_only') throw new Error('assigned contact');
 
   const schedule = input.localScheduleBinding;
-  if (schedule.scheduledStart !== appointment.scheduledStart || schedule.scheduledEnd !== appointment.scheduledEnd || schedule.timeZoneAuthority !== 'exact_Mission22_tenant_authority' || !UUID.test(schedule.timeZoneProfileId) || !Number.isSafeInteger(schedule.timeZoneProfileVersion) || schedule.timeZoneProfileVersion < 1 || !DIGEST.test(schedule.timeZoneProfileDigest)) throw new Error('local schedule');
+  if (schedule.scheduledStart !== appointment.scheduledStart || schedule.scheduledEnd !== appointment.scheduledEnd || schedule.timeZone !== appointment.timeZone || schedule.timeZoneAuthority !== 'exact_Mission22_tenant_authority' || !UUID.test(schedule.timeZoneProfileId) || !Number.isSafeInteger(schedule.timeZoneProfileVersion) || schedule.timeZoneProfileVersion < 1 || !DIGEST.test(schedule.timeZoneProfileDigest)) throw new Error('local schedule');
   const localStart = localParts(schedule.scheduledStart, schedule.timeZone); const localEnd = localParts(schedule.scheduledEnd, schedule.timeZone);
   if (schedule.localStartDate !== localStart.date || schedule.localStartTime !== localStart.time || schedule.localEndDate !== localEnd.date || schedule.localEndTime !== localEnd.time) throw new Error('local schedule');
 
@@ -167,13 +182,13 @@ describe('Mission 28 Part 10A appointment communication boundary', () => {
   });
 
   test('enforces bounded observation currentness while allowing future schedule-effective event time', () => {
-    const threshold = fixture(); threshold.appointmentBinding.observedAt = '2026-10-29T12:00:00.000000Z'; seal(threshold); expect(project(threshold, copy(threshold)).localSchedule.startDate).toBe('2026-10-30');
-    for (const observedAt of ['2026-10-29T11:59:59.999999Z', '2026-10-29T12:05:00.000001Z', 'bad']) { const candidate = fixture(); candidate.appointmentBinding.observedAt = observedAt; seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow('appointment currentness'); }
+    const threshold = fixture(); threshold.appointmentBinding.observedAt = '2026-10-29T12:00:00.000000Z'; threshold.assignedContactBinding.observedAt = threshold.appointmentBinding.observedAt; seal(threshold); expect(project(threshold, copy(threshold)).localSchedule.startDate).toBe('2026-10-30');
+    for (const observedAt of ['2026-10-29T11:59:59.999999Z', '2026-10-29T12:05:00.000001Z', 'bad']) { const candidate = fixture(); candidate.appointmentBinding.observedAt = observedAt; candidate.assignedContactBinding.observedAt = observedAt; seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow('appointment currentness'); }
   });
 
   test('binds assigned profile or crew without exposing private contact values', () => {
     expect(project(fixture(), fixture()).assignedContactLabel).toBe('Assigned contact recorded — private details withheld');
-    const crew = fixture(); Object.assign(crew.assignedContactBinding, {targetKind: 'crew', contactClass: 'assigned_crew'}); seal(crew); expect(project(crew, copy(crew)).assignedContactLabel).toBe(contract.decisionContract.fixedAssignedContactLabel);
+    const crew = fixture(); Object.assign(crew.assignedContactBinding, {assignmentRevision: 8, assignmentDigest: digest(80), targetKind: 'crew', targetId: uuid(81), contactClass: 'assigned_crew', assignmentSnapshotId: uuid(82), assignmentSnapshotDigest: digest(82), sourceSetDigest: digest(83), currentnessResolutionId: uuid(84), currentnessResolutionDigest: digest(84)}); Object.assign(crew.appointmentBinding, {assignmentSnapshotId: uuid(82), assignmentSnapshotDigest: digest(82), sourceSetDigest: digest(83), currentnessResolutionId: uuid(84), currentnessResolutionDigest: digest(84)}); bindSourceProof(crew); seal(crew); expect(project(crew, copy(crew)).assignedContactLabel).toBe(contract.decisionContract.fixedAssignedContactLabel);
     for (const mutation of [value => { value.assignedContactBinding.tenantId = uuid(99); }, value => { value.assignedContactBinding.appointmentId = uuid(99); }, value => { value.assignedContactBinding.sourceTriggerId = 'm22.appointment_state'; }, value => { value.assignedContactBinding.targetState = 'unassigned'; }, value => { value.assignedContactBinding.targetKind = 'user'; }, value => { value.assignedContactBinding.targetId = null; }, value => { value.assignedContactBinding.contactClass = 'customer'; }, value => { value.assignedContactBinding.contactDisclosureState = 'raw_contact'; }]) {
       const candidate = fixture(); mutation(candidate); seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow('assigned contact');
     }
@@ -181,13 +196,20 @@ describe('Mission 28 Part 10A appointment communication boundary', () => {
 
   test('derives exact local time from canonical tenant IANA zone without inference or alias', () => {
     const output = project(fixture(), fixture()); expect(output.localSchedule).toEqual({startDate: '2026-10-30', startTime: '10:00:00', endDate: '2026-10-30', endTime: '11:00:00', timeZone: 'America/New_York'});
-    const chicago = fixture(); Object.assign(chicago.localScheduleBinding, {timeZone: 'America/Chicago', localStartTime: '09:00:00', localEndTime: '10:00:00'}); seal(chicago); expect(project(chicago, copy(chicago)).localSchedule.timeZone).toBe('America/Chicago');
+    const retarget = fixture(); Object.assign(retarget.localScheduleBinding, {timeZone: 'America/Chicago', localStartTime: '09:00:00', localEndTime: '10:00:00'}); seal(retarget); expect(() => project(retarget, copy(retarget))).toThrow('local schedule');
     for (const zone of ['US/Eastern', 'EST', 'UTC+04:00', '', 'Not/AZone']) { const candidate = fixture(); candidate.localScheduleBinding.timeZone = zone; seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow('local schedule'); }
   });
 
   test('denies local date time zone or schedule substitution after recomputing digests', () => {
     for (const mutation of [value => { value.localScheduleBinding.scheduledStart = '2026-10-30T16:00:00.000000Z'; }, value => { value.localScheduleBinding.localStartDate = '2026-10-31'; }, value => { value.localScheduleBinding.localStartTime = '11:00:00'; }, value => { value.localScheduleBinding.timeZoneAuthority = 'browser'; }, value => { value.localScheduleBinding.timeZoneProfileId = 'bad'; }, value => { value.localScheduleBinding.timeZoneProfileVersion = 0; }, value => { value.localScheduleBinding.timeZoneProfileDigest = 'bad'; }]) {
       const candidate = fixture(); mutation(candidate); seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow('local schedule');
+    }
+  });
+
+  test('denies valid-looking appointment time-zone and assignment retargets with unchanged snapshots or currentness', () => {
+    const zone = fixture(); zone.appointmentBinding.timeZone = 'America/Chicago'; Object.assign(zone.localScheduleBinding, {timeZone: 'America/Chicago', localStartTime: '09:00:00', localEndTime: '10:00:00'}); seal(zone); expect(() => project(zone, copy(zone))).toThrow('appointment');
+    for (const mutation of [value => { value.assignedContactBinding.assignmentId = uuid(80); }, value => { value.assignedContactBinding.assignmentRevision = 8; }, value => { value.assignedContactBinding.assignmentDigest = digest(80); }, value => { value.assignedContactBinding.targetId = uuid(81); }, value => { value.assignedContactBinding.eventTime = '2026-10-30T14:01:00.000000Z'; }]) {
+      const candidate = fixture(); mutation(candidate); seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow('assigned contact');
     }
   });
 

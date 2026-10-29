@@ -15,9 +15,36 @@
     "acceptedTree": "48c9944659282a5aea106c2cbbc625759552cb5e",
     "pullRequest": 598,
     "mergedMain": "aea7f65174923b9328dae9454ad2f9a351fe09a4",
-    "mergedAt": "2026-10-29T15:40:38-04:00",
+    "mergedAt": "2026-10-29T19:40:39Z",
     "productionAccepted": true,
-    "exactAuditDeploymentImageInstanceAndHealthEvidence": "unavailable_to_this_writer_and_unclaimed"
+    "freshAudit": {
+      "verdict": "P0=0_P1=0_P2=0_P3=0",
+      "nodeVersion": "22.23.3",
+      "focusedTests": "16/16",
+      "parts11ATo11F": "6_suites_90_tests",
+      "cumulativeMission28": "50_suites_692_tests",
+      "migrationHistory": "2_suites_40_tests",
+      "syntax": "50/50",
+      "json": "49/49",
+      "migrations": "283_through_287_no_288",
+      "changedPaths": "54_docs_tests_only",
+      "protectedPaths": 0,
+      "diffCheck": "clean",
+      "remoteAndWorktree": "clean_and_exact"
+    },
+    "release": {
+      "deploymentId": "fdfcea4e-b515-4551-91e8-ce9b160adea3",
+      "deploymentStatus": "SUCCESS",
+      "serviceInstanceId": "7ee4f747-38c2-4baa-a024-1d7db6e7c218",
+      "deploymentInstanceId": "e16b9ccd-34fb-4f27-88fc-cb114ef42bcc",
+      "deploymentInstanceStatus": "RUNNING",
+      "imageSha256": "sha256:fa4a1641a43db1959172002d4146ec580db6d8ccb9edcbf4d27ff7040a41567f",
+      "canonicalStartup": "ready",
+      "healthStatus": "HTTP_200_PostgreSQL_and_canonical_persistence_healthy",
+      "rootDashboardDemo": "HTTP_200",
+      "dashboardDemoParity": "91681_bytes_sha256:b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369"
+    },
+    "directAppliedProductionMigrationHistory": "unavailable_and_unclaimed"
   },
   "frozenInputs": [
     {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},

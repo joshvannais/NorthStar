@@ -690,7 +690,7 @@ describe('Mission 28 Part 4C coherent currentness revalidation', () => {
   test('roadmap and ledger release Part 5A, name only Part 5B candidate, and retain migration 274/no275', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
-    expect(roadmap).toContain('Parts 1A–11A are released. Part 11B is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–11B are released. Part 11C is the sole implementation candidate.');
     expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Released** |');
     expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Released** |');
     expect(ledger).toContain('| 16 | 4D | Duplicate/replay/reorder/correction/tombstone/concurrency handling | **Released** |');

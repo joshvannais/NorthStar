@@ -349,8 +349,8 @@ describe('Mission 28 Part 9A supported inquiry acknowledgement and internal aler
 
   test('roadmap and ledger record Part9A released, Part9B candidate only and Part9C+ planned', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8'); const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
-    for(const document of [roadmap,ledger]) { expect(document).toContain('Parts 1A–11A are released. Part 11B is the sole implementation candidate.'); expect(document).toContain('Parts 11C–14G remain planned and unimplemented.'); expect(document).toContain('f148d5f1-6874-4c2c-afb3-ef423e4e1abb'); expect(document).toContain('sha256:c242868064ed096fed47d23939e424d242932994d8c2c2933e4d17581c0f5b85'); }
+    for(const document of [roadmap,ledger]) { expect(document).toContain('Parts 1A–11B are released. Part 11C is the sole implementation candidate.'); expect(document).toContain('Parts 11D–14G remain planned and unimplemented.'); expect(document).toContain('f148d5f1-6874-4c2c-afb3-ef423e4e1abb'); expect(document).toContain('sha256:c242868064ed096fed47d23939e424d242932994d8c2c2933e4d17581c0f5b85'); }
     expect(ledger).toContain('| 37 | 9A | Supported inquiry acknowledgement and internal alert | **Released** |'); expect(ledger).toContain('| 38 | 9B | Bounded contact-attempt and response-follow-up cadence | **Released** |'); expect(ledger).toContain('| 39 | 9C | Exact-current estimate/quote follow-up | **Released** |'); expect(ledger).toContain('| 40 | 9D | Explicitly reviewed customer re-engagement boundary | **Released** |');
-    expect((ledger.match(/\*\*Implementation candidate\*\*/g)||[])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(20); expect(markdown).toContain('No migration 288');
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g)||[])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(19); expect(markdown).toContain('No migration 288');
   });
 });

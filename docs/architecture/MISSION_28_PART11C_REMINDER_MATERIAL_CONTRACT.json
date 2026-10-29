@@ -1,0 +1,196 @@
+{
+  "contractVersion": "mission28.part11c.reminder-material.v1",
+  "authority": {
+    "mission": 28,
+    "part": "11C",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "a4da3b83936a411b4315e3a8bc43f69da0b52485",
+    "baselineTree": "bd1aa5a1eb67684316e40dfaea01e5b1c9dd753b",
+    "scope": "owner_readable_no_effect_exact_invoice_amount_due_secure_destination_availability_and_customer_safe_balance_explanation_projection_only",
+    "reminderMessageOrDeliveryGranted": false,
+    "securePaymentDestinationGranted": false,
+    "paymentMethodSelectionOrChargeGranted": false,
+    "feeTermsBalanceAccountingOrUpstreamMutationGranted": false,
+    "part11DOrLaterAuthorityGranted": false
+  },
+  "part11BRelease": {
+    "acceptedSourceHead": "914f5d4424a300d8ab3649141ecab6b5a32bb625",
+    "acceptedTree": "bd1aa5a1eb67684316e40dfaea01e5b1c9dd753b",
+    "freshAudit": "P0_P1_P2_P3_zero",
+    "freshAuditEvidence": "exact_Node_22.23.3; focused_16_of_16; cumulative_46_suites_635_tests; migration_history_2_suites_40_tests; syntax_46; JSON_45; migrations_283_through_287_no_288; protected_0; clean_remote_exact",
+    "pullRequest": 594,
+    "mergedMain": "a4da3b83936a411b4315e3a8bc43f69da0b52485",
+    "deploymentIdentity": "fa5e57be-777b-4970-ab03-8f1c2040171d_SUCCESS_RUNNING",
+    "imageIdentity": "sha256:02753e2605eadc2cdf8a00fae0a51c42b7f86f947086c0ab0318861e376f537d",
+    "runningInstance": "098014a5-7bc1-4171-bc50-e58a871b82fc",
+    "migrationEvidence": "source_283_through_287_no_288; direct_applied_history_not_requeried_and_unclaimed",
+    "healthEvidence": "canonical_startup_ready; api_health_root_dashboard_demo_HTTP_200; database_and_canonicalPersistence_healthy; dashboard_demo_exact_91681_byte_sha256_b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369_parity"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json", "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART7A_SENDER_RECIPIENT_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "DDCFCD0B110AFE39A6FC5C00C5BC518C44112A8753F0BDD4B78DC9B947288871"},
+    {"path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF"},
+    {"path": "docs/architecture/MISSION_28_PART7C_CONTENT_TEMPLATE_PREVIEW_CONTRACT.json", "normalizedLfSha256": "B0070106EFC642299B4C1F8334AA9EB3206078C93AA0412B33DC2EC71D639D91"},
+    {"path": "docs/architecture/MISSION_28_PART7E_SCOPED_LINK_ATTACHMENT_CONTRACT.json", "normalizedLfSha256": "9517730DED6C96309F44E853B2660A7B6C174C9B280ACC30ED4208DA6307E4EB"},
+    {"path": "docs/architecture/MISSION_28_PART8B_FINANCIAL_DOCUMENT_DELIVERY_CONTRACT.json", "normalizedLfSha256": "3663C71A79B4999E3F2801B7F3F7C0A50FE7B51AC48191880B1D3AD09AEAFB41"},
+    {"path": "docs/architecture/MISSION_28_PART11A_COLLECTION_ELIGIBILITY_CONTRACT.json", "normalizedLfSha256": "5ADA756AB4C2C94332DE0DAD01E721DCD6F5548B3829D7D1A27F1AB5ACB158FA"},
+    {"path": "docs/architecture/MISSION_28_PART11B_REMINDER_POLICY_CONTRACT.json", "normalizedLfSha256": "B4E03ADDA4AF59229BDE852A04C56360967DC598A1D75976F4D17546CAA0FCA2"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "currencyPattern": "^[A-Z]{3}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateDocumentAmountDestinationExplanationPolicyOrOutcomeMaterialNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumSafeMinorUnits": 9007199254740991,
+    "maximumCanonicalRequestBytes": 65536,
+    "missingUnknownStaleMixedCorrectedAmbiguousUnsupportedOrConflictingFallback": "deny_or_fixed_unavailable_no_effect"
+  },
+  "projectionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "projectionId", "part11AEligibilityBinding", "part11BPolicyBinding", "invoiceDocumentBinding", "amountDueBinding", "paymentDestinationBinding", "balanceExplanationBinding", "recipientChannelBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "part11AEligibilityBindingExactFields": ["tenantId", "resolutionId", "materialDigest", "idempotencyKeyDigest", "requestDigest", "resultState", "reasonCode", "issuedInvoiceId", "issuedVersionDigest", "sourceSetId", "sourceSetDigest", "axisMaterialDigest", "headTransitionId", "headTransitionDigest", "headSequence", "currentnessState", "observedAt"],
+    "part11BPolicyBindingExactFields": ["tenantId", "projectionId", "materialDigest", "idempotencyKeyDigest", "requestDigest", "resultState", "reasonCode", "policyId", "policyVersion", "policyCanonicalDigest", "policyState", "rolloutState", "phaseId", "issuedInvoiceId", "issuedVersionDigest", "recipientResolutionDigest", "channelId", "permissionResultState", "approvalState", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "currentnessState", "observedAt"],
+    "invoiceDocumentBindingExactFields": ["tenantId", "issuedInvoiceId", "issuedInvoiceVersionId", "invoiceRevision", "invoiceDigest", "issuedVersionDigest", "customerId", "customerIdentityDigest", "currency", "invoiceState", "documentState", "replacementState", "termsDigest", "termsMutationState", "issuedAt", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "currentnessState", "observedAt"],
+    "amountDueBindingExactFields": ["tenantId", "issuedInvoiceId", "issuedVersionDigest", "balanceRevision", "balanceDigest", "currency", "amountDueMinorUnits", "balanceState", "pendingTenderState", "feeAddedMinorUnits", "termsChanged", "chargeInitiated", "paymentMethodSelected", "settlementClaimState", "accountingClaimState", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "currentnessState", "observedAt"],
+    "paymentDestinationBindingExactFields": ["state", "reasonCode", "destinationId", "destinationVersion", "destinationDigest", "documentVersionDigest", "recipientResolutionDigest", "destinationClass", "scopeState", "expiresAt", "rawToken", "url", "paymentMethodId", "providerAccountId", "chargeAuthority"],
+    "balanceExplanationBindingExactFields": ["explanationId", "explanationVersion", "explanationDigest", "fixedText", "invoiceDigest", "issuedVersionDigest", "balanceDigest", "currency", "amountDueMinorUnits", "materialDigest"],
+    "recipientChannelBindingExactFields": ["tenantId", "recipientResolutionDigest", "recipientClassId", "recipientReviewState", "channelId", "permissionResultState", "providerMode", "currentnessState", "observedAt"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"],
+    "outputFieldsCreatedOnlyByTrustedProjection": ["projectionId", "tenantId", "issuedInvoiceId", "issuedVersionDigest", "currency", "amountDueMinorUnits", "policyId", "policyVersion", "phaseId", "destinationState", "explanationId", "evaluatedAt", "resultState", "reasonCode", "labelId", "fixedLabel", "ownerReadableMaterialOnly", "reminderMaterialRecordCreated", "scheduleCreated", "worklistRecordCreated", "taskCreated", "messageCreated", "paymentLinkCreated", "providerAttemptCreated", "chargeCreated", "paymentMethodSelected", "feeAdded", "termsChanged", "financialMutationCreated", "accountingMutationCreated", "balanceMutationCreated", "externalEffectCreated", "upstreamMutationCreated", "moneyEffectCreated"]
+  },
+  "sourceBindingContract": {
+    "requiredPart11AResult": "eligible_for_owner_collection_review_only",
+    "requiredPart11AReason": "exact_current_collection_review_eligible",
+    "requiredPart11BResult": "reminder_policy_definition_valid_no_effect_external_authority_unavailable",
+    "requiredPart11BReason": "financial_reminder_source_permission_approval_schedule_and_effect_authority_unavailable",
+    "requiredCurrentness": "latest_exact_current",
+    "bindingRule": "one_separately_trusted_Part11A_resolution_and_Part11B_policy_projection_bind_the_same_tenant_exact_invoice_version_source_set_authoritative_head_recipient_channel_and_currentness",
+    "documentRule": "exact_issued_current_customer_safe_nonreplaced_invoice_version_and_terms_digest_only",
+    "amountRule": "exact_positive_integer_minor_units_equal_to_the_separately_trusted_current_balance_in_the_same_currency_and_source_head",
+    "laterSourceInvalidation": "any_document_balance_terms_source_set_head_recipient_policy_or_currentness_change_requires_new_material_and_invalidates_alias_clone_or_replay_reuse",
+    "sourceDocumentAmountAgingOrCommunicationEvidenceNeverCreatesPermissionScheduleDeliveryPaymentSettlementAccountingOrEffectAuthority": true
+  },
+  "securePaymentDestinationContract": {
+    "currentState": "unavailable_no_accepted_secure_invoice_payment_destination",
+    "currentReason": "secure_invoice_payment_destination_authority_unavailable",
+    "currentBinding": "all_identity_digest_scope_expiry_token_URL_payment_method_provider_and_charge_fields_are_null_or_false",
+    "futureExactFieldsIfSeparatelyAccepted": ["tenantId", "destinationId", "destinationVersion", "destinationDigest", "documentVersionDigest", "recipientResolutionDigest", "destinationClass", "scopeState", "expiresAt", "currentnessState"],
+    "futureScope": "one_tenant_one_exact_reviewed_recipient_one_exact_current_customer_safe_invoice_version_only",
+    "rawTokenOrUrl": "never_accepted_from_candidate_never_stored_logged_reflected_or_inferred",
+    "paymentMethod": "never_selected_stored_ranked_defaulted_or_inferred",
+    "providerAccountOrCharge": "never_exposed_selected_or_authorized",
+    "part7EFutureShapeDoesNotCreateCurrentFinancialDestinationAuthority": true
+  },
+  "balanceExplanationDigestNamespace": "mission28.part11c.explanation.v1\n",
+  "balanceExplanationCatalog": [
+    {
+      "explanationId": "current_invoice_balance_no_effect_v1",
+      "explanationVersion": 1,
+      "fixedText": "The amount shown is the current balance for this invoice. No reminder fee is added and the invoice terms are unchanged. Payment, settlement, and accounting status require separate current evidence.",
+      "explanationDigest": "sha256:53bf143bbe96cbe8a94cf3ed29a546982d321e9d45762183f3492f825aaef41c"
+    }
+  ],
+  "balanceExplanationContract": {
+    "fixedCatalogOnly": true,
+    "materialBinding": "explanation_identity_version_digest_text_invoice_digest_version_digest_balance_digest_currency_and_amount_due_are_server_recomputed_into_one_material_digest",
+    "forbiddenMeaning": "fee_added_terms_changed_charge_started_payment_method_selected_paid_settled_earned_revenue_recognized_accounted_collected_or_successful",
+    "noFreeTextDynamicInterpolationInvoiceNumberCustomerContactPaymentURLThreatUrgencyDeadlineOrLegalClaim": true
+  },
+  "currentAvailability": {
+    "part11ACompleteMountedResolverAvailable": false,
+    "part11BPolicyPersistenceOrRuntimeAvailable": false,
+    "secureInvoicePaymentDestinationAuthorityAvailable": false,
+    "financialReminderLaunchPermissionProviderScheduleOrDeliveryAvailable": false,
+    "currentLiveResult": "unavailable_secure_payment_destination_and_external_financial_reminder_authority",
+    "ownerReadableMaterialGrammarDefined": true
+  },
+  "fixedDecision": {
+    "resultState": "reminder_material_unavailable_no_secure_destination_or_external_authority",
+    "reasonCode": "secure_payment_destination_permission_approval_schedule_and_effect_authority_unavailable",
+    "labelId": "reminder_material_unavailable",
+    "fixedLabel": "Reminder material unavailable — secure payment destination and communication authority are not available",
+    "neverMeans": "material_persisted_approved_scheduled_queued_sent_delivered_opened_replied_charged_paid_settled_earned_accounted_collected_or_effective"
+  },
+  "digestAndReplayContract": {
+    "canonicalizationRule": "UTF8_JSON_with_lexicographically_sorted_object_keys_and_array_order_preserved_so_object_property_order_cannot_change_any_digest",
+    "explanationMaterialDigest": "server_recomputed_over_fixed_explanation_and_exact_invoice_version_balance_currency_and_amount_due",
+    "materialDigest": "server_recomputed_over_all_trusted_projection_material_except_projectionId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_exact_Part11A_Part11B_invoice_document_amount_destination_state_explanation_recipient_channel_policy_and_actor_material_excluding_only_top_level_projectionId_evaluatedAt_and_envelope_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_projection_replay_no_record_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse"
+  },
+  "deniedCombinations": [
+    "missing_unknown_stale_mixed_corrected_tombstoned_reversed_replaced_or_nonlatest_Part11A_Part11B_invoice_balance_source_set_or_head",
+    "cross_tenant_cross_customer_cross_invoice_cross_version_cross_currency_cross_policy_cross_recipient_cross_channel_or_cross_actor_graft",
+    "amount_due_not_equal_to_exact_current_balance_or_nonpositive_fractional_float_string_negative_overflow_or_currency_mismatch",
+    "draft_void_replaced_noncustomer_safe_or_unissued_invoice_or_changed_terms",
+    "candidate_supplied_destination_identity_digest_scope_expiry_token_URL_payment_method_provider_account_or_charge_authority",
+    "raw_link_token_query_fragment_customer_name_email_phone_address_invoice_number_payment_account_or_provider_payload",
+    "free_text_modified_dynamic_AI_generated_interpolated_amount_link_fee_threat_urgency_deadline_or_legal_explanation",
+    "fee_surcharge_interest_penalty_late_charge_terms_extension_price_scope_due_date_or_balance_mutation",
+    "payment_method_selection_default_ranking_storage_or_inference_or_charge_refund_writeoff_allocation_or_money_movement",
+    "communication_or_delivery_evidence_treated_as_payment_cash_revenue_settlement_accounting_collection_or_success",
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "runtime_route_UI_material_record_scheduler_worklist_task_worker_queue_provider_callback_message_delivery_or_effect",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "materialRecordCreated": false,
+    "mountedResolverAvailable": false,
+    "schedulerWorklistTaskWorkerQueue": false,
+    "recipientChannelProviderCallbackOrMessage": false,
+    "paymentLinkMethodOrCharge": false,
+    "financialAccountingBalanceOrUpstreamMutation": false,
+    "externalEffectOrMoneyMovement": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "reminderMaterialRecordsCreated": 0,
+    "paymentDestinationsCreated": 0,
+    "paymentLinksOrTokensCreated": 0,
+    "paymentMethodsSelected": 0,
+    "chargesCreated": 0,
+    "feesAdded": 0,
+    "termsChanged": 0,
+    "schedulesCreated": 0,
+    "worklistsOrTasksCreated": 0,
+    "messagesCreated": 0,
+    "providerAttemptsCreated": 0,
+    "financialMutationsCreated": 0,
+    "accountingMutationsCreated": 0,
+    "balanceMutationsCreated": 0,
+    "externalEffectsCreated": 0,
+    "upstreamMutationsCreated": 0,
+    "moneyEffectsCreated": 0
+  },
+  "unavailableEvidence": [
+    "complete mounted exact-current Part11A source resolver and persisted accepted Part11B policy authority",
+    "accepted secure invoice payment destination link token portal provider account payment method or checkout authority",
+    "accepted external recipient permission channel provider sender schedule delivery callback or effect authority",
+    "real recipient communication provider delivery payment settlement cash revenue accounting collection or legal outcome evidence",
+    "direct current-deployment applied migration history re-query",
+    "private production data provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent debt collection consumer protection tax accounting regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part11D": "immediate_suppression_or_rebuild_from_financial_or_human_changes",
+    "part11E": "graduated_owner_worklist_and_prohibited_legal_escalation_boundary",
+    "part11F": "collection_communication_evidence_and_Mission27_reconciliation",
+    "laterAuthorityNotGranted": true
+  }
+}

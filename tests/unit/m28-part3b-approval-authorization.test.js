@@ -754,8 +754,8 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–11A are released. Part 11B is the sole implementation candidate.');
-      expect(document).toContain('Parts 11C–14G');
+      expect(document).toContain('Parts 1A–11B are released. Part 11C is the sole implementation candidate.');
+      expect(document).toContain('Parts 11D–14G');
       expect(document).toContain('05a541792adac121f8c51b2cf200c0d18fcfbbf1');
       expect(document).toContain('1e62336afe2c9e65cccbe1629a62b86855da3ff8');
       expect(document).toContain('7ca335a1-7bf6-4f8d-ae98-a188b891f85d');

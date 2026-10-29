@@ -317,13 +317,13 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
     const ledger = fs.readFileSync(LEDGER, 'utf8');
     const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–8C are released. Part 8D is the sole implementation candidate.');
-      expect(document).toContain('Parts 9A–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–8D are released. Part 9A is the sole implementation candidate.');
+      expect(document).toContain('Parts 9B–14G remain planned and unimplemented.');
       expect(document).toContain('927313ac-0e60-4552-8130-023fe266d327');
       expect(document).toContain('sha256:95251721696f9cd2afb33c6d07d7fbaf52f1e51600ef9c4e3d35e1da66fb2b6c');
     }
     expect(ledger).toContain('| 35 | 8C | Shared quick-send/native/policy version and idempotency contract | **Released** |');
-    expect(ledger).toContain('| 36 | 8D | Delivery acknowledgement, revoke/resend/recovery and exact labels | **Implementation candidate** |');
+    expect(ledger).toContain('| 36 | 8D | Delivery acknowledgement, revoke/resend/recovery and exact labels | **Released** |');
     expect(markdown).toContain('No migration 288');
   });
 });

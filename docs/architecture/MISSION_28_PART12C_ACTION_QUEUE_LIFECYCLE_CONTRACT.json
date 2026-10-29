@@ -1,0 +1,223 @@
+{
+  "contractVersion": "mission28.part12c.action-queue-lifecycle.v1",
+  "authority": {
+    "mission": 28,
+    "part": "12C",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "17e732513aeae591ebceeb6832294c0ea4a2f5b4",
+    "baselineTree": "d66dd55993c9ba39dda64768c475d6cb5c660266",
+    "scope": "deterministic_tenant_private_internal_action_dedupe_group_priority_lifecycle_and_source_correction_contract_only",
+    "runtimeOrPersistenceAuthorityGranted": false,
+    "externalEffectAuthorityGranted": false
+  },
+  "part12BRelease": {
+    "acceptedSourceHead": "72e33ce1f9a80e0ecde92bb7b93fdc5a8a518d02",
+    "acceptedTree": "d66dd55993c9ba39dda64768c475d6cb5c660266",
+    "pullRequest": 600,
+    "mergedMain": "17e732513aeae591ebceeb6832294c0ea4a2f5b4",
+    "mergedAt": "2026-10-29T20:55:08Z",
+    "productionAccepted": true,
+    "freshAudit": {
+      "verdict": "P0=0_P1=0_P2=0_P3=0",
+      "nodeVersion": "22.23.3",
+      "focusedTests": "17/17",
+      "parts11ATo12B": "8_suites_122_tests",
+      "cumulativeMission28": "52_suites_724_tests",
+      "migrationHistory": "2_suites_40_tests",
+      "syntax": "52/52",
+      "json": "51/51",
+      "migrations": "283_through_287_no_288",
+      "changedPaths": "56_docs_tests_only",
+      "protectedPaths": 0,
+      "diffCheck": "clean",
+      "remoteAndWorktree": "clean_and_exact"
+    },
+    "release": {
+      "deploymentId": "8bdf94ab-8ae7-46e1-8e76-2f2d619280ef",
+      "deploymentStatus": "SUCCESS",
+      "serviceInstanceId": "7ee4f747-38c2-4baa-a024-1d7db6e7c218",
+      "deploymentInstanceId": "a825b82c-ed48-4938-9f4d-2d13195713a2",
+      "deploymentInstanceStatus": "RUNNING",
+      "imageSha256": "sha256:8b3bbcde9feeb50b1fb42c0ea34d44e782c72b14ad639e897135642c3a5d23de",
+      "canonicalStartup": "ready",
+      "healthStatus": "HTTP_200_PostgreSQL_and_canonical_persistence_healthy",
+      "rootDashboardDemo": "HTTP_200",
+      "dashboardDemoParity": "91681_bytes_sha256:b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369"
+    },
+    "directAppliedProductionMigrationHistory": "unavailable_and_unclaimed"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART12A_TENANT_PRIVATE_ACTION_QUEUE_CONTRACT.json", "normalizedLfSha256": "496362CCE3CF2E83BE5D95BA374660C5544AEFF19EF1DF7A244655E322C68C8F"},
+    {"path": "docs/architecture/MISSION_28_PART12B_REVIEWED_ATTENTION_HANDOFF_CONTRACT.json", "normalizedLfSha256": "4FC7A9C12869DBA978B437CA8F4E99683B36BC59FEBF6E87F8F0B5B23AECB6E6"},
+    {"path": "docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json", "normalizedLfSha256": "3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5"},
+    {"path": "docs/architecture/MISSION_28_PART2C_POLICY_LIFECYCLE.json", "normalizedLfSha256": "91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json", "normalizedLfSha256": "62A4EE942017E789D7F0F73DD9A6FA73125A52A9C09EB6E3726A3345CA8820A0"},
+    {"path": "docs/architecture/MISSION_28_PART6A_TRANSACTIONAL_OUTBOX_CONTRACT.json", "normalizedLfSha256": "F79502C0793CD62A78442046CD04CFC88083C941A6D15D83C037ECB4C6A5FC9A"},
+    {"path": "docs/architecture/MISSION_28_PART6B_DURABLE_SCHEDULER_CONTRACT.json", "normalizedLfSha256": "30B2E2472DDC6DC8EB204D0544535C91302E47355971ACBA0800544D5B626687"},
+    {"path": "docs/architecture/MISSION_28_PART6C_DELIVERY_COORDINATION_CONTRACT.json", "normalizedLfSha256": "D9D00F6496DF95465257C427EA3674ECC7FB960780E495D1807C551F040835A3"},
+    {"path": "docs/architecture/MISSION_28_PART6D_RETRY_RECONCILIATION_CONTRACT.json", "normalizedLfSha256": "47F52068E81EC6D8AC5EBF2139F18C3FC77BF074923F718C22D1A94EAF416B5F"},
+    {"path": "docs/architecture/MISSION_28_PART6E_DELIVERY_CONTROL_CONTRACT.json", "normalizedLfSha256": "57E953448270CAF870855662B5FE5A923821412B3B71F02B4D80178766ECB5FB"},
+    {"path": "docs/architecture/MISSION_28_PART6F_RECOVERY_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "639B6B383B599DA2AD0B16FA07696BF406FD0B64390FF2970956D60FB1B679D8"},
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
+  },
+  "bounds": {
+    "maximumCanonicalRequestBytes": 65536,
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumLifecycleRevision": 2147483647,
+    "maximumHeadSequence": 2147483647,
+    "maximumSnoozeSeconds": 604800,
+    "maximumDueWindowSeconds": 2592000,
+    "maximumGroupSize": 32,
+    "maximumEscalationLevel": 3
+  },
+  "states": [
+    "unregistered",
+    "open",
+    "snoozed",
+    "dismissed_unresolved_visible",
+    "escalated",
+    "expired_unresolved_visible",
+    "source_changed_stale"
+  ],
+  "priorityOrder": ["low", "normal", "high", "urgent"],
+  "operations": [
+    {"id": "assign", "from": ["unregistered"], "to": "open", "advancesRevision": true, "requiresCurrentSourcePolicy": true},
+    {"id": "dedupe_coalesce", "from": ["open", "snoozed", "dismissed_unresolved_visible", "escalated", "expired_unresolved_visible"], "to": "same", "advancesRevision": false, "requiresCurrentSourcePolicy": true},
+    {"id": "group", "from": ["open", "snoozed", "dismissed_unresolved_visible", "escalated", "expired_unresolved_visible"], "to": "same", "advancesRevision": true, "requiresCurrentSourcePolicy": true},
+    {"id": "set_priority", "from": ["open", "snoozed", "dismissed_unresolved_visible", "escalated", "expired_unresolved_visible"], "to": "same", "advancesRevision": true, "requiresCurrentSourcePolicy": true},
+    {"id": "snooze", "from": ["open", "escalated"], "to": "snoozed", "advancesRevision": true, "requiresCurrentSourcePolicy": true},
+    {"id": "dismiss", "from": ["open", "snoozed", "escalated"], "to": "dismissed_unresolved_visible", "advancesRevision": true, "requiresCurrentSourcePolicy": true},
+    {"id": "reassign", "from": ["open", "snoozed", "escalated"], "to": "same", "advancesRevision": true, "requiresCurrentSourcePolicy": true},
+    {"id": "escalate", "from": ["open", "snoozed", "escalated"], "to": "escalated", "advancesRevision": true, "requiresCurrentSourcePolicy": true},
+    {"id": "expire", "from": ["open", "snoozed", "dismissed_unresolved_visible", "escalated"], "to": "expired_unresolved_visible", "advancesRevision": true, "requiresCurrentSourcePolicy": false},
+    {"id": "reopen", "from": ["snoozed", "dismissed_unresolved_visible", "expired_unresolved_visible"], "to": "open", "advancesRevision": true, "requiresCurrentSourcePolicy": true},
+    {"id": "source_correct", "from": ["open", "snoozed", "dismissed_unresolved_visible", "escalated", "expired_unresolved_visible"], "to": "source_changed_stale", "advancesRevision": true, "requiresCurrentSourcePolicy": false}
+  ],
+  "envelope": {
+    "exactFields": ["schemaVersion", "tenantId", "lifecycleRequestId", "queueItemBinding", "sourceAuthorityBinding", "policyEvaluationBinding", "lifecycleHeadBinding", "operationBinding", "targetBinding", "actorAuthorityBinding", "assigneeTransitionBinding", "timingBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "queueItemBindingExactFields": ["tenantId", "queueItemId", "queueItemRevision", "queueItemDigest", "queueKind", "actionFamily", "reasonCode", "originContract", "originProjectionId", "originMaterialDigest", "originIdempotencyKeyDigest", "originAssigneeActorId", "originAssigneeMembershipId", "originNotBefore", "originDueBy", "evidenceQuality", "trustStatus", "uncertaintyState", "horizonKind", "horizonLocalStart", "sourceLinkDigest", "completionState", "semanticFingerprintDigest"],
+    "sourceAuthorityBindingExactFields": ["tenantId", "sourceRecordId", "sourceRecordDigest", "snapshotId", "snapshotDigest", "lineageId", "lineageKind", "snapshotLineageSequence", "predecessorSnapshotId", "predecessorSnapshotDigest", "headTransitionId", "headTransitionDigest", "headSequence", "effectiveSnapshotId", "effectiveSnapshotDigest", "currentnessState", "observedAt"],
+    "policyEvaluationBindingExactFields": ["tenantId", "policyId", "policyVersion", "policyDigest", "sourceSetDigest", "evaluationId", "evaluationOutputDigest", "result", "evaluatedAt"],
+    "lifecycleHeadBindingExactFields": ["lifecycleId", "revision", "eventId", "eventDigest", "semanticFingerprintDigest", "state", "groupId", "groupKeyDigest", "priority", "assigneeActorId", "assigneeMembershipId", "dueBy", "snoozedUntil", "dismissReasonCode", "escalationLevel", "sourceSnapshotId", "sourceSnapshotDigest", "sourceHeadTransitionId", "sourceHeadTransitionDigest", "sourceHeadSequence", "policyId", "policyVersion", "policyDigest", "unresolvedConsequenceState", "completionState"],
+    "operationBindingExactFields": ["operationId", "operationKind", "reasonCode", "semanticFingerprintDigest", "groupCandidateCount", "sourceCorrectionBinding"],
+    "sourceCorrectionBindingExactFields": ["correctionKind", "lineageId", "predecessorSnapshotId", "predecessorSnapshotDigest", "predecessorSnapshotLineageSequence", "replacementSnapshotId", "replacementSnapshotDigest", "replacementSnapshotLineageSequence", "replacementHeadTransitionId", "replacementHeadTransitionDigest", "replacementHeadSequence", "replacementEffectiveSnapshotId", "replacementEffectiveSnapshotDigest", "replacementCurrentnessState", "successorQueueMaterialDigest", "successorRequired"],
+    "targetBindingExactFields": ["lifecycleId", "revision", "eventId", "eventDigest", "semanticFingerprintDigest", "state", "groupId", "groupKeyDigest", "priority", "assigneeActorId", "assigneeMembershipId", "dueBy", "snoozedUntil", "dismissReasonCode", "escalationLevel", "sourceSnapshotId", "sourceSnapshotDigest", "sourceHeadTransitionId", "sourceHeadTransitionDigest", "sourceHeadSequence", "policyId", "policyVersion", "policyDigest", "unresolvedConsequenceState", "completionState"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityState", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest", "recordScope"],
+    "assigneeTransitionBindingExactFields": ["fromActorId", "fromMembershipId", "toActorId", "toMembershipId", "toMembershipSubjectActorId", "toTenantId", "toMembershipState", "toRoleId", "assignmentDecisionId", "assignmentDecisionDigest", "recordScope"],
+    "timingBindingExactFields": ["requestedAt", "effectiveAt", "expiresAt"],
+    "trustedResolutionExactFields": ["tenantId", "queueItemBinding", "sourceAuthorityBinding", "policyEvaluationBinding", "lifecycleHeadBinding", "operationBinding", "targetBinding", "actorAuthorityBinding", "assigneeTransitionBinding", "timingBinding", "evaluatedAt"],
+    "outputFields": ["lifecycleRequestId", "tenantId", "queueItemId", "lifecycleId", "operationKind", "currentState", "targetState", "sourceSnapshotId", "sourceSnapshotDigest", "policyId", "policyVersion", "policyDigest", "assigneeActorId", "priority", "groupId", "evidenceQuality", "trustStatus", "uncertaintyState", "horizonKind", "horizonLocalStart", "unresolvedConsequenceState", "completionState", "evaluatedAt", "resultState", "reasonState", "labelId", "fixedLabel", "ownerReadableNoEffectOnly", "lifecycleEventCreated", "queueItemCreated", "queueItemHidden", "completionEvidenceCreated", "messageCreated", "providerAttemptCreated", "externalEffectCreated", "upstreamMutationCreated", "financialEffectCreated", "moneyEffectCreated"]
+  },
+  "identityAndLineageContract": {
+    "queueLifecycleIdentity": "one_exact_tenant_queue_item_and_immutable_lifecycle_ID",
+    "firstAssignRule": "unregistered_revision_zero_has_null_event_and_assignment_identity_and_assign_binds_the_exact_origin_assignee_at_revision_one",
+    "laterEventRule": "exact_current_head_event_digest_revision_and_state_are_the_only_predecessor_and_every_noncoalesced_event_advances_revision_exactly_one",
+    "lifecycleEventDigestProjection": ["tenant", "queue_item_identity_and_digest", "exact_predecessor_head", "operation_and_reason", "exact_target_without_its_digest", "source_snapshot_and_authoritative_head", "policy_evaluation", "actor_capability", "assignee_transition", "timing"],
+    "stableIdempotencyProjection": "exact_semantic_material_excluding_request_operation_lifecycle_and_target_event_identifiers_plus_observation_evaluation_and_request_clock_aliases",
+    "replayRule": "same_request_ID_same_request_material_and_digests_returns_immutable_no_effect_replay",
+    "conflictRule": "same_request_ID_different_material_or_same_semantic_material_under_a_new_request_ID_is_denied",
+    "eventOrClockNeverEstablishesOrder": true,
+    "sourceCorrectionNeverRewritesHistory": true
+  },
+  "dedupeAndGroupingContract": {
+    "semanticFingerprintProjection": ["tenantId", "queueKind", "actionFamily", "sourceRecordId", "sourceRecordDigest", "snapshotId", "snapshotDigest", "policyId", "policyVersion", "policyDigest", "evaluationId", "evaluationOutputDigest", "originAssigneeActorId", "reasonCode", "evidenceQuality", "trustStatus", "uncertaintyState", "horizonKind", "horizonLocalStart"],
+    "exactDuplicateOnly": true,
+    "groupingDimensions": ["tenantId", "queueKind", "actionFamily", "policyId", "assigneeActorId", "reasonCode", "evidenceQuality", "trustStatus", "uncertaintyState", "horizonKind", "horizonLocalStart"],
+    "differentSourcePolicyHorizonQualityUncertaintyAssigneeReasonOrConsequenceMustRemainDistinct": true,
+    "eachGroupedItemKeepsItsOwnQueueLifecycleSourceAndUnresolvedIdentity": true,
+    "groupingOrDedupeNeverCompletesDismissesExpiresOrHidesConsequentialWork": true,
+    "maximumGroupSize": 32
+  },
+  "transitionContract": {
+    "priorityRule": "set_priority_uses_one_closed_priority_and_escalate_advances_exactly_one_priority_and_one_escalation_level",
+    "snoozeRule": "finite_nonpast_snooze_not_beyond_maximum_and_never_completion",
+    "dismissRule": "fixed_reason_only_and_state_remains_dismissed_unresolved_visible",
+    "assignRule": "first_assignment_equals_origin_assignee_and_reassignment_requires_exact_active_same_tenant_assignee_resolution",
+    "expireRule": "trusted_effective_time_at_or_after_dueBy_and_state_remains_expired_unresolved_visible",
+    "reopenRule": "new_event_under_exact_current_source_policy_and_due_window_never_rewrites_prior_dismiss_snooze_or_expiry",
+    "sourceCorrectionRule": "exact_same_lineage_next_snapshot_sequence_and_strictly_later_authoritative_head_bound_to_that_exact_effective_replacement_snapshot_make_the_old_item_source_changed_stale_and_require_a_distinct_successor_material_digest_for_unresolved_consequential_work",
+    "completionRule": "completion_authority_is_unavailable_and_every_state_keeps_completion_unavailable",
+    "escalationRule": "internal_attention_priority_only_never_legal_financial_recipient_provider_or_effect_authority"
+  },
+  "currentnessAndAuthorityContract": {
+    "source": "exact_Part4B_snapshot_Part4C_currentness_and_Part4D_authoritative_head",
+    "policy": "exact_current_Part5B_policy_source_set_evaluation_output",
+    "actor": "exact_active_same_tenant_actor_session_membership_subject_but_no_released_Part3A_capability_or_record_scope_exists_for_internal_action_lifecycle_mutation",
+    "assignee": "exact_active_same_tenant_membership_subject_and_record_scope",
+    "originQueueMaterial": "exact_released_Part12A_or_Part12B_queue_kind_action_family_reason_approval_result_assignee_role_and_evidence_profile",
+    "authorityIncreasingOperations": ["assign", "dedupe_coalesce", "group", "set_priority", "snooze", "dismiss", "reassign", "escalate", "reopen"],
+    "failSafeOperations": ["expire", "source_correct"],
+    "candidateSuppliedSourcePolicyHeadActorAssigneeTimeGroupPriorityOrOutcomeNeverCreatesAuthority": true,
+    "displayRoleOrMembershipNeverSubstitutesForTheUnavailableCapability": true
+  },
+  "precedence": [
+    "malformed_or_untrusted_input_denied_before_digest_identity_dedupe_or_group_lookup",
+    "exact_same_request_replay_before_mutable_currentness_without_new_event",
+    "exact_source_correction_or_tombstone_stales_the_old_item_before_any_authority_increase",
+    "exact_lifecycle_head_and_source_head_serialize_one_next_event",
+    "dedupe_coalesces_only_identical_semantic_material",
+    "grouping_preserves_each_unresolved_item_and_never_hides_consequential_work",
+    "snooze_dismiss_expire_priority_or_escalation_never_means_completion_or_external_authority"
+  ],
+  "fixedDecision": {
+    "resultState": "action_queue_lifecycle_unavailable_no_mounted_authority",
+    "reasonState": "accepted_lifecycle_persistence_currentness_capability_and_completion_authority_not_jointly_mounted",
+    "labelId": "action_queue_lifecycle_unavailable",
+    "fixedLabel": "Internal action lifecycle unavailable — complete current authority is not mounted",
+    "neverMeans": "dedupe_group_priority_assignment_snooze_dismiss_escalation_expiry_reopen_correction_completion_message_provider_external_upstream_financial_or_money_effect_occurred"
+  },
+  "denials": [
+    "missing_unknown_extra_null_coercible_noncanonical_oversized_or_free_text_field",
+    "symbol_accessor_toJSON_proxy_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "stale_mixed_reordered_corrected_replaced_tombstoned_non_head_or_ambiguous_source_policy_or_lifecycle",
+    "cross_tenant_cross_source_cross_snapshot_cross_lineage_cross_head_cross_policy_cross_group_cross_assignee_cross_lifecycle_or_cross_identity_graft",
+    "candidate_supplied_source_policy_head_actor_assignee_group_priority_time_outcome_completion_or_successor_authority",
+    "dedupe_or_group_over_different_source_policy_horizon_quality_uncertainty_assignee_reason_or_unresolved_consequence",
+    "snooze_dismiss_expire_or_group_used_as_completion_or_to_hide_unresolved_consequential_work",
+    "priority_or_escalation_used_as_legal_financial_recipient_provider_message_effect_or_money_authority",
+    "source_correction_rewrites_history_skips_reuses_or_crosses_lineage_or_omits_distinct_required_successor_material",
+    "same_identity_conflict_or_cross_identity_semantic_clone_replay",
+    "fake_lifecycle_queue_completion_message_provider_delivery_outcome_external_upstream_financial_accounting_or_money_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteWorkerQueueSchedulerOrUi": false,
+    "mountedLifecycleResolverOrPersistence": false,
+    "acceptedRuntimeCapabilityOrAssigneeResolver": false,
+    "acceptedCompletionAuthority": false,
+    "lifecycleEventsCreated": 0,
+    "queueItemsCreated": 0,
+    "queueItemsHidden": 0,
+    "completionEvidenceCreated": 0,
+    "messagesCreated": 0,
+    "providerAttemptsCreated": 0,
+    "externalEffectsCreated": 0,
+    "upstreamMutationsCreated": 0,
+    "financialEffectsCreated": 0,
+    "moneyEffectsCreated": 0,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "unavailableEvidence": [
+    "mounted internal action lifecycle dedupe grouping assignment snooze dismissal escalation expiry reopen or correction persistence",
+    "accepted runtime source policy lifecycle capability assignee and completion resolver",
+    "private-production queue lifecycle grouping or completion evidence",
+    "real recipients messages providers callbacks effects upstream mutations financial or money evidence",
+    "professional legal privacy communications employment accounting regulatory provider deliverability or security review",
+    "hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval"
+  ],
+  "laterSliceBoundary": {
+    "part12D": "owner_explanation_and_cross_authority_drilldown_not_implemented",
+    "part13AndLater": "provider_adapter_callback_observability_rendered_and_release_slices_not_implemented",
+    "laterAuthorityNotGranted": true
+  }
+}

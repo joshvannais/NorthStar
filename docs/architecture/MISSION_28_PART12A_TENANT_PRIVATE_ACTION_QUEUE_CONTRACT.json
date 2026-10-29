@@ -1,0 +1,183 @@
+{
+  "contractVersion": "mission28.part12a.tenant-private-action-queue.v1",
+  "authority": {
+    "mission": 28,
+    "part": "12A",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "aea7f65174923b9328dae9454ad2f9a351fe09a4",
+    "baselineTree": "48c9944659282a5aea106c2cbbc625759552cb5e",
+    "scope": "tenant_private_owner_staff_task_alert_approval_request_failure_work_and_follow_up_queue_contract_only",
+    "runtimeOrPersistenceAuthorityGranted": false,
+    "externalEffectAuthorityGranted": false
+  },
+  "part11FRelease": {
+    "acceptedSourceHead": "83399ffce66b32497221554c0dd839e27403d454",
+    "acceptedTree": "48c9944659282a5aea106c2cbbc625759552cb5e",
+    "pullRequest": 598,
+    "mergedMain": "aea7f65174923b9328dae9454ad2f9a351fe09a4",
+    "mergedAt": "2026-10-29T19:40:39Z",
+    "productionAccepted": true,
+    "freshAudit": {
+      "verdict": "P0=0_P1=0_P2=0_P3=0",
+      "nodeVersion": "22.23.3",
+      "focusedTests": "16/16",
+      "parts11ATo11F": "6_suites_90_tests",
+      "cumulativeMission28": "50_suites_692_tests",
+      "migrationHistory": "2_suites_40_tests",
+      "syntax": "50/50",
+      "json": "49/49",
+      "migrations": "283_through_287_no_288",
+      "changedPaths": "54_docs_tests_only",
+      "protectedPaths": 0,
+      "diffCheck": "clean",
+      "remoteAndWorktree": "clean_and_exact"
+    },
+    "release": {
+      "deploymentId": "fdfcea4e-b515-4551-91e8-ce9b160adea3",
+      "deploymentStatus": "SUCCESS",
+      "serviceInstanceId": "7ee4f747-38c2-4baa-a024-1d7db6e7c218",
+      "deploymentInstanceId": "e16b9ccd-34fb-4f27-88fc-cb114ef42bcc",
+      "deploymentInstanceStatus": "RUNNING",
+      "imageSha256": "sha256:fa4a1641a43db1959172002d4146ec580db6d8ccb9edcbf4d27ff7040a41567f",
+      "canonicalStartup": "ready",
+      "healthStatus": "HTTP_200_PostgreSQL_and_canonical_persistence_healthy",
+      "rootDashboardDemo": "HTTP_200",
+      "dashboardDemoParity": "91681_bytes_sha256:b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369"
+    },
+    "directAppliedProductionMigrationHistory": "unavailable_and_unclaimed"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4D_FACT_PRECEDENCE_CONTRACT.json", "normalizedLfSha256": "25E09A7E0EA49B8D02E0A023402947EA2784043852BF2CAE25C470BFDFC494C9"},
+    {"path": "docs/architecture/MISSION_28_PART11A_COLLECTION_ELIGIBILITY_CONTRACT.json", "normalizedLfSha256": "5ADA756AB4C2C94332DE0DAD01E721DCD6F5548B3829D7D1A27F1AB5ACB158FA"},
+    {"path": "docs/architecture/MISSION_28_PART11B_REMINDER_POLICY_CONTRACT.json", "normalizedLfSha256": "B4E03ADDA4AF59229BDE852A04C56360967DC598A1D75976F4D17546CAA0FCA2"},
+    {"path": "docs/architecture/MISSION_28_PART11C_REMINDER_MATERIAL_CONTRACT.json", "normalizedLfSha256": "0066B55B7403087837480988D6229B394C489024EB5CC1C5946709F83DF2125C"},
+    {"path": "docs/architecture/MISSION_28_PART11D_SUPPRESSION_REBUILD_CONTRACT.json", "normalizedLfSha256": "07E3E33E63FF29AF4F995E388DE625404E5CFE5DD88CF51D3C19565B350FD3A9"},
+    {"path": "docs/architecture/MISSION_28_PART11E_OWNER_WORKLIST_LEGAL_BOUNDARY_CONTRACT.json", "normalizedLfSha256": "122E80E98CF6E81EA8D0349F4CC43C34381C0A071922EE417B0C4288F50EEBD7"},
+    {"path": "docs/architecture/MISSION_28_PART11F_COLLECTION_EVIDENCE_RECONCILIATION_CONTRACT.json", "normalizedLfSha256": "74DA6D7E8592AC34015A32984DF331E12971670CFABDE6A26B87FE8AC33454FE"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
+  },
+  "bounds": {
+    "maximumCanonicalRequestBytes": 32768,
+    "maximumSourceObservationAgeSeconds": 300,
+    "maximumDueWindowSeconds": 2592000,
+    "maximumLineageSequence": 2147483647,
+    "maximumReasonCodeLength": 96
+  },
+  "queueKinds": [
+    {"id": "owner_task", "actionFamily": "internal_read_digest_task", "creatorCapability": "automation_internal_action_prepare", "recipientClass": "tenant_owner", "assigneeRoles": ["owner"], "reasonCodes": ["exact_current_source_requires_owner_review"], "priorities": ["normal", "high"]},
+    {"id": "staff_task", "actionFamily": "internal_read_digest_task", "creatorCapability": "automation_internal_action_prepare", "recipientClass": "assigned_staff", "assigneeRoles": ["member"], "reasonCodes": ["exact_current_source_requires_assigned_staff_review"], "priorities": ["normal", "high"]},
+    {"id": "alert", "actionFamily": "internal_read_digest_task", "creatorCapability": "automation_internal_action_prepare", "recipientClass": "tenant_owner", "assigneeRoles": ["owner"], "reasonCodes": ["exact_current_source_requires_owner_attention"], "priorities": ["high", "urgent"]},
+    {"id": "approval_request", "actionFamily": "owner_approval_request", "creatorCapability": "automation_approval_request_create", "recipientClass": "tenant_owner", "assigneeRoles": ["owner"], "reasonCodes": ["exact_current_material_requires_owner_approval"], "priorities": ["normal", "high"]},
+    {"id": "failure_work", "actionFamily": "internal_read_digest_task", "creatorCapability": "automation_internal_action_prepare", "recipientClass": "tenant_owner", "assigneeRoles": ["owner"], "reasonCodes": ["exact_current_failure_requires_owner_review"], "priorities": ["high", "urgent"]},
+    {"id": "follow_up_queue_item", "actionFamily": "internal_read_digest_task", "creatorCapability": "automation_internal_action_prepare", "recipientClass": "assigned_staff", "assigneeRoles": ["member"], "reasonCodes": ["exact_current_source_requires_assigned_follow_up"], "priorities": ["low", "normal", "high"]},
+    {"id": "collection_owner_work_item", "actionFamily": "collection_escalation", "creatorCapability": "automation_collection_work_item_prepare", "recipientClass": "tenant_owner", "assigneeRoles": ["owner"], "reasonCodes": ["exact_current_reviewed_collection_handoff_requires_owner_review"], "priorities": ["normal", "high"]}
+  ],
+  "envelope": {
+    "exactFields": ["schemaVersion", "tenantId", "queueProjectionId", "queueKind", "sourceBinding", "creatorAuthorityBinding", "assigneeBinding", "visibilityBinding", "dueWindow", "reasonCode", "priority", "sourceLink", "completionEvidence", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "sourceBindingExactFields": ["tenantId", "triggerId", "sourceClassId", "actionFamily", "snapshotId", "snapshotDigest", "lineageId", "lineageKind", "snapshotLineageSequence", "predecessorSnapshotId", "predecessorSnapshotDigest", "headTransitionId", "headTransitionDigest", "headSequence", "effectiveSnapshotId", "effectiveSnapshotDigest", "eventKind", "eventTime", "observedAt", "currentnessState"],
+    "creatorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "part1DCapabilityId", "part3AVisibilityCapabilityId", "capabilityDecisionId", "capabilityDecisionDigest", "recordScope"],
+    "assigneeBindingExactFields": ["assigneeActorId", "assigneeMembershipId", "assigneeMembershipSubjectActorId", "assigneeTenantId", "assigneeMembershipState", "assigneeRoleId", "recipientClassId"],
+    "visibilityBindingExactFields": ["viewerActorId", "viewerSessionId", "viewerMembershipId", "viewerSessionSubjectActorId", "viewerMembershipSubjectActorId", "viewerTenantId", "viewerSessionTenantId", "viewerMembershipTenantId", "viewerActorState", "viewerSessionState", "viewerMembershipState", "viewerMembershipRoleId", "visibilityCapabilityId", "capabilityDecisionId", "capabilityDecisionDigest", "visibilityRecordScope", "assignedRecordId", "tenantWideVisibleToOwnerAdmin", "assignedVisibleToMemberOnly"],
+    "dueWindowExactFields": ["notBefore", "dueBy"],
+    "sourceLinkExactFields": ["linkKind", "tenantId", "sourceRecordId", "sourceRecordDigest", "snapshotId", "snapshotDigest"],
+    "completionEvidenceExactFields": ["state", "completionRecordId", "completionRecordDigest", "completedByActorId", "completedAt"],
+    "outputFields": ["queueProjectionId", "tenantId", "queueKind", "sourceSnapshotId", "sourceSnapshotDigest", "assigneeActorId", "reasonCode", "priority", "evaluatedAt", "resultState", "reasonState", "labelId", "fixedLabel", "ownerReadableNoEffectOnly", "queueRecordCreated", "taskCreated", "alertCreated", "approvalRequestCreated", "failureWorkCreated", "followUpCreated", "completionEvidenceCreated", "messageCreated", "providerAttemptCreated", "externalEffectCreated", "upstreamMutationCreated", "moneyEffectCreated"]
+  },
+  "sourceAuthorityContract": {
+    "sourceCatalog": "exact_server_resolved_Part4A_trigger_row_and_Part4B_snapshot_plus_Part4D_authoritative_head",
+    "allowedSourceClassIds": ["mission20_business_contact_preferences", "mission21_knowledge_reference", "mission22_appointment_dispatch", "mission23_work_execution", "mission24_estimate_quote", "mission25_26_advisory", "mission27_financial_collection"],
+    "lineageKind": "active",
+    "currentnessState": "latest_exact_current",
+    "triggerActionCompatibilityRequired": true,
+    "snapshotAndHeadMustIdentifySameEffectiveSnapshot": true,
+    "eventOrObservationTimeNeverEstablishesPrecedence": true,
+    "candidateSuppliedSourceOrHeadNeverCreatesAuthority": true
+  },
+  "capabilityContract": {
+    "creatorMustResolveOneExactPart1DLaunchBinding": true,
+    "visibilityMustResolveExactPart3AAutomationViewGrant": true,
+    "part1DOperationCapabilityAndPart3AVisibilityCapabilityRemainDistinct": true,
+    "viewerMustBeExactActiveSameTenantActorSessionAndMembershipSubject": true,
+    "assignedStaffViewerMustEqualExactAssigneeActorAndMembership": true,
+    "actorMustEqualSessionAndMembershipSubjects": true,
+    "ownerAdminTenantWideScope": "exact_tenant_all_automation",
+    "memberAssignedScope": "exact_assigned_internal_records_only",
+    "memberAssignedRecordIdentity": "exact_source_snapshot_record_identity_independent_of_request_identity",
+    "staffIsViewOnlyAndNeverCreatesOrRetargetsWork": true,
+    "approvalRequestNeverCreatesApproval": true,
+    "collectionWorkItemRequiresExactReviewedMission27HandoffAndOwnerOnly": true,
+    "candidateCapabilityRoleAssigneeOrScopeNeverCreatesAuthority": true
+  },
+  "recordContract": {
+    "priorityOrder": ["low", "normal", "high", "urgent"],
+    "dueWindowUsesTrustedEvaluatedAt": true,
+    "reasonIsOneFixedCodeFromQueueKind": true,
+    "sourceLinkIsOpaqueInternalIdentityNotUrlOrFreeText": true,
+    "completionEvidenceState": "unavailable_no_accepted_completion_authority",
+    "completionIdentityFieldsMustBeNull": true,
+    "sameSemanticMaterialSameIdempotencyDigest": true,
+    "requestIdentityAndEvaluationTimeExcludedFromStableIdempotencyMaterial": true,
+    "correctionCreatesNewExactSourceSnapshotAndNewQueueMaterialNeverRewritesHistory": true
+  },
+  "fixedDecision": {
+    "resultState": "tenant_private_action_queue_unavailable_no_mounted_authority",
+    "reasonState": "accepted_creation_completion_and_persistence_authority_unavailable",
+    "labelId": "internal_action_queue_unavailable",
+    "fixedLabel": "Internal action queue unavailable — complete current authority is not mounted",
+    "neverMeans": "queue_task_alert_approval_failure_follow_up_or_completion_record_created_or_any_message_provider_external_upstream_or_money_effect"
+  },
+  "denials": [
+    "missing_unknown_extra_null_coercible_noncanonical_or_oversized_field",
+    "symbol_accessor_toJSON_proxy_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "candidate_supplied_source_snapshot_head_actor_session_membership_capability_assignee_scope_or_completion_authority",
+    "cross_tenant_cross_actor_cross_membership_cross_record_cross_source_cross_lineage_cross_head_or_cross_assignee_graft",
+    "stale_mixed_unavailable_tombstoned_reversed_replaced_corrected_non_head_or_ambiguous_source",
+    "trigger_action_family_source_class_launch_cell_role_capability_recipient_or_scope_mismatch",
+    "unsupported_assignee_due_window_reason_priority_source_link_or_completion_evidence",
+    "same_identity_conflict_or_cross_identity_semantic_clone_replay",
+    "recipient_message_provider_callback_delivery_upstream_financial_accounting_legal_external_or_money_effect",
+    "fake_queue_task_alert_approval_failure_follow_up_completion_or_success_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteWorkerQueueSchedulerOrUi": false,
+    "mountedTaskAlertApprovalFailureOrFollowUpPersistence": false,
+    "acceptedRuntimeCapabilityResolver": false,
+    "acceptedCompletionAuthority": false,
+    "queueRecordsCreated": 0,
+    "tasksCreated": 0,
+    "alertsCreated": 0,
+    "approvalRequestsCreated": 0,
+    "failureWorkRecordsCreated": 0,
+    "followUpRecordsCreated": 0,
+    "messagesCreated": 0,
+    "providerAttemptsCreated": 0,
+    "externalEffectsCreated": 0,
+    "upstreamMutationsCreated": 0,
+    "moneyEffectsCreated": 0,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "unavailableEvidence": [
+    "mounted tenant-private action queue task alert approval failure-work follow-up or completion persistence",
+    "accepted runtime capability and record-scope resolver",
+    "private-production task or queue evidence",
+    "real recipients messages providers callbacks effects upstream mutations financial or money evidence",
+    "professional legal privacy communications employment collections accounting tax regulatory provider deliverability or security review",
+    "hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval"
+  ],
+  "laterSliceBoundary": {
+    "part12B": "reviewed_Mission25_26_attention_item_handoffs_not_implemented",
+    "part12C": "dedupe_grouping_priority_snooze_dismiss_reassign_escalate_expire_reopen_and_correction_runtime_not_implemented",
+    "part12D": "owner_explanation_and_cross_authority_drilldown_not_implemented",
+    "laterAuthorityNotGranted": true
+  }
+}

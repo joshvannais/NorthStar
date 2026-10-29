@@ -97,7 +97,7 @@ function frequencyBinding(state = 'clear', attempts = 0) {
     cadencePolicyId: '00000000-0000-4000-8000-000000000040', cadencePolicyDigest: `sha256:${'40'.repeat(32)}`, attemptCeiling: 3,
     attemptWindowSeconds: 604800, minimumIntervalSeconds: 86400, attemptsInWindow: attempts,
     lastAcceptedAttemptAt: attempts === 0 ? null : '2026-10-27T12:00:00.000000Z', nextAttemptNotBefore: attempts === 0 ? null : '2026-10-28T12:00:00.000000Z',
-    cadenceExpiresAt: '2026-11-11T12:05:00.000000Z',
+    cadenceExpiresAt: '2026-11-11T12:05:00.000000Z', observedAt: '2026-10-28T12:04:00.000000Z',
     state, resolutionDigest: `sha256:${'41'.repeat(32)}`
   };
 }
@@ -115,7 +115,7 @@ function collisionBinding(resultState = 'selected_no_effect', reasonCode = 'sele
   return {
     tenantId: '00000000-0000-4000-8000-000000000001', sourceSetDigest: `sha256:${'22'.repeat(32)}`,
     actionUnitId: '00000000-0000-4000-8000-000000000028', actionUnitDigest: `sha256:${'28'.repeat(32)}`,
-    analysisId: '00000000-0000-4000-8000-000000000060', inputDigest: `sha256:${'60'.repeat(32)}`,
+    analysisId: '00000000-0000-4000-8000-000000000060', asOf: '2026-10-28T12:04:00.000000Z', inputDigest: `sha256:${'60'.repeat(32)}`,
     outputDigest: `sha256:${'61'.repeat(32)}`, resultState, reasonCode
   };
 }
@@ -139,6 +139,18 @@ function fixture() {
 
 function canonicalTimeZone(value) {
   try { return new Intl.DateTimeFormat('en-US', {timeZone: value}).resolvedOptions().timeZone === value; } catch { return false; }
+}
+
+function utcMillis(value) {
+  if (!UTC.test(value)) return NaN;
+  const millis = Date.parse(value);
+  return Number.isFinite(millis) ? millis : NaN;
+}
+
+function requireFresh(observedAt, evaluatedAt) {
+  const observed = utcMillis(observedAt); const evaluated = utcMillis(evaluatedAt);
+  if (!Number.isFinite(observed) || !Number.isFinite(evaluated) || observed > evaluated ||
+      evaluated - observed > contract.bounds.maximumResolutionObservationAgeSeconds * 1000) throw new Error('stale resolution');
 }
 
 function validate(input, trusted) {
@@ -170,7 +182,7 @@ function validate(input, trusted) {
     input.collisionBinding.inputDigest, input.collisionBinding.outputDigest, input.responseEvidenceBinding.actionUnitDigest,
     input.responseEvidenceBinding.sourceSetDigest, input.responseEvidenceBinding.deliveryEvidenceResolutionDigest, input.materialDigest, input.idempotencyKeyDigest, input.requestDigest];
   if (digests.some(value => !DIGEST.test(value))) throw new Error('digest');
-  if (!UTC.test(input.evaluatedAt)) throw new Error('time');
+  if (!Number.isFinite(utcMillis(input.evaluatedAt))) throw new Error('time');
 
   const source = input.sourceBinding;
   if (source.tenantId !== input.tenantId || source.triggerId !== 'm20.lead_contact_state' || source.currentnessState !== 'latest_exact_current' || source.evaluationResult !== 'eligible') throw new Error('source');
@@ -196,10 +208,11 @@ function validate(input, trusted) {
   if (frequency.tenantId !== input.tenantId || frequency.sourceSetDigest !== source.sourceSetDigest || frequency.actionUnitId !== part9A.actionUnitId || frequency.actionUnitDigest !== part9A.actionUnitDigest ||
       frequency.attemptCeiling !== contract.bounds.attemptCeiling || frequency.attemptWindowSeconds !== contract.bounds.attemptWindowSeconds ||
       frequency.minimumIntervalSeconds !== contract.bounds.minimumIntervalSeconds || frequency.attemptsInWindow > frequency.attemptCeiling ||
-      !contract.frequencyContract.states.includes(frequency.state) || !UTC.test(frequency.cadenceExpiresAt) ||
-      Date.parse(frequency.cadenceExpiresAt) <= Date.parse(input.evaluatedAt) || Date.parse(frequency.cadenceExpiresAt) - Date.parse(input.evaluatedAt) > contract.bounds.cadenceHorizonSeconds * 1000) throw new Error('frequency');
+      !contract.frequencyContract.states.includes(frequency.state) || !Number.isFinite(utcMillis(frequency.cadenceExpiresAt)) ||
+      utcMillis(frequency.cadenceExpiresAt) <= utcMillis(input.evaluatedAt) || utcMillis(frequency.cadenceExpiresAt) - utcMillis(input.evaluatedAt) > contract.bounds.cadenceHorizonSeconds * 1000) throw new Error('frequency');
+  requireFresh(frequency.observedAt, input.evaluatedAt);
   if ((frequency.attemptsInWindow === 0) !== (frequency.lastAcceptedAttemptAt === null) || (frequency.attemptsInWindow === 0) !== (frequency.nextAttemptNotBefore === null)) throw new Error('attempt evidence');
-  if (frequency.lastAcceptedAttemptAt !== null && (!UTC.test(frequency.lastAcceptedAttemptAt) || !UTC.test(frequency.nextAttemptNotBefore) ||
+  if (frequency.lastAcceptedAttemptAt !== null && (!Number.isFinite(utcMillis(frequency.lastAcceptedAttemptAt)) || !Number.isFinite(utcMillis(frequency.nextAttemptNotBefore)) ||
       frequency.lastAcceptedAttemptAt > input.evaluatedAt || Date.parse(frequency.nextAttemptNotBefore) !== Date.parse(frequency.lastAcceptedAttemptAt) + frequency.minimumIntervalSeconds * 1000)) throw new Error('attempt time');
   if ((frequency.state === 'limit_reached') !== (frequency.attemptsInWindow === frequency.attemptCeiling) ||
       (frequency.state === 'clear' && (frequency.attemptsInWindow >= frequency.attemptCeiling || (frequency.nextAttemptNotBefore !== null && frequency.nextAttemptNotBefore > input.evaluatedAt))) ||
@@ -207,13 +220,15 @@ function validate(input, trusted) {
 
   const quiet = input.quietHoursBinding;
   if (quiet.tenantId !== input.tenantId || !Number.isSafeInteger(quiet.calendarVersion) || quiet.calendarVersion < 1 || !canonicalTimeZone(quiet.tenantTimeZone) ||
-      !contract.quietHoursContract.states.includes(quiet.state) || !UTC.test(quiet.observedAt) || quiet.observedAt > input.evaluatedAt) throw new Error('quiet hours');
+      !contract.quietHoursContract.states.includes(quiet.state)) throw new Error('quiet hours');
+  requireFresh(quiet.observedAt, input.evaluatedAt);
   const closed = ['inside_quiet_hours', 'holiday_closed'].includes(quiet.state);
-  if (closed !== (quiet.nextAllowedAt !== null) || (quiet.nextAllowedAt !== null && (!UTC.test(quiet.nextAllowedAt) || quiet.nextAllowedAt <= input.evaluatedAt))) throw new Error('next allowed');
+  if (closed !== (quiet.nextAllowedAt !== null) || (quiet.nextAllowedAt !== null && (!Number.isFinite(utcMillis(quiet.nextAllowedAt)) || utcMillis(quiet.nextAllowedAt) <= utcMillis(input.evaluatedAt)))) throw new Error('next allowed');
 
   const collision = input.collisionBinding;
   if (collision.tenantId !== input.tenantId || collision.sourceSetDigest !== source.sourceSetDigest || collision.actionUnitId !== part9A.actionUnitId ||
       collision.actionUnitDigest !== part9A.actionUnitDigest || !contract.collisionAndResponseContract.acceptedPairs.some(pair => pair.resultState === collision.resultState && pair.reasonCode === collision.reasonCode)) throw new Error('collision');
+  requireFresh(collision.asOf, input.evaluatedAt);
   const response = input.responseEvidenceBinding;
   if (response.tenantId !== input.tenantId || response.sourceSetDigest !== source.sourceSetDigest || response.actionUnitId !== part9A.actionUnitId || response.actionUnitDigest !== part9A.actionUnitDigest ||
       response.replyState !== part7F.currentLaunchProfile.replyState || response.optOutState !== part7F.currentLaunchProfile.optOutState ||
@@ -229,6 +244,8 @@ function reasonFor(input) {
   if (permission === 'suppressed_do_not_contact') return 'do_not_contact_active';
   if (['suppressed_conflicting', 'suppressed_preference', 'suppressed_jurisdiction', 'suppressed_age'].includes(permission)) return 'permission_suppressed';
   const collision = input.collisionBinding;
+  if (collision.reasonCode === 'global_pause_active') return 'global_pause_active';
+  if (collision.reasonCode === 'tenant_pause_active') return 'tenant_pause_active';
   if (collision.reasonCode === 'active_conversation_present') return 'active_conversation_present';
   if (collision.reasonCode === 'recent_manual_activity_present') return 'recent_manual_activity_present';
   if (collision.resultState === 'unavailable') return 'current_evidence_unavailable';
@@ -274,7 +291,7 @@ describe('Mission 28 Part 9B bounded contact follow-up cadence', () => {
   });
 
   test('freezes finite cadence bounds without missing-as-zero fallbacks', () => {
-    expect(contract.bounds).toMatchObject({attemptCeiling: 3, attemptWindowSeconds: 604800, minimumIntervalSeconds: 86400, cadenceHorizonSeconds: 1209600, ownerWorklistReasonsMaximum: 1});
+    expect(contract.bounds).toMatchObject({attemptCeiling: 3, attemptWindowSeconds: 604800, minimumIntervalSeconds: 86400, cadenceHorizonSeconds: 1209600, maximumResolutionObservationAgeSeconds: 300, ownerWorklistReasonsMaximum: 1});
     expect(contract.frequencyContract.attemptEvidence).toMatch(/separately_resolved/); expect(contract.bounds.unboundedOrZeroFrequencyQuietHourOrExpirationFallback).toBe('deny');
   });
 
@@ -294,6 +311,15 @@ describe('Mission 28 Part 9B bounded contact follow-up cadence', () => {
     for (const [resultState, collisionReason, expected] of [['suppressed', 'active_conversation_present', 'active_conversation_present'], ['suppressed', 'recent_manual_activity_present', 'recent_manual_activity_present'],
       ['unavailable', 'source_material_changed', 'current_evidence_unavailable'], ['superseded', 'higher_priority_action_active', 'higher_priority_action_active']]) {
       const input = fixture(); input.collisionBinding = collisionBinding(resultState, collisionReason); seal(input); expect(project(input, copy(input)).reasonCode).toBe(expected);
+    }
+  });
+
+  test('reports global and tenant pauses before frequency quiet-hour or channel decisions', () => {
+    for (const reason of ['global_pause_active', 'tenant_pause_active']) {
+      const input = fixture(); input.collisionBinding = collisionBinding('suppressed', reason); input.frequencyBinding = frequencyBinding('limit_reached', 3);
+      input.quietHoursBinding = quietHoursBinding('inside_quiet_hours'); seal(input);
+      const result = project(input, copy(input)); expect(result.reasonCode).toBe(reason); expect(result.fixedLabel).toBe(contract.decisionContract.fixedLabels[reason]);
+      for (const key of ['ownerWorklistRecordCreated', 'messageCreated', 'taskCreated', 'scheduleCreated', 'providerAttemptCreated', 'externalEffectCreated']) expect(result[key]).toBe(false);
     }
   });
 
@@ -336,9 +362,12 @@ describe('Mission 28 Part 9B bounded contact follow-up cadence', () => {
     }
   });
 
-  test('denies timezone aliases, unknown quiet states, stale clocks and incoherent next-allowed instants', () => {
+  test('accepts fresh and exact-threshold observations but denies stale future or incoherent clock evidence', () => {
+    const threshold = fixture(); threshold.frequencyBinding.observedAt = '2026-10-28T12:00:00.000000Z'; threshold.quietHoursBinding.observedAt = '2026-10-28T12:00:00.000000Z'; threshold.collisionBinding.asOf = '2026-10-28T12:00:00.000000Z'; seal(threshold); expect(project(threshold, copy(threshold)).resultState).toBe(contract.decisionContract.resultState);
     for (const mutation of [value => { value.quietHoursBinding.tenantTimeZone = 'US/Central'; }, value => { value.quietHoursBinding.tenantTimeZone = 'customer@example.test'; },
       value => { value.quietHoursBinding.state = 'unknown'; }, value => { value.quietHoursBinding.observedAt = '2026-10-29T12:00:00.000000Z'; },
+      value => { value.quietHoursBinding.observedAt = '2026-10-28T11:59:59.000000Z'; }, value => { value.frequencyBinding.observedAt = '2026-10-28T11:59:59.000000Z'; },
+      value => { value.collisionBinding.asOf = '2026-10-28T11:59:59.000000Z'; }, value => { value.collisionBinding.asOf = '2026-10-28T12:06:00.000000Z'; },
       value => { value.quietHoursBinding.nextAllowedAt = '2026-10-28T14:00:00.000000Z'; }, value => { value.quietHoursBinding.state = 'inside_quiet_hours'; }]) {
       const candidate = fixture(); mutation(candidate); seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow();
     }
@@ -356,9 +385,9 @@ describe('Mission 28 Part 9B bounded contact follow-up cadence', () => {
 
   test('keeps stable idempotency across identity and evaluation time with immutable no-effect replay', () => {
     const history = new History(); const first = fixture(); expect(history.record(first, copy(first)).replayed).toBe(false); expect(history.record(copy(first), copy(first)).replayed).toBe(true);
-    const clone = copy(first); clone.cadenceResolutionId = '00000000-0000-4000-8000-000000000099'; clone.evaluatedAt = '2026-10-28T12:10:00.000000Z'; seal(clone);
+    const clone = copy(first); clone.cadenceResolutionId = '00000000-0000-4000-8000-000000000099'; clone.evaluatedAt = '2026-10-28T12:08:00.000000Z'; seal(clone);
     expect(clone.idempotencyKeyDigest).toBe(first.idempotencyKeyDigest); expect(clone.materialDigest).not.toBe(first.materialDigest); expect(() => history.record(clone, copy(clone))).toThrow('clone');
-    const conflict = copy(first); conflict.evaluatedAt = '2026-10-28T12:10:00.000000Z'; seal(conflict); expect(() => history.record(conflict, copy(conflict))).toThrow('identity conflict');
+    const conflict = copy(first); conflict.evaluatedAt = '2026-10-28T12:08:00.000000Z'; seal(conflict); expect(() => history.record(conflict, copy(conflict))).toThrow('identity conflict');
   });
 
   test('rejects unknown, missing, accessor, symbol, proxy, toJSON, custom-prototype, sparse and alias data before hooks', () => {

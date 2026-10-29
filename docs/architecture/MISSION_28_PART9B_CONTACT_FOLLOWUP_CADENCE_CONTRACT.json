@@ -56,6 +56,7 @@
     "attemptWindowSeconds": 604800,
     "minimumIntervalSeconds": 86400,
     "cadenceHorizonSeconds": 1209600,
+    "maximumResolutionObservationAgeSeconds": 300,
     "maximumCanonicalRequestBytes": 65536,
     "ownerWorklistReasonsMaximum": 1,
     "unboundedOrZeroFrequencyQuietHourOrExpirationFallback": "deny"
@@ -66,9 +67,9 @@
     "part9AResolutionBindingExactFields": ["tenantId", "resolutionId", "materialDigest", "sourceSetDigest", "actionUnitId", "actionUnitDigest", "customerAcknowledgementState", "internalAlertState"],
     "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"],
     "channelPermissionBindingExactFields": ["tenantId", "sourceSetDigest", "actionUnitId", "actionUnitDigest", "recipientResolutionId", "recipientResolutionDigest", "recipientClassId", "permissionResolutionId", "permissionResolutionDigest", "permissionRecipientResolutionDigest", "channelId", "permissionResultState", "providerMode"],
-    "frequencyBindingExactFields": ["tenantId", "sourceSetDigest", "actionUnitId", "actionUnitDigest", "cadencePolicyId", "cadencePolicyDigest", "attemptCeiling", "attemptWindowSeconds", "minimumIntervalSeconds", "attemptsInWindow", "lastAcceptedAttemptAt", "nextAttemptNotBefore", "cadenceExpiresAt", "state", "resolutionDigest"],
+    "frequencyBindingExactFields": ["tenantId", "sourceSetDigest", "actionUnitId", "actionUnitDigest", "cadencePolicyId", "cadencePolicyDigest", "attemptCeiling", "attemptWindowSeconds", "minimumIntervalSeconds", "attemptsInWindow", "lastAcceptedAttemptAt", "nextAttemptNotBefore", "cadenceExpiresAt", "observedAt", "state", "resolutionDigest"],
     "quietHoursBindingExactFields": ["tenantId", "calendarId", "calendarVersion", "calendarDigest", "tenantTimeZone", "state", "observedAt", "nextAllowedAt", "resolutionDigest"],
-    "collisionBindingExactFields": ["tenantId", "sourceSetDigest", "actionUnitId", "actionUnitDigest", "analysisId", "inputDigest", "outputDigest", "resultState", "reasonCode"],
+    "collisionBindingExactFields": ["tenantId", "sourceSetDigest", "actionUnitId", "actionUnitDigest", "analysisId", "asOf", "inputDigest", "outputDigest", "resultState", "reasonCode"],
     "responseEvidenceBindingExactFields": ["tenantId", "sourceSetDigest", "actionUnitId", "actionUnitDigest", "deliveryEvidenceResolutionId", "deliveryEvidenceResolutionDigest", "replyState", "optOutState", "strongestClaim", "state"],
     "outputFieldsCreatedOnlyByTrustedProjection": ["cadenceResolutionId", "tenantId", "sourceSetDigest", "actionUnitId", "actionUnitDigest", "recipientResolutionId", "channelId", "evaluatedAt", "resultState", "reasonCode", "labelId", "fixedLabel", "ownerWorklistDisposition", "ownerWorklistRecordCreated", "messageCreated", "taskCreated", "scheduleCreated", "providerAttemptCreated", "externalEffectCreated"]
   },
@@ -106,6 +107,12 @@
     "canonicalTimeZone": "tenantTimeZone_must_be_an_exact_canonical_IANA_identifier",
     "currentExternalBoundary": "external_quiet_hour_legal_and_launch_authority_remains_unavailable_even_if_a_calendar_can_be_resolved"
   },
+  "resolutionFreshnessContract": {
+    "maximumAgeSeconds": 300,
+    "appliesTo": ["frequencyBinding.observedAt", "quietHoursBinding.observedAt", "collisionBinding.asOf"],
+    "rule": "each_exact_UTC_observation_is_not_after_evaluatedAt_and_is_at_most_300_seconds_old; exact_threshold_is_accepted; older_future_invalid_or_missing_evidence_is_denied",
+    "candidateClockOrMissingTimestampNeverCreatesCurrentness": true
+  },
   "collisionAndResponseContract": {
     "acceptedPairs": [
       {"resultState": "selected_no_effect", "reasonCode": "selected_no_effect"},
@@ -128,6 +135,8 @@
       {"reasonCode": "recipient_opt_out_active", "condition": "permission_suppressed_opt_out"},
       {"reasonCode": "do_not_contact_active", "condition": "permission_suppressed_do_not_contact"},
       {"reasonCode": "permission_suppressed", "condition": "permission_other_suppressed_except_quiet_hours"},
+      {"reasonCode": "global_pause_active", "condition": "collision_global_pause"},
+      {"reasonCode": "tenant_pause_active", "condition": "collision_tenant_pause"},
       {"reasonCode": "active_conversation_present", "condition": "collision_active_conversation"},
       {"reasonCode": "recent_manual_activity_present", "condition": "collision_recent_manual_activity"},
       {"reasonCode": "current_evidence_unavailable", "condition": "collision_unavailable_or_source_changed_or_provider_uncertain"},
@@ -143,6 +152,8 @@
       "recipient_opt_out_active": "Follow-up stopped — recipient opted out",
       "do_not_contact_active": "Follow-up stopped — do not contact",
       "permission_suppressed": "Follow-up stopped — communication suppressed",
+      "global_pause_active": "Follow-up stopped — global pause",
+      "tenant_pause_active": "Follow-up stopped — tenant pause",
       "active_conversation_present": "Follow-up stopped — active conversation",
       "recent_manual_activity_present": "Follow-up stopped — recent manual activity",
       "current_evidence_unavailable": "Follow-up stopped — current evidence unavailable",

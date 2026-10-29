@@ -506,8 +506,8 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
     const roadmap=fs.readFileSync(path.join(ROOT,'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'),'utf8');
     const ledger=fs.readFileSync(path.join(ROOT,'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'),'utf8');
     for(const document of [roadmap,ledger]){
-      expect(document).toContain('Parts 1A–9B are released. Part 9C is the sole implementation candidate.');
-      expect(document).toContain('Parts 9D–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–9C are released. Part 9D is the sole implementation candidate.');
+      expect(document).toContain('Parts 10A–14G remain planned and unimplemented.');
       expect(document).toContain('1ed57934cd127b083a3accacc9735ae6b3b9f5cd');
       expect(document).toContain('cb9fcc37-473e-43c9-b243-37ce1860b17d');
       expect(document).toContain('99d66b682bcd53d9b6822a6ced0a663b6591b7aa4156f7bbe8c084c3833b4ce2');
@@ -516,7 +516,7 @@ describe('Mission 28 Part 5C owner-readable no-effect preview', () => {
     expect(ledger).toContain('| 19 | 5C | Owner-readable no-effect preview | **Released** |');
     expect(ledger).toContain('| 20 | 5D | Collision/suppression engine and no-effect dry run | **Released** |');
     expect((ledger.match(/\*\*Implementation candidate\*\*/g)||[])).toHaveLength(1);
-    expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(27);
+    expect((ledger.match(/Planned \/ unimplemented/g)||[])).toHaveLength(26);
     const migrations=fs.readdirSync(path.join(ROOT,'migrations')).filter(n=>/^\d+.*\.sql$/.test(n)).sort();
     expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
     expect(migrations.some(name => name.startsWith('288_'))).toBe(false);

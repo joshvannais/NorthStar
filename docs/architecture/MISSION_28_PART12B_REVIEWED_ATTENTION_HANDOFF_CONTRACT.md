@@ -1,0 +1,19 @@
+# Mission 28 Part 12B — reviewed attention handoffs
+
+Status: **Implementation candidate only.** Part 12A is released. Part 12B freezes a source contract; it mounts no resolver, queue, worker, route, UI, provider or effect path.
+
+## Exact boundary
+
+Only two advisory sources are in this slice: the exact-current Mission 25 reviewed recommendation and the exact-current Mission 26 reviewed advisory handoff whose latest immutable review action is `requested`. Each must retain the exact Part 4A trigger identity, Part 4B snapshot lineage, Part 4D authoritative head, source-specific revision and digests, review identity, evidence quality, trust status, uncertainty, horizon and explicit unavailable state. A Mission 25 outcome summary without the reviewed recommendation is not a handoff. A raw Mission 26 forecast, alert or prediction without the requested reviewed handoff is not a handoff.
+
+The handoff may describe only one future tenant-private owner attention item or one future owner approval request. The exact current Part 5A policy and exact immutable Part 5B evaluation must independently allow the matching action family. An owner attention item requires the exact `eligible` result. An owner approval request requires the exact `approval_required` result and still is not an approval. The Part 1D launch binding, Part 3A actor/session/membership/capability and record scope, and released Part 12A queue grammar remain independent mandatory authorities.
+
+Mission 25 learning and Mission 26 prediction remain advisory. Evidence quality, trust, uncertainty and horizon stay visible and inseparable from their exact reviewed source. They never become a fact, permission, approval, policy, action, recipient, message, provider effect, upstream mutation, financial effect or money movement by inference. Dismissed, consumed, withdrawn, expired, unreviewed, unavailable, stale, corrected, replaced, tombstoned, mixed, cross-tenant, cross-source, cross-policy, cross-horizon or cross-identity material fails closed.
+
+## Current truthful result
+
+The repository has no accepted mounted reviewed-handoff-to-queue resolver, capability resolver, attention/approval persistence or completion authority. Therefore every otherwise well-formed hypothetical request returns only the fixed private label `Reviewed advisory attention item unavailable — complete current authority is not mounted`. It creates no record, task, approval, message, provider attempt, external effect, upstream mutation, financial effect or money movement. Part 12C lifecycle operations and Part 12D drilldown remain unimplemented.
+
+Part 12A is released from source `67a61f18e4fbc98ea4cc13ea8da5979bc0326aa3`, tree `32c3454a5923707cb33db51e5068f3085791778a`, PR #599 and main `b7640e2b111bf09ef21b3094f0c2840209900c52`. The fresh root audit was P0=P1=P2=P3=0 under exact Node 22.23.3 (focused 15/15, Parts 11A–12A 7 suites/105 tests, cumulative 51 suites/707 tests, migration/history 2 suites/40 tests, syntax 51/51, JSON 50/50, migrations 283 through 287/no288, 55 docs/tests paths, protected paths 0, clean diff and exact remote/worktree). Sole deployment `1910f182-b342-424d-9d15-77c0a5c8e316` is `SUCCESS`; service instance `7ee4f747-38c2-4baa-a024-1d7db6e7c218`, deployment instance `dce382b6-d78d-4765-8ae1-597b801da8c2` `RUNNING`, image `sha256:4e194cb746a01384fbc7a19e2832f11efafefdab1b32274658319b5c3d0165d3`; startup, health, PostgreSQL/canonical persistence, root/dashboard/demo and exact 91,681-byte dashboard/demo SHA-256 `b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369` parity passed. Direct applied production migration history remains unavailable and unclaimed.
+
+No migration 288 is added. Provider/live/private-production attention evidence, real recipients or messages, legal or professional review, hosted load/SLA, restore, physical devices, manual assistive technology and founder visual approval remain unavailable and unclaimed.

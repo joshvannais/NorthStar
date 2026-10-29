@@ -77,7 +77,14 @@
     "accepted": "only m24.customer_quote_response_state customer_accepted with exact immutable accepted delivery event",
     "declined": "unavailable because Mission24 has no accepted decline event; silence expiry revoke correction or missing response is never decline",
     "question": "only m24.customer_quote_response_state customer_questioned with exact immutable question event identity; question content is not copied",
-    "revision": "only m24.issued_quote_version quote_version_issued for the exact latest current issued version; revision never changes price scope or terms",
+    "revision": "only m24.issued_quote_version quote_version_issued for the exact latest current issued version whose trusted Mission24 revision is greater than one; the first issued version is not a revision and revision follow-up never changes price scope or terms",
+    "revisionLineageRule": {
+      "firstIssuedRevision": 1,
+      "minimumRevisedVersionRevision": 2,
+      "sourceInvariant": "migration078 assigns next_revision as previous current revision plus one and stores previous_id under immutable per-estimate unique revision history",
+      "acceptedProof": "exact trusted current issued version revision greater than one bound identically in estimateBinding and sourceStateBinding",
+      "predecessorDigestClaim": "not_claimed_because_the_frozen_Part4A_trigger_binding_does_not_expose_a_predecessor_digest"
+    },
     "legacyBoundary": "Mission24 source facts may be referenced only as exact upstream fact snapshots; legacy token link contact value question text acceptance body or response payload is never copied into Mission28 or treated as action authority",
     "silenceNeverMeans": ["sent", "expiring", "expired", "accepted", "declined", "question", "revision", "permission", "consent", "customer_action"]
   },
@@ -86,7 +93,7 @@
     "expiration": "expired may preserve the exact source-owned expiry instant; expiring remains unavailable and no term expiry extension reopening reset replacement or urgency is inferred",
     "terminalStates": "accepted stops follow-up; authenticated declined would stop follow-up if a later accepted source exists; expired does not silently extend or reopen terms",
     "question": "question creates only an owner-readable source-state label; no automated answer acknowledgement recipient correction or customer reply is created",
-    "revision": "revision binds the exact latest issued version and can identify review of that version only; it cannot alter commercial approval terms price scope or prior history",
+    "revision": "revision binds the exact latest issued version at trusted Mission24 revision two or later and can identify review of that version only; revision one is the initial issue and cannot be labeled revised; no follow-up can alter commercial approval terms price scope or prior history",
     "silence": "absence of an accepted response is no response evidence and never acceptance decline urgency consent or permission",
     "cadence": "Part9B remains no-effect and external-channel-unavailable; Part9C cannot reinterpret its stopped owner-review projection as permission to contact",
     "noEffect": true
@@ -120,6 +127,7 @@
     "cross_tenant_estimate_version_document_approval_terms_decision_source_event_actor_session_membership_or_idempotency_retarget",
     "missing_stale_mixed_corrected_tombstoned_reversed_superseded_unavailable_or_ambiguous_source_treated_as_current",
     "sent_expiring_or_declined_claimed_without_an_accepted_exact_source_event_or_classification",
+    "initial_revision_one_issued_version_labeled_as_a_revised_quote",
     "event_kind_trigger_state_identity_revision_digest_time_or_source_selector_substituted_or_ambiguous",
     "legacy_link_token_contact_value_question_text_acceptance_body_or_response_payload_copied_or_used_as_action_authority",
     "delivery_request_provider_acceptance_link_creation_queue_state_or_silence_treated_as_sent_delivery_acceptance_decline_question_or_customer_action",

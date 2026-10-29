@@ -9,7 +9,7 @@ Every resolved state is tied to the same tenant, estimate, exact latest current 
 - `expired` is only the exact `m24.customer_quote_response_state` / `delivery_link_expired` fact at the source-owned expiry instant.
 - `accepted` is only its exact immutable `customer_accepted` event.
 - `question` is only its exact immutable `customer_questioned` event; no question text or contact value is copied.
-- `revision` is only `m24.issued_quote_version` / `quote_version_issued` for the latest exact issued version.
+- `revision` is only `m24.issued_quote_version` / `quote_version_issued` for the latest exact issued version at trusted Mission 24 revision 2 or later. Migration 078 assigns each immutable per-estimate version as the preceding revision plus one and stores its predecessor ID; revision 1 is the initial issue and is never labeled as a revised quote. The frozen Part 4A trigger binding does not expose a predecessor digest, so this slice does not fabricate or claim one.
 - `sent`, `expiring`, and `declined` stay unavailable. There is no accepted sent event, no accepted bounded expiring classification, and no accepted decline event. Link creation, queue/provider acceptance, silence, expiry, revocation and missing response cannot fill those gaps.
 
 Mission 24 delivery facts remain upstream facts. Legacy links, tokens, contact values, response bodies and customer-facing payloads are not adopted into Mission 28 authority.

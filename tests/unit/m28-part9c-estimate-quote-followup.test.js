@@ -166,6 +166,7 @@ function validate(input, trusted) {
     if (response !== (UUID.test(source.deliveryLinkId) && DIGEST.test(source.deliveryLinkDigest))) throw new Error('delivery link');
     if (!response && (source.deliveryLinkId !== null || source.deliveryLinkDigest !== null || source.eventIdentityId !== estimate.customerEstimateVersionId ||
         source.eventIdentityDigest !== estimate.customerEstimateVersionDigest || source.sourceRevision !== estimate.revision)) throw new Error('version event');
+    if (input.requestedStateId === 'revision' && estimate.revision < contract.stateAuthorityContract.revisionLineageRule.minimumRevisedVersionRevision) throw new Error('initial issue is not revision');
   }
 
   if (!DIGEST.test(input.materialDigest) || !DIGEST.test(input.idempotencyKeyDigest) || !DIGEST.test(input.requestDigest) || utcMicros(input.evaluatedAt) === null ||
@@ -245,6 +246,15 @@ describe('Mission 28 Part 9C exact-current estimate quote follow-up', () => {
         const candidate = fixture(stateId); mutation(candidate); seal(candidate); expect(() => project(candidate, copy(candidate))).toThrow();
       }
     }
+  });
+
+  test('accepts only a later issued version as revision and denies the initial revision-one issue', () => {
+    const later = fixture('revision'); later.estimateBinding.revision = 2; later.sourceStateBinding.sourceRevision = 2; seal(later);
+    expect(project(later, copy(later))).toMatchObject({resolvedStateId: 'revision', fixedLabel: 'Estimate revision ready for owner review'});
+    const initial = fixture('revision'); initial.estimateBinding.revision = 1; initial.sourceStateBinding.sourceRevision = 1; seal(initial);
+    expect(() => project(initial, copy(initial))).toThrow('initial issue is not revision');
+    expect(contract.stateAuthorityContract.revisionLineageRule).toMatchObject({firstIssuedRevision: 1, minimumRevisedVersionRevision: 2,
+      predecessorDigestClaim: 'not_claimed_because_the_frozen_Part4A_trigger_binding_does_not_expose_a_predecessor_digest'});
   });
 
   test('denies invented authority for unavailable states and silence aliases', () => {

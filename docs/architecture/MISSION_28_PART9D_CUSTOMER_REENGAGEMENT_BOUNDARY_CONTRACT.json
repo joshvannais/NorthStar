@@ -1,0 +1,148 @@
+{
+  "contractVersion": "mission28.part9d.customer-reengagement-boundary.v1",
+  "authority": {
+    "mission": 28,
+    "part": "9D",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "37818006a02b4d51821734f6876865125ea96a02",
+    "baselineTree": "5e6ebcac8ccc6ac11c6c1bef8d858d2c3d92230c",
+    "scope": "customer_reengagement_and_service_followup_fail_closed_boundary_only",
+    "recipientMessageProviderTaskScheduleOrEffectAuthorityGranted": false,
+    "marketingReferralReviewRequestOrLongDormantAuthorityGranted": false,
+    "part10OrLaterAuthorityGranted": false
+  },
+  "part9CRelease": {
+    "acceptedSourceHead": "16c07e94f472cc22212ec57ec33a85c51bfe76de",
+    "acceptedTree": "5e6ebcac8ccc6ac11c6c1bef8d858d2c3d92230c",
+    "freshAudit": "P0_P1_P2_P3_zero",
+    "focused": "15_of_15",
+    "cumulative": "41_suites_566_tests",
+    "pullRequest": 587,
+    "mergedMain": "37818006a02b4d51821734f6876865125ea96a02",
+    "deployment": "6fa2248f-ff14-4bae-8815-10842b4a9d3d",
+    "deploymentState": "SUCCESS_RUNNING",
+    "runningInstance": "47ee9dbf-ac09-4d8d-8a31-e9c8b6bb3237",
+    "imageSha256": "b72b28a34816a3f278c5056b93aa094537fe48dd1567bcb5e3bfbd4c26e3cabf",
+    "migrationEvidence": "source_byte_identical_to_verified_Part9B_283_through_287_no_288; direct_applied_history_not_requeried_no_registered_Railway_SSH_key_and_private_database_hostname",
+    "health": ["startup_canonical_ready", "health_200_database_and_canonical_persistence_healthy", "root_200", "dashboard_200", "demo_200", "paid_demo_91314_byte_sha256_ab65083c5dd9bac308798171df2e65f711e89df9a6864ea15b569bf9f64ab757_parity", "live_main_demo_dashboard_blob_b77d2c7e915aa6ebd37d03d4c9a29651b9a4f5ca"]
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1C_ACTION_RISK_CATALOG.json", "normalizedLfSha256": "1CB5FF594AE7D1BEED313C1A94D7FE8200FB0024B36DF11B4C668F211481312B"},
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json", "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART4B_SOURCE_SNAPSHOT_CONTRACT.json", "normalizedLfSha256": "D209A5661C91550003B1265D162DB98F3CFAEBE01E76589C29D1B437053EA043"},
+    {"path": "docs/architecture/MISSION_28_PART4C_CURRENTNESS_REVALIDATION_CONTRACT.json", "normalizedLfSha256": "EC955547B4098C0BC849F1F9ACECD207480A6AB313E8E9078828D20F22F07D43"},
+    {"path": "docs/architecture/MISSION_28_PART5D_COLLISION_SUPPRESSION_DRY_RUN_CONTRACT.json", "normalizedLfSha256": "3F82B37864D8B16DB6E8B7E8C5DCF27787D7A2675BE92091857601A0EA467BB0"},
+    {"path": "docs/architecture/MISSION_28_PART7A_SENDER_RECIPIENT_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "DDCFCD0B110AFE39A6FC5C00C5BC518C44112A8753F0BDD4B78DC9B947288871"},
+    {"path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF"},
+    {"path": "docs/architecture/MISSION_28_PART9B_CONTACT_FOLLOWUP_CADENCE_CONTRACT.json", "normalizedLfSha256": "4FE477863980C9829D24900D93AE6A0071EE0FF1C541697257ED234337D76F15"},
+    {"path": "docs/architecture/MISSION_28_PART9C_ESTIMATE_QUOTE_FOLLOWUP_CONTRACT.json", "normalizedLfSha256": "FE5CCCA780CAA3CE04397284DD28420DBA4A86DC03C58870C5EFBA63C9714A58"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidateRelationshipPolicyBasisSuppressionContentSilenceElapsedTimeOrRequestKindNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "maximumRelationshipObservationAgeSeconds": 300,
+    "maximumCanonicalRequestBytes": 65536,
+    "longDormantThreshold": "unavailable_not_defined_or_inferred",
+    "missingUnknownStaleMixedOrAmbiguousFallback": "deny"
+  },
+  "requestKinds": [
+    {"id": "customer_reengagement", "category": "conditionally_supportable_only_after_later_explicit_acceptance", "resultState": "unavailable_no_accepted_external_authority", "reasonCode": "customer_reengagement_not_launched", "fixedLabel": "Customer re-engagement unavailable — reviewed authority not launched"},
+    {"id": "service_followup", "category": "conditionally_supportable_only_after_later_explicit_acceptance", "resultState": "unavailable_no_accepted_external_authority", "reasonCode": "service_followup_not_launched", "fixedLabel": "Service follow-up unavailable — reviewed authority not launched"},
+    {"id": "marketing_like_outreach", "category": "explicitly_unavailable_until_supported_and_reviewed", "resultState": "unavailable_unsupported_outreach", "reasonCode": "marketing_like_outreach_unavailable", "fixedLabel": "Marketing-like outreach unavailable"},
+    {"id": "referral_request", "category": "explicitly_unavailable_until_supported_and_reviewed", "resultState": "unavailable_unsupported_outreach", "reasonCode": "referral_request_unavailable", "fixedLabel": "Referral request unavailable"},
+    {"id": "review_request", "category": "explicitly_unavailable_until_supported_and_reviewed", "resultState": "unavailable_unsupported_outreach", "reasonCode": "review_request_unavailable", "fixedLabel": "Review request unavailable"},
+    {"id": "long_dormant_outreach", "category": "explicitly_unavailable_until_supported_and_reviewed", "resultState": "unavailable_unsupported_outreach", "reasonCode": "long_dormant_outreach_unavailable", "fixedLabel": "Long-dormant outreach unavailable"}
+  ],
+  "resolutionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "resolutionId", "requestedKind", "relationshipBinding", "launchMatrixBinding", "communicationBasisBinding", "policyAuthorityBinding", "suppressionBoundaryBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "relationshipBindingExactFields": ["tenantId", "recipientResolutionId", "recipientResolutionDigest", "recipientClassId", "sourceTriggerId", "canonicalGraphId", "customerId", "opportunityId", "sourceVersion", "projectionDigest", "snapshotId", "snapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState", "observedAt"],
+    "launchMatrixBindingExactFields": ["contractDigest", "actionFamily", "firstLaunchState", "acceptedSourceClassCount", "acceptedRoleCount", "acceptedCapabilityCount", "acceptedChannelCount", "acceptedRecipientClassCount", "externalEffectsEnabled"],
+    "communicationBasisBindingExactFields": ["contractDigest", "externalResult", "permissionResolutionId", "permissionResolutionDigest", "permissionBasisState", "channelId", "providerMode"],
+    "policyAuthorityBindingExactFields": ["contractDigest", "policyId", "policyVersion", "policyDigest", "authorizationRecordId", "authorizationRecordDigest", "authorityState"],
+    "suppressionBoundaryBindingExactFields": ["part5DContractDigest", "part9BContractDigest", "suppressionResolutionId", "suppressionResolutionDigest", "cadenceResolutionId", "cadenceResolutionDigest", "authorityState"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"],
+    "outputFieldsCreatedOnlyByTrustedProjection": ["resolutionId", "tenantId", "requestedKind", "recipientClassId", "relationshipCurrentnessState", "resultState", "reasonCode", "labelId", "fixedLabel", "launchAuthorityState", "communicationBasisState", "policyAuthorityState", "suppressionAuthorityState", "ownerReadableProjectionOnly", "ownerWorklistRecordCreated", "taskCreated", "notificationCreated", "messageCreated", "providerAttemptCreated", "externalEffectCreated", "upstreamMutationCreated", "moneyEffectCreated"]
+  },
+  "currentAuthorityTruth": {
+    "relationship": "an exact current Part7A customer recipient resolution and Part4A m20.lead_contact_state Part4B snapshot Part4C currentness resolution may establish a tenant-private relationship fact only",
+    "launchMatrix": "Part1D customer_communication is unavailable with zero accepted source roles capabilities channels and recipients and externalEffectsEnabled false",
+    "communicationBasis": "Part7B externalResult is always unavailable_or_suppressed until later explicit launch legal provider channel and effect acceptance",
+    "policyAndAuthorization": "no accepted customer_reengagement_or_service_followup policy cell or matching Part3B downstream authorization exists at current launch",
+    "suppression": "Part5D and Part9B remain required later but are not evaluated to manufacture a lower-priority reason after launch basis and policy authority already fail closed",
+    "effect": "every request kind resolves to a fixed owner-readable unavailable projection with zero created record task notification message provider or effect"
+  },
+  "decisionContract": {
+    "closedKindOrder": ["customer_reengagement", "service_followup", "marketing_like_outreach", "referral_request", "review_request", "long_dormant_outreach"],
+    "conditionalKinds": ["customer_reengagement", "service_followup"],
+    "explicitlyUnavailableKinds": ["marketing_like_outreach", "referral_request", "review_request", "long_dormant_outreach"],
+    "precedence": ["explicitly_unsupported_kind", "launch_matrix_unavailable", "communication_basis_unavailable", "policy_or_authorization_unavailable", "suppression_unavailable_or_matched"],
+    "currentLaunchOutcome": "all_kinds_unavailable_no_effect",
+    "silenceElapsedTimeHistoricalBusinessRelationshipPriorPurchaseOrCandidateIntentNeverMeans": ["current_relationship", "permission", "consent", "reviewed_basis", "policy", "authorization", "suppression_clear", "customer_interest", "customer_action", "urgency"],
+    "fixedLabels": "exact_requestKinds_labels_only_no_free_text_or_reflection"
+  },
+  "digestAndReplayContract": {
+    "materialDigest": "server_recomputed_over_all_trusted_material_except_resolutionId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_request_kind_exact_relationship_and_all_frozen_authority_boundaries_excluding_resolutionId_evaluatedAt_and_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_projection_replay_no_new_record_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse"
+  },
+  "deniedCombinations": [
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "cross_tenant_relationship_recipient_snapshot_currentness_actor_session_membership_or_idempotency_retarget",
+    "missing_stale_mixed_corrected_tombstoned_reversed_superseded_unavailable_or_ambiguous_relationship_treated_as_current",
+    "lead_prospect_unknown_former_or_candidate_asserted_identity_treated_as_current_customer_relationship",
+    "Part1D_customer_communication_unavailable_cell_rewritten_as_conditional_or_available",
+    "Part7B_reported_opt_in_owner_review_preference_or_legacy_destination_treated_as_reviewed_external_basis",
+    "candidate_created_policy_authorization_permission_suppression_or_channel_authority",
+    "clear_or_missing_suppression_treated_as_permission_or_launch_authority",
+    "silence_elapsed_time_prior_purchase_old_job_historical_contact_or_dormancy_treated_as_interest_permission_or_urgency",
+    "marketing_referral_review_request_or_long_dormant_outreach_reclassified_as_service_followup_or_customer_reengagement",
+    "invented_dormancy_threshold_offer_discount_incentive_deadline_review_rating_referral_reward_or_customer_outcome",
+    "candidate_free_text_name_email_phone_address_message_reason_relationship_history_or_label",
+    "Part9B_owner_projection_treated_as_worklist_record_task_notification_contact_permission_or_cadence_authority",
+    "runtime_route_UI_scheduler_worker_queue_publisher_consumer_provider_callback_message_delivery_or_effect",
+    "upstream_customer_lead_work_estimate_schedule_financial_accounting_or_money_mutation",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "mountedSchedulerWorkerQueueOrPolicyExecutor": false,
+    "providerAdapterCallbackOrInboundReceiver": false,
+    "customerOrInternalMessageNotificationTaskInvitationOrWorklistRecord": false,
+    "externalEffectOrUpstreamMutation": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "rawContactRelationshipHistoryMessageOrCustomerValues": 0,
+    "ownerWorklistRecordsOrTasksCreated": 0,
+    "recipientMessages": 0,
+    "providerAttempts": 0,
+    "externalEffects": 0,
+    "upstreamMutations": 0,
+    "accountingOrMoneyEffects": 0
+  },
+  "unavailableEvidence": [
+    "accepted external customer communication launch cell country region consent or other reviewed basis recipient channel template provider sender callback effect and retention authority",
+    "accepted customer reengagement service followup marketing referral review-request or long-dormant policy authorization suppression-clear or customer-interest evidence",
+    "real recipient message provider attempt delivery reply review referral repeat-business customer action outcome or conversion evidence",
+    "direct current-deployment applied migration history re-query because Railway SSH has no registered key and local Railway execution exposes only a private database hostname",
+    "private production customer data provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications consent marketing referral review-platform consumer-protection regulatory provider deliverability or security review"
+  ],
+  "laterSliceBoundary": {
+    "part10Plus": "appointment_dispatch_work_financial_collections_integrations_analytics_UI_demo_and_release_readiness_remain_planned_unimplemented"
+  }
+}

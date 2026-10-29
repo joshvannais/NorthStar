@@ -151,12 +151,12 @@ describe('Mission 28 Part 6F recovery authority', () => {
 
   test('records Parts 7A-7C released, Part 7D candidate, migration284/no285 and Part 7E+ planned', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
-      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–9B are released. Part 9C is the sole implementation candidate.'); expect(document).toContain('Parts 9D–14G remain planned and unimplemented.'); expect(document).toContain('eb089985-741b-4147-8af5-7bde9742e8dc');
+      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–9C are released. Part 9D is the sole implementation candidate.'); expect(document).toContain('Parts 10A–14G remain planned and unimplemented.'); expect(document).toContain('eb089985-741b-4147-8af5-7bde9742e8dc');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     expect(ledger).toContain('| 25 | 6E | Cancel/pause/revoke/drain/dead-letter and reviewed retry | **Released** |');
     expect(ledger).toContain('| 26 | 6F | Restart/migration/outage/restore and orphan-authority recovery | **Released** |');
     expect(ledger).toContain('| 27 | 7A | Exact sender and recipient authority | **Released** |');
-    expect(ledger).toContain('Released main and production contain 283 migrations through exact `287_canonical_automation_estimate_quote_resolution_v1.sql` with no 288');
+    expect(ledger).toContain('Released migration source is byte-identical to the previously verified Part 9B deployment at 283 migrations through exact `287_canonical_automation_estimate_quote_resolution_v1.sql` with no 288');
   });
 });

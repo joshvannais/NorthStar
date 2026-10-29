@@ -72,7 +72,7 @@ function trustedOf(input) { return copy({tenantId: input.tenantId, queueItemBind
 
 function queueFingerprint(input) {
   const queue = input.queueItemBinding; const source = input.sourceAuthorityBinding; const policy = input.policyDecisionBinding;
-  return hash({tenantId: input.tenantId, queueKind: queue.queueKind, actionFamily: queue.actionFamily, reasonCode: queue.reasonCode, originContract: queue.originContract, originProjectionId: queue.originProjectionId, originMaterialDigest: queue.originMaterialDigest, sourceRecordId: source.sourceRecordId, sourceRecordDigest: source.sourceRecordDigest, snapshotId: source.snapshotId, snapshotDigest: source.snapshotDigest, policyId: policy.policyId, policyVersion: policy.policyVersion, policyDigest: policy.policyDigest, evaluationId: policy.evaluationId, evaluationOutputDigest: policy.evaluationOutputDigest});
+  return hash({tenantId: input.tenantId, queueKind: queue.queueKind, actionFamily: queue.actionFamily, sourceRecordId: source.sourceRecordId, sourceRecordDigest: source.sourceRecordDigest, snapshotId: source.snapshotId, snapshotDigest: source.snapshotDigest, policyId: policy.policyId, policyVersion: policy.policyVersion, policyDigest: policy.policyDigest, evaluationId: policy.evaluationId, evaluationOutputDigest: policy.evaluationOutputDigest, originAssigneeActorId: queue.originAssigneeActorId, reasonCode: queue.reasonCode, evidenceQuality: queue.evidenceQuality, trustStatus: queue.trustStatus, uncertaintyState: queue.uncertaintyState, horizonKind: queue.horizonKind, horizonLocalStart: queue.horizonLocalStart});
 }
 
 function nullCorrection() {
@@ -183,6 +183,31 @@ describe('Mission 28 Part 12D action explanation and drilldown contract', () => 
     for (const queue of part12A.queueKinds) expect(() => project(...Object.values(fixture('open', 'part12a_action_queue', queue.id)))).not.toThrow();
     for (const queue of part12B.queueKinds) expect(() => project(...Object.values(fixture('open', 'part12b_reviewed_handoff', queue.id)))).not.toThrow();
     for (const mutation of [v => { v.queueItemBinding.originContract = 'unknown'; }, v => { v.queueItemBinding.reasonCode = 'different'; }, v => { v.queueItemBinding.actionFamily = 'customer_communication'; }, v => { v.queueItemBinding.completionState = 'completed'; }]) rejectCoherent('open', mutation);
+  });
+
+  test('uses the exact released Part12C semantic fingerprint projection and rejects every omitted-field drift', () => {
+    expect(contract.semanticFingerprintContract.exactProjectionFields).toEqual([
+      'tenantId', 'queueItemBinding.queueKind', 'queueItemBinding.actionFamily', 'sourceAuthorityBinding.sourceRecordId', 'sourceAuthorityBinding.sourceRecordDigest', 'sourceAuthorityBinding.snapshotId', 'sourceAuthorityBinding.snapshotDigest', 'policyDecisionBinding.policyId', 'policyDecisionBinding.policyVersion', 'policyDecisionBinding.policyDigest', 'policyDecisionBinding.evaluationId', 'policyDecisionBinding.evaluationOutputDigest', 'queueItemBinding.originAssigneeActorId', 'queueItemBinding.reasonCode', 'queueItemBinding.evidenceQuality', 'queueItemBinding.trustStatus', 'queueItemBinding.uncertaintyState', 'queueItemBinding.horizonKind', 'queueItemBinding.horizonLocalStart'
+    ]);
+    expect(contract.semanticFingerprintContract.part12DOriginContractProjectionFieldsAreNotAdded).toEqual(['queueItemBinding.originContract', 'queueItemBinding.originProjectionId', 'queueItemBinding.originMaterialDigest']);
+    const mutations = [
+      value => { value.sourceAuthorityBinding.sourceRecordId = uuid(99); },
+      value => { value.sourceAuthorityBinding.sourceRecordDigest = digest(99); },
+      value => { value.policyDecisionBinding.policyDigest = digest(99); },
+      value => { value.policyDecisionBinding.evaluationId = uuid(99); },
+      value => { value.queueItemBinding.originAssigneeActorId = uuid(99); },
+      value => { value.queueItemBinding.evidenceQuality = 'complete_exact_source'; },
+      value => { value.queueItemBinding.trustStatus = 'source_fact_only_not_permission'; },
+      value => { value.queueItemBinding.uncertaintyState = 'none_exact_current'; },
+      value => { value.queueItemBinding.horizonKind = 'not_applicable'; },
+      value => { value.queueItemBinding.horizonLocalStart = '2026-10-01'; }
+    ];
+    for (const mutate of mutations) {
+      const pair = fixture(); const releasedFingerprint = pair.input.queueItemBinding.semanticFingerprintDigest;
+      mutate(pair.input); expect(queueFingerprint(pair.input)).not.toBe(releasedFingerprint);
+      seal(pair.input); pair.trusted = trustedOf(pair.input);
+      expect(() => project(pair.input, pair.trusted)).toThrow('queue');
+    }
   });
 
   test('binds exact policy source decision lifecycle and immutable current head', () => {

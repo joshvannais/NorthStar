@@ -102,6 +102,36 @@
     "nextSafeChoice": "one_fixed_state_derived_read_or_review_label_only_never_an_action_or_effect_authority",
     "candidateSuppliedIdentityDigestCurrentnessDecisionLimitAttemptViewerOrChoiceNeverCreatesAuthority": true
   },
+  "semanticFingerprintContract": {
+    "authority": "exact_released_Part12C_semantic_fingerprint_projection_without_addition_removal_or_redefinition",
+    "exactProjectionFields": [
+      "tenantId",
+      "queueItemBinding.queueKind",
+      "queueItemBinding.actionFamily",
+      "sourceAuthorityBinding.sourceRecordId",
+      "sourceAuthorityBinding.sourceRecordDigest",
+      "sourceAuthorityBinding.snapshotId",
+      "sourceAuthorityBinding.snapshotDigest",
+      "policyDecisionBinding.policyId",
+      "policyDecisionBinding.policyVersion",
+      "policyDecisionBinding.policyDigest",
+      "policyDecisionBinding.evaluationId",
+      "policyDecisionBinding.evaluationOutputDigest",
+      "queueItemBinding.originAssigneeActorId",
+      "queueItemBinding.reasonCode",
+      "queueItemBinding.evidenceQuality",
+      "queueItemBinding.trustStatus",
+      "queueItemBinding.uncertaintyState",
+      "queueItemBinding.horizonKind",
+      "queueItemBinding.horizonLocalStart"
+    ],
+    "part12DOriginContractProjectionFieldsAreNotAdded": [
+      "queueItemBinding.originContract",
+      "queueItemBinding.originProjectionId",
+      "queueItemBinding.originMaterialDigest"
+    ],
+    "queueAndLifecycleHeadMustCarryTheExactSameReleasedFingerprint": true
+  },
   "sourceCorrectionContract": {
     "ordinaryState": "null_correction_kind_with_every_identity_digest_sequence_and_successor_field_null",
     "correctedState": "exact_same_lineage_next_snapshot_and_distinct_strictly_later_authoritative_head_bound_to_the_replacement_effective_snapshot_and_fresh_trusted_observation",
@@ -160,6 +190,7 @@
     "symbol_accessor_toJSON_proxy_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
     "candidate_supplied_queue_source_policy_decision_limit_attempt_lifecycle_viewer_choice_or_outcome_authority",
     "cross_tenant_cross_actor_cross_session_cross_membership_cross_record_cross_queue_cross_source_cross_lineage_cross_head_cross_policy_cross_decision_cross_lifecycle_or_cross_choice_graft",
+    "Part12C_semantic_fingerprint_field_addition_omission_redefinition_or_evidence_drift",
     "stale_mixed_reordered_corrected_replaced_tombstoned_non_head_or_ambiguous_material_without_the_exact_source_correction_lineage",
     "source_correction_skips_reuses_crosses_or_retargets_snapshot_lineage_transition_identity_digest_sequence_or_effective_head",
     "decision_result_reason_source_set_evidence_quality_or_policy_mismatch",

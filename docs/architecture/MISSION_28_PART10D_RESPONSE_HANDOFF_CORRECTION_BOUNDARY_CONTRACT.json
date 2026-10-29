@@ -59,7 +59,7 @@
   ],
   "resolutionEnvelope": {
     "exactFields": ["schemaVersion", "tenantId", "resolutionId", "requestedKind", "targetSourceBinding", "responseEvidenceBinding", "pendingCommunicationBinding", "correctionBinding", "handoffBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
-    "targetSourceBindingExactFields": ["tenantId", "sourceMission", "sourceTriggerId", "sourceClassId", "sourceRecordType", "targetRecordId", "targetRevision", "targetDigest", "targetState", "appointmentId", "appointmentRevision", "appointmentDigest", "appointmentStatus", "scheduledStart", "scheduledEnd", "timeZone", "executionId", "executionRevision", "executionDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "lifecycleState", "eventKind", "eventTime", "sourceEventField", "sourceStateSelector", "observedAt", "snapshotId", "snapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState", "lineageState", "predecessorRecordRevision", "predecessorRecordDigest", "predecessorSnapshotId", "predecessorSnapshotDigest", "sourceRecordIdentityDigest", "sourceCurrentnessPinsDigest"],
+    "targetSourceBindingExactFields": ["tenantId", "sourceMission", "sourceTriggerId", "sourceClassId", "sourceRecordType", "targetRecordId", "targetRevision", "targetDigest", "targetState", "canonicalDigest", "sourceDigest", "appointmentId", "appointmentRevision", "appointmentDigest", "appointmentStatus", "scheduledStart", "scheduledEnd", "timeZone", "executionId", "executionRevision", "executionDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "lifecycleState", "eventKind", "eventTime", "sourceEventField", "sourceStateSelector", "observedAt", "snapshotId", "snapshotDigest", "sourceSetDigest", "currentnessResolutionId", "currentnessResolutionDigest", "currentnessState", "lineageState", "snapshotLineageKind", "snapshotLineageSequence", "predecessorSnapshotLineageSequence", "predecessorSnapshotId", "predecessorSnapshotDigest", "headTransitionId", "headTransitionDigest", "headSequence", "headState", "effectiveSnapshotId", "effectiveSnapshotDigest", "predecessorHeadTransitionId", "predecessorHeadTransitionDigest", "predecessorHeadSequence", "predecessorHeadState", "predecessorHeadEffectiveSnapshotId", "predecessorHeadEffectiveSnapshotDigest", "sourceRecordIdentityDigest", "sourceCurrentnessPinsDigest"],
     "responseEvidenceBindingExactFields": ["state", "responseEventId", "responseEventDigest", "responseOccurredAt", "authenticatedRecipientIdentityDigest", "deliveryEvidenceDigest", "responseKind", "rawBodyRetained"],
     "pendingCommunicationBindingExactFields": ["state", "pendingCount", "communicationRequestId", "actionUnitId", "actionUnitDigest"],
     "correctionBindingExactFields": ["state", "affectedPendingCount", "cancelledPendingCount", "staledPendingCount", "rebuiltPendingCount", "currentProjectionRecomputed"],
@@ -71,6 +71,9 @@
     "appointmentPins": ["tenantId", "appointmentId", "revision", "digest", "status", "scheduledStart", "scheduledEnd", "timeZone", "eventKind", "eventTime"],
     "completionTrigger": "m23.work_completion_reopening_state",
     "completionPins": ["tenantId", "executionId", "executionRevision", "executionDigest", "assignmentId", "assignmentRevision", "assignmentDigest", "lifecycleState", "eventKind", "eventTime"],
+    "part4BSnapshotLineagePins": ["snapshotLineageKind", "snapshotLineageSequence", "predecessorSnapshotId", "predecessorSnapshotDigest"],
+    "part4DAuthoritativeHeadPins": ["headTransitionId", "headTransitionDigest", "headSequence", "headState", "effectiveSnapshotId", "effectiveSnapshotDigest"],
+    "precedenceRule": "exact Part4B snapshot lineage and the latest active Part4D authoritative head establish precedence; source revision eventTime and observedAt never do",
     "factBoundary": "exact Mission22 or Mission23 target facts never prove that a customer response occurred and never grant handoff task message mutation or effect authority"
   },
   "responseAndHandoffTruth": {
@@ -81,11 +84,14 @@
     "currentResult": "all_request_kinds_fixed_unavailable_no_effect"
   },
   "sourceCorrectionContract": {
-    "original": "original_exact_current_target_has_null_predecessor_and_no_pending_communication",
-    "correctedSuccessor": "same tenant trigger class record identity with revision exactly predecessor plus one new target digest exact predecessor record digest new snapshot and currentness resolution",
+    "original": "Part4B_original_snapshot_lineage_sequence_one_and_Part4D_active_authoritative_head_sequence_one_with_null_predecessors_and_no_pending_communication",
+    "correctedSuccessor": "same tenant trigger source class record identity and event kind with Part4B correction snapshot sequence exactly predecessor plus one exact predecessor snapshot ID and digest and one exact next active Part4D authoritative head whose effective snapshot is the correction",
+    "sourceVersionRule": "source version or revision may remain unchanged only when canonicalDigest sourceDigest or an exact currentness pin changes; no-material-change aliases are denied",
+    "authoritativeHeadRule": "the correction predecessor must be the exact latest active Part4D authoritative head and its effective snapshot must be the exact Part4B predecessor snapshot",
+    "timestampRule": "eventTime and observedAt are immutable evidence only and never establish correction order or precedence",
     "pendingCommunicationOutcome": "Parts10A_through_10C_create_no_pending_communications_so_affected_cancelled_staled_and_rebuilt_counts_are_exactly_zero",
     "projectionOutcome": "corrected source deterministically produces a new current no_effect projection while old projection remains immutable historical evidence only",
-    "deny": ["correction_without_exact_predecessor", "same_revision_or_digest", "cross_tenant_or_cross_record_predecessor", "partial_snapshot_or_currentness_graft", "stale_mixed_unavailable_tombstoned_or_ambiguous_lineage", "fabricated_pending_communication_or_rebuild"]
+    "deny": ["correction_without_exact_predecessor", "skipped_reused_or_nonadjacent_snapshot_lineage_sequence", "non_head_predecessor_or_stale_effective_snapshot", "same_material_alias_even_with_new_snapshot_or_head_identity", "cross_tenant_cross_record_or_cross_lineage_predecessor", "partial_snapshot_currentness_or_authoritative_head_graft", "stale_mixed_unavailable_tombstoned_reversed_or_ambiguous_lineage", "fabricated_pending_communication_or_rebuild"]
   },
   "digestAndReplayContract": {
     "materialDigest": "server_recomputed_over_all_trusted_material_except_resolutionId_and_digest_fields",

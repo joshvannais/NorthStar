@@ -1,0 +1,224 @@
+{
+  "contractVersion": "mission28.part11b.reminder-policy.v1",
+  "authority": {
+    "mission": 28,
+    "part": "11B",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "2d585afd2420ada2f49e2d7bf35e5dccd0c258eb",
+    "baselineTree": "f839ffd067d7e1baab9ab7babae92374f9764ea3",
+    "scope": "owner_readable_no_effect_pre_due_due_and_overdue_reminder_policy_definition_over_exact_Part11A_authority_only",
+    "policyRecordLifecycleOrActivationGranted": false,
+    "schedulerWorklistRouteUiWorkerQueueGranted": false,
+    "recipientMessageProviderCallbackOrEffectGranted": false,
+    "financialAccountingBalanceUpstreamOrMoneyMutationGranted": false,
+    "part11COrLaterAuthorityGranted": false
+  },
+  "part11ARelease": {
+    "acceptedSourceHead": "6a87b1e15856475dd7b0746cbe61a37a149ccba0",
+    "acceptedTree": "f839ffd067d7e1baab9ab7babae92374f9764ea3",
+    "freshAudit": "P0_P1_P2_P3_zero",
+    "freshAuditEvidence": "exact_Node_22.23.3; focused_17_of_17; cumulative_45_suites_619_tests; migration_history_2_suites_40_tests; syntax_45; JSON_44; migrations_283_through_287_no_288; protected_0; clean",
+    "pullRequest": 593,
+    "mergedMain": "2d585afd2420ada2f49e2d7bf35e5dccd0c258eb",
+    "deploymentIdentity": "eb08e10a-97d2-45ce-be16-c95394c082b4_SUCCESS_RUNNING",
+    "imageIdentity": "sha256:56ce7688ff23c8ca2f0067afecd31efcddd2c2943a560e470f9d4f9e12e44a01",
+    "runningInstance": "664a109f-d792-4dce-812c-2588777c37b7",
+    "migrationEvidence": "source_283_through_287_no_288; direct_applied_history_not_requeried_and_unclaimed",
+    "healthEvidence": "canonical_startup_ready; api_health_root_dashboard_demo_HTTP_200; database_and_canonicalPersistence_healthy; dashboard_demo_exact_91314_byte_sha256_ab65083c5dd9bac308798171df2e65f711e89df9a6864ea15b569bf9f64ab757_parity"
+  },
+  "frozenInputs": [
+    {"path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json", "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"},
+    {"path": "docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json", "normalizedLfSha256": "B8BC22AE758E2AD0C2D037963709A947FE0564AF4319DED571F7ABD273D6A4E8"},
+    {"path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json", "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"},
+    {"path": "docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json", "normalizedLfSha256": "6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575"},
+    {"path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json", "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"},
+    {"path": "docs/architecture/MISSION_28_PART4A_CLOSED_TRIGGER_CATALOG.json", "normalizedLfSha256": "5BEAD010F14661C061DD0AD4B649946DF0FFDF43CF649ADE9A2CB98F29270F19"},
+    {"path": "docs/architecture/MISSION_28_PART6B_DURABLE_SCHEDULER_CONTRACT.json", "normalizedLfSha256": "30B2E2472DDC6DC8EB204D0544535C91302E47355971ACBA0800544D5B626687"},
+    {"path": "docs/architecture/MISSION_28_PART7A_SENDER_RECIPIENT_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "DDCFCD0B110AFE39A6FC5C00C5BC518C44112A8753F0BDD4B78DC9B947288871"},
+    {"path": "docs/architecture/MISSION_28_PART7B_COMMUNICATION_PERMISSION_CONTRACT.json", "normalizedLfSha256": "AA9E898F165491C6CD441919E89CFF2083DA1CF4C168EB5131E09C60419886DF"},
+    {"path": "docs/architecture/MISSION_28_PART7C_CONTENT_TEMPLATE_PREVIEW_CONTRACT.json", "normalizedLfSha256": "B0070106EFC642299B4C1F8334AA9EB3206078C93AA0412B33DC2EC71D639D91"},
+    {"path": "docs/architecture/MISSION_28_PART9B_CONTACT_FOLLOWUP_CADENCE_CONTRACT.json", "normalizedLfSha256": "4FE477863980C9829D24900D93AE6A0071EE0FF1C541697257ED234337D76F15"},
+    {"path": "docs/architecture/MISSION_28_PART11A_COLLECTION_ELIGIBILITY_CONTRACT.json", "normalizedLfSha256": "5ADA756AB4C2C94332DE0DAD01E721DCD6F5548B3829D7D1A27F1AB5ACB158FA"}
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+    "localTimePattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$",
+    "plainDataRule": "ordinary_objects_standard_dense_arrays_own_enumerable_data_properties_only_no_symbols_accessors_toJSON_custom_prototypes_wrappers_proxies_aliases_or_coercion",
+    "candidatePolicyEligibilitySourceRecipientChannelTimeContentApprovalFrequencyOrActorMaterialNeverCreatesAuthority": true
+  },
+  "bounds": {
+    "maximumSourceObservationAgeSeconds": 300,
+    "relativeDueDayOffsetMinimum": -30,
+    "relativeDueDayOffsetMaximum": 365,
+    "maximumCadenceOffsets": 12,
+    "minimumIntervalSecondsFloor": 86400,
+    "maximumAttemptsPerRolling7Days": 3,
+    "maximumAttemptsPerInvoice": 6,
+    "maximumGracePeriodDays": 30,
+    "maximumCanonicalRequestBytes": 65536,
+    "missingUnknownStaleMixedCorrectedAmbiguousUnsupportedOrConflictingFallback": "deny_or_fixed_unavailable_no_effect"
+  },
+  "policyProjectionEnvelope": {
+    "exactFields": ["schemaVersion", "tenantId", "projectionId", "policyDefinition", "part11AEligibilityBinding", "financialAxisBinding", "recipientBinding", "channelPermissionBinding", "timeAuthorityBinding", "approvalBinding", "frequencyEvidenceBinding", "actorAuthorityBinding", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "requestDigest"],
+    "policyDefinitionExactFields": ["policyId", "policyVersion", "previousPolicyDigest", "policyState", "phaseId", "agingBucketIds", "cadence", "localTime", "gracePeriodDays", "frequencyCeiling", "recipientClassId", "channelId", "providerMode", "wordingId", "wordingVersion", "wordingDigest", "approvalClass", "stopConditionIds", "expiresAt", "rolloutState", "canonicalDigest"],
+    "cadenceExactFields": ["relativeDueDayOffsets", "minimumIntervalSeconds"],
+    "localTimeExactFields": ["tenantTimeZone", "localTime", "dstResolutionRule", "quietHoursRule"],
+    "frequencyCeilingExactFields": ["maxAttemptsPerRolling7Days", "maxAttemptsPerInvoice"],
+    "part11AEligibilityBindingExactFields": ["tenantId", "resolutionId", "materialDigest", "idempotencyKeyDigest", "requestDigest", "resultState", "reasonCode", "issuedInvoiceId", "issuedVersionDigest", "sourceSetId", "sourceSetDigest", "axisMaterialDigest", "headTransitionId", "headTransitionDigest", "headSequence", "currentnessState", "observedAt"],
+    "financialAxisBindingExactFields": ["tenantId", "issuedInvoiceId", "issuedVersionDigest", "customerId", "customerIdentityDigest", "currency", "invoiceDigest", "balanceDigest", "dueAgingProjectionId", "dueAgingProjectionRevision", "dueAgingProjectionDigest", "issuedDueDate", "asOfBusinessDate", "agingBucket", "daysPastDue", "deliveryEvidenceDigest", "financialStateDigest", "settlementDigest", "allocationDigest", "offlineEvidenceDigest", "accountingDigest", "axisMaterialDigest", "sourceSetId", "sourceSetDigest", "headTransitionId", "headTransitionDigest", "headSequence", "currentnessState", "observedAt"],
+    "recipientBindingExactFields": ["tenantId", "recipientResolutionId", "recipientResolutionDigest", "recipientRecordId", "recipientRecordDigest", "recipientClassId", "customerId", "reviewState", "currentnessState", "observedAt"],
+    "channelPermissionBindingExactFields": ["tenantId", "permissionResolutionId", "permissionResolutionDigest", "permissionRecipientResolutionDigest", "recipientResolutionDigest", "channelId", "permissionResultState", "providerMode", "currentnessState", "observedAt"],
+    "timeAuthorityBindingExactFields": ["tenantId", "calendarId", "calendarVersion", "calendarDigest", "calendarState", "tenantTimeZone", "observedAt"],
+    "approvalBindingExactFields": ["tenantId", "requiredApprovalClass", "authorizationId", "authorizationDigest", "authorizationState", "materialBindingDigest", "observedAt"],
+    "frequencyEvidenceBindingExactFields": ["tenantId", "issuedInvoiceId", "policyId", "policyVersion", "attemptsInRolling7Days", "attemptsForInvoice", "lastAcceptedAttemptAt", "state", "observedAt", "resolutionDigest"],
+    "actorAuthorityBindingExactFields": ["actorId", "sessionId", "membershipId", "sessionSubjectActorId", "membershipSubjectActorId", "actorTenantId", "sessionTenantId", "membershipTenantId", "actorState", "sessionState", "membershipState", "membershipRoleId", "capabilityId", "capabilityDecisionId", "capabilityDecisionDigest"],
+    "outputFieldsCreatedOnlyByTrustedProjection": ["projectionId", "tenantId", "policyId", "policyVersion", "policyState", "rolloutState", "phaseId", "issuedInvoiceId", "issuedVersionDigest", "recipientReviewState", "permissionResultState", "approvalState", "frequencyState", "calendarState", "evaluatedAt", "resultState", "reasonCode", "labelId", "fixedLabel", "ownerReadablePolicyOnly", "policyRecordCreated", "scheduleCreated", "worklistRecordCreated", "taskCreated", "messageCreated", "providerAttemptCreated", "financialMutationCreated", "accountingMutationCreated", "balanceMutationCreated", "externalEffectCreated", "upstreamMutationCreated", "moneyEffectCreated"]
+  },
+  "phaseCatalog": [
+    {"phaseId": "pre_due", "exactAgingBucketIds": ["not_due"], "offsetRule": "strictly_increasing_unique_negative_days_relative_to_due", "gracePeriodDays": 0, "wordingId": "invoice_pre_due_reminder_v1"},
+    {"phaseId": "due_today", "exactAgingBucketIds": ["due_today"], "offsetRule": "exact_single_zero_day_relative_to_due", "gracePeriodDays": 0, "wordingId": "invoice_due_reminder_v1"},
+    {"phaseId": "overdue", "orderedAgingBucketCatalog": ["overdue_1_30", "overdue_31_60", "overdue_61_90", "overdue_91_plus"], "offsetRule": "strictly_increasing_unique_positive_days_relative_to_due_and_strictly_after_grace", "gracePeriodDays": "owner_selected_zero_to_30", "wordingId": "invoice_overdue_reminder_v1"}
+  ],
+  "wordingDigestNamespace": "mission28.part11b.wording.v1\n",
+  "fixedCustomerSafeWordingCatalog": [
+    {"wordingId": "invoice_pre_due_reminder_v1", "wordingVersion": 1, "phaseId": "pre_due", "subjectText": "Invoice reminder", "bodyText": "A current invoice is approaching its due date. Please review the invoice and contact the business with questions.", "wordingDigest": "sha256:7833591c8be2338bf9d1fe8ec47ba7e2e28dc25eef94a705c9502b88e49b43b4"},
+    {"wordingId": "invoice_due_reminder_v1", "wordingVersion": 1, "phaseId": "due_today", "subjectText": "Invoice due reminder", "bodyText": "A current invoice is due today. Please review the invoice and contact the business with questions.", "wordingDigest": "sha256:4a4e225413dd7d0a8c16c69373f016526c6ac86b11b63556f905d3618418822d"},
+    {"wordingId": "invoice_overdue_reminder_v1", "wordingVersion": 1, "phaseId": "overdue", "subjectText": "Invoice overdue reminder", "bodyText": "A current invoice is past due. Please review the invoice and contact the business with questions.", "wordingDigest": "sha256:90a93d01c40a43c15262d9982977317298d34f291df723d0dadbf90bff7d8d96"}
+  ],
+  "cadenceAndGraceContract": {
+    "relativeDueDayOffsets": "ordered_unique_bounded_safe_integers_with_phase_specific_sign; current_due_aging_selects_the_policy_phase_but_need_not_equal_a_cadence_offset_and_never_creates_schedule_authority",
+    "minimumInterval": "at_least_86400_seconds_and_no_two_offsets_are_closer_than_the_interval",
+    "frequencyCeilings": "finite_owner_narrowing_maxima_not_above_three_per_rolling_7_days_or_six_per_invoice",
+    "grace": "pre_due_and_due_today_require_zero; overdue_offsets_must_be_strictly_after_the_owner_selected_zero_to_30_day_grace",
+    "attemptEvidence": "separately_trusted_exact_current_counts_and_last_attempt_evidence_never_missing_as_zero; zero_lifetime_requires_null_last_attempt; positive_lifetime_with_zero_rolling_count_requires_the_last_attempt_strictly_older_than_the_inclusive_rolling_window; positive_rolling_count_requires_the_last_attempt_inside_or_exactly_on_the_window_boundary",
+    "agingIsEvidenceNotPermission": true
+  },
+  "tenantLocalTimeContract": {
+    "timeZone": "exact_separately_trusted_current_canonical_IANA_identifier_equal_in_policy_and_Part6B_calendar_authority",
+    "localTime": "explicit_HH_mm_ss_wall_time_only_no_UTC_inference",
+    "dstResolutionRule": "part6b_gap_deny_and_fold_requires_explicit_instant_at_later_schedule_resolution",
+    "quietHoursRule": "part6b_exact_current_calendar_and_quiet_hours_required_no_fallback_reroute_or_other_channel",
+    "ambiguousAliasGapFoldMissingUnavailableOrConflictingAuthority": "deny",
+    "policyLocalTimeNeverCreatesScheduleOrTrustedClockAuthority": true
+  },
+  "recipientChannelContentApprovalContract": {
+    "recipientClass": "one_exact_reviewed_authorized_billing_contact_bound_to_the_same_invoice_customer_and_Part7A_resolution",
+    "channels": ["email", "sms"],
+    "providerMode": "provider_disabled",
+    "externalPermission": "Part7B_external_email_or_SMS_remains_unavailable_or_suppressed_and_can_never_become_clear_in_this_slice",
+    "wording": "exact_immutable_fixed_catalog_entry_only_no_free_text_amount_link_fee_deadline_threat_urgency_legal_claim_or_dynamic_substitution",
+    "approvalClasses": ["per_run_approval", "standing_authorization"],
+    "approvalState": "required_unavailable_no_authorization_record_or_runtime_consumption",
+    "candidateRecipientChannelWordingApprovalOrPolicyNeverSelfAuthorizes": true
+  },
+  "mandatoryStopConditionIds": [
+    "global_stop_or_tenant_pause",
+    "policy_paused_expired_or_rollout_disabled",
+    "source_or_Part11A_eligibility_not_latest_exact_current",
+    "financial_axis_no_longer_owner_review_eligible",
+    "recipient_permission_suppressed_or_unavailable",
+    "channel_or_provider_unavailable",
+    "approval_missing_expired_or_material_changed",
+    "grace_period_active",
+    "cadence_or_frequency_limit",
+    "manual_activity_reply_opt_out_or_active_conversation"
+  ],
+  "stopConditionBoundary": {
+    "representation": "every_policy_contains_the_complete_ordered_mandatory_catalog_and_owner_may_not_remove_rename_reorder_or_weaken_it",
+    "currentEvaluation": "Part11B_validates_policy_representation_only_and_creates_no_dynamic_suppression_rebuild_or_pending_communication",
+    "laterAuthority": "Part11D_owns_immediate_source_change_suppression_or_rebuild_semantics",
+    "candidateStopStateNeverCreatesSourcePermissionApprovalScheduleOrEffectAuthority": true
+  },
+  "sourceAndEligibilityContract": {
+    "requiredPart11AResult": "eligible_for_owner_collection_review_only",
+    "requiredPart11AReason": "exact_current_collection_review_eligible",
+    "requiredCurrentness": "latest_exact_current",
+    "separateAxes": ["invoice", "balance", "due_aging", "delivery", "dispute_refund_correction", "settlement", "offline_payment", "accounting", "customer_state", "source_set_authoritative_head"],
+    "bindingRule": "one_separately_trusted_Part11A_resolution_and_all_exact_axis_digests_must_bind_the_same_tenant_invoice_version_customer_currency_source_set_and_authoritative_head",
+    "laterSourceInvalidation": "any_new_correction_replacement_tombstone_reversal_head_change_or_currentness_change_invalidates_the_projection_and_requires_new_material",
+    "sourceOrAgingNeverGrantsPolicyApprovalRecipientChannelScheduleDeliveryOutcomeOrEffectAuthority": true
+  },
+  "currentAvailability": {
+    "part11ACompleteMountedResolverAvailable": false,
+    "financialReminderLaunchCellAvailable": false,
+    "externalRecipientPermissionAvailable": false,
+    "externalChannelProviderAvailable": false,
+    "approvalPersistenceOrRuntimeAvailable": false,
+    "schedulerOrDeliveryRuntimeAvailable": false,
+    "currentLiveResult": "unavailable_complete_current_source_and_external_financial_reminder_authority",
+    "ownerReadablePolicyGrammarDefined": true
+  },
+  "fixedDecision": {
+    "resultState": "reminder_policy_definition_valid_no_effect_external_authority_unavailable",
+    "reasonCode": "financial_reminder_source_permission_approval_schedule_and_effect_authority_unavailable",
+    "labelId": "reminder_policy_unavailable",
+    "fixedLabel": "Reminder policy unavailable — current communication authority is not available",
+    "neverMeans": "policy_persisted_validated_approved_activated_scheduled_queued_sent_delivered_replied_paid_settled_accounted_collected_or_effective"
+  },
+  "digestAndReplayContract": {
+    "policyCanonicalDigest": "server_recomputed_over_complete_policy_definition_except_canonicalDigest",
+    "materialDigest": "server_recomputed_over_all_trusted_projection_material_except_projectionId_and_digest_fields",
+    "idempotencyKeyDigest": "stable_over_tenant_exact_policy_Part11A_financial_axes_recipient_channel_time_approval_frequency_and_actor_material_excluding_projectionId_evaluatedAt_and_digest_fields",
+    "requestDigest": "server_recomputed_over_complete_request_with_digest_fields_omitted",
+    "sameIdentitySameRequest": "idempotent_owner_projection_replay_no_record_or_effect",
+    "sameIdentityDifferentRequest": "deny",
+    "sameSemanticMaterialDifferentIdentityOrTime": "deny_alias_clone_or_replay_reuse"
+  },
+  "deniedCombinations": [
+    "missing_unknown_stale_mixed_corrected_tombstoned_reversed_replaced_or_nonlatest_Part11A_resolution_axis_source_set_or_head",
+    "cross_tenant_cross_customer_cross_invoice_cross_version_cross_currency_cross_policy_cross_recipient_cross_channel_cross_calendar_or_cross_actor_graft",
+    "pre_due_due_today_or_overdue_phase_bucket_days_offset_wording_or_grace_mismatch",
+    "unsorted_duplicate_out_of_bounds_wrong_sign_or_too_close_cadence_offset",
+    "negative_fractional_unbounded_over_ceiling_or_incoherent_frequency_count_interval_or_grace",
+    "unknown_alias_noncanonical_or_substituted_timezone_local_time_calendar_DST_or_quiet_hour_authority",
+    "raw_name_email_phone_address_contact_value_invoice_number_amount_payment_destination_message_note_or_provider_payload",
+    "unknown_external_unreviewed_or_cross_customer_recipient",
+    "unsupported_channel_provider_mode_fallback_channel_or_clear_external_permission",
+    "free_text_modified_dynamic_AI_generated_interpolated_link_amount_fee_threat_urgency_deadline_legal_or_noncatalog_wording",
+    "unknown_missing_expired_self_created_or_materially_changed_approval_class_or_authorization",
+    "missing_duplicate_reordered_renamed_or_weakened_stop_condition",
+    "aging_delivery_communication_or_accounting_evidence_treated_as_permission_payment_cash_revenue_accounting_collection_or_success",
+    "policy_definition_treated_as_eligibility_approval_recipient_permission_schedule_delivery_outcome_or_effect",
+    "unknown_missing_extra_null_noncanonical_or_coercible_field",
+    "symbol_accessor_toJSON_proxy_wrapper_custom_prototype_sparse_array_alias_or_clone_trust_reuse",
+    "runtime_route_UI_policy_record_lifecycle_scheduler_worklist_task_worker_queue_provider_callback_message_delivery_or_effect",
+    "fee_writeoff_charge_refund_allocation_settlement_accounting_balance_upstream_or_money_mutation",
+    "legal_provider_private_production_outcome_security_or_founder_verdict_claim"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteOrUi": false,
+    "policyRecordOrLifecycleCreated": false,
+    "mountedEligibilityOrPolicyResolver": false,
+    "schedulerWorklistTaskWorkerQueue": false,
+    "recipientChannelProviderCallbackOrMessage": false,
+    "financialAccountingBalanceOrUpstreamMutation": false,
+    "externalEffectOrMoneyMovement": false,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "privacyAndEffects": {
+    "policyRecordsCreated": 0,
+    "approvalRecordsCreated": 0,
+    "scheduleRecordsCreated": 0,
+    "worklistRecordsOrTasksCreated": 0,
+    "recipientMessages": 0,
+    "providerAttempts": 0,
+    "customerCommunications": 0,
+    "feesWriteoffsChargesRefundsOrAllocations": 0,
+    "accountingOrBalanceMutations": 0,
+    "externalEffects": 0,
+    "upstreamMutations": 0,
+    "moneyEffects": 0
+  },
+  "unavailableEvidence": [
+    "complete mounted Part11A source resolver and private-production customer financial evidence",
+    "accepted external financial-reminder launch cell recipient consent legal basis jurisdiction quiet-hour review channel provider sender credential template callback or effect authority",
+    "policy persistence lifecycle validation preview approval activation scheduling worklist worker queue delivery reply opt-out or outcome runtime",
+    "real recipients messages attempts delivery replies payments settlement accounting collection outcome or money evidence",
+    "provider sandbox or live evidence hosted load SLA exercised restore physical Safari devices manual assistive technology or founder visual approval",
+    "professional legal privacy communications-consent collections debt consumer-protection regulatory provider deliverability tracking or security review"
+  ]
+}

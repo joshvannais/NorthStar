@@ -1,0 +1,21 @@
+# Mission 28 Part 11C — exact reminder material boundary
+
+Status: implementation candidate only. The executable authority is [MISSION_28_PART11C_REMINDER_MATERIAL_CONTRACT.json](./MISSION_28_PART11C_REMINDER_MATERIAL_CONTRACT.json). Part 11B is independently accepted and released at source `914f5d4424a300d8ab3649141ecab6b5a32bb625`, PR #594, live main `a4da3b83936a411b4315e3a8bc43f69da0b52485`, and Railway deployment `fa5e57be-777b-4970-ab03-8f1c2040171d` (`SUCCESS/RUNNING`).
+
+Part 11C freezes an owner-readable, no-effect projection over one exact Part 11A eligibility resolution and one exact Part 11B policy projection. The projection binds the same tenant, customer, issued invoice and customer-safe version; exact invoice, version, terms, balance, source-set and authoritative-head digests; exact currency and positive integer minor-unit amount due; reviewed recipient and provider-disabled channel; and one immutable customer-safe balance explanation. Every source remains separately trusted and latest-exact-current. Candidate data, aging, document delivery or communication evidence never creates permission, scheduling, payment or accounting authority.
+
+## Exact material and meaning
+
+The issued invoice must remain `issued_current`, `customer_safe_current` and not replaced. The amount due is the exact current positive balance in the invoice currency. It cannot be a float, formatted string, inferred zero or caller-supplied arithmetic. The fixed explanation says only that the shown amount is the current invoice balance, that no reminder fee is added, that invoice terms remain unchanged, and that payment, settlement and accounting require separate current evidence. It contains no customer/contact value, invoice number, payment URL, threat, urgency, deadline or legal claim.
+
+No accepted secure invoice-payment destination currently exists. The current destination binding is therefore a closed unavailable state with every destination identity, digest, scope, expiry, raw token, URL, payment-method and provider-account value absent and charge authority false. The Part 7E future scoped-link shape does not create current financial destination authority. A future accepted destination would have to bind one tenant, one reviewed recipient and one exact current customer-safe invoice version through a separately accepted authority; Part 11C does not create or persist it.
+
+Part 11C never adds a fee or changes price, scope, terms, due date or balance. It never selects, stores, ranks or defaults a payment method; starts a charge; issues a token or link; or implies paid, settled, earned, revenue-recognized, accounted, collected or successful status. Any source, policy, recipient, currentness, document, amount, currency, balance, terms or authoritative-head change invalidates the material and requires a new separately trusted projection.
+
+Every material, idempotency and request digest uses UTF-8 JSON with lexicographically sorted object keys and preserved array order. Reordering object properties therefore cannot create a second semantic identity or evade clone/replay denial. The invoice issue instant cannot be later than the trusted evaluation clock.
+
+## Current result and evidence boundary
+
+The only current decision is the fixed, nonreflective `reminder_material_unavailable_no_secure_destination_or_external_authority`. No reminder-material record, payment destination, link, token, method, charge, schedule, worklist, task, message, provider attempt, financial/accounting/balance/upstream mutation, external effect or money movement is created. Migration 287 remains latest and migration 288 is absent.
+
+Unavailable and unclaimed evidence includes a complete mounted Part 11A resolver, persisted accepted Part 11B policy authority, secure financial payment destination, external recipient/channel/provider/schedule/delivery authority, real recipient/provider/payment/accounting outcomes, direct applied-production migration re-query, private-production/provider/live evidence, professional legal/privacy/collections/accounting/provider review, physical Safari/devices, manual assistive technology and founder visual approval. Part 11D and later slices remain unimplemented.

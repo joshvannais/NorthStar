@@ -151,7 +151,7 @@ describe('Mission 28 Part 6F recovery authority', () => {
 
   test('records Parts 7A-7C released, Part 7D candidate, migration284/no285 and Part 7E+ planned', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
-      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–11A are released. Part 11B is the sole implementation candidate.'); expect(document).toContain('Parts 11C–14G remain planned and unimplemented.'); expect(document).toContain('eb089985-741b-4147-8af5-7bde9742e8dc');
+      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–11B are released. Part 11C is the sole implementation candidate.'); expect(document).toContain('Parts 11D–14G remain planned and unimplemented.'); expect(document).toContain('eb089985-741b-4147-8af5-7bde9742e8dc');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     expect(ledger).toContain('| 25 | 6E | Cancel/pause/revoke/drain/dead-letter and reviewed retry | **Released** |');

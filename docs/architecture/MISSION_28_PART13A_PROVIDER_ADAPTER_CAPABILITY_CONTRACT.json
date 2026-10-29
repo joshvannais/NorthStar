@@ -1,0 +1,349 @@
+{
+  "contractVersion": "mission28.part13a.provider-adapter-capability.v1",
+  "authority": {
+    "mission": 28,
+    "part": "13A",
+    "state": "implementation_candidate_only",
+    "baselineCommit": "c391746060348df9f358feba49a8ee0679c2b465",
+    "baselineTree": "523a7b059dbc3edda9926224233627a639536bd1",
+    "scope": "provider_neutral_disabled_adapter_registry_and_capability_discovery_only",
+    "everyAdapterStartsDisabled": true,
+    "unsupportedCapabilitiesRemainUnavailable": true,
+    "providerIdentifiersCredentialsPayloadsAndStatusesNeverCreateBusinessAuthority": true
+  },
+  "part12DRelease": {
+    "acceptedSourceHead": "e0a4739e4b34110e2ef20a59e472a6c383fb96ac",
+    "acceptedTree": "523a7b059dbc3edda9926224233627a639536bd1",
+    "freshAudit": {
+      "verdict": "P0=0_P1=0_P2=0_P3=0",
+      "nodeVersion": "22.23.3",
+      "focusedTests": "18/18",
+      "parts11ATo12D": "10_suites_166_tests",
+      "cumulativeMission28": "54_suites_768_tests",
+      "migrationHistory": "2_suites_40_tests",
+      "syntax": "54/54",
+      "json": "53/53",
+      "migrations": "283_through_287_no_288",
+      "changedPaths": "58_docs_tests_only",
+      "protectedPaths": 0
+    },
+    "pullRequest": 602,
+    "mergedAt": "2026-10-29T22:40:17Z",
+    "mergedMain": "c391746060348df9f358feba49a8ee0679c2b465",
+    "productionAccepted": true,
+    "release": {
+      "deploymentId": "eb46e43c-f153-4c02-82dd-53a5c1206f8a",
+      "deploymentStatus": "SUCCESS",
+      "deploymentInstanceId": "b288d2b8-0c27-4ca9-8d89-d809abdf9d6c",
+      "deploymentInstanceStatus": "RUNNING",
+      "imageSha256": "sha256:66debb28f92855258835fc11fca1e80137547b85c26116172dfe08dce2ca3e48",
+      "canonicalStartup": "ready",
+      "health": "HTTP_200_postgresql_database_canonicalPersistence_healthy",
+      "root": "HTTP_200_69360_bytes_sha256_0a1f73636ca4fe873330301107a9c3ed92edea9a4a2a285467b0aeede581fd38",
+      "dashboardAndDemo": "HTTP_200_exact_91681_bytes_sha256_b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369_parity"
+    },
+    "directAppliedProductionMigrationHistory": "unavailable_and_unclaimed"
+  },
+  "frozenInputs": [
+    {
+      "part": "1B",
+      "path": "docs/architecture/MISSION_28_PART1B_SURFACE_INVENTORY.json",
+      "normalizedLfSha256": "62E37CF07A26F0C2B1A50A2C2F0EB927695500DB32B44B16E5B431F594B93142"
+    },
+    {
+      "part": "1D",
+      "path": "docs/architecture/MISSION_28_PART1D_FIRST_LAUNCH_MATRIX.json",
+      "normalizedLfSha256": "8CC5C4D62719EA6E6BCF9A340C5BE0593BE2F10CD60360D10562C4979D859B52"
+    },
+    {
+      "part": "3A",
+      "path": "docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json",
+      "normalizedLfSha256": "BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33"
+    },
+    {
+      "part": "3C",
+      "path": "docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json",
+      "normalizedLfSha256": "79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321"
+    },
+    {
+      "part": "6C",
+      "path": "docs/architecture/MISSION_28_PART6C_DELIVERY_COORDINATION_CONTRACT.json",
+      "normalizedLfSha256": "D9D00F6496DF95465257C427EA3674ECC7FB960780E495D1807C551F040835A3"
+    },
+    {
+      "part": "7C",
+      "path": "docs/architecture/MISSION_28_PART7C_CONTENT_TEMPLATE_PREVIEW_CONTRACT.json",
+      "normalizedLfSha256": "B0070106EFC642299B4C1F8334AA9EB3206078C93AA0412B33DC2EC71D639D91"
+    },
+    {
+      "part": "7D",
+      "path": "docs/architecture/MISSION_28_PART7D_CHANNEL_DELIVERY_HANDOFF_CONTRACT.json",
+      "normalizedLfSha256": "E4902F0B0251C4F973935F41A4632970F6DF84DA6413236C44FF50873A4378FB"
+    },
+    {
+      "part": "7E",
+      "path": "docs/architecture/MISSION_28_PART7E_SCOPED_LINK_ATTACHMENT_CONTRACT.json",
+      "normalizedLfSha256": "9517730DED6C96309F44E853B2660A7B6C174C9B280ACC30ED4208DA6307E4EB"
+    },
+    {
+      "part": "7F",
+      "path": "docs/architecture/MISSION_28_PART7F_DELIVERY_EVIDENCE_CONTRACT.json",
+      "normalizedLfSha256": "482B381597FCC60803F6BFDE8366468C8CDED2C731B24B74681B12A547B11706"
+    },
+    {
+      "part": "12D",
+      "path": "docs/architecture/MISSION_28_PART12D_ACTION_EXPLANATION_DRILLDOWN_CONTRACT.json",
+      "normalizedLfSha256": "88AFB30586D621AD774245EBBA111A91782112601DA45012D6D5A8916CD242CF"
+    }
+  ],
+  "identityGrammar": {
+    "uuidPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    "digestPattern": "^sha256:[0-9a-f]{64}$",
+    "utcInstantPattern": "^(?:19|20)[0-9]{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{6}Z$"
+  },
+  "bounds": {
+    "maximumCanonicalRequestBytes": 8192,
+    "maximumCapabilityClasses": 8,
+    "maximumProviderSurfaceInventoryEntries": 20,
+    "maximumStatusMeaningEntries": 12,
+    "maximumExternalRecipients": 0,
+    "maximumExternalMessages": 0,
+    "maximumProviderAttempts": 0,
+    "maximumRetries": 0,
+    "maximumAttachments": 0
+  },
+  "capabilityClassOrder": [
+    "outbound_channels",
+    "callbacks",
+    "attachments",
+    "templates",
+    "limits",
+    "modes",
+    "costs",
+    "status_meanings"
+  ],
+  "providerSurfaceInventory": [
+    {"surfaceId": "worker.tax-research", "frozenDisposition": "ambiguous_fail_closed"},
+    {"surfaceId": "worker.knowledge-synchronization", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "voice.legacy-retell-tool-registry", "frozenDisposition": "legacy_unsupported_or_quarantined"},
+    {"surfaceId": "email.resend-transactional-adapter-and-templates", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "notification.legacy-lead-email", "frozenDisposition": "legacy_unsupported_or_quarantined"},
+    {"surfaceId": "notification.legacy-lead-sms", "frozenDisposition": "legacy_unsupported_or_quarantined"},
+    {"surfaceId": "provider.retell-call-sms-client", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "provider.mission26-retell-call-reconciliation", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "provider.google-calendar-event-reminder", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "provider.google-sheets-lead-append", "frozenDisposition": "legacy_unsupported_or_quarantined"},
+    {"surfaceId": "provider.jobber-oauth-and-lead-push", "frozenDisposition": "legacy_unsupported_or_quarantined"},
+    {"surfaceId": "provider.openai-polaris-runtime", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "provider.retell-knowledge-transport", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "provider.equipment-identifier-extraction", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "provider.integration-catalogue-labels", "frozenDisposition": "ambiguous_fail_closed"},
+    {"surfaceId": "browser.legacy-communications-provider-registry", "frozenDisposition": "legacy_unsupported_or_quarantined"},
+    {"surfaceId": "browser.legacy-retell-provider", "frozenDisposition": "legacy_unsupported_or_quarantined"},
+    {"surfaceId": "provider.mission27-payment-boundary", "frozenDisposition": "upstream_or_subscription_owned_excluded"},
+    {"surfaceId": "demo.homepage-web-call-and-polaris", "frozenDisposition": "simulated_or_demo_only"},
+    {"surfaceId": "demo.retired-call-mutations", "frozenDisposition": "legacy_unsupported_or_quarantined"}
+  ],
+  "providerSurfaceRule": {
+    "source": "exact_Part1B_provider_adapter_facet_inventory",
+    "expectedCount": 20,
+    "reclassificationOrReuseAsPart13AAdapterAuthority": "deny",
+    "missingUnknownDuplicateOrChangedDisposition": "deny",
+    "sourceAnchorsRemainRequired": true,
+    "repositorySurfaceExistenceNeverMeansTenantConnectionCredentialCapabilityOrAvailability": true
+  },
+  "adapterFamilies": [
+    {"adapterFamilyId": "provider_neutral_email", "adapterState": "disabled", "capabilityState": "unavailable", "providerMode": "provider_disabled"},
+    {"adapterFamilyId": "provider_neutral_sms", "adapterState": "disabled", "capabilityState": "unavailable", "providerMode": "provider_disabled"},
+    {"adapterFamilyId": "provider_neutral_secure_link_delivery", "adapterState": "disabled", "capabilityState": "unavailable", "providerMode": "provider_disabled"},
+    {"adapterFamilyId": "provider_neutral_callback", "adapterState": "disabled", "capabilityState": "unavailable", "providerMode": "provider_disabled"}
+  ],
+  "outboundChannelCatalog": [
+    {"channelId": "in_app_passive", "adapterFamilyId": null, "adapterState": "not_applicable_internal_only", "capabilityState": "available_internal_no_effect", "providerMode": "provider_disabled", "resultState": "ready_internal_no_effect"},
+    {"channelId": "native_manual_handoff", "adapterFamilyId": null, "adapterState": "not_mounted_manual_excluded", "capabilityState": "manual_excluded_current_launch", "providerMode": "provider_disabled", "resultState": "unavailable_manual_handoff_not_opened"},
+    {"channelId": "email", "adapterFamilyId": "provider_neutral_email", "adapterState": "disabled", "capabilityState": "external_unavailable", "providerMode": "provider_disabled", "resultState": "unavailable_external_channel"},
+    {"channelId": "sms", "adapterFamilyId": "provider_neutral_sms", "adapterState": "disabled", "capabilityState": "external_unavailable", "providerMode": "provider_disabled", "resultState": "unavailable_external_channel"},
+    {"channelId": "secure_link_delivery", "adapterFamilyId": "provider_neutral_secure_link_delivery", "adapterState": "disabled", "capabilityState": "external_unavailable", "providerMode": "provider_disabled", "resultState": "unavailable_external_channel"},
+    {"channelId": "provider_callback", "adapterFamilyId": "provider_neutral_callback", "adapterState": "disabled", "capabilityState": "evidence_only_unavailable_not_a_channel", "providerMode": "provider_disabled", "resultState": "unavailable_no_authenticated_callback_authority"}
+  ],
+  "callbackCapability": {
+    "adapterState": "disabled",
+    "capabilityState": "unavailable",
+    "signatureVerification": "unavailable",
+    "endpointBinding": "unavailable",
+    "accountBinding": "unavailable",
+    "eventVersionCatalog": "unavailable",
+    "replayProtection": "unavailable",
+    "rawPayloadRetention": "forbidden",
+    "normalizedEvidenceCreation": "not_authorized",
+    "callbackNeverCreatesBusinessAuthority": true
+  },
+  "attachmentCapability": {
+    "adapterState": "disabled",
+    "capabilityState": "unavailable",
+    "maximumAttachments": 0,
+    "supportedMediaTypes": [],
+    "maximumBytes": null,
+    "customerSafeDocumentAuthority": "unavailable",
+    "futurePart7EApplicationPdfVocabularyIsNotCurrentProviderSupport": true
+  },
+  "templateCapability": {
+    "adapterState": "disabled",
+    "capabilityState": "unavailable",
+    "providerTemplateIds": [],
+    "providerTemplateVersions": [],
+    "providerLocaleCatalog": [],
+    "providerVariableCatalog": [],
+    "part7CInternalPreviewTemplatesAreNotProviderTemplates": true,
+    "candidateFreeTextOrProviderTemplateReference": "deny"
+  },
+  "limitCapability": {
+    "adapterState": "disabled",
+    "capabilityState": "unavailable",
+    "providerRecipientLimit": null,
+    "providerPayloadByteLimit": null,
+    "providerAttachmentCountLimit": null,
+    "providerAttachmentByteLimit": null,
+    "providerRateLimit": null,
+    "providerRetryLimit": null,
+    "acceptedCurrentExternalRecipients": 0,
+    "acceptedCurrentExternalMessages": 0,
+    "acceptedCurrentProviderAttempts": 0,
+    "acceptedCurrentRetries": 0,
+    "unknownLimitNeverDefaultsToZeroUnlimitedOrProviderDocumentation": true
+  },
+  "modeCapability": {
+    "acceptedCurrentMode": "provider_disabled",
+    "noneInternal": "internal_no_adapter_only",
+    "sandbox": "unavailable",
+    "live": "unavailable",
+    "testModeNeverImpliesCapabilityOrLiveMode": true,
+    "modeSwitchingAuthority": "unavailable"
+  },
+  "costCapability": {
+    "adapterState": "disabled",
+    "capabilityState": "unavailable",
+    "currency": null,
+    "unitAmount": null,
+    "pricingUnit": null,
+    "estimateDigest": null,
+    "zeroFreeOrIncludedMayNotBeInferred": true,
+    "providerDocumentationOrCandidateValueCreatesNoCostAuthority": true
+  },
+  "statusMeaningCatalog": [
+    {"eventKind": "provider_accepted", "evidenceClass": "provider_transport_evidence", "strongestClaim": "accepted", "availableNow": false},
+    {"eventKind": "sent", "evidenceClass": "provider_transport_evidence", "strongestClaim": "sent", "availableNow": false},
+    {"eventKind": "delivered", "evidenceClass": "provider_delivery_evidence", "strongestClaim": "delivered", "availableNow": false},
+    {"eventKind": "opened", "evidenceClass": "provider_open_evidence", "strongestClaim": "opened", "availableNow": false},
+    {"eventKind": "bounced", "evidenceClass": "provider_failure_evidence", "strongestClaim": "failed", "availableNow": false},
+    {"eventKind": "blocked", "evidenceClass": "provider_failure_evidence", "strongestClaim": "failed", "availableNow": false},
+    {"eventKind": "complaint", "evidenceClass": "provider_recipient_protection_evidence", "strongestClaim": "failed", "availableNow": false},
+    {"eventKind": "reply_received", "evidenceClass": "authenticated_recipient_response", "strongestClaim": "reply_or_opt_out", "availableNow": false},
+    {"eventKind": "customer_question_received", "evidenceClass": "authenticated_recipient_response", "strongestClaim": "reply_or_opt_out", "availableNow": false},
+    {"eventKind": "opt_out_received", "evidenceClass": "authenticated_recipient_protection_evidence", "strongestClaim": "reply_or_opt_out", "availableNow": false},
+    {"eventKind": "undeliverable", "evidenceClass": "provider_failure_evidence", "strongestClaim": "failed", "availableNow": false},
+    {"eventKind": "provider_status_correction", "evidenceClass": "provider_correction_evidence", "strongestClaim": "bounded_by_corrected_event", "availableNow": false}
+  ],
+  "statusMeaningRule": {
+    "source": "exact_Part7F_futureAcceptedEvidenceKinds_vocabulary_only",
+    "providerStatusTextCodeOrPayloadCannotSelectMeaning": true,
+    "catalogMembershipDoesNotCreateCallbackOrEvidenceAuthority": true,
+    "acceptedSentDeliveredOpenedReplyFailedComplaintAndUnknownRemainDistinct": true,
+    "noStatusImpliesPaymentCollectionAccountingCustomerSatisfactionOrBusinessOutcome": true,
+    "unknownConflictingOrUnmapped": "unavailable_no_stronger_claim"
+  },
+  "discoveryEnvelope": {
+    "exactFields": [
+      "schemaVersion",
+      "tenantId",
+      "discoveryRequestId",
+      "requestedCapabilityClasses",
+      "registryBinding",
+      "evaluatedAt",
+      "materialDigest",
+      "idempotencyKeyDigest",
+      "requestDigest"
+    ],
+    "registryBindingExactFields": [
+      "registryId",
+      "registryDigest",
+      "part1BInventoryDigest",
+      "providerSurfaceInventoryDigest",
+      "adapterFamilyDigest",
+      "channelCatalogDigest",
+      "statusMeaningCatalogDigest",
+      "adapterState",
+      "providerMode"
+    ],
+    "trustedResolutionExactFields": [
+      "tenantId",
+      "registryBinding",
+      "evaluatedAt"
+    ],
+    "candidateMayNotSupplyOrReplaceTrustedResolution": true,
+    "strictPlainDataBeforePropertyReadDigestLookupOrSerialization": true,
+    "sameRequestIdSameCanonicalDigest": "idempotent_replay_no_new_record_or_authority",
+    "sameRequestIdDifferentDigestOrCanonicalMaterial": "deny",
+    "sameSemanticMaterialDifferentRequestOrTime": "deny_clone_reuse"
+  },
+  "fixedDecision": {
+    "resultState": "unavailable_all_external_provider_adapters_disabled",
+    "reasonCode": "provider_adapter_capability_discovery_unavailable",
+    "labelId": "provider_channels_unavailable",
+    "fixedLabel": "External provider channels are unavailable.",
+    "adapterRegistryState": "disabled",
+    "providerMode": "provider_disabled",
+    "capabilityEvidenceCreated": false,
+    "connectionAuthorityGranted": false,
+    "credentialAuthorityGranted": false,
+    "callbackAuthorityGranted": false,
+    "messageAuthorityGranted": false,
+    "effectAuthorityGranted": false
+  },
+  "denials": [
+    "missing_unknown_duplicate_reordered_or_partial_capability_class_set",
+    "candidate_or_untrusted_registry_capability_connection_credential_mode_limit_cost_template_attachment_callback_or_status_claim",
+    "enabled_connected_available_degraded_sandbox_live_or_fallback_adapter_state",
+    "provider_brand_account_sender_endpoint_credential_secret_token_header_payload_raw_status_template_or_recipient_material",
+    "Part1B_surface_reclassified_or_reused_as_Part13A_adapter_authority",
+    "provider_limit_cost_or_support_inferred_from_source_presence_configuration_documentation_or_zero",
+    "Part7C_preview_template_treated_as_provider_template",
+    "Part7E_future_attachment_vocabulary_treated_as_current_provider_support",
+    "Part7F_status_vocabulary_treated_as_callback_delivery_reply_opt_out_or_outcome_evidence",
+    "provider_accepted_sent_delivered_opened_replied_failed_complained_unknown_or_corrected_states_conflated",
+    "cross_tenant_alias_clone_replay_proxy_accessor_toJSON_symbol_custom_prototype_sparse_extra_missing_or_coercible_data",
+    "runtime_mount_connection_credential_callback_provider_attempt_recipient_message_effect_upstream_financial_money_legal_or_completion_authority"
+  ],
+  "runtimeBoundary": {
+    "newMigration": false,
+    "newTableFunctionRouteWorkerQueueSchedulerCallbackOrUi": false,
+    "mountedCapabilityDiscoveryResolver": false,
+    "mountedProviderAdapter": false,
+    "connectionsCreated": 0,
+    "credentialsReadOrCreated": 0,
+    "callbacksAuthenticated": 0,
+    "templatesCreated": 0,
+    "attachmentsCreated": 0,
+    "providerAttemptsCreated": 0,
+    "messagesCreated": 0,
+    "recipientsContacted": 0,
+    "externalEffectsCreated": 0,
+    "upstreamMutationsCreated": 0,
+    "financialEffectsCreated": 0,
+    "moneyEffectsCreated": 0,
+    "latestMigration": "287_canonical_automation_estimate_quote_resolution_v1.sql",
+    "nextMigrationAbsent": "288"
+  },
+  "unavailableEvidence": [
+    "provider_accounts_and_account_identity",
+    "credentials_secrets_tokens_and_rotation",
+    "verified_senders_domains_numbers_and_registrations",
+    "provider_specific_capability_discovery",
+    "provider_sandbox_and_live_modes",
+    "authenticated_callbacks_and_replay_protection",
+    "provider_templates_attachments_limits_quotas_costs_and_status_mapping",
+    "real_recipients_messages_delivery_replies_opt_outs_complaints_and_outcomes",
+    "provider_private_production_live_money_legal_privacy_regulatory_and_founder_visual_evidence"
+  ],
+  "laterSliceBoundary": "Part13B_connection_credentials_and_modes_Part13C_callbacks_and_reconciliation_Part13D_outage_fallback_and_switching_Part13E_observability_retention_and_lifecycle_and_Part14_plus_remain_unimplemented"
+}

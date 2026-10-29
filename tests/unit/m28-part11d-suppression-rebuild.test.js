@@ -223,9 +223,9 @@ describe('Mission 28 Part 11D suppression and rebuild', () => {
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations).toHaveLength(283); expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql'); expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
   });
 
-  test('roadmap and ledger record Part11C released Part11D candidate and later slices planned', () => {
+  test('roadmap and ledger record Part11D released Part11E candidate and later slices planned', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8'); const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
-    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–11C are released. Part 11D is the sole implementation candidate.'); for (const identity of ['2d2d082399cd1f35519fa0cb4a837efa0fec45e2','05d8457ecd1ff48b338e1da6337808707e92deb5','2135f372-13c2-419b-8b8a-12da526d1a95','sha256:957fc8466a71ee7d07c38d281cebba7c7b1e0e6b8da43d80ddac48462fa45d78','fb9a6f8d-c84b-4da3-8268-a8bd643d4427','b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369']) expect(value).toContain(identity); }
-    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(47); expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1); expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(18);
+    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–11D are released. Part 11E is the sole implementation candidate.'); for (const identity of ['2d2d082399cd1f35519fa0cb4a837efa0fec45e2','05d8457ecd1ff48b338e1da6337808707e92deb5','2135f372-13c2-419b-8b8a-12da526d1a95','sha256:957fc8466a71ee7d07c38d281cebba7c7b1e0e6b8da43d80ddac48462fa45d78','fb9a6f8d-c84b-4da3-8268-a8bd643d4427','b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369']) expect(value).toContain(identity); }
+    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(48); expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1); expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(17);
   });
 });

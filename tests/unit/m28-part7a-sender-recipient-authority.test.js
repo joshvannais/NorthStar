@@ -163,7 +163,7 @@ describe('Mission 28 Part 7A exact sender and recipient authority', () => {
 
   test('records Parts 7A-7C released, Part 7D candidate, migration284/no285 and Part 7E+ planned', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
-      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–9C are released. Part 9D is the sole implementation candidate.'); expect(document).toContain('Parts 10A–14G remain planned and unimplemented.'); expect(document).toContain('020491c14f54f8a849f87ea197cdff462a930f6a');
+      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–9D are released. Part 10A is the sole implementation candidate.'); expect(document).toContain('Parts 10B–14G remain planned and unimplemented.'); expect(document).toContain('020491c14f54f8a849f87ea197cdff462a930f6a');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     expect(ledger).toContain('| 26 | 6F | Restart/migration/outage/restore and orphan-authority recovery | **Released** |');

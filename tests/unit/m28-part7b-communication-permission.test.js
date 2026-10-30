@@ -154,8 +154,8 @@ describe('Mission 28 Part 7B communication permission and suppression authority'
 
   test('records Parts 7A-7C released, only Part 7D candidate, migration284/no285 and Part 7E+ planned', () => {
     for (const document of [fs.readFileSync(ROADMAP, 'utf8'), fs.readFileSync(LEDGER, 'utf8')]) {
-      expect(document).toContain('Parts 1A–13B are released. Part 13C is the sole implementation candidate.');
-      expect(document).toContain('Parts 13D–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–13C are released. Part 13D is the sole implementation candidate.');
+      expect(document).toContain('Parts 13E–14G remain planned and unimplemented.');
       expect(document).toContain('3a64444e-1094-41c0-9d45-7c5375af74a8');
     }
     const ledger = fs.readFileSync(LEDGER, 'utf8');

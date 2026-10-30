@@ -330,15 +330,16 @@ describe('Mission 28 Part 13C authenticated callbacks and status reconciliation'
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8');
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     for (const value of [roadmap, ledger]) {
-      expect(value).toContain('Parts 1A–13B are released. Part 13C is the sole implementation candidate.');
-      expect(value).toContain('Parts 13D–14G remain planned and unimplemented.');
+      expect(value).toContain('Parts 1A–13C are released. Part 13D is the sole implementation candidate.');
+      expect(value).toContain('Parts 13E–14G remain planned and unimplemented.');
       for (const identity of ['3ded5a7292e69332d37dfd61017303fe1a41e49c','5230d7113d5d023b0144142d13f5cc5d1eddffe3','398b0ba45e3e2c150df29c2cf96d1780f76285c7','ba23ce8f-b4ec-4ef3-a087-4b71a669276f','bf795dc7-7c73-4cf7-8c76-db26b3fb2e45','sha256:bd921d008b6afa6e3a11dac88b9750d696b8628f249a5cba2f4ae47f3b2012dc']) expect(value).toContain(identity);
       expect(value).toMatch(/direct applied production migration history.*unavailable.*unclaimed/i);
     }
-    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(56);
+    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(57);
     expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1);
-    expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(9);
+    expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(8);
     expect(ledger).toContain('| 56 | 13B | Tenant-bound connection/credential/mode boundary | **Released** |');
-    expect(ledger).toContain('| 57 | 13C | Authenticated callbacks and exact status reconciliation | **Implementation candidate** |');
+    expect(ledger).toContain('| 57 | 13C | Authenticated callbacks and exact status reconciliation | **Released** |');
+    expect(ledger).toContain('| 58 | 13D | Provider outage/quota/degradation/circuit-breaker/fallback | **Implementation candidate** |');
   });
 });

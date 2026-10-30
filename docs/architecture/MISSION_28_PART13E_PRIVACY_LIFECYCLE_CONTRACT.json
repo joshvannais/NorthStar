@@ -141,7 +141,7 @@
     "lifecycleBindingExactFields": ["sequence", "predecessorAssessmentId", "predecessorAssessmentDigest", "disposition"],
     "plainDataDescriptorFirst": true,
     "candidateMustEqualSeparatelyTrustedResolution": true,
-    "digestAlgorithm": "sha256_lowercase_hex_over_length_prefixed_canonical_plain_data",
+    "digestAlgorithm": "sha256_lowercase_hex_over_utf8_json_of_recursively_sorted_object_keys_preserving_array_order_and_json_primitive_encoding",
     "semanticIdempotencyExcludes": ["assessmentId", "evaluatedAt", "materialDigest", "idempotencyKeyDigest", "assessmentDigest"],
     "sameIdSameDigest": "idempotent_exact_replay",
     "sameIdDifferentDigest": "deny",

@@ -12,6 +12,7 @@ const part3A = JSON.parse(read('docs/architecture/MISSION_28_PART3A_FIXED_CAPABI
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+const ASSESSMENT_DIGEST_ALGORITHM = 'sha256_lowercase_hex_over_utf8_json_of_recursively_sorted_object_keys_preserving_array_order_and_json_primitive_encoding';
 const FROZEN_PRIVACY_PROFILE_DIGEST = 'sha256:ad76777d0711a2c5f48f8983fc00d7fec4302980930a560c5ad6e567f44d78b5';
 const uuid = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const d = n => `sha256:${String(n).padStart(64, '0')}`;
@@ -47,6 +48,9 @@ function canonical(value) {
   return value;
 }
 const hash = value => `sha256:${crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex')}`;
+function validateAssessmentDigestAlgorithm(value) {
+  if (value !== ASSESSMENT_DIGEST_ALGORITHM) throw new Error('assessment digest algorithm');
+}
 function exact(value, fields, label) {
   if (Object.keys(value).sort().join('|') !== [...fields].sort().join('|')) throw new Error(`${label} fields`);
 }
@@ -118,6 +122,7 @@ function validate(candidate, separatelyTrusted) {
   const value = plain(candidate); const trusted = plain(separatelyTrusted);
   validatePrivacyProfile(contract.privacyProfile);
   const env = contract.assessmentEnvelope;
+  validateAssessmentDigestAlgorithm(env.digestAlgorithm);
   exact(value, env.exactFields, 'root');
   exact(value.subjectBinding, env.subjectBindingExactFields, 'subject');
   exact(value.actorBinding, env.actorBindingExactFields, 'actor');
@@ -244,6 +249,9 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
     expect(contract.privacyProfile.profileDigest).toBe(FROZEN_PRIVACY_PROFILE_DIGEST);
     expect(computedPrivacyProfileDigest(contract.privacyProfile)).toBe(FROZEN_PRIVACY_PROFILE_DIGEST);
     expect(() => validatePrivacyProfile(contract.privacyProfile)).not.toThrow();
+    expect(contract.assessmentEnvelope.digestAlgorithm).toBe(ASSESSMENT_DIGEST_ALGORITHM);
+    expect(hash({z: 1, a: ['x', true, null]})).toBe('sha256:2dbf0cc51429fdd00bf311a9833eb83f1426ee02317a9629d054c5b1c8d1a241');
+    expect(() => validateAssessmentDigestAlgorithm('sha256_lowercase_hex_over_length_prefixed_canonical_plain_data')).toThrow('assessment digest algorithm');
     for (const item of contract.frozenInputs) expect(digestLf(item.path)).toBe(item.normalizedLfSha256);
   });
 

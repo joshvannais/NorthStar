@@ -403,6 +403,11 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
     const roadmap = read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'); const ledger = read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md');
     for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–13D are released. Part 13E is the sole implementation candidate.'); expect(value).toContain('Parts 14A–14G remain planned and unimplemented.'); }
     expect(roadmap).toContain('Released Part 13D baseline: accepted source `997ba10385f259f4298bed6447d083bcb83796e4`');
+    for (const value of [roadmap, ledger]) {
+      expect(value).toContain('fresh independent audit P0=P1=P2=P3=0 under exact Node 22.23.3 with focused 20/20, cumulative 58/58 suites and 827/827 tests, migration/history 2/2 suites and 40/40 tests, syntax 58/58, JSON 57/57, and migrations 283 through 287/no288');
+      expect(value).toMatch(/audit report hash.*unavailable.*unclaimed/i);
+      expect(value).toMatch(/direct applied production migration history.*unavailable.*unclaimed/i);
+    }
     expect(roadmap).toContain('Current Part 13E artifacts:');
     expect(ledger).toContain('| 58 | 13D | Provider outage/quota/degradation/circuit-breaker/fallback | **Released** |');
     expect(ledger).toContain('| 59 | 13E | Privacy-safe observability, retention, deletion and lifecycle | **Implementation candidate** |');

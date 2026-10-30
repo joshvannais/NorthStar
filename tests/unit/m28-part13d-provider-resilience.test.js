@@ -121,6 +121,16 @@ function circuitScopeMaterial(value) {
     capabilityResolutionDigest: value.sourceProviderBinding.capabilityResolutionDigest
   };
 }
+function terminalCloseEvidenceMaterial(value) {
+  return {
+    tenantId: value.tenantId,
+    actionUnitId: value.actionBinding.unitId,
+    providerRequestIdentity: value.actionBinding.providerRequestIdentity,
+    retryDecisionId: value.retryAuthorityBinding.retryDecisionId,
+    retryDecisionDigest: value.retryAuthorityBinding.retryDecisionDigest,
+    retryDecisionState: value.retryAuthorityBinding.retryDecisionState
+  };
+}
 
 function baseFixture() {
   const unitId = uuid(6);
@@ -157,7 +167,8 @@ function baseFixture() {
       fallbackKind: 'none', fallbackPlanId: null, fallbackPlanVersion: null, fallbackPlanDigest: null, targetAdapterFamilyId: null, targetEnvironment: null, targetProviderAccountBindingId: null,
       targetProviderAccountIdentityDigest: null, targetConnectionId: null, targetConnectionDigest: null, targetCredentialVersionId: null, targetCredentialBindingDigest: null,
       targetCapabilityResolutionDigest: null, targetChannelId: null, targetPermissionResolutionId: null, targetPermissionResolutionDigest: null, targetChannelResolutionId: null,
-      targetChannelResolutionDigest: null, targetContentPreviewDigest: null, targetContentTemplateDigest: null, targetAttachmentSetDigest: null, fallbackHop: 0,
+      targetChannelResolutionDigest: null, targetContentPreviewDigest: null, targetContentTemplateDigest: null, targetAttachmentSetDigest: null,
+      priorProviderLaneTerminalCloseEvidenceId: null, priorProviderLaneTerminalCloseEvidenceDigest: null, priorProviderLaneTerminalRetryDecisionId: null, priorProviderLaneTerminalRetryDecisionDigest: null, fallbackHop: 0,
       priorProviderLaneClosed: null, targetProviderLaneState: null
     },
     decisionBinding: {
@@ -198,6 +209,8 @@ function providerSwitchFixture(source = incidentFixture('quota_exhausted')) {
     targetPermissionResolutionDigest: value.authorityBinding.permissionResolutionDigest, targetChannelResolutionId: value.authorityBinding.channelResolutionId,
     targetChannelResolutionDigest: value.authorityBinding.channelResolutionDigest, targetContentPreviewDigest: value.authorityBinding.contentPreviewDigest,
     targetContentTemplateDigest: value.authorityBinding.contentTemplateDigest, targetAttachmentSetDigest: value.authorityBinding.attachmentSetDigest,
+    priorProviderLaneTerminalCloseEvidenceId: uuid(27), priorProviderLaneTerminalCloseEvidenceDigest: hash(terminalCloseEvidenceMaterial(value)),
+    priorProviderLaneTerminalRetryDecisionId: value.retryAuthorityBinding.retryDecisionId, priorProviderLaneTerminalRetryDecisionDigest: value.retryAuthorityBinding.retryDecisionDigest,
     fallbackHop: 1, priorProviderLaneClosed: true, targetProviderLaneState: 'review_only_not_active'
   });
   Object.assign(value.decisionBinding, {disposition: 'fallback_review_required_no_effect', retryAfterAppliedSeconds: null, fallbackReviewState: 'review_required_no_effect', channelSwitchState: 'none', providerSwitchState: 'review_required_no_effect'});
@@ -299,8 +312,9 @@ function validateAssessment(candidate, trusted) {
   if (retry.retryAuthorityBindingDigest !== canonicalJson.digest(contract.bindingRules.retryAuthorityBindingDigestNamespace, retryAuthorityMaterial(value))) throw new Error('retry authority binding digest');
   if (!Number.isSafeInteger(value.circuitBinding.circuitGeneration) || value.circuitBinding.circuitGeneration < 1 || value.circuitBinding.circuitGeneration > contract.bounds.maximumCircuitGeneration || value.circuitBinding.circuitHeadDigest !== hash(circuitHeadMaterial(value))) throw new Error('circuit generation');
   if (value.circuitBinding.circuitGeneration === 1) {
-    if (value.circuitBinding.predecessorCircuitHeadId !== null || value.circuitBinding.predecessorCircuitHeadDigest !== null || value.circuitBinding.predecessorCircuitGeneration !== null || !['initialize_closed','initialize_open'].includes(value.circuitBinding.circuitTransitionKind)) throw new Error('circuit initial lineage');
-  } else if (!UUID.test(value.circuitBinding.predecessorCircuitHeadId) || !DIGEST.test(value.circuitBinding.predecessorCircuitHeadDigest) || !Number.isSafeInteger(value.circuitBinding.predecessorCircuitGeneration) || value.circuitBinding.predecessorCircuitGeneration !== value.circuitBinding.circuitGeneration - 1 || value.circuitBinding.circuitHeadId === value.circuitBinding.predecessorCircuitHeadId || value.circuitBinding.circuitHeadDigest === value.circuitBinding.predecessorCircuitHeadDigest || !['open','close_after_separate_current_reconciliation'].includes(value.circuitBinding.circuitTransitionKind)) throw new Error('circuit predecessor lineage');
+    const expectedInitialTransition = value.circuitBinding.circuitState === 'open' ? 'initialize_open' : value.circuitBinding.circuitState === 'closed' ? 'initialize_closed' : null;
+    if (value.circuitBinding.predecessorCircuitHeadId !== null || value.circuitBinding.predecessorCircuitHeadDigest !== null || value.circuitBinding.predecessorCircuitGeneration !== null || value.circuitBinding.circuitTransitionKind !== expectedInitialTransition) throw new Error('circuit initial lineage');
+  } else if (!UUID.test(value.circuitBinding.predecessorCircuitHeadId) || !DIGEST.test(value.circuitBinding.predecessorCircuitHeadDigest) || !Number.isSafeInteger(value.circuitBinding.predecessorCircuitGeneration) || value.circuitBinding.predecessorCircuitGeneration !== value.circuitBinding.circuitGeneration - 1 || value.circuitBinding.circuitHeadId === value.circuitBinding.predecessorCircuitHeadId || value.circuitBinding.circuitHeadDigest === value.circuitBinding.predecessorCircuitHeadDigest || value.circuitBinding.circuitTransitionKind !== 'open' || value.circuitBinding.circuitState !== 'open') throw new Error('circuit predecessor lineage');
   if (value.actionBinding.providerRequestIdentity !== `m28:${value.actionBinding.unitId}` || value.actionBinding.providerRequestIdentityDigest !== hash(value.actionBinding.providerRequestIdentity)) throw new Error('request identity');
   if (value.circuitBinding.circuitScopeDigest !== hash(circuitScopeMaterial(value))) throw new Error('circuit scope');
   const incidentTime = micros(value.incidentBinding.incidentObservedAt); const assessed = micros(value.assessedAt);
@@ -318,7 +332,8 @@ function validateAssessment(candidate, trusted) {
     if (!UUID.test(reconciliation.reconciliationEvidenceHeadId) || !DIGEST.test(reconciliation.reconciliationEvidenceHeadDigest) || reconciliation.reconciliationEvidenceHeadId === value.authorityBinding.callbackEvidenceHeadId || reconciliation.reconciliationEvidenceHeadDigest === value.authorityBinding.callbackEvidenceHeadDigest || reconciliation.reconciliationEvidenceHeadSequence !== value.authorityBinding.callbackEvidenceHeadSequence + 1 || reconciliation.predecessorCallbackEvidenceHeadId !== value.authorityBinding.callbackEvidenceHeadId || reconciliation.predecessorCallbackEvidenceHeadDigest !== value.authorityBinding.callbackEvidenceHeadDigest || reconciliation.predecessorCallbackEvidenceHeadSequence !== value.authorityBinding.callbackEvidenceHeadSequence || reconciliation.priorProviderLaneTerminallyClosed !== reconciliationRow.priorLaneTerminallyClosed) throw new Error('reconciled lineage');
   } else throw new Error('uncertain reconciliation state');
   if (reconciliationRow.definiteNoAcceptance !== null && value.incidentBinding.definiteNoAcceptance !== reconciliationRow.definiteNoAcceptance) throw new Error('reconciliation acceptance');
-  const expectedRetryState = reconciliationRow.requiredPart6DState || row.requiredPart6DState;
+  const fallbackRequested = value.fallbackBinding.fallbackKind !== 'none';
+  const expectedRetryState = fallbackRequested ? contract.fallbackAndSwitchContract.fallbackReviewRequiresPart6DState : reconciliationRow.requiredPart6DState || row.requiredPart6DState;
   if (retry.retryDecisionState !== expectedRetryState) throw new Error('retry decision state');
   if (!['closed','open'].includes(value.circuitBinding.circuitState)) throw new Error('circuit state');
   const mustOpen = ['credential_failure','degraded_capability','circuit_breaker_open'].includes(row.incidentKind);
@@ -340,13 +355,15 @@ function validateAssessment(candidate, trusted) {
     const fallbackReviewAllowed = row.fallbackReviewAllowed || reconciliationRow.fallbackReviewAllowed;
     if (!fallbackReviewAllowed || !value.incidentBinding.definiteNoAcceptance || fallback.fallbackHop !== 1 || fallback.priorProviderLaneClosed !== true || fallback.targetProviderLaneState !== 'review_only_not_active' || (uncertainIncident && reconciliation.priorProviderLaneTerminallyClosed !== true)) throw new Error('fallback authority');
     if (targetNullable.some(field => fallback[field] === null)) throw new Error('fallback target');
-    for (const field of ['fallbackPlanId','targetProviderAccountBindingId','targetConnectionId','targetCredentialVersionId','targetPermissionResolutionId','targetChannelResolutionId']) if (!UUID.test(fallback[field])) throw new Error('fallback uuid');
-    for (const field of ['fallbackPlanDigest','targetProviderAccountIdentityDigest','targetConnectionDigest','targetCredentialBindingDigest','targetCapabilityResolutionDigest','targetPermissionResolutionDigest','targetChannelResolutionDigest','targetContentPreviewDigest','targetContentTemplateDigest','targetAttachmentSetDigest']) if (!DIGEST.test(fallback[field])) throw new Error('fallback digest');
+    for (const field of ['fallbackPlanId','targetProviderAccountBindingId','targetConnectionId','targetCredentialVersionId','targetPermissionResolutionId','targetChannelResolutionId','priorProviderLaneTerminalCloseEvidenceId','priorProviderLaneTerminalRetryDecisionId']) if (!UUID.test(fallback[field])) throw new Error('fallback uuid');
+    for (const field of ['fallbackPlanDigest','targetProviderAccountIdentityDigest','targetConnectionDigest','targetCredentialBindingDigest','targetCapabilityResolutionDigest','targetPermissionResolutionDigest','targetChannelResolutionDigest','targetContentPreviewDigest','targetContentTemplateDigest','targetAttachmentSetDigest','priorProviderLaneTerminalCloseEvidenceDigest','priorProviderLaneTerminalRetryDecisionDigest']) if (!DIGEST.test(fallback[field])) throw new Error('fallback digest');
     if (!Number.isSafeInteger(fallback.fallbackPlanVersion) || fallback.fallbackPlanVersion < 1 || !OPAQUE.test(fallback.targetAdapterFamilyId) || !OPAQUE.test(fallback.targetChannelId) || fallback.targetEnvironment !== value.sourceProviderBinding.environment) throw new Error('fallback primitive');
     const targetAdapter = part13A.adapterFamilies.find(item => item.adapterFamilyId === fallback.targetAdapterFamilyId);
     const targetChannel = part7D.channelCatalog.find(item => item.channelId === fallback.targetChannelId);
     if (!targetAdapter || targetAdapter.adapterState !== 'disabled' || targetAdapter.providerMode !== 'provider_disabled' || !targetChannel || targetChannel.transportClass !== targetAdapter.adapterFamilyId || targetChannel.resultState !== 'unavailable_external_channel') throw new Error('fallback provider channel authority');
     if (fallback.targetContentPreviewDigest !== value.authorityBinding.contentPreviewDigest || fallback.targetContentTemplateDigest !== value.authorityBinding.contentTemplateDigest || fallback.targetAttachmentSetDigest !== value.authorityBinding.attachmentSetDigest) throw new Error('content substitution');
+    if (retry.retryDecisionState !== contract.fallbackAndSwitchContract.fallbackReviewRequiresPart6DState || fallback.priorProviderLaneTerminalRetryDecisionId !== retry.retryDecisionId || fallback.priorProviderLaneTerminalRetryDecisionDigest !== retry.retryDecisionDigest) throw new Error('terminal retry close authority');
+    if (fallback.priorProviderLaneTerminalCloseEvidenceDigest !== hash(terminalCloseEvidenceMaterial(value))) throw new Error('terminal close evidence');
     if (decision.disposition !== 'fallback_review_required_no_effect' || decision.retryAfterAppliedSeconds !== null || decision.fallbackReviewState !== 'review_required_no_effect') throw new Error('fallback disposition');
     if (fallback.fallbackKind === 'provider_switch_review_only') {
       if (fallback.targetChannelId !== value.authorityBinding.requestedChannelId || fallback.targetPermissionResolutionId !== value.authorityBinding.permissionResolutionId || fallback.targetPermissionResolutionDigest !== value.authorityBinding.permissionResolutionDigest || fallback.targetChannelResolutionId !== value.authorityBinding.channelResolutionId || fallback.targetChannelResolutionDigest !== value.authorityBinding.channelResolutionDigest || decision.providerSwitchState !== 'review_required_no_effect' || decision.channelSwitchState !== 'none') throw new Error('provider switch');
@@ -544,6 +561,26 @@ describe('Mission 28 Part 13D provider resilience, fallback and switching', () =
     expect(contract.decisionCoherence.retryPolicyLimit).toContain('exact_Part6D');
   });
 
+  test('blocks fallback while a same-provider retry is scheduled and requires exact terminal close evidence', () => {
+    const scheduled = incidentFixture('provider_throttled_definite_no_acceptance');
+    expect(scheduled.retryAuthorityBinding.retryDecisionState).toBe('retry_scheduled_no_effect');
+    const unsafeSwitch = providerSwitchFixture(scheduled);
+    expect(() => validateAssessment(unsafeSwitch, clonePlain(unsafeSwitch))).toThrow('retry decision state');
+
+    const terminal = clonePlain(scheduled);
+    terminal.retryAuthorityBinding.retryDecisionId = uuid(62);
+    terminal.retryAuthorityBinding.retryDecisionDigest = hash('part6d-terminal-close-decision-62');
+    terminal.retryAuthorityBinding.retryDecisionState = 'permanent_stop_terminal';
+    seal(terminal);
+    const reviewed = providerSwitchFixture(terminal);
+    expect(validateAssessment(reviewed, clonePlain(reviewed))).toBe(true);
+    expect(reviewed.fallbackBinding).toMatchObject({priorProviderLaneClosed: true, priorProviderLaneTerminalRetryDecisionId: terminal.retryAuthorityBinding.retryDecisionId, priorProviderLaneTerminalRetryDecisionDigest: terminal.retryAuthorityBinding.retryDecisionDigest});
+    coherentReject(value => { value.fallbackBinding.priorProviderLaneTerminalCloseEvidenceDigest = hash('other-terminal-close'); }, reviewed);
+    coherentReject(value => { value.fallbackBinding.priorProviderLaneTerminalRetryDecisionId = uuid(63); }, reviewed);
+    coherentReject(value => { value.retryAuthorityBinding.retryDecisionState = 'retry_scheduled_no_effect'; }, reviewed);
+    expect(contract.fallbackAndSwitchContract.scheduledRetryBlocksFallbackOrSwitch).toBe(true);
+  });
+
   test('stops template and credential failures without changing content or inventing rotation', () => {
     const rejected = incidentFixture('template_rejected'); expect(rejected.decisionBinding.disposition).toBe('stop_no_effect');
     const credential = incidentFixture('credential_failure'); expect(credential).toMatchObject({circuitBinding: {circuitState: 'open'}, decisionBinding: {disposition: 'circuit_open_stop_no_effect'}});
@@ -596,6 +633,19 @@ describe('Mission 28 Part 13D provider resilience, fallback and switching', () =
 
     coherentReject(value => { value.circuitBinding.circuitGeneration = 2; value.circuitBinding.predecessorCircuitGeneration = 1; value.circuitBinding.predecessorCircuitHeadId = value.circuitBinding.circuitHeadId; value.circuitBinding.predecessorCircuitHeadDigest = value.circuitBinding.circuitHeadDigest; value.circuitBinding.circuitTransitionKind = 'open'; }, initial);
     expect(contract.circuitBreakerContract.generation).toContain('strictly_predecessor_plus_one');
+  });
+
+  test('binds circuit transition kind to resulting state and denies every close or reset transition in Part 13D', () => {
+    coherentReject(value => { value.circuitBinding.circuitTransitionKind = 'initialize_open'; });
+    const opened = incidentFixture('credential_failure');
+    coherentReject(value => { value.circuitBinding.circuitTransitionKind = 'initialize_closed'; }, opened);
+
+    const unsupportedClose = advancedCircuitFixture(incidentFixture('quota_exhausted'), 78);
+    unsupportedClose.circuitBinding.circuitTransitionKind = 'close_after_separate_current_reconciliation';
+    seal(unsupportedClose);
+    expect(() => validateAssessment(unsupportedClose, clonePlain(unsupportedClose))).toThrow('circuit predecessor lineage');
+    coherentReject(value => { value.circuitBinding.circuitState = 'half_open_review_only'; value.circuitBinding.circuitTransitionKind = 'half_open'; }, opened);
+    expect(contract.circuitBreakerContract.reset).toContain('all_close_reset_transitions_denied');
   });
 
   test('keeps one exact append-only reconciliation successor and denies conflicting forks', () => {

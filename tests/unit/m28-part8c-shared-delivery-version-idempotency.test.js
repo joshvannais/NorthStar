@@ -199,7 +199,7 @@ describe('Mission 28 Part 8C shared delivery version and idempotency authority',
 
   test('roadmap and ledger preserve released Part8C while Part8D is the sole candidate', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8'); const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
-    for (const document of [roadmap,ledger]) { expect(document).toContain('Parts 1A–13B are released. Part 13C is the sole implementation candidate.'); expect(document).toContain('Parts 13D–14G remain planned and unimplemented.'); expect(document).toContain('fdbf9223-1b69-4b97-9bfc-cd60ad1adad0'); expect(document).toContain('sha256:07fd8a6422e3713ed768fb335942c7a68cf766f6d68f3a6059b786c951ef0c26'); }
+    for (const document of [roadmap,ledger]) { expect(document).toContain('Parts 1A–13C are released. Part 13D is the sole implementation candidate.'); expect(document).toContain('Parts 13E–14G remain planned and unimplemented.'); expect(document).toContain('fdbf9223-1b69-4b97-9bfc-cd60ad1adad0'); expect(document).toContain('sha256:07fd8a6422e3713ed768fb335942c7a68cf766f6d68f3a6059b786c951ef0c26'); }
     expect(ledger).toContain('| 34 | 8B | Mission 27 financial-document delivery without financial mutation | **Released** |'); expect(ledger).toContain('| 35 | 8C | Shared quick-send/native/policy version and idempotency contract | **Released** |'); expect(ledger).toContain('| 36 | 8D | Delivery acknowledgement, revoke/resend/recovery and exact labels | **Released** |'); expect(markdown).toContain('no migration 288');
   });
 });

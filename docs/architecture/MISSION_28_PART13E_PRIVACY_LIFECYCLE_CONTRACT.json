@@ -60,23 +60,27 @@
     "policiesOrSourcesRevoked": 0
   },
   "operationCatalog": [
-    {"operationKind": "metrics_read", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_aggregate", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "trace_read", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_action_trace", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "action_audit_read", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_action_audit", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "retention_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_retention_class", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "deletion_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_record_set", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "hold_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_record_set", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "customer_erasure_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_customer_scope", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "tenant_offboarding_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_scope", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "policy_revocation_review", "requiredCapabilityId": "automation_pause", "subjectKind": "exact_tenant_policy_version", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "source_revocation_review", "requiredCapabilityId": "automation_pause", "subjectKind": "exact_tenant_source_lineage", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "export_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_minimized_evidence", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "cleanup_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_record_set", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "incident_evidence_review", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_incident_evidence", "result": "unavailable_no_privacy_lifecycle_authority"},
-    {"operationKind": "recovery_review", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_recovery_evidence", "result": "unavailable_no_privacy_lifecycle_authority"}
+    {"operationKind": "metrics_read", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_aggregate", "retentionRequirement": "not_applicable", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "trace_read", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_action_trace", "retentionRequirement": "not_applicable", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "action_audit_read", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_action_audit", "retentionRequirement": "not_applicable", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "retention_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_retention_class", "retentionRequirement": "resolved_any", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "deletion_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_record_set", "retentionRequirement": "delete_eligible", "holdRequirement": "clear_for_preservation", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "hold_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_record_set", "retentionRequirement": "not_applicable", "holdRequirement": "resolved_any", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "customer_erasure_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_customer_scope", "retentionRequirement": "delete_eligible", "holdRequirement": "clear_for_preservation", "evidenceRequirement": "erasure_identity_and_ownership", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "tenant_offboarding_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_scope", "retentionRequirement": "delete_eligible", "holdRequirement": "clear_for_preservation", "evidenceRequirement": "offboarding_components", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "policy_revocation_review", "requiredCapabilityId": "automation_pause", "subjectKind": "exact_tenant_policy_version", "retentionRequirement": "not_applicable", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "source_revocation_review", "requiredCapabilityId": "automation_pause", "subjectKind": "exact_tenant_source_lineage", "retentionRequirement": "not_applicable", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "export_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_minimized_evidence", "retentionRequirement": "not_applicable", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "cleanup_review", "requiredCapabilityId": "automation_evidence_export", "subjectKind": "exact_tenant_record_set", "retentionRequirement": "delete_eligible", "holdRequirement": "clear_for_preservation", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "incident_evidence_review", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_incident_evidence", "retentionRequirement": "not_applicable", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"},
+    {"operationKind": "recovery_review", "requiredCapabilityId": "automation_view", "subjectKind": "exact_tenant_recovery_evidence", "retentionRequirement": "not_applicable", "holdRequirement": "not_applicable", "evidenceRequirement": "none", "result": "unavailable_no_privacy_lifecycle_authority"}
   ],
   "privacyProfile": {
     "profileId": "mission28.part13e.minimized-evidence.v1",
+    "profileDigestDomain": "mission28.part13e.privacy-profile.v1",
+    "profileDigestAlgorithm": "sha256_lowercase_hex_over_utf8_canonical_sorted_key_json_of_object_with_domain_and_material",
+    "profileDigestMaterialFields": ["profileId", "allowedMetricDimensions", "allowedAuditMaterial", "forbiddenMaterial", "tenantAggregateOnly", "crossTenantAggregationOrJoining", "candidateDefinedDimensionOrLabel", "rawPayloadOrPrivateContentInLogsMetricsTracesScreenshotsExportsOrIncidentEvidence"],
+    "profileDigest": "sha256:ad76777d0711a2c5f48f8983fc00d7fec4302980930a560c5ad6e567f44d78b5",
     "allowedMetricDimensions": ["fixed_action_family", "fixed_decision_state", "fixed_evidence_state", "fixed_provider_disabled_state", "bounded_duration_bucket", "bounded_count"],
     "allowedAuditMaterial": ["internal_opaque_identity", "canonical_digest", "sequence", "revision", "fixed_state", "fixed_reason_code", "trusted_timestamp", "capability_id", "record_scope"],
     "forbiddenMaterial": ["message_body", "document_content", "attachment_content", "credential", "secret", "signature", "authorization_header", "public_token", "recipient_address", "customer_contact_value", "free_text", "provider_raw_payload", "callback_raw_payload", "ip_address", "user_agent", "unnecessary_customer_data"],
@@ -84,6 +88,22 @@
     "crossTenantAggregationOrJoining": "deny_Mission33_only",
     "candidateDefinedDimensionOrLabel": "deny",
     "rawPayloadOrPrivateContentInLogsMetricsTracesScreenshotsExportsOrIncidentEvidence": "deny"
+  },
+  "operationEvidenceCatalog": {
+    "erasure": [
+      {"componentKind": "customer_identity_verification", "requiredState": "verified_exact_current_no_effect"},
+      {"componentKind": "source_ownership_map", "requiredState": "exact_current_reviewed_no_effect"}
+    ],
+    "offboarding": [
+      {"componentKind": "tenant_stop", "requiredState": "reviewed_no_effect"},
+      {"componentKind": "policy_source_revocation", "requiredState": "reviewed_no_effect"},
+      {"componentKind": "minimized_export", "requiredState": "reviewed_no_effect"},
+      {"componentKind": "retention_hold", "requiredState": "reviewed_no_effect"},
+      {"componentKind": "provider_disconnect", "requiredState": "unavailable"},
+      {"componentKind": "cleanup", "requiredState": "unavailable"},
+      {"componentKind": "completion", "requiredState": "unavailable"}
+    ],
+    "componentLineageRule": "each_component_is_a_separately_trusted_latest_exact_current_immediate_successor_with_distinct_head_and_predecessor_identity_and_digest"
   },
   "lifecycleSemantics": {
     "immutableActionAudit": "append_only_exact_identity_digest_sequence_revision_and_predecessor_lineage_never_rewritten_or_deleted_by_a_lifecycle_request",
@@ -101,8 +121,10 @@
   "precedence": [
     "malformed_or_untrusted_input_deny_before_digest_or_lookup",
     "tenant_actor_session_membership_capability_and_record_scope_must_match_exactly",
-    "unknown_hold_or_retention_or_source_currentness_returns_unavailable",
-    "active_hold_blocks_deletion_erasure_cleanup_and_offboarding_cleanup",
+    "unknown_required_hold_or_retention_or_source_currentness_returns_unavailable_for_that_operation",
+    "reviewed_retain_blocks_deletion_erasure_cleanup_and_offboarding_cleanup",
+    "active_hold_blocks_only_deletion_erasure_cleanup_and_offboarding_cleanup",
+    "nondestructive_reads_hold_review_export_incident_recovery_and_safety_revocation_do_not_infer_or_require_destructive_authority",
     "immutable_audit_and_historical_bindings_are_preserved",
     "revocation_prevents_future_authority_without_rewriting_history",
     "all_current_operations_return_fixed_unavailable_no_effect"
@@ -114,7 +136,8 @@
     "actorBindingExactFields": ["actorId", "actorTenantId", "sessionId", "sessionSubjectActorId", "sessionTenantId", "membershipId", "membershipSubjectActorId", "membershipTenantId", "membershipRoleId", "membershipStatus", "capabilityId", "recordScope", "recordTenantId", "recentAuthenticationState"],
     "authorityBindingExactFields": ["authorityTenantId", "retentionPolicyId", "retentionPolicyDigest", "retentionState", "holdResolutionId", "holdResolutionDigest", "holdState", "policySourceHeadId", "policySourceHeadDigest", "actionAuditHeadId", "actionAuditHeadDigest"],
     "privacyBindingExactFields": ["privacyTenantId", "profileId", "profileDigest", "tenantAggregateOnly", "containsForbiddenMaterial", "crossTenantMaterial", "rawPayloadRetained"],
-    "detailBindingExactFields": ["dimensionIds", "exportFieldIds", "exportSchemaId", "exportSchemaDigest", "exportMaximumRows", "exportMaximumBytes", "exportCursorDigest", "customerScopeId", "customerScopeDigest", "incidentOrRecoveryEvidenceHeadId", "incidentOrRecoveryEvidenceHeadDigest", "evidenceItemCount"],
+    "detailBindingExactFields": ["dimensionIds", "exportFieldIds", "exportSchemaId", "exportSchemaDigest", "exportMaximumRows", "exportMaximumBytes", "exportCursorDigest", "customerScopeId", "customerScopeDigest", "erasureEvidenceBindings", "offboardingEvidenceBindings", "incidentOrRecoveryEvidenceHeadId", "incidentOrRecoveryEvidenceHeadDigest", "evidenceItemCount"],
+    "evidenceComponentExactFields": ["componentKind", "evidenceTenantId", "lineageId", "evidenceRevision", "headTransitionId", "headTransitionDigest", "headSequence", "predecessorTransitionId", "predecessorTransitionDigest", "predecessorSequence", "currentnessState", "state"],
     "lifecycleBindingExactFields": ["sequence", "predecessorAssessmentId", "predecessorAssessmentDigest", "disposition"],
     "plainDataDescriptorFirst": true,
     "candidateMustEqualSeparatelyTrustedResolution": true,
@@ -135,7 +158,8 @@
     "maximumExportBytes": 10485760,
     "maximumExportFields": 9,
     "maximumMetricDimensions": 6,
-    "maximumIncidentEvidenceItems": 1000
+    "maximumIncidentEvidenceItems": 1000,
+    "maximumOperationEvidenceComponents": 7
   },
   "fixedDecision": {
     "result": "unavailable_no_privacy_lifecycle_authority",
@@ -167,7 +191,12 @@
     "metric_trace_log_screenshot_export_or_incident_evidence_contains_forbidden_material",
     "cross_tenant_metric_trace_export_or_platform_analytics",
     "unknown_retention_hold_source_policy_or_currentness_treated_as_clear",
+    "reviewed_retain_treated_as_deletion_erasure_cleanup_or_offboarding_cleanup_eligibility",
     "active_hold_bypassed_by_deletion_erasure_cleanup_or_offboarding_cleanup",
+    "active_or_unknown_hold_incorrectly_blocks_nondestructive_read_export_incident_recovery_or_safety_revocation_review",
+    "missing_stale_mixed_cross_tenant_forked_or_candidate_supplied_erasure_identity_ownership_or_offboarding_component_evidence",
+    "offboarding_component_state_treated_as_another_component_or_as_completion",
+    "privacy_profile_id_bound_to_arbitrary_stale_or_content_incoherent_digest",
     "erasure_offboarding_revocation_or_cleanup_rewrites_or_deletes_immutable_action_audit_or_historical_binding",
     "revocation_treated_as_upstream_deletion_or_prior_effect_reversal",
     "export_without_exact_capability_recent_authentication_tenant_scope_allowlist_bounds_and_cursor_identity",

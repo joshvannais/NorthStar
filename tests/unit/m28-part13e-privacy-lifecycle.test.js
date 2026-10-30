@@ -12,6 +12,7 @@ const part3A = JSON.parse(read('docs/architecture/MISSION_28_PART3A_FIXED_CAPABI
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+const FROZEN_PRIVACY_PROFILE_DIGEST = 'sha256:ad76777d0711a2c5f48f8983fc00d7fec4302980930a560c5ad6e567f44d78b5';
 const uuid = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const d = n => `sha256:${String(n).padStart(64, '0')}`;
 const digestLf = relative => crypto.createHash('sha256').update(read(relative).replace(/\r\n?/g, '\n')).digest('hex').toUpperCase();
@@ -68,15 +69,54 @@ function canonicalTime(value) {
   const parsed = new Date(milliseconds);
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString() === milliseconds;
 }
+function privacyProfileMaterial(profile) {
+  return Object.fromEntries(profile.profileDigestMaterialFields.map(field => [field, plain(profile[field])]));
+}
+function computedPrivacyProfileDigest(profile) {
+  return hash({domain: profile.profileDigestDomain, material: privacyProfileMaterial(profile)});
+}
+function validatePrivacyProfile(profile) {
+  exact(profile, ['profileId','profileDigestDomain','profileDigestAlgorithm','profileDigestMaterialFields','profileDigest','allowedMetricDimensions','allowedAuditMaterial','forbiddenMaterial','tenantAggregateOnly','crossTenantAggregationOrJoining','candidateDefinedDimensionOrLabel','rawPayloadOrPrivateContentInLogsMetricsTracesScreenshotsExportsOrIncidentEvidence'], 'privacy profile');
+  if (profile.profileDigestAlgorithm !== 'sha256_lowercase_hex_over_utf8_canonical_sorted_key_json_of_object_with_domain_and_material') throw new Error('privacy profile algorithm');
+  if (!same(profile.profileDigestMaterialFields, ['profileId','allowedMetricDimensions','allowedAuditMaterial','forbiddenMaterial','tenantAggregateOnly','crossTenantAggregationOrJoining','candidateDefinedDimensionOrLabel','rawPayloadOrPrivateContentInLogsMetricsTracesScreenshotsExportsOrIncidentEvidence'])) throw new Error('privacy profile material');
+  if (profile.profileDigest !== FROZEN_PRIVACY_PROFILE_DIGEST || profile.profileDigest !== computedPrivacyProfileDigest(profile)) throw new Error('privacy profile digest');
+}
 
-function expectedDisposition(value) {
-  if (value.authorityBinding.retentionState === 'unavailable' || value.authorityBinding.holdState === 'unavailable' || value.subjectBinding.currentnessState === 'unavailable') return 'unavailable_no_privacy_lifecycle_authority';
-  if (value.authorityBinding.holdState === 'active_exact_current') return 'blocked_by_active_hold_no_effect';
+function expectedDisposition(value, row) {
+  const authority = value.authorityBinding;
+  if (value.subjectBinding.currentnessState === 'unavailable') return 'unavailable_no_privacy_lifecycle_authority';
+  if (row.retentionRequirement !== 'not_applicable' && authority.retentionState === 'unavailable') return 'unavailable_no_privacy_lifecycle_authority';
+  if (row.holdRequirement !== 'not_applicable' && authority.holdState === 'unavailable') return 'unavailable_no_privacy_lifecycle_authority';
+  if (row.retentionRequirement === 'delete_eligible' && authority.retentionState === 'reviewed_retain') return 'blocked_by_retention_no_effect';
+  if (row.holdRequirement === 'clear_for_preservation' && authority.holdState === 'active_exact_current') return 'blocked_by_active_hold_no_effect';
   return 'owner_review_only_no_effect';
+}
+
+function validateEvidenceComponent(component, expected, tenantId) {
+  exact(component, contract.assessmentEnvelope.evidenceComponentExactFields, 'evidence component');
+  if (component.componentKind !== expected.componentKind || component.evidenceTenantId !== tenantId || component.state !== expected.requiredState || component.currentnessState !== 'latest_exact_current') throw new Error('evidence component authority');
+  for (const field of ['lineageId','headTransitionId','predecessorTransitionId']) if (!UUID.test(component[field])) throw new Error('evidence component identity');
+  for (const field of ['headTransitionDigest','predecessorTransitionDigest']) if (!DIGEST.test(component[field])) throw new Error('evidence component digest');
+  if (!Number.isSafeInteger(component.evidenceRevision) || component.evidenceRevision < 1 || component.evidenceRevision > contract.bounds.maximumSubjectRevision || !Number.isSafeInteger(component.headSequence) || component.headSequence < 2 || component.headSequence > contract.bounds.maximumSequence || component.predecessorSequence !== component.headSequence - 1 || component.headTransitionId === component.predecessorTransitionId || component.headTransitionDigest === component.predecessorTransitionDigest) throw new Error('evidence component lineage');
+}
+
+function validateEvidenceSet(value, row) {
+  const detail = value.detailBinding;
+  if (!Array.isArray(detail.erasureEvidenceBindings) || !Array.isArray(detail.offboardingEvidenceBindings)) throw new Error('evidence set');
+  const unavailable = value.subjectBinding.currentnessState === 'unavailable';
+  const expected = row.evidenceRequirement === 'erasure_identity_and_ownership' ? contract.operationEvidenceCatalog.erasure : row.evidenceRequirement === 'offboarding_components' ? contract.operationEvidenceCatalog.offboarding : [];
+  const active = row.evidenceRequirement === 'erasure_identity_and_ownership' ? detail.erasureEvidenceBindings : row.evidenceRequirement === 'offboarding_components' ? detail.offboardingEvidenceBindings : [];
+  const inactive = row.evidenceRequirement === 'erasure_identity_and_ownership' ? detail.offboardingEvidenceBindings : detail.erasureEvidenceBindings;
+  if (inactive.length || (row.evidenceRequirement === 'none' && detail.offboardingEvidenceBindings.length)) throw new Error('unexpected evidence set');
+  if (unavailable) { if (active.length) throw new Error('unavailable evidence set'); return; }
+  if (active.length !== expected.length || active.length > contract.bounds.maximumOperationEvidenceComponents) throw new Error('evidence set count');
+  active.forEach((component, index) => validateEvidenceComponent(component, expected[index], value.tenantId));
+  for (const field of ['lineageId','headTransitionId','headTransitionDigest']) if (new Set(active.map(component => component[field])).size !== active.length) throw new Error('evidence component graft');
 }
 
 function validate(candidate, separatelyTrusted) {
   const value = plain(candidate); const trusted = plain(separatelyTrusted);
+  validatePrivacyProfile(contract.privacyProfile);
   const env = contract.assessmentEnvelope;
   exact(value, env.exactFields, 'root');
   exact(value.subjectBinding, env.subjectBindingExactFields, 'subject');
@@ -89,6 +129,7 @@ function validate(candidate, separatelyTrusted) {
   if (value.schemaVersion !== env.schemaVersion || !UUID.test(value.tenantId) || !UUID.test(value.assessmentId) || !canonicalTime(value.evaluatedAt)) throw new Error('identity');
   const row = contract.operationCatalog.find(item => item.operationKind === value.operationKind);
   if (!row || row.subjectKind !== value.subjectBinding.subjectKind || row.requiredCapabilityId !== value.actorBinding.capabilityId) throw new Error('operation');
+  if (!['not_applicable','resolved_any','delete_eligible'].includes(row.retentionRequirement) || !['not_applicable','resolved_any','clear_for_preservation'].includes(row.holdRequirement) || !['none','erasure_identity_and_ownership','offboarding_components'].includes(row.evidenceRequirement)) throw new Error('operation authority matrix');
   const subject = value.subjectBinding;
   if (subject.subjectTenantId !== value.tenantId || !UUID.test(subject.subjectId) || !DIGEST.test(subject.subjectDigest) || !Number.isSafeInteger(subject.subjectRevision) || subject.subjectRevision < 1 || subject.subjectRevision > contract.bounds.maximumSubjectRevision) throw new Error('subject');
   if (!['latest_exact_current', 'unavailable'].includes(subject.currentnessState)) throw new Error('currentness');
@@ -111,7 +152,7 @@ function validate(candidate, separatelyTrusted) {
   const holdAvailable = authority.holdState !== 'unavailable';
   if (holdAvailable !== (UUID.test(authority.holdResolutionId || '') && DIGEST.test(authority.holdResolutionDigest || ''))) throw new Error('hold identity');
   const privacy = value.privacyBinding;
-  if (privacy.privacyTenantId !== value.tenantId || privacy.profileId !== contract.privacyProfile.profileId || !DIGEST.test(privacy.profileDigest) || privacy.tenantAggregateOnly !== true || privacy.containsForbiddenMaterial !== false || privacy.crossTenantMaterial !== false || privacy.rawPayloadRetained !== false) throw new Error('privacy');
+  if (privacy.privacyTenantId !== value.tenantId || privacy.profileId !== contract.privacyProfile.profileId || privacy.profileDigest !== contract.privacyProfile.profileDigest || privacy.tenantAggregateOnly !== true || privacy.containsForbiddenMaterial !== false || privacy.crossTenantMaterial !== false || privacy.rawPayloadRetained !== false) throw new Error('privacy');
   const detail = value.detailBinding;
   const nullDetail = ['exportSchemaId','exportSchemaDigest','exportMaximumRows','exportMaximumBytes','exportCursorDigest','customerScopeId','customerScopeDigest','incidentOrRecoveryEvidenceHeadId','incidentOrRecoveryEvidenceHeadDigest','evidenceItemCount'];
   if (!Array.isArray(detail.exportFieldIds) || new Set(detail.exportFieldIds).size !== detail.exportFieldIds.length) throw new Error('export fields');
@@ -122,11 +163,14 @@ function validate(candidate, separatelyTrusted) {
     if (detail.dimensionIds.length || detail.exportFieldIds.length < 1 || detail.exportFieldIds.length > contract.bounds.maximumExportFields || detail.exportFieldIds.some(item => !contract.privacyProfile.allowedAuditMaterial.includes(item)) || !UUID.test(detail.exportSchemaId || '') || !DIGEST.test(detail.exportSchemaDigest || '') || !Number.isSafeInteger(detail.exportMaximumRows) || detail.exportMaximumRows < 1 || detail.exportMaximumRows > contract.bounds.maximumExportRows || !Number.isSafeInteger(detail.exportMaximumBytes) || detail.exportMaximumBytes < 1 || detail.exportMaximumBytes > contract.bounds.maximumExportBytes || !DIGEST.test(detail.exportCursorDigest || '') || ['customerScopeId','customerScopeDigest','incidentOrRecoveryEvidenceHeadId','incidentOrRecoveryEvidenceHeadDigest','evidenceItemCount'].some(field => detail[field] !== null)) throw new Error('export detail');
   } else if (value.operationKind === 'customer_erasure_review') {
     if (detail.dimensionIds.length || detail.exportFieldIds.length || !UUID.test(detail.customerScopeId || '') || !DIGEST.test(detail.customerScopeDigest || '') || ['exportSchemaId','exportSchemaDigest','exportMaximumRows','exportMaximumBytes','exportCursorDigest','incidentOrRecoveryEvidenceHeadId','incidentOrRecoveryEvidenceHeadDigest','evidenceItemCount'].some(field => detail[field] !== null)) throw new Error('customer detail');
+  } else if (value.operationKind === 'tenant_offboarding_review') {
+    if (detail.dimensionIds.length || detail.exportFieldIds.length || ['exportSchemaId','exportSchemaDigest','exportMaximumRows','exportMaximumBytes','exportCursorDigest','customerScopeId','customerScopeDigest','incidentOrRecoveryEvidenceHeadId','incidentOrRecoveryEvidenceHeadDigest','evidenceItemCount'].some(field => detail[field] !== null)) throw new Error('offboarding detail');
   } else if (['incident_evidence_review','recovery_review'].includes(value.operationKind)) {
     if (detail.dimensionIds.length || detail.exportFieldIds.length || !UUID.test(detail.incidentOrRecoveryEvidenceHeadId || '') || !DIGEST.test(detail.incidentOrRecoveryEvidenceHeadDigest || '') || !Number.isSafeInteger(detail.evidenceItemCount) || detail.evidenceItemCount < 0 || detail.evidenceItemCount > contract.bounds.maximumIncidentEvidenceItems || ['exportSchemaId','exportSchemaDigest','exportMaximumRows','exportMaximumBytes','exportCursorDigest','customerScopeId','customerScopeDigest'].some(field => detail[field] !== null)) throw new Error('evidence detail');
   } else if (detail.dimensionIds.length || detail.exportFieldIds.length || nullDetail.some(field => detail[field] !== null)) throw new Error('unexpected detail');
+  validateEvidenceSet(value, row);
   const lifecycle = value.lifecycleBinding;
-  if (!Number.isSafeInteger(lifecycle.sequence) || lifecycle.sequence < 1 || lifecycle.sequence > contract.bounds.maximumSequence || lifecycle.disposition !== expectedDisposition(value)) throw new Error('lifecycle');
+  if (!Number.isSafeInteger(lifecycle.sequence) || lifecycle.sequence < 1 || lifecycle.sequence > contract.bounds.maximumSequence || lifecycle.disposition !== expectedDisposition(value, row)) throw new Error('lifecycle');
   if (lifecycle.sequence === 1) { if (lifecycle.predecessorAssessmentId !== null || lifecycle.predecessorAssessmentDigest !== null) throw new Error('first predecessor'); }
   else if (!UUID.test(lifecycle.predecessorAssessmentId || '') || !DIGEST.test(lifecycle.predecessorAssessmentDigest || '')) throw new Error('predecessor');
   if (!DIGEST.test(value.materialDigest) || value.materialDigest !== hash(assessmentMaterial(value))) throw new Error('material digest');
@@ -136,11 +180,16 @@ function validate(candidate, separatelyTrusted) {
   return value;
 }
 
+function evidenceComponent(expected, index) {
+  const base = 100 + (index * 5);
+  return {componentKind: expected.componentKind, evidenceTenantId: uuid(1), lineageId: uuid(base), evidenceRevision: 1, headTransitionId: uuid(base + 1), headTransitionDigest: d(base + 1), headSequence: 2, predecessorTransitionId: uuid(base + 2), predecessorTransitionDigest: d(base + 2), predecessorSequence: 1, currentnessState: 'latest_exact_current', state: expected.requiredState};
+}
+
 function fixture(operationKind = 'deletion_review') {
   const row = contract.operationCatalog.find(item => item.operationKind === operationKind);
   const capability = part3A.capabilities.find(item => item.id === row.requiredCapabilityId);
   const grant = capability.grants.find(item => item.membershipRoleId === 'owner');
-  const detailBinding = {dimensionIds: [], exportFieldIds: [], exportSchemaId: null, exportSchemaDigest: null, exportMaximumRows: null, exportMaximumBytes: null, exportCursorDigest: null, customerScopeId: null, customerScopeDigest: null, incidentOrRecoveryEvidenceHeadId: null, incidentOrRecoveryEvidenceHeadDigest: null, evidenceItemCount: null};
+  const detailBinding = {dimensionIds: [], exportFieldIds: [], exportSchemaId: null, exportSchemaDigest: null, exportMaximumRows: null, exportMaximumBytes: null, exportCursorDigest: null, customerScopeId: null, customerScopeDigest: null, erasureEvidenceBindings: [], offboardingEvidenceBindings: [], incidentOrRecoveryEvidenceHeadId: null, incidentOrRecoveryEvidenceHeadDigest: null, evidenceItemCount: null};
   if (['metrics_read','trace_read'].includes(operationKind)) detailBinding.dimensionIds = ['fixed_action_family'];
   if (operationKind === 'export_review') Object.assign(detailBinding, {exportFieldIds: ['internal_opaque_identity','canonical_digest','fixed_state'], exportSchemaId: uuid(40), exportSchemaDigest: d(40), exportMaximumRows: 1000, exportMaximumBytes: 1048576, exportCursorDigest: d(41)});
   if (operationKind === 'customer_erasure_review') Object.assign(detailBinding, {customerScopeId: uuid(42), customerScopeDigest: d(42)});
@@ -151,7 +200,7 @@ function fixture(operationKind = 'deletion_review') {
     subjectBinding: {subjectTenantId: uuid(1), subjectKind: row.subjectKind, subjectId: uuid(3), subjectDigest: d(3), subjectRevision: 1, currentnessState: 'unavailable', sourceHeadId: null, sourceHeadDigest: null, sourceHeadSequence: null},
     actorBinding: {actorId: uuid(4), actorTenantId: uuid(1), sessionId: uuid(5), sessionSubjectActorId: uuid(4), sessionTenantId: uuid(1), membershipId: uuid(6), membershipSubjectActorId: uuid(4), membershipTenantId: uuid(1), membershipRoleId: 'owner', membershipStatus: 'active', capabilityId: row.requiredCapabilityId, recordScope: grant.recordScope, recordTenantId: uuid(1), recentAuthenticationState: capability.requiresRecentAuthentication ? 'recent_exact' : 'not_required'},
     authorityBinding: {authorityTenantId: uuid(1), retentionPolicyId: null, retentionPolicyDigest: null, retentionState: 'unavailable', holdResolutionId: null, holdResolutionDigest: null, holdState: 'unavailable', policySourceHeadId: uuid(7), policySourceHeadDigest: d(7), actionAuditHeadId: uuid(8), actionAuditHeadDigest: d(8)},
-    privacyBinding: {privacyTenantId: uuid(1), profileId: contract.privacyProfile.profileId, profileDigest: d(9), tenantAggregateOnly: true, containsForbiddenMaterial: false, crossTenantMaterial: false, rawPayloadRetained: false},
+    privacyBinding: {privacyTenantId: uuid(1), profileId: contract.privacyProfile.profileId, profileDigest: contract.privacyProfile.profileDigest, tenantAggregateOnly: true, containsForbiddenMaterial: false, crossTenantMaterial: false, rawPayloadRetained: false},
     detailBinding,
     lifecycleBinding: {sequence: 1, predecessorAssessmentId: null, predecessorAssessmentDigest: null, disposition: 'unavailable_no_privacy_lifecycle_authority'},
     evaluatedAt: '2026-10-30T12:00:00.000000Z', materialDigest: d(0), idempotencyKeyDigest: d(0), assessmentDigest: d(0)
@@ -159,9 +208,13 @@ function fixture(operationKind = 'deletion_review') {
 }
 function reviewedFixture(operationKind = 'deletion_review', holdState = 'clear_exact_current') {
   const value = fixture(operationKind);
+  const row = contract.operationCatalog.find(item => item.operationKind === operationKind);
   value.subjectBinding = {...value.subjectBinding, currentnessState: 'latest_exact_current', sourceHeadId: uuid(20), sourceHeadDigest: d(20), sourceHeadSequence: 4};
-  value.authorityBinding = {...value.authorityBinding, retentionPolicyId: uuid(21), retentionPolicyDigest: d(21), retentionState: 'reviewed_delete_eligible', holdResolutionId: uuid(22), holdResolutionDigest: d(22), holdState};
-  value.lifecycleBinding.disposition = holdState === 'active_exact_current' ? 'blocked_by_active_hold_no_effect' : 'owner_review_only_no_effect';
+  if (row.retentionRequirement !== 'not_applicable') value.authorityBinding = {...value.authorityBinding, retentionPolicyId: uuid(21), retentionPolicyDigest: d(21), retentionState: row.retentionRequirement === 'delete_eligible' ? 'reviewed_delete_eligible' : 'reviewed_retain'};
+  if (row.holdRequirement !== 'not_applicable') value.authorityBinding = {...value.authorityBinding, holdResolutionId: uuid(22), holdResolutionDigest: d(22), holdState};
+  if (row.evidenceRequirement === 'erasure_identity_and_ownership') value.detailBinding.erasureEvidenceBindings = contract.operationEvidenceCatalog.erasure.map(evidenceComponent);
+  if (row.evidenceRequirement === 'offboarding_components') value.detailBinding.offboardingEvidenceBindings = contract.operationEvidenceCatalog.offboarding.map(evidenceComponent);
+  value.lifecycleBinding.disposition = expectedDisposition(value, row);
   return seal(value);
 }
 
@@ -188,6 +241,9 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
   test('binds the frozen authority, exact released Part 13D identities and all input hashes', () => {
     expect(contract.frozenAuthority).toMatchObject({part: '13', slice: 'E', crossTenantAnalyticsBoundary: expect.stringContaining('Mission33')});
     expect(contract.part13DRelease).toMatchObject({acceptedSourceHead: '997ba10385f259f4298bed6447d083bcb83796e4', acceptedTree: 'f3fa9099e2c8557c29d944a1d6b90c409d4e3cb6', pullRequest: 606, mergedMain: '2275b9f94f65ffe9f362a872ddd8b9a24d76b9d1', release: {deploymentId: '75f64645-b482-499d-9a8e-b78a2e71153e', deploymentInstanceId: '949051dd-ebd3-4c11-8f8d-d68efa46b020', imageSha256: 'sha256:21ae0d3cc9d7d98dc17952f9f6ed142c5ce93d30e4211672cf8433d6767d5c04'}});
+    expect(contract.privacyProfile.profileDigest).toBe(FROZEN_PRIVACY_PROFILE_DIGEST);
+    expect(computedPrivacyProfileDigest(contract.privacyProfile)).toBe(FROZEN_PRIVACY_PROFILE_DIGEST);
+    expect(() => validatePrivacyProfile(contract.privacyProfile)).not.toThrow();
     for (const item of contract.frozenInputs) expect(digestLf(item.path)).toBe(item.normalizedLfSha256);
   });
 
@@ -197,6 +253,9 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
       const value = fixture(row.operationKind);
       expect(validate(value, plain(value)).operationKind).toBe(row.operationKind);
       expect(row.result).toBe('unavailable_no_privacy_lifecycle_authority');
+      expect(['not_applicable','resolved_any','delete_eligible']).toContain(row.retentionRequirement);
+      expect(['not_applicable','resolved_any','clear_for_preservation']).toContain(row.holdRequirement);
+      expect(['none','erasure_identity_and_ownership','offboarding_components']).toContain(row.evidenceRequirement);
     }
     expect(Object.values(contract.currentAuthority).filter(value => typeof value === 'number').every(value => value === 0)).toBe(true);
     expect(contract.fixedDecision).toMatchObject({recordWritten: false, recordDeleted: false, recordExported: false, holdCreated: false, customerErased: false, tenantOffboarded: false, policyOrSourceRevoked: false, providerCalled: false, recipientContacted: false, externalEffectCreated: false, moneyMoved: false, legalConclusionCreated: false});
@@ -226,9 +285,20 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
     for (const mutate of mutations) { const attack = plain(base); mutate(attack); seal(attack); expect(() => validate(attack, base)).toThrow('trusted resolution'); }
   });
 
-  test('keeps retention and hold identities mutually coherent and applies fail-closed precedence', () => {
+  test('applies the closed operation-specific retention and hold disposition matrix', () => {
     expect(validate(reviewedFixture(), reviewedFixture()).lifecycleBinding.disposition).toBe('owner_review_only_no_effect');
     expect(validate(reviewedFixture('deletion_review', 'active_exact_current'), reviewedFixture('deletion_review', 'active_exact_current')).lifecycleBinding.disposition).toBe('blocked_by_active_hold_no_effect');
+    const retained = reviewedFixture(); retained.authorityBinding.retentionState = 'reviewed_retain'; retained.lifecycleBinding.disposition = 'blocked_by_retention_no_effect'; seal(retained);
+    expect(validate(retained, retained).lifecycleBinding.disposition).toBe('blocked_by_retention_no_effect');
+    const unknownHold = reviewedFixture(); Object.assign(unknownHold.authorityBinding, {holdResolutionId: null, holdResolutionDigest: null, holdState: 'unavailable'}); unknownHold.lifecycleBinding.disposition = 'unavailable_no_privacy_lifecycle_authority'; seal(unknownHold);
+    expect(validate(unknownHold, unknownHold).lifecycleBinding.disposition).toBe('unavailable_no_privacy_lifecycle_authority');
+    for (const operation of ['metrics_read','trace_read','action_audit_read','export_review','incident_evidence_review','recovery_review','policy_revocation_review','source_revocation_review']) {
+      const value = reviewedFixture(operation);
+      Object.assign(value.authorityBinding, {retentionPolicyId: uuid(21), retentionPolicyDigest: d(21), retentionState: 'reviewed_retain', holdResolutionId: uuid(22), holdResolutionDigest: d(22), holdState: 'active_exact_current'});
+      value.lifecycleBinding.disposition = 'owner_review_only_no_effect'; seal(value);
+      expect(validate(value, value).lifecycleBinding.disposition).toBe('owner_review_only_no_effect');
+    }
+    expect(validate(reviewedFixture('hold_review', 'active_exact_current'), reviewedFixture('hold_review', 'active_exact_current')).lifecycleBinding.disposition).toBe('owner_review_only_no_effect');
     const attacks = [
       value => { value.authorityBinding.retentionState = 'reviewed_delete_eligible'; },
       value => { value.authorityBinding.holdState = 'clear_exact_current'; },
@@ -245,6 +315,34 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
     expect(contract.privacyProfile.forbiddenMaterial).toEqual(expect.arrayContaining(['message_body','credential','recipient_address','free_text','provider_raw_payload','ip_address','user_agent']));
     expect(contract.privacyProfile.crossTenantAggregationOrJoining).toBe('deny_Mission33_only');
     expect(contract.deniedCombinations).toContain('cross_tenant_metric_trace_export_or_platform_analytics');
+    const stale = fixture('metrics_read'); stale.privacyBinding.profileDigest = d(99); seal(stale); expect(() => validate(stale, stale)).toThrow('privacy');
+    const mutatedProfile = plain(contract.privacyProfile); mutatedProfile.allowedMetricDimensions.push('customer_email'); mutatedProfile.profileDigest = computedPrivacyProfileDigest(mutatedProfile);
+    expect(mutatedProfile.profileDigest).not.toBe(FROZEN_PRIVACY_PROFILE_DIGEST);
+    expect(() => validatePrivacyProfile(mutatedProfile)).toThrow('privacy profile digest');
+  });
+
+  test('requires exact current erasure identity ownership and separate offboarding component evidence', () => {
+    const erasure = reviewedFixture('customer_erasure_review');
+    expect(validate(erasure, erasure).detailBinding.erasureEvidenceBindings).toHaveLength(2);
+    const offboarding = reviewedFixture('tenant_offboarding_review');
+    expect(validate(offboarding, offboarding).detailBinding.offboardingEvidenceBindings.map(item => [item.componentKind, item.state])).toEqual(contract.operationEvidenceCatalog.offboarding.map(item => [item.componentKind, item.requiredState]));
+    expect(offboarding.detailBinding.offboardingEvidenceBindings.at(-1)).toMatchObject({componentKind: 'completion', state: 'unavailable'});
+    const attacks = [
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings.pop(); }],
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings[0].currentnessState = 'stale'; }],
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings[0].currentnessState = 'unknown'; }],
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings[1].state = 'mixed'; }],
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings[1].evidenceRevision = 0; }],
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings[0].evidenceTenantId = uuid(90); }],
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings[0].headTransitionId = value.detailBinding.erasureEvidenceBindings[0].predecessorTransitionId; }],
+      ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings[0].headTransitionDigest = value.detailBinding.offboardingEvidenceBindings[0].predecessorTransitionDigest; }],
+      ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings[0].headSequence = 4; }],
+      ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings[1].lineageId = value.detailBinding.offboardingEvidenceBindings[0].lineageId; }],
+      ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings.at(-1).state = 'completed'; }]
+    ];
+    for (const [operation, mutate] of attacks) { const value = reviewedFixture(operation); mutate(value); seal(value); expect(() => validate(value, value)).toThrow(); }
+    const trusted = reviewedFixture('customer_erasure_review'); const fork = plain(trusted); fork.detailBinding.erasureEvidenceBindings[0].headTransitionId = uuid(900); fork.detailBinding.erasureEvidenceBindings[0].headTransitionDigest = d(900); seal(fork);
+    expect(() => validate(fork, trusted)).toThrow('trusted resolution');
   });
 
   test('binds metric, export, erasure, incident and recovery details to closed bounded material', () => {

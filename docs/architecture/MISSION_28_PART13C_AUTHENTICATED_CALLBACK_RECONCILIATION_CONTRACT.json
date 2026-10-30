@@ -262,8 +262,12 @@
     "correctionKeepsExactTenantAccountEnvironmentConnectionActionAttemptRecipientPermissionChannelAndCapabilityBindings": true,
     "correctionMustMateriallyChangeStatusReasonOrNormalizedEvidence": true,
     "correctionAppendOnlyNeverUpdateDeleteOrRewritePriorEvidence": true,
-    "authoritativeHeadSelection": "exact_evidence_sequence_and_predecessor_or_correction_lineage_never_event_received_authenticated_or_observed_time",
-    "lateReorderedDuplicateOrConflictingEvidence": "preserve_append_only_evidence_and_return_unknown_until_exact_reconciliation",
+    "authoritativeLineageIdentity": "exact_tenant_account_environment_connection_request_transaction_run_unit_outbox_attempt_recipient_permission_channel_and_capability_binding",
+    "singleAuthoritativeSuccessorPerPredecessorAndSequence": true,
+    "newAuthoritativeEvidenceMustExtendExactCurrentHead": true,
+    "consumedOrNonheadPredecessor": "deny_authoritative_fork",
+    "authoritativeHeadSelection": "one_exact_current_head_by_evidence_sequence_and_predecessor_or_correction_lineage_never_event_received_authenticated_or_observed_time",
+    "lateReorderedDuplicateOrConflictingEvidence": "never_append_to_authoritative_lineage_separately_preserved_conflict_evidence_must_be_non_authoritative_unknown_until_exact_append_only_reconciliation",
     "correctionNeverCreatesRetryResendSuppressionPaymentAccountingBusinessOrLegalAuthority": true
   },
   "inspectionRequest": {

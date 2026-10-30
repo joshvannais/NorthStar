@@ -146,6 +146,7 @@ const uuidFields = ['tenantId','evidenceId','providerAccountBindingId','connecti
 const digestFields = ['providerAccountIdentityDigest','connectionDigest','callbackEndpointBindingDigest','providerCallbackEventIdentityDigest','providerRequestIdentityDigest','senderRecipientResolutionDigest','permissionResolutionDigest','channelResolutionDigest','statusCapabilityBindingDigest','signatureVerificationDigest','rawEvidenceDigest','normalizedEvidenceDigest','idempotencyKeyDigest','evidenceDigest'];
 const timeFields = ['providerEventTime','signatureTimestamp','receivedAt','authenticatedAt','observedAt'];
 const invariantBindings = ['tenantId','adapterFamilyId','environment','providerAccountBindingId','providerAccountIdentityDigest','connectionId','connectionDigest','callbackEndpointBindingId','callbackEndpointBindingDigest','callbackSchemaVersion','providerRequestIdentity','providerRequestIdentityDigest','transactionId','runId','unitId','outboxId','attemptId','attemptSequence','senderRecipientResolutionId','senderRecipientResolutionDigest','permissionResolutionId','permissionResolutionDigest','channelResolutionId','channelResolutionDigest','statusCapabilityBindingDigest'];
+const lineageKey = value => invariantBindings.map(field => value[field]).join('\u001f');
 
 function validateEvidence(value, predecessor, trusted) {
   dataOnly(value); dataOnly(predecessor); dataOnly(trusted);
@@ -173,7 +174,7 @@ function validateEvidence(value, predecessor, trusted) {
 }
 
 class EvidenceHistory {
-  constructor() { this.byId = new Map(); this.byProviderEvent = new Map(); this.byStable = new Map(); }
+  constructor() { this.byId = new Map(); this.byProviderEvent = new Map(); this.byStable = new Map(); this.headByLineage = new Map(); }
   record(value, predecessor, trusted) {
     validateEvidence(value, predecessor, trusted);
     const prior = this.byId.get(value.evidenceId);
@@ -183,10 +184,17 @@ class EvidenceHistory {
     }
     if (this.byProviderEvent.has(value.providerCallbackEventIdentityDigest)) throw new Error('provider event conflict');
     if (this.byStable.has(value.idempotencyKeyDigest)) throw new Error('semantic clone');
+    const key = lineageKey(value); const headId = this.headByLineage.get(key);
+    if (predecessor) {
+      const storedPredecessor = this.byId.get(predecessor.evidenceId);
+      if (!storedPredecessor || storedPredecessor.evidenceDigest !== predecessor.evidenceDigest || headId !== predecessor.evidenceId) throw new Error('authoritative fork');
+    } else if (headId) throw new Error('authoritative root conflict');
     const stored = Object.freeze({...copy(value), replayed: false});
     this.byId.set(value.evidenceId, stored); this.byProviderEvent.set(value.providerCallbackEventIdentityDigest, value.evidenceId); this.byStable.set(value.idempotencyKeyDigest, value.evidenceId);
+    this.headByLineage.set(key, value.evidenceId);
     return stored;
   }
+  authoritativeHead(value) { const id = this.headByLineage.get(lineageKey(value)); return id ? this.byId.get(id) : null; }
 }
 
 function coherentReject(mutate, base = evidenceFixture(), predecessor = null) {
@@ -256,6 +264,23 @@ describe('Mission 28 Part 13C authenticated callbacks and status reconciliation'
     ]) coherentReject(mutate, corrected, delivered);
     const late = copy(corrected); late.providerEventTime = '2026-10-29T12:00:00.000000Z'; sealEvidence(late); expect(validateEvidence(late, delivered, copy(late))).toBe(true);
     expect(contract.lineageAndCorrectionContract.authoritativeHeadSelection).toContain('never_event_received_authenticated_or_observed_time');
+  });
+
+  test('permits exactly one authoritative successor and rejects a valid distinct fork from a consumed predecessor', () => {
+    const history = new EvidenceHistory(); const first = evidenceFixture();
+    const sent = nextEvidence(first, 'sent'); const fork = nextEvidence(first, 'delivered');
+    fork.evidenceId = uuid(997); fork.providerCallbackEventIdentityDigest = hash('fork-provider-event-997'); fork.signatureVerificationId = uuid(996); fork.signatureVerificationDigest = hash('fork-signature-996'); fork.rawEvidenceDigest = hash('fork-raw-997'); sealEvidence(fork);
+    expect(sent.predecessorEvidenceId).toBe(fork.predecessorEvidenceId);
+    expect(sent.evidenceSequence).toBe(fork.evidenceSequence);
+    expect(sent.evidenceId).not.toBe(fork.evidenceId);
+    expect(sent.evidenceDigest).not.toBe(fork.evidenceDigest);
+    history.record(first, null, copy(first));
+    history.record(sent, first, copy(sent));
+    expect(() => history.record(fork, first, copy(fork))).toThrow('authoritative fork');
+    expect(history.byId.size).toBe(2);
+    expect(history.authoritativeHead(first)).toMatchObject({evidenceId: sent.evidenceId, evidenceDigest: sent.evidenceDigest, statusState: 'sent'});
+    expect(contract.lineageAndCorrectionContract).toMatchObject({singleAuthoritativeSuccessorPerPredecessorAndSequence: true, newAuthoritativeEvidenceMustExtendExactCurrentHead: true, consumedOrNonheadPredecessor: 'deny_authoritative_fork'});
+    expect(contract.lineageAndCorrectionContract.lateReorderedDuplicateOrConflictingEvidence).toContain('non_authoritative_unknown');
   });
 
   test('freezes normalized idempotency and full record digest projections', () => {

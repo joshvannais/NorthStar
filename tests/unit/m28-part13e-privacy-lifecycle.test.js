@@ -111,7 +111,7 @@ function validateEvidenceSet(value, row) {
   if (unavailable) { if (active.length) throw new Error('unavailable evidence set'); return; }
   if (active.length !== expected.length || active.length > contract.bounds.maximumOperationEvidenceComponents) throw new Error('evidence set count');
   active.forEach((component, index) => validateEvidenceComponent(component, expected[index], value.tenantId));
-  for (const field of ['lineageId','headTransitionId','headTransitionDigest']) if (new Set(active.map(component => component[field])).size !== active.length) throw new Error('evidence component graft');
+  for (const field of ['lineageId','headTransitionId','headTransitionDigest','predecessorTransitionId','predecessorTransitionDigest']) if (new Set(active.map(component => component[field])).size !== active.length) throw new Error('evidence component graft');
 }
 
 function validate(candidate, separatelyTrusted) {
@@ -338,6 +338,10 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
       ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings[0].headTransitionDigest = value.detailBinding.offboardingEvidenceBindings[0].predecessorTransitionDigest; }],
       ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings[0].headSequence = 4; }],
       ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings[1].lineageId = value.detailBinding.offboardingEvidenceBindings[0].lineageId; }],
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings[1].predecessorTransitionId = value.detailBinding.erasureEvidenceBindings[0].predecessorTransitionId; }],
+      ['customer_erasure_review', value => { value.detailBinding.erasureEvidenceBindings[1].predecessorTransitionDigest = value.detailBinding.erasureEvidenceBindings[0].predecessorTransitionDigest; }],
+      ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings[1].predecessorTransitionId = value.detailBinding.offboardingEvidenceBindings[0].predecessorTransitionId; }],
+      ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings[1].predecessorTransitionDigest = value.detailBinding.offboardingEvidenceBindings[0].predecessorTransitionDigest; }],
       ['tenant_offboarding_review', value => { value.detailBinding.offboardingEvidenceBindings.at(-1).state = 'completed'; }]
     ];
     for (const [operation, mutate] of attacks) { const value = reviewedFixture(operation); mutate(value); seal(value); expect(() => validate(value, value)).toThrow(); }

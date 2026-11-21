@@ -37,6 +37,17 @@ const POLICY_STATE_LABELS = Object.freeze({
   draining: 'Stopping safely', drained: 'Stopped', revoked_terminal: 'Revoked',
   superseded_terminal: 'Superseded', active_resumed: 'Active', bulk_stopped_terminal: 'Stopped',
 });
+const CHANNEL_EVIDENCE_LABELS = Object.freeze({
+  ready_internal_no_effect: 'Private owner work is available without contacting a customer.',
+  unavailable_manual_handoff_not_opened: 'Manual device handoff is not available.',
+  unavailable_external_channel: 'External delivery is not available.',
+  unavailable_all_external_provider_adapters_disabled: 'External delivery services are unavailable.',
+  unavailable_no_accepted_external_authority: 'External delivery authority is not available.',
+  unavailable_no_accepted_external_customer_channel: 'No approved external customer channel is available.',
+  unavailable_no_authenticated_callback_authority: 'Delivery confirmation is unavailable.',
+  unavailable_no_tenant_bound_provider_account_or_credential: 'A connected delivery service is unavailable.',
+  unavailable_no_provider_resilience_authority: 'Delivery service recovery is unavailable.',
+});
 
 function centerError(status, code, message) {
   return Object.assign(new Error(message || code), { status, code });
@@ -91,6 +102,12 @@ function templateProjection() {
     timing: template.timing,
   }));
 }
+function channelEvidence(row) {
+  if (!row || typeof row.result_state !== 'string') return 'Channel evidence is unavailable.';
+  return Object.prototype.hasOwnProperty.call(CHANNEL_EVIDENCE_LABELS, row.result_state)
+    ? CHANNEL_EVIDENCE_LABELS[row.result_state]
+    : 'Channel evidence is unavailable and needs review.';
+}
 function channelProjection(rows) {
   const observed = new Map(rows.map(row => [row.requested_channel_id, row]));
   return ['in_app_passive', 'email', 'sms', 'secure_link', 'native_handoff'].map(id => {
@@ -101,8 +118,8 @@ function channelProjection(rows) {
       label: centerContract.CHANNEL_LABELS[id],
       state: internal ? 'available_internal_only' : 'unavailable',
       status: internal ? 'Available for private owner work' : 'External delivery is not available',
-      evidence: row ? String(row.result_state || 'unavailable') : 'No current channel resolution',
-      providerMode: 'Provider disabled',
+      evidence: channelEvidence(row),
+      providerMode: internal ? 'No external delivery used' : 'External delivery disabled',
     };
   });
 }
@@ -340,6 +357,7 @@ async function readAutomationCenter(pool, input) {
 }
 
 module.exports = {
+  CHANNEL_EVIDENCE_LABELS,
   MAX_ROWS,
   ROLE_CAPABILITIES,
   buildSnapshot,

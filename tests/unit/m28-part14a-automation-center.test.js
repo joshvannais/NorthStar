@@ -8,7 +8,7 @@ const request = require('supertest');
 const centerContract = require('../../public/js/automation-center-contract');
 const commandCenterContract = require('../../public/js/command-center-contract');
 const permissions = require('../../src/auth/permissions');
-const { buildSnapshot, readAutomationCenter } = require('../../src/automationCenter/repository');
+const { CHANNEL_EVIDENCE_LABELS, buildSnapshot, readAutomationCenter } = require('../../src/automationCenter/repository');
 const { createAutomationCenterRouter } = require('../../src/routes/automationCenter');
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -153,7 +153,7 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     }));
     expect(result.policies[0]).toMatchObject({ id: null, state: 'unavailable' });
     expect(result.runs[0]).toMatchObject({ state: 'failed', stateLabel: 'Currentness needs review' });
-    expect(result.channels.find(item => item.id === 'native_handoff').evidence).toBe('unavailable_manual_handoff_not_opened');
+    expect(result.channels.find(item => item.id === 'native_handoff').evidence).toBe('Manual device handoff is not available.');
     expect(result.status).toMatchObject({ id: 'stopped_or_restricted', explanation: expect.stringMatching(/remains authoritative/i) });
   });
 
@@ -202,6 +202,40 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     }));
     expect(() => buildSnapshot(input(), emptyResults({ records, documents }))).toThrow(/Timeline could not be shown safely/i);
   });
+
+  test.each([
+    ['ready_internal_no_effect', 'Private owner work is available without contacting a customer.'],
+    ['unavailable_manual_handoff_not_opened', 'Manual device handoff is not available.'],
+    ['unavailable_external_channel', 'External delivery is not available.'],
+    ['unavailable_all_external_provider_adapters_disabled', 'External delivery services are unavailable.'],
+    ['unavailable_no_accepted_external_authority', 'External delivery authority is not available.'],
+    ['unavailable_no_accepted_external_customer_channel', 'No approved external customer channel is available.'],
+    ['unavailable_no_authenticated_callback_authority', 'Delivery confirmation is unavailable.'],
+    ['unavailable_no_tenant_bound_provider_account_or_credential', 'A connected delivery service is unavailable.'],
+    ['unavailable_no_provider_resilience_authority', 'Delivery service recovery is unavailable.'],
+  ])('maps accepted channel evidence %s to fixed owner-readable text', (resultState, expected) => {
+    expect(CHANNEL_EVIDENCE_LABELS[resultState]).toBe(expected);
+    const result = buildSnapshot(input(), emptyResults({
+      channels: [{ requested_channel_id: 'email', result_state: resultState }],
+    }));
+    const evidence = result.channels.find(item => item.id === 'email').evidence;
+    expect(evidence).toBe(expected);
+    expect(evidence).not.toContain(resultState);
+    expect(evidence).not.toMatch(/\b[a-z]+(?:_[a-z]+)+\b/);
+  });
+
+  test.each([null, '', 'unavailable_future_internal_state'])(
+    'missing or unmapped channel evidence %p fails closed without reflecting it', resultState => {
+      const row = resultState === null
+        ? {}
+        : { requested_channel_id: 'email', result_state: resultState };
+      const result = buildSnapshot(input(), emptyResults({ channels: [row] }));
+      const evidence = result.channels.find(item => item.id === 'email').evidence;
+      expect(evidence).toMatch(/unavailable|needs review/i);
+      if (resultState) expect(evidence).not.toContain(resultState);
+      expect(evidence).not.toMatch(/\b[a-z]+(?:_[a-z]+)+\b/);
+    }
+  );
 
   test('ambiguous company-wide stop controls fail closed', () => {
     expect(() => buildSnapshot(input(), emptyResults({
@@ -376,6 +410,11 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
         currentness_marker: 'captured_exact_current', authority_class: 'automation_decision',
         recorded_at: '2026-11-20T19:02:00Z',
       }],
+      channels: [
+        { requested_channel_id: 'native_manual_handoff', result_state: 'unavailable_manual_handoff_not_opened' },
+        { requested_channel_id: 'email', result_state: 'unavailable_no_accepted_external_customer_channel' },
+        { requested_channel_id: 'sms', result_state: 'unavailable_future_internal_state' },
+      ],
       stopControl: [{ control_state: 'paused' }],
     }));
     const json = jest.fn()
@@ -387,6 +426,10 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     for (let index = 0; index < 8; index += 1) await Promise.resolve();
     expect(elements.summaryStatus.textContent).toBe('Company-wide control recorded');
     expect(elements.automationSummary.hidden).toBe(false);
+    expect(elements.automationChannels.textContent).toContain('Manual device handoff is not available.');
+    expect(elements.automationChannels.textContent).toContain('No approved external customer channel is available.');
+    expect(elements.automationChannels.textContent).toContain('Channel evidence is unavailable and needs review.');
+    expect(elements.automationChannels.textContent).not.toMatch(/unavailable_[a-z_]+|\b[a-z]+(?:_[a-z]+)+\b/);
 
     const sentinel = 'TENANT_A_PRIVATE_STATE_7F31';
     const fixedDynamicIds = [

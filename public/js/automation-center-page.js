@@ -31,10 +31,35 @@
   }
   function clearSensitive() {
     element('automationSummary').hidden = true;
-    ['automationTemplates', 'automationApprovals', 'automationOwnerWork', 'activeRuns', 'pausedRuns', 'failedRuns',
-      'automationPolicies', 'automationTimeline', 'automationLimits', 'automationChannels', 'automationUnavailable']
-      .forEach(function (id) { element(id).replaceChildren(); });
     element('automationPreview').hidden = true;
+    ['automationTemplates', 'automationApprovals', 'automationOwnerWork', 'activeRuns', 'pausedRuns', 'failedRuns',
+      'automationPolicies', 'automationTimeline', 'automationLimits', 'automationChannels', 'automationUnavailable',
+      'previewDetails', 'previewStops']
+      .forEach(function (id) { element(id).replaceChildren(); });
+    [
+      ['summaryStatus', 'Unavailable'],
+      ['summaryExplanation', 'No automation data loaded.'],
+      ['summaryPolicies', '0'],
+      ['summaryPolicyDetail', 'No policy data loaded'],
+      ['summaryRuns', '0'],
+      ['summaryRunDetail', 'No run data loaded'],
+      ['summaryAttention', '0'],
+      ['approvalCount', '0'],
+      ['ownerWorkCount', '0'],
+      ['limitsState', 'Unavailable'],
+      ['limitsConsumption', 'Current consumption is unavailable.'],
+      ['stopState', 'Unavailable'],
+      ['stopExplanation', 'Current company-wide control is unavailable.'],
+      ['automationEvaluatedAt', 'Not checked.'],
+      ['automationStatus', 'Automation data unavailable.'],
+      ['previewSummary', ''],
+      ['previewBoundary', ''],
+    ].forEach(function (entry) { element(entry[0]).textContent = entry[1]; });
+    element('setupTemplateId').value = 'custom';
+    element('setupName').value = '';
+    element('setupDailyLimit').value = '1';
+    ['setupSource', 'setupAction', 'setupRecipient', 'setupChannel', 'setupTiming']
+      .forEach(function (id) { element(id).value = ''; element(id).selectedIndex = 0; });
   }
   function definition(list, label, value) {
     var group = node('div');

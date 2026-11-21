@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const express = require('express');
 const request = require('supertest');
 const centerContract = require('../../public/js/automation-center-contract');
@@ -332,5 +333,96 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(html).toContain('Scheduled is not delivered');
     expect(html).toContain('does not imply delivery, a reply, payment, or business success');
     expect(html).toContain('No-effect preview');
+  });
+
+  test('failed refresh exhaustively clears prior-tenant visible and hidden DOM state', async () => {
+    class FakeElement {
+      constructor(tagName = 'div') {
+        this.tagName = tagName.toUpperCase(); this.dataset = {}; this.hidden = false;
+        this.childNodes = []; this.attributes = {}; this.listeners = {}; this.value = ''; this.disabled = false;
+        this._text = '';
+      }
+      get textContent() { return this._text + this.childNodes.map(child => child.textContent || '').join(''); }
+      set textContent(value) { this._text = String(value); this.childNodes = []; }
+      appendChild(child) { this.childNodes.push(child); return child; }
+      replaceChildren(...children) { this._text = ''; this.childNodes = children; }
+      setAttribute(name, value) { this.attributes[name] = String(value); }
+      addEventListener(name, listener) { this.listeners[name] = listener; }
+      emit(name, event = {}) { return this.listeners[name] && this.listeners[name](event); }
+      focus() {}
+    }
+    const html = read('public/dashboard/automation.html');
+    const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+    const elements = Object.fromEntries(ids.map(id => [id, new FakeElement()]));
+    const documentListeners = {};
+    const document = {
+      readyState: 'loading',
+      getElementById: id => elements[id],
+      createElement: tag => new FakeElement(tag),
+      addEventListener: (name, listener) => { documentListeners[name] = listener; },
+    };
+    const priorSnapshot = buildSnapshot(input(), emptyResults({
+      policies: [{
+        policy_id: uuid(10), version: '1', source_class_id: 'mission23_work_execution',
+        action_family: 'internal_read_digest_task', channel_id: 'in_app_passive', lifecycle_state: 'active',
+        lifecycle_currentness: 'exact_current_not_runtime_revalidated', recorded_at: '2026-11-20T19:00:00Z',
+      }],
+      runs: [{
+        run_id: uuid(20), policy_id: uuid(10), policy_version: '1', latest_record_type: 'scheduled_run',
+        currentness_marker: 'captured_exact_current', schedule_id: uuid(21), recorded_at: '2026-11-20T19:01:00Z',
+      }],
+      records: [{
+        record_id: uuid(30), run_id: uuid(20), record_type: 'internal_task',
+        currentness_marker: 'captured_exact_current', authority_class: 'automation_decision',
+        recorded_at: '2026-11-20T19:02:00Z',
+      }],
+      stopControl: [{ control_state: 'paused' }],
+    }));
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: priorSnapshot })
+      .mockRejectedValueOnce(new Error('Automation records are unavailable.'));
+    const window = { NorthStarAutomationCenter: centerContract, NorthStarAccountSession: { json } };
+    vm.runInNewContext(read('public/js/automation-center-page.js'), { window, document, Intl, Date, Promise, Error });
+    documentListeners.DOMContentLoaded();
+    for (let index = 0; index < 8; index += 1) await Promise.resolve();
+    expect(elements.summaryStatus.textContent).toBe('Company-wide control recorded');
+    expect(elements.automationSummary.hidden).toBe(false);
+
+    const sentinel = 'TENANT_A_PRIVATE_STATE_7F31';
+    const fixedDynamicIds = [
+      'summaryStatus', 'summaryExplanation', 'summaryPolicies', 'summaryPolicyDetail', 'summaryRuns',
+      'summaryRunDetail', 'summaryAttention', 'approvalCount', 'ownerWorkCount', 'limitsState',
+      'limitsConsumption', 'stopState', 'stopExplanation', 'automationEvaluatedAt', 'previewSummary', 'previewBoundary',
+    ];
+    const dynamicContainerIds = [
+      'automationTemplates', 'automationApprovals', 'automationOwnerWork', 'activeRuns', 'pausedRuns', 'failedRuns',
+      'automationPolicies', 'automationTimeline', 'automationLimits', 'automationChannels', 'automationUnavailable',
+      'previewDetails', 'previewStops',
+    ];
+    fixedDynamicIds.forEach(id => { elements[id].textContent = `${sentinel}:${id}`; });
+    dynamicContainerIds.forEach(id => elements[id].appendChild(Object.assign(new FakeElement('span'), { textContent: `${sentinel}:${id}` })));
+    ['setupTemplateId', 'setupName', 'setupDailyLimit', 'setupSource', 'setupAction', 'setupRecipient', 'setupChannel', 'setupTiming']
+      .forEach(id => { elements[id].value = `${sentinel}:${id}`; elements[id].selectedIndex = 4; });
+    elements.automationStatus.textContent = `${sentinel}:automationStatus`;
+    elements.automationSummary.hidden = false; elements.automationPreview.hidden = false;
+    expect(Object.values(elements).some(node => node.textContent.includes(sentinel) || String(node.value).includes(sentinel))).toBe(true);
+
+    await elements.automationRefresh.emit('click');
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(Object.entries(elements).filter(([_id, node]) =>
+      node.textContent.includes(sentinel) || String(node.value).includes(sentinel)).map(([id]) => id)).toEqual([]);
+    expect(dynamicContainerIds.every(id => elements[id].childNodes.length === 0)).toBe(true);
+    expect(fixedDynamicIds.map(id => elements[id].textContent)).toEqual([
+      'Unavailable', 'No automation data loaded.', '0', 'No policy data loaded', '0', 'No run data loaded', '0',
+      '0', '0', 'Unavailable', 'Current consumption is unavailable.', 'Unavailable',
+      'Current company-wide control is unavailable.', 'Not checked.', '', '',
+    ]);
+    expect(elements.setupTemplateId.value).toBe('custom');
+    expect(elements.setupName.value).toBe('');
+    expect(elements.setupDailyLimit.value).toBe('1');
+    expect(['setupSource', 'setupAction', 'setupRecipient', 'setupChannel', 'setupTiming']
+      .every(id => elements[id].selectedIndex === 0)).toBe(true);
+    expect(elements.automationStatus.textContent).toBe('Automation records are unavailable.');
   });
 });

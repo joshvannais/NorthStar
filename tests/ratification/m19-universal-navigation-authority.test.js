@@ -6,6 +6,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');
 const PERMISSIONS_PATH = path.join(ROOT, 'src', 'auth', 'permissions.js');
 const ACCOUNT_SERVICE_PATH = path.join(ROOT, 'src', 'accounts', 'service.js');
+const COMMAND_CENTER_CONTRACT_PATH = path.join(ROOT, 'public', 'js', 'command-center-contract.js');
 const NAV_PATH = path.join(ROOT, 'public', 'js', 'nav-component.js');
 
 const EXPECTED_NAVIGATION = Object.freeze([
@@ -15,11 +16,21 @@ const EXPECTED_NAVIGATION = Object.freeze([
   Object.freeze({ id: 'leads', href: '/dashboard/leads', resource: 'leads' }),
   Object.freeze({ id: 'communications', href: '/dashboard/communications', resource: 'calls' }),
   Object.freeze({ id: 'calendar', href: '/dashboard/calendar', resource: 'calendar' }),
+  Object.freeze({ id: 'operations', href: '/dashboard/operations', resource: 'operations' }),
+  Object.freeze({ id: 'automation-center', href: '/dashboard/automation', resource: 'automation' }),
+  Object.freeze({ id: 'learning-center', href: '/dashboard/learning-center', resource: 'learning' }),
   Object.freeze({ id: 'team', href: '/dashboard/team', resource: 'team' }),
   Object.freeze({ id: 'business-profile', href: '/dashboard/business-profile', resource: 'settings' }),
   Object.freeze({ id: 'settings', href: '/dashboard/settings', resource: 'settings' }),
   Object.freeze({ id: 'integrations', href: '/dashboard/integrations', resource: 'integrations' }),
 ]);
+
+function expectedNavigationForRole(role) {
+  const canUseOwnerControls = role === 'owner' || role === 'admin';
+  return EXPECTED_NAVIGATION
+    .filter(item => canUseOwnerControls || !['automation-center', 'learning-center'].includes(item.id))
+    .map(item => ({ id: item.id, href: item.href }));
+}
 
 const EXCEPTIONS = Object.freeze([
   Object.freeze({ file: 'public/dashboard.html', active: 'command-center' }),
@@ -54,12 +65,19 @@ describe('Mission 19 universal navigation authority', () => {
     expect(authorization.NAVIGATION_DESTINATIONS).toEqual(EXPECTED_NAVIGATION);
 
     for (const role of ['owner', 'admin', 'member', 'viewer']) {
-      const expected = EXPECTED_NAVIGATION.map(item => ({ id: item.id, href: item.href }));
+      const expected = expectedNavigationForRole(role);
       expect(authorization.navigationForRole(role)).toEqual(expected);
       for (const item of EXPECTED_NAVIGATION) {
-        expect(authorization.hasPermission(role, item.resource, 'read')).toBe(true);
+        expect(authorization.hasPermission(role, item.resource, 'read')).toBe(
+          expected.some(destination => destination.id === item.id)
+        );
       }
     }
+
+    expect(authorization.navigationForRole('owner')).toContainEqual({ id: 'automation-center', href: '/dashboard/automation' });
+    expect(authorization.navigationForRole('admin')).toContainEqual({ id: 'automation-center', href: '/dashboard/automation' });
+    expect(authorization.navigationForRole('member')).not.toContainEqual(expect.objectContaining({ id: 'automation-center' }));
+    expect(authorization.navigationForRole('viewer')).not.toContainEqual(expect.objectContaining({ id: 'automation-center' }));
 
     expect(authorization.navigationForRole('unknown')).toEqual([]);
     expect(authorization.navigationForRole(null)).toEqual([]);
@@ -68,13 +86,35 @@ describe('Mission 19 universal navigation authority', () => {
   test('the mounted account response carries only the server-projected destinations', () => {
     jest.resetModules();
     const { accountView } = require(ACCOUNT_SERVICE_PATH);
-    const expected = EXPECTED_NAVIGATION.map(item => ({ id: item.id, href: item.href }));
     for (const role of ['owner', 'admin', 'member', 'viewer']) {
       const account = accountView(accountAuthority(role));
       expect(account.membership.role).toBe(role);
-      expect(account.navigation).toEqual(expected);
+      expect(account.navigation).toEqual(expectedNavigationForRole(role));
       expect(JSON.stringify(account.navigation)).not.toMatch(/resource|action|role|permission/i);
     }
+  });
+
+  test('the paid-only Automation destination never enters demo navigation', () => {
+    jest.resetModules();
+    const commandCenterContract = require(COMMAND_CENTER_CONTRACT_PATH);
+    const demoRoutes = commandCenterContract.routesForMode('demo');
+
+    expect(demoRoutes.map(route => route.id)).toEqual([
+      'command-center',
+      'polaris',
+      'leads',
+      'communications',
+      'calendar',
+      'operations',
+      'learning-center',
+      'team',
+      'business-profile',
+      'settings',
+      'integrations',
+    ]);
+    expect(demoRoutes).not.toContainEqual(expect.objectContaining({ id: 'automation-center' }));
+    expect(commandCenterContract.destinationPath('automation-center', 'demo')).toBeNull();
+    expect(commandCenterContract.routeForPath('/demo/automation')).toBeNull();
   });
 
   test('the browser component consumes the server projection and fails closed on deep links', () => {

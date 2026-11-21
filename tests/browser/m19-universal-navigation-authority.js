@@ -20,11 +20,19 @@ const EXPECTED_NAVIGATION = Object.freeze([
   Object.freeze({ id: 'leads', href: '/dashboard/leads', label: 'Leads' }),
   Object.freeze({ id: 'communications', href: '/dashboard/communications', label: 'Communications' }),
   Object.freeze({ id: 'calendar', href: '/dashboard/calendar', label: 'Calendar' }),
+  Object.freeze({ id: 'operations', href: '/dashboard/operations', label: 'Operations' }),
+  Object.freeze({ id: 'automation-center', href: '/dashboard/automation', label: 'Automation Center' }),
+  Object.freeze({ id: 'learning-center', href: '/dashboard/learning-center', label: 'Learning Center' }),
   Object.freeze({ id: 'team', href: '/dashboard/team', label: 'Team' }),
   Object.freeze({ id: 'business-profile', href: '/dashboard/business-profile', label: 'Business Profile' }),
   Object.freeze({ id: 'settings', href: '/dashboard/settings', label: 'Settings' }),
   Object.freeze({ id: 'integrations', href: '/dashboard/integrations', label: 'Integrations' }),
 ]);
+
+function expectedNavigationForRole(role) {
+  const canUseOwnerControls = role === 'owner' || role === 'admin';
+  return EXPECTED_NAVIGATION.filter(item => canUseOwnerControls || !['automation-center', 'learning-center'].includes(item.id));
+}
 const PAGES = Object.freeze([
   Object.freeze({ label: 'Canonical Command Center', route: '/dashboard', active: 'command-center' }),
   Object.freeze({ label: 'Lead detail', route: '/dashboard/lead?id=navigation-contract', active: 'leads' }),
@@ -149,8 +157,8 @@ async function installBoundaries(context, origin, role, evidence, navigation) {
   });
 }
 
-function expectedLinks(active) {
-  return EXPECTED_NAVIGATION.map(item => ({
+function expectedLinks(active, role) {
+  return expectedNavigationForRole(role).map(item => ({
     id: item.id,
     href: item.href,
     label: item.label,
@@ -196,7 +204,7 @@ async function exercisePass(page, origin, definition, role, viewport, theme, pas
   await page.waitForTimeout(250);
 
   const observed = await snapshot(page);
-  const expected = expectedLinks(definition.active);
+  const expected = expectedLinks(definition.active, role);
   const label = [definition.label, role, viewport.label, theme, pass === 0 ? 'fresh' : 'reload'].join('/');
   record(evidence, observed.state === 'ready', label + ': canonical navigation reaches ready state', observed.state);
   record(evidence, observed.sidebars === 1, label + ': exactly one desktop sidebar', observed.sidebars);
@@ -204,6 +212,11 @@ async function exercisePass(page, origin, definition, role, viewport, theme, pas
     label + ': exactly one mobile navigation shell', observed);
   equal(evidence, observed.desktopLinks, expected, label + ': desktop links/order/active state equal server contract');
   equal(evidence, observed.mobileLinks, expected, label + ': mobile links/order/active state equal server contract');
+  const automationExpected = role === 'owner' || role === 'admin';
+  record(evidence, observed.desktopLinks.some(item => item.id === 'automation-center') === automationExpected,
+    label + ': paid Automation destination follows owner/admin authority');
+  record(evidence, observed.mobileLinks.some(item => item.id === 'automation-center') === automationExpected,
+    label + ': mobile paid Automation destination follows owner/admin authority');
   equal(evidence, observed.logout, [
     { href: '/login', text: 'Sign Out' },
     { href: '/login', text: 'Sign Out' },
@@ -247,7 +260,7 @@ async function exercisePass(page, origin, definition, role, viewport, theme, pas
 
 async function deepLinkNegative(browser, origin, evidence) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  const projected = EXPECTED_NAVIGATION.filter(item => item.id !== 'business-profile');
+  const projected = expectedNavigationForRole('viewer').filter(item => item.id !== 'business-profile');
   await context.addInitScript(() => localStorage.setItem('northstar-theme', 'light'));
   await installBoundaries(context, origin, 'viewer', evidence, projected);
   const page = await context.newPage();
@@ -286,7 +299,7 @@ async function main() {
         for (const theme of THEMES) {
           const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
           await context.addInitScript(selectedTheme => localStorage.setItem('northstar-theme', selectedTheme), theme);
-          await installBoundaries(context, origin, role, evidence, EXPECTED_NAVIGATION);
+          await installBoundaries(context, origin, role, evidence, expectedNavigationForRole(role));
           for (const definition of PAGES) {
             const page = await context.newPage();
             page.on('pageerror', error => evidence.pageErrors.push({ page: definition.label, message: error.stack || error.message }));

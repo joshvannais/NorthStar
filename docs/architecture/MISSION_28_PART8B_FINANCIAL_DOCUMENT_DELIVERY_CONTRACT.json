@@ -26,7 +26,7 @@
     "health": ["health_200", "root_200", "dashboard_200", "demo_200", "paid_demo_bytes_match"]
   },
   "frozenInputs": [
-    {"path": "docs/architecture/MISSION_28_PART8A_ESTIMATE_QUOTE_SENDING_CONTRACT.json", "normalizedLfSha256": "0D225D46B156B0C8774C6CDE1AD6640C0885EB6349D570160CDDB3A499EC70C4"},
+    {"path": "docs/architecture/MISSION_28_PART8A_ESTIMATE_QUOTE_SENDING_CONTRACT.json", "normalizedLfSha256": "08804F86D9C31EE4ACFC5648C98CE8223D33ACDAF300F8ED3A7C419AF969A60D"},
     {"path": "src/customerFinancial/invoiceDocument.js", "normalizedLfSha256": "13F891FA3C6B8C27F17B2FF23B0A58790F15157CFB9641D63F848B9ED10B9BEB"},
     {"path": "src/customerFinancial/invoicePostIssueCorrection.js", "normalizedLfSha256": "4F640B36DD4042CC1677CF60268C0C6EA4ACCBCCC8878C6E5B77E9DA332D4726"},
     {"path": "src/customerFinancial/creditRefundReadiness.js", "normalizedLfSha256": "9E91D0351B694E5EE35749F98E0E1249917F0118E20A4CFD269300789AA14855"},

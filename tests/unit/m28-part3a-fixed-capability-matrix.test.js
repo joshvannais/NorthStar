@@ -159,7 +159,7 @@ function validateMatrix(model) {
 
   expect(model.membershipVocabulary).toEqual({
     sourcePath: 'src/auth/permissions.js',
-    normalizedLfSha256: '4FD11A90AC6EE584614535580ED45C6AAE2A23B73547CE62D28A73BB11C40D42',
+    normalizedLfSha256: 'F01E3292C929230455D6508D7A2496643D581BE9867779144E9C38CDEBCB6DB0',
     canonicalMembershipRoleIds: ['owner', 'admin', 'member', 'viewer'],
     exactActiveTenantMembershipRequired: true, exactAuthenticatedSessionRequired: true,
     displayRoleNameAuthority: 'deny', operationalRoleTitleAuthority: 'deny',
@@ -483,7 +483,7 @@ describe('Mission 28 Part 3A fixed capability matrix', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–13D are released. Part 13E is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–13E are released. Part 14A is the sole implementation candidate.');
       expect(document).toContain('98c4b3562ad48787472584ca64c601d584c2427f');
       expect(document).toContain('f40e401a-649f-42b3-a1cc-71dbd0ffce4d');
       expect(document).toContain('586afe8103acc0e4f27d5967e8a8554876d7f5f51dc38bd7c7f4a98e2c320337');

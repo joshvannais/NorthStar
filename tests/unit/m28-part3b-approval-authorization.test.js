@@ -26,7 +26,7 @@ const INPUT_HASHES = Object.freeze({
   'docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json': '3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5',
   'docs/architecture/MISSION_28_PART2C_POLICY_LIFECYCLE.json': '91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD',
   'docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json': '03F32F3C66EF525DF9ACA541F8A7D0C08935E1DD2EDB661468F78CC2A763308A',
-  'docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json': 'BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33',
+  'docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json': '1C0F028E6BB6A575FAFB3DB1F1EEEA624A9020BE9BA3FEE013A67F7B6143589B',
   'docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.md': 'F849B39A38377F5B331BE302FD2C4A6065C727F7763127FD17819C20A509C8C1',
 });
 
@@ -754,8 +754,8 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–13D are released. Part 13E is the sole implementation candidate.');
-      expect(document).toContain('Parts 14A–14G');
+      expect(document).toContain('Parts 1A–13E are released. Part 14A is the sole implementation candidate.');
+      expect(document).toContain('Parts 14B–14G');
       expect(document).toContain('05a541792adac121f8c51b2cf200c0d18fcfbbf1');
       expect(document).toContain('1e62336afe2c9e65cccbe1629a62b86855da3ff8');
       expect(document).toContain('7ca335a1-7bf6-4f8d-ae98-a188b891f85d');
@@ -775,7 +775,7 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     expect(roadmap).toContain('Released Part 4D artifacts');
     expect(roadmap).toContain('Released Part 5A artifacts');
     expect(roadmap).toContain('Released Part 5D artifacts');
-    expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
+    expect(ledger).toContain('independent audit/PR/merge/deployment/production unavailable');
   });
 
   test('keeps released migration lineage and recognizes candidate migration 287', () => {

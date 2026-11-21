@@ -66,16 +66,16 @@ function policyState(row) {
   };
 }
 function runState(row) {
+  if (row.currentness_marker !== 'captured_exact_current') {
+    return { id: 'failed', label: 'Currentness needs review' };
+  }
+  if (row.latest_record_type === 'terminal_outcome') return { id: 'completed', label: 'Completed' };
   const control = row.control_state;
   if (control && /paused|draining|drained|stopped|cancelled|expired|dead_lettered|revoked|superseded/.test(control)) {
     return { id: /paused|drain/.test(control) ? 'paused' : 'failed', label: POLICY_STATE_LABELS[control] || 'Stopped' };
   }
   if (row.retry_state === 'reconciliation_required_no_resend') return { id: 'failed', label: 'Outcome needs review' };
   if (row.retry_state && row.retry_state.indexOf('permanent_stop_') === 0) return { id: 'failed', label: 'Stopped after failure' };
-  if (row.currentness_marker && row.currentness_marker !== 'captured_exact_current') {
-    return { id: 'failed', label: 'Currentness needs review' };
-  }
-  if (row.latest_record_type === 'terminal_outcome') return { id: 'completed', label: 'Completed' };
   if (row.schedule_id) return { id: 'active', label: 'Scheduled' };
   return { id: 'active', label: 'In progress' };
 }
@@ -166,8 +166,12 @@ function buildSnapshot(input, results) {
       recordedAt: iso(row.latest_recorded_at || row.recorded_at),
       evidenceState: row.currentness_marker === 'captured_exact_current' ? 'Exact captured evidence' : 'Currentness requires review',
     };
-  });
+  }).filter(run => run.state !== 'completed');
   const recordRows = bounded(results.records, 'Timeline');
+  const documentRows = bounded(results.documents, 'Document timeline');
+  if (recordRows.length + documentRows.length > MAX_ROWS) {
+    throw centerError(503, 'AUTOMATION_CENTER_BOUNDED_READ_REQUIRED', 'Timeline could not be shown safely.');
+  }
   const timeline = recordRows.map(row => ({
     id: safeId(row.record_id),
     runId: safeId(row.run_id),
@@ -176,7 +180,7 @@ function buildSnapshot(input, results) {
     recordedAt: iso(row.recorded_at),
     evidenceState: row.authority_class === 'effect_evidence' ? 'Effect evidence' : 'Decision evidence',
   }));
-  for (const row of bounded(results.documents, 'Document timeline')) {
+  for (const row of documentRows) {
     timeline.push({
       id: safeId(row.estimate_quote_resolution_id),
       runId: safeId(row.run_id),
@@ -189,7 +193,6 @@ function buildSnapshot(input, results) {
     });
   }
   timeline.sort((left, right) => String(right.recordedAt).localeCompare(String(left.recordedAt)));
-  if (timeline.length > MAX_ROWS) timeline.length = MAX_ROWS;
   const ownerWork = recordRows.filter(row => row.record_type === 'internal_task').map(row => ({
     id: safeId(row.record_id),
     runId: safeId(row.run_id),

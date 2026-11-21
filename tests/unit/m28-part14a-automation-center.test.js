@@ -156,9 +156,50 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(result.status).toMatchObject({ id: 'stopped_or_restricted', explanation: expect.stringMatching(/remains authoritative/i) });
   });
 
+  test('missing run currentness never becomes active merely because a schedule exists', () => {
+    const result = buildSnapshot(input(), emptyResults({ runs: [{
+      run_id: uuid(20), policy_id: uuid(10), policy_version: '1', latest_record_type: 'scheduled_run',
+      currentness_marker: null, schedule_id: uuid(21), retry_state: null, control_state: null,
+    }] }));
+    expect(result.runs).toHaveLength(1);
+    expect(result.runs[0]).toMatchObject({ state: 'failed', stateLabel: 'Currentness needs review' });
+    expect(result.counts).toMatchObject({ activeRuns: 0, failedRuns: 1 });
+  });
+
+  test('exact terminal runs stay out of active paused failed lists while terminal evidence remains', () => {
+    const result = buildSnapshot(input(), emptyResults({
+      runs: [{
+        run_id: uuid(20), policy_id: uuid(10), policy_version: '1', latest_record_type: 'terminal_outcome',
+        currentness_marker: 'captured_exact_current', schedule_id: uuid(21),
+        retry_state: 'reconciliation_required_no_resend', control_state: 'paused',
+      }],
+      records: [{
+        record_id: uuid(30), run_id: uuid(20), record_type: 'terminal_outcome',
+        currentness_marker: 'captured_exact_current', authority_class: 'effect_evidence',
+        recorded_at: '2026-11-20T19:31:00Z',
+      }],
+    }));
+    expect(result.runs).toEqual([]);
+    expect(result.counts).toMatchObject({ activeRuns: 0, pausedRuns: 0, failedRuns: 0 });
+    expect(result.timeline).toEqual([expect.objectContaining({ kind: 'terminal_outcome', label: 'Run reached a terminal state' })]);
+  });
+
   test('bounded reads reject silent truncation', () => {
     const policies = Array.from({ length: 101 }, (_, index) => ({ policy_id: uuid(100 + index) }));
     expect(() => buildSnapshot(input(), emptyResults({ policies }))).toThrow(/could not be shown safely/i);
+  });
+
+  test('combined record and document timeline fails closed instead of silently truncating', () => {
+    const records = Array.from({ length: 51 }, (_, index) => ({
+      record_id: uuid(100 + index), run_id: uuid(20), record_type: 'eligibility_evaluation',
+      currentness_marker: 'captured_exact_current', authority_class: 'automation_decision',
+      recorded_at: '2026-11-20T19:31:00Z',
+    }));
+    const documents = Array.from({ length: 50 }, (_, index) => ({
+      estimate_quote_resolution_id: uuid(300 + index), run_id: uuid(20),
+      result_state: 'exact_document_bound_external_delivery_unavailable', recorded_at: '2026-11-20T19:32:00Z',
+    }));
+    expect(() => buildSnapshot(input(), emptyResults({ records, documents }))).toThrow(/Timeline could not be shown safely/i);
   });
 
   test('ambiguous company-wide stop controls fail closed', () => {

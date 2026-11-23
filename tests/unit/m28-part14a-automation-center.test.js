@@ -543,6 +543,39 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(Object.values(elements).some(node => node.textContent.includes('STALE_TENANT_PREVIEW_MUST_NOT_RENDER'))).toBe(false);
   });
 
+  test('stale forbidden preview clears prior tenant data while a newer preview remains pending', async () => {
+    const forbiddenPreview = deferred();
+    const pendingPreview = deferred();
+    const forbidden = Object.assign(new Error('role revoked'), { status: 403 });
+    const priorSnapshot = buildSnapshot(input(), emptyResults({ policies: [{
+      policy_id: uuid(10), version: '1', source_class_id: 'mission23_work_execution',
+      action_family: 'internal_read_digest_task', channel_id: 'in_app_passive', lifecycle_state: 'active',
+      lifecycle_currentness: 'exact_current_not_runtime_revalidated', recorded_at: '2026-11-20T19:00:00Z',
+    }] }));
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: priorSnapshot })
+      .mockImplementationOnce(() => forbiddenPreview.promise)
+      .mockImplementationOnce(() => pendingPreview.promise);
+    const { elements, documentListeners } = automationPageHarness(json);
+    documentListeners.DOMContentLoaded();
+    await flushMicrotasks();
+
+    const templateButtons = elements.automationTemplates.childNodes.map(card =>
+      card.childNodes.find(child => child.tagName === 'BUTTON'));
+    templateButtons[0].emit('click');
+    templateButtons[1].emit('click');
+    await flushMicrotasks();
+    expect(elements.automationSummary.hidden).toBe(false);
+
+    forbiddenPreview.reject(forbidden);
+    await flushMicrotasks();
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.summaryPolicies.textContent).toBe('0');
+    expect(elements.automationStatus.textContent).toMatch(/owner or administrator access/i);
+    expect(json).toHaveBeenCalledTimes(3);
+  });
+
   test('preview authentication loss invalidates a pending GET completion', async () => {
     const staleGet = deferred();
     const unauthorized = Object.assign(new Error('session ended'), { status: 401 });
@@ -569,6 +602,40 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     await flushMicrotasks();
     expect(elements.summaryPolicies.textContent).toBe('0');
     expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationStatus.textContent).toMatch(/session ended/i);
+  });
+
+  test('stale unauthorized GET clears and invalidates a newer pending GET', async () => {
+    const unauthorizedGet = deferred();
+    const pendingGet = deferred();
+    const unauthorized = Object.assign(new Error('session ended'), { status: 401 });
+    const priorSnapshot = buildSnapshot(input(), emptyResults({ policies: [{
+      policy_id: uuid(10), version: '1', source_class_id: 'mission23_work_execution',
+      action_family: 'internal_read_digest_task', channel_id: 'in_app_passive', lifecycle_state: 'active',
+      lifecycle_currentness: 'exact_current_not_runtime_revalidated', recorded_at: '2026-11-20T19:00:00Z',
+    }] }));
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: priorSnapshot })
+      .mockImplementationOnce(() => unauthorizedGet.promise)
+      .mockImplementationOnce(() => pendingGet.promise);
+    const { elements, documentListeners } = automationPageHarness(json);
+    documentListeners.DOMContentLoaded();
+    await flushMicrotasks();
+    expect(elements.automationSummary.hidden).toBe(false);
+
+    elements.automationRefresh.emit('click');
+    elements.automationRefresh.emit('click');
+    await flushMicrotasks();
+    unauthorizedGet.reject(unauthorized);
+    await flushMicrotasks();
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.summaryPolicies.textContent).toBe('0');
+    expect(elements.automationStatus.textContent).toMatch(/session ended/i);
+
+    pendingGet.resolve({ success: true, data: priorSnapshot });
+    await flushMicrotasks();
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.summaryPolicies.textContent).toBe('0');
     expect(elements.automationStatus.textContent).toMatch(/session ended/i);
   });
 });

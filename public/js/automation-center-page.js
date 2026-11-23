@@ -70,6 +70,9 @@
       ? 'Your session ended. Sign in again before reopening Automation Center. No saved data is shown.'
       : 'Automation Center requires current owner or administrator access. No saved data is shown.');
   }
+  function isAuthorityFailure(error) {
+    return error && (error.status === 401 || error.status === 403);
+  }
   function definition(list, label, value) {
     var group = node('div');
     group.appendChild(node('dt', '', label));
@@ -138,11 +141,14 @@
       renderPreview(body.data);
       setStatus('ready', 'Preview ready. Nothing was saved, activated, queued, sent, or charged.');
     }).catch(function (error) {
-      if (request !== previewGeneration) return;
-      if (error && (error.status === 401 || error.status === 403)) {
+      // Authorization loss invalidates every in-flight snapshot and preview,
+      // even when a newer request made this response stale. A newer request
+      // must not keep prior-session or prior-tenant data mounted indefinitely.
+      if (isAuthorityFailure(error)) {
         invalidateAuthority(error);
         return;
       }
+      if (request !== previewGeneration) return;
       element('automationPreview').hidden = true;
       setStatus('error', error && error.message ? error.message : 'The setup preview is unavailable. Review the fields and try again.');
     }).finally(function () { button.disabled = false; });
@@ -242,11 +248,14 @@
       var data = contract.validateSnapshot(body.data);
       render(data); setStatus('ready', data.status.label + '. ' + data.status.explanation);
     }).catch(function (error) {
-      if (request !== generation) return;
-      if (error && (error.status === 401 || error.status === 403)) {
+      // A stale GET can still be the request that proves the session or role
+      // is no longer authorized. Clear and invalidate both request classes
+      // before applying ordinary stale-response suppression.
+      if (isAuthorityFailure(error)) {
         invalidateAuthority(error);
         return;
       }
+      if (request !== generation) return;
       clearSensitive();
       setStatus('error', error && error.message ? error.message : 'Automation records are unavailable. No saved data is shown.');
     });

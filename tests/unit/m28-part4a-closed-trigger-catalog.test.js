@@ -23,10 +23,10 @@ const INPUT_HASHES = Object.freeze({
   'docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json': '3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5',
   'docs/architecture/MISSION_28_PART2C_POLICY_LIFECYCLE.json': '91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD',
   'docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json': '03F32F3C66EF525DF9ACA541F8A7D0C08935E1DD2EDB661468F78CC2A763308A',
-  'docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json': 'BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33',
-  'docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json': '6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575',
-  'docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json': '79031B6D3747FA538D151C1E2597AEE3F072D1AB66772A3E6AB58479C2A38321',
-  'docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.json': 'D1DA31C44602127C6DDF95FE96B59FA57D1E23DA291717D64F658DD0B2E3AF81',
+  'docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json': '1C0F028E6BB6A575FAFB3DB1F1EEEA624A9020BE9BA3FEE013A67F7B6143589B',
+  'docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json': 'C186643B6EA28BA6F2A75D14B73021F5307ADECC17FEA017234469F939A343AF',
+  'docs/architecture/MISSION_28_PART3C_OWNER_LIMITS_CONTRACT.json': 'E30860B94BC923CEAA537C66890D8EF8F3FAFE7108D54F9181AB1F2B3588E845',
+  'docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.json': '6F97E3F20D230212AAEA30B3E270DFE1E48D124500017931ACDF1F2A221EBD27',
   'docs/architecture/MISSION_28_PART3D_GOVERNANCE_CONTROL_CONTRACT.md': '65458B8C9EF563A9FC0BD93FDAAD6B4DA44CA2E8B4EF2B1BFC32D9B6B9AB0943',
 });
 
@@ -355,7 +355,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–13D are released. Part 13E is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–13E are released. Part 14A is the sole implementation candidate.');
       expect(document).toContain('797be4a33bb2128ae2efd79b5347ef43f94da0f6');
       expect(document).toContain('041971bb190998e1444087482941686c4166573d');
       expect(document).toContain('7e0ef15f-1275-4578-aade-70b8c8277bef');
@@ -394,9 +394,9 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(rows[39]).toMatchObject({ id: '9D', state: '**Released**' });
     expect(rows[40]).toMatchObject({ id: '10A', state: '**Released**' });
     expect(rows[41]).toMatchObject({ id: '10B', state: '**Released**' });
-  expect(rows[42]).toMatchObject({ id: '10C', state: '**Released**' }); expect(rows[43]).toMatchObject({ id: '10D', state: '**Released**' }); expect(rows[44]).toMatchObject({ id: '11A', state: '**Released**' }); expect(rows[45]).toMatchObject({ id: '11B', state: '**Released**' }); expect(rows[46]).toMatchObject({ id: '11C', state: '**Released**' }); expect(rows[47]).toMatchObject({ id: '11D', state: '**Released**' }); expect(rows[48]).toMatchObject({ id: '11E', state: '**Released**' }); expect(rows[49]).toMatchObject({ id: '11F', state: '**Released**' }); expect(rows[50]).toMatchObject({ id: '12A', state: '**Released**' }); expect(rows[51]).toMatchObject({ id: '12B', state: '**Released**' }); expect(rows[52]).toMatchObject({ id: '12C', state: '**Released**' }); expect(rows[53]).toMatchObject({ id: '12D', state: '**Released**' }); expect(rows[54]).toMatchObject({ id: '13A', state: '**Released**' }); expect(rows[55]).toMatchObject({ id: '13B', state: '**Released**' }); expect(rows[56]).toMatchObject({ id: '13C', state: '**Released**' }); expect(rows[57]).toMatchObject({ id: '13D', state: '**Released**' }); expect(rows[58]).toMatchObject({ id: '13E', state: '**Implementation candidate**' });
-    expect(rows.slice(59).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(7);
+  expect(rows[42]).toMatchObject({ id: '10C', state: '**Released**' }); expect(rows[43]).toMatchObject({ id: '10D', state: '**Released**' }); expect(rows[44]).toMatchObject({ id: '11A', state: '**Released**' }); expect(rows[45]).toMatchObject({ id: '11B', state: '**Released**' }); expect(rows[46]).toMatchObject({ id: '11C', state: '**Released**' }); expect(rows[47]).toMatchObject({ id: '11D', state: '**Released**' }); expect(rows[48]).toMatchObject({ id: '11E', state: '**Released**' }); expect(rows[49]).toMatchObject({ id: '11F', state: '**Released**' }); expect(rows[50]).toMatchObject({ id: '12A', state: '**Released**' }); expect(rows[51]).toMatchObject({ id: '12B', state: '**Released**' }); expect(rows[52]).toMatchObject({ id: '12C', state: '**Released**' }); expect(rows[53]).toMatchObject({ id: '12D', state: '**Released**' }); expect(rows[54]).toMatchObject({ id: '13A', state: '**Released**' }); expect(rows[55]).toMatchObject({ id: '13B', state: '**Released**' }); expect(rows[56]).toMatchObject({ id: '13C', state: '**Released**' }); expect(rows[57]).toMatchObject({ id: '13D', state: '**Released**' }); expect(rows[58]).toMatchObject({ id: '13E', state: '**Released**' }); expect(rows[59]).toMatchObject({ id: '14A', state: '**Implementation candidate**' });
+    expect(rows.slice(60).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(6);
   });
 
   test('keeps runtime, migrations and later Part 4 authority outside the slice', () => {

@@ -27,9 +27,9 @@ const INPUT_HASHES = Object.freeze({
   'docs/architecture/MISSION_28_PART2B_IMMUTABLE_RECORD_MODEL.json': '3C64287BA287567ADD0E0962A3ED45B90657CA97686435E1D616FFF2F88293B5',
   'docs/architecture/MISSION_28_PART2C_POLICY_LIFECYCLE.json': '91008C2B04D2492F8067F0F31DAB8E4902FA06FEA6A781CB46B4C836453FFACD',
   'docs/architecture/MISSION_28_PART2D_POSTGRES_AUTHORITY.json': '03F32F3C66EF525DF9ACA541F8A7D0C08935E1DD2EDB661468F78CC2A763308A',
-  'docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json': 'BFF226B90123575945B8B268E88B844AF21A5FDE03621BAC0182D270C2928A33',
+  'docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.json': '1C0F028E6BB6A575FAFB3DB1F1EEEA624A9020BE9BA3FEE013A67F7B6143589B',
   'docs/architecture/MISSION_28_PART3A_FIXED_CAPABILITY_MATRIX.md': 'F849B39A38377F5B331BE302FD2C4A6065C727F7763127FD17819C20A509C8C1',
-  'docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json': '6A7558C5BC61C31B627C9C0C474955B98E1D2D7BA5CC537C57F7F9D767A52575',
+  'docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.json': 'C186643B6EA28BA6F2A75D14B73021F5307ADECC17FEA017234469F939A343AF',
   'docs/architecture/MISSION_28_PART3B_APPROVAL_AUTHORIZATION_CONTRACT.md': 'C8C0D7CA8D4FDB9F949B2B35FBAAEE91B321D0127B64A77ECFF941C3F315B2D0',
 });
 
@@ -775,7 +775,7 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–13D are released. Part 13E is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–13E are released. Part 14A is the sole implementation candidate.');
       expect(document).toContain('56a39854325826982283d78dffed4e039c61335b');
       expect(document).toContain('d88a0fe294619fa982bc1541affc8052031cc406');
       expect(document).toContain('81bc25de-eb77-413e-8745-97882bdd7c09');
@@ -798,7 +798,7 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     expect(roadmap).toContain('Released Part 4D artifacts');
     expect(roadmap).toContain('Released Part 5A artifacts');
     expect(roadmap).toContain('Released Part 5D artifacts');
-    expect(ledger).toContain('independent audit/PR/merge/deployment unavailable');
+    expect(ledger).toContain('independent audit/PR/merge/deployment/production unavailable');
   });
 
   test('keeps runtime database provider effect and migration boundaries unavailable', () => {

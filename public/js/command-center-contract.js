@@ -22,10 +22,13 @@
     Object.freeze({ id: 'integrations', label: 'Integrations', resource: 'integrations', paidPath: '/dashboard/integrations', demoPath: '/demo/integrations' }),
   ]);
   var TODAY_ROUTE = Object.freeze({ id: 'today', label: 'Today', resource: 'dashboard', paidPath: '/dashboard/today', demoPath: null });
+  var AUTOMATION_ROUTE = Object.freeze({ id: 'automation-center', label: 'Automation Center', resource: 'automation', paidPath: '/dashboard/automation', demoPath: null });
   // Today is signed-in workforce authority only. Keeping it outside ROUTES
   // preserves the accepted account-free demo contract and prevents a demo
   // route from being mistaken for employee scope.
-  var PAID_ROUTES = Object.freeze([ROUTES[0], TODAY_ROUTE].concat(ROUTES.slice(1)));
+  // Automation Center is paid tenant-private authority. Part 14C owns an
+  // isolated demo journey, so Part 14A deliberately adds no demo destination.
+  var PAID_ROUTES = Object.freeze([ROUTES[0], TODAY_ROUTE].concat(ROUTES.slice(1, 6), [AUTOMATION_ROUTE], ROUTES.slice(6)));
 
   function routesForMode(mode) {
     return mode === 'demo' ? ROUTES : PAID_ROUTES;
@@ -173,6 +176,7 @@
     ROUTES: ROUTES,
     PAID_ROUTES: PAID_ROUTES,
     TODAY_ROUTE: TODAY_ROUTE,
+    AUTOMATION_ROUTE: AUTOMATION_ROUTE,
     destinationPath: destinationPath,
     modeForPath: modeForPath,
     normalizePath: normalizePath,

@@ -228,6 +228,7 @@ const { createKnowledgeManagementRouter } = require('./routes/knowledgeManagemen
 const { createSupportRouter } = require('./routes/support');
 const { createFieldExecutionsRouter } = require('./routes/fieldExecutions');
 const { createOperationalOverviewRouter } = require('./routes/operationalOverview');
+const { createAutomationCenterRouter } = require('./routes/automationCenter');
 const { mountInvestorForecast } = require('./routes/investorForecast');
 const { SupportCaseOutboxWorker } = require('./support/outbox');
 const { DemoCommandCenterHousekeepingWorker } = require('./commandCenter/demoRepository');
@@ -351,6 +352,7 @@ const pages = {
   '/dashboard/work-profile-reviews': 'public/dashboard/work-profile-reviews.html',
   '/dashboard/work': 'public/dashboard/work.html',
   '/dashboard/operations': 'public/dashboard/operations.html',
+  '/dashboard/automation': 'public/dashboard/automation.html',
   '/dashboard/learning-center': 'public/dashboard/learning-center.html',
   '/dashboard/completion-review': 'public/dashboard/completion-review.html',
   '/dashboard/executive-brief': 'public/dashboard/executive-brief.html',
@@ -502,6 +504,7 @@ const simulationsRoutes = require('./routes/simulations');
 app.use('/api/v1/command-center', createCommandCenterRouter());
 app.use('/api/v1/today', createTodayRouter());
 app.use('/api/v1/operational-overview', createOperationalOverviewRouter());
+app.use('/api/v1/automation-center', createAutomationCenterRouter());
 app.use('/api/v1/learning', createLearningRouter());
 app.use('/api/v1/forecast/price-history', createForecastPriceHistoryRouter());
 app.use('/api/v1/forecast/booking-reviews',

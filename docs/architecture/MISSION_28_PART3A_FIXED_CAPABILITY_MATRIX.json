@@ -71,7 +71,7 @@
   ],
   "membershipVocabulary": {
     "sourcePath": "src/auth/permissions.js",
-    "normalizedLfSha256": "4FD11A90AC6EE584614535580ED45C6AAE2A23B73547CE62D28A73BB11C40D42",
+    "normalizedLfSha256": "F01E3292C929230455D6508D7A2496643D581BE9867779144E9C38CDEBCB6DB0",
     "canonicalMembershipRoleIds": ["owner", "admin", "member", "viewer"],
     "exactActiveTenantMembershipRequired": true,
     "exactAuthenticatedSessionRequired": true,

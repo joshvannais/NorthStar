@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Automation Center - NorthStar</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/northstar-icon-32.png?v=20260920">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/northstar-icon-180.png?v=20260920">
+  <script src="/js/command-center-contract.js?v=m28-part14a"></script>
+  <script src="/js/theme.js"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/automation-center.css?v=m28-part14a">
+  <link rel="stylesheet" href="/css/site-professionalism.css?v=command-center-clarity-20260915">
+</head>
+<body class="automation-center-page">
+  <a class="automation-skip" href="#automationMain">Skip to Automation Center</a>
+  <div class="dashboard-layout">
+    <main id="automationMain" class="main-content automation-main" tabindex="-1" aria-busy="true">
+      <header class="automation-hero">
+        <div>
+          <p class="automation-eyebrow">Owner-controlled work</p>
+          <h1>Automation Center</h1>
+          <p class="automation-lede">Understand what NorthStar may prepare, what needs your approval, and what is stopped before anything happens.</p>
+        </div>
+        <button id="automationRefresh" class="btn btn-secondary" type="button">Refresh</button>
+      </header>
+
+      <div id="automationStatus" class="automation-status" role="status" aria-live="polite" aria-atomic="true">Loading current automation records.</div>
+
+      <section id="automationSummary" class="automation-summary" aria-label="Automation overview" hidden>
+        <article><span>Current status</span><strong id="summaryStatus">Checking</strong><small id="summaryExplanation">Loading current records</small></article>
+        <article><span>Policies</span><strong id="summaryPolicies">0</strong><small id="summaryPolicyDetail">No policies loaded</small></article>
+        <article><span>Runs</span><strong id="summaryRuns">0</strong><small id="summaryRunDetail">No runs loaded</small></article>
+        <article><span>Needs you</span><strong id="summaryAttention">Unavailable</strong><small>Current approval and owner-work status</small></article>
+      </section>
+
+      <section class="automation-panel" aria-labelledby="setupTitle">
+        <div class="automation-panel-heading">
+          <div><p class="automation-kicker">Bounded setup</p><h2 id="setupTitle">Choose what you want NorthStar to prepare</h2><p>Start with a clear template or build a bounded preview. Previewing never saves, activates, queues, sends, or charges anything.</p></div>
+        </div>
+        <div id="automationTemplates" class="automation-template-grid" aria-live="polite"></div>
+        <details class="automation-disclosure" id="customSetupDisclosure">
+          <summary>Build a custom setup</summary>
+          <form id="automationSetupForm" class="automation-setup-form" novalidate>
+            <input id="setupTemplateId" name="templateId" type="hidden" value="custom">
+            <div class="automation-field automation-field-wide"><label for="setupName">Setup name</label><input id="setupName" name="name" type="text" minlength="3" maxlength="80" autocomplete="off" required></div>
+            <div class="automation-field"><label for="setupSource">Use this company record</label><select id="setupSource" name="sourceClassId" required></select></div>
+            <div class="automation-field"><label for="setupAction">Prepare this work</label><select id="setupAction" name="actionFamily" required></select></div>
+            <div class="automation-field"><label for="setupRecipient">For</label><select id="setupRecipient" name="recipientClass" required></select></div>
+            <div class="automation-field"><label for="setupChannel">Through</label><select id="setupChannel" name="channelId" required></select></div>
+            <div class="automation-field"><label for="setupTiming">When</label><select id="setupTiming" name="timing" required></select></div>
+            <div class="automation-field"><label for="setupDailyLimit">Daily maximum</label><input id="setupDailyLimit" name="dailyLimit" type="number" min="1" max="25" step="1" value="1" required></div>
+            <div class="automation-form-actions"><button id="setupPreview" class="btn btn-primary" type="submit">Preview setup</button></div>
+          </form>
+        </details>
+        <article id="automationPreview" class="automation-preview" tabindex="-1" aria-labelledby="previewTitle" hidden>
+          <div class="automation-card-heading"><div><p class="automation-kicker">No-effect preview</p><h3 id="previewTitle">Setup preview</h3></div><span class="automation-pill automation-pill-warning">Not active</span></div>
+          <p id="previewSummary"></p>
+          <dl id="previewDetails" class="automation-definition-grid"></dl>
+          <div><h4>What stops it</h4><ul id="previewStops"></ul></div>
+          <p id="previewBoundary" class="automation-boundary-copy"></p>
+        </article>
+      </section>
+
+      <div class="automation-two-column">
+        <section class="automation-panel" aria-labelledby="approvalTitle">
+          <div class="automation-panel-heading"><div><p class="automation-kicker">Approval inbox</p><h2 id="approvalTitle">Current approval status</h2><p>Current pending requests may exist, but inbox resolution is unavailable in this view.</p></div><span id="approvalCount" class="automation-pill">Unavailable</span></div>
+          <div id="automationApprovals" class="automation-list"></div>
+        </section>
+        <section class="automation-panel" aria-labelledby="ownerWorkTitle">
+          <div class="automation-panel-heading"><div><p class="automation-kicker">Owner work evidence</p><h2 id="ownerWorkTitle">Recorded private task history</h2><p>Historical task evidence is not a current to-do. Pending or resolved status remains unavailable.</p></div><span id="ownerWorkCount" class="automation-pill">Unavailable</span></div>
+          <div id="automationOwnerWork" class="automation-list"></div>
+        </section>
+      </div>
+
+      <section class="automation-panel" aria-labelledby="runsTitle">
+        <div class="automation-panel-heading"><div><p class="automation-kicker">Policies and runs</p><h2 id="runsTitle">What is recorded active, paused, or needs review</h2><p>Status reflects recorded authority and evidence, not live runtime revalidation. Scheduled is not delivered, and provider-accepted is not customer-received.</p></div></div>
+        <div class="automation-run-columns">
+          <section aria-labelledby="activeRunsTitle"><h3 id="activeRunsTitle">Recorded active</h3><div id="activeRuns" class="automation-list"></div></section>
+          <section aria-labelledby="pausedRunsTitle"><h3 id="pausedRunsTitle">Paused</h3><div id="pausedRuns" class="automation-list"></div></section>
+          <section aria-labelledby="failedRunsTitle"><h3 id="failedRunsTitle">Needs review</h3><div id="failedRuns" class="automation-list"></div></section>
+        </div>
+        <details class="automation-disclosure"><summary>View policy details</summary><div id="automationPolicies" class="automation-list automation-policy-list"></div></details>
+      </section>
+
+      <section class="automation-panel" aria-labelledby="timelineTitle">
+        <div class="automation-panel-heading"><div><p class="automation-kicker">Customer and document history</p><h2 id="timelineTitle">What NorthStar recorded</h2><p>Each line is evidence of a decision or observed effect. It does not imply delivery, a reply, payment, or business success.</p></div></div>
+        <ol id="automationTimeline" class="automation-timeline"></ol>
+      </section>
+
+      <div class="automation-two-column">
+        <section class="automation-panel" aria-labelledby="limitsTitle">
+          <div class="automation-panel-heading"><div><p class="automation-kicker">Limits</p><h2 id="limitsTitle">Safety limits</h2></div><span id="limitsState" class="automation-pill">Checking</span></div>
+          <p id="limitsConsumption"></p><ul id="automationLimits"></ul>
+        </section>
+        <section class="automation-panel" aria-labelledby="channelsTitle">
+          <div class="automation-panel-heading"><div><p class="automation-kicker">Availability</p><h2 id="channelsTitle">Channels</h2><p>A visible channel is not permission to contact anyone.</p></div></div>
+          <div id="automationChannels" class="automation-list"></div>
+        </section>
+      </div>
+
+      <section class="automation-panel automation-stop-panel" aria-labelledby="stopTitle">
+        <div class="automation-panel-heading"><div><p class="automation-kicker">Stop controls</p><h2 id="stopTitle">Company-wide safeguard</h2><p id="stopExplanation">Checking the current company-wide control.</p></div><span id="stopState" class="automation-pill automation-pill-warning">Checking</span></div>
+        <p class="automation-boundary-copy">This page never treats a missing release control as permission to restart. Policy controls appear only when their exact current authority is mounted.</p>
+      </section>
+
+      <details class="automation-disclosure automation-evidence" id="automationEvidence">
+        <summary>Why these states appear</summary>
+        <p>NorthStar separates eligibility, planned work, queued work, provider attempts, delivery evidence, replies, failures, and outcomes. One state never silently becomes another.</p>
+        <ul id="automationUnavailable"></ul>
+        <p id="automationEvaluatedAt"></p>
+      </details>
+    </main>
+  </div>
+  <script src="/js/auth-session.js"></script>
+  <script src="/js/nav-component.js?v=m28-part14a"></script>
+  <script src="/js/automation-center-contract.js?v=m28-part14a"></script>
+  <script src="/js/automation-center-page.js?v=m28-part14a"></script>
+  <script>NavComponent.init('automation-center');</script>
+</body>
+</html>

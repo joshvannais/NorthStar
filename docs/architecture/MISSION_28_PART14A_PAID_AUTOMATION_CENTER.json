@@ -1,0 +1,152 @@
+{
+  "contractVersion": "mission28.part14a.paid-automation-center.v1",
+  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "frozenAuthority": {
+    "sourcePath": "C:\\Users\\joshv\\Documents\\Codex\\2026-09-09\\view-northstar-mission-success-and-look\\MISSION_28_PROPOSED_PART_SLICE_PLAN.md",
+    "sourceSha256": "DDBA5CA7523A1684330E136313F4416584D142A63167310EEABEC1EBFBB010B4",
+    "canonicalBodySha256": "109589DA2242EE6AA7FDD4C2DED3E3440B909B26452DEFCD39BC2502C1ADAAF5",
+    "part": "14",
+    "slice": "A",
+    "scope": "paid_tenant_private_automation_center_only",
+    "laterSlices": "Part14B_through_Part14G_remain_planned_unimplemented"
+  },
+  "part13ERelease": {
+    "acceptedSourceHead": "51d3fcc0ea4702e06d55cbd512608d98ec1f519e",
+    "acceptedTree": "a7c6f60761f063c02a394d4c97b456764d6ac7b7",
+    "pullRequest": 607,
+    "mergedMain": "ee77b1be373ededb5099bcc14cfa191082ecd127",
+    "deploymentId": "64ee7bdd-aaed-4df9-ac20-e3a64d0410ad",
+    "imageSha256": "sha256:01fd4714b02b0c20f798ffc40a5586e33296f34c6e0721e889f67ca136c61dd2",
+    "productionMigrationReconciliation": "283_of_283_through_287_no_288",
+    "startupHealthRootDashboardDemo": "verified",
+    "dashboardDemoByteHashParity": "verified"
+  },
+  "routes": {
+    "page": "/dashboard/automation",
+    "read": "GET /api/v1/automation-center",
+    "preview": "POST /api/v1/automation-center/preview",
+    "demoRoute": null,
+    "cachePolicy": "private_no_store",
+    "paidOnly": true
+  },
+  "authorization": {
+    "transport": "current_durable_cookie_session_only",
+    "tenantSource": "server_owned_session_membership",
+    "readPermission": "automation:read",
+    "previewPermission": "automation:update",
+    "allowedRoles": ["owner", "admin"],
+    "deniedRoles": ["member", "viewer"],
+    "previewCsrf": "required",
+    "crossTenantRequestMaterial": "denied"
+  },
+  "readTransaction": {
+    "isolation": "repeatable_read",
+    "mode": "read_only",
+    "postgresClock": "statement_timestamp",
+    "tenantRlsSetting": "northstar.automation_tenant_id",
+    "maximumRowsPerCollection": 100,
+    "overBoundDisposition": "fail_closed_whole_response",
+    "statementTimeoutSeconds": 5,
+    "lockTimeoutSeconds": 2,
+    "idleInTransactionTimeoutSeconds": 5
+  },
+  "surfaceSections": [
+    "concise_status",
+    "policy_templates",
+    "custom_bounded_setup",
+    "no_effect_preview",
+    "approval_inbox_boundary",
+    "active_paused_failed_runs",
+    "customer_document_timeline",
+    "owner_work",
+    "limits",
+    "channel_availability",
+    "stop_control_evidence",
+    "policy_explanations",
+    "progressive_drilldown"
+  ],
+  "templates": [
+    "owner-work-review",
+    "estimate-follow-up-review",
+    "appointment-update-review",
+    "invoice-reminder-review"
+  ],
+  "preview": {
+    "schemaVersion": "mission28.automation-center.v1",
+    "exactFields": ["templateId", "name", "sourceClassId", "actionFamily", "recipientClass", "channelId", "timing", "dailyLimit"],
+    "minimumNameCharacters": 3,
+    "maximumNameCharacters": 80,
+    "minimumDailyLimit": 1,
+    "maximumDailyLimit": 25,
+    "templateAuthorityFieldsImmutable": true,
+    "externalAvailability": "preview_only_external_channel_unavailable",
+    "internalAvailability": "preview_only_no_activation",
+    "saved": false,
+    "activated": false,
+    "queued": false,
+    "recipientContacted": false,
+    "providerAttemptCreated": false,
+    "externalEffectCreated": false,
+    "financialEffectCreated": false,
+    "moneyEffectCreated": false
+  },
+  "minimizedProjection": {
+    "allowed": [
+      "opaque_internal_identifiers",
+      "fixed_owner_readable_labels",
+      "fixed_states",
+      "bounded_counts",
+      "currentness_labels",
+      "trusted_timestamps"
+    ],
+    "forbidden": [
+      "policy_document_or_canonical_text",
+      "message_body",
+      "recipient_address_or_customer_contact",
+      "document_or_attachment_content",
+      "provider_payload",
+      "credential_secret_signature_or_token",
+      "free_text",
+      "cross_tenant_material"
+    ]
+  },
+  "failClosed": {
+    "failedLoadClearsPriorTenantData": true,
+    "staleOrUnavailableCurrentnessIsNotActive": true,
+    "policyLifecycleAndDeliveryControlRemainDistinct": true,
+    "policyExpiryPreventsRecordedActiveProjection": true,
+    "runRequiresExactActiveUnexpiredPolicyVersionLifecycle": true,
+    "capturedRunEvidenceIsNotLiveRuntimeRevalidation": true,
+    "unavailablePolicyStateMakesAggregateStatusUnavailable": true,
+    "knownPolicyCountsNeverHideUnavailablePolicyCount": true,
+    "positiveAggregateStatusIsRecordedEvidenceNotLiveCurrent": true,
+    "approvalEvidenceIsNotPendingApprovalAuthority": true,
+    "pendingApprovalCountIsUnavailableNotZero": true,
+    "historicalInternalTaskIsNotPendingOwnerWork": true,
+    "missingLimitConsumptionIsNotZero": true,
+    "visibleChannelIsNotContactPermission": true,
+    "scheduledIsNotDelivered": true,
+    "providerAcceptedIsNotCustomerReceived": true,
+    "missingStopReleaseIsNotResumePermission": true
+  },
+  "runtimeBoundary": {
+    "migrationAdded": false,
+    "latestMigration": 287,
+    "nextMigrationAbsent": 288,
+    "providerAdapterMounted": false,
+    "recipientOrMessagePathMounted": false,
+    "financialOrMoneyEffectMounted": false,
+    "upstreamMutationMounted": false,
+    "isolatedDemoMounted": false
+  },
+  "unavailableEvidence": [
+    "pending_approval_resolver_and_approval_actions",
+    "current_limit_consumption",
+    "provider_and_live_channel_availability",
+    "tenant_stop_release_authority",
+    "Part14A_independent_audit_PR_merge_deployment_and_production_acceptance",
+    "provider_live_private_production_and_money_evidence",
+    "physical_Safari_devices_manual_assistive_technology_and_founder_visual_approval",
+    "professional_legal_privacy_communications_collections_accounting_security_or_compliance_review"
+  ]
+}

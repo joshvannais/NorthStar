@@ -168,10 +168,10 @@
     element('summaryStatus').textContent = data.status.label;
     element('summaryExplanation').textContent = data.status.explanation;
     element('summaryPolicies').textContent = String(data.counts.policies);
-    element('summaryPolicyDetail').textContent = data.counts.activePolicies + ' active · ' + data.counts.pausedPolicies + ' paused';
+    element('summaryPolicyDetail').textContent = data.counts.activePolicies + ' recorded active · ' + data.counts.pausedPolicies + ' paused';
     var runCount = data.counts.activeRuns + data.counts.pausedRuns + data.counts.failedRuns;
     element('summaryRuns').textContent = String(runCount);
-    element('summaryRunDetail').textContent = data.counts.activeRuns + ' active · ' + data.counts.failedRuns + ' need review';
+    element('summaryRunDetail').textContent = data.counts.activeRuns + ' recorded active · ' + data.counts.failedRuns + ' need review';
     element('summaryAttention').textContent = data.counts.approvals === null || data.counts.ownerWork === null
       ? 'Unavailable'
       : String(data.counts.approvals + data.counts.ownerWork);

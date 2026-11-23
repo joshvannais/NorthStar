@@ -150,7 +150,7 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
         { policy_id: uuid(11), version: '2', source_class_id: 'mission27_financial_collection', action_family: 'collection_escalation', channel_id: 'in_app_passive', lifecycle_state: 'active', lifecycle_currentness: 'exact_current_not_runtime_revalidated', control_state: 'paused', expires_at: '2030-01-01T00:00:00Z', recorded_at: '2026-11-20T18:00:00Z' },
       ],
       runs: [
-        { run_id: uuid(20), policy_id: uuid(10), policy_version: '1', latest_record_type: 'scheduled_run', currentness_marker: 'captured_exact_current', latest_recorded_at: '2026-11-20T19:30:00Z', schedule_id: uuid(21), retry_state: null, control_state: null },
+        { run_id: uuid(20), policy_id: uuid(10), policy_version: '1', latest_record_type: 'scheduled_run', currentness_marker: 'captured_exact_current', latest_recorded_at: '2026-11-20T19:30:00Z', schedule_id: uuid(21), retry_state: null, control_state: null, policy_lifecycle_state: 'active', policy_lifecycle_currentness: 'exact_current_not_runtime_revalidated', policy_expires_at: '2030-01-01T00:00:00Z' },
         { run_id: uuid(22), policy_id: uuid(11), policy_version: '2', latest_record_type: 'reconciliation', currentness_marker: 'captured_unavailable_fail_closed', latest_recorded_at: '2026-11-20T19:35:00Z', schedule_id: uuid(23), retry_state: 'reconciliation_required_no_resend', control_state: null },
       ],
       records: [
@@ -179,7 +179,41 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
       channel_id: 'in_app_passive', lifecycle_state: 'active', lifecycle_currentness: 'stale_fail_closed', control_state: null,
       expires_at: '2030-01-01T00:00:00Z', recorded_at: '2026-11-20T19:00:00Z'
     }] }));
-    expect(result.policies[0]).toMatchObject({ state: 'unavailable', stateLabel: 'Currentness unavailable', canPause: false });
+    expect(result.policies[0]).toMatchObject({ state: 'unavailable', stateLabel: 'Current policy status unavailable', canPause: false });
+  });
+
+  test('resumed delivery control never masks restrictive lifecycle or policy expiry', () => {
+    const basePolicy = {
+      source_class_id: 'mission23_work_execution', action_family: 'internal_read_digest_task',
+      channel_id: 'in_app_passive', lifecycle_currentness: 'exact_current_not_runtime_revalidated',
+      control_state: 'active_resumed', recorded_at: '2026-11-20T19:00:00Z',
+    };
+    const result = buildSnapshot(input(), emptyResults({ policies: [
+      { ...basePolicy, policy_id: uuid(10), version: '1', lifecycle_state: 'active', expires_at: '2030-01-01T00:00:00Z' },
+      { ...basePolicy, policy_id: uuid(11), version: '1', lifecycle_state: 'paused', expires_at: '2030-01-01T00:00:00Z' },
+      { ...basePolicy, policy_id: uuid(12), version: '1', lifecycle_state: 'expired', expires_at: '2030-01-01T00:00:00Z' },
+      { ...basePolicy, policy_id: uuid(13), version: '1', lifecycle_state: 'retired', expires_at: '2030-01-01T00:00:00Z' },
+      { ...basePolicy, policy_id: uuid(14), version: '1', lifecycle_state: 'active', expires_at: '2026-11-20T19:59:59Z' },
+      { ...basePolicy, policy_id: uuid(15), version: '1', lifecycle_state: null, expires_at: '2030-01-01T00:00:00Z' },
+      { ...basePolicy, policy_id: uuid(16), version: '1', lifecycle_state: 'active_resumed', expires_at: '2030-01-01T00:00:00Z' },
+      { ...basePolicy, policy_id: uuid(17), version: '1', lifecycle_state: 'active', control_state: 'active', expires_at: '2030-01-01T00:00:00Z' },
+      { ...basePolicy, policy_id: uuid(18), version: '1', lifecycle_state: 'superseded', expires_at: '2030-01-01T00:00:00Z' },
+      { ...basePolicy, policy_id: uuid(19), version: '1', lifecycle_state: 'emergency_stopped', expires_at: '2030-01-01T00:00:00Z' },
+    ] }));
+
+    expect(result.policies.map(policy => [policy.id, policy.state, policy.stateLabel])).toEqual([
+      [uuid(10), 'active', 'Recorded active'],
+      [uuid(11), 'paused', 'Paused'],
+      [uuid(12), 'expired', 'Expired'],
+      [uuid(13), 'retired', 'Retired'],
+      [uuid(14), 'expired', 'Expired'],
+      [uuid(15), 'unavailable', 'Current policy status unavailable'],
+      [uuid(16), 'unavailable', 'Current policy status unavailable'],
+      [uuid(17), 'unavailable', 'Current policy status unavailable'],
+      [uuid(18), 'superseded', 'Superseded'],
+      [uuid(19), 'emergency_stopped', 'Stopped'],
+    ]);
+    expect(result.counts).toMatchObject({ activePolicies: 1, pausedPolicies: 1 });
   });
 
   test('missing currentness, malformed identifiers, and stale run evidence fail closed', () => {
@@ -216,6 +250,8 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     const baseRun = {
       policy_id: uuid(10), policy_version: '1', latest_record_type: 'scheduled_run',
       currentness_marker: 'captured_exact_current', schedule_id: uuid(21), retry_state: null,
+      policy_lifecycle_state: 'active', policy_lifecycle_currentness: 'exact_current_not_runtime_revalidated',
+      policy_expires_at: '2030-01-01T00:00:00Z',
     };
     const result = buildSnapshot(input(), emptyResults({ runs: [
       { ...baseRun, run_id: uuid(20), tenant_control_state: 'paused' },
@@ -227,10 +263,37 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(result.runs.map(run => [run.id, run.state, run.stateLabel])).toEqual([
       [uuid(20), 'paused', 'Paused'],
       [uuid(22), 'failed', 'Revoked'],
-      [uuid(23), 'active', 'Scheduled'],
+      [uuid(23), 'active', 'Scheduled record'],
       [uuid(24), 'failed', 'Control needs review'],
     ]);
     expect(result.counts).toMatchObject({ activeRuns: 1, pausedRuns: 1, failedRuns: 2 });
+  });
+
+  test('active-looking runs fail closed under paused terminal expired or missing policy lifecycle', () => {
+    const baseRun = {
+      policy_id: uuid(10), policy_version: '7', latest_record_type: 'scheduled_run',
+      currentness_marker: 'captured_exact_current', schedule_id: uuid(21), retry_state: null,
+      policy_lifecycle_currentness: 'exact_current_not_runtime_revalidated',
+      policy_expires_at: '2030-01-01T00:00:00Z', policy_control_state: 'active_resumed',
+    };
+    const result = buildSnapshot(input(), emptyResults({ runs: [
+      { ...baseRun, run_id: uuid(20), policy_lifecycle_state: 'paused' },
+      { ...baseRun, run_id: uuid(22), policy_lifecycle_state: 'retired' },
+      { ...baseRun, run_id: uuid(23), policy_lifecycle_state: 'expired' },
+      { ...baseRun, run_id: uuid(24), policy_lifecycle_state: 'active', policy_expires_at: '2026-11-20T19:59:59Z' },
+      { ...baseRun, run_id: uuid(25), policy_lifecycle_state: null },
+      { ...baseRun, run_id: uuid(26), policy_lifecycle_state: 'active', policy_lifecycle_currentness: null },
+    ] }));
+
+    expect(result.runs.map(run => [run.id, run.state, run.stateLabel])).toEqual([
+      [uuid(20), 'paused', 'Paused'],
+      [uuid(22), 'failed', 'Retired'],
+      [uuid(23), 'failed', 'Expired'],
+      [uuid(24), 'failed', 'Expired'],
+      [uuid(25), 'failed', 'Current policy status unavailable'],
+      [uuid(26), 'failed', 'Current policy status unavailable'],
+    ]);
+    expect(result.counts).toMatchObject({ activeRuns: 0, pausedRuns: 1, failedRuns: 5 });
   });
 
   test('exact terminal runs stay out of active paused failed lists while terminal evidence remains', () => {
@@ -360,6 +423,10 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     const tenant = calls.find(call => call.sql.includes("set_config('northstar.automation_tenant_id'"));
     expect(tenant.params).toEqual([uuid(28)]);
     const runRead = calls.find(call => call.sql.includes('SELECT binding.run_id'));
+    expect(runRead.sql).toMatch(/run_policy\.expires_at policy_expires_at/);
+    expect(runRead.sql).toMatch(/run_policy\.policy_id=binding\.policy_id[\s\S]*run_policy\.version=binding\.policy_version/);
+    expect(runRead.sql).toMatch(/policy_lifecycle\.to_state policy_lifecycle_state/);
+    expect(runRead.sql).toMatch(/policy_id=binding\.policy_id AND policy_version=binding\.policy_version[\s\S]*ORDER BY lifecycle_sequence DESC LIMIT 1/);
     expect(runRead.sql).toMatch(/tenant_control\.control_state tenant_control_state/);
     expect(runRead.sql).toMatch(/tenant_control\.target_kind='tenant'[\s\S]*tenant_control\.target_key=\$1::text/);
     expect(runRead.sql).toMatch(/policy_control\.target_kind='policy_version'[\s\S]*binding\.policy_id::text\|\|':'\|\|binding\.policy_version::text/);
@@ -462,6 +529,7 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     const html = read('public/dashboard/automation.html');
     expect(html).not.toMatch(/idempotency|canonical digest|provider request identity|fencing token|row level security/i);
     expect(html).toContain('Scheduled is not delivered');
+    expect(html).toContain('not live runtime revalidation');
     expect(html).toContain('does not imply delivery, a reply, payment, or business success');
     expect(html).toContain('No-effect preview');
     expect(html).toContain('Current pending requests may exist');

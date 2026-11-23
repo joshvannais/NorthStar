@@ -47,6 +47,16 @@ contact values, document contents, provider payloads, credentials, tokens,
 free text, and cross-tenant material. Failed or stale loads clear every prior
 tenant-derived region before an error is shown.
 
+Policy lifecycle and delivery-control heads remain separate authorities. A
+resumed delivery control cannot mask a paused, expired, retired, superseded, or
+emergency-stopped policy lifecycle. Recorded-active policy projection requires
+the exact latest lifecycle for that same policy version, the exact lifecycle
+currentness marker, and an expiry later than the read transaction clock. Run
+projection uses that same policy-version lifecycle and expiry gate before any
+tenant, policy, or action-schedule delivery-control evidence. A captured run
+record remains historical evidence rather than proof of live runtime
+revalidation; owner-facing active labels therefore say recorded active.
+
 Immutable approval evidence is not a pending-approval resolver. Part 14A
 therefore reports the pending approval count and combined attention count as
 unavailable, never zero, and shows no actionable approval merely because an

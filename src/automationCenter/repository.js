@@ -32,11 +32,18 @@ const RECORD_LABELS = Object.freeze({
   terminal_outcome: 'Run reached a terminal state',
 });
 const POLICY_STATE_LABELS = Object.freeze({
-  draft: 'Draft', validated: 'Validated', previewed: 'Preview ready', active: 'Active', paused: 'Paused',
+  draft: 'Draft', validated: 'Validated', previewed: 'Preview ready', active: 'Recorded active', paused: 'Paused',
   superseded: 'Superseded', expired: 'Expired', retired: 'Retired', emergency_stopped: 'Stopped',
   draining: 'Stopping safely', drained: 'Stopped', revoked_terminal: 'Revoked',
-  superseded_terminal: 'Superseded', active_resumed: 'Active', bulk_stopped_terminal: 'Stopped',
+  superseded_terminal: 'Superseded', active_resumed: 'Recorded active', bulk_stopped_terminal: 'Stopped',
 });
+const POLICY_LIFECYCLE_STATES = Object.freeze([
+  'draft', 'validated', 'previewed', 'active', 'paused', 'superseded', 'expired', 'retired', 'emergency_stopped',
+]);
+const DELIVERY_CONTROL_STATES = Object.freeze([
+  'paused', 'revoked_terminal', 'superseded_terminal', 'draining', 'drained', 'active_resumed',
+  'cancelled_terminal', 'expired_terminal', 'dead_lettered_terminal', 'bulk_stopped_terminal',
+]);
 const CHANNEL_EVIDENCE_LABELS = Object.freeze({
   ready_internal_no_effect: 'Private owner work is available without contacting a customer.',
   unavailable_manual_handoff_not_opened: 'Manual device handoff is not available.',
@@ -68,19 +75,43 @@ function safeId(value) {
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value)
     ? value : null;
 }
-function policyState(row) {
-  const state = row.control_state || row.lifecycle_state || 'draft';
-  const current = row.lifecycle_currentness === 'exact_current_not_runtime_revalidated';
-  return {
-    id: current ? state : 'unavailable',
-    label: current ? (POLICY_STATE_LABELS[state] || 'Review required') : 'Currentness unavailable',
-  };
+function exactPolicyLifecycle(row, evaluatedAt) {
+  const expiresAt = iso(row.expires_at || row.policy_expires_at);
+  const checkedAt = iso(evaluatedAt);
+  if (row.lifecycle_currentness !== 'exact_current_not_runtime_revalidated' ||
+      !POLICY_LIFECYCLE_STATES.includes(row.lifecycle_state) ||
+      !expiresAt || !checkedAt) {
+    return { id: 'unavailable', label: 'Current policy status unavailable' };
+  }
+  const expired = new Date(expiresAt).getTime() <= new Date(checkedAt).getTime();
+  const state = expired ? 'expired' : row.lifecycle_state;
+  return { id: state, label: POLICY_STATE_LABELS[state] || 'Current policy status unavailable' };
 }
-function runState(row) {
+function policyState(row, evaluatedAt) {
+  const lifecycle = exactPolicyLifecycle(row, evaluatedAt);
+  if (lifecycle.id !== 'active') return lifecycle;
+  if (!row.control_state || row.control_state === 'active_resumed') return lifecycle;
+  if (!DELIVERY_CONTROL_STATES.includes(row.control_state)) {
+    return { id: 'unavailable', label: 'Current policy status unavailable' };
+  }
+  return { id: row.control_state, label: POLICY_STATE_LABELS[row.control_state] || 'Stopped' };
+}
+function runState(row, evaluatedAt) {
   if (row.currentness_marker !== 'captured_exact_current') {
     return { id: 'failed', label: 'Currentness needs review' };
   }
   if (row.latest_record_type === 'terminal_outcome') return { id: 'completed', label: 'Completed' };
+  const policyLifecycle = exactPolicyLifecycle({
+    lifecycle_state: row.policy_lifecycle_state,
+    lifecycle_currentness: row.policy_lifecycle_currentness,
+    policy_expires_at: row.policy_expires_at,
+  }, evaluatedAt);
+  if (policyLifecycle.id !== 'active') {
+    return {
+      id: policyLifecycle.id === 'paused' ? 'paused' : 'failed',
+      label: policyLifecycle.label,
+    };
+  }
   const tenantControl = row.tenant_control_state;
   const policyControl = row.policy_control_state;
   const actionControl = row.action_control_state || row.control_state;
@@ -100,8 +131,8 @@ function runState(row) {
   }
   if (row.retry_state === 'reconciliation_required_no_resend') return { id: 'failed', label: 'Outcome needs review' };
   if (row.retry_state && row.retry_state.indexOf('permanent_stop_') === 0) return { id: 'failed', label: 'Stopped after failure' };
-  if (row.schedule_id) return { id: 'active', label: 'Scheduled' };
-  return { id: 'active', label: 'In progress' };
+  if (row.schedule_id) return { id: 'active', label: 'Scheduled record' };
+  return { id: 'active', label: 'In-progress record' };
 }
 function templateProjection() {
   return centerContract.TEMPLATES.map(template => ({
@@ -167,8 +198,9 @@ function stopProjection(row) {
   };
 }
 function buildSnapshot(input, results) {
+  const evaluatedAt = iso(results.evaluatedAt);
   const policies = bounded(results.policies, 'Policies').map(row => {
-    const state = policyState(row);
+    const state = policyState(row, evaluatedAt);
     return {
       id: safeId(row.policy_id),
       version: Number(row.version),
@@ -185,7 +217,7 @@ function buildSnapshot(input, results) {
     };
   });
   const runs = bounded(results.runs, 'Runs').map(row => {
-    const state = runState(row);
+    const state = runState(row, evaluatedAt);
     return {
       id: safeId(row.run_id),
       policyId: safeId(row.policy_id),
@@ -194,7 +226,9 @@ function buildSnapshot(input, results) {
       stateLabel: state.label,
       latestEvent: RECORD_LABELS[row.latest_record_type] || 'Current evidence recorded',
       recordedAt: iso(row.latest_recorded_at || row.recorded_at),
-      evidenceState: row.currentness_marker === 'captured_exact_current' ? 'Exact captured evidence' : 'Currentness requires review',
+      evidenceState: row.currentness_marker === 'captured_exact_current'
+        ? 'Captured evidence; not live revalidated'
+        : 'Currentness requires review',
     };
   }).filter(run => run.state !== 'completed');
   const recordRows = bounded(results.records, 'Timeline');
@@ -241,7 +275,7 @@ function buildSnapshot(input, results) {
   const approvals = null;
   const counts = {
     policies: policies.length,
-    activePolicies: policies.filter(item => item.state === 'active' || item.state === 'active_resumed').length,
+    activePolicies: policies.filter(item => item.state === 'active').length,
     pausedPolicies: policies.filter(item => item.state === 'paused' || item.state === 'draining' || item.state === 'drained').length,
     activeRuns: runs.filter(item => item.state === 'active').length,
     pausedRuns: runs.filter(item => item.state === 'paused').length,
@@ -285,7 +319,7 @@ function buildSnapshot(input, results) {
       'External messages, recipients, provider attempts, delivery, replies, outcomes, and money effects are unavailable and unclaimed',
       'Tenant-wide stop release, private-production evidence, professional review, and founder visual approval are unavailable and unclaimed',
     ],
-    evaluatedAt: iso(results.evaluatedAt),
+    evaluatedAt,
   });
 }
 
@@ -328,11 +362,22 @@ async function readAutomationCenter(pool, input) {
     const runs = (await client.query(`
       SELECT binding.run_id,binding.policy_id,binding.policy_version,binding.recorded_at,
         latest.record_type latest_record_type,latest.currentness_marker,latest.recorded_at latest_recorded_at,
+        run_policy.expires_at policy_expires_at,
+        policy_lifecycle.to_state policy_lifecycle_state,
+        policy_lifecycle.currentness_marker policy_lifecycle_currentness,
         schedule.schedule_id,retry.state retry_state,
         tenant_control.control_state tenant_control_state,
         policy_control.control_state policy_control_state,
         action_control.control_state action_control_state
       FROM public.canonical_automation_historical_run_bindings_v1 binding
+      JOIN public.canonical_automation_policy_versions_v1 run_policy
+        ON run_policy.organization_id=$1 AND run_policy.policy_id=binding.policy_id
+        AND run_policy.version=binding.policy_version
+      LEFT JOIN LATERAL (
+        SELECT to_state,currentness_marker FROM public.canonical_automation_lifecycle_events_v1
+        WHERE organization_id=$1 AND policy_id=binding.policy_id AND policy_version=binding.policy_version
+        ORDER BY lifecycle_sequence DESC LIMIT 1
+      ) policy_lifecycle ON TRUE
       LEFT JOIN LATERAL (
         SELECT record_type,currentness_marker,recorded_at FROM public.canonical_automation_records_v1
         WHERE organization_id=$1 AND run_id=binding.run_id ORDER BY causal_ordinal DESC LIMIT 1

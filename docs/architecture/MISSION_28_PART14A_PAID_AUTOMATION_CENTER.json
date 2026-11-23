@@ -113,6 +113,10 @@
   "failClosed": {
     "failedLoadClearsPriorTenantData": true,
     "staleOrUnavailableCurrentnessIsNotActive": true,
+    "policyLifecycleAndDeliveryControlRemainDistinct": true,
+    "policyExpiryPreventsRecordedActiveProjection": true,
+    "runRequiresExactActiveUnexpiredPolicyVersionLifecycle": true,
+    "capturedRunEvidenceIsNotLiveRuntimeRevalidation": true,
     "approvalEvidenceIsNotPendingApprovalAuthority": true,
     "pendingApprovalCountIsUnavailableNotZero": true,
     "historicalInternalTaskIsNotPendingOwnerWork": true,

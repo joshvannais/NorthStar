@@ -114,6 +114,8 @@
     "failedLoadClearsPriorTenantData": true,
     "staleOrUnavailableCurrentnessIsNotActive": true,
     "approvalEvidenceIsNotPendingApprovalAuthority": true,
+    "pendingApprovalCountIsUnavailableNotZero": true,
+    "historicalInternalTaskIsNotPendingOwnerWork": true,
     "missingLimitConsumptionIsNotZero": true,
     "visibleChannelIsNotContactPermission": true,
     "scheduledIsNotDelivered": true,

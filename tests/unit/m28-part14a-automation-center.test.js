@@ -136,7 +136,8 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     const result = buildSnapshot(input(), emptyResults());
     expect(result.status.id).toBe('ready_to_set_up');
     expect(result.counts).toEqual({ policies: 0, activePolicies: 0, pausedPolicies: 0,
-      activeRuns: 0, pausedRuns: 0, failedRuns: 0, approvals: 0, ownerWork: 0 });
+      activeRuns: 0, pausedRuns: 0, failedRuns: 0, approvals: null, ownerWork: null });
+    expect(result.approvals).toBeNull();
     expect(result.stopControl).toMatchObject({ state: 'normal_no_control_record', canEngage: false, canRelease: false });
     expect(result.channels.find(item => item.id === 'email').state).toBe('unavailable');
     expect(result.limits.currentConsumption).toBeNull();
@@ -159,11 +160,17 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
       documents: [{ estimate_quote_resolution_id: uuid(40), run_id: uuid(20), result_state: 'exact_document_bound_external_delivery_unavailable', recorded_at: '2026-11-20T19:32:00Z' }],
       channels: [{ requested_channel_id: 'email', result_state: 'unavailable_external_channel' }],
     }));
-    expect(result.counts).toMatchObject({ policies: 2, activePolicies: 1, pausedPolicies: 1, activeRuns: 1, failedRuns: 1, ownerWork: 1 });
+    expect(result.counts).toMatchObject({ policies: 2, activePolicies: 1, pausedPolicies: 1, activeRuns: 1,
+      failedRuns: 1, approvals: null, ownerWork: null });
     expect(result.runs.map(item => item.state)).toEqual(['active', 'failed']);
     expect(result.timeline.some(item => item.kind === 'document_review')).toBe(true);
     expect(JSON.stringify(result)).not.toContain('must never return');
-    expect(result.approvals).toEqual([]);
+    expect(result.approvals).toBeNull();
+    expect(result.ownerWork).toEqual([expect.objectContaining({
+      state: 'historical_status_unavailable',
+      label: 'Private owner work evidence',
+      statusLabel: 'Current pending or resolved task status is unavailable.',
+    })]);
   });
 
   test('stale lifecycle currentness fails closed', () => {
@@ -242,6 +249,32 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(result.runs).toEqual([]);
     expect(result.counts).toMatchObject({ activeRuns: 0, pausedRuns: 0, failedRuns: 0 });
     expect(result.timeline).toEqual([expect.objectContaining({ kind: 'terminal_outcome', label: 'Run reached a terminal state' })]);
+  });
+
+  test('an internal task followed by terminal evidence remains history, never pending owner work', () => {
+    const result = buildSnapshot(input(), emptyResults({ records: [
+      {
+        record_id: uuid(30), run_id: uuid(20), record_type: 'internal_task',
+        currentness_marker: 'captured_exact_current', authority_class: 'automation_decision',
+        recorded_at: '2026-11-20T19:30:00Z',
+      },
+      {
+        record_id: uuid(31), run_id: uuid(20), record_type: 'terminal_outcome',
+        currentness_marker: 'captured_exact_current', authority_class: 'effect_evidence',
+        recorded_at: '2026-11-20T19:31:00Z',
+      },
+    ] }));
+
+    expect(result.ownerWork).toEqual([expect.objectContaining({
+      runId: uuid(20),
+      state: 'historical_status_unavailable',
+      statusLabel: 'Terminal evidence is also recorded. Current task status is unavailable.',
+    })]);
+    expect(result.counts).toMatchObject({ approvals: null, ownerWork: null });
+    expect(result.timeline.map(item => item.kind)).toEqual(['terminal_outcome', 'internal_task']);
+    expect(() => centerContract.validateSnapshot({
+      ...result, counts: { ...result.counts, approvals: 0, ownerWork: 1 },
+    })).toThrow(/attention status is unavailable/i);
   });
 
   test('bounded reads reject silent truncation', () => {
@@ -431,6 +464,35 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(html).toContain('Scheduled is not delivered');
     expect(html).toContain('does not imply delivery, a reply, payment, or business success');
     expect(html).toContain('No-effect preview');
+    expect(html).toContain('Current pending requests may exist');
+    expect(html).toContain('Historical task evidence is not a current to-do');
+  });
+
+  test('unavailable inbox and historical terminal task evidence never render as zero pending work', async () => {
+    const snapshot = buildSnapshot(input(), emptyResults({ records: [
+      {
+        record_id: uuid(30), run_id: uuid(20), record_type: 'internal_task',
+        currentness_marker: 'captured_exact_current', authority_class: 'automation_decision',
+        recorded_at: '2026-11-20T19:30:00Z',
+      },
+      {
+        record_id: uuid(31), run_id: uuid(20), record_type: 'terminal_outcome',
+        currentness_marker: 'captured_exact_current', authority_class: 'effect_evidence',
+        recorded_at: '2026-11-20T19:31:00Z',
+      },
+    ] }));
+    const { elements, documentListeners } = automationPageHarness(jest.fn()
+      .mockResolvedValue({ success: true, data: snapshot }));
+    documentListeners.DOMContentLoaded();
+    await flushMicrotasks();
+
+    expect(elements.summaryAttention.textContent).toBe('Unavailable');
+    expect(elements.approvalCount.textContent).toBe('Unavailable');
+    expect(elements.automationApprovals.textContent).toMatch(/requests may exist/i);
+    expect(elements.automationApprovals.textContent).not.toMatch(/no current approval|\b0\b/i);
+    expect(elements.ownerWorkCount.textContent).toBe('Unavailable');
+    expect(elements.automationOwnerWork.textContent).toMatch(/terminal evidence is also recorded.*current task status is unavailable/i);
+    expect(elements.automationOwnerWork.textContent).not.toMatch(/current record ready|review private owner work/i);
   });
 
   test('failed refresh exhaustively clears prior-tenant visible and hidden DOM state', async () => {
@@ -495,8 +557,8 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
       node.textContent.includes(sentinel) || String(node.value).includes(sentinel)).map(([id]) => id)).toEqual([]);
     expect(dynamicContainerIds.every(id => elements[id].childNodes.length === 0)).toBe(true);
     expect(fixedDynamicIds.map(id => elements[id].textContent)).toEqual([
-      'Unavailable', 'No automation data loaded.', '0', 'No policy data loaded', '0', 'No run data loaded', '0',
-      '0', '0', 'Unavailable', 'Current consumption is unavailable.', 'Unavailable',
+      'Unavailable', 'No automation data loaded.', '0', 'No policy data loaded', '0', 'No run data loaded', 'Unavailable',
+      'Unavailable', 'Unavailable', 'Unavailable', 'Current consumption is unavailable.', 'Unavailable',
       'Current company-wide control is unavailable.', 'Not checked.', '', '',
     ]);
     expect(elements.setupTemplateId.value).toBe('custom');

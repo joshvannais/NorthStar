@@ -48,11 +48,17 @@ free text, and cross-tenant material. Failed or stale loads clear every prior
 tenant-derived region before an error is shown.
 
 Immutable approval evidence is not a pending-approval resolver. Part 14A
-therefore shows no actionable approval merely because an approval record
-exists. Current limit consumption, a pending approval resolver, provider/live
-channel availability, and tenant-stop release authority are not jointly
-mounted and stay explicitly unavailable. A recorded stop remains authoritative;
-a missing release control is never treated as permission to resume.
+therefore reports the pending approval count and combined attention count as
+unavailable, never zero, and shows no actionable approval merely because an
+approval record exists. Immutable internal-task records remain historical
+evidence: even exact captured evidence, including a task followed by terminal
+evidence, does not establish that the task is currently pending or resolved.
+The owner-work pending count stays unavailable and historical entries are
+labelled accordingly. Current limit consumption, a pending approval resolver,
+provider/live channel availability, and tenant-stop release authority are not
+jointly mounted and stay explicitly unavailable. A recorded stop remains
+authoritative; a missing release control is never treated as permission to
+resume.
 
 ## Setup and templates
 

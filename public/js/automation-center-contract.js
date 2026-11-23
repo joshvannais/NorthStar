@@ -179,14 +179,21 @@
   }
   function validateSnapshot(value) {
     var keys = ['version', 'status', 'counts', 'policies', 'runs', 'approvals', 'timeline', 'ownerWork', 'limits', 'channels', 'stopControl', 'templates', 'capabilities', 'unavailableEvidence', 'evaluatedAt'];
+    var countKeys = ['policies', 'activePolicies', 'pausedPolicies', 'activeRuns', 'pausedRuns', 'failedRuns', 'approvals', 'ownerWork'];
     if (!exactKeys(value, keys) || value.version !== VERSION || !plainObject(value.status) || !plainObject(value.counts) ||
-        !Array.isArray(value.policies) || !Array.isArray(value.runs) || !Array.isArray(value.approvals) ||
+        !Array.isArray(value.policies) || !Array.isArray(value.runs) || value.approvals !== null ||
         !Array.isArray(value.timeline) || !Array.isArray(value.ownerWork) || !plainObject(value.limits) ||
         !Array.isArray(value.channels) || !plainObject(value.stopControl) || !Array.isArray(value.templates) ||
         !Array.isArray(value.capabilities) || !Array.isArray(value.unavailableEvidence) ||
         typeof value.evaluatedAt !== 'string' || !Number.isFinite(Date.parse(value.evaluatedAt))) {
       throw new Error('The Automation Center response is unavailable.');
     }
+    if (!exactKeys(value.counts, countKeys) || value.counts.approvals !== null || value.counts.ownerWork !== null ||
+        countKeys.slice(0, 6).some(function (key) {
+          return !Number.isInteger(value.counts[key]) || value.counts[key] < 0;
+        }) || value.ownerWork.some(function (item) {
+          return !plainObject(item) || item.state !== 'historical_status_unavailable' || typeof item.statusLabel !== 'string';
+        })) throw new Error('The Automation Center attention status is unavailable.');
     if (value.templates.length !== TEMPLATES.length || value.templates.some(function (template, index) {
       return !template || template.id !== TEMPLATES[index].id;
     })) throw new Error('The Automation Center templates changed.');

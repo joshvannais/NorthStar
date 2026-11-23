@@ -223,16 +223,22 @@ function buildSnapshot(input, results) {
     });
   }
   timeline.sort((left, right) => String(right.recordedAt).localeCompare(String(left.recordedAt)));
+  const terminalRunIds = new Set(recordRows
+    .filter(row => row.record_type === 'terminal_outcome' || row.record_type === 'cancellation')
+    .map(row => row.run_id));
   const ownerWork = recordRows.filter(row => row.record_type === 'internal_task').map(row => ({
     id: safeId(row.record_id),
     runId: safeId(row.run_id),
-    label: 'Review private owner work',
-    state: row.currentness_marker === 'captured_exact_current' ? 'ready_for_review' : 'source_review_required',
+    label: 'Private owner work evidence',
+    state: 'historical_status_unavailable',
+    statusLabel: terminalRunIds.has(row.run_id)
+      ? 'Terminal evidence is also recorded. Current task status is unavailable.'
+      : 'Current pending or resolved task status is unavailable.',
     recordedAt: iso(row.recorded_at),
   }));
   // Immutable approval records are evidence, not a pending-inbox resolver. Do
-  // not turn their existence into a new approval request or action authority.
-  const approvals = [];
+  // not turn their existence or absence into a pending count or action authority.
+  const approvals = null;
   const counts = {
     policies: policies.length,
     activePolicies: policies.filter(item => item.state === 'active' || item.state === 'active_resumed').length,
@@ -240,8 +246,8 @@ function buildSnapshot(input, results) {
     activeRuns: runs.filter(item => item.state === 'active').length,
     pausedRuns: runs.filter(item => item.state === 'paused').length,
     failedRuns: runs.filter(item => item.state === 'failed').length,
-    approvals: approvals.length,
-    ownerWork: ownerWork.length,
+    approvals: null,
+    ownerWork: null,
   };
   const stopRows = bounded(results.stopControl, 'Stop controls');
   if (stopRows.length > 1) {

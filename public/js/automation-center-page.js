@@ -44,9 +44,9 @@
       ['summaryPolicyDetail', 'No policy data loaded'],
       ['summaryRuns', '0'],
       ['summaryRunDetail', 'No run data loaded'],
-      ['summaryAttention', '0'],
-      ['approvalCount', '0'],
-      ['ownerWorkCount', '0'],
+      ['summaryAttention', 'Unavailable'],
+      ['approvalCount', 'Unavailable'],
+      ['ownerWorkCount', 'Unavailable'],
       ['limitsState', 'Unavailable'],
       ['limitsConsumption', 'Current consumption is unavailable.'],
       ['stopState', 'Unavailable'],
@@ -172,20 +172,27 @@
     var runCount = data.counts.activeRuns + data.counts.pausedRuns + data.counts.failedRuns;
     element('summaryRuns').textContent = String(runCount);
     element('summaryRunDetail').textContent = data.counts.activeRuns + ' active · ' + data.counts.failedRuns + ' need review';
-    element('summaryAttention').textContent = String(data.counts.approvals + data.counts.ownerWork);
+    element('summaryAttention').textContent = data.counts.approvals === null || data.counts.ownerWork === null
+      ? 'Unavailable'
+      : String(data.counts.approvals + data.counts.ownerWork);
     element('automationSummary').hidden = false;
   }
   function renderApprovals(data) {
-    element('approvalCount').textContent = String(data.approvals.length);
+    element('approvalCount').textContent = data.counts.approvals === null ? 'Unavailable' : String(data.counts.approvals);
     var target = element('automationApprovals'); target.replaceChildren();
-    if (!data.approvals.length) empty(target, 'No current approval requests are available. Recorded approval evidence is not turned into a new request.');
+    if (data.approvals === null) {
+      empty(target, 'Pending approval inbox status is unavailable. Approval requests may exist; this view does not claim there are none.');
+    }
   }
   function renderOwnerWork(data) {
-    element('ownerWorkCount').textContent = String(data.ownerWork.length);
+    element('ownerWorkCount').textContent = data.counts.ownerWork === null ? 'Unavailable' : String(data.counts.ownerWork);
     var target = element('automationOwnerWork'); target.replaceChildren();
-    if (!data.ownerWork.length) { empty(target, 'No private owner work is recorded.'); return; }
+    if (!data.ownerWork.length) {
+      empty(target, 'Current owner-work status is unavailable. No historical task evidence is shown in this bounded view.');
+      return;
+    }
     data.ownerWork.forEach(function (item) {
-      target.appendChild(listCard(item.label, item.state === 'ready_for_review' ? 'Current record ready for review.' : 'The source changed or needs review.', [formatDate(item.recordedAt)]));
+      target.appendChild(listCard(item.label, item.statusLabel, [formatDate(item.recordedAt)]));
     });
   }
   function renderRuns(data) {

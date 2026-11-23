@@ -81,9 +81,22 @@ function runState(row) {
     return { id: 'failed', label: 'Currentness needs review' };
   }
   if (row.latest_record_type === 'terminal_outcome') return { id: 'completed', label: 'Completed' };
-  const control = row.control_state;
-  if (control && /paused|draining|drained|stopped|cancelled|expired|dead_lettered|revoked|superseded/.test(control)) {
-    return { id: /paused|drain/.test(control) ? 'paused' : 'failed', label: POLICY_STATE_LABELS[control] || 'Stopped' };
+  const tenantControl = row.tenant_control_state;
+  const policyControl = row.policy_control_state;
+  const actionControl = row.action_control_state || row.control_state;
+  // Migration 279 blocks non-resumed tenant/policy scope and every recorded
+  // action-schedule control. The read projection must never present a run as
+  // active when the authoritative delivery guard would reject new activity.
+  const control = tenantControl && tenantControl !== 'active_resumed' ? tenantControl
+    : policyControl && policyControl !== 'active_resumed' ? policyControl
+      : actionControl || null;
+  if (control) {
+    const paused = /paused|draining|drained/.test(control);
+    const terminal = /stopped|cancelled|expired|dead_lettered|revoked|superseded/.test(control);
+    return {
+      id: paused ? 'paused' : 'failed',
+      label: paused || terminal ? (POLICY_STATE_LABELS[control] || 'Stopped') : 'Control needs review',
+    };
   }
   if (row.retry_state === 'reconciliation_required_no_resend') return { id: 'failed', label: 'Outcome needs review' };
   if (row.retry_state && row.retry_state.indexOf('permanent_stop_') === 0) return { id: 'failed', label: 'Stopped after failure' };
@@ -309,7 +322,10 @@ async function readAutomationCenter(pool, input) {
     const runs = (await client.query(`
       SELECT binding.run_id,binding.policy_id,binding.policy_version,binding.recorded_at,
         latest.record_type latest_record_type,latest.currentness_marker,latest.recorded_at latest_recorded_at,
-        schedule.schedule_id,retry.state retry_state,control.control_state
+        schedule.schedule_id,retry.state retry_state,
+        tenant_control.control_state tenant_control_state,
+        policy_control.control_state policy_control_state,
+        action_control.control_state action_control_state
       FROM public.canonical_automation_historical_run_bindings_v1 binding
       LEFT JOIN LATERAL (
         SELECT record_type,currentness_marker,recorded_at FROM public.canonical_automation_records_v1
@@ -321,8 +337,15 @@ async function readAutomationCenter(pool, input) {
       ) schedule ON TRUE
       LEFT JOIN public.canonical_automation_delivery_retry_heads_v1 retry
         ON retry.organization_id=$1 AND retry.schedule_id=schedule.schedule_id
-      LEFT JOIN public.canonical_automation_delivery_control_heads_v1 control
-        ON control.organization_id=$1 AND control.target_kind='action_schedule' AND control.schedule_id=schedule.schedule_id
+      LEFT JOIN public.canonical_automation_delivery_control_heads_v1 tenant_control
+        ON tenant_control.organization_id=$1 AND tenant_control.target_kind='tenant'
+        AND tenant_control.target_key=$1::text
+      LEFT JOIN public.canonical_automation_delivery_control_heads_v1 policy_control
+        ON policy_control.organization_id=$1 AND policy_control.target_kind='policy_version'
+        AND policy_control.target_key=binding.policy_id::text||':'||binding.policy_version::text
+      LEFT JOIN public.canonical_automation_delivery_control_heads_v1 action_control
+        ON action_control.organization_id=$1 AND action_control.target_kind='action_schedule'
+        AND action_control.target_key=schedule.schedule_id::text
       WHERE binding.organization_id=$1
       ORDER BY COALESCE(latest.recorded_at,binding.recorded_at) DESC,binding.run_id LIMIT ${MAX_ROWS + 1}`, [input.organizationId])).rows;
     const records = (await client.query(`

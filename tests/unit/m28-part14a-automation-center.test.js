@@ -39,6 +39,44 @@ function emptyResults(overrides = {}) {
 function input(role = 'owner') {
   return { organizationId: uuid(28), actorUserId: uuid(1), actorAccessRole: role, authSessionId: uuid(2) };
 }
+function deferred() {
+  let resolve; let reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+async function flushMicrotasks(count = 8) {
+  for (let index = 0; index < count; index += 1) await Promise.resolve();
+}
+function automationPageHarness(json) {
+  class FakeElement {
+    constructor(tagName = 'div') {
+      this.tagName = tagName.toUpperCase(); this.dataset = {}; this.hidden = false;
+      this.childNodes = []; this.attributes = {}; this.listeners = {}; this.value = ''; this.disabled = false;
+      this._text = '';
+    }
+    get textContent() { return this._text + this.childNodes.map(child => child.textContent || '').join(''); }
+    set textContent(value) { this._text = String(value); this.childNodes = []; }
+    appendChild(child) { this.childNodes.push(child); return child; }
+    replaceChildren(...children) { this._text = ''; this.childNodes = children; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    addEventListener(name, listener) { this.listeners[name] = listener; }
+    emit(name, event = {}) { return this.listeners[name] && this.listeners[name](event); }
+    focus() {}
+  }
+  const html = read('public/dashboard/automation.html');
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+  const elements = Object.fromEntries(ids.map(id => [id, new FakeElement()]));
+  const documentListeners = {};
+  const document = {
+    readyState: 'loading',
+    getElementById: id => elements[id],
+    createElement: tag => new FakeElement(tag),
+    addEventListener: (name, listener) => { documentListeners[name] = listener; },
+  };
+  const window = { NorthStarAutomationCenter: centerContract, NorthStarAccountSession: { json } };
+  vm.runInNewContext(read('public/js/automation-center-page.js'), { window, document, Intl, Date, Promise, Error });
+  return { elements, documentListeners, FakeElement };
+}
 
 describe('Mission 28 Part 14A bounded setup contract', () => {
   test('publishes four owner-readable templates and no executable authority', () => {
@@ -167,6 +205,27 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(result.counts).toMatchObject({ activeRuns: 0, failedRuns: 1 });
   });
 
+  test('run state respects tenant, policy-version, and action-schedule controls exactly like the delivery guard', () => {
+    const baseRun = {
+      policy_id: uuid(10), policy_version: '1', latest_record_type: 'scheduled_run',
+      currentness_marker: 'captured_exact_current', schedule_id: uuid(21), retry_state: null,
+    };
+    const result = buildSnapshot(input(), emptyResults({ runs: [
+      { ...baseRun, run_id: uuid(20), tenant_control_state: 'paused' },
+      { ...baseRun, run_id: uuid(22), policy_control_state: 'revoked_terminal' },
+      { ...baseRun, run_id: uuid(23), tenant_control_state: 'active_resumed', policy_control_state: 'active_resumed' },
+      { ...baseRun, run_id: uuid(24), action_control_state: 'active_resumed' },
+    ] }));
+
+    expect(result.runs.map(run => [run.id, run.state, run.stateLabel])).toEqual([
+      [uuid(20), 'paused', 'Paused'],
+      [uuid(22), 'failed', 'Revoked'],
+      [uuid(23), 'active', 'Scheduled'],
+      [uuid(24), 'failed', 'Control needs review'],
+    ]);
+    expect(result.counts).toMatchObject({ activeRuns: 1, pausedRuns: 1, failedRuns: 2 });
+  });
+
   test('exact terminal runs stay out of active paused failed lists while terminal evidence remains', () => {
     const result = buildSnapshot(input(), emptyResults({
       runs: [{
@@ -267,6 +326,11 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(calls[0].sql).toBe('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const tenant = calls.find(call => call.sql.includes("set_config('northstar.automation_tenant_id'"));
     expect(tenant.params).toEqual([uuid(28)]);
+    const runRead = calls.find(call => call.sql.includes('SELECT binding.run_id'));
+    expect(runRead.sql).toMatch(/tenant_control\.control_state tenant_control_state/);
+    expect(runRead.sql).toMatch(/tenant_control\.target_kind='tenant'[\s\S]*tenant_control\.target_key=\$1::text/);
+    expect(runRead.sql).toMatch(/policy_control\.target_kind='policy_version'[\s\S]*binding\.policy_id::text\|\|':'\|\|binding\.policy_version::text/);
+    expect(runRead.sql).toMatch(/action_control\.target_kind='action_schedule'[\s\S]*action_control\.target_key=schedule\.schedule_id::text/);
     expect(calls.some(call => call.sql === 'COMMIT')).toBe(true);
     expect(client.release).toHaveBeenCalledWith(false);
   });
@@ -370,31 +434,6 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
   });
 
   test('failed refresh exhaustively clears prior-tenant visible and hidden DOM state', async () => {
-    class FakeElement {
-      constructor(tagName = 'div') {
-        this.tagName = tagName.toUpperCase(); this.dataset = {}; this.hidden = false;
-        this.childNodes = []; this.attributes = {}; this.listeners = {}; this.value = ''; this.disabled = false;
-        this._text = '';
-      }
-      get textContent() { return this._text + this.childNodes.map(child => child.textContent || '').join(''); }
-      set textContent(value) { this._text = String(value); this.childNodes = []; }
-      appendChild(child) { this.childNodes.push(child); return child; }
-      replaceChildren(...children) { this._text = ''; this.childNodes = children; }
-      setAttribute(name, value) { this.attributes[name] = String(value); }
-      addEventListener(name, listener) { this.listeners[name] = listener; }
-      emit(name, event = {}) { return this.listeners[name] && this.listeners[name](event); }
-      focus() {}
-    }
-    const html = read('public/dashboard/automation.html');
-    const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
-    const elements = Object.fromEntries(ids.map(id => [id, new FakeElement()]));
-    const documentListeners = {};
-    const document = {
-      readyState: 'loading',
-      getElementById: id => elements[id],
-      createElement: tag => new FakeElement(tag),
-      addEventListener: (name, listener) => { documentListeners[name] = listener; },
-    };
     const priorSnapshot = buildSnapshot(input(), emptyResults({
       policies: [{
         policy_id: uuid(10), version: '1', source_class_id: 'mission23_work_execution',
@@ -420,10 +459,9 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     const json = jest.fn()
       .mockResolvedValueOnce({ success: true, data: priorSnapshot })
       .mockRejectedValueOnce(new Error('Automation records are unavailable.'));
-    const window = { NorthStarAutomationCenter: centerContract, NorthStarAccountSession: { json } };
-    vm.runInNewContext(read('public/js/automation-center-page.js'), { window, document, Intl, Date, Promise, Error });
+    const { elements, documentListeners, FakeElement } = automationPageHarness(json);
     documentListeners.DOMContentLoaded();
-    for (let index = 0; index < 8; index += 1) await Promise.resolve();
+    await flushMicrotasks();
     expect(elements.summaryStatus.textContent).toBe('Company-wide control recorded');
     expect(elements.automationSummary.hidden).toBe(false);
     expect(elements.automationChannels.textContent).toContain('Manual device handoff is not available.');
@@ -467,5 +505,70 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(['setupSource', 'setupAction', 'setupRecipient', 'setupChannel', 'setupTiming']
       .every(id => elements[id].selectedIndex === 0)).toBe(true);
     expect(elements.automationStatus.textContent).toBe('Automation records are unavailable.');
+  });
+
+  test('preview authorization loss clears prior tenant data and rejects stale preview success', async () => {
+    const stalePreview = deferred();
+    const forbidden = Object.assign(new Error('restricted'), { status: 403 });
+    const priorSnapshot = buildSnapshot(input(), emptyResults({ policies: [{
+      policy_id: uuid(10), version: '1', source_class_id: 'mission23_work_execution',
+      action_family: 'internal_read_digest_task', channel_id: 'in_app_passive', lifecycle_state: 'active',
+      lifecycle_currentness: 'exact_current_not_runtime_revalidated', recorded_at: '2026-11-20T19:00:00Z',
+    }] }));
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: priorSnapshot })
+      .mockImplementationOnce(() => stalePreview.promise)
+      .mockRejectedValueOnce(forbidden);
+    const { elements, documentListeners } = automationPageHarness(json);
+    documentListeners.DOMContentLoaded();
+    await flushMicrotasks();
+
+    const templateButtons = elements.automationTemplates.childNodes.map(card =>
+      card.childNodes.find(child => child.tagName === 'BUTTON'));
+    expect(templateButtons).toHaveLength(4);
+    templateButtons[0].emit('click');
+    templateButtons[1].emit('click');
+    await flushMicrotasks();
+
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.summaryPolicies.textContent).toBe('0');
+    expect(elements.automationStatus.textContent).toMatch(/owner or administrator access/i);
+
+    const stale = centerContract.buildPreview(preview({ name: 'STALE_TENANT_PREVIEW_MUST_NOT_RENDER' }));
+    stalePreview.resolve({ success: true, data: stale });
+    await flushMicrotasks();
+    expect(elements.previewSummary.textContent).toBe('');
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(Object.values(elements).some(node => node.textContent.includes('STALE_TENANT_PREVIEW_MUST_NOT_RENDER'))).toBe(false);
+  });
+
+  test('preview authentication loss invalidates a pending GET completion', async () => {
+    const staleGet = deferred();
+    const unauthorized = Object.assign(new Error('session ended'), { status: 401 });
+    const json = jest.fn()
+      .mockImplementationOnce(() => staleGet.promise)
+      .mockRejectedValueOnce(unauthorized);
+    const { elements, documentListeners } = automationPageHarness(json);
+    documentListeners.DOMContentLoaded();
+    elements.summaryStatus.textContent = 'PRIOR_TENANT_PRIVATE_STATE';
+    elements.automationSummary.hidden = false;
+
+    elements.automationSetupForm.emit('submit', { preventDefault() {} });
+    await flushMicrotasks();
+    expect(elements.summaryStatus.textContent).toBe('Unavailable');
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationStatus.textContent).toMatch(/session ended/i);
+
+    const staleSnapshot = buildSnapshot(input(), emptyResults({ policies: [{
+      policy_id: uuid(10), version: '1', source_class_id: 'mission23_work_execution',
+      action_family: 'internal_read_digest_task', channel_id: 'in_app_passive', lifecycle_state: 'active',
+      lifecycle_currentness: 'exact_current_not_runtime_revalidated', recorded_at: '2026-11-20T19:00:00Z',
+    }] }));
+    staleGet.resolve({ success: true, data: staleSnapshot });
+    await flushMicrotasks();
+    expect(elements.summaryPolicies.textContent).toBe('0');
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationStatus.textContent).toMatch(/session ended/i);
   });
 });

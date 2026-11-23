@@ -4,6 +4,7 @@
   var contract = global.NorthStarAutomationCenter;
   var session = global.NorthStarAccountSession;
   var generation = 0;
+  var previewGeneration = 0;
 
   function element(id) { return document.getElementById(id); }
   function node(tag, className, text) {
@@ -61,6 +62,14 @@
     ['setupSource', 'setupAction', 'setupRecipient', 'setupChannel', 'setupTiming']
       .forEach(function (id) { element(id).value = ''; element(id).selectedIndex = 0; });
   }
+  function invalidateAuthority(error) {
+    generation += 1;
+    previewGeneration += 1;
+    clearSensitive();
+    setStatus('error', error && error.status === 401
+      ? 'Your session ended. Sign in again before reopening Automation Center. No saved data is shown.'
+      : 'Automation Center requires current owner or administrator access. No saved data is shown.');
+  }
   function definition(list, label, value) {
     var group = node('div');
     group.appendChild(node('dt', '', label));
@@ -116,17 +125,24 @@
     element('automationPreview').focus();
   }
   function requestPreview(input, button) {
+    var request = ++previewGeneration;
     button.disabled = true;
     setStatus('loading', 'Preparing a no-effect preview.');
     return session.json('/api/v1/automation-center/preview', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
     }).then(function (body) {
+      if (request !== previewGeneration) return;
       if (!body || body.success !== true || !body.data || body.data.previewOnly !== true || body.data.saved !== false ||
           body.data.activated !== false || body.data.recipientContacted !== false || body.data.externalEffectCreated !== false ||
           body.data.moneyEffectCreated !== false) throw new Error('The no-effect preview could not be confirmed.');
       renderPreview(body.data);
       setStatus('ready', 'Preview ready. Nothing was saved, activated, queued, sent, or charged.');
     }).catch(function (error) {
+      if (request !== previewGeneration) return;
+      if (error && (error.status === 401 || error.status === 403)) {
+        invalidateAuthority(error);
+        return;
+      }
       element('automationPreview').hidden = true;
       setStatus('error', error && error.message ? error.message : 'The setup preview is unavailable. Review the fields and try again.');
     }).finally(function () { button.disabled = false; });
@@ -218,6 +234,7 @@
   }
   function load() {
     var request = ++generation;
+    previewGeneration += 1;
     clearSensitive(); setStatus('loading', 'Loading current automation records.');
     return session.json('/api/v1/automation-center').then(function (body) {
       if (request !== generation) return;
@@ -226,6 +243,10 @@
       render(data); setStatus('ready', data.status.label + '. ' + data.status.explanation);
     }).catch(function (error) {
       if (request !== generation) return;
+      if (error && (error.status === 401 || error.status === 403)) {
+        invalidateAuthority(error);
+        return;
+      }
       clearSensitive();
       setStatus('error', error && error.message ? error.message : 'Automation records are unavailable. No saved data is shown.');
     });

@@ -6,7 +6,42 @@
 })(typeof window !== 'undefined' ? window : null, function () {
   'use strict';
 
-  var VERSION = 'mission28.automation-center.v1';
+  var VERSION = 'mission28.automation-center.v2';
+  var RUN_STATE_LABELS = Object.freeze({
+    validation: 'Preparing for review',
+    approval: 'Approval status recorded',
+    queued: 'Queued',
+    in_flight: 'In progress',
+    uncertain: 'Outcome needs review',
+    suppressed: 'Held back',
+    failed: 'Failed',
+    paused: 'Paused',
+    stopped: 'Stopped',
+    expired: 'Expired',
+    completed: 'Internal work completed',
+    corrected: 'Updated after correction',
+    recovery: 'Recovery review',
+    stale: 'Source changed',
+    unavailable: 'Status unavailable',
+  });
+  var RUN_STATE_EXPLANATIONS = Object.freeze({
+    validation: 'Recorded work is still being prepared or validated.',
+    approval: 'A requirement or prior decision is recorded. Current pending status is unavailable.',
+    queued: 'Recorded work is waiting to begin. Queued does not mean sent or delivered.',
+    in_flight: 'Recorded work is being processed. This does not prove delivery or success.',
+    uncertain: 'The recorded outcome is not known. Review it before any next step.',
+    suppressed: 'Recorded safeguards are holding this work back.',
+    failed: 'Recorded work stopped after a failure.',
+    paused: 'Recorded controls are pausing this work.',
+    stopped: 'Recorded controls or decisions stopped this work.',
+    expired: 'The recorded time window ended.',
+    completed: 'Recorded internal work completed. This does not prove a customer or business outcome.',
+    corrected: 'Later recorded evidence corrected the earlier status.',
+    recovery: 'Recorded work needs recovery review before another step.',
+    stale: 'The source changed or needs a current check.',
+    unavailable: 'The current recorded status cannot be determined safely.',
+  });
+  var RUN_STATE_ORDER = Object.freeze(Object.keys(RUN_STATE_LABELS));
   var SOURCE_LABELS = Object.freeze({
     mission20_business_contact_preferences: 'Customer contact preferences',
     mission21_knowledge_reference: 'Approved company knowledge',
@@ -179,8 +214,8 @@
   }
   function validateSnapshot(value) {
     var keys = ['version', 'status', 'counts', 'policies', 'runs', 'approvals', 'timeline', 'ownerWork', 'limits', 'channels', 'stopControl', 'templates', 'capabilities', 'unavailableEvidence', 'evaluatedAt'];
-    var countKeys = ['policies', 'activePolicies', 'pausedPolicies', 'unavailablePolicies', 'activeRuns', 'pausedRuns', 'failedRuns', 'approvals', 'ownerWork'];
-    var numericCountKeys = countKeys.slice(0, 7);
+    var countKeys = ['policies', 'activePolicies', 'pausedPolicies', 'unavailablePolicies', 'runs', 'runStates', 'approvals', 'ownerWork'];
+    var numericCountKeys = ['policies', 'activePolicies', 'pausedPolicies', 'unavailablePolicies', 'runs'];
     if (!exactKeys(value, keys) || value.version !== VERSION || !plainObject(value.status) || !plainObject(value.counts) ||
         !Array.isArray(value.policies) || !Array.isArray(value.runs) || value.approvals !== null ||
         !Array.isArray(value.timeline) || !Array.isArray(value.ownerWork) || !plainObject(value.limits) ||
@@ -189,9 +224,17 @@
         typeof value.evaluatedAt !== 'string' || !Number.isFinite(Date.parse(value.evaluatedAt))) {
       throw new Error('The Automation Center response is unavailable.');
     }
-    if (!exactKeys(value.counts, countKeys) || value.counts.approvals !== null || value.counts.ownerWork !== null ||
+    if (!exactKeys(value.counts, countKeys) || !plainObject(value.counts.runStates) ||
+        !exactKeys(value.counts.runStates, RUN_STATE_ORDER) || value.counts.approvals !== null || value.counts.ownerWork !== null ||
         numericCountKeys.some(function (key) {
           return !Number.isInteger(value.counts[key]) || value.counts[key] < 0;
+        }) || RUN_STATE_ORDER.some(function (key) {
+          return !Number.isInteger(value.counts.runStates[key]) || value.counts.runStates[key] < 0;
+        }) || RUN_STATE_ORDER.reduce(function (total, key) { return total + value.counts.runStates[key]; }, 0) !== value.counts.runs ||
+        value.runs.some(function (run) {
+          return !plainObject(run) || RUN_STATE_ORDER.indexOf(run.state) < 0 ||
+            typeof run.stateLabel !== 'string' || run.stateLabel !== RUN_STATE_LABELS[run.state] ||
+            typeof run.stateExplanation !== 'string' || run.stateExplanation !== RUN_STATE_EXPLANATIONS[run.state];
         }) || value.ownerWork.some(function (item) {
           return !plainObject(item) || item.state !== 'historical_status_unavailable' || typeof item.statusLabel !== 'string';
         })) throw new Error('The Automation Center attention status is unavailable.');
@@ -206,6 +249,9 @@
     CHANNEL_LABELS: CHANNEL_LABELS,
     PREVIEW_KEYS: PREVIEW_KEYS,
     RECIPIENT_LABELS: RECIPIENT_LABELS,
+    RUN_STATE_EXPLANATIONS: RUN_STATE_EXPLANATIONS,
+    RUN_STATE_LABELS: RUN_STATE_LABELS,
+    RUN_STATE_ORDER: RUN_STATE_ORDER,
     SOURCE_LABELS: SOURCE_LABELS,
     TEMPLATES: TEMPLATES,
     TIMING_LABELS: TIMING_LABELS,

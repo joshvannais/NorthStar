@@ -49,7 +49,7 @@
 .automation-list-card p { margin-top: .35rem; color: var(--neutral-600, #536270); line-height: 1.45; }
 .automation-list-meta { display: flex; flex-wrap: wrap; gap: .4rem .8rem; margin-top: .55rem; color: var(--neutral-600, #536270); font-size: .78rem; }
 .automation-empty { margin: 0; padding: .85rem; border: 1px dashed var(--neutral-400, #aeb8c2); border-radius: .7rem; color: var(--neutral-600, #536270); }
-.automation-run-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.automation-run-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 1rem; }
 .automation-run-columns h3 { margin: 0 0 .5rem; font-size: 1rem; }
 .automation-policy-list { margin-top: .8rem; }
 .automation-timeline { display: grid; gap: .8rem; margin: 0; padding: 0; list-style: none; }

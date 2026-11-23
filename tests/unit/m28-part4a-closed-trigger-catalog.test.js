@@ -355,7 +355,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–13E are released. Part 14A is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–14A are released. Part 14B is the sole implementation candidate.');
       expect(document).toContain('797be4a33bb2128ae2efd79b5347ef43f94da0f6');
       expect(document).toContain('041971bb190998e1444087482941686c4166573d');
       expect(document).toContain('7e0ef15f-1275-4578-aade-70b8c8277bef');
@@ -394,9 +394,9 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(rows[39]).toMatchObject({ id: '9D', state: '**Released**' });
     expect(rows[40]).toMatchObject({ id: '10A', state: '**Released**' });
     expect(rows[41]).toMatchObject({ id: '10B', state: '**Released**' });
-  expect(rows[42]).toMatchObject({ id: '10C', state: '**Released**' }); expect(rows[43]).toMatchObject({ id: '10D', state: '**Released**' }); expect(rows[44]).toMatchObject({ id: '11A', state: '**Released**' }); expect(rows[45]).toMatchObject({ id: '11B', state: '**Released**' }); expect(rows[46]).toMatchObject({ id: '11C', state: '**Released**' }); expect(rows[47]).toMatchObject({ id: '11D', state: '**Released**' }); expect(rows[48]).toMatchObject({ id: '11E', state: '**Released**' }); expect(rows[49]).toMatchObject({ id: '11F', state: '**Released**' }); expect(rows[50]).toMatchObject({ id: '12A', state: '**Released**' }); expect(rows[51]).toMatchObject({ id: '12B', state: '**Released**' }); expect(rows[52]).toMatchObject({ id: '12C', state: '**Released**' }); expect(rows[53]).toMatchObject({ id: '12D', state: '**Released**' }); expect(rows[54]).toMatchObject({ id: '13A', state: '**Released**' }); expect(rows[55]).toMatchObject({ id: '13B', state: '**Released**' }); expect(rows[56]).toMatchObject({ id: '13C', state: '**Released**' }); expect(rows[57]).toMatchObject({ id: '13D', state: '**Released**' }); expect(rows[58]).toMatchObject({ id: '13E', state: '**Released**' }); expect(rows[59]).toMatchObject({ id: '14A', state: '**Implementation candidate**' });
-    expect(rows.slice(60).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(6);
+  expect(rows[42]).toMatchObject({ id: '10C', state: '**Released**' }); expect(rows[43]).toMatchObject({ id: '10D', state: '**Released**' }); expect(rows[44]).toMatchObject({ id: '11A', state: '**Released**' }); expect(rows[45]).toMatchObject({ id: '11B', state: '**Released**' }); expect(rows[46]).toMatchObject({ id: '11C', state: '**Released**' }); expect(rows[47]).toMatchObject({ id: '11D', state: '**Released**' }); expect(rows[48]).toMatchObject({ id: '11E', state: '**Released**' }); expect(rows[49]).toMatchObject({ id: '11F', state: '**Released**' }); expect(rows[50]).toMatchObject({ id: '12A', state: '**Released**' }); expect(rows[51]).toMatchObject({ id: '12B', state: '**Released**' }); expect(rows[52]).toMatchObject({ id: '12C', state: '**Released**' }); expect(rows[53]).toMatchObject({ id: '12D', state: '**Released**' }); expect(rows[54]).toMatchObject({ id: '13A', state: '**Released**' }); expect(rows[55]).toMatchObject({ id: '13B', state: '**Released**' }); expect(rows[56]).toMatchObject({ id: '13C', state: '**Released**' }); expect(rows[57]).toMatchObject({ id: '13D', state: '**Released**' }); expect(rows[58]).toMatchObject({ id: '13E', state: '**Released**' }); expect(rows[59]).toMatchObject({ id: '14A', state: '**Released**' }); expect(rows[60]).toMatchObject({ id: '14B', state: '**Implementation candidate**' });
+    expect(rows.slice(61).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(5);
   });
 
   test('keeps runtime, migrations and later Part 4 authority outside the slice', () => {

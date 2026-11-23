@@ -1,0 +1,107 @@
+{
+  "contractVersion": "mission28.part14b.complete-state-behavior.v1",
+  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "base": {
+    "part": "14A",
+    "acceptedSourceHead": "4217ea78e200d1016bd54e3ce4bb72cee2d82d30",
+    "acceptedTree": "e5c7c17b0df08ba5e43d801a8c57c1e8dcff872f",
+    "pullRequest": 608,
+    "mergedMain": "e72c04bc6990c03b8d0b8719f0bd05779cdba505",
+    "deploymentId": "7f735b47-3d69-4bd4-861a-a9a55e951404",
+    "imageSha256": "sha256:25a19362c4237971d541bd031a62f5992fd829e2bc4cf73961e92fb231ab4f5e"
+  },
+  "scope": {
+    "part": "14B",
+    "surface": "released_paid_tenant_private_automation_center_only",
+    "demoRoute": null,
+    "migrationAdded": false,
+    "latestMigration": 287,
+    "nextMigrationAbsent": 288
+  },
+  "runStateOrder": [
+    "validation",
+    "approval",
+    "queued",
+    "in_flight",
+    "uncertain",
+    "suppressed",
+    "failed",
+    "paused",
+    "stopped",
+    "expired",
+    "completed",
+    "corrected",
+    "recovery",
+    "stale",
+    "unavailable"
+  ],
+  "projectionRules": {
+    "missingCurrentness": "unavailable",
+    "staleCurrentness": "stale",
+    "scheduleOrActionUnitExistenceAlone": "unavailable",
+    "terminalClassWithoutExactPayload": "unavailable",
+    "cancellationRequested": "validation",
+    "cancellationAccepted": "stopped",
+    "cancellationTooLate": "uncertain",
+    "cancellationUnavailable": "unavailable",
+    "suppressionWithoutBlocksEffectTrue": "unavailable",
+    "replyOptOutWithoutAuthenticatedTrue": "uncertain",
+    "approvalRequiredOrUnavailable": "approval_evidence_recorded_current_pending_status_unavailable",
+    "historicalApprovedWithoutLaterState": "validation_not_pending_owner_request",
+    "unknownRecoveryState": "unavailable",
+    "unknownRetryState": "unavailable",
+    "multipleSchedulesOrActionUnits": "unavailable_whole_run_projection",
+    "expiredLease": "recovery",
+    "providerOrDeliveryEvidenceWithoutAcceptedOutcome": "uncertain",
+    "completedMeaning": "completed_internal_work_only_not_business_success"
+  },
+  "conjunctiveAuthorities": [
+    "record_currentness",
+    "same_policy_version_lifecycle_currentness",
+    "policy_version_expiry",
+    "tenant_delivery_control",
+    "policy_version_delivery_control",
+    "action_schedule_delivery_control",
+    "exact_execution_or_recovery_evidence"
+  ],
+  "precedence": [
+    "missing_or_stale_record_currentness",
+    "exact_terminal_payload",
+    "restrictive_or_unavailable_policy_lifecycle",
+    "restrictive_tenant_policy_or_action_control",
+    "closed_recovery_assessment",
+    "schedule_expiry_conflict",
+    "trusted_retry_and_lease_timestamp_order",
+    "exact_action_control_phase",
+    "exact_record_payload",
+    "unavailable"
+  ],
+  "browserClearing": {
+    "allTenantDerivedFieldsClearedBeforeLoad": true,
+    "allTenantDerivedFieldsClearedAgainOnLoadFailure": true,
+    "previewFieldsClearedBeforePreview": true,
+    "authorization401Or403InvalidatesGetAndPreview": true,
+    "conflict409InvalidatesGetAndPreview": true,
+    "staleAuthorityOrConflictFailureStillClears": true,
+    "olderSuccessCannotRemountAfterInvalidation": true,
+    "preview400Or422ClearsPreviewOnly": true,
+    "rawErrorOrInternalStateRendered": false
+  },
+  "effectBoundary": {
+    "policySaved": false,
+    "policyActivated": false,
+    "actionQueued": false,
+    "providerCalled": false,
+    "recipientContacted": false,
+    "externalEffectCreated": false,
+    "financialEffectCreated": false,
+    "moneyEffectCreated": false,
+    "upstreamFactMutated": false
+  },
+  "unavailableEvidence": [
+    "Part14B_independent_audit_PR_merge_deployment_and_production_acceptance",
+    "provider_live_private_production_and_money_evidence",
+    "physical_Safari_devices_manual_assistive_technology_and_founder_visual_approval",
+    "professional_legal_privacy_communications_collections_accounting_security_or_compliance_review"
+  ]
+}

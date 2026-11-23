@@ -30,12 +30,20 @@
       }).format(new Date(value));
     } catch (_error) { return 'Time unavailable'; }
   }
+  function clearPreview() {
+    element('automationPreview').hidden = true;
+    element('previewDetails').replaceChildren();
+    element('previewStops').replaceChildren();
+    element('previewSummary').textContent = '';
+    element('previewBoundary').textContent = '';
+  }
   function clearSensitive() {
     element('automationSummary').hidden = true;
-    element('automationPreview').hidden = true;
-    ['automationTemplates', 'automationApprovals', 'automationOwnerWork', 'activeRuns', 'pausedRuns', 'failedRuns',
+    clearPreview();
+    ['automationTemplates', 'automationApprovals', 'automationOwnerWork', 'waitingRuns', 'inFlightRuns', 'attentionRuns',
+      'stoppedRuns', 'finishedRuns',
       'automationPolicies', 'automationTimeline', 'automationLimits', 'automationChannels', 'automationUnavailable',
-      'previewDetails', 'previewStops']
+    ]
       .forEach(function (id) { element(id).replaceChildren(); });
     [
       ['summaryStatus', 'Unavailable'],
@@ -53,8 +61,6 @@
       ['stopExplanation', 'Current company-wide control is unavailable.'],
       ['automationEvaluatedAt', 'Not checked.'],
       ['automationStatus', 'Automation data unavailable.'],
-      ['previewSummary', ''],
-      ['previewBoundary', ''],
     ].forEach(function (entry) { element(entry[0]).textContent = entry[1]; });
     element('setupTemplateId').value = 'custom';
     element('setupName').value = '';
@@ -72,6 +78,31 @@
   }
   function isAuthorityFailure(error) {
     return error && (error.status === 401 || error.status === 403);
+  }
+  function invalidateConflict(context) {
+    generation += 1;
+    previewGeneration += 1;
+    clearSensitive();
+    var status = errorStatus({ status: 409 }, context);
+    setStatus(status.state, status.message);
+  }
+  function errorStatus(error, context) {
+    if (error && error.status === 409) return {
+      state: 'conflict',
+      message: context === 'preview'
+        ? 'Automation records changed while this preview was prepared. No saved data is shown; refresh and review the latest exact records.'
+        : 'Automation records changed while loading. No saved data is shown; refresh to review the latest exact records.',
+    };
+    if (context === 'preview' && error && (error.status === 400 || error.status === 422)) return {
+      state: 'validation',
+      message: 'The setup needs review. The prior preview was cleared and nothing was saved or activated.',
+    };
+    return {
+      state: 'unavailable',
+      message: context === 'preview'
+        ? 'The setup preview is unavailable. The prior preview was cleared and nothing was saved or activated.'
+        : 'Automation records are unavailable. No saved data is shown.',
+    };
   }
   function definition(list, label, value) {
     var group = node('div');
@@ -130,6 +161,7 @@
   function requestPreview(input, button) {
     var request = ++previewGeneration;
     button.disabled = true;
+    clearPreview();
     setStatus('loading', 'Preparing a no-effect preview.');
     return session.json('/api/v1/automation-center/preview', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
@@ -148,9 +180,17 @@
         invalidateAuthority(error);
         return;
       }
+      // A conflict proves that the mounted snapshot/preview authority is no
+      // longer current. It must clear all prior data and invalidate both
+      // request classes even when a newer request made this response stale.
+      if (error && error.status === 409) {
+        invalidateConflict('preview');
+        return;
+      }
       if (request !== previewGeneration) return;
-      element('automationPreview').hidden = true;
-      setStatus('error', error && error.message ? error.message : 'The setup preview is unavailable. Review the fields and try again.');
+      clearPreview();
+      var status = errorStatus(error, 'preview');
+      setStatus(status.state, status.message);
     }).finally(function () { button.disabled = false; });
   }
   function renderTemplates(templates) {
@@ -170,9 +210,11 @@
     element('summaryPolicies').textContent = String(data.counts.policies);
     element('summaryPolicyDetail').textContent = data.counts.activePolicies + ' recorded active · ' +
       data.counts.pausedPolicies + ' paused · ' + data.counts.unavailablePolicies + ' status unavailable';
-    var runCount = data.counts.activeRuns + data.counts.pausedRuns + data.counts.failedRuns;
-    element('summaryRuns').textContent = String(runCount);
-    element('summaryRunDetail').textContent = data.counts.activeRuns + ' recorded active · ' + data.counts.failedRuns + ' need review';
+    var states = data.counts.runStates;
+    var attention = states.approval + states.uncertain + states.failed + states.stale + states.unavailable;
+    element('summaryRuns').textContent = String(data.counts.runs);
+    element('summaryRunDetail').textContent = states.queued + ' recorded queued · ' + states.in_flight +
+      ' in progress · ' + attention + ' need review · ' + states.completed + ' completed internal';
     element('summaryAttention').textContent = data.counts.approvals === null || data.counts.ownerWork === null
       ? 'Unavailable'
       : String(data.counts.approvals + data.counts.ownerWork);
@@ -197,15 +239,29 @@
     });
   }
   function renderRuns(data) {
-    var buckets = { active: element('activeRuns'), paused: element('pausedRuns'), failed: element('failedRuns') };
+    var buckets = {
+      waiting: element('waitingRuns'),
+      progress: element('inFlightRuns'),
+      attention: element('attentionRuns'),
+      stopped: element('stoppedRuns'),
+      finished: element('finishedRuns'),
+    };
+    var groups = {
+      validation: 'waiting', approval: 'waiting', queued: 'waiting',
+      in_flight: 'progress', recovery: 'progress',
+      uncertain: 'attention', failed: 'attention', stale: 'attention', unavailable: 'attention',
+      suppressed: 'stopped', paused: 'stopped', stopped: 'stopped', expired: 'stopped',
+      completed: 'finished', corrected: 'finished',
+    };
     Object.keys(buckets).forEach(function (key) { buckets[key].replaceChildren(); });
     data.runs.forEach(function (run) {
-      var bucket = buckets[run.state] || buckets.failed;
-      bucket.appendChild(listCard(run.stateLabel, run.latestEvent, [run.evidenceState, formatDate(run.recordedAt)]));
+      var bucket = buckets[groups[run.state]] || buckets.attention;
+      bucket.appendChild(listCard(run.stateLabel, run.stateExplanation,
+        [run.latestEvent, run.evidenceState, formatDate(run.recordedAt)]));
     });
-    if (!buckets.active.childNodes.length) empty(buckets.active, 'No active runs.');
-    if (!buckets.paused.childNodes.length) empty(buckets.paused, 'No paused runs.');
-    if (!buckets.failed.childNodes.length) empty(buckets.failed, 'No runs need review.');
+    Object.keys(buckets).forEach(function (key) {
+      if (!buckets[key].childNodes.length) empty(buckets[key], 'No recorded run evidence in this group.');
+    });
     var policies = element('automationPolicies'); policies.replaceChildren();
     if (!data.policies.length) { empty(policies, 'No policies are recorded. Preview a setup above.'); return; }
     data.policies.forEach(function (policy) {
@@ -254,7 +310,9 @@
       if (request !== generation) return;
       if (!body || body.success !== true) throw new Error('The Automation Center response is unavailable.');
       var data = contract.validateSnapshot(body.data);
-      render(data); setStatus('ready', data.status.label + '. ' + data.status.explanation);
+      render(data);
+      var emptySnapshot = data.counts.policies === 0 && data.counts.runs === 0 && data.timeline.length === 0;
+      setStatus(emptySnapshot ? 'empty' : 'ready', data.status.label + '. ' + data.status.explanation);
     }).catch(function (error) {
       // A stale GET can still be the request that proves the session or role
       // is no longer authorized. Clear and invalidate both request classes
@@ -263,9 +321,14 @@
         invalidateAuthority(error);
         return;
       }
+      if (error && error.status === 409) {
+        invalidateConflict('load');
+        return;
+      }
       if (request !== generation) return;
       clearSensitive();
-      setStatus('error', error && error.message ? error.message : 'Automation records are unavailable. No saved data is shown.');
+      var status = errorStatus(error, 'load');
+      setStatus(status.state, status.message);
     });
   }
   function bind() {

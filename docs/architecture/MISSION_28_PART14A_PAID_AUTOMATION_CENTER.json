@@ -1,6 +1,6 @@
 {
   "contractVersion": "mission28.part14a.paid-automation-center.v1",
-  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "status": "released",
   "frozenAuthority": {
     "sourcePath": "C:\\Users\\joshv\\Documents\\Codex\\2026-09-09\\view-northstar-mission-success-and-look\\MISSION_28_PROPOSED_PART_SLICE_PLAN.md",
     "sourceSha256": "DDBA5CA7523A1684330E136313F4416584D142A63167310EEABEC1EBFBB010B4",
@@ -8,7 +8,7 @@
     "part": "14",
     "slice": "A",
     "scope": "paid_tenant_private_automation_center_only",
-    "laterSlices": "Part14B_through_Part14G_remain_planned_unimplemented"
+    "laterSlices": "Part14B_is_the_current_implementation_candidate_Part14C_through_Part14G_remain_planned_unimplemented"
   },
   "part13ERelease": {
     "acceptedSourceHead": "51d3fcc0ea4702e06d55cbd512608d98ec1f519e",
@@ -20,6 +20,28 @@
     "productionMigrationReconciliation": "283_of_283_through_287_no_288",
     "startupHealthRootDashboardDemo": "verified",
     "dashboardDemoByteHashParity": "verified"
+  },
+  "part14ARelease": {
+    "acceptedSourceHead": "4217ea78e200d1016bd54e3ce4bb72cee2d82d30",
+    "acceptedTree": "e5c7c17b0df08ba5e43d801a8c57c1e8dcff872f",
+    "pullRequest": 608,
+    "mergedMain": "e72c04bc6990c03b8d0b8719f0bd05779cdba505",
+    "independentAudit": "P0_P1_P2_P3_zero",
+    "node": "22.23.3",
+    "cumulativeMission28": "60_suites_894_tests_passed",
+    "supporting": "167_passed_3_intentional_skips",
+    "syntaxJsonReferences": "71_59_518",
+    "legacyParityBaseline": "six_failures_reproduced_on_prior_base_not_claimed_passed",
+    "backupId": "32307774-0077-478b-8c18-d99405af7b96",
+    "backupName": "pre-m28-part14a-90ebb323-20261123",
+    "deploymentId": "7f735b47-3d69-4bd4-861a-a9a55e951404",
+    "deploymentInstance": "78967638-f02a-4e48-a893-1c5a8158fe74",
+    "deploymentState": "SUCCESS_RUNNING",
+    "imageSha256": "sha256:25a19362c4237971d541bd031a62f5992fd829e2bc4cf73961e92fb231ab4f5e",
+    "productionDatabase": "PostgreSQL_18.6_UTF8_Etc_UTC_offset_0",
+    "productionMigrationReconciliation": "283_of_283_through_287_no_288_zero_extra_duplicate_mismatch_pending",
+    "startupHealthRootDashboardDemoAutomation": "verified_HTTP_200",
+    "dashboardDemoParity": "91681_bytes_sha256_b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369"
   },
   "routes": {
     "page": "/dashboard/automation",
@@ -144,7 +166,7 @@
     "current_limit_consumption",
     "provider_and_live_channel_availability",
     "tenant_stop_release_authority",
-    "Part14A_independent_audit_PR_merge_deployment_and_production_acceptance",
+    "Part14B_and_later_independent_audit_PR_merge_deployment_and_production_acceptance",
     "provider_live_private_production_and_money_evidence",
     "physical_Safari_devices_manual_assistive_technology_and_founder_visual_approval",
     "professional_legal_privacy_communications_collections_accounting_security_or_compliance_review"

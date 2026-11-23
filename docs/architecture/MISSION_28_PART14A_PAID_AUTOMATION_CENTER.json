@@ -145,6 +145,7 @@
     "approvalEvidenceIsNotPendingApprovalAuthority": true,
     "pendingApprovalCountIsUnavailableNotZero": true,
     "historicalInternalTaskIsNotPendingOwnerWork": true,
+    "recordClassLabelDoesNotEstablishOutcomeOrCurrentStatus": true,
     "missingLimitConsumptionIsNotZero": true,
     "visibleChannelIsNotContactPermission": true,
     "scheduledIsNotDelivered": true,

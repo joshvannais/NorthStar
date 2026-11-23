@@ -113,7 +113,10 @@ describe('Mission 28 Part 14B exact state projection', () => {
     expect(snapshot.counts.runs).toBe(contract.RUN_STATE_ORDER.length);
     expect(Object.values(snapshot.counts.runStates)).toEqual(contract.RUN_STATE_ORDER.map(() => 1));
     expect(snapshot.runs.every(run => run.stateLabel === contract.RUN_STATE_LABELS[run.state])).toBe(true);
-    expect(snapshot.runs.map(run => run.explanation).join(' '))
+    expect(snapshot.runs.every(run =>
+      typeof run.stateExplanation === 'string' && run.stateExplanation.length > 0 &&
+      run.stateExplanation === contract.RUN_STATE_EXPLANATIONS[run.state])).toBe(true);
+    expect(snapshot.runs.map(run => run.stateExplanation).join(' '))
       .not.toMatch(/\b(?:lease|fence|action-control|delivery-control|authority-class|vocabulary)\b/i);
   });
 
@@ -182,6 +185,122 @@ describe('Mission 28 Part 14B exact state projection', () => {
     expect(snapshot.runs.map(run => run.state)).toEqual([
       'unavailable', 'unavailable', 'validation', 'uncertain', 'unavailable',
     ]);
+  });
+
+  test('secondary surfaces keep record classes neutral when exact outcomes are unavailable', () => {
+    const record = (id, runId, recordType, recordedAt) => ({
+      record_id: uuid(id), run_id: uuid(runId), record_type: recordType,
+      currentness_marker: 'captured_not_runtime_revalidated', authority_class: 'automation_decision',
+      recorded_at: recordedAt,
+    });
+    const snapshot = buildSnapshot(input(), results({
+      runs: [
+        baseRun(41, { latest_record_type: 'suppression', suppression_blocks_effect: 'false' }),
+        baseRun(42, { latest_record_type: 'suppression', suppression_blocks_effect: null }),
+        baseRun(43, { latest_record_type: 'cancellation', cancellation_state: 'requested' }),
+        baseRun(44, { latest_record_type: 'cancellation', cancellation_state: 'too_late' }),
+        baseRun(45, { latest_record_type: 'cancellation', cancellation_state: 'unavailable' }),
+        baseRun(46, { latest_record_type: 'reconciliation', reconciliation_state: 'uncertain' }),
+        baseRun(47, { latest_record_type: 'scheduled_run', schedule_id: uuid(4047) }),
+      ],
+      records: [
+        record(641, 41, 'suppression', '2026-11-23T19:41:00.000Z'),
+        record(642, 42, 'suppression', '2026-11-23T19:42:00.000Z'),
+        record(643, 43, 'cancellation', '2026-11-23T19:43:00.000Z'),
+        record(644, 44, 'cancellation', '2026-11-23T19:44:00.000Z'),
+        record(645, 45, 'cancellation', '2026-11-23T19:45:00.000Z'),
+        record(646, 46, 'reconciliation', '2026-11-23T19:46:00.000Z'),
+        record(647, 47, 'scheduled_run', '2026-11-23T19:47:00.000Z'),
+        record(648, 43, 'internal_task', '2026-11-23T19:42:30.000Z'),
+      ],
+    }));
+
+    expect(snapshot.runs.map(run => run.state)).toEqual([
+      'unavailable', 'unavailable', 'validation', 'uncertain', 'unavailable', 'uncertain', 'unavailable',
+    ]);
+    expect(snapshot.runs.map(run => run.latestEvent)).toEqual([
+      'Safeguard evidence recorded', 'Safeguard evidence recorded',
+      'Cancellation evidence recorded', 'Cancellation evidence recorded', 'Cancellation evidence recorded',
+      'Review evidence recorded', 'Schedule evidence recorded',
+    ]);
+    expect(Object.fromEntries(snapshot.timeline.map(item => [item.kind, item.label]))).toMatchObject({
+      suppression: 'Safeguard evidence recorded',
+      cancellation: 'Cancellation evidence recorded',
+      reconciliation: 'Review evidence recorded',
+      scheduled_run: 'Schedule evidence recorded',
+      internal_task: 'Owner work evidence recorded',
+    });
+    expect(snapshot.ownerWork).toEqual([expect.objectContaining({
+      runId: uuid(43),
+      state: 'historical_status_unavailable',
+      statusLabel: 'Current pending or resolved task status is unavailable.',
+    })]);
+    const secondaryCopy = snapshot.runs.map(run => run.latestEvent)
+      .concat(snapshot.timeline.map(item => item.label), snapshot.ownerWork.map(item => item.statusLabel)).join(' ');
+    expect(secondaryCopy).not.toMatch(/action cancelled|stopped (?:the )?effect|outcome reconciled|run scheduled|terminal evidence/i);
+  });
+
+  test('every record-class label describes evidence without inventing an outcome', () => {
+    const labels = {
+      eligibility_evaluation: 'Eligibility evidence recorded',
+      proposed_action: 'Proposed action evidence recorded',
+      approval: 'Approval evidence recorded',
+      scheduled_run: 'Schedule evidence recorded',
+      action_unit: 'Work evidence recorded',
+      provider_attempt: 'Delivery attempt evidence recorded',
+      provider_acknowledgement: 'Delivery response evidence recorded',
+      delivery_state: 'Delivery status evidence recorded',
+      reply_opt_out: 'Reply or opt-out evidence recorded',
+      internal_task: 'Owner work evidence recorded',
+      suppression: 'Safeguard evidence recorded',
+      cancellation: 'Cancellation evidence recorded',
+      reconciliation: 'Review evidence recorded',
+      terminal_outcome: 'Outcome evidence recorded',
+    };
+    const recordTypes = Object.keys(labels);
+    const snapshot = buildSnapshot(input(), results({
+      runs: recordTypes.map((recordType, index) => baseRun(100 + index, {
+        latest_record_type: recordType,
+        ...(recordType === 'scheduled_run' ? { schedule_id: uuid(4100 + index) } : {}),
+      })),
+      records: recordTypes.map((recordType, index) => ({
+        record_id: uuid(700 + index), run_id: uuid(100 + index), record_type: recordType,
+        currentness_marker: 'captured_not_runtime_revalidated', authority_class: 'automation_decision',
+        recorded_at: `2026-11-23T19:${String(index).padStart(2, '0')}:00.000Z`,
+      })),
+    }));
+    expect(new Set(snapshot.runs.map(run => run.latestEvent))).toEqual(new Set(Object.values(labels)));
+    expect(Object.fromEntries(snapshot.timeline.map(item => [item.kind, item.label]))).toMatchObject(labels);
+    const copy = snapshot.runs.map(run => run.latestEvent).concat(snapshot.timeline.map(item => item.label)).join(' ');
+    expect(copy).not.toMatch(/eligibility checked|prepared for review|run scheduled|action prepared|provider acknowledgement|delivery evidence updated|action stopped|action cancelled|outcome reconciled|terminal state/i);
+  });
+
+  test('rendered latest-event, timeline, and owner-work copy preserves neutral evidence labels', async () => {
+    const snapshot = buildSnapshot(input(), results({
+      runs: [
+        baseRun(120, { latest_record_type: 'cancellation', cancellation_state: 'unavailable' }),
+        baseRun(121, { latest_record_type: 'suppression', suppression_blocks_effect: 'false' }),
+        baseRun(122, { latest_record_type: 'reconciliation', reconciliation_state: 'uncertain' }),
+        baseRun(123, { latest_record_type: 'scheduled_run', schedule_id: uuid(4123) }),
+      ],
+      records: [
+        { record_id: uuid(720), run_id: uuid(120), record_type: 'cancellation', currentness_marker: 'captured_not_runtime_revalidated', authority_class: 'automation_decision', recorded_at: '2026-11-23T19:20:00.000Z' },
+        { record_id: uuid(721), run_id: uuid(121), record_type: 'suppression', currentness_marker: 'captured_not_runtime_revalidated', authority_class: 'automation_decision', recorded_at: '2026-11-23T19:21:00.000Z' },
+        { record_id: uuid(722), run_id: uuid(122), record_type: 'reconciliation', currentness_marker: 'captured_not_runtime_revalidated', authority_class: 'effect_evidence', recorded_at: '2026-11-23T19:22:00.000Z' },
+        { record_id: uuid(723), run_id: uuid(123), record_type: 'scheduled_run', currentness_marker: 'captured_not_runtime_revalidated', authority_class: 'automation_decision', recorded_at: '2026-11-23T19:23:00.000Z' },
+        { record_id: uuid(724), run_id: uuid(120), record_type: 'internal_task', currentness_marker: 'captured_not_runtime_revalidated', authority_class: 'automation_decision', recorded_at: '2026-11-23T19:19:00.000Z' },
+      ],
+    }));
+    const { elements, listeners } = pageHarness(jest.fn().mockResolvedValue({ success: true, data: snapshot }));
+    listeners.DOMContentLoaded(); await flush();
+    const rendered = [elements.attentionRuns, elements.automationTimeline, elements.automationOwnerWork]
+      .map(element => element.textContent).join(' ');
+    expect(rendered).toMatch(/Cancellation evidence recorded/);
+    expect(rendered).toMatch(/Safeguard evidence recorded/);
+    expect(rendered).toMatch(/Review evidence recorded/);
+    expect(rendered).toMatch(/Schedule evidence recorded/);
+    expect(rendered).toMatch(/Current pending or resolved task status is unavailable/);
+    expect(rendered).not.toMatch(/action cancelled|stopped (?:the )?effect|outcome reconciled|run scheduled|terminal evidence/i);
   });
 
   test('approval evidence never invents a current pending owner request', () => {

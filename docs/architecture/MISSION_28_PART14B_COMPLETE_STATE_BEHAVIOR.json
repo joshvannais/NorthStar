@@ -87,6 +87,15 @@
     "preview400Or422ClearsPreviewOnly": true,
     "rawErrorOrInternalStateRendered": false
   },
+  "secondarySurfaceRules": {
+    "latestEventAndTimelineUseNeutralEvidenceClassLabels": true,
+    "recordClassAloneNeverClaimsOutcomeCurrentnessOrTerminalState": true,
+    "cancellationClassAloneNeverClaimsCancelled": true,
+    "suppressionClassAloneNeverClaimsEffectStopped": true,
+    "reconciliationClassAloneNeverClaimsCorrectionOrSuccess": true,
+    "scheduleClassAloneNeverClaimsQueuedOrScheduledExecution": true,
+    "coexistingRecordClassNeverClaimsOwnerWorkPendingResolvedOrTerminal": true
+  },
   "effectBoundary": {
     "policySaved": false,
     "policyActivated": false,

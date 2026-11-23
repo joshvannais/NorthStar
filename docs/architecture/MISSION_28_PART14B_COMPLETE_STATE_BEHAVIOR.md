@@ -47,6 +47,14 @@ historical approved record renders validation/later-state-unavailable; it does
 not create a new pending owner request or strengthen the unavailable approval
 inbox into a known count.
 
+Latest-event, timeline, and owner-work copy remains a secondary evidence
+projection, not another state resolver. Its fixed labels identify only the
+record class. Cancellation does not mean cancelled, suppression does not prove
+an effect stopped, reconciliation does not prove correction or success, and a
+schedule record does not prove queued or scheduled execution. A coexisting
+record class cannot make historical owner work terminal, pending, or resolved;
+that current status remains unavailable.
+
 ## Conjunctive authority and precedence
 
 Captured run evidence remains recorded history, not live runtime validation.

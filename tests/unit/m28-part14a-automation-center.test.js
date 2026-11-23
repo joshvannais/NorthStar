@@ -363,7 +363,7 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     }));
     expect(result.runs).toEqual([expect.objectContaining({ state: 'unavailable', stateLabel: 'Status unavailable' })]);
     expect(result.counts.runStates).toMatchObject({ completed: 0, unavailable: 1 });
-    expect(result.timeline).toEqual([expect.objectContaining({ kind: 'terminal_outcome', label: 'Run reached a terminal state' })]);
+    expect(result.timeline).toEqual([expect.objectContaining({ kind: 'terminal_outcome', label: 'Outcome evidence recorded' })]);
   });
 
   test('an internal task followed by terminal evidence remains history, never pending owner work', () => {
@@ -383,7 +383,7 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(result.ownerWork).toEqual([expect.objectContaining({
       runId: uuid(20),
       state: 'historical_status_unavailable',
-      statusLabel: 'Terminal evidence is also recorded. Current task status is unavailable.',
+      statusLabel: 'Current pending or resolved task status is unavailable.',
     })]);
     expect(result.counts).toMatchObject({ approvals: null, ownerWork: null });
     expect(result.timeline.map(item => item.kind)).toEqual(['terminal_outcome', 'internal_task']);
@@ -644,7 +644,7 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(elements.automationApprovals.textContent).toMatch(/requests may exist/i);
     expect(elements.automationApprovals.textContent).not.toMatch(/no current approval|\b0\b/i);
     expect(elements.ownerWorkCount.textContent).toBe('Unavailable');
-    expect(elements.automationOwnerWork.textContent).toMatch(/terminal evidence is also recorded.*current task status is unavailable/i);
+    expect(elements.automationOwnerWork.textContent).toMatch(/current pending or resolved task status is unavailable/i);
     expect(elements.automationOwnerWork.textContent).not.toMatch(/current record ready|review private owner work/i);
   });
 

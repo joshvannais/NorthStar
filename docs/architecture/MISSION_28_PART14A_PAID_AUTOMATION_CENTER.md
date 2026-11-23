@@ -78,6 +78,14 @@ jointly mounted and stay explicitly unavailable. A recorded stop remains
 authoritative; a missing release control is never treated as permission to
 resume.
 
+Latest-event and timeline labels name only the immutable evidence class. A
+cancellation record does not say cancelled, a suppression record does not say
+an effect stopped, a reconciliation record does not say an outcome was
+corrected, and a schedule record does not say work is queued. Exact payload and
+current authority decide those run states separately. Historical owner-work
+copy likewise never infers a terminal, pending, or resolved task state from a
+coexisting record class.
+
 ## Setup and templates
 
 The four templates are owner work review, estimate follow-up review,

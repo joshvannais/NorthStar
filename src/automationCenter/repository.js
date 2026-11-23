@@ -16,20 +16,20 @@ const ROLE_CAPABILITIES = Object.freeze({
   ]),
 });
 const RECORD_LABELS = Object.freeze({
-  eligibility_evaluation: 'Eligibility checked',
-  proposed_action: 'Action prepared for review',
+  eligibility_evaluation: 'Eligibility evidence recorded',
+  proposed_action: 'Proposed action evidence recorded',
   approval: 'Approval evidence recorded',
-  scheduled_run: 'Run scheduled',
-  action_unit: 'Action prepared',
-  provider_attempt: 'Provider attempt recorded',
-  provider_acknowledgement: 'Provider acknowledgement recorded',
-  delivery_state: 'Delivery evidence updated',
-  reply_opt_out: 'Reply or opt-out recorded',
-  internal_task: 'Owner work recorded',
-  suppression: 'Action stopped by a current safeguard',
-  cancellation: 'Action cancelled',
-  reconciliation: 'Prior outcome reconciled',
-  terminal_outcome: 'Run reached a terminal state',
+  scheduled_run: 'Schedule evidence recorded',
+  action_unit: 'Work evidence recorded',
+  provider_attempt: 'Delivery attempt evidence recorded',
+  provider_acknowledgement: 'Delivery response evidence recorded',
+  delivery_state: 'Delivery status evidence recorded',
+  reply_opt_out: 'Reply or opt-out evidence recorded',
+  internal_task: 'Owner work evidence recorded',
+  suppression: 'Safeguard evidence recorded',
+  cancellation: 'Cancellation evidence recorded',
+  reconciliation: 'Review evidence recorded',
+  terminal_outcome: 'Outcome evidence recorded',
 });
 const POLICY_STATE_LABELS = Object.freeze({
   draft: 'Draft', validated: 'Validated', previewed: 'Preview ready', active: 'Recorded active', paused: 'Paused',
@@ -407,7 +407,7 @@ function buildSnapshot(input, results) {
       state: state.id,
       stateLabel: state.label,
       stateExplanation: state.explanation,
-      latestEvent: RECORD_LABELS[row.latest_record_type] || 'Current evidence recorded',
+      latestEvent: RECORD_LABELS[row.latest_record_type] || 'Evidence record captured',
       recordedAt: iso(row.latest_recorded_at || row.recorded_at),
       evidenceState: row.currentness_marker === 'captured_exact_current'
         ? 'Captured evidence; not live revalidated'
@@ -440,17 +440,12 @@ function buildSnapshot(input, results) {
     });
   }
   timeline.sort((left, right) => String(right.recordedAt).localeCompare(String(left.recordedAt)));
-  const terminalRunIds = new Set(recordRows
-    .filter(row => row.record_type === 'terminal_outcome' || row.record_type === 'cancellation')
-    .map(row => row.run_id));
   const ownerWork = recordRows.filter(row => row.record_type === 'internal_task').map(row => ({
     id: safeId(row.record_id),
     runId: safeId(row.run_id),
     label: 'Private owner work evidence',
     state: 'historical_status_unavailable',
-    statusLabel: terminalRunIds.has(row.run_id)
-      ? 'Terminal evidence is also recorded. Current task status is unavailable.'
-      : 'Current pending or resolved task status is unavailable.',
+    statusLabel: 'Current pending or resolved task status is unavailable.',
     recordedAt: iso(row.recorded_at),
   }));
   // Immutable approval records are evidence, not a pending-inbox resolver. Do

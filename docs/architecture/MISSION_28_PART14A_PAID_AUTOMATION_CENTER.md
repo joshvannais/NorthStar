@@ -1,6 +1,8 @@
 # Mission 28 Part 14A — paid Automation Center
 
-Status: **Implementation candidate only. Not independently accepted or released.**
+Status: **Released.** Accepted source `4217ea78e200d1016bd54e3ce4bb72cee2d82d30`,
+tree `e5c7c17b0df08ba5e43d801a8c57c1e8dcff872f`, PR #608, merged main
+`e72c04bc6990c03b8d0b8719f0bd05779cdba505`.
 
 Part 14A mounts one paid, tenant-private Automation Center for active owner and
 administrator sessions. It projects the already accepted Mission 28 policy,
@@ -76,6 +78,22 @@ jointly mounted and stay explicitly unavailable. A recorded stop remains
 authoritative; a missing release control is never treated as permission to
 resume.
 
+Latest-event and timeline labels name only the immutable evidence class. A
+cancellation record does not say cancelled, a suppression record does not say
+an effect stopped, a reconciliation record does not say an outcome was
+corrected, and a schedule record does not say work is queued. Exact payload and
+current authority decide those run states separately. Historical owner-work
+copy likewise never infers a terminal, pending, or resolved task state from a
+coexisting record class.
+
+Recovery assessments are immutable historical snapshots, not durable current
+run heads. A nonblocking assessment yields to later exact processing, retry, or
+work-control evidence only when the policy version, transaction, trusted times,
+and selected schedule binding all agree. An older or equal processing record
+does not supersede the assessment. Missing or conflicting bindings stay
+unavailable, while stale source, uncertain-effect, unavailable restore,
+currentness, policy, and stop evidence continue to fail closed.
+
 ## Setup and templates
 
 The four templates are owner work review, estimate follow-up review,
@@ -103,7 +121,22 @@ Production reconciliation verified 283/283 migrations through 287/no288,
 startup readiness, `/api/health`, `/`, `/dashboard`, and `/demo/` HTTP 200,
 and exact dashboard/demo byte/hash parity.
 
-Writer tests are not independent acceptance. Part 14A PR, merge, deployment,
-production behavior, provider/live/private-production evidence, physical
+The complete independent audit accepted P0=P1=P2=P3=0 under Node 22.23.3 with
+60 Mission 28 suites and 894 tests, 167 supporting passes and 3 intentional
+skips, syntax 71, JSON 59, and references 518. The legacy full parity suite's
+six failures reproduced on the prior production base and are not claimed
+passed. The named pre-release backup is
+`pre-m28-part14a-90ebb323-20261123` (`32307774-0077-478b-8c18-d99405af7b96`).
+
+The sole automatic deployment `7f735b47-3d69-4bd4-861a-a9a55e951404` is
+`SUCCESS/RUNNING`, instance `78967638-f02a-4e48-a893-1c5a8158fe74`, image
+`sha256:25a19362c4237971d541bd031a62f5992fd829e2bc4cf73961e92fb231ab4f5e`.
+Production PostgreSQL 18.6 is UTF8 at Etc/UTC offset 0; read-only migration
+reconciliation passed 283/283 through 287/no288 with zero extra, duplicate,
+mismatched, or pending migrations. Startup, `/api/health`, `/`, `/dashboard`,
+`/demo/`, and `/dashboard/automation` returned HTTP 200; dashboard/demo exact
+91,681-byte SHA-256
+`b42145ddc95e9bc2a383f9dac6ad1f5a884a90d5a3e999a0c126b2b6e3bae369`
+parity passed. Provider/live/private-production evidence, physical
 Safari/devices, manual assistive-technology review, professional review, and
 founder visual approval remain unavailable and unclaimed.

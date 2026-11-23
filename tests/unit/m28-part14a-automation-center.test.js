@@ -91,7 +91,7 @@ describe('Mission 28 Part 14A bounded setup contract', () => {
   test('custom preview remains an exact no-effect result', () => {
     const result = centerContract.buildPreview(preview());
     expect(result).toMatchObject({
-      version: 'mission28.automation-center.v1', previewOnly: true, saved: false, activated: false,
+      version: 'mission28.automation-center.v2', previewOnly: true, saved: false, activated: false,
       queued: false, recipientContacted: false, providerAttemptCreated: false,
       externalEffectCreated: false, financialEffectCreated: false, moneyEffectCreated: false,
     });
@@ -135,8 +135,9 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
   test('empty authority is presented as ready to set up without inventing activity', () => {
     const result = buildSnapshot(input(), emptyResults());
     expect(result.status.id).toBe('ready_to_set_up');
-    expect(result.counts).toEqual({ policies: 0, activePolicies: 0, pausedPolicies: 0, unavailablePolicies: 0,
-      activeRuns: 0, pausedRuns: 0, failedRuns: 0, approvals: null, ownerWork: null });
+    expect(result.counts).toMatchObject({ policies: 0, activePolicies: 0, pausedPolicies: 0, unavailablePolicies: 0,
+      runs: 0, approvals: null, ownerWork: null });
+    expect(Object.values(result.counts.runStates).every(value => value === 0)).toBe(true);
     expect(result.approvals).toBeNull();
     expect(result.stopControl).toMatchObject({ state: 'normal_no_control_record', canEngage: false, canRelease: false });
     expect(result.channels.find(item => item.id === 'email').state).toBe('unavailable');
@@ -160,9 +161,10 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
       documents: [{ estimate_quote_resolution_id: uuid(40), run_id: uuid(20), result_state: 'exact_document_bound_external_delivery_unavailable', recorded_at: '2026-11-20T19:32:00Z' }],
       channels: [{ requested_channel_id: 'email', result_state: 'unavailable_external_channel' }],
     }));
-    expect(result.counts).toMatchObject({ policies: 2, activePolicies: 1, pausedPolicies: 1, activeRuns: 1,
-      failedRuns: 1, approvals: null, ownerWork: null });
-    expect(result.runs.map(item => item.state)).toEqual(['active', 'failed']);
+    expect(result.counts).toMatchObject({ policies: 2, activePolicies: 1, pausedPolicies: 1,
+      runs: 2, approvals: null, ownerWork: null });
+    expect(result.counts.runStates).toMatchObject({ unavailable: 2, stale: 0 });
+    expect(result.runs.map(item => item.state)).toEqual(['unavailable', 'unavailable']);
     expect(result.timeline.some(item => item.kind === 'document_review')).toBe(true);
     expect(JSON.stringify(result)).not.toContain('must never return');
     expect(result.approvals).toBeNull();
@@ -281,7 +283,7 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
       stopControl: [{ control_state: 'paused' }],
     }));
     expect(result.policies[0]).toMatchObject({ id: null, state: 'unavailable' });
-    expect(result.runs[0]).toMatchObject({ state: 'failed', stateLabel: 'Currentness needs review' });
+    expect(result.runs[0]).toMatchObject({ state: 'stale', stateLabel: 'Source changed' });
     expect(result.channels.find(item => item.id === 'native_handoff').evidence).toBe('Manual device handoff is not available.');
     expect(result.status).toMatchObject({ id: 'stopped_or_restricted', explanation: expect.stringMatching(/remains authoritative/i) });
   });
@@ -292,8 +294,8 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
       currentness_marker: null, schedule_id: uuid(21), retry_state: null, control_state: null,
     }] }));
     expect(result.runs).toHaveLength(1);
-    expect(result.runs[0]).toMatchObject({ state: 'failed', stateLabel: 'Currentness needs review' });
-    expect(result.counts).toMatchObject({ activeRuns: 0, failedRuns: 1 });
+    expect(result.runs[0]).toMatchObject({ state: 'unavailable', stateLabel: 'Status unavailable' });
+    expect(result.counts.runStates).toMatchObject({ unavailable: 1 });
   });
 
   test('run state respects tenant, policy-version, and action-schedule controls exactly like the delivery guard', () => {
@@ -312,11 +314,11 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
 
     expect(result.runs.map(run => [run.id, run.state, run.stateLabel])).toEqual([
       [uuid(20), 'paused', 'Paused'],
-      [uuid(22), 'failed', 'Revoked'],
-      [uuid(23), 'active', 'Scheduled record'],
-      [uuid(24), 'failed', 'Control needs review'],
+      [uuid(22), 'stopped', 'Stopped'],
+      [uuid(23), 'unavailable', 'Status unavailable'],
+      [uuid(24), 'unavailable', 'Status unavailable'],
     ]);
-    expect(result.counts).toMatchObject({ activeRuns: 1, pausedRuns: 1, failedRuns: 2 });
+    expect(result.counts.runStates).toMatchObject({ paused: 1, stopped: 1, unavailable: 2 });
   });
 
   test('active-looking runs fail closed under paused terminal expired or missing policy lifecycle', () => {
@@ -337,16 +339,16 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
 
     expect(result.runs.map(run => [run.id, run.state, run.stateLabel])).toEqual([
       [uuid(20), 'paused', 'Paused'],
-      [uuid(22), 'failed', 'Retired'],
-      [uuid(23), 'failed', 'Expired'],
-      [uuid(24), 'failed', 'Expired'],
-      [uuid(25), 'failed', 'Current policy status unavailable'],
-      [uuid(26), 'failed', 'Current policy status unavailable'],
+      [uuid(22), 'stopped', 'Stopped'],
+      [uuid(23), 'expired', 'Expired'],
+      [uuid(24), 'expired', 'Expired'],
+      [uuid(25), 'unavailable', 'Status unavailable'],
+      [uuid(26), 'unavailable', 'Status unavailable'],
     ]);
-    expect(result.counts).toMatchObject({ activeRuns: 0, pausedRuns: 1, failedRuns: 5 });
+    expect(result.counts.runStates).toMatchObject({ paused: 1, stopped: 1, expired: 2, unavailable: 2 });
   });
 
-  test('exact terminal runs stay out of active paused failed lists while terminal evidence remains', () => {
+  test('terminal evidence without an exact terminal payload remains explicitly unavailable', () => {
     const result = buildSnapshot(input(), emptyResults({
       runs: [{
         run_id: uuid(20), policy_id: uuid(10), policy_version: '1', latest_record_type: 'terminal_outcome',
@@ -359,9 +361,9 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
         recorded_at: '2026-11-20T19:31:00Z',
       }],
     }));
-    expect(result.runs).toEqual([]);
-    expect(result.counts).toMatchObject({ activeRuns: 0, pausedRuns: 0, failedRuns: 0 });
-    expect(result.timeline).toEqual([expect.objectContaining({ kind: 'terminal_outcome', label: 'Run reached a terminal state' })]);
+    expect(result.runs).toEqual([expect.objectContaining({ state: 'unavailable', stateLabel: 'Status unavailable' })]);
+    expect(result.counts.runStates).toMatchObject({ completed: 0, unavailable: 1 });
+    expect(result.timeline).toEqual([expect.objectContaining({ kind: 'terminal_outcome', label: 'Outcome evidence recorded' })]);
   });
 
   test('an internal task followed by terminal evidence remains history, never pending owner work', () => {
@@ -381,7 +383,7 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(result.ownerWork).toEqual([expect.objectContaining({
       runId: uuid(20),
       state: 'historical_status_unavailable',
-      statusLabel: 'Terminal evidence is also recorded. Current task status is unavailable.',
+      statusLabel: 'Current pending or resolved task status is unavailable.',
     })]);
     expect(result.counts).toMatchObject({ approvals: null, ownerWork: null });
     expect(result.timeline.map(item => item.kind)).toEqual(['terminal_outcome', 'internal_task']);
@@ -481,6 +483,15 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(runRead.sql).toMatch(/tenant_control\.target_kind='tenant'[\s\S]*tenant_control\.target_key=\$1::text/);
     expect(runRead.sql).toMatch(/policy_control\.target_kind='policy_version'[\s\S]*binding\.policy_id::text\|\|':'\|\|binding\.policy_version::text/);
     expect(runRead.sql).toMatch(/action_control\.target_kind='action_schedule'[\s\S]*action_control\.target_key=schedule\.schedule_id::text/);
+    expect(runRead.sql).toMatch(/schedule\.transaction_id schedule_transaction_id/);
+    expect(runRead.sql).toMatch(/action_control\.updated_at action_control_updated_at/);
+    expect(runRead.sql).toMatch(/recovery\.transaction_id recovery_transaction_id[\s\S]*recovery\.policy_id recovery_policy_id[\s\S]*recovery\.policy_version recovery_policy_version/);
+    expect(runRead.sql).toMatch(/SELECT transaction_id,policy_id,policy_version,result_state,recorded_at[\s\S]*canonical_automation_recovery_assessments_v1/);
+    expect(runRead.sql).toMatch(/count\(\*\) OVER\(\) schedule_count[\s\S]*organization_id=\$1 AND run_id=binding\.run_id/);
+    expect(runRead.sql).toMatch(/count\(\*\)::integer action_unit_count[\s\S]*organization_id=\$1 AND run_id=binding\.run_id/);
+    expect(runRead.sql).toMatch(/\{payload,cancellationState\}.*cancellation_state/);
+    expect(runRead.sql).toMatch(/\{payload,blocksEffect\}.*suppression_blocks_effect/);
+    expect(runRead.sql).toMatch(/\{payload,authenticated\}.*reply_authenticated/);
     expect(calls.some(call => call.sql === 'COMMIT')).toBe(true);
     expect(client.release).toHaveBeenCalledWith(false);
   });
@@ -565,7 +576,15 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     const artifact = JSON.parse(read('docs/architecture/MISSION_28_PART14A_PAID_AUTOMATION_CENTER.json'));
     expect(artifact).toMatchObject({
       contractVersion: 'mission28.part14a.paid-automation-center.v1',
-      status: 'implementation_candidate_not_independently_accepted_not_released',
+      status: 'released',
+      part14ARelease: {
+        acceptedSourceHead: '4217ea78e200d1016bd54e3ce4bb72cee2d82d30',
+        acceptedTree: 'e5c7c17b0df08ba5e43d801a8c57c1e8dcff872f',
+        pullRequest: 608,
+        mergedMain: 'e72c04bc6990c03b8d0b8719f0bd05779cdba505',
+        deploymentId: '7f735b47-3d69-4bd4-861a-a9a55e951404',
+        imageSha256: 'sha256:25a19362c4237971d541bd031a62f5992fd829e2bc4cf73961e92fb231ab4f5e',
+      },
       routes: { page: '/dashboard/automation', demoRoute: null, paidOnly: true },
       preview: { saved: false, activated: false, queued: false, recipientContacted: false,
         providerAttemptCreated: false, externalEffectCreated: false, financialEffectCreated: false,
@@ -579,7 +598,7 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     const html = read('public/dashboard/automation.html');
     expect(html).not.toMatch(/idempotency|canonical digest|provider request identity|fencing token|row level security/i);
     expect(html).toContain('Scheduled is not delivered');
-    expect(html).toContain('not live runtime revalidation');
+    expect(html).toContain('not a live check');
     expect(html).toContain('does not imply delivery, a reply, payment, or business success');
     expect(html).toContain('No-effect preview');
     expect(html).toContain('Current pending requests may exist');
@@ -629,7 +648,7 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(elements.automationApprovals.textContent).toMatch(/requests may exist/i);
     expect(elements.automationApprovals.textContent).not.toMatch(/no current approval|\b0\b/i);
     expect(elements.ownerWorkCount.textContent).toBe('Unavailable');
-    expect(elements.automationOwnerWork.textContent).toMatch(/terminal evidence is also recorded.*current task status is unavailable/i);
+    expect(elements.automationOwnerWork.textContent).toMatch(/current pending or resolved task status is unavailable/i);
     expect(elements.automationOwnerWork.textContent).not.toMatch(/current record ready|review private owner work/i);
   });
 
@@ -676,7 +695,8 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
       'limitsConsumption', 'stopState', 'stopExplanation', 'automationEvaluatedAt', 'previewSummary', 'previewBoundary',
     ];
     const dynamicContainerIds = [
-      'automationTemplates', 'automationApprovals', 'automationOwnerWork', 'activeRuns', 'pausedRuns', 'failedRuns',
+      'automationTemplates', 'automationApprovals', 'automationOwnerWork', 'waitingRuns', 'inFlightRuns', 'attentionRuns',
+      'stoppedRuns', 'finishedRuns',
       'automationPolicies', 'automationTimeline', 'automationLimits', 'automationChannels', 'automationUnavailable',
       'previewDetails', 'previewStops',
     ];
@@ -704,7 +724,7 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(elements.setupDailyLimit.value).toBe('1');
     expect(['setupSource', 'setupAction', 'setupRecipient', 'setupChannel', 'setupTiming']
       .every(id => elements[id].selectedIndex === 0)).toBe(true);
-    expect(elements.automationStatus.textContent).toBe('Automation records are unavailable.');
+    expect(elements.automationStatus.textContent).toBe('Automation records are unavailable. No saved data is shown.');
   });
 
   test('preview authorization loss clears prior tenant data and rejects stale preview success', async () => {

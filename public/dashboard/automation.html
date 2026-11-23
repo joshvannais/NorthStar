@@ -6,10 +6,10 @@
   <title>Automation Center - NorthStar</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/northstar-icon-32.png?v=20260920">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/northstar-icon-180.png?v=20260920">
-  <script src="/js/command-center-contract.js?v=m28-part14a"></script>
+  <script src="/js/command-center-contract.js?v=m28-part14b"></script>
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/automation-center.css?v=m28-part14a">
+  <link rel="stylesheet" href="/css/automation-center.css?v=m28-part14b">
   <link rel="stylesheet" href="/css/site-professionalism.css?v=command-center-clarity-20260915">
 </head>
 <body class="automation-center-page">
@@ -74,11 +74,13 @@
       </div>
 
       <section class="automation-panel" aria-labelledby="runsTitle">
-        <div class="automation-panel-heading"><div><p class="automation-kicker">Policies and runs</p><h2 id="runsTitle">What is recorded active, paused, or needs review</h2><p>Status reflects recorded authority and evidence, not live runtime revalidation. Scheduled is not delivered, and provider-accepted is not customer-received.</p></div></div>
+        <div class="automation-panel-heading"><div><p class="automation-kicker">Policies and runs</p><h2 id="runsTitle">Exact recorded state, without hidden assumptions</h2><p>Status is recorded evidence, not a live check. Queued and in progress appear only when exact recorded processing evidence supports them. Scheduled is not delivered, a terminal record is not automatically success, and provider acceptance is not customer receipt.</p></div></div>
         <div class="automation-run-columns">
-          <section aria-labelledby="activeRunsTitle"><h3 id="activeRunsTitle">Recorded active</h3><div id="activeRuns" class="automation-list"></div></section>
-          <section aria-labelledby="pausedRunsTitle"><h3 id="pausedRunsTitle">Paused</h3><div id="pausedRuns" class="automation-list"></div></section>
-          <section aria-labelledby="failedRunsTitle"><h3 id="failedRunsTitle">Needs review</h3><div id="failedRuns" class="automation-list"></div></section>
+          <section aria-labelledby="waitingRunsTitle"><h3 id="waitingRunsTitle">Preparing or queued</h3><div id="waitingRuns" class="automation-list"></div></section>
+          <section aria-labelledby="inFlightRunsTitle"><h3 id="inFlightRunsTitle">In progress or recovery</h3><div id="inFlightRuns" class="automation-list"></div></section>
+          <section aria-labelledby="attentionRunsTitle"><h3 id="attentionRunsTitle">Needs review</h3><div id="attentionRuns" class="automation-list"></div></section>
+          <section aria-labelledby="stoppedRunsTitle"><h3 id="stoppedRunsTitle">Paused or stopped</h3><div id="stoppedRuns" class="automation-list"></div></section>
+          <section aria-labelledby="finishedRunsTitle"><h3 id="finishedRunsTitle">Completed or corrected evidence</h3><div id="finishedRuns" class="automation-list"></div></section>
         </div>
         <details class="automation-disclosure"><summary>View policy details</summary><div id="automationPolicies" class="automation-list automation-policy-list"></div></details>
       </section>
@@ -101,7 +103,7 @@
 
       <section class="automation-panel automation-stop-panel" aria-labelledby="stopTitle">
         <div class="automation-panel-heading"><div><p class="automation-kicker">Stop controls</p><h2 id="stopTitle">Company-wide safeguard</h2><p id="stopExplanation">Checking the current company-wide control.</p></div><span id="stopState" class="automation-pill automation-pill-warning">Checking</span></div>
-        <p class="automation-boundary-copy">This page never treats a missing release control as permission to restart. Policy controls appear only when their exact current authority is mounted.</p>
+        <p class="automation-boundary-copy">This page never treats a missing release decision as permission to restart. Policy stop choices appear only when a current supported decision is available.</p>
       </section>
 
       <details class="automation-disclosure automation-evidence" id="automationEvidence">
@@ -113,9 +115,9 @@
     </main>
   </div>
   <script src="/js/auth-session.js"></script>
-  <script src="/js/nav-component.js?v=m28-part14a"></script>
-  <script src="/js/automation-center-contract.js?v=m28-part14a"></script>
-  <script src="/js/automation-center-page.js?v=m28-part14a"></script>
+  <script src="/js/nav-component.js?v=m28-part14b"></script>
+  <script src="/js/automation-center-contract.js?v=m28-part14b"></script>
+  <script src="/js/automation-center-page.js?v=m28-part14b"></script>
   <script>NavComponent.init('automation-center');</script>
 </body>
 </html>

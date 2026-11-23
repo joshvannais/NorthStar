@@ -86,6 +86,14 @@ current authority decide those run states separately. Historical owner-work
 copy likewise never infers a terminal, pending, or resolved task state from a
 coexisting record class.
 
+Recovery assessments are immutable historical snapshots, not durable current
+run heads. A nonblocking assessment yields to later exact processing, retry, or
+work-control evidence only when the policy version, transaction, trusted times,
+and selected schedule binding all agree. An older or equal processing record
+does not supersede the assessment. Missing or conflicting bindings stay
+unavailable, while stale source, uncertain-effect, unavailable restore,
+currentness, policy, and stop evidence continue to fail closed.
+
 ## Setup and templates
 
 The four templates are owner work review, estimate follow-up review,

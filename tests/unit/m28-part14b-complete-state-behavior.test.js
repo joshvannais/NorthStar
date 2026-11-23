@@ -14,14 +14,35 @@ const results = overrides => ({
   policies: [], runs: [], records: [], documents: [], channels: [], stopControl: [],
   ...(overrides || {}),
 });
-const baseRun = (id, overrides) => ({
-  run_id: uuid(id), policy_id: uuid(900 + id), policy_version: '1',
-  latest_record_type: 'proposed_action', currentness_marker: 'captured_not_runtime_revalidated',
-  latest_recorded_at: '2026-11-23T19:00:00.000Z',
-  policy_lifecycle_state: 'active', policy_lifecycle_currentness: 'exact_current_not_runtime_revalidated',
-  policy_expires_at: '2030-01-01T00:00:00.000Z',
-  ...(overrides || {}),
-});
+const baseRun = (id, overrides) => {
+  const inputOverrides = overrides || {};
+  const row = {
+    run_id: uuid(id), policy_id: uuid(900 + id), policy_version: '1',
+    latest_record_type: 'proposed_action', currentness_marker: 'captured_not_runtime_revalidated',
+    latest_recorded_at: '2026-11-23T19:00:00.000Z',
+    policy_lifecycle_state: 'active', policy_lifecycle_currentness: 'exact_current_not_runtime_revalidated',
+    policy_expires_at: '2030-01-01T00:00:00.000Z',
+    ...inputOverrides,
+  };
+  if (row.retry_state && !Object.prototype.hasOwnProperty.call(inputOverrides, 'retry_updated_at')) {
+    row.retry_updated_at = '2026-11-23T19:40:00.000Z';
+  }
+  if (row.recovery_state) {
+    if (!Object.prototype.hasOwnProperty.call(inputOverrides, 'recovery_recorded_at')) {
+      row.recovery_recorded_at = '2026-11-23T19:45:00.000Z';
+    }
+    if (!Object.prototype.hasOwnProperty.call(inputOverrides, 'recovery_transaction_id')) {
+      row.recovery_transaction_id = uuid(800 + id);
+    }
+    if (!Object.prototype.hasOwnProperty.call(inputOverrides, 'recovery_policy_id')) {
+      row.recovery_policy_id = row.policy_id;
+    }
+    if (!Object.prototype.hasOwnProperty.call(inputOverrides, 'recovery_policy_version')) {
+      row.recovery_policy_version = row.policy_version;
+    }
+  }
+  return row;
+};
 function deferred() {
   let resolve; let reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -72,6 +93,12 @@ describe('Mission 28 Part 14B exact state projection', () => {
         mergedMain: 'e72c04bc6990c03b8d0b8719f0bd05779cdba505',
       },
       scope: { part: '14B', demoRoute: null, migrationAdded: false, latestMigration: 287, nextMigrationAbsent: 288 },
+      projectionRules: {
+        recoverySnapshotBinding: 'exact_policy_version_transaction_and_trusted_recorded_time_required',
+        nonblockingRecoverySnapshot: 'only_newer_exact_same_transaction_processing_retry_or_control_evidence_may_supersede',
+        olderOrEqualExecutionVersusRecovery: 'recovery_snapshot_remains_controlling',
+        restrictiveRecoverySnapshot: 'stale_unavailable_or_uncertain_fail_closed_regardless_of_newer_positive_execution_evidence',
+      },
       effectBoundary: {
         policySaved: false, policyActivated: false, actionQueued: false, providerCalled: false,
         recipientContacted: false, externalEffectCreated: false, financialEffectCreated: false,
@@ -79,6 +106,7 @@ describe('Mission 28 Part 14B exact state projection', () => {
       },
     });
     expect(artifact.runStateOrder).toEqual(contract.RUN_STATE_ORDER);
+    expect(artifact.precedence).toContain('exact_binding_and_strict_time_order_for_nonblocking_recovery_versus_execution');
     expect(Object.values(artifact.effectBoundary).every(value => value === false)).toBe(true);
   });
 
@@ -171,6 +199,107 @@ describe('Mission 28 Part 14B exact state projection', () => {
     ] }));
     expect(snapshot.runs.map(run => run.state)).toEqual([
       'in_flight', 'uncertain', 'uncertain', 'stale', 'unavailable', 'paused',
+    ]);
+  });
+
+  test('newer exact bound processing supersedes only an older nonblocking recovery snapshot', () => {
+    const recoveryRun = (id, overrides) => {
+      const transactionId = uuid(6000 + id);
+      return baseRun(id, {
+        schedule_id: uuid(5000 + id), schedule_transaction_id: transactionId,
+        recovery_state: 'bounded_history_verified_no_effect',
+        recovery_transaction_id: transactionId,
+        recovery_recorded_at: '2026-11-23T19:40:00.000Z',
+        ...overrides,
+      });
+    };
+    const snapshot = buildSnapshot(input(), results({ runs: [
+      recoveryRun(130, {
+        lease_id: uuid(7130), lease_acquired_at: '2026-11-23T19:50:00.000Z', lease_expires_at: '2026-11-23T20:30:00.000Z',
+      }),
+      recoveryRun(131, {
+        lease_id: uuid(7131), lease_acquired_at: '2026-11-23T19:30:00.000Z', lease_expires_at: '2026-11-23T20:30:00.000Z',
+      }),
+      recoveryRun(132, {
+        lease_id: uuid(7132), lease_acquired_at: '2026-11-23T19:40:00.000Z', lease_expires_at: '2026-11-23T20:30:00.000Z',
+      }),
+      recoveryRun(133, {
+        action_control_state: 'active_resumed', action_execution_phase: 'queued',
+        action_control_updated_at: '2026-11-23T19:50:00.000Z',
+      }),
+      recoveryRun(134, {
+        action_control_state: 'active_resumed', action_execution_phase: 'queued',
+        action_control_updated_at: '2026-11-23T19:30:00.000Z',
+      }),
+    ] }));
+    expect(snapshot.runs.map(run => run.state)).toEqual([
+      'in_flight', 'recovery', 'recovery', 'queued', 'recovery',
+    ]);
+  });
+
+  test('recovery versus retry ordering uses exact trusted times and preserves conflicts', () => {
+    const recoveryRun = (id, overrides) => {
+      const transactionId = uuid(6200 + id);
+      return baseRun(id, {
+        schedule_id: uuid(5200 + id), schedule_transaction_id: transactionId,
+        recovery_state: 'bounded_history_verified_no_effect',
+        recovery_transaction_id: transactionId,
+        recovery_recorded_at: '2026-11-23T19:40:00.000Z',
+        retry_state: 'retry_scheduled_no_effect', retry_next_attempt_at: '2026-11-23T20:10:00.000Z',
+        ...overrides,
+      });
+    };
+    const snapshot = buildSnapshot(input(), results({ runs: [
+      recoveryRun(140, { retry_updated_at: '2026-11-23T19:50:00.000Z' }),
+      recoveryRun(141, { retry_updated_at: '2026-11-23T19:30:00.000Z' }),
+      recoveryRun(142, { retry_updated_at: '2026-11-23T19:40:00.000Z' }),
+      recoveryRun(143, {
+        recovery_recorded_at: '2026-11-23T19:20:00.000Z', retry_updated_at: '2026-11-23T19:50:00.000Z',
+        lease_id: uuid(7143), lease_acquired_at: '2026-11-23T19:40:00.000Z', lease_expires_at: '2026-11-23T20:30:00.000Z',
+      }),
+      recoveryRun(144, {
+        recovery_state: 'wait_for_active_lease_no_effect', recovery_recorded_at: '2026-11-23T19:20:00.000Z',
+        retry_state: null, retry_next_attempt_at: null,
+        lease_id: uuid(7144), lease_acquired_at: '2026-11-23T19:50:00.000Z', lease_expires_at: '2026-11-23T20:30:00.000Z',
+      }),
+    ] }));
+    expect(snapshot.runs.map(run => run.state)).toEqual([
+      'queued', 'recovery', 'recovery', 'uncertain', 'in_flight',
+    ]);
+  });
+
+  test('missing or mismatched temporal bindings fail closed and restrictive evidence still wins', () => {
+    const recoveryRun = (id, overrides) => {
+      const transactionId = uuid(6400 + id);
+      return baseRun(id, {
+        schedule_id: uuid(5400 + id), schedule_transaction_id: transactionId,
+        recovery_state: 'bounded_history_verified_no_effect', recovery_transaction_id: transactionId,
+        recovery_recorded_at: '2026-11-23T19:30:00.000Z',
+        lease_id: uuid(7200 + id), lease_acquired_at: '2026-11-23T19:50:00.000Z', lease_expires_at: '2026-11-23T20:30:00.000Z',
+        ...overrides,
+      });
+    };
+    const snapshot = buildSnapshot(input(), results({ runs: [
+      recoveryRun(150, { recovery_recorded_at: null }),
+      recoveryRun(151, { recovery_transaction_id: uuid(9991) }),
+      recoveryRun(152, {
+        lease_id: null, lease_acquired_at: null, lease_expires_at: null,
+        retry_state: 'retry_scheduled_no_effect', retry_next_attempt_at: '2026-11-23T20:10:00.000Z', retry_updated_at: null,
+      }),
+      recoveryRun(153, {
+        lease_id: null, lease_acquired_at: null, lease_expires_at: null,
+        action_control_state: 'active_resumed', action_execution_phase: 'queued', action_control_updated_at: null,
+      }),
+      recoveryRun(154, { currentness_marker: 'captured_stale_fail_closed' }),
+      recoveryRun(155, { policy_lifecycle_state: 'paused' }),
+      recoveryRun(156, { tenant_control_state: 'paused' }),
+      recoveryRun(157, { recovery_state: 'blocked_source_not_latest_exact_current' }),
+      recoveryRun(158, { recovery_state: 'disaster_restore_evidence_gap_no_authority' }),
+      recoveryRun(159, { recovery_state: 'reconciliation_required_no_resend' }),
+    ] }));
+    expect(snapshot.runs.map(run => run.state)).toEqual([
+      'unavailable', 'unavailable', 'unavailable', 'unavailable', 'stale',
+      'paused', 'paused', 'stale', 'unavailable', 'uncertain',
     ]);
   });
 

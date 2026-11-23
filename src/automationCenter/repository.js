@@ -174,6 +174,8 @@ function runState(row, evaluatedAt) {
   const leaseAcquiredAt = iso(row.lease_acquired_at);
   const retryUpdatedAt = iso(row.retry_updated_at);
   const retryNextAttemptAt = iso(row.retry_next_attempt_at);
+  const actionControlUpdatedAt = iso(row.action_control_updated_at);
+  const recoveryRecordedAt = iso(row.recovery_recorded_at);
   const leasePresent = Boolean(row.lease_id || row.lease_acquired_at || row.lease_expires_at);
   const leaseComplete = Boolean(row.lease_id && leaseAcquiredAt && leaseExpiresAt);
   const activeLease = Boolean(leaseComplete && checkedAt &&
@@ -211,6 +213,9 @@ function runState(row, evaluatedAt) {
   if (row.retry_state === 'retry_scheduled_no_effect' && !retryNextAttemptAt) {
     return projectedRunState('unavailable', 'Retry evidence is missing its trusted next-attempt time.');
   }
+  if (row.retry_state && !retryUpdatedAt) {
+    return projectedRunState('unavailable', 'Retry evidence is missing its trusted decision time.');
+  }
   const recoveryStates = [
     'bounded_history_verified_no_effect', 'wait_for_active_lease_no_effect',
     'reconciliation_required_no_resend', 'blocked_source_not_latest_exact_current',
@@ -218,6 +223,41 @@ function runState(row, evaluatedAt) {
   ];
   if (row.recovery_state && !recoveryStates.includes(row.recovery_state)) {
     return projectedRunState('unavailable', 'Recovery evidence is outside the accepted state catalog.');
+  }
+  let nonblockingRecoverySuperseded = false;
+  if (row.recovery_state) {
+    const exactRecoveryBinding = recoveryRecordedAt && row.recovery_transaction_id &&
+      row.recovery_policy_id && row.recovery_policy_version != null &&
+      String(row.recovery_policy_id) === String(row.policy_id) &&
+      String(row.recovery_policy_version) === String(row.policy_version);
+    if (!exactRecoveryBinding) {
+      return projectedRunState('unavailable', 'Recovery evidence is missing its exact policy, transaction, or trusted-time binding.');
+    }
+    const nonblockingRecovery = row.recovery_state === 'bounded_history_verified_no_effect' ||
+      row.recovery_state === 'wait_for_active_lease_no_effect';
+    if (nonblockingRecovery) {
+      const executionTimes = [];
+      const executionEvidencePresent = leasePresent || Boolean(row.retry_state) || Boolean(actionControl);
+      if (executionEvidencePresent) {
+        if (!row.schedule_id || !row.schedule_transaction_id ||
+            String(row.schedule_transaction_id) !== String(row.recovery_transaction_id)) {
+          return projectedRunState('unavailable', 'Recorded recovery and processing evidence do not share one exact transaction binding.');
+        }
+        if (leasePresent) executionTimes.push(leaseAcquiredAt);
+        if (row.retry_state) executionTimes.push(retryUpdatedAt);
+        if (actionControl) {
+          if (!actionControlUpdatedAt) {
+            return projectedRunState('unavailable', 'Current work evidence is missing its trusted decision time.');
+          }
+          executionTimes.push(actionControlUpdatedAt);
+        }
+        if (executionTimes.some(value => !value)) {
+          return projectedRunState('unavailable', 'Recorded processing evidence is missing a trusted decision time.');
+        }
+        const latestExecutionTime = Math.max(...executionTimes.map(value => new Date(value).getTime()));
+        nonblockingRecoverySuperseded = latestExecutionTime > new Date(recoveryRecordedAt).getTime();
+      }
+    }
   }
   if (row.recovery_state === 'blocked_source_not_latest_exact_current') {
     return projectedRunState('stale', 'Recovery evidence records a source that is not latest exact current.');
@@ -249,8 +289,8 @@ function runState(row, evaluatedAt) {
   if (scheduleExpired) {
     return projectedRunState('expired', 'The exact schedule is expired.');
   }
-  if (row.recovery_state === 'wait_for_active_lease_no_effect' ||
-      row.recovery_state === 'bounded_history_verified_no_effect') {
+  if (!nonblockingRecoverySuperseded && (row.recovery_state === 'wait_for_active_lease_no_effect' ||
+      row.recovery_state === 'bounded_history_verified_no_effect')) {
     return projectedRunState('recovery', 'A bounded recovery assessment is recorded; it grants no resend or effect authority.');
   }
   if (row.retry_state === 'retry_scheduled_no_effect' && activeLease) {
@@ -566,15 +606,19 @@ async function readAutomationCenter(pool, input) {
         run_policy.expires_at policy_expires_at,
         policy_lifecycle.to_state policy_lifecycle_state,
         policy_lifecycle.currentness_marker policy_lifecycle_currentness,
-        schedule.schedule_id,schedule.expires_at schedule_expires_at,schedule.schedule_count,
+        schedule.schedule_id,schedule.transaction_id schedule_transaction_id,
+        schedule.expires_at schedule_expires_at,schedule.schedule_count,
         units.action_unit_count,retry.state retry_state,
         retry.next_attempt_at retry_next_attempt_at,retry.updated_at retry_updated_at,
         lease.lease_id,lease.lease_acquired_at,lease.lease_expires_at,
+        recovery.transaction_id recovery_transaction_id,recovery.policy_id recovery_policy_id,
+        recovery.policy_version recovery_policy_version,
         recovery.result_state recovery_state,recovery.recorded_at recovery_recorded_at,
         tenant_control.control_state tenant_control_state,
         policy_control.control_state policy_control_state,
         action_control.control_state action_control_state,
-        action_control.execution_phase action_execution_phase
+        action_control.execution_phase action_execution_phase,
+        action_control.updated_at action_control_updated_at
       FROM public.canonical_automation_historical_run_bindings_v1 binding
       JOIN public.canonical_automation_policy_versions_v1 run_policy
         ON run_policy.organization_id=$1 AND run_policy.policy_id=binding.policy_id
@@ -589,7 +633,7 @@ async function readAutomationCenter(pool, input) {
         WHERE organization_id=$1 AND run_id=binding.run_id ORDER BY causal_ordinal DESC LIMIT 1
       ) latest ON TRUE
       LEFT JOIN LATERAL (
-        SELECT schedule_id,expires_at,count(*) OVER() schedule_count FROM public.canonical_automation_action_schedules_v1
+        SELECT schedule_id,transaction_id,expires_at,count(*) OVER() schedule_count FROM public.canonical_automation_action_schedules_v1
         WHERE organization_id=$1 AND run_id=binding.run_id ORDER BY recorded_at DESC LIMIT 1
       ) schedule ON TRUE
       LEFT JOIN LATERAL (
@@ -601,7 +645,8 @@ async function readAutomationCenter(pool, input) {
       LEFT JOIN public.canonical_automation_delivery_lease_heads_v1 lease
         ON lease.organization_id=$1 AND lease.schedule_id=schedule.schedule_id
       LEFT JOIN LATERAL (
-        SELECT result_state,recorded_at FROM public.canonical_automation_recovery_assessments_v1
+        SELECT transaction_id,policy_id,policy_version,result_state,recorded_at
+        FROM public.canonical_automation_recovery_assessments_v1
         WHERE organization_id=$1 AND run_id=binding.run_id
         ORDER BY recorded_at DESC,recovery_id DESC LIMIT 1
       ) recovery ON TRUE

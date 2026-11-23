@@ -65,11 +65,22 @@ paused, expired is expired, and retired/superseded/emergency-stopped is stopped.
 
 Tenant, policy-version, and action-schedule delivery controls remain independent
 conjunctive authorities. For nonterminal execution projection, any restrictive
-current control wins over retained execution evidence. Closed recovery states then preserve stale, unavailable,
-uncertain, or bounded-recovery dispositions before generic lease fallback;
+current control wins over retained execution evidence. Closed recovery states
+then preserve stale, unavailable, uncertain, or bounded-recovery dispositions
+before generic lease fallback;
 unknown recovery states fail closed. Exact provider/delivery evidence remains
 uncertain unless a separately accepted fact proves more. Reconciliation may
 render corrected only from its exact corrected payload.
+
+Recovery assessments are immutable historical snapshots. A nonblocking
+`bounded_history_verified_no_effect` or `wait_for_active_lease_no_effect`
+assessment can yield only to processing, retry, or action-control evidence with
+a strictly later trusted time and the same exact policy version, transaction,
+run, and selected schedule binding. Older or equal evidence leaves the recovery
+snapshot controlling. Missing time, missing binding, a transaction mismatch,
+or conflicting execution evidence fails closed. Stale-source, disaster-restore,
+and reconciliation-required recovery results remain restrictive regardless of
+newer positive-looking execution evidence.
 
 ## Browser clearing and races
 

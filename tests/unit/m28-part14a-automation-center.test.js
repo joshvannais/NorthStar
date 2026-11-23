@@ -483,6 +483,10 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     expect(runRead.sql).toMatch(/tenant_control\.target_kind='tenant'[\s\S]*tenant_control\.target_key=\$1::text/);
     expect(runRead.sql).toMatch(/policy_control\.target_kind='policy_version'[\s\S]*binding\.policy_id::text\|\|':'\|\|binding\.policy_version::text/);
     expect(runRead.sql).toMatch(/action_control\.target_kind='action_schedule'[\s\S]*action_control\.target_key=schedule\.schedule_id::text/);
+    expect(runRead.sql).toMatch(/schedule\.transaction_id schedule_transaction_id/);
+    expect(runRead.sql).toMatch(/action_control\.updated_at action_control_updated_at/);
+    expect(runRead.sql).toMatch(/recovery\.transaction_id recovery_transaction_id[\s\S]*recovery\.policy_id recovery_policy_id[\s\S]*recovery\.policy_version recovery_policy_version/);
+    expect(runRead.sql).toMatch(/SELECT transaction_id,policy_id,policy_version,result_state,recorded_at[\s\S]*canonical_automation_recovery_assessments_v1/);
     expect(runRead.sql).toMatch(/count\(\*\) OVER\(\) schedule_count[\s\S]*organization_id=\$1 AND run_id=binding\.run_id/);
     expect(runRead.sql).toMatch(/count\(\*\)::integer action_unit_count[\s\S]*organization_id=\$1 AND run_id=binding\.run_id/);
     expect(runRead.sql).toMatch(/\{payload,cancellationState\}.*cancellation_state/);

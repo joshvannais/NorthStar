@@ -277,6 +277,7 @@ function buildSnapshot(input, results) {
     policies: policies.length,
     activePolicies: policies.filter(item => item.state === 'active').length,
     pausedPolicies: policies.filter(item => item.state === 'paused' || item.state === 'draining' || item.state === 'drained').length,
+    unavailablePolicies: policies.filter(item => item.state === 'unavailable').length,
     activeRuns: runs.filter(item => item.state === 'active').length,
     pausedRuns: runs.filter(item => item.state === 'paused').length,
     failedRuns: runs.filter(item => item.state === 'failed').length,
@@ -290,14 +291,20 @@ function buildSnapshot(input, results) {
   const stopControl = stopProjection(stopRows[0] || null);
   const status = {
     id: stopControl.state !== 'normal_no_control_record' ? 'stopped_or_restricted'
-      : policies.length === 0 ? 'ready_to_set_up' : counts.failedRuns > 0 ? 'attention_needed' : 'current',
+      : policies.length === 0 ? 'ready_to_set_up'
+        : counts.unavailablePolicies > 0 || counts.failedRuns > 0 ? 'attention_needed'
+          : 'recorded_evidence_available',
     label: stopControl.state !== 'normal_no_control_record' ? 'Company-wide control recorded'
-      : policies.length === 0 ? 'Ready to set up' : counts.failedRuns > 0 ? 'Review needed' : 'Automation records current',
+      : policies.length === 0 ? 'Ready to set up'
+        : counts.unavailablePolicies > 0 ? 'Policy status unavailable'
+          : counts.failedRuns > 0 ? 'Review needed' : 'Recorded automation evidence',
     explanation: stopControl.state !== 'normal_no_control_record'
       ? 'The recorded company-wide control remains authoritative. No release is inferred or available here.'
       : policies.length === 0
       ? 'No policies are recorded for this company. Preview a bounded setup without creating an effect.'
-      : 'Review exact policy, run, and evidence records before changing authority.',
+      : counts.unavailablePolicies > 0
+        ? 'One or more policy records lack exact lifecycle, currentness, or expiry authority. Known counts remain recorded evidence, not live runtime revalidation.'
+        : 'Review recorded policy, run, and evidence states before changing authority. Recorded evidence is not live runtime revalidation.',
   };
   return centerContract.validateSnapshot({
     version: centerContract.VERSION,

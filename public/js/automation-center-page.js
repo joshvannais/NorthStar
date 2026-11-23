@@ -168,7 +168,8 @@
     element('summaryStatus').textContent = data.status.label;
     element('summaryExplanation').textContent = data.status.explanation;
     element('summaryPolicies').textContent = String(data.counts.policies);
-    element('summaryPolicyDetail').textContent = data.counts.activePolicies + ' recorded active · ' + data.counts.pausedPolicies + ' paused';
+    element('summaryPolicyDetail').textContent = data.counts.activePolicies + ' recorded active · ' +
+      data.counts.pausedPolicies + ' paused · ' + data.counts.unavailablePolicies + ' status unavailable';
     var runCount = data.counts.activeRuns + data.counts.pausedRuns + data.counts.failedRuns;
     element('summaryRuns').textContent = String(runCount);
     element('summaryRunDetail').textContent = data.counts.activeRuns + ' recorded active · ' + data.counts.failedRuns + ' need review';

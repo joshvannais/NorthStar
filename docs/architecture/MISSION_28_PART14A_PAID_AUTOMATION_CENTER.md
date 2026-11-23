@@ -55,7 +55,13 @@ currentness marker, and an expiry later than the read transaction clock. Run
 projection uses that same policy-version lifecycle and expiry gate before any
 tenant, policy, or action-schedule delivery-control evidence. A captured run
 record remains historical evidence rather than proof of live runtime
-revalidation; owner-facing active labels therefore say recorded active.
+revalidation; owner-facing active labels therefore say recorded active. The
+summary separately reports recorded-active, paused, and status-unavailable
+policy counts. Any unavailable policy makes the aggregate status unavailable
+or review-needed instead of disappearing behind zero known-state counts. When
+all shown states are resolved, the positive aggregate label is recorded
+automation evidence, never a claim that automation is live-revalidated or
+globally current.
 
 Immutable approval evidence is not a pending-approval resolver. Part 14A
 therefore reports the pending approval count and combined attention count as

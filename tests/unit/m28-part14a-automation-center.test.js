@@ -135,7 +135,7 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
   test('empty authority is presented as ready to set up without inventing activity', () => {
     const result = buildSnapshot(input(), emptyResults());
     expect(result.status.id).toBe('ready_to_set_up');
-    expect(result.counts).toEqual({ policies: 0, activePolicies: 0, pausedPolicies: 0,
+    expect(result.counts).toEqual({ policies: 0, activePolicies: 0, pausedPolicies: 0, unavailablePolicies: 0,
       activeRuns: 0, pausedRuns: 0, failedRuns: 0, approvals: null, ownerWork: null });
     expect(result.approvals).toBeNull();
     expect(result.stopControl).toMatchObject({ state: 'normal_no_control_record', canEngage: false, canRelease: false });
@@ -180,6 +180,56 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
       expires_at: '2030-01-01T00:00:00Z', recorded_at: '2026-11-20T19:00:00Z'
     }] }));
     expect(result.policies[0]).toMatchObject({ state: 'unavailable', stateLabel: 'Current policy status unavailable', canPause: false });
+    expect(result.status).toMatchObject({ id: 'attention_needed', label: 'Policy status unavailable' });
+    expect(result.counts).toMatchObject({ activePolicies: 0, pausedPolicies: 0, unavailablePolicies: 1 });
+  });
+
+  test('a sole unavailable policy cannot produce zero-state or globally current claims', () => {
+    const result = buildSnapshot(input(), emptyResults({ policies: [{
+      policy_id: uuid(10), version: '1', source_class_id: 'mission23_work_execution',
+      action_family: 'internal_read_digest_task', channel_id: 'in_app_passive',
+      lifecycle_state: null, lifecycle_currentness: null, expires_at: '2030-01-01T00:00:00Z',
+      recorded_at: '2026-11-20T19:00:00Z',
+    }] }));
+
+    expect(result.counts).toMatchObject({ policies: 1, activePolicies: 0, pausedPolicies: 0, unavailablePolicies: 1 });
+    expect(result.status).toMatchObject({
+      id: 'attention_needed', label: 'Policy status unavailable',
+      explanation: expect.stringMatching(/lack exact lifecycle.*not live runtime revalidation/i),
+    });
+    expect(JSON.stringify(result.status)).not.toMatch(/records current|automation.*current/i);
+  });
+
+  test('mixed recorded-active and unavailable policies keep aggregate status unavailable', () => {
+    const basePolicy = {
+      version: '1', source_class_id: 'mission23_work_execution', action_family: 'internal_read_digest_task',
+      channel_id: 'in_app_passive', expires_at: '2030-01-01T00:00:00Z', recorded_at: '2026-11-20T19:00:00Z',
+    };
+    const result = buildSnapshot(input(), emptyResults({ policies: [
+      { ...basePolicy, policy_id: uuid(10), lifecycle_state: 'active', lifecycle_currentness: 'exact_current_not_runtime_revalidated' },
+      { ...basePolicy, policy_id: uuid(11), lifecycle_state: 'active', lifecycle_currentness: 'stale_fail_closed' },
+    ] }));
+
+    expect(result.policies.map(policy => policy.stateLabel)).toEqual(['Recorded active', 'Current policy status unavailable']);
+    expect(result.counts).toMatchObject({ policies: 2, activePolicies: 1, pausedPolicies: 0, unavailablePolicies: 1 });
+    expect(result.status).toMatchObject({ id: 'attention_needed', label: 'Policy status unavailable' });
+  });
+
+  test('positive captured policy evidence stays recorded rather than globally live-current', () => {
+    const result = buildSnapshot(input(), emptyResults({ policies: [{
+      policy_id: uuid(10), version: '1', source_class_id: 'mission23_work_execution',
+      action_family: 'internal_read_digest_task', channel_id: 'in_app_passive', lifecycle_state: 'active',
+      lifecycle_currentness: 'exact_current_not_runtime_revalidated', expires_at: '2030-01-01T00:00:00Z',
+      recorded_at: '2026-11-20T19:00:00Z',
+    }] }));
+
+    expect(result.policies[0]).toMatchObject({ state: 'active', stateLabel: 'Recorded active' });
+    expect(result.counts).toMatchObject({ activePolicies: 1, unavailablePolicies: 0 });
+    expect(result.status).toMatchObject({
+      id: 'recorded_evidence_available', label: 'Recorded automation evidence',
+      explanation: expect.stringMatching(/not live runtime revalidation/i),
+    });
+    expect(JSON.stringify(result.status)).not.toMatch(/records current|automation.*current/i);
   });
 
   test('resumed delivery control never masks restrictive lifecycle or policy expiry', () => {
@@ -213,7 +263,7 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
       [uuid(18), 'superseded', 'Superseded'],
       [uuid(19), 'emergency_stopped', 'Stopped'],
     ]);
-    expect(result.counts).toMatchObject({ activePolicies: 1, pausedPolicies: 1 });
+    expect(result.counts).toMatchObject({ activePolicies: 1, pausedPolicies: 1, unavailablePolicies: 3 });
   });
 
   test('missing currentness, malformed identifiers, and stale run evidence fail closed', () => {
@@ -534,6 +584,26 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(html).toContain('No-effect preview');
     expect(html).toContain('Current pending requests may exist');
     expect(html).toContain('Historical task evidence is not a current to-do');
+  });
+
+  test('mixed policy authority renders recorded known counts plus explicit unavailable status', async () => {
+    const basePolicy = {
+      version: '1', source_class_id: 'mission23_work_execution', action_family: 'internal_read_digest_task',
+      channel_id: 'in_app_passive', expires_at: '2030-01-01T00:00:00Z', recorded_at: '2026-11-20T19:00:00Z',
+    };
+    const snapshot = buildSnapshot(input(), emptyResults({ policies: [
+      { ...basePolicy, policy_id: uuid(10), lifecycle_state: 'active', lifecycle_currentness: 'exact_current_not_runtime_revalidated' },
+      { ...basePolicy, policy_id: uuid(11), lifecycle_state: null, lifecycle_currentness: null },
+    ] }));
+    const { elements, documentListeners } = automationPageHarness(jest.fn()
+      .mockResolvedValue({ success: true, data: snapshot }));
+    documentListeners.DOMContentLoaded();
+    await flushMicrotasks();
+
+    expect(elements.summaryStatus.textContent).toBe('Policy status unavailable');
+    expect(elements.summaryPolicyDetail.textContent).toBe('1 recorded active · 0 paused · 1 status unavailable');
+    expect(elements.automationStatus.textContent).toMatch(/lack exact lifecycle.*not live runtime revalidation/i);
+    expect(elements.automationStatus.textContent).not.toMatch(/records current|automation.*current/i);
   });
 
   test('unavailable inbox and historical terminal task evidence never render as zero pending work', async () => {

@@ -179,7 +179,8 @@
   }
   function validateSnapshot(value) {
     var keys = ['version', 'status', 'counts', 'policies', 'runs', 'approvals', 'timeline', 'ownerWork', 'limits', 'channels', 'stopControl', 'templates', 'capabilities', 'unavailableEvidence', 'evaluatedAt'];
-    var countKeys = ['policies', 'activePolicies', 'pausedPolicies', 'activeRuns', 'pausedRuns', 'failedRuns', 'approvals', 'ownerWork'];
+    var countKeys = ['policies', 'activePolicies', 'pausedPolicies', 'unavailablePolicies', 'activeRuns', 'pausedRuns', 'failedRuns', 'approvals', 'ownerWork'];
+    var numericCountKeys = countKeys.slice(0, 7);
     if (!exactKeys(value, keys) || value.version !== VERSION || !plainObject(value.status) || !plainObject(value.counts) ||
         !Array.isArray(value.policies) || !Array.isArray(value.runs) || value.approvals !== null ||
         !Array.isArray(value.timeline) || !Array.isArray(value.ownerWork) || !plainObject(value.limits) ||
@@ -189,7 +190,7 @@
       throw new Error('The Automation Center response is unavailable.');
     }
     if (!exactKeys(value.counts, countKeys) || value.counts.approvals !== null || value.counts.ownerWork !== null ||
-        countKeys.slice(0, 6).some(function (key) {
+        numericCountKeys.some(function (key) {
           return !Number.isInteger(value.counts[key]) || value.counts[key] < 0;
         }) || value.ownerWork.some(function (item) {
           return !plainObject(item) || item.state !== 'historical_status_unavailable' || typeof item.statusLabel !== 'string';

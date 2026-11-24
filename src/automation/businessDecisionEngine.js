@@ -9,7 +9,11 @@ const canonical = require('./canonicalJson');
 
 const CONTRACT = 'mission28.part14c.shared-business-decision.v1';
 const MODES = Object.freeze(['paid_no_effect_preview', 'isolated_demo']);
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+// Runtime-owned policy/source records use deterministic v4 identities, while
+// the mounted demo repository derives tenant/session identities with UUIDv5.
+// Preserve the exact supplied identity and match the closed UUID versions the
+// runtime context already accepts; digest and component bindings remain exact.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const CONTROL_KINDS = Object.freeze([
   'globalPause', 'tenantPause', 'customerPause', 'documentPause',

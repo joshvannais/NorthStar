@@ -59,6 +59,7 @@
     "cookie": "northstar_demo_workspace",
     "storage": "existing_demo_command_center_sessions_json_state",
     "tenantSessionGenerationBound": true,
+    "identityBinding": "exact_uuid_versions_1_through_8_including_repository_uuidv5_no_coercion",
     "workspaceRevisionCompareAndSwap": true,
     "idempotencyReceipt": true,
     "paidCookiesSelectDemoAuthority": false,
@@ -109,6 +110,7 @@
   },
   "unavailableEvidence": [
     "Part14C_independent_audit_PR_merge_deployment_and_production_acceptance",
+    "fresh_PostgreSQL_candidate_acceptance_until_the_corrected_exact_head_gate_passes",
     "genuine_Chrome_and_Playwright_WebKit_acceptance_reserved_for_Part14F",
     "physical_Safari_devices_manual_assistive_technology_and_founder_visual_approval",
     "provider_live_private_production_money_and_professional_review"

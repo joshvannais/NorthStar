@@ -48,8 +48,10 @@ realPostgres('Mission 28 Part 14C isolated Automation Center PostgreSQL persiste
       demo: { workspaceRevision: 2 } });
 
     const session = (await fixture.ownerPool.query(
-      'SELECT id,revision,state FROM demo_command_center_sessions WHERE token_hash=$1',
+      'SELECT id,tenant_id,revision,state FROM demo_command_center_sessions WHERE token_hash=$1',
       [tokenHash(savedCookie)])).rows[0];
+    expect(String(session.id)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(String(session.tenant_id)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(Number(session.revision)).toBe(2);
     expect((await fixture.ownerPool.query(
       `SELECT operation,response_revision FROM demo_command_center_mutations

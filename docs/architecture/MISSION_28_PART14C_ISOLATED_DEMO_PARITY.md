@@ -84,13 +84,20 @@ authentication cookies do not select demo source data, and fictional demo data
 has no code path into paid policy, record, scheduler, outbox, provider,
 recipient, or financial authority.
 
+The shared business-decision seam preserves each exact canonical UUID identity
+across every component digest. It accepts the runtime's closed UUID version
+range, including the UUIDv5 tenant and session identities issued by the mounted
+demo repository, without rewriting or substituting those identities.
+
 Migration `288_demo_automation_center_action_v1.sql` makes the single
 `automation_action` operation a member of the existing closed fictional demo
 mutation ledger. It preserves all 23 accepted members, continues to reject
 every other operation, and changes no paid table, provider path, recipient, or
-effect authority. The actual mounted repository is exercised against
-PostgreSQL for persistence, revision compare-and-swap rollback, idempotent
-replay, and unknown-operation rejection.
+effect authority. A dedicated integration gate exercises the actual mounted
+repository against PostgreSQL for persistence, revision compare-and-swap
+rollback, idempotent replay, and unknown-operation rejection. Fresh successful
+PostgreSQL acceptance for this corrected candidate remains unavailable until
+the independent gate is executed again.
 
 ## Controlled fictional journey
 

@@ -13,7 +13,7 @@ const paidStateEngine = require('../../src/automationCenter/repository');
 const centerContract = require('../../public/js/automation-center-contract');
 const commandCenterContract = require('../../public/js/command-center-contract');
 const config = require('../../src/config');
-const { DemoCommandCenterRepository } = require('../../src/commandCenter/demoRepository');
+const { DemoCommandCenterRepository, issueToken } = require('../../src/commandCenter/demoRepository');
 
 const ROOT = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
@@ -135,7 +135,9 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
       },
       scope: { part: '14C', demoPath: '/demo/automation', migrationAdded: true,
         latestMigration: 288, nextMigrationAbsent: 289, mission31GuidedSimulationIncluded: false },
-      isolatedAuthority: { tenantSessionGenerationBound: true, workspaceRevisionCompareAndSwap: true,
+      isolatedAuthority: { tenantSessionGenerationBound: true,
+        identityBinding: 'exact_uuid_versions_1_through_8_including_repository_uuidv5_no_coercion',
+        workspaceRevisionCompareAndSwap: true,
         paidCookiesSelectDemoAuthority: false, fictionalDataCanEnterPaidAuthority: false },
       controlledAdapters: { processingClaim: 'immutable_per_provider_attempt_with_new_identity_after_recovery',
         pauseResumeRefreshesClaim: false,
@@ -201,6 +203,26 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(() => runtime.validateState(first, context({ sessionId: '00000000-0000-4000-8000-000000000003' })))
       .toThrow(/bindings|history/i);
     expect(() => runtime.validateState(first, otherTenantContext)).toThrow(/bindings|history/i);
+  });
+
+  test('preserves repository-issued UUIDv5 tenant and session identities through every shared decision binding', () => {
+    const issued = issueToken(new Date('2026-11-23T15:00:00.000Z'));
+    expect(issued.tenantId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(issued.sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    const issuedContext = context({ tenantId: issued.tenantId, sessionId: issued.sessionId });
+    const state = runtime.initialState(issuedContext);
+    const input = runtime.businessInputForState(state, issuedContext);
+    expect(input.tenantId).toBe(issued.tenantId);
+    for (const component of ['policy', 'source', 'authorization', 'permission', 'controls', 'schedule', 'execution']) {
+      expect(input[component].tenantId).toBe(issued.tenantId);
+    }
+    expect(businessEngine.evaluate(input)).toMatchObject({
+      runnable: true, policy: { state: 'active_exact_current' }, evaluation: { state: 'eligible' },
+    });
+    expect(() => businessEngine.controlledInput({
+      ...businessOptions(input, 'isolated_demo'),
+      tenantId: '00000000-0000-0000-8000-000000000000',
+    })).toThrow(/tenant is invalid/i);
   });
 
   test('rejects corrupted embedded journey bindings instead of serving labels from untrusted persisted state', () => {
@@ -957,12 +979,14 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
   });
 
   test('serves mounted fictional read, preview and CAS action routes behind explicit same-origin intent', async () => {
-    const initial = runtime.initialState(context());
-    const initialRecord = record(initial);
-    const updatedState = runtime.applyAction(initial, context(), 'provider_step');
-    const updatedRecord = record(updatedState, { revision: 2 });
-    const token = { token: 'fictional-token', tenantId: TENANT, sessionId: SESSION,
-      expiresAt: new Date('2026-11-24T15:00:00.000Z') };
+    const token = issueToken(new Date('2026-11-23T15:00:00.000Z'));
+    const routeContext = context({ tenantId: token.tenantId, sessionId: token.sessionId });
+    const initial = runtime.initialState(routeContext);
+    const initialRecord = record(initial, { tenantId: token.tenantId, sessionId: token.sessionId });
+    const updatedState = runtime.applyAction(initial, routeContext, 'provider_step');
+    const updatedRecord = record(updatedState, {
+      revision: 2, tenantId: token.tenantId, sessionId: token.sessionId,
+    });
     const previousSecret = config.auth.accessSecret;
     config.auth.accessSecret = 'part14c-isolated-route-test-secret-0001';
     const tokenSpy = jest.spyOn(DemoCommandCenterRepository.prototype, 'token').mockReturnValue(token);

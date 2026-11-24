@@ -163,11 +163,11 @@ describe('Mission 28 Part 7A exact sender and recipient authority', () => {
 
   test('records Parts 7A-7C released, Part 7D candidate, migration284/no285 and Part 7E+ planned', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
-      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–14B are released. Part 14C is the sole implementation candidate.'); expect(document).toContain('Parts 14D–14G remain planned and unimplemented.'); expect(document).toContain('020491c14f54f8a849f87ea197cdff462a930f6a');
+      const document = fs.readFileSync(path.join(ROOT, relative), 'utf8'); expect(document).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.'); expect(document).toContain('Parts 14E–14G remain planned and unimplemented.'); expect(document).toContain('020491c14f54f8a849f87ea197cdff462a930f6a');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
     expect(ledger).toContain('| 26 | 6F | Restart/migration/outage/restore and orphan-authority recovery | **Released** |');
     expect(ledger).toContain('| 27 | 7A | Exact sender and recipient authority | **Released** |');
-    expect(ledger).toContain('Source and bounded read-only production reconciliation are 283/283 migrations through exact `287_canonical_automation_estimate_quote_resolution_v1.sql` with no 288');
+    expect(ledger).toContain('Source and bounded read-only production reconciliation are 284/284 migrations through exact `288_demo_automation_center_action_v1.sql` with no 289');
   });
 });

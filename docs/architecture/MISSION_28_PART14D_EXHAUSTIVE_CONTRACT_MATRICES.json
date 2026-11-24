@@ -1,0 +1,101 @@
+{
+  "contractVersion": "mission28.part14d.exhaustive-contract-matrices.v1",
+  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "base": {
+    "part": "14C",
+    "acceptedSourceHead": "b4da799f85333058ccca4cd3fd3c3908537b911f",
+    "acceptedTree": "731bf82d926e9b32708b6ec396fd98d50a8d9ea3",
+    "pullRequest": 610,
+    "mergedMain": "db9c14d9206bdb3a6f73d83ee7f480aedb2f9fb1",
+    "deploymentId": "07975abd-4be1-4b4c-a709-68422e5dddfe",
+    "deploymentInstance": "4ea46c8a-214d-42b4-ac97-9ad803859359",
+    "imageSha256": "sha256:c83748ee9fb1cc3fd949eb16730d9771607e9ef337bea0800683bc37a1a96a5b",
+    "productionMigrations": "284_of_284_through_288_no_289",
+    "backupId": "0f3f9bf0-6eeb-43fa-b269-38e227ad0ec1",
+    "backupName": "pre-m28-part14c-b4da799f-20261124"
+  },
+  "scope": {
+    "part": "14D",
+    "dimensions": [
+      "policies", "sources", "versions", "digests", "currentness", "roles", "capabilities",
+      "sessions", "tenants", "recipients", "consent", "paths", "queries", "bodies", "framing",
+      "methods", "CORS", "templates", "callbacks", "idempotency", "concurrency", "corrections",
+      "retries", "restarts", "privacy", "zero unintended effects"
+    ],
+    "migrationAdded": false,
+    "latestMigration": 288,
+    "nextMigrationAbsent": 289,
+    "postgreSQLMountedWorkerRestartMeasurementsIncluded": false,
+    "genuineBrowserAcceptanceIncluded": false,
+    "releaseIncluded": false
+  },
+  "matrices": {
+    "semanticAuthority": {
+      "engine": "src/automation/businessDecisionEngine.js#evaluate",
+      "positiveControl": "exact_current_complete_bound_no_effect",
+      "restrictiveAxes": [
+        "policy_lifecycle_currentness_and_expiry", "source_state_lineage_version_and_digest",
+        "recipient_authorization_and_consent", "suppression_and_limits", "tenant_zone_schedule_and_fold",
+        "execution_claim_and_recovery"
+      ],
+      "missingOrMixedAuthority": "unavailable_not_positive"
+    },
+    "structuralAuthority": {
+      "tenantSessionComponentDigestBinding": true,
+      "crossTenantOrSessionRetargeting": "rejected",
+      "unknownClosedVocabularyMember": "rejected",
+      "fictionalAuthorityCanEnterPaidAuthority": false
+    },
+    "paidTransport": {
+      "read": "GET_/api/automation-center_owner_or_admin_automation_read",
+      "preview": "POST_/api/automation-center/preview_owner_or_admin_automation_update_pure_no_effect",
+      "untrustedQueryBodyMethodAndFraming": "cannot_select_foreign_tenant_or_create_business_authority",
+      "cacheControl": "private_no-store",
+      "cors": "server_allowlist_never_business_authority"
+    },
+    "demoTransport": {
+      "read": "GET_/api/demo/automation-center_no_query",
+      "preview": "POST_same_origin_explicit_intent_exact_preview_body_and_revision",
+      "actions": "POST_same_origin_explicit_intent_exact_action_body_revision_and_idempotency",
+      "paidCookiesSelectDemoAuthority": false,
+      "crossOriginMutation": "denied"
+    },
+    "templatesAndCallbacks": {
+      "templateContract": "docs/architecture/MISSION_28_PART7C_CONTENT_TEMPLATE_PREVIEW_CONTRACT.json",
+      "templateCatalog": "closed_owner_readable_catalog_no_free_text",
+      "callbackContract": "docs/architecture/MISSION_28_PART13C_AUTHENTICATED_CALLBACK_RECONCILIATION_CONTRACT.json",
+      "callbackStatusStates": [
+        "accepted", "sent", "delivered", "opened", "replied", "failed", "complained", "unknown"
+      ],
+      "callbackEvidence": "exact_authenticated_append_only_action_bound_replay_safe_and_correction_bound",
+      "callbackStateNeverCreates": "action_permission_recipient_channel_retry_resend_effect_payment_accounting_business_or_legal_authority",
+      "callbackSimulationOrProviderClaimAdded": false
+    },
+    "durabilityAndRaces": {
+      "stableTenantScopedIdempotency": true,
+      "compareAndSwap": true,
+      "staleRevision": "conflict_no_mutation",
+      "sourceCorrectionRebuildsAuthority": true,
+      "retryDoesNotDuplicateEffects": true,
+      "restartEvidenceReservedForPart14E": true
+    },
+    "privacyAndEffects": {
+      "messageBodiesDocumentContentsSecretsPublicTokensInEvidence": false,
+      "providerCalled": false,
+      "recipientContacted": false,
+      "paidTenantMutatedByDemo": false,
+      "externalEffectCreated": false,
+      "financialEffectCreated": false,
+      "moneyEffectCreated": false
+    }
+  },
+  "evidenceBoundary": {
+    "templates": "exact_closed_owner_readable_catalog",
+    "callbacks": "authenticated_reconciliation_contract_only_no_callback_simulation_or_provider_claim",
+    "part14E": "fresh_PostgreSQL_mounted_modules_worker_restart_provider_fixture_and_measurements_unavailable",
+    "part14F": "genuine_Chrome_and_Playwright_WebKit_acceptance_unavailable",
+    "part14G": "independent_audit_PR_merge_deployment_and_production_acceptance_unavailable",
+    "founderVisualApproval": "separate_unavailable_unclaimed",
+    "providerLivePrivateProductionMoneyProfessionalReview": "unavailable_unclaimed"
+  }
+}

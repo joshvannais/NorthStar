@@ -1,7 +1,6 @@
 # Mission 28 Part 14C — isolated paid-application demo parity
 
-Status: **Implementation candidate only. Not independently accepted or
-released.** This slice mounts `/demo/automation` inside the existing isolated,
+Status: **Released.** This slice mounts `/demo/automation` inside the existing isolated,
 account-free fictional workspace. It does not alter paid tenant data, create a
 policy or delivery record, call a provider, contact a recipient, or create an
 external, financial, or money effect.
@@ -103,11 +102,9 @@ Migration `288_demo_automation_center_action_v1.sql` makes the single
 `automation_action` operation a member of the existing closed fictional demo
 mutation ledger. It preserves all 23 accepted members, continues to reject
 every other operation, and changes no paid table, provider path, recipient, or
-effect authority. A dedicated integration gate exercises the actual mounted
+effect authority. A dedicated integration gate exercised the actual mounted
 repository against PostgreSQL for persistence, revision compare-and-swap
-rollback, idempotent replay, and unknown-operation rejection. Fresh successful
-PostgreSQL acceptance for this corrected candidate remains unavailable until
-the independent gate is executed again.
+rollback, idempotent replay, and unknown-operation rejection.
 
 ## Controlled fictional journey
 
@@ -162,13 +159,32 @@ The response carries exact zero counters for recipients, provider calls,
 external effects, financial effects, and money effects. Email/SMS availability
 is labeled deterministic fictional simulation only. No provider SDK, network
 transport, secret, credential, real address, live money, or destructive paid
-mutation is mounted by this slice. Candidate source contains 284 migrations
-through additive migration 288 with no 289; released production remains
-verified only through migration 287 until the pending candidate is accepted.
+mutation is mounted by this slice. Source and production contain 284 exact
+migrations through additive migration 288 with no 289.
 
-Writer tests are not independent acceptance. Part 14C audit, PR, merge,
-deployment, production behavior, genuine Chrome/WebKit acceptance, physical
-Safari/devices, manual assistive-technology review, live provider/private
-production evidence, professional review, and founder visual approval remain
-unavailable and unclaimed. Mission 31 public guided simulation remains a
-separate later authority.
+Part 14C was independently accepted at exact source
+`b4da799f85333058ccca4cd3fd3c3908537b911f`, tree
+`731bf82d926e9b32708b6ec396fd98d50a8d9ea3`, with P0=P1=P2=P3=0 under exact
+Node 22.23.3 (62 Mission 28 suites/959 tests), then normally merged through PR
+#610 to main `db9c14d9206bdb3a6f73d83ee7f480aedb2f9fb1`. Sole deployment
+`07975abd-4be1-4b4c-a709-68422e5dddfe` succeeded with running instance
+`4ea46c8a-214d-42b4-ac97-9ad803859359` and image
+`sha256:c83748ee9fb1cc3fd949eb16730d9771607e9ef337bea0800683bc37a1a96a5b`.
+Read-only production reconciliation proved 284/284 through 288/no289, startup,
+health, all six bounded routes, exact Git assets, paid 401/no-store and demo
+200/no-store/zero-effects behavior. Fresh backup
+`0f3f9bf0-6eeb-43fa-b269-38e227ad0ec1`
+(`pre-m28-part14c-b4da799f-20261124`, external identity
+`vs_1795556666328_jtoie91hdqa3ze8b`) was created only after five older
+snapshots were removed to clear quota while the prior newest backup
+`32307774-0077-478b-8c18-d99405af7b96` remained protected. After the fresh
+replacement was confirmed, that former newest backup was removed, leaving the
+fresh replacement as the one retained snapshot. The audit report
+`m28-part14c-root-audit-b4da-v9.json` has SHA-256
+`1FD8CB8EA7F4EAB29CF0FB8EF8A410DFFD0E14E9C6203189DC4036BDCCADCF33`.
+
+Genuine Chrome/WebKit acceptance, physical Safari/devices, manual
+assistive-technology review, live provider/private-production evidence,
+professional review, and founder visual approval remain unavailable and
+unclaimed. Mission 31 public guided simulation remains a separate later
+authority.

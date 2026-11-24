@@ -47,6 +47,7 @@
     "firstLaunchActionMaterial": "mission23_work_execution_internal_read_digest_task_tenant_owner_in_app_passive_provider_disabled_internal_only",
     "mandatoryControls": "all_closed_keys_required_and_not_applicable_only_for_proven_recipient_or_document_scope",
     "scheduleBounds": "admission_not_before_source_observation_scheduled_at_most_366_days_expiration_at_most_367_days",
+    "sourceVersionProvenance": "each_fictional_version_observation_time_is_owned_by_its_exact_history_event_and_bound_into_its_source_digest",
     "unavailableLineage": "unavailable_not_ineligible_and_never_complete_exact",
     "equivalentControlledPaidAndDemoInputsProduceSameBusinessDecisions": true,
     "restrictiveSourcePolicyConsentCalendarAndRecoveryInputsFailClosedOnBothPaths": true,

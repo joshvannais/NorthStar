@@ -63,10 +63,10 @@ function deterministicUuid(namespace, material) {
 function digest(value) {
   return `sha256:${crypto.createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex')}`;
 }
-function sourceDigest(context, generation, version) {
+function sourceDigest(context, generation, version, observedAt) {
   return digest({ tenantId: context.tenantId, sessionId: context.sessionId,
     workspaceGeneration: context.workspaceGeneration,
-    automationGeneration: generation, version, fictional: true });
+    automationGeneration: generation, version, observedAt, fictional: true });
 }
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function contextValue(context) {
@@ -99,7 +99,7 @@ function initialState(context, generation = 1) {
   const value = {
     contract: CONTRACT, generation, virtualNow: scheduledAt,
     source: { id: deterministicUuid('mission28-part14c-source', authorityKey),
-      version: 1, digest: sourceDigest(bounded, generation, 1) },
+      version: 1, observedAt: anchor, digest: sourceDigest(bounded, generation, 1, anchor) },
     policy: { id: policyId, version: 1, lifecycle: 'active', control: 'active_resumed',
       expiresAt: addMilliseconds(anchor, 30 * 24 * 60 * 60 * 1000) },
     run: { id: firstRunId, sequence: 1, capturedSourceVersion: 1,
@@ -139,6 +139,7 @@ function validateHistoryCoherence(value, context) {
   const expected = {
     virtualNow: addMilliseconds(context.anchorTime, 60 * 60 * 1000),
     sourceVersion: 1,
+    sourceObservedAt: context.anchorTime,
     runSequence: 1,
     capturedSourceVersion: 1,
     lifecycle: 'active',
@@ -162,6 +163,7 @@ function validateHistoryCoherence(value, context) {
       expected.virtualNow = addMilliseconds(expected.virtualNow, 24 * 60 * 60 * 1000);
     } else if (exact === 'reconciliation:source_changed_requires_review') {
       expected.sourceVersion += 1;
+      expected.sourceObservedAt = expected.virtualNow;
     } else if (exact === 'reconciliation:source_correction_bound_no_effect') {
       if (expected.sourceVersion === expected.capturedSourceVersion || expected.scheduleExpected) {
         fail('The isolated automation source correction history is unavailable.');
@@ -234,7 +236,8 @@ function validateHistoryCoherence(value, context) {
     }
   }
   if (expected.scheduleExpected || value.virtualNow !== expected.virtualNow ||
-      value.source.version !== expected.sourceVersion || value.run.sequence !== expected.runSequence ||
+      value.source.version !== expected.sourceVersion || value.source.observedAt !== expected.sourceObservedAt ||
+      value.run.sequence !== expected.runSequence ||
       value.run.capturedSourceVersion !== expected.capturedSourceVersion ||
       value.policy.lifecycle !== expected.lifecycle || value.policy.control !== expected.control ||
       value.tenantControl !== expected.tenantControl || value.run.phase !== expected.phase ||
@@ -253,8 +256,9 @@ function validateState(value, context) {
   if (!exactObject(value, ['contract', 'generation', 'virtualNow', 'source', 'policy', 'run', 'tenantControl', 'events']) ||
       value.contract !== CONTRACT || !Number.isSafeInteger(value.generation) || value.generation < 1 ||
       asIso(value.virtualNow, 'The virtual clock') !== value.virtualNow ||
-      !exactObject(value.source, ['id', 'version', 'digest']) || !UUID.test(value.source.id) ||
+      !exactObject(value.source, ['id', 'version', 'observedAt', 'digest']) || !UUID.test(value.source.id) ||
       !Number.isSafeInteger(value.source.version) || value.source.version < 1 || !/^sha256:[0-9a-f]{64}$/.test(value.source.digest) ||
+      asIso(value.source.observedAt, 'The fictional source observation time') !== value.source.observedAt ||
       !exactObject(value.policy, ['id', 'version', 'lifecycle', 'control', 'expiresAt']) || !UUID.test(value.policy.id) ||
       !Number.isSafeInteger(value.policy.version) || value.policy.version < 1 ||
       !['active', 'paused', 'expired', 'retired'].includes(value.policy.lifecycle) ||
@@ -280,10 +284,12 @@ function validateState(value, context) {
   if (value.source.id !== deterministicUuid('mission28-part14c-source', authorityKey) ||
       value.policy.id !== deterministicUuid('mission28-part14c-policy', authorityKey) ||
       value.run.id !== runId(bounded, value.generation, value.run.sequence) ||
-      value.source.digest !== sourceDigest(bounded, value.generation, value.source.version) ||
+      value.source.digest !== sourceDigest(bounded, value.generation, value.source.version, value.source.observedAt) ||
       value.policy.version !== value.run.sequence ||
       value.run.capturedSourceVersion > value.source.version ||
       new Date(value.virtualNow).getTime() < new Date(bounded.anchorTime).getTime() ||
+      new Date(value.source.observedAt).getTime() < new Date(bounded.anchorTime).getTime() ||
+      new Date(value.source.observedAt).getTime() > new Date(value.virtualNow).getTime() ||
       new Date(value.run.scheduleAcceptedAt).getTime() > new Date(value.virtualNow).getTime() ||
       new Date(value.run.phaseRecordedAt).getTime() < new Date(bounded.anchorTime).getTime() ||
       new Date(value.run.phaseRecordedAt).getTime() > new Date(value.virtualNow).getTime() ||
@@ -404,7 +410,7 @@ function businessInputForState(value, context, mode = 'isolated_demo') {
     sourceId: state.source.id, sourceVersion: state.source.version,
     sourceDigest: state.source.digest, sourceState: sourceCurrent ? 'known' : 'unavailable',
     sourceValue: sourceCurrent ? 'latest_exact_current' : null,
-    sourceLineage: 'active', sourceObservedAt: bounded.anchorTime,
+    sourceLineage: 'active', sourceObservedAt: state.source.observedAt,
     sourceClassId: SOURCE_CLASS, actionFamily: ACTION_FAMILY,
     recipientClass: RECIPIENT_CLASS, channelId: CHANNEL_ID,
     providerMode: 'provider_disabled', effectClass: 'internal_only_no_external_effect',
@@ -637,7 +643,8 @@ function applyAction(value, context, actionValue) {
     appendEvent(next, bounded, 'reconciliation', 'virtual_clock_advanced_no_effect');
   } else if (action === 'source_change') {
     next.source.version += 1;
-    next.source.digest = sourceDigest(bounded, next.generation, next.source.version);
+    next.source.observedAt = next.virtualNow;
+    next.source.digest = sourceDigest(bounded, next.generation, next.source.version, next.source.observedAt);
     appendEvent(next, bounded, 'reconciliation', 'source_changed_requires_review');
   } else if (action === 'source_correct') {
     if (next.run.capturedSourceVersion === next.source.version) {

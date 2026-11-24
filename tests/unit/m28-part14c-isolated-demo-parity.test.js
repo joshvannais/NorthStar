@@ -157,6 +157,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(runtime.validateState(left, context())).toEqual(left);
     expect(left).toMatchObject({
       virtualNow: '2026-11-23T16:00:00.000Z',
+      source: { version: 1, observedAt: '2026-11-23T15:00:00.000Z' },
       run: {
         scheduleAcceptedAt: '2026-11-23T15:00:00.000Z',
         scheduledAt: '2026-11-23T16:00:00.000Z',
@@ -249,6 +250,11 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(results[10].projected.demo.allowedActions).toEqual(['reset_automation']);
     const corrected = results[1];
     expect(corrected.state.source.version).toBe(corrected.state.run.capturedSourceVersion);
+    expect(corrected.state.source.observedAt).toBe('2026-11-23T16:00:00.000Z');
+    expect(runtime.businessInputForState(corrected.state, context()).source.observedAt)
+      .toBe(corrected.state.source.observedAt);
+    expect(new Date(corrected.state.run.scheduleAcceptedAt).getTime())
+      .toBeGreaterThanOrEqual(new Date(corrected.state.source.observedAt).getTime());
     expect(corrected.state.policy.version).toBe(2);
     expect(corrected.state.run.scheduleAcceptedAt).toBe(corrected.state.virtualNow);
     expect(new Date(corrected.state.run.scheduledAt).getTime() -
@@ -325,8 +331,27 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(state.source.digest).not.toBe(prior.source.digest);
     expect(state.policy.id).not.toBe(prior.policy.id);
     expect(state.source.version).toBe(1);
+    expect(state.source.observedAt).toBe(context().anchorTime);
     expect(state.events).toHaveLength(3);
     expect(() => runtime.validateState(prior, context({ workspaceGeneration: 2 }))).toThrow();
+  });
+
+  test('binds every later fictional source version to its exact history-owned observation time', () => {
+    let state = runtime.applyAction(runtime.initialState(context()), context(), 'advance_time');
+    state = runtime.applyAction(state, context(), 'source_change');
+    const changedAt = state.events.at(-1).at;
+    expect(state.source).toMatchObject({ version: 2, observedAt: changedAt });
+    expect(state.source.observedAt).toBe(state.virtualNow);
+    const changedInput = runtime.businessInputForState(state, context());
+    expect(changedInput.source).toMatchObject({ version: 2, observedAt: changedAt });
+    state = runtime.applyAction(state, context(), 'source_correct');
+    expect(state.source.observedAt).toBe(changedAt);
+    expect(state.run.scheduleAcceptedAt).toBe(state.virtualNow);
+    expect(new Date(state.run.scheduleAcceptedAt).getTime())
+      .toBeGreaterThanOrEqual(new Date(state.source.observedAt).getTime());
+    const tampered = JSON.parse(JSON.stringify(state));
+    tampered.source.observedAt = context().anchorTime;
+    expect(() => runtime.validateState(tampered, context())).toThrow(/history|bindings/i);
   });
 
   test('paid and demo previews use the same mounted no-effect engine', () => {

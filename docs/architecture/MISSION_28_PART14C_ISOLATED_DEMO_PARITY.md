@@ -54,6 +54,12 @@ source observation, scheduled time is capped at 366 days after admission, and
 expiration is independently capped at 367 days. Requests cannot provide or
 widen those controlled inputs.
 
+Each fictional source version owns an exact observation time. Version one is
+observed at the fixed workspace anchor; each later version is observed at its
+validated source-change history event. That time is included in the source
+digest and carried unchanged through correction, so a later version can never
+borrow the anchor or be admitted before the event that introduced it.
+
 After the business decision, paid PostgreSQL rows and isolated fictional rows
 also enter the pure mounted `automationCenter/repository` read-model resolvers.
 `evaluateEvidence` composes those resolvers into the run-state decision consumed

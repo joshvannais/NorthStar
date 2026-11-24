@@ -85,7 +85,7 @@ describe('Mission 28 Part 14B exact state projection', () => {
       'docs/architecture/MISSION_28_PART14B_COMPLETE_STATE_BEHAVIOR.json'), 'utf8'));
     expect(artifact).toMatchObject({
       contractVersion: 'mission28.part14b.complete-state-behavior.v1',
-      status: 'implementation_candidate_not_independently_accepted_not_released',
+      status: 'released',
       base: {
         acceptedSourceHead: '4217ea78e200d1016bd54e3ce4bb72cee2d82d30',
         acceptedTree: 'e5c7c17b0df08ba5e43d801a8c57c1e8dcff872f',
@@ -93,6 +93,13 @@ describe('Mission 28 Part 14B exact state projection', () => {
         mergedMain: 'e72c04bc6990c03b8d0b8719f0bd05779cdba505',
       },
       scope: { part: '14B', demoRoute: null, migrationAdded: false, latestMigration: 287, nextMigrationAbsent: 288 },
+      release: {
+        acceptedSourceHead: 'c0775903ed4e42d1ade8c9936ced2d141d8ff942',
+        acceptedTree: '83869d378c2583c350ee4b899c4276e6db091035',
+        pullRequest: 609,
+        mergedMain: 'd43f0c588fb1785bb0afb6568997a329b485cc8d',
+        deploymentId: 'b52e88e6-5339-4261-a25f-5256eca9897b',
+      },
       projectionRules: {
         recoverySnapshotBinding: 'exact_policy_version_transaction_and_trusted_recorded_time_required',
         nonblockingRecoverySnapshot: 'only_newer_exact_same_transaction_processing_retry_or_control_evidence_may_supersede',

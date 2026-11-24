@@ -1,0 +1,121 @@
+{
+  "contractVersion": "mission28.part14c.isolated-demo-parity.v1",
+  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "base": {
+    "part": "14B",
+    "acceptedSourceHead": "c0775903ed4e42d1ade8c9936ced2d141d8ff942",
+    "acceptedTree": "83869d378c2583c350ee4b899c4276e6db091035",
+    "pullRequest": 609,
+    "mergedMain": "d43f0c588fb1785bb0afb6568997a329b485cc8d",
+    "deploymentId": "b52e88e6-5339-4261-a25f-5256eca9897b",
+    "imageSha256": "sha256:68a2ae5c8123a3a151335b939305f4726954fac95394c730e235d5372064ed01"
+  },
+  "scope": {
+    "part": "14C",
+    "paidPath": "/dashboard/automation",
+    "demoPath": "/demo/automation",
+    "demoApi": "/api/demo/automation-center",
+    "migrationAdded": true,
+    "migration": "288_demo_automation_center_action_v1.sql",
+    "latestMigration": 288,
+    "nextMigrationAbsent": 289,
+    "mission31GuidedSimulationIncluded": false
+  },
+  "sharedEngines": {
+    "businessDecision": "src/automation/businessDecisionEngine.js#evaluate",
+    "controlledInput": "src/automation/businessDecisionEngine.js#controlledInput",
+    "policyEvaluationSuppressionSchedulingRecovery": "one_source_linked_effect_free_business_call_graph",
+    "acceptedSourceContracts": [
+      {"path": "docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json", "normalizedLfSha256": "BAD13E2EE322990655E3C817F89B227DDE40D591054746286002F9628BAA9758"},
+      {"path": "docs/architecture/MISSION_28_PART5D_COLLISION_SUPPRESSION_DRY_RUN_CONTRACT.json", "normalizedLfSha256": "DAD8279E384924222EB1F0F8F86B0EC739197334F727596DD6A3F53044865FFA"},
+      {"path": "docs/architecture/MISSION_28_PART6B_DURABLE_SCHEDULER_CONTRACT.json", "normalizedLfSha256": "36EC7DE5DEE42EBA9C95D67A8549EFA6204AC2B142AC4C54ACB49688F42600EF"},
+      {"path": "docs/architecture/MISSION_28_PART6F_RECOVERY_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "31427D49C49575B908293BF5E8442B15BB7F960D5952E0910B89EC8C4869FBFE"}
+    ],
+    "statusProjection": "src/automationCenter/repository.js#buildSnapshot",
+    "policy": "src/automationCenter/repository.js#resolvePolicy",
+    "evaluation": "src/automationCenter/repository.js#resolveEvaluation",
+    "scheduler": "src/automationCenter/repository.js#resolveScheduler",
+    "suppression": "src/automationCenter/repository.js#resolveSuppression",
+    "recovery": "src/automationCenter/repository.js#resolveRecovery",
+    "composition": "src/automationCenter/repository.js#evaluateEvidence",
+    "preview": "src/automation/runtimeEngine.js#buildNoEffectPreview",
+    "paidCallGraph": "routes/automationCenter.preview -> runtimeEngine.buildNoEffectPreview -> businessDecisionEngine.evaluate",
+    "demoCallGraph": "routes/demo.preview_and_demoRepository.action -> runtimeEngine.businessInputForState -> businessDecisionEngine.evaluate -> runtimeEngine.transition_guard -> demoProjection -> repository.buildSnapshot",
+    "paidPreviewUsesSharedEngine": true,
+    "paidPreviewProviderAuthority": "unavailable_preview_no_effect",
+    "demoPreviewProviderAuthority": "deterministic_local_simulation_only_for_exact_bound_internal_material_otherwise_unavailable_preview_no_effect",
+    "exactPreviewMaterialBinding": "source_action_recipient_channel_must_match_the_controlled_business_input_or_the_assessment_is_unavailable",
+    "firstLaunchActionMaterial": "mission23_work_execution_internal_read_digest_task_tenant_owner_in_app_passive_provider_disabled_internal_only",
+    "mandatoryControls": "all_closed_keys_required_and_not_applicable_only_for_proven_recipient_or_document_scope",
+    "missingAuthorityDisposition": "source_value_and_execution_material_are_explicit_required_inputs_never_positive_defaults",
+    "localScheduleBinding": "tenant_zone_local_date_whole_second_local_time_explicit_not_ambiguous_or_earlier_or_later_fold_and_exact_matching_utc_instant",
+    "scheduleBounds": "admission_not_before_source_observation_exact_local_fold_utc_round_trip_utc_instant_whole_second_scheduled_at_most_366_days_expiration_at_most_367_days",
+    "sourceVersionProvenance": "each_fictional_version_observation_time_is_owned_by_its_exact_history_event_and_bound_into_its_source_digest",
+    "unavailableLineage": "unavailable_not_ineligible_and_never_complete_exact",
+    "equivalentControlledPaidAndDemoInputsProduceSameBusinessDecisions": true,
+    "restrictiveSourcePolicyConsentCalendarAndRecoveryInputsFailClosedOnBothPaths": true,
+    "demoProjectionUsesPaidResolversAndStatusEngine": true,
+    "runtimeImportsTestModels": false
+  },
+  "isolatedAuthority": {
+    "cookie": "northstar_demo_workspace",
+    "storage": "existing_demo_command_center_sessions_json_state",
+    "tenantSessionGenerationBound": true,
+    "identityBinding": "exact_uuid_versions_1_through_8_including_repository_uuidv5_no_coercion",
+    "workspaceRevisionCompareAndSwap": true,
+    "idempotencyReceipt": true,
+    "paidCookiesSelectDemoAuthority": false,
+    "fictionalDataCanEnterPaidAuthority": false
+  },
+  "controlledAdapters": {
+    "virtualClock": "server_fixed_advance_exactly_one_day",
+    "initialSchedule": "source_eligibility_and_admission_share_the_anchor_then_due_at_the_first_exact_whole_second_at_least_one_hour_later",
+    "daylightSavingResolution": "server_owned_explicit_local_date_local_time_and_fold_choice_exactly_match_the_bound_utc_instant_gaps_and_mismatches_fail_closed",
+    "correctedSchedule": "accepted_at_the_correction_boundary_strictly_future_and_no_processing_before_due",
+    "actionAvailability": "every_offered_action_satisfies_its_exact_shared_business_and_admission_predicate",
+    "sourceCorrectionAvailability": "withheld_while_policy_paused_expired_or_otherwise_not_runnable_and_available_after_explicit_valid_resume",
+    "provider": "deterministic_local_simulation_no_provider",
+    "processingClaim": "immutable_per_provider_attempt_with_new_identity_after_recovery",
+    "pauseResumeRefreshesClaim": false,
+    "requestCanSetClockProviderResultOrRecipient": false,
+    "closedActions": [
+      "advance_time",
+      "source_change",
+      "source_correct",
+      "pause",
+      "resume",
+      "suppress",
+      "recover",
+      "provider_step",
+      "stop",
+      "reset_automation"
+    ]
+  },
+  "raceAndReset": {
+    "resetAdvancesGeneration": true,
+    "resetReplacesFictionalIdentitiesAndHistory": true,
+    "resetInvalidatesPendingLoadPreviewAndActionSuccess": true,
+    "staleAuthorizationFailureClearsAllFictionalData": true,
+    "currentLoadOrActionFailureInvalidatesDependentPreview": true,
+    "unboundConflictClearsMountedState": true,
+    "supersededActionSuccessCannotReplaceReset": true,
+    "allDemoFieldsClearedOnFailure": true
+  },
+  "effectBoundary": {
+    "paidTenantMutated": false,
+    "paidPolicySaved": false,
+    "paidActionQueueWritten": false,
+    "providerCalled": false,
+    "recipientContacted": false,
+    "externalEffectCreated": false,
+    "financialEffectCreated": false,
+    "moneyEffectCreated": false
+  },
+  "unavailableEvidence": [
+    "Part14C_independent_audit_PR_merge_deployment_and_production_acceptance",
+    "fresh_PostgreSQL_candidate_acceptance_until_the_corrected_exact_head_gate_passes",
+    "genuine_Chrome_and_Playwright_WebKit_acceptance_reserved_for_Part14F",
+    "physical_Safari_devices_manual_assistive_technology_and_founder_visual_approval",
+    "provider_live_private_production_money_and_professional_review"
+  ]
+}

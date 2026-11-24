@@ -215,12 +215,12 @@ describe('Mission 28 Part 11C reminder material', () => {
 
   test('freezes docs-tests-only scope with migration287 latest and no288', () => {
     expect(contract.runtimeBoundary).toMatchObject({newMigration: false, newTableFunctionRouteOrUi: false, materialRecordCreated: false, nextMigrationAbsent: '288'});
-    const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations).toHaveLength(283); expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql'); expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
+    const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations).toHaveLength(284); expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql'); expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
   });
 
   test('roadmap and ledger record Part11B released Part11C candidate and later slices planned', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8'); const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
-    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–14A are released. Part 14B is the sole implementation candidate.'); expect(value).toContain('914f5d4424a300d8ab3649141ecab6b5a32bb625'); expect(value).toContain('fa5e57be-777b-4970-ab03-8f1c2040171d'); expect(value).toContain('sha256:02753e2605eadc2cdf8a00fae0a51c42b7f86f947086c0ab0318861e376f537d'); }
-    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(60); expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1); expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(5);
+    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–14B are released. Part 14C is the sole implementation candidate.'); expect(value).toContain('914f5d4424a300d8ab3649141ecab6b5a32bb625'); expect(value).toContain('fa5e57be-777b-4970-ab03-8f1c2040171d'); expect(value).toContain('sha256:02753e2605eadc2cdf8a00fae0a51c42b7f86f947086c0ab0318861e376f537d'); }
+    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(61); expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1); expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(4);
   });
 });

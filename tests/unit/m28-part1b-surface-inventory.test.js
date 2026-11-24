@@ -876,8 +876,8 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
   test('records Parts 1A–5A released, Part 5B as the sole candidate and every later slice as planned', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
-    expect(roadmap).toContain('Parts 1A–14A are released. Part 14B is the sole implementation candidate.');
-    expect(roadmap).toContain('Parts 14C–14G remain planned and unimplemented.');
+    expect(roadmap).toContain('Parts 1A–14B are released. Part 14C is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 14D–14G remain planned and unimplemented.');
     const rows = [...ledger.matchAll(/^\| (\d{2}) \| (\d{1,2}[A-G]) \| (.+) \| (.+) \| (.+) \|$/gm)];
     expect(rows).toHaveLength(66);
     expect(rows[0][4]).toBe('**Released**');
@@ -933,8 +933,8 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(rows[39][4]).toBe('**Released**');
     expect(rows[40][4]).toBe('**Released**');
     expect(rows[41][4]).toBe('**Released**');
-    expect(rows[42][4]).toBe('**Released**'); expect(rows[43][4]).toBe('**Released**'); expect(rows[44][4]).toBe('**Released**'); expect(rows[45][4]).toBe('**Released**'); expect(rows[46][4]).toBe('**Released**'); expect(rows[47][4]).toBe('**Released**'); expect(rows[48][4]).toBe('**Released**'); expect(rows[49][4]).toBe('**Released**'); expect(rows[50][4]).toBe('**Released**'); expect(rows[51][4]).toBe('**Released**'); expect(rows[52][4]).toBe('**Released**'); expect(rows[53][4]).toBe('**Released**'); expect(rows[54][4]).toBe('**Released**'); expect(rows[55][4]).toBe('**Released**'); expect(rows[56][4]).toBe('**Released**'); expect(rows[57][4]).toBe('**Released**'); expect(rows[58][4]).toBe('**Released**'); expect(rows[59][4]).toBe('**Released**'); expect(rows[60][4]).toBe('**Implementation candidate**');
-    expect(rows.slice(61).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
+    expect(rows[42][4]).toBe('**Released**'); expect(rows[43][4]).toBe('**Released**'); expect(rows[44][4]).toBe('**Released**'); expect(rows[45][4]).toBe('**Released**'); expect(rows[46][4]).toBe('**Released**'); expect(rows[47][4]).toBe('**Released**'); expect(rows[48][4]).toBe('**Released**'); expect(rows[49][4]).toBe('**Released**'); expect(rows[50][4]).toBe('**Released**'); expect(rows[51][4]).toBe('**Released**'); expect(rows[52][4]).toBe('**Released**'); expect(rows[53][4]).toBe('**Released**'); expect(rows[54][4]).toBe('**Released**'); expect(rows[55][4]).toBe('**Released**'); expect(rows[56][4]).toBe('**Released**'); expect(rows[57][4]).toBe('**Released**'); expect(rows[58][4]).toBe('**Released**'); expect(rows[59][4]).toBe('**Released**'); expect(rows[60][4]).toBe('**Released**'); expect(rows[61][4]).toBe('**Implementation candidate**');
+    expect(rows.slice(62).every(row => row[4] === 'Planned / unimplemented' && row[5] === 'None')).toBe(true);
     expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1);
   });
 
@@ -945,9 +945,9 @@ describe('Mission 28 Part 1B automation-surface inventory', () => {
     expect(productionSource).not.toContain('mission28.part1b.surface-inventory.v1');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(migrations).toHaveLength(283);
-    expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
-    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
+    expect(migrations).toHaveLength(284);
+    expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql');
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
     expect(migrations.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
     expect(migrations.filter(name => /^278_/.test(name))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
     expect(migrations.filter(name => /^279_/.test(name))).toEqual(['279_canonical_automation_delivery_controls_v1.sql']);

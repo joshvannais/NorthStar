@@ -15,6 +15,7 @@
     Object.freeze({ id: 'communications', label: 'Communications', resource: 'calls', paidPath: '/dashboard/communications', demoPath: '/demo/communications' }),
     Object.freeze({ id: 'calendar', label: 'Calendar', resource: 'calendar', paidPath: '/dashboard/calendar', demoPath: '/demo/calendar' }),
     Object.freeze({ id: 'operations', label: 'Operations', resource: 'operations', paidPath: '/dashboard/operations', demoPath: '/demo/operations' }),
+    Object.freeze({ id: 'automation-center', label: 'Automation Center', resource: 'automation', paidPath: '/dashboard/automation', demoPath: '/demo/automation' }),
     Object.freeze({ id: 'learning-center', label: 'Learning Center', resource: 'learning', paidPath: '/dashboard/learning-center', demoPath: '/demo/learning-center' }),
     Object.freeze({ id: 'team', label: 'Team', resource: 'team', paidPath: '/dashboard/team', demoPath: '/demo/team' }),
     Object.freeze({ id: 'business-profile', label: 'Business Profile', resource: 'settings', paidPath: '/dashboard/business-profile', demoPath: '/demo/business-profile' }),
@@ -22,13 +23,13 @@
     Object.freeze({ id: 'integrations', label: 'Integrations', resource: 'integrations', paidPath: '/dashboard/integrations', demoPath: '/demo/integrations' }),
   ]);
   var TODAY_ROUTE = Object.freeze({ id: 'today', label: 'Today', resource: 'dashboard', paidPath: '/dashboard/today', demoPath: null });
-  var AUTOMATION_ROUTE = Object.freeze({ id: 'automation-center', label: 'Automation Center', resource: 'automation', paidPath: '/dashboard/automation', demoPath: null });
+  var AUTOMATION_ROUTE = ROUTES[6];
   // Today is signed-in workforce authority only. Keeping it outside ROUTES
   // preserves the accepted account-free demo contract and prevents a demo
   // route from being mistaken for employee scope.
-  // Automation Center is paid tenant-private authority. Part 14C owns an
-  // isolated demo journey, so Part 14A deliberately adds no demo destination.
-  var PAID_ROUTES = Object.freeze([ROUTES[0], TODAY_ROUTE].concat(ROUTES.slice(1, 6), [AUTOMATION_ROUTE], ROUTES.slice(6)));
+  // Part 14C mounts an isolated fictional Automation Center through the same
+  // route contract. It carries no paid tenant authority or real effects.
+  var PAID_ROUTES = Object.freeze([ROUTES[0], TODAY_ROUTE].concat(ROUTES.slice(1)));
 
   function routesForMode(mode) {
     return mode === 'demo' ? ROUTES : PAID_ROUTES;

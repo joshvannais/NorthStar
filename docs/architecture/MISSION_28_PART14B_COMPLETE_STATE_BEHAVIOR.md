@@ -1,7 +1,6 @@
 # Mission 28 Part 14B — complete state behavior
 
-Status: **Implementation candidate only. Not independently accepted or
-released.** Part 14B extends the released paid Automation Center with a closed,
+Status: **Released.** Part 14B extends the released paid Automation Center with a closed,
 owner-readable projection for every frozen run state and exhaustive fail-closed
 clearing. It adds no route, demo authority, migration, worker, scheduler,
 provider adapter, recipient, message, upstream mutation, external effect,
@@ -109,8 +108,15 @@ The exact base is released Part 14A: accepted source
 `sha256:25a19362c4237971d541bd031a62f5992fd829e2bc4cf73961e92fb231ab4f5e`.
 Migration 287 remains latest and migration 288 remains absent.
 
-Writer tests are not independent acceptance. Part 14B audit, PR, merge,
-deployment, production behavior, provider/live/private-production evidence,
-physical Safari/device evidence, manual assistive-technology review,
-professional review, and founder visual approval remain unavailable and
-unclaimed.
+Part 14B was independently accepted P0=P1=P2=P3=0 at source
+`c0775903ed4e42d1ade8c9936ced2d141d8ff942`, tree
+`83869d378c2583c350ee4b899c4276e6db091035`, and normally squash-merged by PR
+#609 to main `d43f0c588fb1785bb0afb6568997a329b485cc8d`. Its sole automatic deployment
+`b52e88e6-5339-4261-a25f-5256eca9897b` is `SUCCESS/RUNNING`, instance
+`31a364b4-bcc2-4add-8c4e-4edbf053bd87`, image
+`sha256:68a2ae5c8123a3a151335b939305f4726954fac95394c730e235d5372064ed01`.
+Startup, health, rendered routes, exact 283/283 production migration
+reconciliation through 287/no288, and paid/demo source parity passed. Live
+provider, private-production behavior beyond those read-only checks, physical
+Safari/device evidence, manual assistive-technology review, professional
+review, and founder visual approval remain unavailable and unclaimed.

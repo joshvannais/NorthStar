@@ -409,6 +409,31 @@
     if (url.origin !== global.location.origin) {
       return Promise.resolve(jsonResponse({ error: readonlyMessage, code: 'demo_external_request_blocked' }, 403));
     }
+    if (method === 'GET' && url.pathname === '/api/v1/automation-center') {
+      // Refresh the shared workspace revision before every Automation Center
+      // read. A prior concurrent demo mutation may have advanced the database
+      // revision even when this page's old response was correctly discarded.
+      return loadWorkspace(true).then(function () {
+        return nativeFetch('/api/demo/automation-center',
+          Object.assign({}, options || {}, { credentials: 'same-origin' }));
+      });
+    }
+    if (method === 'POST' && (url.pathname === '/api/v1/automation-center/preview' ||
+        url.pathname === '/api/v1/automation-center/actions')) {
+      return loadWorkspace(false).then(function () {
+        var headers = new Headers(options && options.headers || {});
+        headers.set('X-NorthStar-Demo-Intent', url.pathname.endsWith('/preview')
+          ? 'automation-center-preview' : 'automation-center-action');
+        headers.set('X-NorthStar-Demo-Revision', String(workspace.integrity.revision));
+        var target = url.pathname.endsWith('/preview')
+          ? '/api/demo/automation-center/preview' : '/api/demo/automation-center/actions';
+        return nativeFetch(target, Object.assign({}, options || {}, { headers: headers, credentials: 'same-origin' }))
+          .then(function (response) {
+            if (!response.ok || url.pathname.endsWith('/preview')) return response;
+            return loadWorkspace(true).then(function () { return response; });
+          });
+      });
+    }
     if (url.pathname.indexOf('/api/demo/') === 0) return nativeFetch(input, options);
     if(method==='GET'&&url.pathname==='/api/v1/operational-overview')return ownerReadFetch('/api/demo/command-center/operations/overview'+url.search,options);
     var ownerRead=/^\/api\/v1\/field-executions\/owner-work(?:\/appointments\/([a-f0-9-]+))?$/.exec(url.pathname);

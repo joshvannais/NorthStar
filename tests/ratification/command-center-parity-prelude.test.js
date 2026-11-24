@@ -30,6 +30,7 @@ const PAGE_BY_ROUTE = Object.freeze({
   communications: 'public/dashboard/communications.html',
   calendar: 'public/dashboard/calendar.html',
   operations: 'public/dashboard/operations.html',
+  'automation-center': 'public/dashboard/automation.html',
   'learning-center': 'public/dashboard/learning-center.html',
   team: 'public/dashboard/team.html',
   'business-profile': 'public/dashboard/business-profile.html',
@@ -89,14 +90,14 @@ function renderedText(node) {
 }
 
 describe('Demo/Paid Command Center Parity Prelude contracts', () => {
-  test('eleven shared routes retain demo parity while paid navigation adds signed-in Today and Automation Center only', async () => {
-    expect(contract.ROUTES).toHaveLength(11);
+  test('twelve shared routes include isolated Automation Center while paid navigation also adds signed-in Today', async () => {
+    expect(contract.ROUTES).toHaveLength(12);
     expect(contract.PAID_ROUTES).toHaveLength(13);
     expect(contract.PAID_ROUTES.map(route => route.id)).toEqual(permissions.NAVIGATION_DESTINATIONS.map(route => route.id));
     expect(contract.PAID_ROUTES.map(route => route.paidPath)).toEqual(permissions.NAVIGATION_DESTINATIONS.map(route => route.href));
     expect(contract.TODAY_ROUTE.demoPath).toBeNull();
-    expect(contract.AUTOMATION_ROUTE.demoPath).toBeNull();
-    expect(new Set(contract.ROUTES.map(route => route.demoPath)).size).toBe(11);
+    expect(contract.AUTOMATION_ROUTE.demoPath).toBe('/demo/automation');
+    expect(new Set(contract.ROUTES.map(route => route.demoPath)).size).toBe(12);
     expect(contract.routeForPath('/demo-dashboard').id).toBe('command-center');
 
     for (const destination of contract.ROUTES) {

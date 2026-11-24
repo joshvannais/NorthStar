@@ -544,17 +544,20 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     await request(appFor()).post('/api/v1/automation-center/preview').set('x-test-role', 'member').send(preview()).expect(403);
   });
 
-  test('paid navigation adds Automation Center without demo or member visibility', () => {
-    expect(commandCenterContract.ROUTES.map(item => item.id)).not.toContain('automation-center');
+  test('paid authority and isolated Part 14C demo navigation expose Automation Center without member paid authority', () => {
+    expect(commandCenterContract.ROUTES.map(item => item.id)).toContain('automation-center');
     expect(commandCenterContract.PAID_ROUTES.map(item => item.id)).toContain('automation-center');
-    expect(commandCenterContract.AUTOMATION_ROUTE).toMatchObject({ paidPath: '/dashboard/automation', demoPath: null });
+    expect(commandCenterContract.AUTOMATION_ROUTE).toMatchObject({
+      paidPath: '/dashboard/automation', demoPath: '/demo/automation', resource: 'automation',
+    });
     expect(permissions.navigationForRole('owner').map(item => item.id)).toContain('automation-center');
     expect(permissions.navigationForRole('admin').map(item => item.id)).toContain('automation-center');
     expect(permissions.navigationForRole('member').map(item => item.id)).not.toContain('automation-center');
     expect(permissions.navigationForRole('viewer').map(item => item.id)).not.toContain('automation-center');
+    expect(commandCenterContract.destinationPath('automation-center', 'demo')).toBe('/demo/automation');
   });
 
-  test('source mounts one accessible paid page with progressive details and no demo route', () => {
+  test('source retains the accessible Automation Center page and paid API mount after the isolated demo is added', () => {
     const html = read('public/dashboard/automation.html');
     const server = read('src/server.js');
     const navigation = read('public/js/nav-component.js');
@@ -565,7 +568,7 @@ describe('Mission 28 Part 14A mounted paid routes', () => {
     expect(html).toContain('NavComponent.init(\'automation-center\')');
     expect(server).toContain("'/dashboard/automation': 'public/dashboard/automation.html'");
     expect(server).toContain("app.use('/api/v1/automation-center', createAutomationCenterRouter())");
-    expect(server).not.toContain("'/demo/automation'");
+    expect(server).toContain("'automation-center': 'public/dashboard/automation.html'");
     expect(navigation).toContain("id: 'automation-center'");
     expect(css).toMatch(/@media \(max-width: 760px\)/);
     expect(css).toMatch(/@media \(forced-colors: active\)/);

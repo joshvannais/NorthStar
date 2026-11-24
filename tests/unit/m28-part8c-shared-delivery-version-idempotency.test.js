@@ -194,12 +194,12 @@ describe('Mission 28 Part 8C shared delivery version and idempotency authority',
   test('freezes zero-effect privacy and no-runtime boundaries with migration287 latest and no288', () => {
     expect(Object.values(contract.privacyAndEffects).every(value=>value===0)).toBe(true);
     expect(contract.runtimeBoundary).toMatchObject({newMigration:false,newTableFunctionRouteOrUi:false,mountedSchedulerWorkerQueueOrPolicyExecutor:false,providerAdapterCallbackOrOperatingSystemHandoff:false,recipientMessageDeliveryOrCustomerResponse:false,nextMigrationAbsent:'288'});
-    const migrations=fs.readdirSync(path.join(ROOT,'migrations')).filter(name=>/^\d+_/.test(name)).sort(); expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql'); expect(migrations.some(name=>name.startsWith('288_'))).toBe(false);
+    const migrations=fs.readdirSync(path.join(ROOT,'migrations')).filter(name=>/^\d+_/.test(name)).sort(); expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql'); expect(migrations.filter(name=>name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name=>name.startsWith('289_'))).toBe(false);
   });
 
   test('roadmap and ledger preserve released Part8C while Part8D is the sole candidate', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8'); const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
-    for (const document of [roadmap,ledger]) { expect(document).toContain('Parts 1A–14A are released. Part 14B is the sole implementation candidate.'); expect(document).toContain('Parts 14C–14G remain planned and unimplemented.'); expect(document).toContain('fdbf9223-1b69-4b97-9bfc-cd60ad1adad0'); expect(document).toContain('sha256:07fd8a6422e3713ed768fb335942c7a68cf766f6d68f3a6059b786c951ef0c26'); }
+    for (const document of [roadmap,ledger]) { expect(document).toContain('Parts 1A–14B are released. Part 14C is the sole implementation candidate.'); expect(document).toContain('Parts 14D–14G remain planned and unimplemented.'); expect(document).toContain('fdbf9223-1b69-4b97-9bfc-cd60ad1adad0'); expect(document).toContain('sha256:07fd8a6422e3713ed768fb335942c7a68cf766f6d68f3a6059b786c951ef0c26'); }
     expect(ledger).toContain('| 34 | 8B | Mission 27 financial-document delivery without financial mutation | **Released** |'); expect(ledger).toContain('| 35 | 8C | Shared quick-send/native/policy version and idempotency contract | **Released** |'); expect(ledger).toContain('| 36 | 8D | Delivery acknowledgement, revoke/resend/recovery and exact labels | **Released** |'); expect(markdown).toContain('no migration 288');
   });
 });

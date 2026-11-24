@@ -148,10 +148,10 @@ describe('Mission 28 Part 8B financial-document delivery authority', () => {
       schedulerWorkerOrQueue:false,providerOrReceiver:false,effectExecutor:false});
   });
 
-  test('keeps migration287 latest with no 288 and no Part8B runtime or public surface', () => {
+  test('keeps current migration inventory through the isolated-demo action admission', () => {
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort();
-    expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
-    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql');
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
     const diffSensitive = ['src/routes','public','src/server.js'];
     expect(contract.runtimeBoundary.mountedRuntimeConsumer).toBe(false);
     expect(diffSensitive).toHaveLength(3);
@@ -161,10 +161,11 @@ describe('Mission 28 Part 8B financial-document delivery authority', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8');
     const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
     for (const document of [roadmap,ledger]) {
-      expect(document).toContain('Parts 1A–14A are released. Part 14B is the sole implementation candidate.');
-      expect(document).toContain('Parts 14C–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–14B are released. Part 14C is the sole implementation candidate.');
+      expect(document).toContain('Parts 14D–14G remain planned and unimplemented.');
       expect(document).toContain('60fd4934-d7cc-4f1f-8366-894e6fd03393');
-      expect(document).toContain('287'); expect(document).toMatch(/no 288|migration 288 is absent/);
+      expect(document).toContain('287');
+      expect(document).toMatch(/no\s?288|migration 288 is absent|288_demo_automation_center_action_v1/);
     }
     expect(ledger).toContain('| 33 | 8A | Mission 24 estimate/proposal/quote sending | **Released** |');
     expect(ledger).toContain('| 34 | 8B | Mission 27 financial-document delivery without financial mutation | **Released** |');

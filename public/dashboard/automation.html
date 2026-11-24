@@ -6,10 +6,12 @@
   <title>Automation Center - NorthStar</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/northstar-icon-32.png?v=20260920">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/northstar-icon-180.png?v=20260920">
-  <script src="/js/command-center-contract.js?v=m28-part14b"></script>
+  <script src="/js/command-center-contract.js?v=m28-part14c"></script>
+  <script src="/js/demo-runtime.js?v=m28-part14c"></script>
+  <link rel="stylesheet" href="/css/demo-runtime.css">
   <script src="/js/theme.js"></script>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/automation-center.css?v=m28-part14b">
+  <link rel="stylesheet" href="/css/automation-center.css?v=m28-part14c">
   <link rel="stylesheet" href="/css/site-professionalism.css?v=command-center-clarity-20260915">
 </head>
 <body class="automation-center-page">
@@ -26,6 +28,32 @@
       </header>
 
       <div id="automationStatus" class="automation-status" role="status" aria-live="polite" aria-atomic="true">Loading current automation records.</div>
+
+      <section id="automationDemoControls" class="automation-panel automation-demo-panel" aria-labelledby="automationDemoTitle" hidden>
+        <div class="automation-panel-heading">
+          <div><p class="automation-kicker">Isolated fictional workspace</p><h2 id="automationDemoTitle">Explore automation safely</h2><p id="automationDemoBoundary">This controlled demo uses fictional sources and time. Nothing here changes your account or contacts a real outside service or person.</p></div>
+          <span id="automationDemoGeneration" class="automation-pill">Not loaded</span>
+        </div>
+        <dl class="automation-definition-grid automation-demo-facts">
+          <div><dt>Virtual time</dt><dd id="automationDemoTime">Unavailable</dd></div>
+          <div><dt>Fictional source</dt><dd id="automationDemoSource">Unavailable</dd></div>
+          <div><dt>Policy version</dt><dd id="automationDemoPolicy">Unavailable</dd></div>
+          <div><dt>Outside services</dt><dd id="automationDemoProvider">No real outside-service calls</dd></div>
+        </dl>
+        <div class="automation-demo-actions" aria-label="Fictional automation controls">
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="provider_step">Run next simulated step</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="advance_time">Advance one virtual day</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="source_change">Change fictional source</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="source_correct">Review source correction</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="pause">Pause policy</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="resume">Resume policy</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="suppress">Simulate safeguard</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="recover">Review after a safeguard</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="stop">Stop fictional automation</button>
+          <button type="button" class="btn btn-secondary" data-automation-demo-action="reset_automation">Reset automation demo</button>
+        </div>
+        <p id="automationDemoStatus" class="automation-boundary-copy" role="status" aria-live="polite">Loading the isolated fictional workspace.</p>
+      </section>
 
       <section id="automationSummary" class="automation-summary" aria-label="Automation overview" hidden>
         <article><span>Current status</span><strong id="summaryStatus">Checking</strong><small id="summaryExplanation">Loading current records</small></article>
@@ -115,9 +143,9 @@
     </main>
   </div>
   <script src="/js/auth-session.js"></script>
-  <script src="/js/nav-component.js?v=m28-part14b"></script>
-  <script src="/js/automation-center-contract.js?v=m28-part14b"></script>
-  <script src="/js/automation-center-page.js?v=m28-part14b"></script>
+  <script src="/js/nav-component.js?v=m28-part14c"></script>
+  <script src="/js/automation-center-contract.js?v=m28-part14c"></script>
+  <script src="/js/automation-center-page.js?v=m28-part14c"></script>
   <script>NavComponent.init('automation-center');</script>
 </body>
 </html>

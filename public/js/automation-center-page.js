@@ -5,6 +5,16 @@
   var session = global.NorthStarAccountSession;
   var generation = 0;
   var previewGeneration = 0;
+  var actionGeneration = 0;
+  var actionPending = false;
+  var pendingAction = null;
+  var demoRevision = null;
+  var demoMode = Boolean(global.NorthStarDemoRuntime && global.NorthStarDemoRuntime.active === true);
+  var DEMO_ACTIONS = Object.freeze([
+    'advance_time', 'source_change', 'source_correct', 'pause', 'resume',
+    'suppress', 'recover', 'provider_step', 'stop', 'reset_automation',
+  ]);
+  var DEMO_DISCLAIMER = 'This is fictional information only. Nothing here changes your account or contacts a real outside service or person.';
 
   function element(id) { return document.getElementById(id); }
   function node(tag, className, text) {
@@ -67,10 +77,22 @@
     element('setupDailyLimit').value = '1';
     ['setupSource', 'setupAction', 'setupRecipient', 'setupChannel', 'setupTiming']
       .forEach(function (id) { element(id).value = ''; element(id).selectedIndex = 0; });
+    element('automationDemoControls').hidden = true;
+    element('automationDemoGeneration').textContent = 'Not loaded';
+    element('automationDemoTime').textContent = 'Unavailable';
+    element('automationDemoSource').textContent = 'Unavailable';
+    element('automationDemoPolicy').textContent = 'Unavailable';
+    element('automationDemoProvider').textContent = 'No real outside-service calls';
+    element('automationDemoBoundary').textContent = 'No fictional automation state is loaded.';
+    element('automationDemoStatus').textContent = 'The isolated fictional workspace is not loaded.';
+    demoRevision = null;
   }
   function invalidateAuthority(error) {
     generation += 1;
     previewGeneration += 1;
+    actionGeneration += 1;
+    actionPending = false;
+    pendingAction = null;
     clearSensitive();
     setStatus('error', error && error.status === 401
       ? 'Your session ended. Sign in again before reopening Automation Center. No saved data is shown.'
@@ -82,9 +104,24 @@
   function invalidateConflict(context) {
     generation += 1;
     previewGeneration += 1;
+    actionGeneration += 1;
+    actionPending = false;
+    pendingAction = null;
     clearSensitive();
     var status = errorStatus({ status: 409 }, context);
     setStatus(status.state, status.message);
+  }
+  function invalidateUnavailable(message) {
+    // A current load or mutation failure makes every dependent response
+    // unusable. In particular, a preview that began while the failed request
+    // was pending must never remount data after this fail-closed clear.
+    generation += 1;
+    previewGeneration += 1;
+    actionGeneration += 1;
+    actionPending = false;
+    pendingAction = null;
+    clearSensitive();
+    setStatus('unavailable', message);
   }
   function errorStatus(error, context) {
     if (error && error.status === 409) return {
@@ -183,6 +220,9 @@
       // A conflict proves that the mounted snapshot/preview authority is no
       // longer current. It must clear all prior data and invalidate both
       // request classes even when a newer request made this response stale.
+      // A later mounted response does not prove when an otherwise unbound
+      // conflict occurred on the server. Without exact ordering evidence the
+      // mounted workspace is unavailable and must clear conservatively.
       if (error && error.status === 409) {
         invalidateConflict('preview');
         return;
@@ -298,19 +338,132 @@
     data.unavailableEvidence.forEach(function (item) { target.appendChild(node('li', '', item)); });
     element('automationEvaluatedAt').textContent = 'Checked ' + formatDate(data.evaluatedAt) + '.';
   }
+  function validateDemo(meta) {
+    var zero = meta && meta.zeroEffects;
+    var actions = meta && meta.allowedActions;
+    var parsedTime = meta && typeof meta.virtualNow === 'string' ? new Date(meta.virtualNow) : null;
+    if (!meta || meta.contract !== 'mission28.part14c.isolated-automation-demo.v1' ||
+        !Number.isSafeInteger(meta.generation) || meta.generation < 1 ||
+        !Number.isSafeInteger(meta.workspaceRevision) || meta.workspaceRevision < 1 ||
+        !Number.isSafeInteger(meta.sourceVersion) || meta.sourceVersion < 1 ||
+        !Number.isSafeInteger(meta.capturedSourceVersion) || meta.capturedSourceVersion < 1 ||
+        meta.capturedSourceVersion > meta.sourceVersion ||
+        !Number.isSafeInteger(meta.policyVersion) || meta.policyVersion < 1 ||
+        !parsedTime || !Number.isFinite(parsedTime.getTime()) || parsedTime.toISOString() !== meta.virtualNow ||
+        meta.providerMode !== 'deterministic_local_simulation_no_provider' ||
+        meta.disclaimer !== DEMO_DISCLAIMER || !Array.isArray(actions) ||
+        new Set(actions).size !== actions.length ||
+        actions.indexOf('reset_automation') < 0 ||
+        actions.some(function (action) { return DEMO_ACTIONS.indexOf(action) < 0; }) || !zero ||
+        Object.keys(zero).sort().join(',') !== 'external,financial,money,providerCalls,recipients' ||
+        ['recipients', 'providerCalls', 'external', 'financial', 'money'].some(function (key) { return zero[key] !== 0; })) {
+      throw new Error('The isolated automation demo boundary is unavailable.');
+    }
+    return meta;
+  }
+  function renderDemo(meta) {
+    if (!demoMode) return;
+    meta = validateDemo(meta);
+    demoRevision = meta.workspaceRevision;
+    element('automationDemoGeneration').textContent = 'Demo ' + meta.generation + ' · saved version ' + meta.workspaceRevision;
+    element('automationDemoTime').textContent = formatDate(meta.virtualNow);
+    element('automationDemoSource').textContent = 'Fictional version ' + meta.sourceVersion +
+      (meta.sourceVersion === meta.capturedSourceVersion ? ' · matches this run' : ' · changed since this run began');
+    element('automationDemoPolicy').textContent = 'Version ' + meta.policyVersion;
+    element('automationDemoProvider').textContent = 'Controlled simulation · no real outside-service calls';
+    element('automationDemoBoundary').textContent = meta.disclaimer;
+    element('automationDemoStatus').textContent = 'Ready. Everything stays in this fictional demo; no one is contacted and no real account is changed.';
+    element('automationDemoControls').hidden = false;
+    if (typeof document.querySelectorAll === 'function') {
+      var buttons = document.querySelectorAll('[data-automation-demo-action]');
+      for (var index = 0; index < buttons.length; index += 1) {
+        buttons[index].disabled = meta.allowedActions.indexOf(buttons[index].getAttribute('data-automation-demo-action')) < 0;
+      }
+    }
+  }
   function render(data) {
     renderSummary(data); renderTemplates(data.templates); renderApprovals(data); renderOwnerWork(data);
     renderRuns(data); renderTimeline(data); renderLimits(data); renderChannels(data); renderStop(data); renderEvidence(data);
   }
+  function actionKey() {
+    if (global.crypto && typeof global.crypto.randomUUID === 'function') return global.crypto.randomUUID();
+    return 'automation-demo-' + String(Date.now()) + '-' + String(Math.random()).slice(2);
+  }
+  function demoButtonsDisabled(disabled, keepResetAvailable) {
+    if (typeof document.querySelectorAll !== 'function') return;
+    var buttons = document.querySelectorAll('[data-automation-demo-action]');
+    for (var index = 0; index < buttons.length; index += 1) {
+      buttons[index].disabled = disabled && !(keepResetAvailable &&
+        buttons[index].getAttribute('data-automation-demo-action') === 'reset_automation');
+    }
+  }
+  function performDemoAction(action) {
+    // Reset is the sole command allowed to supersede an older pending demo
+    // command. Its generation invalidates that response client-side while the
+    // server's exact revision guard still decides which mutation can commit.
+    if (!demoMode || !Number.isSafeInteger(demoRevision) ||
+        (actionPending && (action !== 'reset_automation' || pendingAction === 'reset_automation'))) {
+      return Promise.resolve();
+    }
+    var request = ++actionGeneration;
+    actionPending = true;
+    pendingAction = action;
+    generation += 1;
+    previewGeneration += 1;
+    demoButtonsDisabled(true, action !== 'reset_automation');
+    clearPreview();
+    setStatus('loading', 'Updating the isolated fictional automation state.');
+    element('automationDemoStatus').textContent = 'Applying one fictional action safely.';
+    var expectedRevision = demoRevision;
+    return session.json('/api/v1/automation-center/actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': actionKey() },
+      body: JSON.stringify({ action: action, expectedRevision: expectedRevision })
+    }).then(function (body) {
+      if (request !== actionGeneration) return;
+      if (!body || body.success !== true || !body.data || !body.demo) throw new Error('The fictional automation update is unavailable.');
+      var data = contract.validateSnapshot(body.data);
+      var meta = validateDemo(body.demo);
+      // A preview may have started while this action was being committed.
+      // Its older revision must not reappear after the newer action response.
+      previewGeneration += 1;
+      clearPreview();
+      render(data); renderDemo(meta);
+      setStatus('ready', data.status.label + '. ' + data.status.explanation);
+      element('automationDemoStatus').textContent = action === 'reset_automation'
+        ? 'Automation demo reset. Older pending reads and actions can no longer replace this generation.'
+        : 'Fictional action recorded. No one was contacted, no outside service was called, and no real account or money changed.';
+    }).catch(function (error) {
+      if (isAuthorityFailure(error)) { invalidateAuthority(error); return; }
+      // A later mounted action does not prove when an unbound conflict was
+      // established on the server. Clear before stale-response suppression so
+      // a superseded command cannot leave an obsolete workspace visible.
+      if (error && error.status === 409) { invalidateConflict('load'); return; }
+      if (request !== actionGeneration) return;
+      invalidateUnavailable('The fictional automation action is unavailable. No prior demo state is shown; refresh to continue.');
+    }).finally(function () {
+      if (request === actionGeneration) {
+        actionPending = false;
+        pendingAction = null;
+      }
+    });
+  }
   function load() {
+    // Do not race a current mutation with a read that may have been taken just
+    // before its commit. The action response carries the new exact revision.
+    if (demoMode && actionPending) return Promise.resolve();
     var request = ++generation;
     previewGeneration += 1;
+    actionGeneration += 1;
     clearSensitive(); setStatus('loading', 'Loading current automation records.');
     return session.json('/api/v1/automation-center').then(function (body) {
       if (request !== generation) return;
       if (!body || body.success !== true) throw new Error('The Automation Center response is unavailable.');
       var data = contract.validateSnapshot(body.data);
       render(data);
+      if (demoMode) {
+        renderDemo(body.demo);
+      }
       var emptySnapshot = data.counts.policies === 0 && data.counts.runs === 0 && data.timeline.length === 0;
       setStatus(emptySnapshot ? 'empty' : 'ready', data.status.label + '. ' + data.status.explanation);
     }).catch(function (error) {
@@ -326,9 +479,7 @@
         return;
       }
       if (request !== generation) return;
-      clearSensitive();
-      var status = errorStatus(error, 'load');
-      setStatus(status.state, status.message);
+      invalidateUnavailable(errorStatus(error, 'load').message);
     });
   }
   function bind() {
@@ -337,6 +488,14 @@
     element('automationSetupForm').addEventListener('submit', function (event) {
       event.preventDefault(); requestPreview(previewInput(null), element('setupPreview'));
     });
+    if (demoMode && typeof document.querySelectorAll === 'function') {
+      var buttons = document.querySelectorAll('[data-automation-demo-action]');
+      for (var index = 0; index < buttons.length; index += 1) {
+        buttons[index].addEventListener('click', function (event) {
+          performDemoAction(event.currentTarget.getAttribute('data-automation-demo-action'));
+        });
+      }
+    }
     load();
   }
 

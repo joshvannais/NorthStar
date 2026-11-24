@@ -94,7 +94,7 @@ describe('Mission 19 universal navigation authority', () => {
     }
   });
 
-  test('the paid-only Automation destination never enters demo navigation', () => {
+  test('the isolated Part 14C Automation destination enters demo navigation without changing paid role authority', () => {
     jest.resetModules();
     const commandCenterContract = require(COMMAND_CENTER_CONTRACT_PATH);
     const demoRoutes = commandCenterContract.routesForMode('demo');
@@ -106,15 +106,18 @@ describe('Mission 19 universal navigation authority', () => {
       'communications',
       'calendar',
       'operations',
+      'automation-center',
       'learning-center',
       'team',
       'business-profile',
       'settings',
       'integrations',
     ]);
-    expect(demoRoutes).not.toContainEqual(expect.objectContaining({ id: 'automation-center' }));
-    expect(commandCenterContract.destinationPath('automation-center', 'demo')).toBeNull();
-    expect(commandCenterContract.routeForPath('/demo/automation')).toBeNull();
+    expect(demoRoutes).toContainEqual(expect.objectContaining({
+      id: 'automation-center', demoPath: '/demo/automation', resource: 'automation',
+    }));
+    expect(commandCenterContract.destinationPath('automation-center', 'demo')).toBe('/demo/automation');
+    expect(commandCenterContract.routeForPath('/demo/automation').id).toBe('automation-center');
   });
 
   test('the browser component consumes the server projection and fails closed on deep links', () => {

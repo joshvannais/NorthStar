@@ -1,6 +1,6 @@
 {
   "contractVersion": "mission28.part14b.complete-state-behavior.v1",
-  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "status": "released",
   "base": {
     "part": "14A",
     "acceptedSourceHead": "4217ea78e200d1016bd54e3ce4bb72cee2d82d30",
@@ -17,6 +17,19 @@
     "migrationAdded": false,
     "latestMigration": 287,
     "nextMigrationAbsent": 288
+  },
+  "release": {
+    "acceptedSourceHead": "c0775903ed4e42d1ade8c9936ced2d141d8ff942",
+    "acceptedTree": "83869d378c2583c350ee4b899c4276e6db091035",
+    "pullRequest": 609,
+    "mergedMain": "d43f0c588fb1785bb0afb6568997a329b485cc8d",
+    "deploymentId": "b52e88e6-5339-4261-a25f-5256eca9897b",
+    "instanceId": "31a364b4-bcc2-4add-8c4e-4edbf053bd87",
+    "imageSha256": "sha256:68a2ae5c8123a3a151335b939305f4726954fac95394c730e235d5372064ed01",
+    "auditFindings": { "p0": 0, "p1": 0, "p2": 0, "p3": 0 },
+    "mission28Suites": 61,
+    "mission28Tests": 926,
+    "productionMigrations": { "applied": 283, "expected": 283, "latest": 287, "nextAbsent": 288 }
   },
   "runStateOrder": [
     "validation",
@@ -113,7 +126,7 @@
     "upstreamFactMutated": false
   },
   "unavailableEvidence": [
-    "Part14B_independent_audit_PR_merge_deployment_and_production_acceptance",
+    "Part14C_and_later_acceptance",
     "provider_live_private_production_and_money_evidence",
     "physical_Safari_devices_manual_assistive_technology_and_founder_visual_approval",
     "professional_legal_privacy_communications_collections_accounting_security_or_compliance_review"

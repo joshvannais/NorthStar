@@ -152,8 +152,9 @@ The response carries exact zero counters for recipients, provider calls,
 external effects, financial effects, and money effects. Email/SMS availability
 is labeled deterministic fictional simulation only. No provider SDK, network
 transport, secret, credential, real address, live money, or destructive paid
-mutation is mounted by this slice. Migration 287 remains latest and migration
-288 remains absent.
+mutation is mounted by this slice. Candidate source contains 284 migrations
+through additive migration 288 with no 289; released production remains
+verified only through migration 287 until the pending candidate is accepted.
 
 Writer tests are not independent acceptance. Part 14C audit, PR, merge,
 deployment, production behavior, genuine Chrome/WebKit acceptance, physical

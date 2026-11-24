@@ -1,6 +1,6 @@
 # Mission 28 — acceptance ledger
 
-Status: **Parts 1A–14B are released. Part 14C is the sole implementation candidate.** Parts 14D–14G remain planned and unimplemented. Part 14C mounts an isolated fictional Automation Center through the same paid status projection and no-effect preview engine, with bounded server-fixed state transitions, deterministic local simulation, reset, and no paid authority, migration, real recipient, provider call, external effect, financial effect, or money effect. Part 14C independent audit, PR, merge, deployment, production behavior, genuine-browser acceptance, and founder visual approval remain unavailable and unclaimed.
+Status: **Parts 1A–14B are released. Part 14C is the sole implementation candidate.** Parts 14D–14G remain planned and unimplemented. Part 14C mounts an isolated fictional Automation Center through the same paid status projection and no-effect preview engine, with bounded server-fixed state transitions, deterministic local simulation, reset, and no paid authority, real recipient, provider call, external effect, financial effect, or money effect. Candidate source contains 284 migrations through additive migration 288 with no 289; released production remains verified only through migration 287 pending normal acceptance and release. Part 14C independent audit, PR, merge, deployment, production behavior, genuine-browser acceptance, and founder visual approval remain unavailable and unclaimed.
 
 ## Authority and baseline
 

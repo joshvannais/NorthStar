@@ -44,16 +44,26 @@ the canonical runtime bootstrap correctly withheld those tables from the
 application role. Migration 289 adds one read-only, security-definer entry,
 `canonical_automation_center_v1_read`. It reuses the accepted exact account,
 membership and session authority, permits only owner/admin reads, binds every
-query to the requested organization inside the function, and returns the
+query to the requested organization inside the function, establishes the exact
+transaction-local tenant context required by forced row-level security only
+after that authority succeeds, and returns the
 bounded source rows consumed by the existing owner-facing projection. The
 runtime role receives only `EXECUTE` on this entry. Direct canonical-table
 access remains denied, public execution remains revoked, and the entry cannot
 save a policy, schedule work, contact a recipient, create a provider attempt,
 or create an external or money effect.
 
+The entry rejects a null, missing, member, viewer or unknown access role before
+the legacy actor helper can compare it. It never trusts a caller or pooled
+connection's tenant setting. Actual role-separated PostgreSQL coverage stores a
+real policy, then proves the correct owner and admin see it with cleared and
+wrong prior tenant settings, through warm and restarted pools. Cross-tenant,
+forged actor/session, explicit member/viewer and null-role owner/member/viewer
+calls fail closed.
+
 The exact additive migration file is
 `289_automation_center_runtime_read_authority_v1.sql`, raw SHA-256
-`65B5F20F73CDC88A18E73F8077FDAD50FC99CFBAFD9EE80ED1B82B558A86DCFB`.
+`47C7AA1BC02C4DBC0CE03F3C57A014B16080070792E503F5616DF97B1DD52B08`.
 The candidate inventory contains 285 migrations through 289 and no 290;
 historical migration bytes remain unchanged.
 
@@ -84,10 +94,10 @@ No external delivery worker or provider adapter is claimed to be mounted.
 Durations in the executable artifact are a single local disposable PostgreSQL
 observation. Tests assert functional outcomes and exact counts, not duration
 ceilings. The numbers are not a production benchmark, capacity promise or SLA.
-That observation recorded 5,925.368 ms for the bounded 24-session/48-action
-mounted batch, 630.876 ms for database-pool restart, 6.662 ms to return the
-fail-closed degraded response, 578.716 ms to reinitialize and recover, and
-227.258 ms to drain 26 expired fictional sessions through the housekeeping
+That observation recorded 5,866.320 ms for the bounded 24-session/48-action
+mounted batch, 916.087 ms for database-pool restart, 6.441 ms to return the
+fail-closed degraded response, 522.038 ms to reinitialize and recover, and
+28.144 ms to drain 26 expired fictional sessions through the housekeeping
 worker. These machine-specific durations are descriptive only.
 
 ## Evidence boundary

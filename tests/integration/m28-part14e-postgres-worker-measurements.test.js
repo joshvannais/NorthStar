@@ -3,6 +3,8 @@
 const crypto = require('node:crypto');
 const { performance } = require('node:perf_hooks');
 const request = require('supertest');
+const canonical = require('../../src/automation/canonicalJson');
+const policyContract = require('../../docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
@@ -40,6 +42,15 @@ function action(app, savedCookie, expectedRevision, automationAction, idempotenc
 
 function milliseconds(startedAt) {
   return Number((performance.now() - startedAt).toFixed(3));
+}
+
+function policyForTenant(tenantId) {
+  const policy = JSON.parse(JSON.stringify(policyContract.canonicalExamples[0]));
+  policy.tenantId = tenantId;
+  policy.policyId = crypto.randomUUID();
+  delete policy.canonicalDigest;
+  policy.canonicalDigest = canonical.digest(policyContract.canonicalization.namespace, policy);
+  return policy;
 }
 
 async function inBatches(values, size, operation) {
@@ -91,7 +102,59 @@ realPostgres('Mission 28 Part 14E fresh PostgreSQL, mounted routes, worker resta
 
   test('uses real paid session, capability, CSRF, route and database boundaries', async () => {
     const owner = fixture.actors.owner;
+    const admin = fixture.actors.admin;
     const member = fixture.actors.member;
+    const viewer = fixture.actors.viewer;
+    const policy = policyForTenant(owner.organizationId);
+    await expect(fixture.ownerPool.query(
+      'SELECT public.canonical_automation_store_policy_v1($1) result',
+      [canonical.canonicalize(policy)]
+    )).resolves.toMatchObject({ rows: [{ result: {
+      state: 'stored', replayed: false, canonicalDigest: policy.canonicalDigest,
+    } }] });
+
+    // The entry establishes its own transaction-local FORCE-RLS context only
+    // after exact actor/session authority. Cleared or poisoned pooled context
+    // cannot hide the tenant's rows or retarget the projection.
+    const runtimeClient = await fixture.runtimePool.connect();
+    try {
+      await runtimeClient.query(
+        "SELECT pg_catalog.set_config('northstar.automation_tenant_id','',FALSE)"
+      );
+      const clean = (await runtimeClient.query(
+        'SELECT public.canonical_automation_center_v1_read($1,$2,$3,$4) snapshot',
+        [owner.organizationId,owner.actorUserId,owner.actorAccessRole,owner.authSessionId]
+      )).rows[0].snapshot;
+      expect(clean.policies).toHaveLength(1);
+      expect(clean.policies[0]).toMatchObject({ policy_id: policy.policyId, version: 1 });
+
+      await runtimeClient.query(
+        "SELECT pg_catalog.set_config('northstar.automation_tenant_id',$1,FALSE)",
+        [fixture.otherOrg]
+      );
+      const poisoned = (await runtimeClient.query(
+        'SELECT public.canonical_automation_center_v1_read($1,$2,$3,$4) snapshot',
+        [owner.organizationId,owner.actorUserId,owner.actorAccessRole,owner.authSessionId]
+      )).rows[0].snapshot;
+      expect(poisoned.policies).toHaveLength(1);
+      expect(poisoned.policies[0].policy_id).toBe(policy.policyId);
+
+      const adminRead = (await runtimeClient.query(
+        'SELECT public.canonical_automation_center_v1_read($1,$2,$3,$4) snapshot',
+        [admin.organizationId,admin.actorUserId,admin.actorAccessRole,admin.authSessionId]
+      )).rows[0].snapshot;
+      expect(adminRead.policies).toHaveLength(1);
+
+      for (const actor of [owner, member, viewer]) {
+        await expect(runtimeClient.query(
+          'SELECT public.canonical_automation_center_v1_read($1,$2,$3,$4)',
+          [actor.organizationId,actor.actorUserId,null,actor.authSessionId]
+        )).rejects.toMatchObject({ code: '42501' });
+      }
+    } finally {
+      runtimeClient.release();
+    }
+
     await require('../../src/automationCenter/repository').readAutomationCenter(
       fixture.db.getPool(), {
         organizationId: owner.organizationId,
@@ -105,8 +168,13 @@ realPostgres('Mission 28 Part 14E fresh PostgreSQL, mounted routes, worker resta
     expect(read.headers['cache-control']).toMatch(/private, no-store/);
     expect(read.body).toMatchObject({ success: true, data: {
       version: 'mission28.automation-center.v2',
-      status: { id: 'ready_to_set_up' },
+      status: { id: 'attention_needed' },
+      counts: { policies: 1, unavailablePolicies: 1 },
     } });
+    const warmRead = await request(fixture.app).get('/api/v1/automation-center')
+      .set(owner.session.headers).expect(200);
+    expect(warmRead.body.data.policies).toHaveLength(1);
+    expect(warmRead.body.data.policies[0].id).toBe(policy.policyId);
 
     await expect(fixture.runtimePool.query(
       'SELECT count(*) FROM public.canonical_automation_policy_versions_v1'
@@ -135,7 +203,7 @@ realPostgres('Mission 28 Part 14E fresh PostgreSQL, mounted routes, worker resta
     await request(fixture.app).get('/api/v1/automation-center')
       .set(member.session.headers).expect(403);
     await request(fixture.app).get('/api/v1/automation-center')
-      .set(fixture.actors.viewer.session.headers).expect(403);
+      .set(viewer.session.headers).expect(403);
     await request(fixture.app).post('/api/v1/automation-center/preview')
       .set('Cookie', owner.session.headers.Cookie).send(PREVIEW).expect(403);
 
@@ -211,7 +279,9 @@ realPostgres('Mission 28 Part 14E fresh PostgreSQL, mounted routes, worker resta
     const paidAfterRestart = await request(fixture.app).get('/api/v1/automation-center')
       .set(fixture.actors.owner.session.headers).expect(200);
     expect(paidAfterRestart.body).toMatchObject({ success: true,
-      data: { version: 'mission28.automation-center.v2' } });
+      data: { version: 'mission28.automation-center.v2',
+        counts: { policies: 1, unavailablePolicies: 1 } } });
+    expect(paidAfterRestart.body.data.policies).toHaveLength(1);
   }, 120000);
 
   test('fails closed during a database outage and recovers without changing saved authority', async () => {

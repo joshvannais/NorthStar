@@ -21,7 +21,8 @@ DECLARE
   channels_value JSONB;
   stop_control_value JSONB;
 BEGIN
-  IF actor_access_role_value NOT IN ('owner','admin') THEN
+  IF actor_access_role_value IS NULL
+     OR actor_access_role_value NOT IN ('owner','admin') THEN
     RAISE EXCEPTION 'Current Automation Center read authority is unavailable'
       USING ERRCODE='42501',CONSTRAINT='canonical_automation_center_v1_read_unauthorized';
   END IF;
@@ -29,6 +30,13 @@ BEGIN
   PERFORM public.canonical_field_execution_actor_authority(
     organization_id_value,actor_user_id_value,actor_access_role_value,
     auth_session_id_value,NULL,FALSE
+  );
+  -- The canonical automation tables enforce tenant ownership with FORCE RLS.
+  -- Establish this transaction-local context only after exact actor, account,
+  -- membership, role and session authority succeeds; never trust a caller or
+  -- pooled connection's prior setting.
+  PERFORM pg_catalog.set_config(
+    'northstar.automation_tenant_id',organization_id_value::TEXT,TRUE
   );
   evaluated_at_value := statement_timestamp();
 

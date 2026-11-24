@@ -22,11 +22,13 @@ describe('Mission 28 Part 14E PostgreSQL, worker and measurement contract', () =
         backupId: 'f42b41cb-596c-45a9-ad51-f83eb793e3ac',
       },
       scope: { part: '14E', sourceMigrationCount: 285, latestMigration: 289,
-        migrationSha256: '65B5F20F73CDC88A18E73F8077FDAD50FC99CFBAFD9EE80ED1B82B558A86DCFB',
+        migrationSha256: '47C7AA1BC02C4DBC0CE03F3C57A014B16080070792E503F5616DF97B1DD52B08',
         nextMigrationAbsent: 290, genuineBrowserAcceptanceIncluded: false,
         releaseIncluded: false },
       runtimeReadAuthority: { directCanonicalTableAccessForRuntimeRole: false,
-        publicExecute: false, createsAutomationOrExternalEffect: false },
+        publicExecute: false, callerOrPooledTenantContextTrusted: false,
+        nullMissingOrNonOwnerAdminRole: '42501_fail_closed',
+        createsAutomationOrExternalEffect: false },
       functionalMeasurement: { environment:
         'local_disposable_postgresql_functional_measurement_not_sla',
       absoluteDurationAssertions: false, productionPerformanceClaim: false,
@@ -49,10 +51,11 @@ describe('Mission 28 Part 14E PostgreSQL, worker and measurement contract', () =
   test('adds one private capability-checked read entry while storage remains withheld', () => {
     const migration = read('migrations/289_automation_center_runtime_read_authority_v1.sql');
     expect(crypto.createHash('sha256').update(migration).digest('hex').toUpperCase())
-      .toBe('65B5F20F73CDC88A18E73F8077FDAD50FC99CFBAFD9EE80ED1B82B558A86DCFB');
+      .toBe('47C7AA1BC02C4DBC0CE03F3C57A014B16080070792E503F5616DF97B1DD52B08');
     expect(migration).toMatch(/CREATE OR REPLACE FUNCTION public\.canonical_automation_center_v1_read/);
     expect(migration).toMatch(/SECURITY DEFINER[\s\S]*canonical_field_execution_actor_authority/);
-    expect(migration).toMatch(/actor_access_role_value NOT IN \('owner','admin'\)/);
+    expect(migration).toMatch(/actor_access_role_value IS NULL[\s\S]*actor_access_role_value NOT IN \('owner','admin'\)/);
+    expect(migration).toMatch(/canonical_field_execution_actor_authority[\s\S]*pg_catalog\.set_config\([\s\S]*'northstar\.automation_tenant_id'[\s\S]*organization_id_value::TEXT,TRUE/);
     expect(migration).toMatch(/WHERE organization_id=organization_id_value/g);
     expect(migration).toMatch(/LIMIT 101/g);
     expect(migration).toMatch(/REVOKE ALL ON FUNCTION public\.canonical_automation_center_v1_read\(UUID,UUID,TEXT,UUID\) FROM PUBLIC/);

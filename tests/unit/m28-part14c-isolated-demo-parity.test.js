@@ -572,6 +572,24 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     }));
     expect(sourceAfterAdmission).toMatchObject({ scheduler: { state: 'unavailable',
       reason: 'schedule_time_bounds_invalid' }, runnable: false });
+    const fractionalInstant = businessEngine.evaluate(rebuildBusinessInput(input, input.mode, {
+      schedule: { utcInstant: '2026-11-23T16:00:00.123Z' },
+    }));
+    expect(fractionalInstant).toMatchObject({ scheduler: { state: 'unavailable',
+      reason: 'schedule_time_bounds_invalid', localDate: null, localMinute: null }, runnable: false });
+  });
+
+  test('preserves fractional source and admission provenance while selecting a representable due instant', () => {
+    const fractional = context({ anchorTime: '2026-11-23T15:00:00.123Z' });
+    const state = runtime.initialState(fractional);
+    expect(state.source.observedAt).toBe('2026-11-23T15:00:00.123Z');
+    expect(state.run.scheduleAcceptedAt).toBe('2026-11-23T15:00:00.123Z');
+    expect(state.run.scheduledAt).toBe('2026-11-23T16:00:01.000Z');
+    expect(state.virtualNow).toBe(state.run.scheduledAt);
+    expect(new Date(state.run.scheduledAt).getUTCMilliseconds()).toBe(0);
+    expect(runtime.businessDecision(state, fractional)).toMatchObject({
+      scheduler: { state: 'scheduled_unpublished' }, runnable: true,
+    });
   });
 
   test('keeps unavailable source lineage unavailable and reserves ineligibility for exact terminal lineage', () => {

@@ -53,6 +53,10 @@ function asIso(value, label) {
 function addMilliseconds(value, milliseconds) {
   return new Date(new Date(value).getTime() + milliseconds).toISOString();
 }
+function addMillisecondsAtWholeSecond(value, milliseconds) {
+  const target = new Date(value).getTime() + milliseconds;
+  return new Date(Math.ceil(target / 1000) * 1000).toISOString();
+}
 function deterministicUuid(namespace, material) {
   const bytes = Buffer.from(crypto.createHash('sha256').update(`${namespace}\0${material}`, 'utf8').digest().subarray(0, 16));
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -95,7 +99,7 @@ function initialState(context, generation = 1) {
   const authorityKey = `${bounded.tenantId}:${bounded.sessionId}:${bounded.workspaceGeneration}:${generation}`;
   const policyId = deterministicUuid('mission28-part14c-policy', authorityKey);
   const firstRunId = runId(bounded, generation, 1);
-  const scheduledAt = addMilliseconds(anchor, 60 * 60 * 1000);
+  const scheduledAt = addMillisecondsAtWholeSecond(anchor, 60 * 60 * 1000);
   const value = {
     contract: CONTRACT, generation, virtualNow: scheduledAt,
     source: { id: deterministicUuid('mission28-part14c-source', authorityKey),
@@ -137,7 +141,7 @@ function validateEvent(event, context, state, priorSequence, priorAt, allowedRun
 
 function validateHistoryCoherence(value, context) {
   const expected = {
-    virtualNow: addMilliseconds(context.anchorTime, 60 * 60 * 1000),
+    virtualNow: addMillisecondsAtWholeSecond(context.anchorTime, 60 * 60 * 1000),
     sourceVersion: 1,
     sourceObservedAt: context.anchorTime,
     runSequence: 1,
@@ -150,7 +154,7 @@ function validateHistoryCoherence(value, context) {
     suppression: false,
     recovery: null,
     scheduleAcceptedAt: context.anchorTime,
-    scheduledAt: addMilliseconds(context.anchorTime, 60 * 60 * 1000),
+    scheduledAt: addMillisecondsAtWholeSecond(context.anchorTime, 60 * 60 * 1000),
     scheduleExpiresAt: addMilliseconds(context.anchorTime, 48 * 60 * 60 * 1000),
     phaseRecordedAt: context.anchorTime,
     scheduleExpected: false,
@@ -346,7 +350,7 @@ function beginCurrentRun(state, context, outcome) {
   state.run = {
     id: runId(context, state.generation, state.run.sequence + 1), sequence: state.run.sequence + 1,
     capturedSourceVersion: state.source.version, scheduleAcceptedAt: state.virtualNow,
-    scheduledAt: addMilliseconds(state.virtualNow, 60 * 60 * 1000),
+    scheduledAt: addMillisecondsAtWholeSecond(state.virtualNow, 60 * 60 * 1000),
     scheduleExpiresAt: addMilliseconds(state.virtualNow, 48 * 60 * 60 * 1000), phase: 'queued',
     phaseRecordedAt: state.virtualNow, providerStep: 0, suppression: false,
     recovery: 'bounded_history_verified_no_effect',

@@ -456,23 +456,26 @@ function schedulerDecision(input, evaluation, suppression) {
   let state = 'unavailable'; let reason = 'schedule_prerequisite_unavailable';
   let local = null;
   if (evaluation.state === 'eligible' && suppression.state === 'clear') {
-    local = localParts(schedule.utcInstant, schedule.timeZone);
     if (at(schedule.expiresAt) <= at(input.evaluatedAt)) {
       state = 'expired'; reason = 'schedule_expired';
     } else if (at(schedule.acceptedAt) < at(input.source.observedAt) ||
+        new Date(schedule.utcInstant).getUTCMilliseconds() !== 0 ||
         at(schedule.utcInstant) <= at(schedule.acceptedAt) ||
         at(schedule.utcInstant) > at(schedule.acceptedAt) + 366 * DAY_MS ||
         at(schedule.expiresAt) <= at(schedule.utcInstant) ||
         at(schedule.expiresAt) > at(schedule.acceptedAt) + 367 * DAY_MS) {
       reason = 'schedule_time_bounds_invalid';
-    } else if (schedule.holidays.includes(local.date)) {
-      state = 'suppressed'; reason = 'schedule_holiday';
-    } else if (!inWindows(schedule.allowedWindows, local.weekday, local.minute)) {
-      state = 'suppressed'; reason = 'schedule_outside_allowed_window';
-    } else if (inWindows(schedule.quietWindows, local.weekday, local.minute)) {
-      state = 'suppressed'; reason = 'schedule_quiet_window';
     } else {
-      state = 'scheduled_unpublished'; reason = 'exact_calendar_schedule_recorded';
+      local = localParts(schedule.utcInstant, schedule.timeZone);
+      if (schedule.holidays.includes(local.date)) {
+        state = 'suppressed'; reason = 'schedule_holiday';
+      } else if (!inWindows(schedule.allowedWindows, local.weekday, local.minute)) {
+        state = 'suppressed'; reason = 'schedule_outside_allowed_window';
+      } else if (inWindows(schedule.quietWindows, local.weekday, local.minute)) {
+        state = 'suppressed'; reason = 'schedule_quiet_window';
+      } else {
+        state = 'scheduled_unpublished'; reason = 'exact_calendar_schedule_recorded';
+      }
     }
   }
   return seal('mission28.part14c.shared-scheduler-decision.v1', {

@@ -46,7 +46,7 @@
     "exactPreviewMaterialBinding": "source_action_recipient_channel_must_match_the_controlled_business_input_or_the_assessment_is_unavailable",
     "firstLaunchActionMaterial": "mission23_work_execution_internal_read_digest_task_tenant_owner_in_app_passive_provider_disabled_internal_only",
     "mandatoryControls": "all_closed_keys_required_and_not_applicable_only_for_proven_recipient_or_document_scope",
-    "scheduleBounds": "admission_not_before_source_observation_scheduled_at_most_366_days_expiration_at_most_367_days",
+    "scheduleBounds": "admission_not_before_source_observation_utc_instant_exact_whole_second_scheduled_at_most_366_days_expiration_at_most_367_days",
     "sourceVersionProvenance": "each_fictional_version_observation_time_is_owned_by_its_exact_history_event_and_bound_into_its_source_digest",
     "unavailableLineage": "unavailable_not_ineligible_and_never_complete_exact",
     "equivalentControlledPaidAndDemoInputsProduceSameBusinessDecisions": true,
@@ -65,7 +65,7 @@
   },
   "controlledAdapters": {
     "virtualClock": "server_fixed_advance_exactly_one_day",
-    "initialSchedule": "source_eligibility_and_admission_share_the_anchor_then_due_one_hour_later",
+    "initialSchedule": "source_eligibility_and_admission_share_the_anchor_then_due_at_the_first_exact_whole_second_at_least_one_hour_later",
     "correctedSchedule": "accepted_at_the_correction_boundary_strictly_future_and_no_processing_before_due",
     "provider": "deterministic_local_simulation_no_provider",
     "processingClaim": "immutable_per_provider_attempt_with_new_identity_after_recovery",

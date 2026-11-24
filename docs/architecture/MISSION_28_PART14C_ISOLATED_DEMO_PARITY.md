@@ -54,6 +54,12 @@ source observation, scheduled time is capped at 366 days after admission, and
 expiration is independently capped at 367 days. Requests cannot provide or
 widen those controlled inputs.
 
+The accepted scheduler's local-time material is whole-second precision. The
+runtime preserves fractional trusted observation and admission times, but it
+selects the first whole-second due instant at least one hour later. The shared
+scheduler rejects a fractional UTC due instant instead of silently rounding or
+strengthening it.
+
 Each fictional source version owns an exact observation time. Version one is
 observed at the fixed workspace anchor; each later version is observed at its
 validated source-change history event. That time is included in the source
@@ -89,8 +95,9 @@ stop, or reset. Requests cannot provide a clock, source document, result,
 provider response, recipient, channel credential, money amount, or effect.
 
 The initial source observation, eligibility evidence, and schedule admission
-share one coherent fictional anchor; its due time is one hour later and the
-initial virtual clock begins at that due boundary. A source correction records
+share one coherent fictional anchor; its due time is the first representable
+whole-second instant at least one hour later and the initial virtual clock
+begins at that due boundary. A source correction records
 schedule acceptance at that controlled transition and selects a strictly later
 fictional instant. The simulated processing step is unavailable until the
 virtual clock reaches that instant; no earlier acceptance time or processing

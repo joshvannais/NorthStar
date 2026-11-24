@@ -164,7 +164,7 @@ describe('Mission 28 Part 7B communication permission and suppression authority'
     expect(ledger).toContain('| 29 | 7C | Approved templates, bounded variables and AI-draft boundary | **Released** |');
     expect(ledger).toContain('| 30 | 7D | Provider-neutral email/SMS and truthful native handoff | **Released** |');
     const names = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+.*\.sql$/.test(name)).sort((a, b) => Number(a.slice(0, 3)) - Number(b.slice(0, 3)));
-    expect(names).toHaveLength(283); expect(names.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql'); expect(names.some(name => name.startsWith('288_'))).toBe(false);
+    expect(names).toHaveLength(284); expect(names.at(-1)).toBe('288_demo_automation_center_action_v1.sql'); expect(names.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(names.some(name => name.startsWith('289_'))).toBe(false);
   });
 
   test('keeps Part 7C+ and every provider, message, effect, money, legal and founder boundary unavailable', () => {

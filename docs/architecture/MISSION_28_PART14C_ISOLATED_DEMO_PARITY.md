@@ -84,6 +84,14 @@ authentication cookies do not select demo source data, and fictional demo data
 has no code path into paid policy, record, scheduler, outbox, provider,
 recipient, or financial authority.
 
+Migration `288_demo_automation_center_action_v1.sql` makes the single
+`automation_action` operation a member of the existing closed fictional demo
+mutation ledger. It preserves all 23 accepted members, continues to reject
+every other operation, and changes no paid table, provider path, recipient, or
+effect authority. The actual mounted repository is exercised against
+PostgreSQL for persistence, revision compare-and-swap rollback, idempotent
+replay, and unknown-operation rejection.
+
 ## Controlled fictional journey
 
 The server owns the fictional anchor time, workspace revision, generation,
@@ -108,6 +116,13 @@ receipt. A source change makes the captured source stale; correction creates a
 new bound policy/run version; processing requires every current source,
 lifecycle, stop, schedule and recovery check; suppression blocks the simulated
 step; recovery remains recorded/no-effect; terminal stop permits only reset.
+The server offers source correction only when that exact hypothetical new run
+passes the same shared policy, evaluation, suppression, scheduler, and recovery
+predicate used to execute it. A paused policy must be explicitly and validly
+resumed first. An expired policy is not revived, and a direct unavailable
+correction request returns a conflict without clearing or rewriting authority.
+Every action shown in the fictional controls therefore satisfies its actual
+server-side transition predicate for the recorded state.
 The deterministic provider adapter progresses through recorded processing and
 completed internal simulation only. Completion never claims delivery or a
 business outcome. A pause/resume preserves the original immutable processing

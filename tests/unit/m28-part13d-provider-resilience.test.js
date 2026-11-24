@@ -778,7 +778,7 @@ describe('Mission 28 Part 13D provider resilience, fallback and switching', () =
     const rows = ledger.split(/\r?\n/).filter(line => /^\| \d{2} \|/.test(line));
     expect(rows).toHaveLength(66); expect(rows.filter(line => line.includes('**Released**'))).toHaveLength(61); expect(rows.filter(line => line.includes('**Implementation candidate**'))).toHaveLength(1);
     expect(rows.slice(62).every(line => line.includes('Planned / unimplemented'))).toBe(true);
-    expect(fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_.*\.sql$/.test(name))).toHaveLength(283);
+    expect(fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_.*\.sql$/.test(name))).toHaveLength(284);
     expect(fs.existsSync(path.join(ROOT, 'migrations', '288_canonical_automation_provider_resilience_v1.sql'))).toBe(false);
   });
 });

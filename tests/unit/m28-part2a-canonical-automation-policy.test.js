@@ -482,9 +482,9 @@ describe('Mission 28 Part 2A canonical tenant-private automation policy', () => 
     expect(productionSource).not.toContain('mission28.part2a.canonical-automation-policy.v1');
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'))
       .sort((left, right) => Number(left.split('_')[0]) - Number(right.split('_')[0]));
-    expect(migrations).toHaveLength(283);
-    expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
-    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
+    expect(migrations).toHaveLength(284);
+    expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql');
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
     expect(migrations.filter(name => /^273_/.test(name))).toEqual(['273_canonical_automation_authority_v1.sql']);
     expect(migrations.filter(name => /^278_/.test(name))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
     expect(migrations.filter(name => /^279_/.test(name))).toEqual(['279_canonical_automation_delivery_controls_v1.sql']);

@@ -862,9 +862,9 @@ describe('Mission 28 Part 3D governance controls', () => {
       expect.stringContaining('founder visual approval'),
     ]));
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => name.endsWith('.sql'));
-    expect(migrations).toHaveLength(283);
-    expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
-    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
+    expect(migrations).toHaveLength(284);
+    expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql');
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
     expect(migrations.filter(name => name.startsWith('274'))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
   });
 });

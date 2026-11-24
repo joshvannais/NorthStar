@@ -408,7 +408,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
       part5Plus: 'rule evaluation scheduling execution providers recipients and effects remain planned and unimplemented',
     });
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name));
-    expect(migrations).toHaveLength(283);
+    expect(migrations).toHaveLength(284);
     expect(migrations.some(name => name.startsWith('273_'))).toBe(true);
     expect(migrations.filter(name => name.startsWith('274_'))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
     expect(migrations.filter(name => name.startsWith('278_'))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
@@ -416,6 +416,6 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(migrations.filter(name => name.startsWith('280_'))).toEqual(['280_canonical_automation_recovery_authority_v1.sql']);
     expect(migrations.filter(name => name.startsWith('281_'))).toEqual(['281_canonical_automation_sender_recipient_authority_v1.sql']);
     expect(migrations.filter(name => name.startsWith('282_'))).toEqual(['282_canonical_automation_communication_permission_v1.sql']);
-    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
   });
 });

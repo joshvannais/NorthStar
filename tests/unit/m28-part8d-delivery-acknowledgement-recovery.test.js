@@ -308,8 +308,8 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
     expect(Object.values(contract.privacyAndEffects).every(value => value === 0)).toBe(true);
     expect(contract.runtimeBoundary).toMatchObject({newMigration: false, newTableFunctionRouteOrUi: false, mountedSchedulerWorkerQueueOrPolicyExecutor: false, providerAdapterCallbackOrInboundReceiver: false, recipientMessageDeliveryViewRevokeResendOrRecovery: false, nextMigrationAbsent: '288'});
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort();
-    expect(migrations.at(-1)).toBe('287_canonical_automation_estimate_quote_resolution_v1.sql');
-    expect(migrations.some(name => name.startsWith('288_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql');
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
   });
 
   test('roadmap and ledger record Part8C released, Part8D candidate only and Part9A+ planned', () => {

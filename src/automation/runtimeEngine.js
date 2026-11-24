@@ -345,7 +345,7 @@ function appendEvent(state, context, type, outcome, run = state.run) {
   state.events.push({ id: eventId(context, state.generation, sequence), sequence, runId: run.id,
     type, at: state.virtualNow, outcome });
 }
-function beginCurrentRun(state, context, outcome) {
+function prepareCurrentRun(state, context) {
   state.policy.version += 1;
   state.run = {
     id: runId(context, state.generation, state.run.sequence + 1), sequence: state.run.sequence + 1,
@@ -355,6 +355,10 @@ function beginCurrentRun(state, context, outcome) {
     phaseRecordedAt: state.virtualNow, providerStep: 0, suppression: false,
     recovery: 'bounded_history_verified_no_effect',
   };
+  return state;
+}
+function beginCurrentRun(state, context, outcome) {
+  prepareCurrentRun(state, context);
   requireRunnableBusinessPrelude(state, context);
   appendEvent(state, context, 'reconciliation', outcome);
   appendEvent(state, context, 'scheduled_run', 'scheduled_unpublished');
@@ -459,15 +463,23 @@ function businessDecision(value, context, mode = 'isolated_demo') {
   return businessEngine.evaluate(businessInputForState(state, context, mode));
 }
 
+function isRunnableBusinessPrelude(decision) {
+  return decision.runnable && decision.policy.state === 'active_exact_current' &&
+    decision.evaluation.state === 'eligible' && decision.suppression.state === 'clear' &&
+    decision.scheduler.state === 'scheduled_unpublished' &&
+    ['ready_no_effect', 'recovery_reviewed_no_effect'].includes(decision.recovery.state);
+}
 function requireRunnableBusinessPrelude(state, context) {
   const decision = businessEngine.evaluate(businessInputForState(state, context));
-  if (!decision.runnable || decision.policy.state !== 'active_exact_current' ||
-      decision.evaluation.state !== 'eligible' || decision.suppression.state !== 'clear' ||
-      decision.scheduler.state !== 'scheduled_unpublished' ||
-      !['ready_no_effect', 'recovery_reviewed_no_effect'].includes(decision.recovery.state)) {
+  if (!isRunnableBusinessPrelude(decision)) {
     fail('The fictional policy, source, safeguards, calendar, or recovery decision is unavailable.');
   }
   return decision;
+}
+function canBeginCurrentRun(state, context) {
+  const candidate = prepareCurrentRun(clone(state), context);
+  return isRunnableBusinessPrelude(
+    businessEngine.evaluate(businessInputForState(candidate, context)));
 }
 
 function unavailableBusinessInput(mode = 'paid_no_effect_preview', requestedMaterial = {}) {
@@ -611,7 +623,10 @@ function allowedActions(value, context) {
   if (state.tenantControl !== 'active_resumed') return Object.freeze(['reset_automation']);
   const evidence = deriveEvidence(state, context);
   const actions = ['advance_time', 'source_change'];
-  if (!evidence.sourceCurrent) actions.push('source_correct');
+  // Correction creates a new exact run and schedule. Offer it only when that
+  // exact hypothetical admission passes the same mounted policy, evaluation,
+  // suppression, scheduler, and recovery predicate used by applyAction.
+  if (!evidence.sourceCurrent && canBeginCurrentRun(state, context)) actions.push('source_correct');
   if (evidence.policy.lifecycle === 'active' && state.policy.control === 'active_resumed') actions.push('pause');
   if (evidence.policy.lifecycle === 'paused' ||
       (evidence.policy.lifecycle === 'active' && state.run.recovery)) actions.push('resume');

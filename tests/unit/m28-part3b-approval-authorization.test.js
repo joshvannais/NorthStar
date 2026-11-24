@@ -778,12 +778,13 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     expect(ledger).toContain('independent audit/PR/merge/deployment/production unavailable');
   });
 
-  test('keeps released migration lineage and recognizes candidate migration 287', () => {
+  test('keeps released migration lineage and recognizes the current Part 14C migration 288', () => {
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name));
     const numbers = migrations.map(name => Number(name.match(/^(\d+)_/)[1]));
-    expect(Math.max(...numbers)).toBe(287);
+    expect(Math.max(...numbers)).toBe(288);
     expect(numbers.filter(number => number === 287)).toHaveLength(1);
-    expect(numbers).not.toContain(288);
+    expect(numbers.filter(number => number === 288)).toHaveLength(1);
+    expect(numbers).not.toContain(289);
     expect(numbers.filter(number => number === 274)).toHaveLength(1);
     expect(numbers.filter(number => number === 275)).toHaveLength(1);
     expect(numbers.filter(number => number === 276)).toHaveLength(1);

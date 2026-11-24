@@ -812,10 +812,10 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     });
     expect(contract.unavailableEvidence).toHaveLength(7);
     const migrationNames = fs.readdirSync(path.join(ROOT, 'migrations'));
-    expect(migrationNames).toHaveLength(283);
-    expect(Math.max(...migrationNames.map(name => Number(name.match(/^(\d+)/)?.[1] || 0)))).toBe(287);
+    expect(migrationNames).toHaveLength(284);
+    expect(Math.max(...migrationNames.map(name => Number(name.match(/^(\d+)/)?.[1] || 0)))).toBe(288);
     expect(migrationNames.filter(name => /^282/.test(name))).toEqual(['282_canonical_automation_communication_permission_v1.sql']);
-    expect(migrationNames.some(name => name.startsWith('288_'))).toBe(false);
+    expect(migrationNames.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrationNames.some(name => name.startsWith('289_'))).toBe(false);
     expect(migrationNames.filter(name => /^274/.test(name))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
     expect(migrationNames.filter(name => /^275/.test(name))).toEqual(['275_canonical_automation_transactional_outbox_v1.sql']);
     expect(migrationNames.filter(name => /^276/.test(name))).toEqual(['276_canonical_automation_durable_scheduler_v1.sql']);

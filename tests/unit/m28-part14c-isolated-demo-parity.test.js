@@ -133,12 +133,13 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
         pullRequest: 609,
         mergedMain: 'd43f0c588fb1785bb0afb6568997a329b485cc8d',
       },
-      scope: { part: '14C', demoPath: '/demo/automation', migrationAdded: false,
-        latestMigration: 287, nextMigrationAbsent: 288, mission31GuidedSimulationIncluded: false },
+      scope: { part: '14C', demoPath: '/demo/automation', migrationAdded: true,
+        latestMigration: 288, nextMigrationAbsent: 289, mission31GuidedSimulationIncluded: false },
       isolatedAuthority: { tenantSessionGenerationBound: true, workspaceRevisionCompareAndSwap: true,
         paidCookiesSelectDemoAuthority: false, fictionalDataCanEnterPaidAuthority: false },
       controlledAdapters: { processingClaim: 'immutable_per_provider_attempt_with_new_identity_after_recovery',
-        pauseResumeRefreshesClaim: false },
+        pauseResumeRefreshesClaim: false,
+        actionAvailability: 'every_offered_action_satisfies_its_exact_shared_business_and_admission_predicate' },
       raceAndReset: { currentLoadOrActionFailureInvalidatesDependentPreview: true,
         unboundConflictClearsMountedState: true },
       effectBoundary: { paidTenantMutated: false, providerCalled: false, recipientContacted: false,
@@ -352,6 +353,44 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     const tampered = JSON.parse(JSON.stringify(state));
     tampered.source.observedAt = context().anchorTime;
     expect(() => runtime.validateState(tampered, context())).toThrow(/history|bindings/i);
+  });
+
+  test('offers source correction only when the shared admission predicate can execute it', () => {
+    const expectUnavailable = (state, action) => {
+      try { runtime.applyAction(state, context(), action); throw new Error('Expected the action to fail.'); }
+      catch (error) { expect(error).toMatchObject({ code: 'AUTOMATION_DEMO_ACTION_UNAVAILABLE', status: 409 }); }
+    };
+    const expectEveryOfferedActionToExecute = state => {
+      for (const action of runtime.allowedActions(state, context())) {
+        expect(() => runtime.applyAction(state, context(), action)).not.toThrow();
+      }
+    };
+
+    let pausedAndStale = runtime.applyAction(runtime.initialState(context()), context(), 'pause');
+    pausedAndStale = runtime.applyAction(pausedAndStale, context(), 'source_change');
+    expect(runtime.allowedActions(pausedAndStale, context())).toContain('resume');
+    expect(runtime.allowedActions(pausedAndStale, context())).not.toContain('source_correct');
+    expectUnavailable(pausedAndStale, 'source_correct');
+    expectEveryOfferedActionToExecute(pausedAndStale);
+
+    const explicitlyResumed = runtime.applyAction(pausedAndStale, context(), 'resume');
+    expect(runtime.allowedActions(explicitlyResumed, context())).toContain('source_correct');
+    const corrected = runtime.applyAction(explicitlyResumed, context(), 'source_correct');
+    expect(corrected.run.capturedSourceVersion).toBe(corrected.source.version);
+    expect(runtime.businessDecision(corrected, context())).toMatchObject({
+      policy: { state: 'active_exact_current' }, evaluation: { state: 'eligible' },
+      scheduler: { state: 'scheduled_unpublished' }, runnable: true,
+    });
+
+    let expiredAndStale = runtime.initialState(context());
+    for (let day = 0; day < 31; day += 1) {
+      expiredAndStale = runtime.applyAction(expiredAndStale, context(), 'advance_time');
+    }
+    expiredAndStale = runtime.applyAction(expiredAndStale, context(), 'source_change');
+    expect(runtime.businessDecision(expiredAndStale, context()).policy.state).toBe('expired');
+    expect(runtime.allowedActions(expiredAndStale, context())).not.toContain('source_correct');
+    expectUnavailable(expiredAndStale, 'source_correct');
+    expectEveryOfferedActionToExecute(expiredAndStale);
   });
 
   test('paid and demo previews use the same mounted no-effect engine', () => {
@@ -899,7 +938,22 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(read('src/automationCenter/repository.js')).toContain('const recovery = resolveRecovery(row, scheduler)');
     expect(read('src/automation/runtimeEngine.js')).not.toMatch(/require\(['"](?:https?|axios|node-fetch|stripe|twilio|resend)/);
     expect(read('src/automation/demoProjection.js')).not.toMatch(/tests[\\/]|\.\.\/\.\.\/tests/);
-    expect(fs.readdirSync(path.join(ROOT, 'migrations')).some(name => /^288_/.test(name))).toBe(false);
+    const migration = read('migrations/288_demo_automation_center_action_v1.sql');
+    const acceptedOperations = [
+      'customer_estimate_issue', 'proposal_adopt', 'simulate_lead', 'reset', 'learning_step',
+      'forecast_journey', 'billing_identity', 'automation_action', 'estimate_review', 'material_plan',
+      'estimate_adopt', 'schedule_preview', 'schedule_approve', 'work_action', 'labor_plan',
+      'equipment_plan', 'equipment_cost', 'equipment_ready', 'travel_plan', 'pricing_plan',
+      'pricing_policy', 'commercial_terms', 'commercial_ok', 'tax_profile',
+    ];
+    for (const operation of acceptedOperations) expect(migration).toContain(`'${operation}'`);
+    expect(migration).toContain('DROP CONSTRAINT demo_command_center_mutations_operation_check');
+    expect(migration).toContain('ADD CONSTRAINT demo_command_center_mutations_operation_check');
+    expect(migration).not.toMatch(/\b(?:UPDATE|DELETE|TRUNCATE)\b/);
+    expect(new Set(acceptedOperations).size).toBe(24);
+    expect(fs.readdirSync(path.join(ROOT, 'migrations')).some(name => /^289_/.test(name))).toBe(false);
+    expect(read('tests/integration/m28-part14c-isolated-demo-parity-postgres.test.js'))
+      .toContain("operation='automation_action'");
   });
 
   test('serves mounted fictional read, preview and CAS action routes behind explicit same-origin intent', async () => {

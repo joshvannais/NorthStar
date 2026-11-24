@@ -15,9 +15,10 @@
     "paidPath": "/dashboard/automation",
     "demoPath": "/demo/automation",
     "demoApi": "/api/demo/automation-center",
-    "migrationAdded": false,
-    "latestMigration": 287,
-    "nextMigrationAbsent": 288,
+    "migrationAdded": true,
+    "migration": "288_demo_automation_center_action_v1.sql",
+    "latestMigration": 288,
+    "nextMigrationAbsent": 289,
     "mission31GuidedSimulationIncluded": false
   },
   "sharedEngines": {
@@ -67,6 +68,8 @@
     "virtualClock": "server_fixed_advance_exactly_one_day",
     "initialSchedule": "source_eligibility_and_admission_share_the_anchor_then_due_at_the_first_exact_whole_second_at_least_one_hour_later",
     "correctedSchedule": "accepted_at_the_correction_boundary_strictly_future_and_no_processing_before_due",
+    "actionAvailability": "every_offered_action_satisfies_its_exact_shared_business_and_admission_predicate",
+    "sourceCorrectionAvailability": "withheld_while_policy_paused_expired_or_otherwise_not_runnable_and_available_after_explicit_valid_resume",
     "provider": "deterministic_local_simulation_no_provider",
     "processingClaim": "immutable_per_provider_attempt_with_new_identity_after_recovery",
     "pauseResumeRefreshesClaim": false,

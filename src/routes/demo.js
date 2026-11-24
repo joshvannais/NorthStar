@@ -54,6 +54,8 @@ const demoPaymentPart9Acceptance = require('../customerFinancial/demoPaymentPart
 const demoCollectionPart10Acceptance = require('../customerFinancial/demoCollectionPart10Acceptance');
 const demoAccountingPart11Acceptance = require('../customerFinancial/demoAccountingPart11Acceptance');
 const demoReportingPart12Acceptance = require('../customerFinancial/demoReportingPart12Acceptance');
+const automationRuntime = require('../automation/runtimeEngine');
+const automationDemoProjection = require('../automation/demoProjection');
 
 const router = express.Router();
 const commandCenterRepository = new DemoCommandCenterRepository();
@@ -326,6 +328,49 @@ router.get('/command-center', async function (req, res) {
   } catch (error) {
     return commandCenterFailure(req, res, error);
   }
+});
+
+router.get('/automation-center', async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  if (Object.keys(req.query || {}).length) return res.status(400).json({ success: false,
+    error: { code: 'demo_automation_request_invalid', message: 'Refresh the isolated Automation Center.' } });
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    const projection = automationDemoProjection.project(record);
+    return res.json({ success: true, data: projection.snapshot, demo: projection.demo });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.post('/automation-center/preview', express.json({ limit: '8kb' }), async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  if (!mutationBoundary(req, res, 'automation-center-preview')) return undefined;
+  try {
+    const record = await readCommandCenterEntry(req, res);
+    const expectedRevision = Number(req.get('X-NorthStar-Demo-Revision'));
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision !== record.revision) {
+      return res.status(409).json({ success: false,
+        error: { code: 'demo_automation_changed', message: 'The fictional automation changed. Refresh and review it again.' } });
+    }
+    return res.json({ success: true, data: automationRuntime.buildNoEffectPreview(req.body, { mode: 'isolated_demo' }),
+      demo: { workspaceRevision: record.revision, providerMode: automationRuntime.PROVIDER_MODE } });
+  } catch (error) { return commandCenterFailure(req, res, error); }
+});
+
+router.post('/automation-center/actions', express.json({ limit: '4kb' }), async function (req, res) {
+  res.set('Cache-Control', 'no-store'); res.vary('Cookie');
+  if (!mutationBoundary(req, res, 'automation-center-action')) return undefined;
+  if (!exactBody(req.body, ['action', 'expectedRevision'])) return res.status(400).json({ success: false,
+    error: { code: 'demo_automation_action_invalid', message: 'Choose one current fictional automation action.' } });
+  try {
+    const token = commandCenterToken(req, res);
+    const result = await commandCenterRepository.mutate(token, {
+      operation: 'automation_action', expectedRevision: req.body.expectedRevision,
+      automationAction: req.body.action, idempotencyKey: req.get('Idempotency-Key'),
+    }, { sourceHash: durableSourceHash(req) });
+    const projection = automationDemoProjection.project(result.record);
+    return res.status(result.replayed ? 200 : 201).json({ success: true, replayed: result.replayed,
+      data: projection.snapshot, demo: projection.demo });
+  } catch (error) { return commandCenterFailure(req, res, error); }
 });
 
 router.get('/forecast/journey', async function (req, res) {

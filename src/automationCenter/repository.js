@@ -54,6 +54,7 @@ const CHANNEL_EVIDENCE_LABELS = Object.freeze({
   unavailable_no_authenticated_callback_authority: 'Delivery confirmation is unavailable.',
   unavailable_no_tenant_bound_provider_account_or_credential: 'A connected delivery service is unavailable.',
   unavailable_no_provider_resilience_authority: 'Delivery service recovery is unavailable.',
+  simulated_demo_only: 'A fictional delivery preview is available only inside this isolated demo.',
 });
 
 function centerError(status, code, message) {
@@ -87,14 +88,20 @@ function exactPolicyLifecycle(row, evaluatedAt) {
   const state = expired ? 'expired' : row.lifecycle_state;
   return { id: state, label: POLICY_STATE_LABELS[state] || 'Current policy status unavailable' };
 }
-function policyState(row, evaluatedAt) {
-  const lifecycle = exactPolicyLifecycle(row, evaluatedAt);
-  if (lifecycle.id !== 'active') return lifecycle;
-  if (!row.control_state || row.control_state === 'active_resumed') return lifecycle;
-  if (!DELIVERY_CONTROL_STATES.includes(row.control_state)) {
+function resolvePolicy(row, evaluatedAt, includeControl = true) {
+  const normalized = {
+    lifecycle_state: row.lifecycle_state || row.policy_lifecycle_state,
+    lifecycle_currentness: row.lifecycle_currentness || row.policy_lifecycle_currentness,
+    expires_at: row.expires_at || row.policy_expires_at,
+  };
+  const lifecycle = exactPolicyLifecycle(normalized, evaluatedAt);
+  if (lifecycle.id !== 'active' || !includeControl) return lifecycle;
+  const controlState = row.control_state || row.policy_control_state;
+  if (!controlState || controlState === 'active_resumed') return lifecycle;
+  if (!DELIVERY_CONTROL_STATES.includes(controlState)) {
     return { id: 'unavailable', label: 'Current policy status unavailable' };
   }
-  return { id: row.control_state, label: POLICY_STATE_LABELS[row.control_state] || 'Stopped' };
+  return { id: controlState, label: POLICY_STATE_LABELS[controlState] || 'Stopped' };
 }
 function projectedRunState(id) {
   return {
@@ -159,27 +166,119 @@ function controlRunState(controlState, executionPhase, activeLease) {
   }
   return projectedRunState('unavailable', 'Current work status is unavailable.');
 }
-function runState(row, evaluatedAt) {
+// These five pure resolvers are the mounted paid/demo engine seam. Production
+// rows and the isolated fictional adapter enter through the same closed state
+// vocabulary. The resolvers never create authority or an effect.
+function resolveEvaluation(row) {
   const currentness = recordCurrentness(row);
-  if (currentness) return currentness;
-  if (row.latest_record_type === 'terminal_outcome') return terminalRunState(row);
-  const policyLifecycle = exactPolicyLifecycle({
-    lifecycle_state: row.policy_lifecycle_state,
-    lifecycle_currentness: row.policy_lifecycle_currentness,
-    policy_expires_at: row.policy_expires_at,
-  }, evaluatedAt);
-  if (policyLifecycle.id !== 'active') return restrictivePolicyRunState(policyLifecycle);
+  if (currentness) return { currentness, state: currentness.id };
+  if (row.latest_record_type !== 'eligibility_evaluation') return { currentness: null, state: null };
+  const states = {
+    approval_required: 'approval', suppressed: 'suppressed', unavailable: 'unavailable',
+    ineligible: 'stopped', eligible: 'validation',
+  };
+  return { currentness: null, state: states[row.eligibility_state] || 'unavailable' };
+}
+function resolveScheduler(row, evaluatedAt) {
   const checkedAt = iso(evaluatedAt);
   const leaseExpiresAt = iso(row.lease_expires_at);
   const leaseAcquiredAt = iso(row.lease_acquired_at);
   const retryUpdatedAt = iso(row.retry_updated_at);
   const retryNextAttemptAt = iso(row.retry_next_attempt_at);
   const actionControlUpdatedAt = iso(row.action_control_updated_at);
-  const recoveryRecordedAt = iso(row.recovery_recorded_at);
+  const scheduleExpiresAt = iso(row.schedule_expires_at);
   const leasePresent = Boolean(row.lease_id || row.lease_acquired_at || row.lease_expires_at);
   const leaseComplete = Boolean(row.lease_id && leaseAcquiredAt && leaseExpiresAt);
   const activeLease = Boolean(leaseComplete && checkedAt &&
     new Date(leaseExpiresAt).getTime() > new Date(checkedAt).getTime());
+  const scheduleExpired = Boolean(scheduleExpiresAt && checkedAt &&
+    new Date(scheduleExpiresAt).getTime() <= new Date(checkedAt).getTime());
+  return Object.freeze({ checkedAt, leaseExpiresAt, leaseAcquiredAt, retryUpdatedAt,
+    retryNextAttemptAt, actionControlUpdatedAt, scheduleExpiresAt, leasePresent,
+    leaseComplete, activeLease, scheduleExpired });
+}
+function resolveSuppression(row) {
+  if (row.latest_record_type === 'reply_opt_out') {
+    return (row.reply_authenticated === true || row.reply_authenticated === 'true') &&
+      (row.suppression_required === true || row.suppression_required === 'true')
+      ? projectedRunState('suppressed', 'Exact reply or opt-out evidence requires suppression.')
+      : projectedRunState('uncertain', 'Authenticated reply or opt-out suppression evidence is unavailable.');
+  }
+  if (row.latest_record_type === 'suppression') {
+    return row.suppression_blocks_effect === true || row.suppression_blocks_effect === 'true'
+      ? projectedRunState('suppressed', 'Exact suppression evidence blocks the effect.')
+      : projectedRunState('unavailable', 'Suppression evidence does not prove that the effect is blocked.');
+  }
+  return null;
+}
+function resolveRecovery(row, scheduler) {
+  const recoveryStates = [
+    'bounded_history_verified_no_effect', 'wait_for_active_lease_no_effect',
+    'reconciliation_required_no_resend', 'blocked_source_not_latest_exact_current',
+    'disaster_restore_evidence_gap_no_authority',
+  ];
+  if (!row.recovery_state) return Object.freeze({ state: null, projected: null, nonblockingSuperseded: false });
+  if (!recoveryStates.includes(row.recovery_state)) {
+    return Object.freeze({ state: row.recovery_state,
+      projected: projectedRunState('unavailable', 'Recovery evidence is outside the accepted state catalog.'),
+      nonblockingSuperseded: false });
+  }
+  const recoveryRecordedAt = iso(row.recovery_recorded_at);
+  const exactBinding = recoveryRecordedAt && row.recovery_transaction_id &&
+    row.recovery_policy_id && row.recovery_policy_version != null &&
+    String(row.recovery_policy_id) === String(row.policy_id) &&
+    String(row.recovery_policy_version) === String(row.policy_version);
+  if (!exactBinding) {
+    return Object.freeze({ state: row.recovery_state,
+      projected: projectedRunState('unavailable', 'Recovery evidence is missing its exact policy, transaction, or trusted-time binding.'),
+      nonblockingSuperseded: false });
+  }
+  let nonblockingSuperseded = false;
+  if (['bounded_history_verified_no_effect', 'wait_for_active_lease_no_effect'].includes(row.recovery_state)) {
+    const actionControl = row.action_control_state || row.control_state;
+    const executionEvidencePresent = scheduler.leasePresent || Boolean(row.retry_state) || Boolean(actionControl);
+    if (executionEvidencePresent) {
+      if (!row.schedule_id || !row.schedule_transaction_id ||
+          String(row.schedule_transaction_id) !== String(row.recovery_transaction_id)) {
+        return Object.freeze({ state: row.recovery_state,
+          projected: projectedRunState('unavailable', 'Recorded recovery and processing evidence do not share one exact transaction binding.'),
+          nonblockingSuperseded: false });
+      }
+      const times = [];
+      if (scheduler.leasePresent) times.push(scheduler.leaseAcquiredAt);
+      if (row.retry_state) times.push(scheduler.retryUpdatedAt);
+      if (actionControl) times.push(scheduler.actionControlUpdatedAt);
+      if (times.some(value => !value)) {
+        return Object.freeze({ state: row.recovery_state,
+          projected: projectedRunState('unavailable', 'Recorded processing evidence is missing a trusted decision time.'),
+          nonblockingSuperseded: false });
+      }
+      nonblockingSuperseded = Math.max(...times.map(value => new Date(value).getTime())) >
+        new Date(recoveryRecordedAt).getTime();
+    }
+  }
+  let projected = null;
+  if (row.recovery_state === 'blocked_source_not_latest_exact_current') {
+    projected = projectedRunState('stale', 'Recovery evidence records a source that is not latest exact current.');
+  } else if (row.recovery_state === 'disaster_restore_evidence_gap_no_authority') {
+    projected = projectedRunState('unavailable', 'Current recovery status is unavailable because restore evidence is incomplete.');
+  } else if (row.recovery_state === 'reconciliation_required_no_resend') {
+    projected = projectedRunState('uncertain', 'Recovery evidence requires reconciliation with no resend.');
+  } else if (!nonblockingSuperseded) {
+    projected = projectedRunState('recovery', 'A bounded recovery assessment is recorded; it grants no resend or effect authority.');
+  }
+  return Object.freeze({ state: row.recovery_state, projected, nonblockingSuperseded });
+}
+function runState(row, evaluatedAt) {
+  const evaluation = resolveEvaluation(row);
+  if (evaluation.currentness) return evaluation.currentness;
+  if (row.latest_record_type === 'terminal_outcome') return terminalRunState(row);
+  const policyLifecycle = resolvePolicy(row, evaluatedAt, false);
+  if (policyLifecycle.id !== 'active') return restrictivePolicyRunState(policyLifecycle);
+  const scheduler = resolveScheduler(row, evaluatedAt);
+  const { checkedAt, leaseExpiresAt, leaseAcquiredAt, retryUpdatedAt, retryNextAttemptAt,
+    actionControlUpdatedAt, scheduleExpiresAt, leasePresent, leaseComplete, activeLease,
+    scheduleExpired } = scheduler;
   const tenantControl = row.tenant_control_state;
   const policyControl = row.policy_control_state;
   const actionControl = row.action_control_state || row.control_state;
@@ -216,58 +315,9 @@ function runState(row, evaluatedAt) {
   if (row.retry_state && !retryUpdatedAt) {
     return projectedRunState('unavailable', 'Retry evidence is missing its trusted decision time.');
   }
-  const recoveryStates = [
-    'bounded_history_verified_no_effect', 'wait_for_active_lease_no_effect',
-    'reconciliation_required_no_resend', 'blocked_source_not_latest_exact_current',
-    'disaster_restore_evidence_gap_no_authority',
-  ];
-  if (row.recovery_state && !recoveryStates.includes(row.recovery_state)) {
-    return projectedRunState('unavailable', 'Recovery evidence is outside the accepted state catalog.');
-  }
-  let nonblockingRecoverySuperseded = false;
-  if (row.recovery_state) {
-    const exactRecoveryBinding = recoveryRecordedAt && row.recovery_transaction_id &&
-      row.recovery_policy_id && row.recovery_policy_version != null &&
-      String(row.recovery_policy_id) === String(row.policy_id) &&
-      String(row.recovery_policy_version) === String(row.policy_version);
-    if (!exactRecoveryBinding) {
-      return projectedRunState('unavailable', 'Recovery evidence is missing its exact policy, transaction, or trusted-time binding.');
-    }
-    const nonblockingRecovery = row.recovery_state === 'bounded_history_verified_no_effect' ||
-      row.recovery_state === 'wait_for_active_lease_no_effect';
-    if (nonblockingRecovery) {
-      const executionTimes = [];
-      const executionEvidencePresent = leasePresent || Boolean(row.retry_state) || Boolean(actionControl);
-      if (executionEvidencePresent) {
-        if (!row.schedule_id || !row.schedule_transaction_id ||
-            String(row.schedule_transaction_id) !== String(row.recovery_transaction_id)) {
-          return projectedRunState('unavailable', 'Recorded recovery and processing evidence do not share one exact transaction binding.');
-        }
-        if (leasePresent) executionTimes.push(leaseAcquiredAt);
-        if (row.retry_state) executionTimes.push(retryUpdatedAt);
-        if (actionControl) {
-          if (!actionControlUpdatedAt) {
-            return projectedRunState('unavailable', 'Current work evidence is missing its trusted decision time.');
-          }
-          executionTimes.push(actionControlUpdatedAt);
-        }
-        if (executionTimes.some(value => !value)) {
-          return projectedRunState('unavailable', 'Recorded processing evidence is missing a trusted decision time.');
-        }
-        const latestExecutionTime = Math.max(...executionTimes.map(value => new Date(value).getTime()));
-        nonblockingRecoverySuperseded = latestExecutionTime > new Date(recoveryRecordedAt).getTime();
-      }
-    }
-  }
-  if (row.recovery_state === 'blocked_source_not_latest_exact_current') {
-    return projectedRunState('stale', 'Recovery evidence records a source that is not latest exact current.');
-  }
-  if (row.recovery_state === 'disaster_restore_evidence_gap_no_authority') {
-    return projectedRunState('unavailable', 'Current recovery status is unavailable because restore evidence is incomplete.');
-  }
-  if (row.recovery_state === 'reconciliation_required_no_resend') {
-    return projectedRunState('uncertain', 'Recovery evidence requires reconciliation with no resend.');
-  }
+  const recovery = resolveRecovery(row, scheduler);
+  if (recovery.projected && !['recovery'].includes(recovery.projected.id)) return recovery.projected;
+  const nonblockingRecoverySuperseded = recovery.nonblockingSuperseded;
   if (row.retry_state === 'reconciliation_required_no_resend') {
     return projectedRunState('uncertain', 'Retry authority records an uncertain outcome and blocks resend.');
   }
@@ -277,12 +327,9 @@ function runState(row, evaluatedAt) {
   if (row.retry_state === 'permanent_stop_terminal' || row.retry_state === 'permanent_stop_attempt_ceiling') {
     return projectedRunState('failed', 'Retry authority records a permanent stop.');
   }
-  const scheduleExpiresAt = iso(row.schedule_expires_at);
   if (row.schedule_expires_at && (!row.schedule_id || !scheduleExpiresAt)) {
     return projectedRunState('unavailable', 'Schedule expiry evidence is incomplete or invalid.');
   }
-  const scheduleExpired = Boolean(scheduleExpiresAt && checkedAt &&
-    new Date(scheduleExpiresAt).getTime() <= new Date(checkedAt).getTime());
   if (scheduleExpired && (activeLease || row.retry_state === 'retry_scheduled_no_effect')) {
     return projectedRunState('uncertain', 'Expired schedule evidence conflicts with retained active execution evidence and needs review.');
   }
@@ -291,7 +338,7 @@ function runState(row, evaluatedAt) {
   }
   if (!nonblockingRecoverySuperseded && (row.recovery_state === 'wait_for_active_lease_no_effect' ||
       row.recovery_state === 'bounded_history_verified_no_effect')) {
-    return projectedRunState('recovery', 'A bounded recovery assessment is recorded; it grants no resend or effect authority.');
+    return recovery.projected;
   }
   if (row.retry_state === 'retry_scheduled_no_effect' && activeLease) {
     if (leaseAcquiredAt && retryUpdatedAt && new Date(leaseAcquiredAt).getTime() > new Date(retryUpdatedAt).getTime()) {
@@ -330,17 +377,8 @@ function runState(row, evaluatedAt) {
   if (['provider_attempt', 'provider_acknowledgement', 'delivery_state'].includes(row.latest_record_type)) {
     return projectedRunState('uncertain', 'Provider or delivery evidence does not establish a completed business outcome.');
   }
-  if (row.latest_record_type === 'reply_opt_out') {
-    return (row.reply_authenticated === true || row.reply_authenticated === 'true') &&
-      (row.suppression_required === true || row.suppression_required === 'true')
-      ? projectedRunState('suppressed', 'Exact reply or opt-out evidence requires suppression.')
-      : projectedRunState('uncertain', 'Authenticated reply or opt-out suppression evidence is unavailable.');
-  }
-  if (row.latest_record_type === 'suppression') {
-    return row.suppression_blocks_effect === true || row.suppression_blocks_effect === 'true'
-      ? projectedRunState('suppressed', 'Exact suppression evidence blocks the effect.')
-      : projectedRunState('unavailable', 'Suppression evidence does not prove that the effect is blocked.');
-  }
+  const suppression = resolveSuppression(row);
+  if (suppression) return suppression;
   if (row.latest_record_type === 'cancellation') {
     if (row.cancellation_state === 'accepted') return projectedRunState('stopped', 'Exact cancellation evidence records acceptance.');
     if (row.cancellation_state === 'requested') return projectedRunState('validation', 'Cancellation is requested, but acceptance is not recorded.');
@@ -368,24 +406,40 @@ function templateProjection() {
     timing: template.timing,
   }));
 }
+function evaluateEvidence(row, evaluatedAt) {
+  const scheduler = resolveScheduler(row, evaluatedAt);
+  return Object.freeze({
+    policy: resolvePolicy(row, evaluatedAt),
+    evaluation: Object.freeze(resolveEvaluation(row)),
+    scheduler,
+    suppression: resolveSuppression(row),
+    recovery: resolveRecovery(row, scheduler),
+    run: runState(row, evaluatedAt),
+  });
+}
 function channelEvidence(row) {
   if (!row || typeof row.result_state !== 'string') return 'Channel evidence is unavailable.';
   return Object.prototype.hasOwnProperty.call(CHANNEL_EVIDENCE_LABELS, row.result_state)
     ? CHANNEL_EVIDENCE_LABELS[row.result_state]
     : 'Channel evidence is unavailable and needs review.';
 }
-function channelProjection(rows) {
+function channelProjection(rows, mode) {
   const observed = new Map(rows.map(row => [row.requested_channel_id, row]));
   return ['in_app_passive', 'email', 'sms', 'secure_link', 'native_handoff'].map(id => {
     const row = observed.get(id === 'native_handoff' ? 'native_manual_handoff' : id);
     const internal = id === 'in_app_passive';
+    const simulated = mode === 'isolated_demo' && !internal && row && row.result_state === 'simulated_demo_only';
     return {
       id,
       label: centerContract.CHANNEL_LABELS[id],
-      state: internal ? 'available_internal_only' : 'unavailable',
-      status: internal ? 'Available for private owner work' : 'External delivery is not available',
+      state: internal ? 'available_internal_only' : simulated ? 'fictional_simulation_only' : 'unavailable',
+      status: internal ? 'Available for private owner work' : simulated
+        ? 'Fictional preview only; nobody is contacted'
+        : 'External delivery is not available',
       evidence: channelEvidence(row),
-      providerMode: internal ? 'No external delivery used' : 'External delivery disabled',
+      providerMode: internal ? 'No external delivery used' : simulated
+        ? 'Controlled simulation; no outside-service calls'
+        : 'External delivery disabled',
     };
   });
 }
@@ -422,7 +476,7 @@ function stopProjection(row) {
 function buildSnapshot(input, results) {
   const evaluatedAt = iso(results.evaluatedAt);
   const policies = bounded(results.policies, 'Policies').map(row => {
-    const state = policyState(row, evaluatedAt);
+    const state = resolvePolicy(row, evaluatedAt);
     return {
       id: safeId(row.policy_id),
       version: Number(row.version),
@@ -439,7 +493,10 @@ function buildSnapshot(input, results) {
     };
   });
   const runs = bounded(results.runs, 'Runs').map(row => {
-    const state = runState(row, evaluatedAt);
+    // Paid PostgreSQL rows and isolated fictional rows both traverse the
+    // complete mounted resolver composition. Keep rendering on that exact
+    // seam so demo parity cannot drift into a separate precedence path.
+    const state = evaluateEvidence(row, evaluatedAt).run;
     return {
       id: safeId(row.run_id),
       policyId: safeId(row.policy_id),
@@ -539,7 +596,7 @@ function buildSnapshot(input, results) {
     timeline,
     ownerWork,
     limits: limitsProjection(),
-    channels: channelProjection(bounded(results.channels, 'Channels')),
+    channels: channelProjection(bounded(results.channels, 'Channels'), results.mode),
     stopControl,
     templates: templateProjection(),
     capabilities: ROLE_CAPABILITIES[input.actorAccessRole].slice(),
@@ -697,5 +754,11 @@ module.exports = {
   MAX_ROWS,
   ROLE_CAPABILITIES,
   buildSnapshot,
+  evaluateEvidence,
   readAutomationCenter,
+  resolveEvaluation,
+  resolvePolicy,
+  resolveRecovery,
+  resolveScheduler,
+  resolveSuppression,
 };

@@ -387,6 +387,7 @@ const demoPageFiles = Object.freeze({
   communications: 'public/dashboard/communications.html',
   calendar: 'public/dashboard/calendar.html',
   operations: 'public/dashboard/operations.html',
+  'automation-center': 'public/dashboard/automation.html',
   'learning-center': 'public/dashboard/learning-center.html',
   team: 'public/dashboard/team.html',
   'business-profile': 'public/dashboard/business-profile.html',

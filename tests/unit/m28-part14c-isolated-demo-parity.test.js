@@ -1,0 +1,572 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const express = require('express');
+const request = require('supertest');
+const runtime = require('../../src/automation/runtimeEngine');
+const demoProjection = require('../../src/automation/demoProjection');
+const paidStateEngine = require('../../src/automationCenter/repository');
+const centerContract = require('../../public/js/automation-center-contract');
+const commandCenterContract = require('../../public/js/command-center-contract');
+const config = require('../../src/config');
+const { DemoCommandCenterRepository } = require('../../src/commandCenter/demoRepository');
+
+const ROOT = path.resolve(__dirname, '../..');
+const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
+const TENANT = '00000000-0000-4000-8000-000000000028';
+const SESSION = '00000000-0000-4000-8000-000000000002';
+function context(overrides = {}) {
+  return { tenantId: TENANT, sessionId: SESSION, workspaceGeneration: 1, workspaceRevision: 1,
+    anchorTime: '2026-11-23T15:00:00.000Z', ...overrides };
+}
+function record(automationJourney, overrides = {}) {
+  return { tenantId: TENANT, sessionId: SESSION, revision: 1,
+    state: { generation: 1, createdAt: '2026-11-23T15:00:00.000Z',
+      ...(automationJourney ? { automationJourney } : {}) }, ...overrides };
+}
+function actionSequence(actions) {
+  let state;
+  const results = [];
+  for (const action of actions) {
+    state = runtime.applyAction(state, context(), action);
+    results.push({ action, state, projected: demoProjection.project(record(state)) });
+  }
+  return results;
+}
+function deferred() {
+  let resolve; let reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+async function flush(count = 10) { for (let index = 0; index < count; index += 1) await Promise.resolve(); }
+function demoPageHarness(json) {
+  class FakeElement {
+    constructor(tagName = 'div', attributes = {}) {
+      this.tagName = tagName.toUpperCase(); this.dataset = {}; this.hidden = false;
+      this.childNodes = []; this.attributes = { ...attributes }; this.listeners = {}; this.value = '';
+      this.disabled = false; this.selectedIndex = 0; this._text = '';
+    }
+    get textContent() { return this._text + this.childNodes.map(child => child.textContent || '').join(''); }
+    set textContent(value) { this._text = String(value); this.childNodes = []; }
+    appendChild(child) { this.childNodes.push(child); return child; }
+    replaceChildren(...children) { this._text = ''; this.childNodes = children; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    getAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null; }
+    addEventListener(name, listener) { this.listeners[name] = listener; }
+    emit(name, event = {}) { return this.listeners[name] && this.listeners[name]({ currentTarget: this, ...event }); }
+    focus() {}
+  }
+  const html = read('public/dashboard/automation.html');
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+  const elements = Object.fromEntries(ids.map(id => [id, new FakeElement()]));
+  const buttons = [...html.matchAll(/<button[^>]*data-automation-demo-action="([^"]+)"[^>]*>/g)]
+    .map(match => new FakeElement('button', { 'data-automation-demo-action': match[1] }));
+  const listeners = {};
+  const document = {
+    readyState: 'loading', getElementById: id => elements[id], createElement: tag => new FakeElement(tag),
+    querySelectorAll: selector => selector === '[data-automation-demo-action]' ? buttons : [],
+    addEventListener: (name, listener) => { listeners[name] = listener; },
+  };
+  const window = {
+    NorthStarAutomationCenter: centerContract, NorthStarAccountSession: { json },
+    NorthStarDemoRuntime: { active: true },
+    crypto: { randomUUID: () => '00000000-0000-4000-8000-000000000099' },
+  };
+  vm.runInNewContext(read('public/js/automation-center-page.js'), { window, document, Intl, Date, Promise, Error, Math });
+  return { buttons, elements, listeners };
+}
+function envelope(state, revision = 1) {
+  return demoProjection.project(record(state, { revision }));
+}
+
+describe('Mission 28 Part 14C shared isolated runtime', () => {
+  test('publishes a source-linked candidate contract without claiming unavailable acceptance', () => {
+    const artifact = JSON.parse(read('docs/architecture/MISSION_28_PART14C_ISOLATED_DEMO_PARITY.json'));
+    expect(artifact).toMatchObject({
+      contractVersion: 'mission28.part14c.isolated-demo-parity.v1',
+      status: 'implementation_candidate_not_independently_accepted_not_released',
+      base: {
+        acceptedSourceHead: 'c0775903ed4e42d1ade8c9936ced2d141d8ff942',
+        acceptedTree: '83869d378c2583c350ee4b899c4276e6db091035',
+        pullRequest: 609,
+        mergedMain: 'd43f0c588fb1785bb0afb6568997a329b485cc8d',
+      },
+      scope: { part: '14C', demoPath: '/demo/automation', migrationAdded: false,
+        latestMigration: 287, nextMigrationAbsent: 288, mission31GuidedSimulationIncluded: false },
+      isolatedAuthority: { tenantSessionGenerationBound: true, workspaceRevisionCompareAndSwap: true,
+        paidCookiesSelectDemoAuthority: false, fictionalDataCanEnterPaidAuthority: false },
+      effectBoundary: { paidTenantMutated: false, providerCalled: false, recipientContacted: false,
+        externalEffectCreated: false, financialEffectCreated: false, moneyEffectCreated: false },
+    });
+    expect(Object.values(artifact.effectBoundary).every(value => value === false)).toBe(true);
+    expect(read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'))
+      .toContain('Parts 1A–14B are released. Part 14C is the sole implementation candidate.');
+    expect(read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md')).toContain('Part 14B audit / release');
+  });
+
+  test('creates one deterministic fictional journey with fixed adapters and zero effects', () => {
+    const left = runtime.initialState(context());
+    const right = runtime.initialState(context());
+    expect(left).toEqual(right);
+    expect(runtime.validateState(left, context())).toEqual(left);
+    const projected = demoProjection.project(record(left));
+    expect(projected.snapshot.counts).toMatchObject({ policies: 1, activePolicies: 1, runs: 1 });
+    expect(projected.snapshot.runs[0].state).toBe('queued');
+    expect(projected.demo).toMatchObject({
+      contract: 'mission28.part14c.isolated-automation-demo.v1', generation: 1,
+      providerMode: 'deterministic_local_simulation_no_provider',
+      zeroEffects: { recipients: 0, providerCalls: 0, external: 0, financial: 0, money: 0 },
+    });
+    expect(projected.demo.allowedActions).toEqual(expect.arrayContaining([
+      'provider_step', 'pause', 'suppress', 'source_change', 'reset_automation',
+    ]));
+    expect(projected.demo.allowedActions).not.toContain('source_correct');
+    expect(projected.snapshot.channels.find(item => item.id === 'email')).toMatchObject({
+      state: 'fictional_simulation_only', providerMode: 'Controlled simulation; no outside-service calls',
+    });
+    expect(JSON.stringify(projected)).not.toMatch(/api[_-]?key|credential|real recipient/i);
+  });
+
+  test('uses tenant/session/generation bindings so another demo cannot select the same fictional authority', () => {
+    const first = runtime.initialState(context());
+    const otherTenantContext = context({ tenantId: '00000000-0000-4000-8000-000000000029' });
+    const otherTenant = runtime.initialState(otherTenantContext);
+    const second = runtime.initialState(context({ sessionId: '00000000-0000-4000-8000-000000000003' }));
+    const regenerated = runtime.initialState(context({ workspaceGeneration: 2 }));
+    expect(otherTenant.source.id).not.toBe(first.source.id);
+    expect(otherTenant.policy.id).not.toBe(first.policy.id);
+    expect(second.source.id).not.toBe(first.source.id);
+    expect(second.policy.id).not.toBe(first.policy.id);
+    expect(regenerated.source.id).not.toBe(first.source.id);
+    expect(() => runtime.validateState(first, context({ sessionId: '00000000-0000-4000-8000-000000000003' })))
+      .toThrow(/bindings|history/i);
+    expect(() => runtime.validateState(first, otherTenantContext)).toThrow(/bindings|history/i);
+  });
+
+  test('rejects corrupted embedded journey bindings instead of serving labels from untrusted persisted state', () => {
+    const state = runtime.initialState(context());
+    state.source.id = '00000000-0000-4000-8000-000000000099';
+    expect(() => demoProjection.project(record(state))).toThrow(/bindings|unavailable/i);
+    const foreignRun = runtime.initialState(context());
+    foreignRun.events[0].runId = '00000000-0000-4000-8000-000000000099';
+    expect(() => runtime.validateState(foreignRun, context())).toThrow(/history/i);
+    const reversedTime = runtime.applyAction(undefined, context(), 'advance_time');
+    reversedTime.events.at(-1).at = '2026-11-23T14:59:59.000Z';
+    expect(() => runtime.validateState(reversedTime, context())).toThrow(/history/i);
+    const unknownEvidence = runtime.initialState(context());
+    unknownEvidence.events.at(-1).outcome = 'internal_success';
+    expect(() => runtime.validateState(unknownEvidence, context())).toThrow(/history/i);
+    const futureSchedule = runtime.initialState(context());
+    futureSchedule.run.scheduledAt = '2026-11-23T15:00:01.000Z';
+    expect(() => runtime.validateState(futureSchedule, context())).toThrow(/bindings/i);
+    const incoherentPolicy = runtime.initialState(context());
+    incoherentPolicy.policy.control = 'paused';
+    expect(() => runtime.validateState(incoherentPolicy, context())).toThrow(/bindings/i);
+    const rewrittenPrelude = runtime.initialState(context());
+    rewrittenPrelude.events[0].type = 'reconciliation';
+    rewrittenPrelude.events[0].outcome = 'bounded_recovery_no_effect';
+    expect(() => runtime.validateState(rewrittenPrelude, context())).toThrow(/history/i);
+    const impossibleCompletion = runtime.applyAction(
+      runtime.applyAction(runtime.initialState(context()), context(), 'provider_step'), context(), 'provider_step');
+    impossibleCompletion.events.at(-1).type = 'provider_attempt';
+    impossibleCompletion.events.at(-1).outcome = 'deterministic_simulation_started_no_provider';
+    expect(() => runtime.validateState(impossibleCompletion, context())).toThrow(/history/i);
+    expect(read('src/commandCenter/demoRepository.js')).toContain(
+      'validateAutomationJourney(parsedState, token.tenantId, token.sessionId, parsedRevision)');
+    expect(read('src/commandCenter/demoRepository.js')).toContain(
+      'validateAutomationJourney(nextState, current.tenantId, current.sessionId, nextRevision)');
+  });
+
+  test('projects coherent policy, evaluation, scheduler, suppression and recovery states through one renderer', () => {
+    const results = actionSequence([
+      'source_change', 'source_correct', 'resume', 'provider_step', 'suppress',
+      'recover', 'resume', 'pause', 'resume', 'stop', 'reset_automation',
+    ]);
+    expect(results.map(item => item.projected.snapshot.runs[0].state)).toEqual([
+      'stale', 'recovery', 'queued', 'in_flight', 'suppressed',
+      'recovery', 'queued', 'paused', 'queued', 'stopped', 'queued',
+    ]);
+    expect(results[0].projected.demo.allowedActions).toContain('source_correct');
+    expect(results[0].projected.demo.allowedActions).not.toContain('provider_step');
+    expect(results[9].projected.demo.allowedActions).toEqual(['reset_automation']);
+    const corrected = results[1];
+    expect(corrected.state.source.version).toBe(corrected.state.run.capturedSourceVersion);
+    expect(corrected.state.policy.version).toBe(2);
+    expect(corrected.projected.snapshot.timeline.map(item => item.label)).toEqual(
+      expect.arrayContaining(['Review evidence recorded', 'Schedule evidence recorded']));
+  });
+
+  test('runs a deterministic local provider sequence without strengthening internal completion', () => {
+    const results = actionSequence(['provider_step', 'provider_step']);
+    expect(results[0].projected.snapshot.runs[0]).toMatchObject({ state: 'in_flight',
+      stateExplanation: expect.stringMatching(/recorded work is being processed/i) });
+    expect(results[1].projected.snapshot.runs[0]).toMatchObject({ state: 'completed',
+      stateExplanation: expect.stringMatching(/does not prove.*business outcome/i) });
+    expect(results[1].projected.demo.zeroEffects).toEqual({ recipients: 0, providerCalls: 0,
+      external: 0, financial: 0, money: 0 });
+    expect(results[1].state.events.at(-1)).toMatchObject({
+      type: 'terminal_outcome', outcome: 'completed_internal_simulation_only',
+    });
+  });
+
+  test('virtual time is server-fixed, expires schedules, and cannot be widened by action input', () => {
+    let state = runtime.initialState(context());
+    const original = state.virtualNow;
+    state = runtime.applyAction(state, context(), 'advance_time');
+    expect(new Date(state.virtualNow).getTime() - new Date(original).getTime()).toBe(24 * 60 * 60 * 1000);
+    state = runtime.applyAction(state, context(), 'advance_time');
+    state = runtime.applyAction(state, context(), 'advance_time');
+    expect(demoProjection.project(record(state)).snapshot.runs[0].state).toBe('expired');
+    for (const attacked of ['advance_time:365', 'provider_success', '', null, { action: 'advance_time' }]) {
+      expect(() => runtime.normalizeAction(attacked)).toThrow(/choose one current/i);
+    }
+  });
+
+  test('an expired simulated processing claim requires recorded recovery before it can continue', () => {
+    let state = runtime.applyAction(runtime.initialState(context()), context(), 'provider_step');
+    state = runtime.applyAction(state, context(), 'advance_time');
+    const projection = demoProjection.project(record(state));
+    expect(projection.snapshot.runs[0].state).toBe('recovery');
+    expect(projection.demo.allowedActions).toContain('recover');
+    expect(projection.demo.allowedActions).not.toContain('provider_step');
+    expect(() => runtime.applyAction(state, context(), 'provider_step'))
+      .toThrow(/not available|must pass/i);
+    state = runtime.applyAction(state, context(), 'recover');
+    expect(demoProjection.project(record(state)).snapshot.runs[0].state).toBe('recovery');
+    state = runtime.applyAction(state, context(), 'resume');
+    expect(demoProjection.project(record(state)).snapshot.runs[0].state).toBe('queued');
+    expect(runtime.allowedActions(state, context())).toContain('provider_step');
+  });
+
+  test('reset advances generation and invalidates every prior fictional identity and history', () => {
+    let state = runtime.applyAction(undefined, context(), 'source_change');
+    const prior = JSON.parse(JSON.stringify(state));
+    state = runtime.applyAction(state, context(), 'reset_automation');
+    expect(state.generation).toBe(prior.generation + 1);
+    expect(state.run.id).not.toBe(prior.run.id);
+    expect(state.source.id).not.toBe(prior.source.id);
+    expect(state.source.digest).not.toBe(prior.source.digest);
+    expect(state.policy.id).not.toBe(prior.policy.id);
+    expect(state.source.version).toBe(1);
+    expect(state.events).toHaveLength(3);
+    expect(() => runtime.validateState(prior, context({ workspaceGeneration: 2 }))).toThrow();
+  });
+
+  test('paid and demo previews use the same mounted no-effect engine', () => {
+    const input = { templateId: 'custom', name: 'Private owner review',
+      sourceClassId: 'mission23_work_execution', actionFamily: 'internal_read_digest_task',
+      recipientClass: 'tenant_owner', channelId: 'in_app_passive', timing: 'review_now', dailyLimit: 2 };
+    const paidPreview = runtime.buildNoEffectPreview(input);
+    const demoPreview = runtime.buildNoEffectPreview(input, { mode: 'isolated_demo' });
+    expect(paidPreview).toMatchObject(centerContract.buildPreview(input));
+    expect(paidPreview).toMatchObject({ previewOnly: true, saved: false,
+      activated: false, queued: false, recipientContacted: false, providerAttemptCreated: false,
+      externalEffectCreated: false, financialEffectCreated: false, moneyEffectCreated: false });
+    expect(paidPreview.engineAssessment).toEqual({
+      policy: 'unavailable', evaluation: 'unavailable', scheduler: 'preview_only_no_schedule_created',
+      suppression: 'mandatory_checks_required_before_effect', recovery: 'not_applicable_no_effect',
+      run: 'unavailable', providerMode: 'provider_unavailable_preview_no_effect',
+      recipients: 0, providerCalls: 0, externalEffects: 0, financialEffects: 0, moneyEffects: 0,
+    });
+    expect(demoPreview.engineAssessment).toMatchObject({
+      providerMode: 'deterministic_local_simulation_no_provider', providerCalls: 0,
+      recipients: 0, externalEffects: 0, financialEffects: 0, moneyEffects: 0,
+    });
+  });
+
+  test('executes paid and isolated evidence through the same policy, evaluation, scheduler, suppression and recovery functions', () => {
+    let state = runtime.initialState(context());
+    const canonical = runtime.demoEvidenceRow(state, context());
+    const shared = paidStateEngine.evaluateEvidence(canonical, state.virtualNow);
+    expect(shared).toMatchObject({
+      policy: { id: 'active' }, evaluation: { currentness: null },
+      scheduler: { scheduleExpired: false, activeLease: false },
+      suppression: null, recovery: { state: null }, run: { id: 'queued' },
+    });
+    expect(demoProjection.project(record(state)).snapshot.runs[0].state).toBe(shared.run.id);
+
+    state = runtime.applyAction(state, context(), 'suppress');
+    const held = paidStateEngine.evaluateEvidence(runtime.demoEvidenceRow(state, context()), state.virtualNow);
+    expect(held.suppression).toMatchObject({ id: 'suppressed' });
+    expect(held.run.id).toBe('suppressed');
+    expect(demoProjection.project(record(state)).snapshot.runs[0].state).toBe(held.run.id);
+
+    state = runtime.applyAction(state, context(), 'recover');
+    const recovery = paidStateEngine.evaluateEvidence(runtime.demoEvidenceRow(state, context()), state.virtualNow);
+    expect(recovery.recovery).toMatchObject({ state: 'bounded_history_verified_no_effect',
+      nonblockingSuperseded: false, projected: { id: 'recovery' } });
+    expect(recovery.run.id).toBe('recovery');
+  });
+
+  test('rejects incoherent transition shortcuts instead of changing labels without authority', () => {
+    const initial = runtime.initialState(context());
+    const expectUnavailable = (state, action) => {
+      try { runtime.applyAction(state, context(), action); throw new Error('Expected the action to fail.'); }
+      catch (error) { expect(error).toMatchObject({ code: 'AUTOMATION_DEMO_ACTION_UNAVAILABLE', status: 409 }); }
+    };
+    expectUnavailable(initial, 'source_correct');
+    expectUnavailable(initial, 'resume');
+    expectUnavailable(initial, 'recover');
+    const paused = runtime.applyAction(initial, context(), 'pause');
+    expectUnavailable(paused, 'pause');
+    const stale = runtime.applyAction(initial, context(), 'source_change');
+    expectUnavailable(stale, 'provider_step');
+    expectUnavailable(stale, 'suppress');
+    const completed = runtime.applyAction(runtime.applyAction(initial, context(), 'provider_step'), context(), 'provider_step');
+    expectUnavailable(completed, 'suppress');
+    let bounded = initial;
+    for (let index = 0; index < 37; index += 1) bounded = runtime.applyAction(bounded, context(), 'advance_time');
+    expect(runtime.allowedActions(bounded, context())).toEqual(['reset_automation']);
+    expect(() => runtime.applyAction(bounded, context(), 'advance_time')).toThrow(/history is full/i);
+  });
+
+  test('reset invalidates older preview and action successes without exposing obsolete fictional state', async () => {
+    const initial = runtime.initialState(context());
+    const initialEnvelope = envelope(initial, 1);
+    const olderAction = deferred(); const resetAction = deferred(); const preview = deferred();
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: initialEnvelope.snapshot, demo: initialEnvelope.demo })
+      .mockImplementationOnce(() => preview.promise)
+      .mockImplementationOnce(() => olderAction.promise)
+      .mockImplementationOnce(() => resetAction.promise);
+    const { buttons, elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    const template = elements.automationTemplates.childNodes[0].childNodes.find(node => node.tagName === 'BUTTON');
+    template.emit('click');
+    buttons.find(button => button.getAttribute('data-automation-demo-action') === 'provider_step').emit('click');
+    buttons.find(button => button.getAttribute('data-automation-demo-action') === 'reset_automation').emit('click');
+    const reset = runtime.applyAction(initial, context(), 'reset_automation');
+    const resetEnvelope = envelope(reset, 2);
+    resetAction.resolve({ success: true, data: resetEnvelope.snapshot, demo: resetEnvelope.demo }); await flush();
+    expect(elements.automationDemoGeneration.textContent).toContain('Demo 2 · saved version 2');
+    expect(elements.automationDemoStatus.textContent).toMatch(/reset.*older pending/i);
+    const older = runtime.applyAction(initial, context(), 'provider_step');
+    const olderEnvelope = envelope(older, 2);
+    olderAction.resolve({ success: true, data: olderEnvelope.snapshot, demo: olderEnvelope.demo });
+    preview.resolve({ success: true, data: runtime.buildNoEffectPreview({
+      templateId: 'owner-work-review', name: 'Old preview', sourceClassId: 'mission23_work_execution',
+      actionFamily: 'internal_read_digest_task', recipientClass: 'tenant_owner', channelId: 'in_app_passive',
+      timing: 'review_now', dailyLimit: 1,
+    }) });
+    await flush();
+    expect(elements.automationDemoGeneration.textContent).toContain('Demo 2 · saved version 2');
+    expect(elements.automationDemoStatus.textContent).toMatch(/reset.*older pending/i);
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.previewSummary.textContent).toBe('');
+  });
+
+  test('an older demo preview conflict cannot erase a newer completed reset', async () => {
+    const initial = runtime.initialState(context());
+    const initialEnvelope = envelope(initial, 1);
+    const preview = deferred(); const resetAction = deferred();
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: initialEnvelope.snapshot, demo: initialEnvelope.demo })
+      .mockImplementationOnce(() => preview.promise)
+      .mockImplementationOnce(() => resetAction.promise);
+    const { buttons, elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    const template = elements.automationTemplates.childNodes[0].childNodes.find(node => node.tagName === 'BUTTON');
+    template.emit('click');
+    buttons.find(button => button.getAttribute('data-automation-demo-action') === 'reset_automation').emit('click');
+    const reset = runtime.applyAction(initial, context(), 'reset_automation');
+    const resetEnvelope = envelope(reset, 2);
+    resetAction.resolve({ success: true, data: resetEnvelope.snapshot, demo: resetEnvelope.demo }); await flush();
+    preview.reject(Object.assign(new Error('CONFLICT'), { status: 409 })); await flush();
+    expect(elements.automationDemoGeneration.textContent).toContain('Demo 2 · saved version 2');
+    expect(elements.automationDemoControls.hidden).toBe(false);
+    expect(elements.automationStatus.dataset.state).toBe('ready');
+    expect(elements.automationDemoStatus.textContent).toMatch(/reset.*older pending/i);
+  });
+
+  test('an older demo preview conflict clears state while a newer preview remains unresolved', async () => {
+    const initialEnvelope = envelope(runtime.initialState(context()), 1);
+    const olderPreview = deferred(); const newerPreview = deferred();
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: initialEnvelope.snapshot, demo: initialEnvelope.demo })
+      .mockImplementationOnce(() => olderPreview.promise)
+      .mockImplementationOnce(() => newerPreview.promise);
+    const { elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    const template = elements.automationTemplates.childNodes[0].childNodes.find(node => node.tagName === 'BUTTON');
+    template.emit('click'); template.emit('click'); await flush();
+    expect(elements.automationDemoControls.hidden).toBe(false);
+    olderPreview.reject(Object.assign(new Error('CONFLICT'), { status: 409 })); await flush();
+    expect(elements.automationStatus.dataset.state).toBe('conflict');
+    expect(elements.automationDemoControls.hidden).toBe(true);
+    expect(elements.automationDemoGeneration.textContent).toBe('Not loaded');
+    newerPreview.resolve({ success: true, data: runtime.buildNoEffectPreview({
+      templateId: 'owner-work-review', name: 'Obsolete preview', sourceClassId: 'mission23_work_execution',
+      actionFamily: 'internal_read_digest_task', recipientClass: 'tenant_owner', channelId: 'in_app_passive',
+      timing: 'review_now', dailyLimit: 1,
+    }) });
+    await flush();
+    expect(elements.automationDemoControls.hidden).toBe(true);
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.previewSummary.textContent).toBe('');
+  });
+
+  test('a pending action blocks an ambiguous refresh and invalidates a preview started before commit', async () => {
+    const initial = runtime.initialState(context());
+    const initialEnvelope = envelope(initial, 1);
+    const action = deferred(); const preview = deferred();
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: initialEnvelope.snapshot, demo: initialEnvelope.demo })
+      .mockImplementationOnce(() => action.promise)
+      .mockImplementationOnce(() => preview.promise);
+    const { buttons, elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    buttons.find(button => button.getAttribute('data-automation-demo-action') === 'provider_step').emit('click');
+    elements.automationRefresh.emit('click');
+    expect(json).toHaveBeenCalledTimes(2);
+    const template = elements.automationTemplates.childNodes[0].childNodes.find(node => node.tagName === 'BUTTON');
+    template.emit('click');
+    expect(json).toHaveBeenCalledTimes(3);
+    const updated = runtime.applyAction(initial, context(), 'provider_step');
+    const updatedEnvelope = envelope(updated, 2);
+    action.resolve({ success: true, data: updatedEnvelope.snapshot, demo: updatedEnvelope.demo });
+    await flush();
+    preview.resolve({ success: true, data: runtime.buildNoEffectPreview({
+      templateId: 'owner-work-review', name: 'Obsolete preview', sourceClassId: 'mission23_work_execution',
+      actionFamily: 'internal_read_digest_task', recipientClass: 'tenant_owner', channelId: 'in_app_passive',
+      timing: 'review_now', dailyLimit: 1,
+    }) });
+    await flush();
+    expect(elements.automationDemoGeneration.textContent).toContain('saved version 2');
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.previewSummary.textContent).toBe('');
+  });
+
+  test('an older authorization failure clears a newer pending isolated action and every rendered fictional value', async () => {
+    const initialEnvelope = envelope(runtime.initialState(context()), 7);
+    const oldAction = deferred(); const newerAction = deferred();
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: initialEnvelope.snapshot,
+        demo: { ...initialEnvelope.demo, workspaceRevision: 7 } })
+      .mockImplementationOnce(() => oldAction.promise)
+      .mockImplementationOnce(() => newerAction.promise);
+    const { buttons, elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    const provider = buttons.find(button => button.getAttribute('data-automation-demo-action') === 'provider_step');
+    const reset = buttons.find(button => button.getAttribute('data-automation-demo-action') === 'reset_automation');
+    provider.emit('click'); reset.emit('click'); await flush();
+    elements.automationDemoBoundary.textContent = 'DISTINCTIVE PRIOR FICTIONAL VALUE';
+    oldAction.reject(Object.assign(new Error('FORBIDDEN'), { status: 403 })); await flush();
+    expect(elements.automationStatus.dataset.state).toBe('error');
+    expect(elements.automationDemoControls.hidden).toBe(true);
+    expect(elements.automationDemoGeneration.textContent).toBe('Not loaded');
+    expect(elements.automationDemoSource.textContent).toBe('Unavailable');
+    expect(elements.automationDemoPolicy.textContent).toBe('Unavailable');
+    expect(elements.automationDemoTime.textContent).toBe('Unavailable');
+    expect(elements.automationDemoBoundary.textContent).toBe('No fictional automation state is loaded.');
+    expect(elements.automationDemoBoundary.textContent).not.toContain('DISTINCTIVE');
+    newerAction.resolve({ success: true, data: initialEnvelope.snapshot, demo: initialEnvelope.demo }); await flush();
+    expect(elements.automationDemoControls.hidden).toBe(true);
+    expect(elements.automationDemoGeneration.textContent).toBe('Not loaded');
+  });
+
+  test('rejects an untrusted demo envelope and clears the partially rendered snapshot', async () => {
+    const initialEnvelope = envelope(runtime.initialState(context()), 1);
+    const json = jest.fn().mockResolvedValueOnce({
+      success: true,
+      data: initialEnvelope.snapshot,
+      demo: { ...initialEnvelope.demo, disclaimer: 'untrusted response copy' },
+    });
+    const { elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    expect(elements.automationStatus.dataset.state).toBe('unavailable');
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationDemoControls.hidden).toBe(true);
+    expect(elements.automationDemoGeneration.textContent).toBe('Not loaded');
+    expect(elements.automationDemoBoundary.textContent).toBe('No fictional automation state is loaded.');
+    expect(elements.automationDemoBoundary.textContent).not.toContain('untrusted');
+  });
+
+  test('mounts one isolated route and transport instead of a static response or paid authority shortcut', () => {
+    const demoRoute = read('src/routes/demo.js');
+    const demoRuntime = read('public/js/demo-runtime.js');
+    const server = read('src/server.js');
+    const projection = read('src/automation/demoProjection.js');
+    const paidRoute = read('src/routes/automationCenter.js');
+    expect(commandCenterContract.AUTOMATION_ROUTE).toMatchObject({
+      paidPath: '/dashboard/automation', demoPath: '/demo/automation', resource: 'automation',
+    });
+    expect(commandCenterContract.routesForMode('demo').map(route => route.id)).toContain('automation-center');
+    expect(server).toContain("'automation-center': 'public/dashboard/automation.html'");
+    expect(demoRuntime).toContain("url.pathname === '/api/v1/automation-center'");
+    expect(demoRuntime).toMatch(/url\.pathname === '\/api\/v1\/automation-center'[\s\S]*loadWorkspace\(true\)[\s\S]*nativeFetch\('\/api\/demo\/automation-center'/);
+    expect(demoRoute).toContain("router.get('/automation-center'");
+    expect(demoRoute).toContain("router.post('/automation-center/actions'");
+    expect(demoRoute).toContain("mutationBoundary(req, res, 'automation-center-action')");
+    expect(demoRoute).toContain("operation: 'automation_action'");
+    expect(projection).toContain("require('../automationCenter/repository')");
+    expect(paidRoute).toContain('automationRuntime.buildNoEffectPreview');
+    expect(read('src/automation/runtimeEngine.js')).toContain('stateEngine.evaluateEvidence');
+    expect(read('src/automationCenter/repository.js')).toContain('const state = resolvePolicy(row, evaluatedAt)');
+    expect(read('src/automationCenter/repository.js')).toContain('const scheduler = resolveScheduler(row, evaluatedAt)');
+    expect(read('src/automationCenter/repository.js')).toContain('const recovery = resolveRecovery(row, scheduler)');
+    expect(read('src/automation/runtimeEngine.js')).not.toMatch(/require\(['"](?:https?|axios|node-fetch|stripe|twilio|resend)/);
+    expect(read('src/automation/demoProjection.js')).not.toMatch(/tests[\\/]|\.\.\/\.\.\/tests/);
+    expect(fs.readdirSync(path.join(ROOT, 'migrations')).some(name => /^288_/.test(name))).toBe(false);
+  });
+
+  test('serves mounted fictional read, preview and CAS action routes behind explicit same-origin intent', async () => {
+    const initial = runtime.initialState(context());
+    const initialRecord = record(initial);
+    const updatedState = runtime.applyAction(initial, context(), 'provider_step');
+    const updatedRecord = record(updatedState, { revision: 2 });
+    const token = { token: 'fictional-token', tenantId: TENANT, sessionId: SESSION,
+      expiresAt: new Date('2026-11-24T15:00:00.000Z') };
+    const previousSecret = config.auth.accessSecret;
+    config.auth.accessSecret = 'part14c-isolated-route-test-secret-0001';
+    const tokenSpy = jest.spyOn(DemoCommandCenterRepository.prototype, 'token').mockReturnValue(token);
+    const readSpy = jest.spyOn(DemoCommandCenterRepository.prototype, 'read').mockResolvedValue(initialRecord);
+    const mutateSpy = jest.spyOn(DemoCommandCenterRepository.prototype, 'mutate')
+      .mockImplementation(async (_token, input, options) => {
+        expect(input).toMatchObject({ operation: 'automation_action', expectedRevision: 1,
+          automationAction: 'provider_step' });
+        expect(options.sourceHash).toMatch(/^[0-9a-f]{64}$/);
+        return { record: updatedRecord, replayed: false };
+      });
+    try {
+      const app = express();
+      app.set('trust proxy', false);
+      app.use('/api/demo', require('../../src/routes/demo'));
+      const readResponse = await request(app).get('/api/demo/automation-center')
+        .set('Host', 'northstar.test').expect(200);
+      expect(readResponse.body).toMatchObject({ success: true,
+        data: { runs: [{ state: 'queued' }] },
+        demo: { contract: runtime.CONTRACT, workspaceRevision: 1 } });
+
+      const previewInput = { templateId: 'custom', name: 'Private owner review',
+        sourceClassId: 'mission23_work_execution', actionFamily: 'internal_read_digest_task',
+        recipientClass: 'tenant_owner', channelId: 'in_app_passive', timing: 'review_now', dailyLimit: 2 };
+      const previewResponse = await request(app).post('/api/demo/automation-center/preview')
+        .set('Host', 'northstar.test').set('Origin', 'http://northstar.test')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('X-NorthStar-Demo-Revision', '1').send(previewInput).expect(200);
+      expect(previewResponse.body.data).toMatchObject({ previewOnly: true,
+        engineAssessment: { policy: 'unavailable', run: 'unavailable', providerCalls: 0 } });
+
+      const actionResponse = await request(app).post('/api/demo/automation-center/actions')
+        .set('Host', 'northstar.test').set('Origin', 'http://northstar.test')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000099')
+        .send({ action: 'provider_step', expectedRevision: 1 }).expect(201);
+      expect(actionResponse.body).toMatchObject({ success: true, replayed: false,
+        data: { runs: [{ state: 'in_flight' }] }, demo: { workspaceRevision: 2 } });
+
+      await request(app).post('/api/demo/automation-center/actions')
+        .set('Host', 'northstar.test').set('Origin', 'https://attacker.invalid')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000100')
+        .send({ action: 'provider_step', expectedRevision: 1 }).expect(403);
+      expect(readSpy).toHaveBeenCalledTimes(2);
+      expect(mutateSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      config.auth.accessSecret = previousSecret;
+      tokenSpy.mockRestore(); readSpy.mockRestore(); mutateSpy.mockRestore();
+    }
+  });
+});

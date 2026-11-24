@@ -56,6 +56,7 @@ const config = require('../config');
 const paymentProviderBoundary = require('../customerFinancial/paymentProviderBoundary');
 const demoReportingPart12Acceptance = require('../customerFinancial/demoReportingPart12Acceptance');
 const fictionalDemoJourneyAcceptance = require('../customerFinancial/fictionalDemoJourneyAcceptance');
+const automationRuntime = require('../automation/runtimeEngine');
 const readFictionalJourneySource = demoReportingPart12Acceptance.bundle;
 const buildFictionalJourney = fictionalDemoJourneyAcceptance.bundle;
 const productionPoolProvider = db.getPool.bind(db);
@@ -271,6 +272,17 @@ function state(value) {
   return stableValue(value);
 }
 
+function validateAutomationJourney(value, tenantId, sessionId, workspaceRevision) {
+  if (value.automationJourney === undefined) return;
+  automationRuntime.validateState(value.automationJourney, {
+    tenantId,
+    sessionId,
+    workspaceGeneration: value.generation,
+    workspaceRevision,
+    anchorTime: value.createdAt,
+  });
+}
+
 function legacyState(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value) &&
     value.schemaVersion === 1 && typeof value.createdAt === 'string' &&
@@ -443,7 +455,11 @@ function issueToken(now = new Date()) {
 }
 
 function mutationInput(input) {
-  if (!input || typeof input !== 'object' || !['customer_estimate_issue','proposal_adopt','simulate_lead', 'reset', 'learning_step', 'forecast_journey', 'billing_identity', 'estimate_review','commercial_terms','commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost','equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action'].includes(input.operation)) {
+  if (!input || typeof input !== 'object' || !['customer_estimate_issue','proposal_adopt','simulate_lead', 'reset',
+    'learning_step', 'forecast_journey', 'billing_identity', 'automation_action', 'estimate_review','commercial_terms',
+    'commercial_ok','tax_profile','pricing_policy','pricing_plan','travel_plan','equipment_ready','equipment_cost',
+    'equipment_plan','labor_plan','material_plan','estimate_adopt','schedule_preview','schedule_approve','work_action']
+    .includes(input.operation)) {
     fail(400, 'DEMO_MUTATION_INVALID', 'The demo action is invalid.');
   }
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
@@ -461,6 +477,8 @@ function mutationInput(input) {
   if (input.operation === 'forecast_journey') normalized.forecastAction = demoForecastJourney.normalizeAction(input.forecastAction);
   if (input.operation === 'billing_identity') normalized.billingIdentityAction =
     demoBillingIdentityJourney.normalizeAction(input.billingIdentityAction);
+  if (input.operation === 'automation_action') normalized.automationAction =
+    automationRuntime.normalizeAction(input.automationAction);
   if (input.operation === 'work_action') {
     if (!/^[0-9a-f-]{36}$/.test(input.appointmentId || '') || !input.operations ||
       Object.keys(input.operations).some(k => !['family','body'].includes(k)) ||
@@ -519,6 +537,7 @@ function mutationInput(input) {
     ...(normalized.operation==='learning_step'?{learningAction:normalized.learningAction}:{}),
     ...(normalized.operation==='forecast_journey'?{forecastAction:normalized.forecastAction}:{}),
     ...(normalized.operation==='billing_identity'?{billingIdentityAction:normalized.billingIdentityAction}:{}),
+    ...(normalized.operation==='automation_action'?{automationAction:normalized.automationAction}:{}),
   });
   return normalized;
 }
@@ -549,6 +568,8 @@ function recordFromRow(row, token, persisted) {
   }
   assertRowAuthority(row, token);
   const parsedState = state(row.state);
+  const parsedRevision = revision(row.revision);
+  validateAutomationJourney(parsedState, token.tenantId, token.sessionId, parsedRevision);
   const simulationCount = count(row.simulation_count, 12);
   if (parsedState.graphs.length !== simulationCount + 3) {
     fail(503, 'DEMO_STATE_INVALID', 'The isolated demo graph count is unavailable.');
@@ -558,7 +579,7 @@ function recordFromRow(row, token, persisted) {
     tenantId: token.tenantId,
     sessionId: token.sessionId,
     state: parsedState,
-    revision: revision(row.revision),
+    revision: parsedRevision,
     simulationCount,
     mutationCount: count(row.mutation_count, MAX_MUTATIONS),
     persisted: persisted !== false,
@@ -1077,7 +1098,14 @@ class DemoCommandCenterRepository {
       let operationsResponse;
       let nextSimulationCount = current.simulationCount;
       let lastSimulatedAt = current.lastSimulatedAt;
-      if(input.operation==='forecast_journey'){
+      if(input.operation==='automation_action'){
+        const automationContext={tenantId:current.tenantId,sessionId:current.sessionId,
+          workspaceGeneration:current.state.generation,workspaceRevision:current.revision,
+          anchorTime:current.state.createdAt};
+        const automationJourney=automationRuntime.applyAction(current.state.automationJourney,
+          automationContext,input.automationAction);
+        nextState=stableValue({...current.state,automationJourney});
+      } else if(input.operation==='forecast_journey'){
         nextState=demoForecastJourney.apply(current.state,input.forecastAction,input.idempotencyHash,now);
       } else if(input.operation==='billing_identity'){
         nextState=demoBillingIdentityJourney.apply(current.state,input.billingIdentityAction,
@@ -1202,6 +1230,7 @@ class DemoCommandCenterRepository {
       // Validate the complete state before the database write. A failed
       // response must never leave an unreadable demo session committed.
       nextState = state(nextState);
+      validateAutomationJourney(nextState, current.tenantId, current.sessionId, nextRevision);
       const responseDigest = sha256({ state: nextState, revision: nextRevision });
       // Match the database JSONB byte limit for every mutation. Estimate,
       // scheduling and profile-backed demo writes all share this state; checking

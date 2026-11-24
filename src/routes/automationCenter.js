@@ -5,7 +5,7 @@ const db = require('../db');
 const { requireAccountMutation, requireTenantAccess } = require('../auth/middleware');
 const { requirePermission } = require('../auth/permissions');
 const { rateLimit } = require('../middleware/rateLimit');
-const centerContract = require('../../public/js/automation-center-contract');
+const automationRuntime = require('../automation/runtimeEngine');
 const { readAutomationCenter } = require('../automationCenter/repository');
 
 function centerError(status, code, message) {
@@ -53,7 +53,7 @@ function createAutomationCenterRouter(options = {}) {
       try {
         // Preview is deliberately pure. It stores no policy, approval, schedule,
         // queue item, message, provider attempt, external effect, or money effect.
-        const data = centerContract.buildPreview(req.body);
+        const data = automationRuntime.buildNoEffectPreview(req.body);
         res.json({ success: true, data, requestId: req.requestId });
       } catch (error) {
         next(centerError(400, 'AUTOMATION_CENTER_PREVIEW_INVALID', error.message));

@@ -38,7 +38,15 @@
     "productionMigrations": "284_of_284_through_288_no_289",
     "backupId": "0f3f9bf0-6eeb-43fa-b269-38e227ad0ec1",
     "backupName": "pre-m28-part14c-b4da799f-20261124",
-    "olderBackupsRemovedAfterReplacementConfirmed": 6
+    "backupExternalId": "vs_1795556666328_jtoie91hdqa3ze8b",
+    "quotaRotation": {
+      "olderSnapshotsRemovedBeforeReplacementToClearQuota": 5,
+      "priorNewestProtectedBackupId": "32307774-0077-478b-8c18-d99405af7b96",
+      "quotaClearedAt": "2026-11-24T21:44:14.9866371Z",
+      "freshReplacementCreatedAt": "2026-11-24T21:44:26.402Z",
+      "priorNewestRemovedOnlyAfterFreshReplacementConfirmed": true,
+      "retainedBackupsAfterRotation": 1
+    }
   },
   "sharedEngines": {
     "businessDecision": "src/automation/businessDecisionEngine.js#evaluate",

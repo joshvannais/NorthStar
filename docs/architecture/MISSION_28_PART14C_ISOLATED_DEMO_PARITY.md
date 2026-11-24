@@ -174,8 +174,12 @@ Read-only production reconciliation proved 284/284 through 288/no289, startup,
 health, all six bounded routes, exact Git assets, paid 401/no-store and demo
 200/no-store/zero-effects behavior. Fresh backup
 `0f3f9bf0-6eeb-43fa-b269-38e227ad0ec1`
-(`pre-m28-part14c-b4da799f-20261124`) was confirmed before all six older
-snapshots were removed. The audit report
+(`pre-m28-part14c-b4da799f-20261124`, external identity
+`vs_1795556666328_jtoie91hdqa3ze8b`) was created only after five older
+snapshots were removed to clear quota while the prior newest backup
+`32307774-0077-478b-8c18-d99405af7b96` remained protected. After the fresh
+replacement was confirmed, that former newest backup was removed, leaving the
+fresh replacement as the one retained snapshot. The audit report
 `m28-part14c-root-audit-b4da-v9.json` has SHA-256
 `1FD8CB8EA7F4EAB29CF0FB8EF8A410DFFD0E14E9C6203189DC4036BDCCADCF33`.
 

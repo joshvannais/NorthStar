@@ -22,8 +22,11 @@ Part 14C released from accepted source
 Read-only production reconciliation proved 284/284 exact migrations through
 288 with no 289. The fresh retained pre-release backup is
 `0f3f9bf0-6eeb-43fa-b269-38e227ad0ec1`, named
-`pre-m28-part14c-b4da799f-20261124`; older snapshots were removed only after
-that exact replacement was confirmed. Startup, health and all six bounded
+`pre-m28-part14c-b4da799f-20261124`. Five older snapshots were removed first
+to clear quota while prior newest backup
+`32307774-0077-478b-8c18-d99405af7b96` remained protected. Only after the
+fresh replacement was confirmed was that former newest removed, leaving the
+fresh backup as the one retained snapshot. Startup, health and all six bounded
 routes passed, exact paid/demo assets matched Git, paid API access remained
 401/no-store, and demo API access remained 200/no-store with zero effects.
 

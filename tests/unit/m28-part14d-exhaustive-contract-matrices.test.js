@@ -10,6 +10,8 @@ const centerContract = require('../../public/js/automation-center-contract');
 const { createAutomationCenterRouter } = require('../../src/routes/automationCenter');
 const { buildSnapshot } = require('../../src/automationCenter/repository');
 const { corsOptions } = require('../../src/middleware/security');
+const config = require('../../src/config');
+const { DemoCommandCenterRepository, issueToken } = require('../../src/commandCenter/demoRepository');
 
 const ROOT = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
@@ -85,6 +87,62 @@ function paidApp(readCenter = async (_pool, actor) => buildSnapshot(actor, empty
     .json({ success: false, code: error.code || 'unavailable' }));
   return app;
 }
+function knownError(status, code, message) {
+  return Object.assign(new Error(message), { status, code });
+}
+function demoTransportFixture() {
+  const token = issueToken(new Date('2026-11-23T15:00:00.000Z'));
+  const engineContext = context({ tenantId: token.tenantId, sessionId: token.sessionId });
+  const initial = runtime.initialState(engineContext);
+  const updated = runtime.applyAction(initial, engineContext, 'provider_step');
+  const makeRecord = (automationJourney, revision) => ({
+    tenantId: token.tenantId, sessionId: token.sessionId, revision,
+    state: { generation: 1, createdAt: engineContext.anchorTime, automationJourney },
+  });
+  const initialRecord = makeRecord(initial, 1);
+  const updatedRecord = makeRecord(updated, 2);
+  const priorSecret = config.auth.accessSecret;
+  config.auth.accessSecret = 'part14d-mounted-transport-matrix-secret-0001';
+  const tokenSpy = jest.spyOn(DemoCommandCenterRepository.prototype, 'token').mockReturnValue(token);
+  const readSpy = jest.spyOn(DemoCommandCenterRepository.prototype, 'read').mockResolvedValue(initialRecord);
+  const replay = new Map();
+  const mutateSpy = jest.spyOn(DemoCommandCenterRepository.prototype, 'mutate')
+    .mockImplementation(async (actualToken, input, options) => {
+      expect(actualToken).toMatchObject({ tenantId: token.tenantId, sessionId: token.sessionId });
+      expect(input).toMatchObject({ operation: 'automation_action' });
+      expect(Object.keys(input).sort()).toEqual([
+        'automationAction', 'expectedRevision', 'idempotencyKey', 'operation',
+      ]);
+      expect(options.sourceHash).toMatch(/^[0-9a-f]{64}$/);
+      if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length < 16 ||
+          input.idempotencyKey.length > 128) {
+        throw knownError(400, 'DEMO_IDEMPOTENCY_REQUIRED', 'A bounded idempotency key is required.');
+      }
+      const requestDigest = JSON.stringify({ action: input.automationAction,
+        expectedRevision: input.expectedRevision });
+      const prior = replay.get(input.idempotencyKey);
+      if (prior && prior !== requestDigest) {
+        throw knownError(409, 'DEMO_IDEMPOTENCY_CONFLICT',
+          'That demo action key was already used for a different action.');
+      }
+      if (prior) return { record: updatedRecord, replayed: true };
+      if (input.expectedRevision !== 1) {
+        throw knownError(409, 'DEMO_STATE_CHANGED', 'The fictional automation changed.');
+      }
+      if (input.automationAction !== 'provider_step') {
+        throw knownError(409, 'AUTOMATION_DEMO_ACTION_UNAVAILABLE',
+          'That fictional action is not currently available.');
+      }
+      replay.set(input.idempotencyKey, requestDigest);
+      return { record: updatedRecord, replayed: false };
+    });
+  const app = express(); app.set('trust proxy', false);
+  app.use('/api/demo', require('../../src/routes/demo'));
+  return { app, tokenSpy, readSpy, mutateSpy, cleanup() {
+    config.auth.accessSecret = priorSecret;
+    tokenSpy.mockRestore(); readSpy.mockRestore(); mutateSpy.mockRestore();
+  } };
+}
 
 describe('Mission 28 Part 14D exhaustive semantic and structural matrices', () => {
   test('publishes every frozen dimension without claiming later-slice evidence', () => {
@@ -110,6 +168,18 @@ describe('Mission 28 Part 14D exhaustive semantic and structural matrices', () =
     ]);
     expect(read('docs/architecture/MISSION_28_PART14D_EXHAUSTIVE_CONTRACT_MATRICES.md'))
       .toMatch(/Part 14E remains\s+the authority for fresh PostgreSQL/);
+    const released = JSON.parse(read('docs/architecture/MISSION_28_PART14C_ISOLATED_DEMO_PARITY.json'));
+    expect(released.release).toMatchObject({
+      backupId: '0f3f9bf0-6eeb-43fa-b269-38e227ad0ec1',
+      backupExternalId: 'vs_1795556666328_jtoie91hdqa3ze8b',
+      quotaRotation: { olderSnapshotsRemovedBeforeReplacementToClearQuota: 5,
+        priorNewestProtectedBackupId: '32307774-0077-478b-8c18-d99405af7b96',
+        priorNewestRemovedOnlyAfterFreshReplacementConfirmed: true,
+        retainedBackupsAfterRotation: 1 },
+    });
+    expect(read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md')).toContain(
+      '| Mission 28 released baseline | Part 14C source `b4da799f85333058ccca4cd3fd3c3908537b911f`; main `db9c14d9206bdb3a6f73d83ee7f480aedb2f9fb1`; tree `731bf82d926e9b32708b6ec396fd98d50a8d9ea3` |'
+    );
   });
 
   test('evaluates a closed restrictive authority matrix from one exact positive control', () => {
@@ -218,7 +288,135 @@ describe('Mission 28 Part 14D exhaustive semantic and structural matrices', () =
     await expect(resolve(undefined)).resolves.toMatchObject({ origin: true, credentials: true });
   });
 
-  test('pins demo framing, revision, idempotency and callback/template/privacy boundaries to closed source', () => {
+  test('executes the complete mounted demo transport denial, revision, replay and conflict matrix', async () => {
+    const fixture = demoTransportFixture();
+    const sameOrigin = test => test.set('Host', 'northstar.test').set('Origin', 'http://northstar.test');
+    const previewBody = preview();
+    const actionBody = { action: 'provider_step', expectedRevision: 1 };
+    const denied = [
+      ['read query', () => request(fixture.app).get('/api/demo/automation-center?tenant=foreign'),
+        400, 'demo_automation_request_invalid'],
+      ['preview missing origin', () => request(fixture.app).post('/api/demo/automation-center/preview')
+        .set('Host', 'northstar.test').set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('X-NorthStar-Demo-Revision', '1').send(previewBody), 403, 'demo_same_origin_required'],
+      ['preview foreign origin', () => request(fixture.app).post('/api/demo/automation-center/preview')
+        .set('Host', 'northstar.test').set('Origin', 'https://attacker.invalid')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('X-NorthStar-Demo-Revision', '1').send(previewBody), 403, 'demo_same_origin_required'],
+      ['preview cross-site framing', () => sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/preview')).set('Sec-Fetch-Site', 'cross-site')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('X-NorthStar-Demo-Revision', '1').send(previewBody), 403, 'demo_same_origin_required'],
+      ['preview missing intent', () => sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/preview')).set('X-NorthStar-Demo-Revision', '1')
+        .send(previewBody), 403, 'demo_intent_required'],
+      ['preview wrong intent', () => sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/preview')).set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('X-NorthStar-Demo-Revision', '1').send(previewBody), 403, 'demo_intent_required'],
+      ['preview unknown body member', () => sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/preview')).set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('X-NorthStar-Demo-Revision', '1').send({ ...previewBody, tenantId: 'foreign' }),
+      400, 'demo_automation_preview_invalid'],
+      ['action missing origin', () => request(fixture.app).post('/api/demo/automation-center/actions')
+        .set('Host', 'northstar.test').set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000091').send(actionBody),
+      403, 'demo_same_origin_required'],
+      ['action foreign origin', () => request(fixture.app).post('/api/demo/automation-center/actions')
+        .set('Host', 'northstar.test').set('Origin', 'https://attacker.invalid')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000092').send(actionBody),
+      403, 'demo_same_origin_required'],
+      ['action cross-site framing', () => sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/actions')).set('Sec-Fetch-Site', 'cross-site')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000093').send(actionBody),
+      403, 'demo_same_origin_required'],
+      ['action wrong intent', () => sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/actions')).set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000094').send(actionBody),
+      403, 'demo_intent_required'],
+      ['action missing body member', () => sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/actions')).set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000095')
+        .send({ action: 'provider_step' }), 400, 'demo_automation_action_invalid'],
+      ['action unknown body member', () => sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/actions')).set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000096')
+        .send({ ...actionBody, tenantId: 'foreign' }), 400, 'demo_automation_action_invalid'],
+    ];
+    try {
+      for (const [label, perform, status, code] of denied) {
+        const before = [fixture.tokenSpy.mock.calls.length, fixture.readSpy.mock.calls.length,
+          fixture.mutateSpy.mock.calls.length];
+        const response = await perform().expect(status);
+        expect(response.headers['cache-control']).toMatch(/no-store/);
+        expect(response.body).toMatchObject({ success: false, error: { code } });
+        expect([fixture.tokenSpy.mock.calls.length, fixture.readSpy.mock.calls.length,
+          fixture.mutateSpy.mock.calls.length]).toEqual(before);
+        expect(label).toBeTruthy();
+      }
+
+      const beforeMethods = [fixture.tokenSpy.mock.calls.length, fixture.readSpy.mock.calls.length,
+        fixture.mutateSpy.mock.calls.length];
+      await request(fixture.app).put('/api/demo/automation-center/actions').send(actionBody).expect(404);
+      await request(fixture.app).delete('/api/demo/automation-center').expect(404);
+      expect([fixture.tokenSpy.mock.calls.length, fixture.readSpy.mock.calls.length,
+        fixture.mutateSpy.mock.calls.length]).toEqual(beforeMethods);
+
+      const readResponse = await request(fixture.app).get('/api/demo/automation-center').expect(200);
+      expect(readResponse.headers['cache-control']).toMatch(/no-store/);
+      expect(readResponse.body).toMatchObject({ success: true,
+        demo: { workspaceRevision: 1,
+          zeroEffects: { recipients: 0, providerCalls: 0, external: 0, financial: 0, money: 0 } } });
+
+      const currentPreview = await sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/preview')).set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('X-NorthStar-Demo-Revision', '1').send(previewBody).expect(200);
+      expect(currentPreview.body).toMatchObject({ success: true,
+        data: { previewOnly: true, recipientContacted: false, providerAttemptCreated: false,
+          externalEffectCreated: false, financialEffectCreated: false, moneyEffectCreated: false },
+        demo: { workspaceRevision: 1 } });
+      for (const revision of [undefined, '2', 'not-a-revision']) {
+        let stale = sameOrigin(request(fixture.app).post('/api/demo/automation-center/preview'))
+          .set('X-NorthStar-Demo-Intent', 'automation-center-preview');
+        if (revision !== undefined) stale = stale.set('X-NorthStar-Demo-Revision', revision);
+        const response = await stale.send(previewBody).expect(409);
+        expect(response.body).toMatchObject({ success: false,
+          error: { code: 'demo_automation_changed' } });
+      }
+      expect(fixture.mutateSpy).not.toHaveBeenCalled();
+
+      const missingKey = await sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/actions')).set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .send(actionBody).expect(400);
+      expect(missingKey.body.error.code).toBe('demo_idempotency_required');
+      const staleAction = await sameOrigin(request(fixture.app)
+        .post('/api/demo/automation-center/actions')).set('X-NorthStar-Demo-Intent', 'automation-center-action')
+        .set('Idempotency-Key', '00000000-0000-4000-8000-000000000097')
+        .send({ action: 'provider_step', expectedRevision: 9 }).expect(409);
+      expect(staleAction.body.error.code).toBe('demo_state_changed');
+
+      const stableKey = '00000000-0000-4000-8000-000000000099';
+      const first = await sameOrigin(request(fixture.app).post('/api/demo/automation-center/actions'))
+        .set('X-NorthStar-Demo-Intent', 'automation-center-action').set('Idempotency-Key', stableKey)
+        .send(actionBody).expect(201);
+      expect(first.body).toMatchObject({ success: true, replayed: false,
+        data: { runs: [{ state: 'in_flight' }] }, demo: { workspaceRevision: 2,
+          zeroEffects: { recipients: 0, providerCalls: 0, external: 0, financial: 0, money: 0 } } });
+      const replay = await sameOrigin(request(fixture.app).post('/api/demo/automation-center/actions'))
+        .set('X-NorthStar-Demo-Intent', 'automation-center-action').set('Idempotency-Key', stableKey)
+        .send(actionBody).expect(200);
+      expect(replay.body).toMatchObject({ success: true, replayed: true,
+        demo: { workspaceRevision: 2 } });
+      const conflict = await sameOrigin(request(fixture.app).post('/api/demo/automation-center/actions'))
+        .set('X-NorthStar-Demo-Intent', 'automation-center-action').set('Idempotency-Key', stableKey)
+        .send({ action: 'pause', expectedRevision: 1 }).expect(409);
+      expect(conflict.body.error.code).toBe('demo_idempotency_conflict');
+      expect(fixture.mutateSpy).toHaveBeenCalledTimes(5);
+    } finally { fixture.cleanup(); }
+  });
+
+  test('pins callback, template and privacy boundaries to accepted closed source', () => {
     const demoRoute = read('src/routes/demo.js');
     expect(demoRoute).toMatch(/router\.get\('\/automation-center'[\s\S]*Object\.keys\(req\.query/);
     expect(demoRoute).toMatch(/router\.post\('\/automation-center\/preview'[\s\S]*mutationBoundary\(req, res, 'automation-center-preview'\)/);

@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const centerContract = require('../../public/js/automation-center-contract');
 const stateEngine = require('../automationCenter/repository');
+const businessEngine = require('./businessDecisionEngine');
 
 const CONTRACT = 'mission28.part14c.isolated-automation-demo.v1';
 const ACTIONS = Object.freeze([
@@ -100,7 +101,8 @@ function initialState(context, generation = 1) {
       version: 1, digest: sourceDigest(bounded, generation, 1) },
     policy: { id: policyId, version: 1, lifecycle: 'active', control: 'active_resumed',
       expiresAt: addMilliseconds(anchor, 30 * 24 * 60 * 60 * 1000) },
-    run: { id: firstRunId, sequence: 1, capturedSourceVersion: 1, scheduledAt,
+    run: { id: firstRunId, sequence: 1, capturedSourceVersion: 1,
+      scheduleAcceptedAt: addMilliseconds(anchor, -60 * 60 * 1000), scheduledAt,
       scheduleExpiresAt: addMilliseconds(scheduledAt, 2 * 24 * 60 * 60 * 1000), phase: 'queued',
       phaseRecordedAt: anchor, providerStep: 0, suppression: false, recovery: null },
     tenantControl: 'active_resumed',
@@ -113,6 +115,7 @@ function initialState(context, generation = 1) {
         type: 'scheduled_run', at: anchor, outcome: 'scheduled_unpublished' },
     ],
   };
+  requireRunnableBusinessPrelude(value, bounded);
   validateState(value, bounded);
   return value;
 }
@@ -144,6 +147,7 @@ function validateHistoryCoherence(value, context) {
     providerStep: 0,
     suppression: false,
     recovery: null,
+    scheduleAcceptedAt: addMilliseconds(context.anchorTime, -60 * 60 * 1000),
     scheduledAt: context.anchorTime,
     scheduleExpiresAt: addMilliseconds(context.anchorTime, 48 * 60 * 60 * 1000),
     phaseRecordedAt: context.anchorTime,
@@ -165,7 +169,8 @@ function validateHistoryCoherence(value, context) {
       expected.capturedSourceVersion = expected.sourceVersion;
       expected.phase = 'queued'; expected.providerStep = 0;
       expected.suppression = false; expected.recovery = 'bounded_history_verified_no_effect';
-      expected.scheduledAt = expected.virtualNow;
+      expected.scheduleAcceptedAt = expected.virtualNow;
+      expected.scheduledAt = addMilliseconds(expected.virtualNow, 60 * 60 * 1000);
       expected.scheduleExpiresAt = addMilliseconds(expected.virtualNow, 48 * 60 * 60 * 1000);
       expected.phaseRecordedAt = expected.virtualNow;
       expected.scheduleExpected = true;
@@ -206,6 +211,7 @@ function validateHistoryCoherence(value, context) {
       if (expected.sourceVersion !== expected.capturedSourceVersion || expected.lifecycle !== 'active' ||
           expected.control !== 'active_resumed' || expected.tenantControl !== 'active_resumed' ||
           expected.recovery || expected.suppression || expected.phase !== 'queued' ||
+          new Date(expected.scheduledAt).getTime() > new Date(expected.virtualNow).getTime() ||
           new Date(expected.scheduleExpiresAt).getTime() <= new Date(expected.virtualNow).getTime()) {
         fail('The isolated automation processing history is unavailable.');
       }
@@ -232,7 +238,8 @@ function validateHistoryCoherence(value, context) {
       value.policy.lifecycle !== expected.lifecycle || value.policy.control !== expected.control ||
       value.tenantControl !== expected.tenantControl || value.run.phase !== expected.phase ||
       value.run.providerStep !== expected.providerStep || value.run.suppression !== expected.suppression ||
-      value.run.recovery !== expected.recovery || value.run.scheduledAt !== expected.scheduledAt ||
+      value.run.recovery !== expected.recovery || value.run.scheduleAcceptedAt !== expected.scheduleAcceptedAt ||
+      value.run.scheduledAt !== expected.scheduledAt ||
       value.run.scheduleExpiresAt !== expected.scheduleExpiresAt ||
       value.run.phaseRecordedAt !== expected.phaseRecordedAt ||
       value.policy.expiresAt !== addMilliseconds(context.anchorTime, 30 * 24 * 60 * 60 * 1000)) {
@@ -252,12 +259,14 @@ function validateState(value, context) {
       !['active', 'paused', 'expired', 'retired'].includes(value.policy.lifecycle) ||
       !['active_resumed', 'paused', 'revoked_terminal'].includes(value.policy.control) ||
       asIso(value.policy.expiresAt, 'The fictional policy expiry') !== value.policy.expiresAt ||
-      !exactObject(value.run, ['id', 'sequence', 'capturedSourceVersion', 'scheduledAt', 'scheduleExpiresAt',
+      !exactObject(value.run, ['id', 'sequence', 'capturedSourceVersion', 'scheduleAcceptedAt', 'scheduledAt', 'scheduleExpiresAt',
         'phase', 'phaseRecordedAt', 'providerStep', 'suppression', 'recovery']) || !UUID.test(value.run.id) ||
       !Number.isSafeInteger(value.run.sequence) || value.run.sequence < 1 ||
       !Number.isSafeInteger(value.run.capturedSourceVersion) || value.run.capturedSourceVersion < 1 ||
+      asIso(value.run.scheduleAcceptedAt, 'The fictional schedule acceptance') !== value.run.scheduleAcceptedAt ||
       asIso(value.run.scheduledAt, 'The fictional schedule') !== value.run.scheduledAt ||
       asIso(value.run.scheduleExpiresAt, 'The fictional schedule expiry') !== value.run.scheduleExpiresAt ||
+      new Date(value.run.scheduledAt).getTime() <= new Date(value.run.scheduleAcceptedAt).getTime() ||
       new Date(value.run.scheduleExpiresAt).getTime() <= new Date(value.run.scheduledAt).getTime() ||
       !['queued', 'processing', 'completed_internal'].includes(value.run.phase) ||
       asIso(value.run.phaseRecordedAt, 'The fictional processing time') !== value.run.phaseRecordedAt ||
@@ -274,7 +283,7 @@ function validateState(value, context) {
       value.policy.version !== value.run.sequence ||
       value.run.capturedSourceVersion > value.source.version ||
       new Date(value.virtualNow).getTime() < new Date(bounded.anchorTime).getTime() ||
-      new Date(value.run.scheduledAt).getTime() > new Date(value.virtualNow).getTime() ||
+      new Date(value.run.scheduleAcceptedAt).getTime() > new Date(value.virtualNow).getTime() ||
       new Date(value.run.phaseRecordedAt).getTime() < new Date(bounded.anchorTime).getTime() ||
       new Date(value.run.phaseRecordedAt).getTime() > new Date(value.virtualNow).getTime() ||
       !((value.policy.lifecycle === 'active' && value.policy.control === 'active_resumed') ||
@@ -329,11 +338,13 @@ function beginCurrentRun(state, context, outcome) {
   state.policy.version += 1;
   state.run = {
     id: runId(context, state.generation, state.run.sequence + 1), sequence: state.run.sequence + 1,
-    capturedSourceVersion: state.source.version, scheduledAt: state.virtualNow,
+    capturedSourceVersion: state.source.version, scheduleAcceptedAt: state.virtualNow,
+    scheduledAt: addMilliseconds(state.virtualNow, 60 * 60 * 1000),
     scheduleExpiresAt: addMilliseconds(state.virtualNow, 48 * 60 * 60 * 1000), phase: 'queued',
     phaseRecordedAt: state.virtualNow, providerStep: 0, suppression: false,
     recovery: 'bounded_history_verified_no_effect',
   };
+  requireRunnableBusinessPrelude(state, context);
   appendEvent(state, context, 'reconciliation', outcome);
   appendEvent(state, context, 'scheduled_run', 'scheduled_unpublished');
 }
@@ -370,6 +381,97 @@ function evidenceIds(state) {
     schedule: deterministicUuid('mission28-part14c-schedule', state.run.id),
     transaction: deterministicUuid('mission28-part14c-transaction', state.run.id),
     lease: deterministicUuid('mission28-part14c-lease', `${state.run.id}:${claimSequence}`),
+  });
+}
+
+// Server-owned adapters supply the same exact business-decision input for paid
+// no-effect preview and isolated demo. Request fields never select policy,
+// source, permission, calendar, clock, provider, or recovery authority.
+function businessInputForState(value, context, mode = 'isolated_demo') {
+  const state = value;
+  const bounded = contextValue(context);
+  const sourceCurrent = state.run.capturedSourceVersion === state.source.version;
+  const leaseExpiresAt = state.run.phase === 'processing'
+    ? addMilliseconds(state.run.phaseRecordedAt, 30 * 60 * 1000) : null;
+  const claimState = state.run.phase === 'processing'
+    ? (new Date(leaseExpiresAt).getTime() > new Date(state.virtualNow).getTime() ? 'active' : 'expired') : 'none';
+  return businessEngine.controlledInput({
+    mode, tenantId: bounded.tenantId, evaluatedAt: state.virtualNow,
+    policyId: state.policy.id, policyVersion: state.policy.version,
+    policyLifecycle: state.policy.lifecycle, policyCurrentness: 'exact_current',
+    policyExpiresAt: state.policy.expiresAt,
+    sourceId: state.source.id, sourceVersion: state.source.version,
+    sourceDigest: state.source.digest, sourceState: sourceCurrent ? 'known' : 'unavailable',
+    sourceValue: sourceCurrent ? 'latest_exact_current' : null,
+    sourceLineage: 'active', sourceObservedAt: bounded.anchorTime,
+    authorizationState: 'exact_current_satisfied', permissionState: 'exact_current_allowed',
+    controls: {
+      tenantPause: state.tenantControl === 'active_resumed' ? 'clear' : 'matched',
+      recipientOptOut: state.run.suppression ? 'matched' : 'clear',
+      sourceChange: sourceCurrent ? 'clear' : 'matched',
+    },
+    schedule: {
+      timeZone: 'America/New_York', utcInstant: state.run.scheduledAt,
+      acceptedAt: state.run.scheduleAcceptedAt,
+      expiresAt: state.run.scheduleExpiresAt,
+      allowedWindows: [
+        { weekday: 1, startMinute: 0, endMinute: 1440 },
+        { weekday: 2, startMinute: 0, endMinute: 1440 },
+        { weekday: 3, startMinute: 0, endMinute: 1440 },
+        { weekday: 4, startMinute: 0, endMinute: 1440 },
+        { weekday: 5, startMinute: 0, endMinute: 1440 },
+        { weekday: 6, startMinute: 0, endMinute: 1440 },
+        { weekday: 7, startMinute: 0, endMinute: 1440 },
+      ],
+      quietWindows: [], holidays: [],
+    },
+    execution: {
+      claimState,
+      claimAcquiredAt: claimState === 'none' ? null : state.run.phaseRecordedAt,
+      claimExpiresAt: claimState === 'none' ? null : leaseExpiresAt,
+      recoveryState: state.run.recovery || 'not_required',
+    },
+  });
+}
+
+function businessDecision(value, context, mode = 'isolated_demo') {
+  const state = currentState(value, context);
+  return businessEngine.evaluate(businessInputForState(state, context, mode));
+}
+
+function requireRunnableBusinessPrelude(state, context) {
+  const decision = businessEngine.evaluate(businessInputForState(state, context));
+  if (!decision.runnable || decision.policy.state !== 'active_exact_current' ||
+      decision.evaluation.state !== 'eligible' || decision.suppression.state !== 'clear' ||
+      decision.scheduler.state !== 'scheduled_unpublished' ||
+      !['ready_no_effect', 'recovery_reviewed_no_effect'].includes(decision.recovery.state)) {
+    fail('The fictional policy, source, safeguards, calendar, or recovery decision is unavailable.');
+  }
+  return decision;
+}
+
+function unavailableBusinessInput(mode = 'paid_no_effect_preview') {
+  if (!businessEngine.MODES.includes(mode)) fail('The no-effect business mode is unavailable.');
+  const evaluatedAt = '1970-01-01T15:00:00.000Z';
+  const id = deterministicUuid('mission28-part14c-preview', `${mode}:unavailable-no-effect`);
+  return businessEngine.controlledInput({
+    mode, tenantId: id, evaluatedAt,
+    policyId: deterministicUuid('mission28-part14c-paid-preview-policy', id), policyVersion: 1,
+    policyLifecycle: 'unavailable', policyCurrentness: 'unavailable',
+    policyExpiresAt: '1970-01-02T15:00:00.000Z',
+    sourceId: deterministicUuid('mission28-part14c-paid-preview-source', id), sourceVersion: 1,
+    sourceDigest: digest({ unavailable: true, noEffect: true }), sourceState: 'unavailable',
+    sourceValue: null, sourceLineage: 'unavailable', sourceObservedAt: evaluatedAt,
+    authorizationState: 'unavailable', permissionState: 'unavailable',
+    controls: Object.fromEntries(businessEngine.CONTROL_KINDS.map(kind => [kind, 'unavailable'])),
+    schedule: {
+      timeZone: 'America/New_York', utcInstant: '1970-01-01T16:00:00.000Z',
+      acceptedAt: evaluatedAt, expiresAt: '1970-01-02T16:00:00.000Z',
+      allowedWindows: [{ weekday: 4, startMinute: 540, endMinute: 1020 }],
+      quietWindows: [], holidays: [],
+    },
+    execution: { claimState: 'uncertain', claimAcquiredAt: null, claimExpiresAt: null,
+      recoveryState: 'unavailable' },
   });
 }
 // The fictional adapter creates the same closed row vocabulary consumed by
@@ -445,17 +547,22 @@ function deriveEvidence(value, context) {
   const state = currentState(value, context);
   const row = demoEvidenceRow(state, context);
   const shared = stateEngine.evaluateEvidence(row, state.virtualNow);
+  const business = businessEngine.evaluate(businessInputForState(state, context));
   // Only exact runnable/completed projections preserve the fictional
   // eligibility record. In particular, an expired processing claim projects
   // recovery and cannot be strengthened back to eligible by schedule presence.
   const eligible = ['queued', 'in_flight', 'completed'].includes(shared.run.id);
   return Object.freeze({
-    policy: Object.freeze({ lifecycle: shared.policy.id, control: state.policy.control }),
-    evaluation: eligible ? 'eligible' : shared.run.id,
-    scheduler: shared.scheduler.scheduleExpired ? 'expired' : state.run.phase,
-    suppression: shared.suppression ? shared.suppression.id : 'exact_current_clear',
-    recovery: shared.recovery.state,
+    policy: Object.freeze({ lifecycle: shared.policy.id, control: state.policy.control,
+      business: business.policy.state }),
+    evaluation: business.evaluation.state === 'eligible' && eligible ? 'eligible' :
+      business.evaluation.state === 'eligible' ? shared.run.id : business.evaluation.state,
+    scheduler: business.scheduler.state === 'scheduled_unpublished' ? state.run.phase : business.scheduler.state,
+    suppression: business.suppression.state === 'clear' ? 'exact_current_clear' : business.suppression.state,
+    recovery: ['recovery_required', 'reconciliation_required_no_resend', 'unavailable']
+      .includes(business.recovery.state) ? business.recovery.state : shared.recovery.state,
     runState: shared.run,
+    business,
     sourceCurrent: state.run.capturedSourceVersion === state.source.version,
     provider: Object.freeze({ mode: PROVIDER_MODE, step: state.run.providerStep }),
     effects: Object.freeze({ recipients: 0, providerCalls: 0, external: 0, financial: 0, money: 0 }),
@@ -475,6 +582,7 @@ function allowedActions(value, context) {
       !state.run.suppression && state.run.phase !== 'completed_internal') actions.push('suppress');
   if (state.run.suppression || state.run.recovery || evidence.runState.id === 'recovery') actions.push('recover');
   if (evidence.sourceCurrent && evidence.evaluation === 'eligible' && evidence.scheduler !== 'expired' &&
+      new Date(state.virtualNow).getTime() >= new Date(state.run.scheduledAt).getTime() &&
       !evidence.recovery && state.run.providerStep < 2) actions.push('provider_step');
   actions.push('stop', 'reset_automation');
   return Object.freeze(actions.filter(action => state.events.length + actionEventCost(action) <= 40));
@@ -576,23 +684,21 @@ function applyAction(value, context, actionValue) {
 }
 
 function buildNoEffectPreview(value, options = {}) {
-  const providerMode = options.mode === 'isolated_demo'
+  const businessMode = options.mode === 'isolated_demo' ? 'isolated_demo' : 'paid_no_effect_preview';
+  const providerMode = businessMode === 'isolated_demo'
     ? PROVIDER_MODE : 'provider_unavailable_preview_no_effect';
   const preview = centerContract.buildPreview(value);
-  const paidPreviewEvidence = Object.freeze({
-    latest_record_type: 'proposed_action', currentness_marker: null,
-    policy_lifecycle_state: null, policy_lifecycle_currentness: null, policy_expires_at: null,
-    policy_control_state: null, tenant_control_state: null, action_control_state: null,
-    schedule_count: 0, action_unit_count: 0,
-  });
-  const shared = stateEngine.evaluateEvidence(paidPreviewEvidence, new Date(0).toISOString());
+  const business = businessEngine.evaluate(options.businessInput || unavailableBusinessInput(businessMode));
+  if (business.mode !== businessMode) fail('The no-effect preview authority is unavailable.');
   const engineAssessment = Object.freeze({
-    policy: shared.policy.id,
-    evaluation: shared.evaluation.state,
-    scheduler: shared.scheduler.scheduleExpiresAt ? 'recorded_schedule' : 'preview_only_no_schedule_created',
-    suppression: shared.suppression ? shared.suppression.id : 'mandatory_checks_required_before_effect',
-    recovery: shared.recovery.state || 'not_applicable_no_effect',
-    run: shared.run.id,
+    policy: business.policy.state,
+    evaluation: business.evaluation.state,
+    scheduler: business.scheduler.state === 'unavailable' ? 'preview_only_no_schedule_created' : business.scheduler.state,
+    suppression: business.suppression.state === 'unavailable'
+      ? 'mandatory_checks_required_before_effect' : business.suppression.state,
+    recovery: business.recovery.state === 'unavailable' ? 'not_applicable_no_effect' : business.recovery.state,
+    run: business.runnable ? 'ready_no_effect' : 'unavailable',
+    businessInputDigest: business.inputDigest, businessOutputDigest: business.outputDigest,
     providerMode, recipients: 0, providerCalls: 0, externalEffects: 0,
     financialEffects: 0, moneyEffects: 0,
   });
@@ -605,6 +711,7 @@ function buildNoEffectPreview(value, options = {}) {
 
 module.exports = Object.freeze({
   ACTIONS, ACTION_FAMILY, CHANNEL_ID, CONTRACT, PROVIDER_MODE, SOURCE_CLASS,
-  allowedActions, applyAction, buildNoEffectPreview, currentState, demoEvidenceRow,
-  deriveEvidence, deterministicUuid, evidenceIds, initialState, normalizeAction, validateState,
+  allowedActions, applyAction, buildNoEffectPreview, businessDecision, businessInputForState,
+  currentState, demoEvidenceRow, deriveEvidence, deterministicUuid, evidenceIds, initialState,
+  normalizeAction, unavailableBusinessInput, validateState,
 });

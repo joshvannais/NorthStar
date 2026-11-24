@@ -54,6 +54,7 @@ const demoPaymentPart9Acceptance = require('../customerFinancial/demoPaymentPart
 const demoCollectionPart10Acceptance = require('../customerFinancial/demoCollectionPart10Acceptance');
 const demoAccountingPart11Acceptance = require('../customerFinancial/demoAccountingPart11Acceptance');
 const demoReportingPart12Acceptance = require('../customerFinancial/demoReportingPart12Acceptance');
+const automationCenterContract = require('../../public/js/automation-center-contract');
 const automationRuntime = require('../automation/runtimeEngine');
 const automationDemoProjection = require('../automation/demoProjection');
 
@@ -344,6 +345,10 @@ router.get('/automation-center', async function (req, res) {
 router.post('/automation-center/preview', express.json({ limit: '8kb' }), async function (req, res) {
   res.set('Cache-Control', 'no-store'); res.vary('Cookie');
   if (!mutationBoundary(req, res, 'automation-center-preview')) return undefined;
+  try { automationCenterContract.buildPreview(req.body); } catch (error) {
+    return res.status(400).json({ success: false,
+      error: { code: 'demo_automation_preview_invalid', message: error.message } });
+  }
   try {
     const record = await readCommandCenterEntry(req, res);
     const expectedRevision = Number(req.get('X-NorthStar-Demo-Revision'));
@@ -351,7 +356,11 @@ router.post('/automation-center/preview', express.json({ limit: '8kb' }), async 
       return res.status(409).json({ success: false,
         error: { code: 'demo_automation_changed', message: 'The fictional automation changed. Refresh and review it again.' } });
     }
-    return res.json({ success: true, data: automationRuntime.buildNoEffectPreview(req.body, { mode: 'isolated_demo' }),
+    const engineContext = automationDemoProjection.context(record);
+    const state = automationRuntime.currentState(record.state.automationJourney, engineContext);
+    const businessInput = automationRuntime.businessInputForState(state, engineContext, 'isolated_demo');
+    return res.json({ success: true, data: automationRuntime.buildNoEffectPreview(req.body,
+      { mode: 'isolated_demo', businessInput }),
       demo: { workspaceRevision: record.revision, providerMode: automationRuntime.PROVIDER_MODE } });
   } catch (error) { return commandCenterFailure(req, res, error); }
 });

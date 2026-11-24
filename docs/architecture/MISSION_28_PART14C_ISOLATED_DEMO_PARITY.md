@@ -8,18 +8,48 @@ external, financial, or money effect.
 
 ## Shared engines, distinct authorities
 
-Paid PostgreSQL rows and isolated fictional rows both enter the pure mounted
-`automationCenter/repository` policy, evaluation, scheduler, suppression, and
-recovery resolvers. `evaluateEvidence` composes those same resolvers into the
-run-state decision consumed by `buildSnapshot`; there is no demo-only state
-precedence. Paid and demo no-effect previews both use
-`automation/runtimeEngine.buildNoEffectPreview`, which also executes the same
-five resolvers with explicitly unavailable paid source authority and exposes a
-zero-effect engine assessment. The paid preview truthfully labels real provider
-authority unavailable, while the isolated demo labels its fixed local
-simulation; neither creates a provider attempt. The demo adapter may supply
-only a closed, validated fictional row in the production vocabulary. It cannot
-replace the resolvers or strengthen unavailable evidence.
+Part 14C mounts `automation/businessDecisionEngine` as the common, effect-free
+business decision path, rather than renaming the existing read-model
+classifiers as engines. Its server-owned controlled input binds exact policy and
+source identities and digests, currentness, declarative rule material and authorization,
+permission and collision controls, a tenant-zone calendar schedule, immutable
+processing evidence, and recovery state. `evaluate` applies the released Part
+5B evaluation precedence and exact input/output digests, Part 5D permission and
+collision/suppression precedence, Part 6B zone/calendar/quiet-hour/holiday and
+expiration checks, and Part 6F fail-closed recovery decision. It returns only
+no-effect decisions and exact zero effect counters.
+
+The runtime source map pins those four released contract files by normalized-LF
+SHA-256, and executable tests recompute every binding. This source link does not
+turn a candidate digest into authority; the runtime accepts only server-built,
+tenant-bound controlled input whose complete component and envelope digests
+validate before any decision.
+
+The mounted paid call graph is
+`routes/automationCenter.preview -> runtimeEngine.buildNoEffectPreview ->
+businessDecisionEngine.evaluate`; because that request has no independently
+resolved current policy, source, recipient, consent, calendar, or execution
+authority, all positive decisions remain unavailable. The isolated call graph
+is `routes/demo.preview` or `demoRepository.action ->
+runtimeEngine.businessInputForState -> businessDecisionEngine.evaluate ->
+runtime transition guard -> demoProjection -> repository.buildSnapshot`.
+Initial eligibility/scheduling, corrected-run scheduling, provider-simulation
+steps, and previews therefore use the same decision functions. Executable
+counterexamples prove equivalent controlled paid/demo inputs produce identical
+policy, evaluation, scheduling, suppression, and recovery results, including
+source change, policy pause, suppression, calendar expiry, and expired-claim
+recovery. Requests cannot provide or widen those controlled inputs.
+
+After the business decision, paid PostgreSQL rows and isolated fictional rows
+also enter the pure mounted `automationCenter/repository` read-model resolvers.
+`evaluateEvidence` composes those resolvers into the run-state decision consumed
+by `buildSnapshot`; there is no demo-only display precedence. The business
+engine and read-model projection are deliberately distinct and both are shared.
+The paid preview truthfully labels real provider authority unavailable, while
+the isolated demo labels its fixed local simulation; neither creates a provider
+attempt. The demo adapter may supply only a closed, validated fictional row in
+the production vocabulary. It cannot replace the engines or strengthen
+unavailable evidence.
 
 Paid reads remain tenant-private PostgreSQL projections behind owner/admin
 authorization. Demo reads use only the opaque `northstar_demo_workspace`
@@ -37,6 +67,11 @@ virtual day, change source, review a source correction, pause, resume,
 suppress, record recovery review, run one deterministic local simulation step,
 stop, or reset. Requests cannot provide a clock, source document, result,
 provider response, recipient, channel credential, money amount, or effect.
+
+A source correction records schedule acceptance at that controlled transition
+and selects a strictly later fictional instant. The simulated processing step
+is unavailable until the virtual clock reaches that instant; no earlier
+acceptance time or processing authority is backfilled.
 
 Each mutation uses the existing demo revision compare-and-swap and idempotency
 receipt. A source change makes the captured source stale; correction creates a

@@ -435,8 +435,11 @@
         : 'Fictional action recorded. No one was contacted, no outside service was called, and no real account or money changed.';
     }).catch(function (error) {
       if (isAuthorityFailure(error)) { invalidateAuthority(error); return; }
-      if (request !== actionGeneration) return;
+      // A later mounted action does not prove when an unbound conflict was
+      // established on the server. Clear before stale-response suppression so
+      // a superseded command cannot leave an obsolete workspace visible.
       if (error && error.status === 409) { invalidateConflict('load'); return; }
+      if (request !== actionGeneration) return;
       invalidateUnavailable('The fictional automation action is unavailable. No prior demo state is shown; refresh to continue.');
     }).finally(function () {
       if (request === actionGeneration) {

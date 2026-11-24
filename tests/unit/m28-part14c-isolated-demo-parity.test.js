@@ -1,11 +1,13 @@
 'use strict';
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const vm = require('node:vm');
 const express = require('express');
 const request = require('supertest');
 const runtime = require('../../src/automation/runtimeEngine');
+const businessEngine = require('../../src/automation/businessDecisionEngine');
 const demoProjection = require('../../src/automation/demoProjection');
 const paidStateEngine = require('../../src/automationCenter/repository');
 const centerContract = require('../../public/js/automation-center-contract');
@@ -20,6 +22,35 @@ const SESSION = '00000000-0000-4000-8000-000000000002';
 function context(overrides = {}) {
   return { tenantId: TENANT, sessionId: SESSION, workspaceGeneration: 1, workspaceRevision: 1,
     anchorTime: '2026-11-23T15:00:00.000Z', ...overrides };
+}
+function rebuildBusinessInput(input, mode, overrides = {}) {
+  const options = {
+    mode, tenantId: input.tenantId, evaluatedAt: input.evaluatedAt,
+    policyId: input.policy.policyId, policyVersion: input.policy.version,
+    policyLifecycle: input.policy.lifecycle, policyCurrentness: input.policy.currentness,
+    policyExpiresAt: input.policy.expiresAt,
+    sourceId: input.source.sourceId, sourceVersion: input.source.version,
+    sourceDigest: input.source.sourceDigest, sourceState: input.source.state,
+    sourceValue: input.source.value, sourceLineage: input.source.lineage,
+    sourceObservedAt: input.source.observedAt,
+    authorizationState: input.authorization.state, permissionState: input.permission.state,
+    controls: { ...input.controls.states },
+    schedule: {
+      timeZone: input.schedule.timeZone, utcInstant: input.schedule.utcInstant,
+      acceptedAt: input.schedule.acceptedAt, expiresAt: input.schedule.expiresAt,
+      allowedWindows: input.schedule.allowedWindows.map(window => ({ ...window })),
+      quietWindows: input.schedule.quietWindows.map(window => ({ ...window })),
+      holidays: input.schedule.holidays.slice(),
+    },
+    execution: {
+      claimState: input.execution.claimState, claimAcquiredAt: input.execution.claimAcquiredAt,
+      claimExpiresAt: input.execution.claimExpiresAt, recoveryState: input.execution.recoveryState,
+    },
+  };
+  return businessEngine.controlledInput({ ...options, ...overrides,
+    controls: { ...options.controls, ...(overrides.controls || {}) },
+    schedule: { ...options.schedule, ...(overrides.schedule || {}) },
+    execution: { ...options.execution, ...(overrides.execution || {}) } });
 }
 function record(automationJourney, overrides = {}) {
   return { tenantId: TENANT, sessionId: SESSION, revision: 1,
@@ -131,6 +162,9 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
       state: 'fictional_simulation_only', providerMode: 'Controlled simulation; no outside-service calls',
     });
     expect(JSON.stringify(projected)).not.toMatch(/api[_-]?key|credential|real recipient/i);
+    const weekendContext = context({ anchorTime: '2026-11-22T04:30:00.000Z' });
+    const weekendState = runtime.initialState(weekendContext);
+    expect(runtime.businessDecision(weekendState, weekendContext).scheduler.state).toBe('scheduled_unpublished');
   });
 
   test('uses tenant/session/generation bindings so another demo cannot select the same fictional authority', () => {
@@ -164,7 +198,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(() => runtime.validateState(unknownEvidence, context())).toThrow(/history/i);
     const futureSchedule = runtime.initialState(context());
     futureSchedule.run.scheduledAt = '2026-11-23T15:00:01.000Z';
-    expect(() => runtime.validateState(futureSchedule, context())).toThrow(/bindings/i);
+    expect(() => runtime.validateState(futureSchedule, context())).toThrow(/bindings|history/i);
     const incoherentPolicy = runtime.initialState(context());
     incoherentPolicy.policy.control = 'paused';
     expect(() => runtime.validateState(incoherentPolicy, context())).toThrow(/bindings/i);
@@ -185,19 +219,24 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
 
   test('projects coherent policy, evaluation, scheduler, suppression and recovery states through one renderer', () => {
     const results = actionSequence([
-      'source_change', 'source_correct', 'resume', 'provider_step', 'suppress',
+      'source_change', 'source_correct', 'resume', 'advance_time', 'provider_step', 'suppress',
       'recover', 'resume', 'pause', 'resume', 'stop', 'reset_automation',
     ]);
     expect(results.map(item => item.projected.snapshot.runs[0].state)).toEqual([
-      'stale', 'recovery', 'queued', 'in_flight', 'suppressed',
+      'stale', 'recovery', 'queued', 'queued', 'in_flight', 'suppressed',
       'recovery', 'queued', 'paused', 'queued', 'stopped', 'queued',
     ]);
     expect(results[0].projected.demo.allowedActions).toContain('source_correct');
     expect(results[0].projected.demo.allowedActions).not.toContain('provider_step');
-    expect(results[9].projected.demo.allowedActions).toEqual(['reset_automation']);
+    expect(results[10].projected.demo.allowedActions).toEqual(['reset_automation']);
     const corrected = results[1];
     expect(corrected.state.source.version).toBe(corrected.state.run.capturedSourceVersion);
     expect(corrected.state.policy.version).toBe(2);
+    expect(corrected.state.run.scheduleAcceptedAt).toBe(corrected.state.virtualNow);
+    expect(new Date(corrected.state.run.scheduledAt).getTime() -
+      new Date(corrected.state.run.scheduleAcceptedAt).getTime()).toBe(60 * 60 * 1000);
+    expect(results[2].projected.demo.allowedActions).not.toContain('provider_step');
+    expect(results[3].projected.demo.allowedActions).toContain('provider_step');
     expect(corrected.projected.snapshot.timeline.map(item => item.label)).toEqual(
       expect.arrayContaining(['Review evidence recorded', 'Schedule evidence recorded']));
   });
@@ -282,12 +321,14 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(paidPreview).toMatchObject({ previewOnly: true, saved: false,
       activated: false, queued: false, recipientContacted: false, providerAttemptCreated: false,
       externalEffectCreated: false, financialEffectCreated: false, moneyEffectCreated: false });
-    expect(paidPreview.engineAssessment).toEqual({
+    expect(paidPreview.engineAssessment).toEqual(expect.objectContaining({
       policy: 'unavailable', evaluation: 'unavailable', scheduler: 'preview_only_no_schedule_created',
       suppression: 'mandatory_checks_required_before_effect', recovery: 'not_applicable_no_effect',
       run: 'unavailable', providerMode: 'provider_unavailable_preview_no_effect',
       recipients: 0, providerCalls: 0, externalEffects: 0, financialEffects: 0, moneyEffects: 0,
-    });
+    }));
+    expect(paidPreview.engineAssessment.businessInputDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(paidPreview.engineAssessment.businessOutputDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(demoPreview.engineAssessment).toMatchObject({
       providerMode: 'deterministic_local_simulation_no_provider', providerCalls: 0,
       recipients: 0, externalEffects: 0, financialEffects: 0, moneyEffects: 0,
@@ -316,6 +357,88 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(recovery.recovery).toMatchObject({ state: 'bounded_history_verified_no_effect',
       nonblockingSuperseded: false, projected: { id: 'recovery' } });
     expect(recovery.run.id).toBe('recovery');
+  });
+
+  test('uses one source-linked business engine for equivalent paid and demo decisions and restrictive counterexamples', () => {
+    const state = runtime.initialState(context());
+    const paidInput = runtime.businessInputForState(state, context(), 'paid_no_effect_preview');
+    const demoInput = runtime.businessInputForState(state, context(), 'isolated_demo');
+    const paid = businessEngine.evaluate(paidInput);
+    const demo = businessEngine.evaluate(demoInput);
+    const decisions = value => ({
+      policy: value.policy.state, evaluation: value.evaluation.state,
+      scheduler: value.scheduler.state, suppression: value.suppression.state,
+      recovery: value.recovery.state, runnable: value.runnable, effects: value.effects,
+    });
+    expect(decisions(paid)).toEqual(decisions(demo));
+    expect(decisions(paid)).toEqual({ policy: 'active_exact_current', evaluation: 'eligible',
+      scheduler: 'scheduled_unpublished', suppression: 'clear', recovery: 'ready_no_effect',
+      runnable: true, effects: { recipients: 0, providerCalls: 0, external: 0, financial: 0, money: 0 } });
+    expect([paid, paid.policy, paid.evaluation, paid.suppression, paid.scheduler,
+      paid.recovery, paid.effects].every(Object.isFrozen)).toBe(true);
+    expect(Object.keys(businessEngine.SOURCES)).toEqual(['evaluator', 'suppression', 'scheduler', 'recovery']);
+    const candidateArtifact = JSON.parse(read('docs/architecture/MISSION_28_PART14C_ISOLATED_DEMO_PARITY.json'));
+    expect(candidateArtifact.sharedEngines.acceptedSourceContracts).toEqual(Object.values(businessEngine.SOURCES));
+    for (const source of Object.values(businessEngine.SOURCES)) {
+      const normalized = read(source.path).replace(/\r\n/g, '\n').trim() + '\n';
+      expect(crypto.createHash('sha256').update(normalized).digest('hex').toUpperCase())
+        .toBe(source.normalizedLfSha256);
+    }
+    const retargeted = JSON.parse(JSON.stringify(demoInput));
+    retargeted.source.value = 'stale';
+    expect(() => businessEngine.evaluate(retargeted)).toThrow(/source binding/i);
+
+    const changed = runtime.applyAction(state, context(), 'source_change');
+    const restrictedPaid = businessEngine.evaluate(
+      runtime.businessInputForState(changed, context(), 'paid_no_effect_preview'));
+    const restrictedDemo = businessEngine.evaluate(
+      runtime.businessInputForState(changed, context(), 'isolated_demo'));
+    expect(decisions(restrictedPaid)).toEqual(decisions(restrictedDemo));
+    expect(decisions(restrictedPaid)).toMatchObject({ evaluation: 'unavailable',
+      suppression: 'unavailable', scheduler: 'unavailable', recovery: 'unavailable', runnable: false });
+    expect(runtime.allowedActions(changed, context())).not.toContain('provider_step');
+
+    const paused = runtime.applyAction(state, context(), 'pause');
+    const suppressed = runtime.applyAction(state, context(), 'suppress');
+    const suppressedThenChanged = runtime.applyAction(suppressed, context(), 'source_change');
+    const expiredSchedule = runtime.applyAction(runtime.applyAction(state, context(), 'advance_time'),
+      context(), 'advance_time');
+    const expiredClaim = runtime.applyAction(runtime.applyAction(state, context(), 'provider_step'),
+      context(), 'advance_time');
+    for (const [candidate, expected] of [
+      [paused, { policy: 'paused', evaluation: 'ineligible', runnable: false }],
+      [suppressed, { evaluation: 'suppressed', suppression: 'suppressed', runnable: false }],
+      [suppressedThenChanged, { evaluation: 'unavailable', suppression: 'unavailable', runnable: false }],
+      [expiredSchedule, { scheduler: 'expired', runnable: false }],
+      [expiredClaim, { recovery: 'recovery_required', runnable: false }],
+    ]) {
+      const paidResult = businessEngine.evaluate(
+        runtime.businessInputForState(candidate, context(), 'paid_no_effect_preview'));
+      const demoResult = businessEngine.evaluate(
+        runtime.businessInputForState(candidate, context(), 'isolated_demo'));
+      expect(decisions(paidResult)).toEqual(decisions(demoResult));
+      expect(decisions(paidResult)).toMatchObject(expected);
+    }
+
+    for (const [overrides, expected] of [
+      [{ authorizationState: 'required' },
+        { evaluation: 'approval_required', suppression: 'clear', runnable: false }],
+      [{ permissionState: 'exact_current_blocked' },
+        { evaluation: 'suppressed', suppression: 'suppressed', runnable: false }],
+      [{ schedule: { quietWindows: [{ weekday: 1, startMinute: 0, endMinute: 1440 }] } },
+        { scheduler: 'suppressed', runnable: false }],
+      [{ sourceValue: 'not_current', controls: { recipientOptOut: 'matched' } },
+        { evaluation: 'suppressed', suppression: 'suppressed', runnable: false }],
+      [{ policyLifecycle: 'paused', controls: { globalPause: 'unavailable' } },
+        { evaluation: 'unavailable', suppression: 'unavailable', runnable: false }],
+      [{ policyExpiresAt: '2026-11-22T15:00:00.000Z', sourceState: 'unavailable', sourceValue: null },
+        { policy: 'expired', evaluation: 'unavailable', runnable: false }],
+    ]) {
+      const paidResult = businessEngine.evaluate(rebuildBusinessInput(paidInput, 'paid_no_effect_preview', overrides));
+      const demoResult = businessEngine.evaluate(rebuildBusinessInput(demoInput, 'isolated_demo', overrides));
+      expect(decisions(paidResult)).toEqual(decisions(demoResult));
+      expect(decisions(paidResult)).toMatchObject(expected);
+    }
   });
 
   test('rejects incoherent transition shortcuts instead of changing labels without authority', () => {
@@ -392,6 +515,29 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     const resetEnvelope = envelope(reset, 2);
     resetAction.resolve({ success: true, data: resetEnvelope.snapshot, demo: resetEnvelope.demo }); await flush();
     preview.reject(Object.assign(new Error('CONFLICT'), { status: 409 })); await flush();
+    expect(elements.automationDemoGeneration.textContent).toBe('Not loaded');
+    expect(elements.automationDemoControls.hidden).toBe(true);
+    expect(elements.automationStatus.dataset.state).toBe('conflict');
+    expect(elements.automationSummary.hidden).toBe(true);
+  });
+
+  test('a superseded action conflict clears a later reset when a newer server revision may exist', async () => {
+    const initial = runtime.initialState(context());
+    const initialEnvelope = envelope(initial, 1);
+    const olderAction = deferred(); const resetAction = deferred();
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: initialEnvelope.snapshot, demo: initialEnvelope.demo })
+      .mockImplementationOnce(() => olderAction.promise)
+      .mockImplementationOnce(() => resetAction.promise);
+    const { buttons, elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    buttons.find(button => button.getAttribute('data-automation-demo-action') === 'provider_step').emit('click');
+    buttons.find(button => button.getAttribute('data-automation-demo-action') === 'reset_automation').emit('click');
+    const reset = runtime.applyAction(initial, context(), 'reset_automation');
+    const resetEnvelope = envelope(reset, 2);
+    resetAction.resolve({ success: true, data: resetEnvelope.snapshot, demo: resetEnvelope.demo }); await flush();
+    expect(elements.automationDemoGeneration.textContent).toContain('Demo 2 · saved version 2');
+    olderAction.reject(Object.assign(new Error('CONFLICT'), { status: 409 })); await flush();
     expect(elements.automationDemoGeneration.textContent).toBe('Not loaded');
     expect(elements.automationDemoControls.hidden).toBe(true);
     expect(elements.automationStatus.dataset.state).toBe('conflict');
@@ -620,7 +766,15 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
         .set('X-NorthStar-Demo-Intent', 'automation-center-preview')
         .set('X-NorthStar-Demo-Revision', '1').send(previewInput).expect(200);
       expect(previewResponse.body.data).toMatchObject({ previewOnly: true,
-        engineAssessment: { policy: 'unavailable', run: 'unavailable', providerCalls: 0 } });
+        engineAssessment: { policy: 'active_exact_current', evaluation: 'eligible',
+          scheduler: 'scheduled_unpublished', suppression: 'clear', recovery: 'ready_no_effect',
+          run: 'ready_no_effect', providerCalls: 0 } });
+      await request(app).post('/api/demo/automation-center/preview')
+        .set('Host', 'northstar.test').set('Origin', 'http://northstar.test')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('X-NorthStar-Demo-Revision', '1')
+        .send({ ...previewInput, evaluatedAt: '2099-01-01T00:00:00.000Z', providerResult: 'success' })
+        .expect(400);
 
       const actionResponse = await request(app).post('/api/demo/automation-center/actions')
         .set('Host', 'northstar.test').set('Origin', 'http://northstar.test')

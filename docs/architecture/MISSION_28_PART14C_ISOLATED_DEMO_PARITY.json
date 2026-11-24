@@ -21,6 +21,15 @@
     "mission31GuidedSimulationIncluded": false
   },
   "sharedEngines": {
+    "businessDecision": "src/automation/businessDecisionEngine.js#evaluate",
+    "controlledInput": "src/automation/businessDecisionEngine.js#controlledInput",
+    "policyEvaluationSuppressionSchedulingRecovery": "one_source_linked_effect_free_business_call_graph",
+    "acceptedSourceContracts": [
+      {"path": "docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json", "normalizedLfSha256": "BAD13E2EE322990655E3C817F89B227DDE40D591054746286002F9628BAA9758"},
+      {"path": "docs/architecture/MISSION_28_PART5D_COLLISION_SUPPRESSION_DRY_RUN_CONTRACT.json", "normalizedLfSha256": "DAD8279E384924222EB1F0F8F86B0EC739197334F727596DD6A3F53044865FFA"},
+      {"path": "docs/architecture/MISSION_28_PART6B_DURABLE_SCHEDULER_CONTRACT.json", "normalizedLfSha256": "36EC7DE5DEE42EBA9C95D67A8549EFA6204AC2B142AC4C54ACB49688F42600EF"},
+      {"path": "docs/architecture/MISSION_28_PART6F_RECOVERY_AUTHORITY_CONTRACT.json", "normalizedLfSha256": "31427D49C49575B908293BF5E8442B15BB7F960D5952E0910B89EC8C4869FBFE"}
+    ],
     "statusProjection": "src/automationCenter/repository.js#buildSnapshot",
     "policy": "src/automationCenter/repository.js#resolvePolicy",
     "evaluation": "src/automationCenter/repository.js#resolveEvaluation",
@@ -29,9 +38,13 @@
     "recovery": "src/automationCenter/repository.js#resolveRecovery",
     "composition": "src/automationCenter/repository.js#evaluateEvidence",
     "preview": "src/automation/runtimeEngine.js#buildNoEffectPreview",
+    "paidCallGraph": "routes/automationCenter.preview -> runtimeEngine.buildNoEffectPreview -> businessDecisionEngine.evaluate",
+    "demoCallGraph": "routes/demo.preview_and_demoRepository.action -> runtimeEngine.businessInputForState -> businessDecisionEngine.evaluate -> runtimeEngine.transition_guard -> demoProjection -> repository.buildSnapshot",
     "paidPreviewUsesSharedEngine": true,
     "paidPreviewProviderAuthority": "unavailable_preview_no_effect",
     "demoPreviewProviderAuthority": "deterministic_local_simulation_no_provider",
+    "equivalentControlledPaidAndDemoInputsProduceSameBusinessDecisions": true,
+    "restrictiveSourcePolicyConsentCalendarAndRecoveryInputsFailClosedOnBothPaths": true,
     "demoProjectionUsesPaidResolversAndStatusEngine": true,
     "runtimeImportsTestModels": false
   },
@@ -46,6 +59,7 @@
   },
   "controlledAdapters": {
     "virtualClock": "server_fixed_advance_exactly_one_day",
+    "correctedSchedule": "accepted_at_the_correction_boundary_strictly_future_and_no_processing_before_due",
     "provider": "deterministic_local_simulation_no_provider",
     "processingClaim": "immutable_per_provider_attempt_with_new_identity_after_recovery",
     "pauseResumeRefreshesClaim": false,

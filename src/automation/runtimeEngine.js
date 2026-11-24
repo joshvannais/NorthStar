@@ -405,6 +405,8 @@ function evidenceIds(state) {
 function businessInputForState(value, context, mode = 'isolated_demo') {
   const state = value;
   const bounded = contextValue(context);
+  const scheduleMaterial = businessEngine.localScheduleMaterial(
+    'America/New_York', state.run.scheduledAt);
   const sourceCurrent = state.run.capturedSourceVersion === state.source.version;
   const leaseExpiresAt = state.run.phase === 'processing'
     ? addMilliseconds(state.run.phaseRecordedAt, 30 * 60 * 1000) : null;
@@ -435,7 +437,8 @@ function businessInputForState(value, context, mode = 'isolated_demo') {
       duplicateContent: 'clear', higherPriorityAction: 'clear',
     },
     schedule: {
-      timeZone: 'America/New_York', utcInstant: state.run.scheduledAt,
+      timeZone: 'America/New_York', ...scheduleMaterial,
+      utcInstant: state.run.scheduledAt,
       acceptedAt: state.run.scheduleAcceptedAt,
       expiresAt: state.run.scheduleExpiresAt,
       allowedWindows: [
@@ -500,6 +503,8 @@ function unavailableBusinessInput(mode = 'paid_no_effect_preview', requestedMate
   controls.activeConversation = selected.recipientClass === 'exact_customer_record' ? 'unavailable' : 'not_applicable';
   controls.documentPause = ['mission24_estimate_quote', 'mission27_financial_collection']
     .includes(selected.sourceClassId) ? 'unavailable' : 'not_applicable';
+  const scheduleMaterial = businessEngine.localScheduleMaterial(
+    'America/New_York', '1970-01-01T16:00:00.000Z');
   return businessEngine.controlledInput({
     mode, tenantId: id, evaluatedAt,
     policyId: deterministicUuid('mission28-part14c-paid-preview-policy', id), policyVersion: 1,
@@ -514,7 +519,8 @@ function unavailableBusinessInput(mode = 'paid_no_effect_preview', requestedMate
     authorizationState: 'unavailable', permissionState: 'unavailable',
     controls,
     schedule: {
-      timeZone: 'America/New_York', utcInstant: '1970-01-01T16:00:00.000Z',
+      timeZone: 'America/New_York', ...scheduleMaterial,
+      utcInstant: '1970-01-01T16:00:00.000Z',
       acceptedAt: evaluatedAt, expiresAt: '1970-01-02T16:00:00.000Z',
       allowedWindows: [{ weekday: 4, startMinute: 540, endMinute: 1020 }],
       quietWindows: [], holidays: [],

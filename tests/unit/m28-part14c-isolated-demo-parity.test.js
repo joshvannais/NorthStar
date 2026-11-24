@@ -42,7 +42,9 @@ function businessOptions(input, mode) {
     authorizationState: input.authorization.state, permissionState: input.permission.state,
     controls: { ...input.controls.states },
     schedule: {
-      timeZone: input.schedule.timeZone, utcInstant: input.schedule.utcInstant,
+      timeZone: input.schedule.timeZone, localDate: input.schedule.localDate,
+      localTime: input.schedule.localTime, foldResolution: input.schedule.foldResolution,
+      utcInstant: input.schedule.utcInstant,
       acceptedAt: input.schedule.acceptedAt, expiresAt: input.schedule.expiresAt,
       allowedWindows: input.schedule.allowedWindows.map(window => ({ ...window })),
       quietWindows: input.schedule.quietWindows.map(window => ({ ...window })),
@@ -56,9 +58,18 @@ function businessOptions(input, mode) {
 }
 function rebuildBusinessInput(input, mode, overrides = {}) {
   const options = businessOptions(input, mode);
+  const scheduleOverrides = overrides.schedule || {};
+  const schedule = { ...options.schedule, ...scheduleOverrides };
+  if ((Object.prototype.hasOwnProperty.call(scheduleOverrides, 'timeZone') ||
+       Object.prototype.hasOwnProperty.call(scheduleOverrides, 'utcInstant')) &&
+      !['localDate', 'localTime', 'foldResolution'].some(field =>
+        Object.prototype.hasOwnProperty.call(scheduleOverrides, field))) {
+    Object.assign(schedule,
+      businessEngine.localScheduleMaterial(schedule.timeZone, schedule.utcInstant));
+  }
   return businessEngine.controlledInput({ ...options, ...overrides,
     controls: { ...options.controls, ...(overrides.controls || {}) },
-    schedule: { ...options.schedule, ...(overrides.schedule || {}) },
+    schedule,
     execution: { ...options.execution, ...(overrides.execution || {}) } });
 }
 function record(automationJourney, overrides = {}) {
@@ -513,6 +524,12 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(Object.keys(businessEngine.SOURCES)).toEqual(['evaluator', 'suppression', 'scheduler', 'recovery']);
     const candidateArtifact = JSON.parse(read('docs/architecture/MISSION_28_PART14C_ISOLATED_DEMO_PARITY.json'));
     expect(candidateArtifact.sharedEngines.acceptedSourceContracts).toEqual(Object.values(businessEngine.SOURCES));
+    expect(candidateArtifact.sharedEngines).toMatchObject({
+      missingAuthorityDisposition:
+        'source_value_and_execution_material_are_explicit_required_inputs_never_positive_defaults',
+      localScheduleBinding:
+        'tenant_zone_local_date_whole_second_local_time_explicit_not_ambiguous_or_earlier_or_later_fold_and_exact_matching_utc_instant',
+    });
     for (const source of Object.values(businessEngine.SOURCES)) {
       const normalized = read(source.path).replace(/\r\n/g, '\n').trim() + '\n';
       expect(crypto.createHash('sha256').update(normalized).digest('hex').toUpperCase())
@@ -601,6 +618,62 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
       documentPause: 'unavailable', recipientOptOut: 'unavailable', activeConversation: 'unavailable' });
     expect(businessEngine.evaluate(external)).toMatchObject({ evaluation: { state: 'unavailable' },
       suppression: { state: 'unavailable' }, runnable: false });
+  });
+
+  test('requires explicit source and execution authority instead of manufacturing positive defaults', () => {
+    const input = runtime.businessInputForState(runtime.initialState(context()), context());
+    expect(businessEngine.evaluate(input)).toMatchObject({ evaluation: { state: 'eligible' },
+      recovery: { state: 'ready_no_effect' }, runnable: true });
+
+    for (const missingSourceValue of [undefined, null]) {
+      const options = businessOptions(input, input.mode);
+      if (missingSourceValue === undefined) delete options.sourceValue;
+      else options.sourceValue = missingSourceValue;
+      expect(() => businessEngine.controlledInput(options)).toThrow(/known source value/i);
+    }
+    for (const missingExecution of [undefined, null]) {
+      const options = businessOptions(input, input.mode);
+      if (missingExecution === undefined) delete options.execution;
+      else options.execution = missingExecution;
+      expect(() => businessEngine.controlledInput(options)).toThrow(/execution is unavailable/i);
+    }
+  });
+
+  test('binds explicit local date, time and daylight-saving fold choice to the exact UTC instant', () => {
+    const foldContext = context({ anchorTime: '2026-11-01T04:30:00.000Z' });
+    const input = runtime.businessInputForState(runtime.initialState(foldContext), foldContext);
+    expect(input.schedule).toMatchObject({ timeZone: 'America/New_York',
+      localDate: '2026-11-01', localTime: '01:30:00', foldResolution: 'earlier',
+      utcInstant: '2026-11-01T05:30:00.000Z' });
+    expect(businessEngine.evaluate(input)).toMatchObject({ scheduler: {
+      state: 'scheduled_unpublished', localDate: '2026-11-01', localTime: '01:30:00',
+      foldResolution: 'earlier' }, runnable: true });
+
+    const later = rebuildBusinessInput(input, input.mode,
+      { schedule: { utcInstant: '2026-11-01T06:30:00.000Z' } });
+    expect(later.schedule).toMatchObject({ localDate: '2026-11-01', localTime: '01:30:00',
+      foldResolution: 'later', utcInstant: '2026-11-01T06:30:00.000Z' });
+    expect(businessEngine.evaluate(later)).toMatchObject({ scheduler: {
+      state: 'scheduled_unpublished', foldResolution: 'later' }, runnable: true });
+
+    const wrongFold = businessOptions(input, input.mode);
+    Object.assign(wrongFold.schedule, { utcInstant: '2026-11-01T06:30:00.000Z',
+      localDate: '2026-11-01', localTime: '01:30:00', foldResolution: 'earlier' });
+    expect(() => businessEngine.controlledInput(wrongFold)).toThrow(/daylight-saving schedule resolution/i);
+
+    for (const missing of ['localDate', 'localTime', 'foldResolution']) {
+      const options = businessOptions(input, input.mode);
+      delete options.schedule[missing];
+      expect(() => businessEngine.controlledInput(options)).toThrow(/schedule fields/i);
+    }
+
+    const ordinary = runtime.businessInputForState(runtime.initialState(context()), context());
+    expect(ordinary.schedule.foldResolution).toBe('not_ambiguous');
+    const nonexistent = businessOptions(ordinary, ordinary.mode);
+    Object.assign(nonexistent.schedule, { utcInstant: '2026-03-08T07:30:00.000Z',
+      localDate: '2026-03-08', localTime: '02:30:00', foldResolution: 'not_ambiguous' });
+    expect(() => businessEngine.controlledInput(nonexistent))
+      .toThrow(/daylight-saving schedule resolution/i);
   });
 
   test('enforces coherent admission time and independent 366/367 day scheduler horizons', () => {

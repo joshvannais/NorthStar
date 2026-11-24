@@ -31,6 +31,15 @@ turn a candidate digest into authority; the runtime accepts only server-built,
 tenant-bound controlled input whose complete component and envelope digests
 validate before any decision.
 
+The controlled input does not synthesize positive facts. Exact source value
+and complete execution/recovery material are mandatory; missing or null
+material is rejected instead of being defaulted to a current source or an
+effect-free ready state. The schedule binds the trusted tenant zone, explicit
+local date, whole-second local time, exact UTC instant, and an explicit
+`not_ambiguous`, `earlier`, or `later` fold resolution. The factory and
+evaluator independently prove that exact round trip. A daylight-saving gap,
+wrong fold selection, missing field, or UTC/local mismatch fails closed.
+
 The mounted paid call graph is
 `routes/automationCenter.preview -> runtimeEngine.buildNoEffectPreview ->
 businessDecisionEngine.evaluate`; because that request has no independently
@@ -54,7 +63,8 @@ source observation, scheduled time is capped at 366 days after admission, and
 expiration is independently capped at 367 days. Requests cannot provide or
 widen those controlled inputs.
 
-The accepted scheduler's local-time material is whole-second precision. The
+The accepted scheduler's local-time material is whole-second precision and
+includes explicit local date, local time, UTC instant, and fold choice. The
 runtime preserves fractional trusted observation and admission times, but it
 selects the first whole-second due instant at least one hour later. The shared
 scheduler rejects a fractional UTC due instant instead of silently rounding or

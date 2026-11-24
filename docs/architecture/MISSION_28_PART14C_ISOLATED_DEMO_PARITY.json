@@ -47,7 +47,9 @@
     "exactPreviewMaterialBinding": "source_action_recipient_channel_must_match_the_controlled_business_input_or_the_assessment_is_unavailable",
     "firstLaunchActionMaterial": "mission23_work_execution_internal_read_digest_task_tenant_owner_in_app_passive_provider_disabled_internal_only",
     "mandatoryControls": "all_closed_keys_required_and_not_applicable_only_for_proven_recipient_or_document_scope",
-    "scheduleBounds": "admission_not_before_source_observation_utc_instant_exact_whole_second_scheduled_at_most_366_days_expiration_at_most_367_days",
+    "missingAuthorityDisposition": "source_value_and_execution_material_are_explicit_required_inputs_never_positive_defaults",
+    "localScheduleBinding": "tenant_zone_local_date_whole_second_local_time_explicit_not_ambiguous_or_earlier_or_later_fold_and_exact_matching_utc_instant",
+    "scheduleBounds": "admission_not_before_source_observation_exact_local_fold_utc_round_trip_utc_instant_whole_second_scheduled_at_most_366_days_expiration_at_most_367_days",
     "sourceVersionProvenance": "each_fictional_version_observation_time_is_owned_by_its_exact_history_event_and_bound_into_its_source_digest",
     "unavailableLineage": "unavailable_not_ineligible_and_never_complete_exact",
     "equivalentControlledPaidAndDemoInputsProduceSameBusinessDecisions": true,
@@ -68,6 +70,7 @@
   "controlledAdapters": {
     "virtualClock": "server_fixed_advance_exactly_one_day",
     "initialSchedule": "source_eligibility_and_admission_share_the_anchor_then_due_at_the_first_exact_whole_second_at_least_one_hour_later",
+    "daylightSavingResolution": "server_owned_explicit_local_date_local_time_and_fold_choice_exactly_match_the_bound_utc_instant_gaps_and_mismatches_fail_closed",
     "correctedSchedule": "accepted_at_the_correction_boundary_strictly_future_and_no_processing_before_due",
     "actionAvailability": "every_offered_action_satisfies_its_exact_shared_business_and_admission_predicate",
     "sourceCorrectionAvailability": "withheld_while_policy_paused_expired_or_otherwise_not_runnable_and_available_after_explicit_valid_resume",

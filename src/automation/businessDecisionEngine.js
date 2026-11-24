@@ -55,6 +55,9 @@ const ALWAYS_APPLICABLE_CONTROLS = Object.freeze([
 ]);
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKDAYS = Object.freeze({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 });
+const FOLD_RESOLUTIONS = Object.freeze(['not_ambiguous', 'earlier', 'later']);
+const ZONE_FORMATTERS = new Map();
+const LOCAL_MATCHES = new Map();
 
 const SOURCES = Object.freeze({
   evaluator: Object.freeze({ path: 'docs/architecture/MISSION_28_PART5B_DETERMINISTIC_EVALUATOR_CONTRACT.json',
@@ -100,22 +103,83 @@ function validLocalDate(value) {
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
+function validLocalTime(value) {
+  if (!/^\d{2}:\d{2}:\d{2}$/.test(String(value || ''))) return false;
+  const [hour, minute, second] = value.split(':').map(Number);
+  return hour >= 0 && hour < 24 && minute >= 0 && minute < 60 && second >= 0 && second < 60;
+}
+function canonicalTimeZone(value) {
+  if (typeof value !== 'string' || value.length > 64) fail('time zone is invalid');
+  const exactZones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
+  if (value !== 'UTC' && !exactZones.includes(value)) fail('time zone is unavailable');
+  return value;
+}
+function formatter(timeZone) {
+  if (ZONE_FORMATTERS.has(timeZone)) return ZONE_FORMATTERS.get(timeZone);
+  let value;
+  try {
+    value = new Intl.DateTimeFormat('en-CA', {
+      timeZone, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    });
+  } catch (_) { fail('time zone is unavailable'); }
+  ZONE_FORMATTERS.set(timeZone, value);
+  return value;
+}
 
 function localParts(instant, timeZone) {
   let parts;
   try {
-    parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-    }).formatToParts(new Date(instant));
+    parts = formatter(timeZone).formatToParts(new Date(instant));
   } catch (_) { fail('time zone is unavailable'); }
   const values = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
   if (!WEEKDAYS[values.weekday]) fail('local schedule could not be resolved');
   return Object.freeze({
     date: `${values.year}-${values.month}-${values.day}`,
+    time: `${values.hour}:${values.minute}:${values.second}`,
     minute: Number(values.hour) * 60 + Number(values.minute),
     weekday: WEEKDAYS[values.weekday],
   });
+}
+function matchingLocalInstants(timeZone, utcInstant, localDate, localTime) {
+  const cacheKey = `${timeZone}\0${utcInstant}\0${localDate}\0${localTime}`;
+  if (LOCAL_MATCHES.has(cacheKey)) return LOCAL_MATCHES.get(cacheKey);
+  const center = at(utcInstant); const matches = [];
+  for (let offset = -1440; offset <= 1440; offset += 1) {
+    const candidate = center + offset * 60 * 1000;
+    const local = localParts(candidate, timeZone);
+    if (local.date === localDate && local.time === localTime) matches.push(candidate);
+  }
+  const resolved = Object.freeze(matches.sort((left, right) => left - right));
+  if (LOCAL_MATCHES.size >= 256) LOCAL_MATCHES.delete(LOCAL_MATCHES.keys().next().value);
+  LOCAL_MATCHES.set(cacheKey, resolved);
+  return resolved;
+}
+function validateLocalSchedule(schedule) {
+  canonicalTimeZone(schedule.timeZone);
+  if (!validLocalDate(schedule.localDate) || !validLocalTime(schedule.localTime) ||
+      !FOLD_RESOLUTIONS.includes(schedule.foldResolution)) fail('local schedule is invalid');
+  const matches = matchingLocalInstants(
+    schedule.timeZone, schedule.utcInstant, schedule.localDate, schedule.localTime);
+  const selected = at(schedule.utcInstant);
+  const valid = (matches.length === 1 && schedule.foldResolution === 'not_ambiguous' && selected === matches[0]) ||
+    (matches.length === 2 && schedule.foldResolution === 'earlier' && selected === matches[0]) ||
+    (matches.length === 2 && schedule.foldResolution === 'later' && selected === matches[1]);
+  if (!valid) fail('daylight-saving schedule resolution is invalid');
+  return localParts(selected, schedule.timeZone);
+}
+function localScheduleMaterial(timeZoneValue, utcInstantValue) {
+  const timeZone = canonicalTimeZone(timeZoneValue);
+  const utcInstant = iso(utcInstantValue, 'schedule instant');
+  const local = localParts(utcInstant, timeZone);
+  const matches = matchingLocalInstants(timeZone, utcInstant, local.date, local.time);
+  const selected = at(utcInstant);
+  let foldResolution = null;
+  if (matches.length === 1 && selected === matches[0]) foldResolution = 'not_ambiguous';
+  else if (matches.length === 2 && selected === matches[0]) foldResolution = 'earlier';
+  else if (matches.length === 2 && selected === matches[1]) foldResolution = 'later';
+  if (!foldResolution) fail('daylight-saving schedule resolution is invalid');
+  return Object.freeze({ localDate: local.date, localTime: local.time, foldResolution });
 }
 function inWindows(windows, weekday, minute) {
   return windows.some(window => window.weekday === weekday && minute >= window.startMinute && minute < window.endMinute);
@@ -208,24 +272,25 @@ function controlledInput(options = {}) {
   if (!PERMISSION_STATES.includes(options.permissionState)) fail('permission state is unsupported');
   if (!AUTHORIZATION_STATES.includes(options.authorizationState)) fail('authorization state is unsupported');
   const selectedMaterial = material(options);
-  const sourceValue = options.sourceValue === undefined ? 'latest_exact_current' : options.sourceValue;
+  const sourceValue = options.sourceValue;
   if (options.sourceState === 'known' && typeof sourceValue !== 'string') fail('known source value is invalid');
   if (options.sourceState !== 'known' && sourceValue !== null) fail('absent source value must remain null');
   const schedule = clone(options.schedule);
-  exact(schedule, ['timeZone', 'utcInstant', 'acceptedAt', 'expiresAt', 'allowedWindows', 'quietWindows', 'holidays'], 'schedule');
+  exact(schedule, ['timeZone', 'localDate', 'localTime', 'foldResolution', 'utcInstant',
+    'acceptedAt', 'expiresAt', 'allowedWindows', 'quietWindows', 'holidays'], 'schedule');
   iso(schedule.utcInstant, 'schedule instant'); iso(schedule.acceptedAt, 'schedule acceptance time');
   iso(schedule.expiresAt, 'schedule expiration');
-  if (typeof schedule.timeZone !== 'string' || schedule.timeZone.length > 64) fail('time zone is invalid');
-  const exactZones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
-  if (schedule.timeZone !== 'UTC' && !exactZones.includes(schedule.timeZone)) fail('time zone is unavailable');
+  validateLocalSchedule(schedule);
   validateWindows(schedule.allowedWindows, 'allowed windows'); validateWindows(schedule.quietWindows, 'quiet windows');
   if (!Array.isArray(schedule.holidays) || schedule.holidays.length > 64 ||
       schedule.holidays.some((day, index) => !validLocalDate(day) || (index && day <= schedule.holidays[index - 1]))) {
     fail('holidays are invalid');
   }
   if (at(schedule.acceptedAt) > at(evaluatedAt)) fail('schedule acceptance is from the future');
-  const execution = clone(options.execution || { claimState: 'none', claimAcquiredAt: null,
-    claimExpiresAt: null, recoveryState: 'not_required' });
+  if (!options.execution || typeof options.execution !== 'object' || Array.isArray(options.execution)) {
+    fail('execution is unavailable');
+  }
+  const execution = clone(options.execution);
   exact(execution, ['claimState', 'claimAcquiredAt', 'claimExpiresAt', 'recoveryState'], 'execution');
   if (!CLAIM_STATES.includes(execution.claimState) || !RECOVERY_STATES.includes(execution.recoveryState)) {
     fail('execution state is unsupported');
@@ -291,8 +356,9 @@ function validateInput(input) {
     ['permission', 'mission28.part14c.shared-permission.v1', ['tenantId', 'state', 'digest']],
     ['controls', 'mission28.part14c.shared-controls.v1', ['tenantId', 'states', 'digest']],
     ['schedule', 'mission28.part14c.shared-schedule.v1', ['tenantId', 'policyDigest', 'sourceDigest',
-      'authorizationDigest', 'permissionDigest', 'controlsDigest', 'timeZone', 'utcInstant', 'acceptedAt',
-      'expiresAt', 'allowedWindows', 'quietWindows', 'holidays', 'digest']],
+      'authorizationDigest', 'permissionDigest', 'controlsDigest', 'timeZone', 'localDate', 'localTime',
+      'foldResolution', 'utcInstant', 'acceptedAt', 'expiresAt', 'allowedWindows', 'quietWindows',
+      'holidays', 'digest']],
     ['execution', 'mission28.part14c.shared-execution.v1', ['tenantId', 'scheduleDigest', 'claimState',
       'claimAcquiredAt', 'claimExpiresAt', 'recoveryState', 'digest']],
   ]) {
@@ -339,8 +405,7 @@ function validateInput(input) {
       (input.source.state !== 'known' && input.source.value !== null)) fail('source value is incoherent');
   iso(input.schedule.utcInstant, 'schedule instant'); iso(input.schedule.acceptedAt, 'schedule acceptance time');
   iso(input.schedule.expiresAt, 'schedule expiration');
-  const exactZones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
-  if (input.schedule.timeZone !== 'UTC' && !exactZones.includes(input.schedule.timeZone)) fail('time zone is unavailable');
+  validateLocalSchedule(input.schedule);
   validateWindows(input.schedule.allowedWindows, 'allowed windows');
   validateWindows(input.schedule.quietWindows, 'quiet windows');
   if (!Array.isArray(input.schedule.holidays) || input.schedule.holidays.length > 64 ||
@@ -484,7 +549,9 @@ function schedulerDecision(input, evaluation, suppression) {
   }
   return seal('mission28.part14c.shared-scheduler-decision.v1', {
     state, reason, scheduleDigest: schedule.digest, utcInstant: schedule.utcInstant,
-    localDate: local ? local.date : null, localMinute: local ? local.minute : null,
+    localDate: local ? local.date : null, localTime: local ? local.time : null,
+    localMinute: local ? local.minute : null,
+    foldResolution: local ? schedule.foldResolution : null,
   });
 }
 function recoveryDecision(input, evaluation, suppression, scheduler) {
@@ -533,5 +600,5 @@ function evaluate(inputValue) {
 }
 
 module.exports = Object.freeze({
-  CONTRACT, CONTROL_KINDS, MODES, SOURCES, controlledInput, evaluate,
+  CONTRACT, CONTROL_KINDS, MODES, SOURCES, controlledInput, evaluate, localScheduleMaterial,
 });

@@ -133,11 +133,11 @@ function envelope(state, revision = 1) {
 }
 
 describe('Mission 28 Part 14C shared isolated runtime', () => {
-  test('publishes a source-linked candidate contract without claiming unavailable acceptance', () => {
+  test('publishes the exact released Part 14C contract without claiming unavailable later evidence', () => {
     const artifact = JSON.parse(read('docs/architecture/MISSION_28_PART14C_ISOLATED_DEMO_PARITY.json'));
     expect(artifact).toMatchObject({
       contractVersion: 'mission28.part14c.isolated-demo-parity.v1',
-      status: 'implementation_candidate_not_independently_accepted_not_released',
+      status: 'released',
       base: {
         acceptedSourceHead: 'c0775903ed4e42d1ade8c9936ced2d141d8ff942',
         acceptedTree: '83869d378c2583c350ee4b899c4276e6db091035',
@@ -146,6 +146,11 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
       },
       scope: { part: '14C', demoPath: '/demo/automation', migrationAdded: true,
         latestMigration: 288, nextMigrationAbsent: 289, mission31GuidedSimulationIncluded: false },
+      release: { acceptedSourceHead: 'b4da799f85333058ccca4cd3fd3c3908537b911f',
+        acceptedTree: '731bf82d926e9b32708b6ec396fd98d50a8d9ea3', pullRequest: 610,
+        mergedMain: 'db9c14d9206bdb3a6f73d83ee7f480aedb2f9fb1',
+        deploymentId: '07975abd-4be1-4b4c-a709-68422e5dddfe',
+        productionMigrations: '284_of_284_through_288_no_289' },
       isolatedAuthority: { tenantSessionGenerationBound: true,
         identityBinding: 'exact_uuid_versions_1_through_8_including_repository_uuidv5_no_coercion',
         workspaceRevisionCompareAndSwap: true,
@@ -160,7 +165,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     });
     expect(Object.values(artifact.effectBoundary).every(value => value === false)).toBe(true);
     expect(read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'))
-      .toContain('Parts 1A–14B are released. Part 14C is the sole implementation candidate.');
+      .toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.');
     expect(read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md')).toContain('Part 14B audit / release');
   });
 

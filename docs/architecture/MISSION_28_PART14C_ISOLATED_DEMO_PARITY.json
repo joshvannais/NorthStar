@@ -1,6 +1,6 @@
 {
   "contractVersion": "mission28.part14c.isolated-demo-parity.v1",
-  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "status": "released",
   "base": {
     "part": "14B",
     "acceptedSourceHead": "c0775903ed4e42d1ade8c9936ced2d141d8ff942",
@@ -20,6 +20,25 @@
     "latestMigration": 288,
     "nextMigrationAbsent": 289,
     "mission31GuidedSimulationIncluded": false
+  },
+  "release": {
+    "acceptedSourceHead": "b4da799f85333058ccca4cd3fd3c3908537b911f",
+    "acceptedTree": "731bf82d926e9b32708b6ec396fd98d50a8d9ea3",
+    "auditFindings": { "P0": 0, "P1": 0, "P2": 0, "P3": 0 },
+    "auditReport": "m28-part14c-root-audit-b4da-v9.json",
+    "auditReportSha256": "1FD8CB8EA7F4EAB29CF0FB8EF8A410DFFD0E14E9C6203189DC4036BDCCADCF33",
+    "node": "22.23.3",
+    "mission28Suites": 62,
+    "mission28Tests": 959,
+    "pullRequest": 610,
+    "mergedMain": "db9c14d9206bdb3a6f73d83ee7f480aedb2f9fb1",
+    "deploymentId": "07975abd-4be1-4b4c-a709-68422e5dddfe",
+    "deploymentInstance": "4ea46c8a-214d-42b4-ac97-9ad803859359",
+    "imageSha256": "sha256:c83748ee9fb1cc3fd949eb16730d9771607e9ef337bea0800683bc37a1a96a5b",
+    "productionMigrations": "284_of_284_through_288_no_289",
+    "backupId": "0f3f9bf0-6eeb-43fa-b269-38e227ad0ec1",
+    "backupName": "pre-m28-part14c-b4da799f-20261124",
+    "olderBackupsRemovedAfterReplacementConfirmed": 6
   },
   "sharedEngines": {
     "businessDecision": "src/automation/businessDecisionEngine.js#evaluate",
@@ -112,8 +131,6 @@
     "moneyEffectCreated": false
   },
   "unavailableEvidence": [
-    "Part14C_independent_audit_PR_merge_deployment_and_production_acceptance",
-    "fresh_PostgreSQL_candidate_acceptance_until_the_corrected_exact_head_gate_passes",
     "genuine_Chrome_and_Playwright_WebKit_acceptance_reserved_for_Part14F",
     "physical_Safari_devices_manual_assistive_technology_and_founder_visual_approval",
     "provider_live_private_production_money_and_professional_review"

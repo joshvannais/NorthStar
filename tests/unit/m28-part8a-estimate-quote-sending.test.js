@@ -218,11 +218,11 @@ describe('Mission 28 Part 8A estimate, proposal and quote sending authority', ()
 
   test('roadmap and ledger preserve the released Part8A while Part8B alone is candidate', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8'); const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
-    expect(roadmap).toContain('Parts 1A–14B are released. Part 14C is the sole implementation candidate.');
+    expect(roadmap).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.');
     expect(ledger).toContain('| 32 | 7F | Delivery corrections, replies, opt-outs and minimized provider evidence | **Released** |');
     expect(ledger).toContain('| 33 | 8A | Mission 24 estimate/proposal/quote sending | **Released** |');
     expect(ledger).toContain('| 34 | 8B | Mission 27 financial-document delivery without financial mutation | **Released** |');
-    expect(ledger).toContain('Source and bounded read-only production reconciliation are 283/283 migrations through exact `287_canonical_automation_estimate_quote_resolution_v1.sql` with no 288');
+    expect(ledger).toContain('Source and bounded read-only production reconciliation are 284/284 migrations through exact `288_demo_automation_center_action_v1.sql` with no 289');
     expect(markdown).toContain('It does not send anything.');
   });
 });

@@ -1,6 +1,6 @@
 # Mission 28 Part 14D — exhaustive contract matrices
 
-Status: **Implementation candidate only. Not independently accepted or released.**
+Status: **Released.**
 
 Part 14D turns the frozen Part 14D dimensions into executable semantic,
 structural, transport, durability, privacy, and no-effect matrices. It adds no
@@ -37,6 +37,33 @@ syntax 76, JSON 61, references 522, and 284 source migrations through 288 with
 no 289. The report was
 `m28-part14c-root-audit-b4da-v9.json`, SHA-256
 `1FD8CB8EA7F4EAB29CF0FB8EF8A410DFFD0E14E9C6203189DC4036BDCCADCF33`.
+
+## Part 14D terminal release
+
+Root independently accepted exact source
+`fd917d5459033e0af78fb65e1f368c31d33ef68c`, tree
+`7210b21b9aa42fbe67d01846ca87cc6d64aad656`, with P0=P1=P2=P3=0.
+Exact Node 22.23.3 reproduced 63 Mission 28 suites and 971 tests,
+supporting 167 passes with three intentional skips, impacted navigation one
+pass with ten unrelated skips, syntax 61, JSON 62, normalized references 522,
+and 284 source migrations through 288 with no 289. The immutable report is
+`m28-part14d-root-audit-fd917-v2.json`, SHA-256
+`29F76CEB1B2AA7C1B4A94466D48701822EFF3B6E8A95028F3ABA5F85D343F1D5`.
+
+PR #611 normally merged with the accepted-head guard to main
+`cb2c68aac404bc055352c78853e8b3ce0d90982c`. The sole automatic deployment
+`2f26683f-aaee-42ad-9cf5-2c4c4891cdbf` succeeded; instance
+`146d8f4f-b22c-4851-a9e5-20c0ab7fbc50` was running image
+`sha256:08c89f00176da1d132be0a4c5faaa4b962a9dcde9962897e72c6359ceedbbda4`.
+Direct read-only production reconciliation proved PostgreSQL 18.6 and exact
+284/284 migrations through 288 with no 289. Bounded startup, health, routes
+and exact assets passed. The fresh confirmed backup is
+`f42b41cb-596c-45a9-ad51-f83eb793e3ac`, named
+`pre-m28-part14d-fd917d54-20261124`, external identity
+`vs_1795560282694_zfgwta2goxdxzgv5`. The prior fresh Part 14C backup was
+removed only after this replacement was confirmed, leaving exactly one fresh
+backup retained. Restore was not exercised and workflow status was
+unavailable. Temporary task keys and local key material were removed.
 
 ## Matrix contract
 

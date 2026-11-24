@@ -180,8 +180,8 @@ describe('Mission 28 Part 6D bounded retry and reconciliation', () => {
   test('records Part 6D released, only Part 6E candidate, migration279/no280 and later slices planned', () => {
     for (const relative of ['docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md', 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md']) {
       const document = fs.readFileSync(path.join(ROOT, relative), 'utf8');
-      expect(document).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.');
-      expect(document).toContain('Parts 14E–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.');
+      expect(document).toContain('Parts 14F–14G remain planned and unimplemented.');
       expect(document).toContain('3d7689ff-79cc-457a-95f7-542acbc20409');
     }
     const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
@@ -190,6 +190,6 @@ describe('Mission 28 Part 6D bounded retry and reconciliation', () => {
     expect(ledger).toContain('| 25 | 6E | Cancel/pause/revoke/drain/dead-letter and reviewed retry | **Released** |');
     expect(ledger).toContain('| 26 | 6F | Restart/migration/outage/restore and orphan-authority recovery | **Released** |');
     expect(ledger).toContain('| 27 | 7A | Exact sender and recipient authority | **Released** |');
-    expect(ledger).toContain('Source and bounded read-only production reconciliation are 284/284 migrations through exact `288_demo_automation_center_action_v1.sql` with no 289');
+    expect(ledger).toContain('Released production is 284/284 migrations through exact `288_demo_automation_center_action_v1.sql` with no 289');
   });
 });

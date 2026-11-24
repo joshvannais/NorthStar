@@ -149,13 +149,18 @@ describe('Mission 28 Part 14D exhaustive semantic and structural matrices', () =
     const artifact = JSON.parse(read('docs/architecture/MISSION_28_PART14D_EXHAUSTIVE_CONTRACT_MATRICES.json'));
     expect(artifact).toMatchObject({
       contractVersion: 'mission28.part14d.exhaustive-contract-matrices.v1',
-      status: 'implementation_candidate_not_independently_accepted_not_released',
+      status: 'released',
       base: { acceptedSourceHead: 'b4da799f85333058ccca4cd3fd3c3908537b911f',
         acceptedTree: '731bf82d926e9b32708b6ec396fd98d50a8d9ea3', pullRequest: 610,
         mergedMain: 'db9c14d9206bdb3a6f73d83ee7f480aedb2f9fb1' },
       scope: { part: '14D', migrationAdded: false, latestMigration: 288, nextMigrationAbsent: 289,
         postgreSQLMountedWorkerRestartMeasurementsIncluded: false,
         genuineBrowserAcceptanceIncluded: false, releaseIncluded: false },
+      release: { acceptedSourceHead: 'fd917d5459033e0af78fb65e1f368c31d33ef68c',
+        acceptedTree: '7210b21b9aa42fbe67d01846ca87cc6d64aad656', pullRequest: 611,
+        mergedMain: 'cb2c68aac404bc055352c78853e8b3ce0d90982c',
+        deploymentId: '2f26683f-aaee-42ad-9cf5-2c4c4891cdbf',
+        productionMigrations: '284_of_284_through_288_no_289' },
       matrices: { privacyAndEffects: { providerCalled: false, recipientContacted: false,
         paidTenantMutatedByDemo: false, externalEffectCreated: false,
         financialEffectCreated: false, moneyEffectCreated: false } },
@@ -178,7 +183,7 @@ describe('Mission 28 Part 14D exhaustive semantic and structural matrices', () =
         retainedBackupsAfterRotation: 1 },
     });
     expect(read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md')).toContain(
-      '| Mission 28 released baseline | Part 14C source `b4da799f85333058ccca4cd3fd3c3908537b911f`; main `db9c14d9206bdb3a6f73d83ee7f480aedb2f9fb1`; tree `731bf82d926e9b32708b6ec396fd98d50a8d9ea3` |'
+      '| Mission 28 released baseline | Part 14D source `fd917d5459033e0af78fb65e1f368c31d33ef68c`; main `cb2c68aac404bc055352c78853e8b3ce0d90982c`; tree `7210b21b9aa42fbe67d01846ca87cc6d64aad656` |'
     );
   });
 

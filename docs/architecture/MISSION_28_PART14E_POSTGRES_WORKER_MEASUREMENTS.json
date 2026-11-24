@@ -1,0 +1,100 @@
+{
+  "contractVersion": "mission28.part14e.postgres-worker-measurements.v1",
+  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "base": {
+    "part": "14D",
+    "acceptedSourceHead": "fd917d5459033e0af78fb65e1f368c31d33ef68c",
+    "acceptedTree": "7210b21b9aa42fbe67d01846ca87cc6d64aad656",
+    "pullRequest": 611,
+    "mergedMain": "cb2c68aac404bc055352c78853e8b3ce0d90982c",
+    "deploymentId": "2f26683f-aaee-42ad-9cf5-2c4c4891cdbf",
+    "deploymentInstance": "146d8f4f-b22c-4851-a9e5-20c0ab7fbc50",
+    "imageSha256": "sha256:08c89f00176da1d132be0a4c5faaa4b962a9dcde9962897e72c6359ceedbbda4",
+    "productionMigrations": "284_of_284_through_288_no_289",
+    "backupId": "f42b41cb-596c-45a9-ad51-f83eb793e3ac",
+    "backupName": "pre-m28-part14d-fd917d54-20261124",
+    "backupExternalId": "vs_1795560282694_zfgwta2goxdxzgv5"
+  },
+  "scope": {
+    "part": "14E",
+    "freshDisposablePostgreSQL": true,
+    "mountedProductionModules": true,
+    "realSessionCsrfRoutesDatabase": true,
+    "queueLeaseRetryControlRecoveryPostgreSQLContracts": true,
+    "localDeterministicProviderFixture": true,
+    "housekeepingWorkerAndPoolRestart": true,
+    "highVolumeAndDegradedPathFunctionalMeasurements": true,
+    "migrationAdded": true,
+    "migration": "289_automation_center_runtime_read_authority_v1.sql",
+    "migrationSha256": "65B5F20F73CDC88A18E73F8077FDAD50FC99CFBAFD9EE80ED1B82B558A86DCFB",
+    "sourceMigrationCount": 285,
+    "latestMigration": 289,
+    "nextMigrationAbsent": 290,
+    "genuineBrowserAcceptanceIncluded": false,
+    "releaseIncluded": false
+  },
+  "runtimeReadAuthority": {
+    "entry": "public.canonical_automation_center_v1_read(uuid,uuid,text,uuid)",
+    "caller": "src/automationCenter/repository.js#readAutomationCenter",
+    "authorization": "active_exact_owner_or_admin_membership_account_and_session",
+    "transaction": "repeatable_read_read_only_bounded_timeouts",
+    "tenantIsolation": "organization_id_bound_inside_security_definer_projection",
+    "directCanonicalTableAccessForRuntimeRole": false,
+    "publicExecute": false,
+    "createsAutomationOrExternalEffect": false
+  },
+  "postgresEvidence": {
+    "server": "local_disposable_PostgreSQL_17.10_loopback_only",
+    "allMigrations": "285_of_285_through_289_no_290",
+    "separatedMigrationAndRuntimeRoles": true,
+    "paidOwnerRead": "real_session_capability_route_and_database_200",
+    "paidMemberRead": "403_before_projection",
+    "paidPreview": "real_csrf_pure_no_effect_200",
+    "crossTenantRetarget": "42501_fail_closed",
+    "directStorageRead": "42501_denied",
+    "productionEvidence": "unavailable_pending_normal_release_and_migration"
+  },
+  "workerAndFixtureEvidence": {
+    "canonicalQueueWorker": "PostgreSQL_contracts_for_transaction_schedule_lease_retry_control_recovery_only_no_external_adapter",
+    "providerFixture": "isolated_demo_deterministic_local_simulation_no_provider",
+    "providerFixturePersistsAcrossPoolRestart": true,
+    "idempotentReplayAfterPoolRestart": true,
+    "databaseOutage": "mounted_route_503_fail_closed",
+    "databaseRecovery": "saved_fictional_authority_unchanged",
+    "housekeepingWorker": "production_DemoCommandCenterHousekeepingWorker_drains_expired_fictional_sessions",
+    "workerRestart": "second_instance_drains_zero_after_completed_drain"
+  },
+  "functionalMeasurement": {
+    "environment": "local_disposable_postgresql_functional_measurement_not_sla",
+    "sessions": 24,
+    "providerFixtureActions": 48,
+    "batchConcurrency": 6,
+    "highVolumeMountedMilliseconds": 5925.368,
+    "databasePoolRestartMilliseconds": 630.876,
+    "degradedFailureMilliseconds": 6.662,
+    "degradedRecoveryMilliseconds": 578.716,
+    "housekeepingWorkerMilliseconds": 227.258,
+    "housekeepingSessionsDrained": 26,
+    "absoluteDurationAssertions": false,
+    "productionPerformanceClaim": false,
+    "capacityPromise": false,
+    "slaClaim": false
+  },
+  "effectBoundary": {
+    "realRecipients": 0,
+    "realProviderCalls": 0,
+    "paidAutomationTransactionsCreatedByDemo": 0,
+    "externalEffects": 0,
+    "financialEffects": 0,
+    "moneyEffects": 0,
+    "liveOrSandboxProviderCalled": false,
+    "productionDataMutated": false
+  },
+  "evidenceBoundary": {
+    "writerEvidenceIndependent": false,
+    "part14F": "genuine_Chrome_and_Playwright_WebKit_acceptance_unavailable",
+    "part14G": "final_independent_audit_PR_merge_deployment_and_production_acceptance_unavailable",
+    "founderVisualApproval": "separate_unavailable_unclaimed",
+    "providerLivePrivateProductionMoneyProfessionalReview": "unavailable_unclaimed"
+  }
+}

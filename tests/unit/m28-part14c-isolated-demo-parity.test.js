@@ -97,6 +97,10 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
         latestMigration: 287, nextMigrationAbsent: 288, mission31GuidedSimulationIncluded: false },
       isolatedAuthority: { tenantSessionGenerationBound: true, workspaceRevisionCompareAndSwap: true,
         paidCookiesSelectDemoAuthority: false, fictionalDataCanEnterPaidAuthority: false },
+      controlledAdapters: { processingClaim: 'immutable_per_provider_attempt_with_new_identity_after_recovery',
+        pauseResumeRefreshesClaim: false },
+      raceAndReset: { currentLoadOrActionFailureInvalidatesDependentPreview: true,
+        unboundConflictClearsMountedState: true },
       effectBoundary: { paidTenantMutated: false, providerCalled: false, recipientContacted: false,
         externalEffectCreated: false, financialEffectCreated: false, moneyEffectCreated: false },
     });
@@ -224,9 +228,18 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     }
   });
 
-  test('an expired simulated processing claim requires recorded recovery before it can continue', () => {
+  test('pause and resume preserve an immutable claim, and expiry requires a new recovered claim', () => {
     let state = runtime.applyAction(runtime.initialState(context()), context(), 'provider_step');
+    const originalClaim = runtime.demoEvidenceRow(state, context());
+    state = runtime.applyAction(state, context(), 'pause');
     state = runtime.applyAction(state, context(), 'advance_time');
+    state = runtime.applyAction(state, context(), 'resume');
+    const resumedExpiredClaim = runtime.demoEvidenceRow(state, context());
+    expect(resumedExpiredClaim).toMatchObject({
+      lease_id: originalClaim.lease_id,
+      lease_acquired_at: originalClaim.lease_acquired_at,
+      lease_expires_at: originalClaim.lease_expires_at,
+    });
     const projection = demoProjection.project(record(state));
     expect(projection.snapshot.runs[0].state).toBe('recovery');
     expect(projection.demo.allowedActions).toContain('recover');
@@ -238,6 +251,11 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     state = runtime.applyAction(state, context(), 'resume');
     expect(demoProjection.project(record(state)).snapshot.runs[0].state).toBe('queued');
     expect(runtime.allowedActions(state, context())).toContain('provider_step');
+    state = runtime.applyAction(state, context(), 'provider_step');
+    const recoveredClaim = runtime.demoEvidenceRow(state, context());
+    expect(recoveredClaim.lease_id).not.toBe(originalClaim.lease_id);
+    expect(recoveredClaim.lease_acquired_at).toBe(state.virtualNow);
+    expect(state.events.filter(event => event.type === 'provider_attempt')).toHaveLength(2);
   });
 
   test('reset advances generation and invalidates every prior fictional identity and history', () => {
@@ -357,7 +375,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(elements.previewSummary.textContent).toBe('');
   });
 
-  test('an older demo preview conflict cannot erase a newer completed reset', async () => {
+  test('an unbound preview conflict clears a later mounted reset because server ordering is unavailable', async () => {
     const initial = runtime.initialState(context());
     const initialEnvelope = envelope(initial, 1);
     const preview = deferred(); const resetAction = deferred();
@@ -374,10 +392,10 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     const resetEnvelope = envelope(reset, 2);
     resetAction.resolve({ success: true, data: resetEnvelope.snapshot, demo: resetEnvelope.demo }); await flush();
     preview.reject(Object.assign(new Error('CONFLICT'), { status: 409 })); await flush();
-    expect(elements.automationDemoGeneration.textContent).toContain('Demo 2 · saved version 2');
-    expect(elements.automationDemoControls.hidden).toBe(false);
-    expect(elements.automationStatus.dataset.state).toBe('ready');
-    expect(elements.automationDemoStatus.textContent).toMatch(/reset.*older pending/i);
+    expect(elements.automationDemoGeneration.textContent).toBe('Not loaded');
+    expect(elements.automationDemoControls.hidden).toBe(true);
+    expect(elements.automationStatus.dataset.state).toBe('conflict');
+    expect(elements.automationSummary.hidden).toBe(true);
   });
 
   test('an older demo preview conflict clears state while a newer preview remains unresolved', async () => {
@@ -436,6 +454,61 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(elements.automationDemoGeneration.textContent).toContain('saved version 2');
     expect(elements.automationPreview.hidden).toBe(true);
     expect(elements.previewSummary.textContent).toBe('');
+  });
+
+  test('a current action failure invalidates a preview that began while the mutation was pending', async () => {
+    const initialEnvelope = envelope(runtime.initialState(context()), 1);
+    const action = deferred(); const preview = deferred();
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: initialEnvelope.snapshot, demo: initialEnvelope.demo })
+      .mockImplementationOnce(() => action.promise)
+      .mockImplementationOnce(() => preview.promise);
+    const { buttons, elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    const template = elements.automationTemplates.childNodes[0].childNodes.find(node => node.tagName === 'BUTTON');
+    buttons.find(button => button.getAttribute('data-automation-demo-action') === 'provider_step').emit('click');
+    template.emit('click');
+    action.reject(Object.assign(new Error('UNAVAILABLE'), { status: 503 })); await flush();
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.automationStatus.dataset.state).toBe('unavailable');
+    preview.resolve({ success: true, data: runtime.buildNoEffectPreview({
+      templateId: 'owner-work-review', name: 'Obsolete preview', sourceClassId: 'mission23_work_execution',
+      actionFamily: 'internal_read_digest_task', recipientClass: 'tenant_owner', channelId: 'in_app_passive',
+      timing: 'review_now', dailyLimit: 1,
+    }) });
+    await flush();
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.previewSummary.textContent).toBe('');
+    expect(elements.automationStatus.dataset.state).toBe('unavailable');
+  });
+
+  test('a current read failure invalidates a preview that began while the read was pending', async () => {
+    const initialEnvelope = envelope(runtime.initialState(context()), 1);
+    const load = deferred(); const preview = deferred();
+    const json = jest.fn()
+      .mockResolvedValueOnce({ success: true, data: initialEnvelope.snapshot, demo: initialEnvelope.demo })
+      .mockImplementationOnce(() => load.promise)
+      .mockImplementationOnce(() => preview.promise);
+    const { elements, listeners } = demoPageHarness(json);
+    listeners.DOMContentLoaded(); await flush();
+    const template = elements.automationTemplates.childNodes[0].childNodes.find(node => node.tagName === 'BUTTON');
+    elements.automationRefresh.emit('click');
+    template.emit('click');
+    load.reject(Object.assign(new Error('UNAVAILABLE'), { status: 503 })); await flush();
+    expect(elements.automationSummary.hidden).toBe(true);
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.automationStatus.dataset.state).toBe('unavailable');
+    preview.resolve({ success: true, data: runtime.buildNoEffectPreview({
+      templateId: 'owner-work-review', name: 'Obsolete preview', sourceClassId: 'mission23_work_execution',
+      actionFamily: 'internal_read_digest_task', recipientClass: 'tenant_owner', channelId: 'in_app_passive',
+      timing: 'review_now', dailyLimit: 1,
+    }) });
+    await flush();
+    expect(elements.automationPreview.hidden).toBe(true);
+    expect(elements.previewSummary.textContent).toBe('');
+    expect(elements.automationStatus.dataset.state).toBe('unavailable');
   });
 
   test('an older authorization failure clears a newer pending isolated action and every rendered fictional value', async () => {

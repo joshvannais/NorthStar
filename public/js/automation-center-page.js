@@ -6,7 +6,6 @@
   var generation = 0;
   var previewGeneration = 0;
   var actionGeneration = 0;
-  var demoAuthorityGeneration = 0;
   var actionPending = false;
   var pendingAction = null;
   var demoRevision = null;
@@ -112,6 +111,18 @@
     var status = errorStatus({ status: 409 }, context);
     setStatus(status.state, status.message);
   }
+  function invalidateUnavailable(message) {
+    // A current load or mutation failure makes every dependent response
+    // unusable. In particular, a preview that began while the failed request
+    // was pending must never remount data after this fail-closed clear.
+    generation += 1;
+    previewGeneration += 1;
+    actionGeneration += 1;
+    actionPending = false;
+    pendingAction = null;
+    clearSensitive();
+    setStatus('unavailable', message);
+  }
   function errorStatus(error, context) {
     if (error && error.status === 409) return {
       state: 'conflict',
@@ -186,7 +197,6 @@
   }
   function requestPreview(input, button) {
     var request = ++previewGeneration;
-    var demoAuthorityAtRequest = demoAuthorityGeneration;
     button.disabled = true;
     clearPreview();
     setStatus('loading', 'Preparing a no-effect preview.');
@@ -210,12 +220,9 @@
       // A conflict proves that the mounted snapshot/preview authority is no
       // longer current. It must clear all prior data and invalidate both
       // request classes even when a newer request made this response stale.
-      // A completed isolated read/action may establish a newer exact workspace
-      // after this preview began. Only that mounted authority can supersede an
-      // older conflict; starting another request is not evidence and must not
-      // keep obsolete data visible while the newer request hangs.
-      if (error && error.status === 409 && demoMode &&
-          demoAuthorityAtRequest < demoAuthorityGeneration) return;
+      // A later mounted response does not prove when an otherwise unbound
+      // conflict occurred on the server. Without exact ordering evidence the
+      // mounted workspace is unavailable and must clear conservatively.
       if (error && error.status === 409) {
         invalidateConflict('preview');
         return;
@@ -421,7 +428,6 @@
       // Its older revision must not reappear after the newer action response.
       previewGeneration += 1;
       clearPreview();
-      demoAuthorityGeneration += 1;
       render(data); renderDemo(meta);
       setStatus('ready', data.status.label + '. ' + data.status.explanation);
       element('automationDemoStatus').textContent = action === 'reset_automation'
@@ -431,8 +437,7 @@
       if (isAuthorityFailure(error)) { invalidateAuthority(error); return; }
       if (request !== actionGeneration) return;
       if (error && error.status === 409) { invalidateConflict('load'); return; }
-      clearSensitive();
-      setStatus('unavailable', 'The fictional automation action is unavailable. No prior demo state is shown; refresh to continue.');
+      invalidateUnavailable('The fictional automation action is unavailable. No prior demo state is shown; refresh to continue.');
     }).finally(function () {
       if (request === actionGeneration) {
         actionPending = false;
@@ -445,7 +450,6 @@
     // before its commit. The action response carries the new exact revision.
     if (demoMode && actionPending) return Promise.resolve();
     var request = ++generation;
-    var demoAuthorityAtRequest = demoAuthorityGeneration;
     previewGeneration += 1;
     actionGeneration += 1;
     clearSensitive(); setStatus('loading', 'Loading current automation records.');
@@ -456,7 +460,6 @@
       render(data);
       if (demoMode) {
         renderDemo(body.demo);
-        demoAuthorityGeneration += 1;
       }
       var emptySnapshot = data.counts.policies === 0 && data.counts.runs === 0 && data.timeline.length === 0;
       setStatus(emptySnapshot ? 'empty' : 'ready', data.status.label + '. ' + data.status.explanation);
@@ -468,19 +471,12 @@
         invalidateAuthority(error);
         return;
       }
-      // A newer isolated action/reset invalidates every older read result,
-      // including its conflict. Paid reads retain the conservative rule that
-      // any confirmed currentness conflict clears mounted tenant data.
-      if (error && error.status === 409 && demoMode &&
-          demoAuthorityAtRequest < demoAuthorityGeneration) return;
       if (error && error.status === 409) {
         invalidateConflict('load');
         return;
       }
       if (request !== generation) return;
-      clearSensitive();
-      var status = errorStatus(error, 'load');
-      setStatus(status.state, status.message);
+      invalidateUnavailable(errorStatus(error, 'load').message);
     });
   }
   function bind() {

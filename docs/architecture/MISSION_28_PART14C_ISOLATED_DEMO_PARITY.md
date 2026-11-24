@@ -45,14 +45,19 @@ lifecycle, stop, schedule and recovery check; suppression blocks the simulated
 step; recovery remains recorded/no-effect; terminal stop permits only reset.
 The deterministic provider adapter progresses through recorded processing and
 completed internal simulation only. Completion never claims delivery or a
-business outcome.
+business outcome. A pause/resume preserves the original immutable processing
+claim and timestamps. If that claim expires, the journey remains in recovery
+until explicit review; any later simulated claim has a new identity and a new
+provider-attempt record rather than rewriting the earlier claim.
 
 Reset advances the automation generation, replaces every fictional identity,
 clears prior history, and invalidates older pending load, preview, and action
 responses in the browser. HTTP 401/403 clears every rendered fictional value
 even when the failure belongs to an older request. Current revision conflicts
-clear obsolete state; results from superseded action generations cannot replace
-a newer reset.
+clear obsolete state because a response mounted later does not prove server
+ordering. A current load or mutation failure also invalidates dependent
+previews that began while it was pending. Results from superseded action
+generations cannot replace a newer reset.
 
 ## Effect and evidence boundary
 

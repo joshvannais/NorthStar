@@ -182,7 +182,6 @@ function validateHistoryCoherence(value, context) {
         fail('The isolated automation resume history is unavailable.');
       }
       expected.lifecycle = 'active'; expected.control = 'active_resumed'; expected.recovery = null;
-      expected.phaseRecordedAt = expected.virtualNow;
     } else if (exact === 'suppression:blocks_effect_demo_only') {
       if (expected.sourceVersion !== expected.capturedSourceVersion || expected.lifecycle !== 'active' ||
           expected.control !== 'active_resumed' || expected.tenantControl !== 'active_resumed' ||
@@ -362,10 +361,15 @@ function latestRecoveryAt(state) {
   return event ? event.at : state.run.phaseRecordedAt;
 }
 function evidenceIds(state) {
+  // Every processing claim is bound to its own immutable provider-attempt
+  // record. Recovery can queue another attempt, but it cannot rewrite the
+  // identity or timestamps of an earlier claim.
+  const claimSequence = state.events.filter(event => event.runId === state.run.id &&
+    event.type === 'provider_attempt' && event.outcome === 'deterministic_simulation_started_no_provider').length;
   return Object.freeze({
     schedule: deterministicUuid('mission28-part14c-schedule', state.run.id),
     transaction: deterministicUuid('mission28-part14c-transaction', state.run.id),
-    lease: deterministicUuid('mission28-part14c-lease', state.run.id),
+    lease: deterministicUuid('mission28-part14c-lease', `${state.run.id}:${claimSequence}`),
   });
 }
 // The fictional adapter creates the same closed row vocabulary consumed by
@@ -516,7 +520,10 @@ function applyAction(value, context, actionValue) {
       fail('This fictional policy has no paused or recovery state to resume.', 'AUTOMATION_DEMO_ACTION_UNAVAILABLE');
     }
     next.policy.lifecycle = 'active'; next.policy.control = 'active_resumed';
-    next.run.recovery = null; next.run.phaseRecordedAt = next.virtualNow;
+    // Resume changes policy authority only. It cannot refresh or replace an
+    // immutable processing claim. An expired claim therefore still projects
+    // recovery and must be explicitly recovered before another claim begins.
+    next.run.recovery = null;
     appendEvent(next, bounded, 'reconciliation', 'resumed_no_effect');
   } else if (action === 'suppress') {
     if (next.run.suppression || next.run.phase === 'completed_internal') {

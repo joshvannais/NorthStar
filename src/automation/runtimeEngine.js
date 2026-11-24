@@ -12,8 +12,9 @@ const ACTIONS = Object.freeze([
 ]);
 const PROVIDER_MODE = 'deterministic_local_simulation_no_provider';
 const SOURCE_CLASS = 'mission23_work_execution';
-const ACTION_FAMILY = 'customer_communication';
-const CHANNEL_ID = 'email';
+const ACTION_FAMILY = 'internal_read_digest_task';
+const RECIPIENT_CLASS = 'tenant_owner';
+const CHANNEL_ID = 'in_app_passive';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EVENT_RESULTS = Object.freeze(new Set([
   'eligibility_evaluation:eligible',
@@ -94,16 +95,16 @@ function initialState(context, generation = 1) {
   const authorityKey = `${bounded.tenantId}:${bounded.sessionId}:${bounded.workspaceGeneration}:${generation}`;
   const policyId = deterministicUuid('mission28-part14c-policy', authorityKey);
   const firstRunId = runId(bounded, generation, 1);
-  const scheduledAt = anchor;
+  const scheduledAt = addMilliseconds(anchor, 60 * 60 * 1000);
   const value = {
-    contract: CONTRACT, generation, virtualNow: anchor,
+    contract: CONTRACT, generation, virtualNow: scheduledAt,
     source: { id: deterministicUuid('mission28-part14c-source', authorityKey),
       version: 1, digest: sourceDigest(bounded, generation, 1) },
     policy: { id: policyId, version: 1, lifecycle: 'active', control: 'active_resumed',
       expiresAt: addMilliseconds(anchor, 30 * 24 * 60 * 60 * 1000) },
     run: { id: firstRunId, sequence: 1, capturedSourceVersion: 1,
-      scheduleAcceptedAt: addMilliseconds(anchor, -60 * 60 * 1000), scheduledAt,
-      scheduleExpiresAt: addMilliseconds(scheduledAt, 2 * 24 * 60 * 60 * 1000), phase: 'queued',
+      scheduleAcceptedAt: anchor, scheduledAt,
+      scheduleExpiresAt: addMilliseconds(anchor, 2 * 24 * 60 * 60 * 1000), phase: 'queued',
       phaseRecordedAt: anchor, providerStep: 0, suppression: false, recovery: null },
     tenantControl: 'active_resumed',
     events: [
@@ -136,7 +137,7 @@ function validateEvent(event, context, state, priorSequence, priorAt, allowedRun
 
 function validateHistoryCoherence(value, context) {
   const expected = {
-    virtualNow: context.anchorTime,
+    virtualNow: addMilliseconds(context.anchorTime, 60 * 60 * 1000),
     sourceVersion: 1,
     runSequence: 1,
     capturedSourceVersion: 1,
@@ -147,8 +148,8 @@ function validateHistoryCoherence(value, context) {
     providerStep: 0,
     suppression: false,
     recovery: null,
-    scheduleAcceptedAt: addMilliseconds(context.anchorTime, -60 * 60 * 1000),
-    scheduledAt: context.anchorTime,
+    scheduleAcceptedAt: context.anchorTime,
+    scheduledAt: addMilliseconds(context.anchorTime, 60 * 60 * 1000),
     scheduleExpiresAt: addMilliseconds(context.anchorTime, 48 * 60 * 60 * 1000),
     phaseRecordedAt: context.anchorTime,
     scheduleExpected: false,
@@ -404,11 +405,20 @@ function businessInputForState(value, context, mode = 'isolated_demo') {
     sourceDigest: state.source.digest, sourceState: sourceCurrent ? 'known' : 'unavailable',
     sourceValue: sourceCurrent ? 'latest_exact_current' : null,
     sourceLineage: 'active', sourceObservedAt: bounded.anchorTime,
+    sourceClassId: SOURCE_CLASS, actionFamily: ACTION_FAMILY,
+    recipientClass: RECIPIENT_CLASS, channelId: CHANNEL_ID,
+    providerMode: 'provider_disabled', effectClass: 'internal_only_no_external_effect',
     authorizationState: 'exact_current_satisfied', permissionState: 'exact_current_allowed',
     controls: {
+      globalPause: 'clear',
       tenantPause: state.tenantControl === 'active_resumed' ? 'clear' : 'matched',
-      recipientOptOut: state.run.suppression ? 'matched' : 'clear',
+      customerPause: 'not_applicable', documentPause: 'not_applicable',
+      recipientOptOut: 'not_applicable',
+      providerUncertainty: 'clear',
       sourceChange: sourceCurrent ? 'clear' : 'matched',
+      activeConversation: 'not_applicable',
+      recentManualActivity: state.run.suppression ? 'matched' : 'clear',
+      duplicateContent: 'clear', higherPriorityAction: 'clear',
     },
     schedule: {
       timeZone: 'America/New_York', utcInstant: state.run.scheduledAt,
@@ -450,10 +460,24 @@ function requireRunnableBusinessPrelude(state, context) {
   return decision;
 }
 
-function unavailableBusinessInput(mode = 'paid_no_effect_preview') {
+function unavailableBusinessInput(mode = 'paid_no_effect_preview', requestedMaterial = {}) {
   if (!businessEngine.MODES.includes(mode)) fail('The no-effect business mode is unavailable.');
   const evaluatedAt = '1970-01-01T15:00:00.000Z';
-  const id = deterministicUuid('mission28-part14c-preview', `${mode}:unavailable-no-effect`);
+  const selected = {
+    sourceClassId: requestedMaterial.sourceClassId || SOURCE_CLASS,
+    actionFamily: requestedMaterial.actionFamily || ACTION_FAMILY,
+    recipientClass: requestedMaterial.recipientClass || RECIPIENT_CLASS,
+    channelId: requestedMaterial.channelId || CHANNEL_ID,
+  };
+  const internal = selected.channelId === 'in_app_passive' && selected.recipientClass !== 'exact_customer_record';
+  const id = deterministicUuid('mission28-part14c-preview',
+    `${mode}:unavailable-no-effect:${JSON.stringify(selected)}`);
+  const controls = Object.fromEntries(businessEngine.CONTROL_KINDS.map(kind => [kind, 'unavailable']));
+  controls.customerPause = selected.recipientClass === 'exact_customer_record' ? 'unavailable' : 'not_applicable';
+  controls.recipientOptOut = selected.recipientClass === 'exact_customer_record' ? 'unavailable' : 'not_applicable';
+  controls.activeConversation = selected.recipientClass === 'exact_customer_record' ? 'unavailable' : 'not_applicable';
+  controls.documentPause = ['mission24_estimate_quote', 'mission27_financial_collection']
+    .includes(selected.sourceClassId) ? 'unavailable' : 'not_applicable';
   return businessEngine.controlledInput({
     mode, tenantId: id, evaluatedAt,
     policyId: deterministicUuid('mission28-part14c-paid-preview-policy', id), policyVersion: 1,
@@ -462,8 +486,11 @@ function unavailableBusinessInput(mode = 'paid_no_effect_preview') {
     sourceId: deterministicUuid('mission28-part14c-paid-preview-source', id), sourceVersion: 1,
     sourceDigest: digest({ unavailable: true, noEffect: true }), sourceState: 'unavailable',
     sourceValue: null, sourceLineage: 'unavailable', sourceObservedAt: evaluatedAt,
+    ...selected,
+    providerMode: internal ? 'provider_disabled' : 'provider_unavailable_preview_no_effect',
+    effectClass: internal ? 'internal_only_no_external_effect' : 'external_preview_no_effect',
     authorizationState: 'unavailable', permissionState: 'unavailable',
-    controls: Object.fromEntries(businessEngine.CONTROL_KINDS.map(kind => [kind, 'unavailable'])),
+    controls,
     schedule: {
       timeZone: 'America/New_York', utcInstant: '1970-01-01T16:00:00.000Z',
       acceptedAt: evaluatedAt, expiresAt: '1970-01-02T16:00:00.000Z',
@@ -685,11 +712,19 @@ function applyAction(value, context, actionValue) {
 
 function buildNoEffectPreview(value, options = {}) {
   const businessMode = options.mode === 'isolated_demo' ? 'isolated_demo' : 'paid_no_effect_preview';
-  const providerMode = businessMode === 'isolated_demo'
-    ? PROVIDER_MODE : 'provider_unavailable_preview_no_effect';
-  const preview = centerContract.buildPreview(value);
-  const business = businessEngine.evaluate(options.businessInput || unavailableBusinessInput(businessMode));
+  const requestedMaterial = centerContract.normalizePreviewInput(value);
+  const preview = centerContract.buildPreview(requestedMaterial);
+  const supplied = options.businessInput;
+  const materialMatches = supplied && supplied.source && supplied.authorization &&
+    supplied.source.sourceClassId === requestedMaterial.sourceClassId &&
+    supplied.authorization.actionFamily === requestedMaterial.actionFamily &&
+    supplied.authorization.recipientClass === requestedMaterial.recipientClass &&
+    supplied.authorization.channelId === requestedMaterial.channelId;
+  const business = businessEngine.evaluate(materialMatches
+    ? supplied : unavailableBusinessInput(businessMode, requestedMaterial));
   if (business.mode !== businessMode) fail('The no-effect preview authority is unavailable.');
+  const providerMode = businessMode === 'isolated_demo' && business.runnable
+    ? PROVIDER_MODE : 'provider_unavailable_preview_no_effect';
   const engineAssessment = Object.freeze({
     policy: business.policy.state,
     evaluation: business.evaluation.state,
@@ -710,7 +745,7 @@ function buildNoEffectPreview(value, options = {}) {
 }
 
 module.exports = Object.freeze({
-  ACTIONS, ACTION_FAMILY, CHANNEL_ID, CONTRACT, PROVIDER_MODE, SOURCE_CLASS,
+  ACTIONS, ACTION_FAMILY, CHANNEL_ID, CONTRACT, PROVIDER_MODE, RECIPIENT_CLASS, SOURCE_CLASS,
   allowedActions, applyAction, buildNoEffectPreview, businessDecision, businessInputForState,
   currentState, demoEvidenceRow, deriveEvidence, deterministicUuid, evidenceIds, initialState,
   normalizeAction, unavailableBusinessInput, validateState,

@@ -29,6 +29,27 @@ const RECOVERY_STATES = Object.freeze([
   'not_required', 'bounded_history_verified_no_effect',
   'reconciliation_required_no_resend', 'unavailable',
 ]);
+const SOURCE_CLASSES = Object.freeze([
+  'mission20_business_contact_preferences', 'mission21_knowledge_reference',
+  'mission22_appointment_dispatch', 'mission23_work_execution',
+  'mission24_estimate_quote', 'mission25_26_advisory',
+  'mission27_financial_collection',
+]);
+const ACTION_FAMILIES = Object.freeze([
+  'internal_read_digest_task', 'owner_approval_request', 'customer_communication',
+  'secure_document_delivery', 'financial_reminder', 'collection_escalation',
+]);
+const RECIPIENT_CLASSES = Object.freeze([
+  'tenant_owner', 'tenant_admin', 'assigned_staff', 'exact_customer_record',
+]);
+const CHANNEL_IDS = Object.freeze(['in_app_passive', 'email', 'sms', 'secure_link', 'native_handoff']);
+const PROVIDER_MODES = Object.freeze(['provider_disabled', 'provider_unavailable_preview_no_effect']);
+const EFFECT_CLASSES = Object.freeze(['internal_only_no_external_effect', 'external_preview_no_effect']);
+const ALWAYS_APPLICABLE_CONTROLS = Object.freeze([
+  'globalPause', 'tenantPause', 'providerUncertainty', 'sourceChange',
+  'recentManualActivity', 'duplicateContent', 'higherPriorityAction',
+]);
+const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKDAYS = Object.freeze({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 });
 
 const SOURCES = Object.freeze({
@@ -115,18 +136,57 @@ function validateWindows(windows, label) {
   }
 }
 
-function normalizedControls(overrides = {}) {
+function material(options) {
+  const selected = {
+    sourceClassId: options.sourceClassId,
+    actionFamily: options.actionFamily,
+    recipientClass: options.recipientClass,
+    channelId: options.channelId,
+    providerMode: options.providerMode,
+    effectClass: options.effectClass,
+  };
+  if (!SOURCE_CLASSES.includes(selected.sourceClassId) || !ACTION_FAMILIES.includes(selected.actionFamily) ||
+      !RECIPIENT_CLASSES.includes(selected.recipientClass) || !CHANNEL_IDS.includes(selected.channelId) ||
+      !PROVIDER_MODES.includes(selected.providerMode) || !EFFECT_CLASSES.includes(selected.effectClass)) {
+    fail('action material is unsupported');
+  }
+  const noExternalEffect = selected.channelId === 'in_app_passive' &&
+    selected.recipientClass !== 'exact_customer_record';
+  const supported = selected.actionFamily === 'internal_read_digest_task' &&
+    selected.recipientClass === 'tenant_owner' && selected.channelId === 'in_app_passive';
+  if (noExternalEffect) {
+    if (selected.providerMode !== 'provider_disabled' ||
+        selected.effectClass !== 'internal_only_no_external_effect') fail('internal action material is incoherent');
+  } else if (selected.providerMode !== 'provider_unavailable_preview_no_effect' ||
+      selected.effectClass !== 'external_preview_no_effect') {
+    fail('unavailable action material is incoherent');
+  }
+  if (options.authorizationState !== 'unavailable' && !supported) {
+    fail('action material has no first-launch authority');
+  }
+  return Object.freeze(selected);
+}
+
+function normalizedControls(overrides, selectedMaterial) {
   const selected = clone(overrides);
   if (!selected || typeof selected !== 'object' || Array.isArray(selected)) fail('controls are invalid');
-  if (Object.keys(selected).some(key => !CONTROL_KINDS.includes(key))) fail('control kind is unsupported');
-  const controls = {};
-  for (const kind of CONTROL_KINDS) {
-    const value = Object.hasOwn(selected, kind) ? selected[kind] :
-      (['customerPause', 'documentPause', 'activeConversation'].includes(kind) ? 'not_applicable' : 'clear');
-    if (!CONTROL_STATES.includes(value)) fail('control state is unsupported');
-    controls[kind] = value;
+  exact(selected, CONTROL_KINDS, 'controls');
+  if (CONTROL_KINDS.some(kind => !CONTROL_STATES.includes(selected[kind]))) fail('control state is unsupported');
+  if (ALWAYS_APPLICABLE_CONTROLS.some(kind => selected[kind] === 'not_applicable')) {
+    fail('mandatory control cannot be not applicable');
   }
-  return controls;
+  const customerScoped = selectedMaterial.recipientClass === 'exact_customer_record';
+  for (const kind of ['customerPause', 'recipientOptOut', 'activeConversation']) {
+    if ((customerScoped && selected[kind] === 'not_applicable') ||
+        (!customerScoped && selected[kind] !== 'not_applicable')) fail('recipient control applicability is incoherent');
+  }
+  const documentScoped = ['mission24_estimate_quote', 'mission27_financial_collection']
+    .includes(selectedMaterial.sourceClassId);
+  if ((documentScoped && selected.documentPause === 'not_applicable') ||
+      (!documentScoped && selected.documentPause !== 'not_applicable')) {
+    fail('document control applicability is incoherent');
+  }
+  return selected;
 }
 
 function controlledInput(options = {}) {
@@ -143,6 +203,7 @@ function controlledInput(options = {}) {
   if (!SOURCE_LINEAGES.includes(options.sourceLineage)) fail('source lineage is unsupported');
   if (!PERMISSION_STATES.includes(options.permissionState)) fail('permission state is unsupported');
   if (!AUTHORIZATION_STATES.includes(options.authorizationState)) fail('authorization state is unsupported');
+  const selectedMaterial = material(options);
   const sourceValue = options.sourceValue === undefined ? 'latest_exact_current' : options.sourceValue;
   if (options.sourceState === 'known' && typeof sourceValue !== 'string') fail('known source value is invalid');
   if (options.sourceState !== 'known' && sourceValue !== null) fail('absent source value must remain null');
@@ -181,6 +242,7 @@ function controlledInput(options = {}) {
   });
   const source = seal('mission28.part14c.shared-source.v1', {
     tenantId, sourceId, version: options.sourceVersion, sourceDigest: hash(options.sourceDigest, 'source digest'),
+    sourceClassId: selectedMaterial.sourceClassId,
     state: options.sourceState, value: sourceValue, lineage: options.sourceLineage,
     observedAt: iso(options.sourceObservedAt, 'source observation time'),
   });
@@ -188,11 +250,13 @@ function controlledInput(options = {}) {
   const authorization = seal('mission28.part14c.shared-authorization.v1', {
     tenantId, kind: 'standing_authorization', state: options.authorizationState,
     policyDigest: policy.digest, sourceDigest: source.digest, permissionDigest: permission.digest,
-    actionFamily: 'internal_read_digest_task', recipientClass: 'tenant_owner',
-    channelId: 'in_app_passive', providerMode: 'no_external_provider',
-    effectClass: 'internal_only_no_external_effect',
+    actionFamily: selectedMaterial.actionFamily, recipientClass: selectedMaterial.recipientClass,
+    channelId: selectedMaterial.channelId, providerMode: selectedMaterial.providerMode,
+    effectClass: selectedMaterial.effectClass,
   });
-  const controls = seal('mission28.part14c.shared-controls.v1', { tenantId, states: normalizedControls(options.controls) });
+  const controls = seal('mission28.part14c.shared-controls.v1', {
+    tenantId, states: normalizedControls(options.controls, selectedMaterial),
+  });
   const scheduleBinding = seal('mission28.part14c.shared-schedule.v1', {
     tenantId, policyDigest: policy.digest, sourceDigest: source.digest,
     authorizationDigest: authorization.digest, permissionDigest: permission.digest,
@@ -215,7 +279,8 @@ function validateInput(input) {
   uuid(input.tenantId, 'tenant'); iso(input.evaluatedAt, 'evaluation time'); hash(input.inputDigest, 'input digest');
   for (const [kind, namespace, fields] of [
     ['policy', 'mission28.part14c.shared-policy.v1', ['tenantId', 'policyId', 'version', 'lifecycle', 'currentness', 'expiresAt', 'rule', 'digest']],
-    ['source', 'mission28.part14c.shared-source.v1', ['tenantId', 'sourceId', 'version', 'sourceDigest', 'state', 'value', 'lineage', 'observedAt', 'digest']],
+    ['source', 'mission28.part14c.shared-source.v1', ['tenantId', 'sourceId', 'version', 'sourceDigest',
+      'sourceClassId', 'state', 'value', 'lineage', 'observedAt', 'digest']],
     ['authorization', 'mission28.part14c.shared-authorization.v1', ['tenantId', 'kind', 'state', 'policyDigest',
       'sourceDigest', 'permissionDigest', 'actionFamily', 'recipientClass', 'channelId', 'providerMode',
       'effectClass', 'digest']],
@@ -245,23 +310,25 @@ function validateInput(input) {
   if (input.authorization.policyDigest !== input.policy.digest ||
       input.authorization.sourceDigest !== input.source.digest ||
       input.authorization.permissionDigest !== input.permission.digest ||
-      input.authorization.actionFamily !== 'internal_read_digest_task' ||
-      input.authorization.recipientClass !== 'tenant_owner' ||
-      input.authorization.channelId !== 'in_app_passive' ||
-      input.authorization.providerMode !== 'no_external_provider' ||
-      input.authorization.effectClass !== 'internal_only_no_external_effect' ||
       input.schedule.policyDigest !== input.policy.digest || input.schedule.sourceDigest !== input.source.digest ||
       input.schedule.authorizationDigest !== input.authorization.digest ||
       input.schedule.permissionDigest !== input.permission.digest ||
       input.schedule.controlsDigest !== input.controls.digest ||
       input.execution.scheduleDigest !== input.schedule.digest) fail('cross-component binding is invalid');
+  const selectedMaterial = material({
+    sourceClassId: input.source.sourceClassId,
+    actionFamily: input.authorization.actionFamily,
+    recipientClass: input.authorization.recipientClass,
+    channelId: input.authorization.channelId,
+    providerMode: input.authorization.providerMode,
+    effectClass: input.authorization.effectClass,
+    authorizationState: input.authorization.state,
+  });
   exact(input.policy.rule, ['factRef', 'operator', 'expected'], 'rule');
   if (input.policy.rule.factRef !== 'source.currentness_state' || input.policy.rule.operator !== 'equals' ||
       input.policy.rule.expected !== 'latest_exact_current') fail('rule is unsupported');
   exact(input.controls.states, CONTROL_KINDS, 'controls');
-  if (CONTROL_KINDS.some(kind => !CONTROL_STATES.includes(input.controls.states[kind]))) {
-    fail('control state is unsupported');
-  }
+  normalizedControls(input.controls.states, selectedMaterial);
   iso(input.policy.expiresAt, 'policy expiration'); iso(input.source.observedAt, 'source observation time');
   hash(input.source.sourceDigest, 'source digest');
   if ((input.source.state === 'known' && typeof input.source.value !== 'string') ||
@@ -290,8 +357,10 @@ function validateInput(input) {
       fail('execution timestamps are incoherent');
     }
   }
-  const material = Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'inputDigest'));
-  if (digest('mission28.part14c.shared-decision-input.v1', material) !== input.inputDigest) fail('input binding is invalid');
+  const bindingMaterial = Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'inputDigest'));
+  if (digest('mission28.part14c.shared-decision-input.v1', bindingMaterial) !== input.inputDigest) {
+    fail('input binding is invalid');
+  }
   return input;
 }
 
@@ -309,17 +378,19 @@ function evaluationDecision(input, policy) {
   const source = input.source;
   let state; let reason; let evidenceQuality;
   if (policy.state === 'unavailable') { state = 'unavailable'; reason = policy.reason; evidenceQuality = 'unavailable'; }
-  else if (source.state === 'unavailable' || source.observedAt > input.evaluatedAt) {
-    state = 'unavailable'; reason = 'source_unavailable'; evidenceQuality = 'unavailable';
-  } else if (source.state === 'unknown') {
-    state = 'unavailable'; reason = 'source_unknown'; evidenceQuality = 'partial_unknown';
+  else if (source.state === 'unavailable' || source.lineage === 'unavailable' ||
+      source.observedAt > input.evaluatedAt) {
+    state = 'unavailable'; reason = source.lineage === 'unavailable'
+      ? 'source_lineage_unavailable' : 'source_unavailable'; evidenceQuality = 'unavailable';
   } else if (input.authorization.state === 'unavailable') {
     state = 'unavailable'; reason = 'authorization_unavailable'; evidenceQuality = 'unavailable';
+  } else if (source.state === 'unknown') {
+    state = 'unavailable'; reason = 'source_unknown'; evidenceQuality = 'partial_unknown';
   } else if (policy.state === 'expired') {
     state = 'expired'; reason = policy.reason; evidenceQuality = 'complete_exact';
   } else if (policy.state !== 'active_exact_current') {
     state = 'ineligible'; reason = policy.reason; evidenceQuality = 'complete_exact';
-  } else if (source.lineage !== 'active') {
+  } else if (['tombstoned', 'reversed'].includes(source.lineage)) {
     state = 'ineligible'; reason = 'source_lineage_not_active'; evidenceQuality = 'complete_exact';
   } else if (source.value !== input.policy.rule.expected) {
     state = 'ineligible'; reason = 'rule_no_match'; evidenceQuality = 'complete_exact';
@@ -388,8 +459,11 @@ function schedulerDecision(input, evaluation, suppression) {
     local = localParts(schedule.utcInstant, schedule.timeZone);
     if (at(schedule.expiresAt) <= at(input.evaluatedAt)) {
       state = 'expired'; reason = 'schedule_expired';
-    } else if (at(schedule.utcInstant) <= at(schedule.acceptedAt) || at(schedule.expiresAt) <= at(schedule.utcInstant) ||
-        at(schedule.expiresAt) > at(schedule.acceptedAt) + 367 * 24 * 60 * 60 * 1000) {
+    } else if (at(schedule.acceptedAt) < at(input.source.observedAt) ||
+        at(schedule.utcInstant) <= at(schedule.acceptedAt) ||
+        at(schedule.utcInstant) > at(schedule.acceptedAt) + 366 * DAY_MS ||
+        at(schedule.expiresAt) <= at(schedule.utcInstant) ||
+        at(schedule.expiresAt) > at(schedule.acceptedAt) + 367 * DAY_MS) {
       reason = 'schedule_time_bounds_invalid';
     } else if (schedule.holidays.includes(local.date)) {
       state = 'suppressed'; reason = 'schedule_holiday';

@@ -23,8 +23,8 @@ function context(overrides = {}) {
   return { tenantId: TENANT, sessionId: SESSION, workspaceGeneration: 1, workspaceRevision: 1,
     anchorTime: '2026-11-23T15:00:00.000Z', ...overrides };
 }
-function rebuildBusinessInput(input, mode, overrides = {}) {
-  const options = {
+function businessOptions(input, mode) {
+  return {
     mode, tenantId: input.tenantId, evaluatedAt: input.evaluatedAt,
     policyId: input.policy.policyId, policyVersion: input.policy.version,
     policyLifecycle: input.policy.lifecycle, policyCurrentness: input.policy.currentness,
@@ -33,6 +33,12 @@ function rebuildBusinessInput(input, mode, overrides = {}) {
     sourceDigest: input.source.sourceDigest, sourceState: input.source.state,
     sourceValue: input.source.value, sourceLineage: input.source.lineage,
     sourceObservedAt: input.source.observedAt,
+    sourceClassId: input.source.sourceClassId,
+    actionFamily: input.authorization.actionFamily,
+    recipientClass: input.authorization.recipientClass,
+    channelId: input.authorization.channelId,
+    providerMode: input.authorization.providerMode,
+    effectClass: input.authorization.effectClass,
     authorizationState: input.authorization.state, permissionState: input.permission.state,
     controls: { ...input.controls.states },
     schedule: {
@@ -47,6 +53,9 @@ function rebuildBusinessInput(input, mode, overrides = {}) {
       claimExpiresAt: input.execution.claimExpiresAt, recoveryState: input.execution.recoveryState,
     },
   };
+}
+function rebuildBusinessInput(input, mode, overrides = {}) {
+  const options = businessOptions(input, mode);
   return businessEngine.controlledInput({ ...options, ...overrides,
     controls: { ...options.controls, ...(overrides.controls || {}) },
     schedule: { ...options.schedule, ...(overrides.schedule || {}) },
@@ -146,6 +155,15 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     const right = runtime.initialState(context());
     expect(left).toEqual(right);
     expect(runtime.validateState(left, context())).toEqual(left);
+    expect(left).toMatchObject({
+      virtualNow: '2026-11-23T16:00:00.000Z',
+      run: {
+        scheduleAcceptedAt: '2026-11-23T15:00:00.000Z',
+        scheduledAt: '2026-11-23T16:00:00.000Z',
+      },
+    });
+    expect(left.events.slice(0, 3).map(event => event.at))
+      .toEqual(Array(3).fill('2026-11-23T15:00:00.000Z'));
     const projected = demoProjection.project(record(left));
     expect(projected.snapshot.counts).toMatchObject({ policies: 1, activePolicies: 1, runs: 1 });
     expect(projected.snapshot.runs[0].state).toBe('queued');
@@ -330,9 +348,35 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(paidPreview.engineAssessment.businessInputDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(paidPreview.engineAssessment.businessOutputDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(demoPreview.engineAssessment).toMatchObject({
-      providerMode: 'deterministic_local_simulation_no_provider', providerCalls: 0,
+      providerMode: 'provider_unavailable_preview_no_effect', providerCalls: 0,
       recipients: 0, externalEffects: 0, financialEffects: 0, moneyEffects: 0,
     });
+
+    const state = runtime.initialState(context());
+    const exactBusinessInput = runtime.businessInputForState(state, context(), 'isolated_demo');
+    const exactPreview = runtime.buildNoEffectPreview(input,
+      { mode: 'isolated_demo', businessInput: exactBusinessInput });
+    expect(exactPreview.engineAssessment).toMatchObject({ policy: 'active_exact_current',
+      evaluation: 'eligible', scheduler: 'scheduled_unpublished', suppression: 'clear',
+      run: 'ready_no_effect', providerMode: 'deterministic_local_simulation_no_provider' });
+
+    const different = { templateId: 'custom', name: 'Invoices and collection review',
+      sourceClassId: 'mission27_financial_collection', actionFamily: 'collection_escalation',
+      recipientClass: 'exact_customer_record', channelId: 'email', timing: 'review_now', dailyLimit: 1 };
+    const mismatchedPreview = runtime.buildNoEffectPreview(different,
+      { mode: 'isolated_demo', businessInput: exactBusinessInput });
+    expect(mismatchedPreview).toMatchObject({ action: 'Prepare collection review',
+      recipient: 'Customer on the exact record', channel: 'Email',
+      engineAssessment: { policy: 'unavailable', evaluation: 'unavailable',
+        scheduler: 'preview_only_no_schedule_created', suppression: 'mandatory_checks_required_before_effect',
+        run: 'unavailable', providerMode: 'provider_unavailable_preview_no_effect' } });
+    expect(mismatchedPreview.engineAssessment.businessInputDigest)
+      .not.toBe(exactPreview.engineAssessment.businessInputDigest);
+    const unavailableBound = runtime.unavailableBusinessInput('isolated_demo', different);
+    expect(unavailableBound.source.sourceClassId).toBe(different.sourceClassId);
+    expect(unavailableBound.authorization).toMatchObject({ actionFamily: different.actionFamily,
+      recipientClass: different.recipientClass, channelId: different.channelId,
+      providerMode: 'provider_unavailable_preview_no_effect', effectClass: 'external_preview_no_effect' });
   });
 
   test('executes paid and isolated evidence through the same policy, evaluation, scheduler, suppression and recovery functions', () => {
@@ -365,6 +409,10 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     const demoInput = runtime.businessInputForState(state, context(), 'isolated_demo');
     const paid = businessEngine.evaluate(paidInput);
     const demo = businessEngine.evaluate(demoInput);
+    expect(demoInput.source.sourceClassId).toBe(runtime.SOURCE_CLASS);
+    expect(demoInput.authorization).toMatchObject({ actionFamily: runtime.ACTION_FAMILY,
+      recipientClass: runtime.RECIPIENT_CLASS, channelId: runtime.CHANNEL_ID,
+      providerMode: 'provider_disabled', effectClass: 'internal_only_no_external_effect' });
     const decisions = value => ({
       policy: value.policy.state, evaluation: value.evaluation.state,
       scheduler: value.scheduler.state, suppression: value.suppression.state,
@@ -427,7 +475,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
         { evaluation: 'suppressed', suppression: 'suppressed', runnable: false }],
       [{ schedule: { quietWindows: [{ weekday: 1, startMinute: 0, endMinute: 1440 }] } },
         { scheduler: 'suppressed', runnable: false }],
-      [{ sourceValue: 'not_current', controls: { recipientOptOut: 'matched' } },
+      [{ sourceValue: 'not_current', controls: { recentManualActivity: 'matched' } },
         { evaluation: 'suppressed', suppression: 'suppressed', runnable: false }],
       [{ policyLifecycle: 'paused', controls: { globalPause: 'unavailable' } },
         { evaluation: 'unavailable', suppression: 'unavailable', runnable: false }],
@@ -438,6 +486,87 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
       const demoResult = businessEngine.evaluate(rebuildBusinessInput(demoInput, 'isolated_demo', overrides));
       expect(decisions(paidResult)).toEqual(decisions(demoResult));
       expect(decisions(paidResult)).toMatchObject(expected);
+    }
+  });
+
+  test('fails mandatory controls closed and preserves exact scope applicability', () => {
+    const input = runtime.businessInputForState(runtime.initialState(context()), context());
+    expect(input.controls.states).toEqual({
+      globalPause: 'clear', tenantPause: 'clear', customerPause: 'not_applicable',
+      documentPause: 'not_applicable', recipientOptOut: 'not_applicable',
+      providerUncertainty: 'clear', sourceChange: 'clear', activeConversation: 'not_applicable',
+      recentManualActivity: 'clear', duplicateContent: 'clear', higherPriorityAction: 'clear',
+    });
+    for (const kind of ['globalPause', 'tenantPause', 'providerUncertainty', 'sourceChange',
+      'recentManualActivity', 'duplicateContent', 'higherPriorityAction']) {
+      expect(() => rebuildBusinessInput(input, input.mode, { controls: { [kind]: 'not_applicable' } }))
+        .toThrow(/mandatory control/i);
+    }
+    const options = businessOptions(input, input.mode);
+    delete options.controls.globalPause;
+    expect(() => businessEngine.controlledInput(options)).toThrow(/controls fields/i);
+    expect(() => rebuildBusinessInput(input, input.mode, { controls: { recipientOptOut: 'clear' } }))
+      .toThrow(/recipient control applicability/i);
+    const external = runtime.unavailableBusinessInput('isolated_demo', {
+      sourceClassId: 'mission27_financial_collection', actionFamily: 'collection_escalation',
+      recipientClass: 'exact_customer_record', channelId: 'email',
+    });
+    expect(external.controls.states).toMatchObject({ customerPause: 'unavailable',
+      documentPause: 'unavailable', recipientOptOut: 'unavailable', activeConversation: 'unavailable' });
+    expect(businessEngine.evaluate(external)).toMatchObject({ evaluation: { state: 'unavailable' },
+      suppression: { state: 'unavailable' }, runnable: false });
+  });
+
+  test('enforces coherent admission time and independent 366/367 day scheduler horizons', () => {
+    const input = runtime.businessInputForState(runtime.initialState(context()), context());
+    const accepted = Date.parse(input.schedule.acceptedAt);
+    const iso = milliseconds => new Date(milliseconds).toISOString();
+    const policyExpiresAt = iso(accepted + 370 * 24 * 60 * 60 * 1000);
+    const atBoundary = businessEngine.evaluate(rebuildBusinessInput(input, input.mode, {
+      policyExpiresAt,
+      schedule: { utcInstant: iso(accepted + 366 * 24 * 60 * 60 * 1000),
+        expiresAt: iso(accepted + 367 * 24 * 60 * 60 * 1000) },
+    }));
+    expect(atBoundary).toMatchObject({ scheduler: { state: 'scheduled_unpublished' }, runnable: true });
+    const afterScheduleHorizon = businessEngine.evaluate(rebuildBusinessInput(input, input.mode, {
+      policyExpiresAt,
+      schedule: { utcInstant: iso(accepted + 366 * 24 * 60 * 60 * 1000 + 1),
+        expiresAt: iso(accepted + 367 * 24 * 60 * 60 * 1000) },
+    }));
+    expect(afterScheduleHorizon).toMatchObject({ scheduler: { state: 'unavailable',
+      reason: 'schedule_time_bounds_invalid' }, runnable: false });
+    const afterExpirationHorizon = businessEngine.evaluate(rebuildBusinessInput(input, input.mode, {
+      policyExpiresAt,
+      schedule: { utcInstant: iso(accepted + 365 * 24 * 60 * 60 * 1000),
+        expiresAt: iso(accepted + 367 * 24 * 60 * 60 * 1000 + 1) },
+    }));
+    expect(afterExpirationHorizon).toMatchObject({ scheduler: { state: 'unavailable',
+      reason: 'schedule_time_bounds_invalid' }, runnable: false });
+    const sourceAfterAdmission = businessEngine.evaluate(rebuildBusinessInput(input, input.mode, {
+      sourceObservedAt: iso(accepted + 1),
+    }));
+    expect(sourceAfterAdmission).toMatchObject({ scheduler: { state: 'unavailable',
+      reason: 'schedule_time_bounds_invalid' }, runnable: false });
+  });
+
+  test('keeps unavailable source lineage unavailable and reserves ineligibility for exact terminal lineage', () => {
+    const input = runtime.businessInputForState(runtime.initialState(context()), context());
+    const unavailable = businessEngine.evaluate(rebuildBusinessInput(input, input.mode,
+      { sourceLineage: 'unavailable' }));
+    expect(unavailable).toMatchObject({ evaluation: { state: 'unavailable',
+      reason: 'source_lineage_unavailable', evidenceQuality: 'unavailable' }, runnable: false });
+    const unavailableBeatsRestrictivePolicy = businessEngine.evaluate(rebuildBusinessInput(input, input.mode,
+      { sourceLineage: 'unavailable', policyLifecycle: 'paused' }));
+    expect(unavailableBeatsRestrictivePolicy).toMatchObject({ evaluation: { state: 'unavailable',
+      reason: 'source_lineage_unavailable', evidenceQuality: 'unavailable' }, runnable: false });
+    const unavailableBeatsUnknown = businessEngine.evaluate(rebuildBusinessInput(input, input.mode,
+      { sourceState: 'unknown', sourceValue: null, sourceLineage: 'unavailable' }));
+    expect(unavailableBeatsUnknown).toMatchObject({ evaluation: { state: 'unavailable',
+      reason: 'source_lineage_unavailable', evidenceQuality: 'unavailable' }, runnable: false });
+    for (const sourceLineage of ['tombstoned', 'reversed']) {
+      expect(businessEngine.evaluate(rebuildBusinessInput(input, input.mode, { sourceLineage })))
+        .toMatchObject({ evaluation: { state: 'ineligible', reason: 'source_lineage_not_active',
+          evidenceQuality: 'complete_exact' }, runnable: false });
     }
   });
 
@@ -769,6 +898,17 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
         engineAssessment: { policy: 'active_exact_current', evaluation: 'eligible',
           scheduler: 'scheduled_unpublished', suppression: 'clear', recovery: 'ready_no_effect',
           run: 'ready_no_effect', providerCalls: 0 } });
+      const unmatchedPreview = await request(app).post('/api/demo/automation-center/preview')
+        .set('Host', 'northstar.test').set('Origin', 'http://northstar.test')
+        .set('X-NorthStar-Demo-Intent', 'automation-center-preview')
+        .set('X-NorthStar-Demo-Revision', '1').send({ templateId: 'custom',
+          name: 'Collection review only', sourceClassId: 'mission27_financial_collection',
+          actionFamily: 'collection_escalation', recipientClass: 'exact_customer_record',
+          channelId: 'email', timing: 'review_now', dailyLimit: 1 }).expect(200);
+      expect(unmatchedPreview.body.data).toMatchObject({ action: 'Prepare collection review',
+        channel: 'Email', engineAssessment: { policy: 'unavailable', evaluation: 'unavailable',
+          scheduler: 'preview_only_no_schedule_created', run: 'unavailable',
+          providerMode: 'provider_unavailable_preview_no_effect', providerCalls: 0 } });
       await request(app).post('/api/demo/automation-center/preview')
         .set('Host', 'northstar.test').set('Origin', 'http://northstar.test')
         .set('X-NorthStar-Demo-Intent', 'automation-center-preview')
@@ -789,7 +929,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
         .set('X-NorthStar-Demo-Intent', 'automation-center-action')
         .set('Idempotency-Key', '00000000-0000-4000-8000-000000000100')
         .send({ action: 'provider_step', expectedRevision: 1 }).expect(403);
-      expect(readSpy).toHaveBeenCalledTimes(2);
+      expect(readSpy).toHaveBeenCalledTimes(3);
       expect(mutateSpy).toHaveBeenCalledTimes(1);
     } finally {
       config.auth.accessSecret = previousSecret;

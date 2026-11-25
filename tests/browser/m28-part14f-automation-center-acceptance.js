@@ -222,6 +222,56 @@ async function pointerAndTouchPreview(page, mode) {
   await assertPreviewReady(page);
   return { input: mode.isMobile ? 'touch' : 'pointer', templatePreview: true, customPreview: true };
 }
+async function canceledPointerActivation(page, surface) {
+  const button = surface === 'paid'
+    ? page.locator('#automationTemplates .automation-template').first()
+      .getByRole('button', { name: 'Preview this setup' })
+    : page.locator('[data-automation-demo-action="source_change"]');
+  await button.waitFor({ state: 'visible' });
+  assert.equal(await button.isEnabled(), true);
+  await button.scrollIntoViewIfNeeded();
+  const envelope = await button.evaluate(control => {
+    const rect = control.getBoundingClientRect();
+    const inside = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    const candidates = [];
+    for (const distance of [8, 16, 32, 48]) {
+      candidates.push({ x: rect.left - distance, y: inside.y });
+      candidates.push({ x: rect.right + distance, y: inside.y });
+      candidates.push({ x: inside.x, y: rect.top - distance });
+      candidates.push({ x: inside.x, y: rect.bottom + distance });
+    }
+    function hit(point) {
+      if (point.x < 1 || point.y < 1 || point.x >= innerWidth - 1 || point.y >= innerHeight - 1) return null;
+      const target = document.elementFromPoint(point.x, point.y);
+      if (!target || target === control || control.contains(target)) return null;
+      return { x: point.x, y: point.y, tag: target.tagName,
+        id: target.id || null, className: typeof target.className === 'string' ? target.className : null };
+    }
+    const insideTarget = document.elementFromPoint(inside.x, inside.y);
+    if (!insideTarget || (insideTarget !== control && !control.contains(insideTarget))) return null;
+    const outside = candidates.map(hit).find(Boolean);
+    return outside ? { inside: { ...inside, tag: insideTarget.tagName }, outside } : null;
+  });
+  assert.ok(envelope, `${surface} pointer envelope must have stable inside and outside hit targets`);
+  const endpoint = surface === 'paid'
+    ? '/api/v1/automation-center/preview' : '/api/demo/automation-center/actions';
+  const postCount = () => result.requests.filter(item => item.method === 'POST' && item.path === endpoint).length;
+  const before = postCount();
+  await page.mouse.move(envelope.inside.x, envelope.inside.y);
+  await page.mouse.down();
+  await page.mouse.move(envelope.outside.x, envelope.outside.y);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  assert.equal(postCount(), before, `${surface} inside-to-outside cancellation must not activate`);
+  await page.mouse.move(envelope.outside.x, envelope.outside.y);
+  await page.mouse.down();
+  await page.mouse.move(envelope.inside.x, envelope.inside.y);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  assert.equal(postCount(), before, `${surface} outside-to-inside release must not activate`);
+  return { input: 'native_pointer', insideTarget: envelope.inside.tag,
+    outsideTarget: envelope.outside.tag, insideToOutsidePosts: 0, outsideToInsidePosts: 0 };
+}
 async function action(page, actionName, mode) {
   const button = page.locator(`[data-automation-demo-action="${actionName}"]`);
   assert.equal(await button.isEnabled(), true, `${actionName} should be available`);
@@ -361,13 +411,15 @@ async function paidAuthorityLossAndRecovery(page) {
         assert.equal(new URL(page.url()).hash, '#automationEvidence');
         const first = await renderedAudit(page, mode);
         let workflowReceipts;
+        const canceledPointer = mode.isMobile ? { input: 'touch', boundary: 'completed_touch_positive_control' }
+          : await canceledPointerActivation(page, surface);
         if (surface === 'paid') {
           workflowReceipts = { preview: await keyboardAndPreview(page),
             pointerOrTouch: await pointerAndTouchPreview(page, mode),
-            authority: await paidAuthorityLossAndRecovery(page) };
+            canceledPointer, authority: await paidAuthorityLossAndRecovery(page) };
         } else {
           workflowReceipts = { demo: await demoWorkflows(page, mode), delayed: await delayedRead(page),
-            database: await databaseErrorAndRecovery(page), conflict: await staleConflict(context, origin) };
+            canceledPointer, database: await databaseErrorAndRecovery(page), conflict: await staleConflict(context, origin) };
           await page.reload({ waitUntil: 'networkidle' }); await settled(page); await reset(page, mode);
           workflowReceipts.conflictRecovery = { reloadedCurrentRevision: true, resetRecovered: true };
         }

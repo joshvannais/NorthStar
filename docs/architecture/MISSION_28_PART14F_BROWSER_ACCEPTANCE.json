@@ -35,6 +35,7 @@
     "directReloadBackForwardDeepLinks": "passed_writer_actual_browser_no_interception",
     "keyboardAndFocus": "passed_writer_actual_browser_no_interception",
     "pointerAndTouch": "passed_writer_actual_browser_no_interception",
+    "canceledAndOutsideRelease": "passed_writer_actual_browser_hit_validated_zero_post",
     "screenReaderSemantics": "passed_writer_actual_browser_no_interception",
     "responsiveDesktopMobile": "passed_writer_actual_browser_no_interception",
     "lightDark": "passed_writer_actual_browser_no_interception",
@@ -66,7 +67,9 @@
       "unexpectedConsoleErrors": 0,
       "expectedFailClosedHttpConsoleMessages": 20,
       "screenshots": 8,
-      "resultSha256": "6222CBCA57E5671F3A05381D3245FAC7F2B2D7B09395EC9B819BD25D9B0793F8"
+      "canceledGestureReceipts": 4,
+      "canceledGesturePosts": 0,
+      "resultSha256": "D36517CC0DBA714DF5CB0FBDED0A0012F455EAEC230943047F88272BAF713C03"
     },
     "playwrightWebkit": {
       "browserRevision": 2336,
@@ -88,7 +91,9 @@
       "unexpectedConsoleErrors": 0,
       "expectedFailClosedHttpConsoleMessages": 20,
       "screenshots": 8,
-      "resultSha256": "B7280BD81277E196EC895C1FB2B836B197F591868CFF01D323227A5AB5113860"
+      "canceledGestureReceipts": 4,
+      "canceledGesturePosts": 0,
+      "resultSha256": "3D9C4594A84F0F4D563A732844842ABDAC822851B852039CE4A5DA1B7AE5899E"
     },
     "nativePointerTouchProbe": {
       "pass": true,
@@ -96,6 +101,16 @@
       "posts": 8,
       "pageErrors": 0,
       "resultSha256": "769E53ACCF03C3BC64B335A81EA6C7ECAE5D1164CB994EBC80B7265AA6F6D86A"
+    },
+    "nativeCanceledGestureProbe": {
+      "pass": true,
+      "cases": 4,
+      "trustedNativeEventsPerCase": 10,
+      "hitTargetValidated": true,
+      "insideToOutsidePosts": 0,
+      "outsideToInsidePosts": 0,
+      "pageErrors": 0,
+      "resultSha256": "DFB7CA81C5043BD8DF5FAD23379B64FEE1772EE6FEEEB1FAC4CFFEF2D47C2486"
     },
     "expectedFailClosedStatuses": [400, 403, 409, 503],
     "requestInterception": false,

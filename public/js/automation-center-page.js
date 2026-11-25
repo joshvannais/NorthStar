@@ -180,21 +180,95 @@
     // bounded action once, never twice.
     var directStarted = false;
     var directHandled = false;
+    var activeFamily = null;
+    var activePointerId = null;
+    var activeTouchId = null;
+    var guarded = false;
+    function family(event) { return event && event.type.indexOf('touch') === 0 ? 'touch' : 'pointer'; }
     function primary(event) {
       return (!event || event.isPrimary !== false) &&
         (!event || typeof event.button !== 'number' || event.button === 0);
     }
+    function touchFrom(event) {
+      var list = event && (event.changedTouches || event.touches);
+      return list && list.length ? list[0] : null;
+    }
+    function sameGesture(event) {
+      if (family(event) !== activeFamily) return false;
+      if (activeFamily === 'touch') {
+        var touch = touchFrom(event);
+        return Boolean(touch) && touch.identifier === activeTouchId;
+      }
+      return event.pointerId === activePointerId;
+    }
+    function releaseTarget(event) {
+      var touch = touchFrom(event);
+      var x = touch ? touch.clientX : event.clientX;
+      var y = touch ? touch.clientY : event.clientY;
+      if (typeof x !== 'number' || typeof y !== 'number' ||
+          typeof document.elementFromPoint !== 'function') return event.target;
+      return document.elementFromPoint(x, y);
+    }
+    function releaseInside(event) {
+      var target = releaseTarget(event);
+      return Boolean(target) && (target === button || button.contains(target));
+    }
+    function clearGuards() {
+      if (!guarded) return;
+      guarded = false;
+      document.removeEventListener('pointerdown', guardStart, true);
+      document.removeEventListener('pointerup', guardEnd, true);
+      document.removeEventListener('pointercancel', guardCancel, true);
+      document.removeEventListener('touchstart', guardStart, true);
+      document.removeEventListener('touchend', guardEnd, true);
+      document.removeEventListener('touchcancel', guardCancel, true);
+    }
+    function cancel() {
+      clearGuards();
+      directStarted = false;
+      directHandled = false;
+      activeFamily = null;
+      activePointerId = null;
+      activeTouchId = null;
+    }
+    function guardStart(event) {
+      if (event.target !== button && !button.contains(event.target)) cancel();
+    }
+    function guardEnd(event) {
+      if (sameGesture(event) && !releaseInside(event)) cancel();
+    }
+    function guardCancel(event) {
+      if (sameGesture(event)) cancel();
+    }
+    function installGuards() {
+      if (guarded) return;
+      guarded = true;
+      document.addEventListener('pointerdown', guardStart, true);
+      document.addEventListener('pointerup', guardEnd, true);
+      document.addEventListener('pointercancel', guardCancel, true);
+      document.addEventListener('touchstart', guardStart, true);
+      document.addEventListener('touchend', guardEnd, true);
+      document.addEventListener('touchcancel', guardCancel, true);
+    }
     function start(event) {
       if (!primary(event)) return;
+      cancel();
       directStarted = true;
       directHandled = false;
+      activeFamily = family(event);
+      if (activeFamily === 'touch') {
+        var touch = touchFrom(event);
+        activeTouchId = touch ? touch.identifier : null;
+      } else activePointerId = event.pointerId;
+      installGuards();
     }
     function finish(event) {
-      if (!directStarted || directHandled || button.disabled || !primary(event)) return;
+      if (!directStarted || directHandled || button.disabled || !primary(event) ||
+          !sameGesture(event) || !releaseInside(event)) return;
       directHandled = true;
+      clearGuards();
       activate(event);
     }
-    function cancel() { directStarted = false; directHandled = false; }
     button.addEventListener('pointerdown', start);
     button.addEventListener('pointerup', finish);
     button.addEventListener('pointercancel', cancel);

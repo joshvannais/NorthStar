@@ -71,6 +71,14 @@ class and both preview outcomes. A separate root-authored pointer/touch
 reproducer executed by the writer passed 8/8 cases with exactly eight action
 POSTs and zero page errors; its result SHA-256 is
 `769E53ACCF03C3BC64B335A81EA6C7ECAE5D1164CB994EBC80B7265AA6F6D86A`.
+Every desktop matrix slot also performs two hit-tested native canceled gestures:
+press inside then release outside, and press outside then release inside. Both
+must remain at zero POSTs. A separate root-authored, writer-executed Chrome and
+WebKit paid/demo probe verified the button interior and outside `ARTICLE` or
+`DIV` with `elementFromPoint`, recorded ten trusted native events per case,
+passed 4/4 cases with zero POSTs and zero page errors, and produced result
+SHA-256
+`DFB7CA81C5043BD8DF5FAD23379B64FEE1772EE6FEEEB1FAC4CFFEF2D47C2486`.
 
 The demo journey uses only buttons rendered from exact allowed actions. It
 exercises source change/correction, pause/resume, safeguard/recovery, virtual
@@ -101,9 +109,9 @@ set, including the version-bound Automation Center page script, so a warm
 public cache cannot retain the prior target geometry or activation path on
 this surface. The external writer result ledgers are bound by
 SHA-256
-`6222CBCA57E5671F3A05381D3245FAC7F2B2D7B09395EC9B819BD25D9B0793F8`
+`D36517CC0DBA714DF5CB0FBDED0A0012F455EAEC230943047F88272BAF713C03`
 for Chrome and
-`B7280BD81277E196EC895C1FB2B836B197F591868CFF01D323227A5AB5113860`
+`3D9C4594A84F0F4D563A732844842ABDAC822851B852039CE4A5DA1B7AE5899E`
 for WebKit.
 
 The rendered acceptance exposed and corrected three shared accessibility
@@ -119,7 +127,13 @@ as the same semantic activation while retaining the ordinary `click` path for
 keyboard and assistive technology, and suppresses only that gesture's follow-on
 compatibility click. A broader mouse-event fallback was rejected because the
 delayed compatibility mouse sequence produced a duplicate request and exact
-409; it is not present in the final source. These writer results are
+409; it is not present in the final source. The normal PR review then exposed a
+stale pending gesture after release outside the control. The shared page now
+binds activation to the same still-valid pointer or touch identifier, clears
+the pending gesture on an outside start, outside release or cancellation
+through temporary document capture guards, and requires the release hit target
+to remain inside the same button. Ordinary keyboard and assistive-technology
+click activation remains unchanged. These writer results are
 browser-automation evidence only. They cannot constitute
 physical Safari/device evidence, manual assistive-technology review, founder
 visual approval, private-production acceptance, provider/live evidence,

@@ -106,11 +106,19 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
     expect(page).toContain("button.addEventListener('touchend', finish");
     expect(page).toContain("button.addEventListener('click', function (event)");
     expect(page).toContain('if (directHandled && event.detail !== 0)');
+    expect(page).toContain("document.addEventListener('pointerup', guardEnd, true)");
+    expect(page).toContain("document.addEventListener('touchend', guardEnd, true)");
+    expect(page).toContain('sameGesture(event) && !releaseInside(event)');
+    expect(page).toContain('document.elementFromPoint(x, y)');
     expect(page).not.toContain("button.addEventListener('mouseup', finish)");
     expect(browser).toContain('submitPreviewWithPointerOrTouch');
     expect(browser).toContain('if (mode.isMobile) await button.tap()');
     expect(browser).toContain('else await button.click()');
     expect(browser).toContain("input: mode.isMobile ? 'touch' : 'pointer'");
+    expect(browser).toContain('canceledPointerActivation(page, surface)');
+    expect(browser).toContain('inside-to-outside cancellation must not activate');
+    expect(browser).toContain('outside-to-inside release must not activate');
+    expect(browser).toContain('document.elementFromPoint(inside.x, inside.y)');
     expect(html).toContain('/js/automation-center-page.js?v=m28-part14f-pointer-20261125');
     expect(browser).not.toMatch(/force\s*:/);
   });
@@ -170,9 +178,13 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
     expect(artifact.writerExecution).toMatchObject({
       node: '22.23.3', playwrightCore: '1.62.1', requestInterception: false,
       responseInterception: false, externalOriginRequests: 0,
-      chrome: { pass: true, cases: 8, pageErrors: 0, unexpectedConsoleErrors: 0, screenshots: 8 },
+      chrome: { pass: true, cases: 8, pageErrors: 0, unexpectedConsoleErrors: 0, screenshots: 8,
+        canceledGestureReceipts: 4, canceledGesturePosts: 0 },
       playwrightWebkit: { browserRevision: 2336, browserVersion: '26.5', pass: true,
-        cases: 8, pageErrors: 0, unexpectedConsoleErrors: 0, screenshots: 8 },
+        cases: 8, pageErrors: 0, unexpectedConsoleErrors: 0, screenshots: 8,
+        canceledGestureReceipts: 4, canceledGesturePosts: 0 },
+      nativeCanceledGestureProbe: { pass: true, cases: 4, hitTargetValidated: true,
+        insideToOutsidePosts: 0, outsideToInsidePosts: 0, pageErrors: 0 },
     });
     expect(artifact.writerExecution.chrome.resultSha256).toMatch(/^[A-F0-9]{64}$/);
     expect(artifact.writerExecution.playwrightWebkit.resultSha256).toMatch(/^[A-F0-9]{64}$/);

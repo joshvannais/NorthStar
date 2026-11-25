@@ -767,8 +767,8 @@ describe('Mission 28 Part 13D provider resilience, fallback and switching', () =
   test('keeps the roadmap and 66-row ledger exact after Part 13D release and during Part 13E', () => {
     const roadmap = read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'); const ledger = read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md');
     for (const value of [roadmap, ledger]) {
-      expect(value).toContain('Parts 1A–14E are released. Part 14F is the sole implementation candidate.');
-      expect(value).toContain('Part 14G'); expect(value).toContain('planned and unimplemented');
+      expect(value).toContain('Parts 1A–14F are released. Part 14G is the sole implementation candidate.');
+      expect(value).toContain('Part 14G'); expect(value).toContain('sole implementation candidate');
     }
     expect(roadmap).toContain('Released Part 13C baseline: accepted corrected source `7b59f3771f6dc921cecd418816a313a22874863f`');
     expect(roadmap).toContain('Released Part 13D artifacts:');
@@ -778,8 +778,8 @@ describe('Mission 28 Part 13D provider resilience, fallback and switching', () =
     expect(ledger).toContain('| 57 | 13C | Authenticated callbacks and exact status reconciliation | **Released** |');
     expect(ledger).toContain('| 58 | 13D | Provider outage/quota/degradation/circuit-breaker/fallback | **Released** |');
     const rows = ledger.split(/\r?\n/).filter(line => /^\| \d{2} \|/.test(line));
-    expect(rows).toHaveLength(66); expect(rows.filter(line => line.includes('**Released**'))).toHaveLength(64); expect(rows.filter(line => line.includes('**Implementation candidate**'))).toHaveLength(1);
-    expect(rows.slice(65).every(line => line.includes('Planned / unimplemented'))).toBe(true);
+    expect(rows).toHaveLength(66); expect(rows.filter(line => line.includes('**Released**'))).toHaveLength(65); expect(rows.filter(line => line.includes('**Implementation candidate**'))).toHaveLength(1);
+    expect(rows[65]).toContain('| 66 | 14G |'); expect(rows[65]).toContain('**Implementation candidate**');
     expect(fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_.*\.sql$/.test(name))).toHaveLength(285);
     expect(fs.existsSync(path.join(ROOT, 'migrations', '288_canonical_automation_provider_resilience_v1.sql'))).toBe(false);
   });

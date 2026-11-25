@@ -1,6 +1,6 @@
 {
   "contractVersion": "mission28.part14f.browser-acceptance.v1",
-  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "status": "released_terminally_accepted",
   "base": {
     "part": "14E",
     "acceptedSourceHead": "d63b9ff59f6af6aae63e6eeaa2f9683354245eea",
@@ -29,7 +29,7 @@
     "routeFulfillment": false,
     "migrationAdded": false,
     "sourceMigrations": "285_through_289_no_290",
-    "releaseIncluded": false
+    "releaseIncluded": true
   },
   "renderedAcceptance": {
     "directReloadBackForwardDeepLinks": "passed_writer_actual_browser_no_interception",
@@ -126,10 +126,39 @@
     "productionDataMutated": false,
     "privateProductionRead": false
   },
+  "independentAudit": {
+    "acceptedSourceHead": "eedce86851a017ac8ecc0c08b6f63788b4dae88e",
+    "acceptedTree": "20cb0a9b103fc927ed2e19eabd0b2410343fe09e",
+    "report": "m28-part14f-root-audit-eedce-v5.json",
+    "reportSha256": "28E2BF55BD634D3521F9AAFA7C33D0A3C4197DCE6305D542BDD871C374998E9F",
+    "severityCounts": { "P0": 0, "P1": 0, "P2": 0, "P3": 0 },
+    "mission28Suites": 65,
+    "mission28Tests": 1002,
+    "rootChromeLedgerSha256": "07B9EDF5AAA51AD0D133FF791713EBD69158C0695F3E5AC514F4EC50EB2FAA31",
+    "rootWebkitLedgerSha256": "CBE45035BC3E85DC5B6C07D7B054D0B07D4166A2B41FC828F54EB9499A2FC7C2",
+    "rootNativePositiveSha256": "E8267BEE1D2BEF4ABF9EAFBF57F4C117273A010B6E128E646ED3D1D54DA8CCE2",
+    "rootNativeCanceledSha256": "32867469936F65DB525436C67B540DD6BC89C603691DAAF63B424276066E27BD"
+  },
+  "terminalRelease": {
+    "pullRequest": 613,
+    "mergedMain": "6b29a739d6df1660847aa7d70559a98979dc8021",
+    "mergedTree": "20cb0a9b103fc927ed2e19eabd0b2410343fe09e",
+    "deploymentId": "8762dcc6-e838-419e-8c2d-70a5b8e5dcda",
+    "deploymentStatus": "SUCCESS",
+    "instanceId": "b22069d1-e75e-4339-820f-0ee9cfa48774",
+    "instanceStatus": "RUNNING",
+    "imageSha256": "sha256:9cfd5e82dd3853bb3515a6966944802e74dfcf46e6f8c38fa04955d27af92a63",
+    "productionMigrations": "285_of_285_through_289_no_290",
+    "backupId": "9819cdb8-09ae-4eb0-b286-2db427ab4892",
+    "backupName": "pre-m28-part14f-eedce868-20261125",
+    "backupExternalId": "vs_1795581896622_wsn1hz24t8l57y3o",
+    "retainedBackupCount": 1,
+    "restoreExercised": false
+  },
   "evidenceBoundary": {
     "writerEvidenceIndependent": false,
-    "rootIndependentBrowserAcceptance": "pending",
-    "part14G": "not_implemented",
+    "rootIndependentBrowserAcceptance": "accepted",
+    "part14G": "implementation_candidate_not_accepted_or_released",
     "physicalSafariDevices": "unavailable_unclaimed",
     "manualAssistiveTechnology": "unavailable_unclaimed",
     "founderVisualApproval": "separate_unavailable_unclaimed",

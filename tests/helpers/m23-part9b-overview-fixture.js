@@ -3,6 +3,28 @@
 const EXECUTION = 'e1900000-0000-4000-8000-000000000001';
 const APPOINTMENT = 'd1900000-0000-4000-8000-000000000001';
 const INSTANT = '2026-09-08T12:00:00.000000Z';
+const FIXTURE_ENVIRONMENT_KEYS = Object.freeze([
+  'DATABASE_URL',
+  'MIGRATION_DATABASE_URL',
+  'NODE_ENV',
+  'AUTH_ACCESS_SECRET',
+  'JEST_WORKER_ID',
+  'NORTHSTAR_PART14B_TEST_ADAPTER',
+]);
+
+function snapshotEnvironment(environment) {
+  return new Map(FIXTURE_ENVIRONMENT_KEYS.map(key => [key, {
+    present: Object.prototype.hasOwnProperty.call(environment, key),
+    value: environment[key],
+  }]));
+}
+
+function restoreEnvironment(environment, snapshot) {
+  for (const [key, prior] of snapshot) {
+    if (prior.present) environment[key] = prior.value;
+    else delete environment[key];
+  }
+}
 
 function record(scope = 'owner_admin', overrides = {}) {
   const value = {
@@ -68,12 +90,15 @@ async function createDatabaseFixture(options = {}) {
   };
   const ownerPool = new Pool({ connectionString: roleUrl(roles.owner), max: 5 });
   const runtimePool = new Pool({ connectionString: roleUrl(options.singleRoleMigrations ? roles.owner : roles.runtime), max: 6 });
-  process.env.DATABASE_URL = roleUrl(options.singleRoleMigrations ? roles.owner : roles.runtime);
-  if (options.singleRoleMigrations) delete process.env.MIGRATION_DATABASE_URL;
-  else process.env.MIGRATION_DATABASE_URL = roleUrl(roles.owner);
   const NodeModule = require('node:module');
   const hostProcess = process.env.JEST_WORKER_ID ?
     Reflect.apply(NodeModule._load, NodeModule, ['node:process', null, false]) : process;
+  const processEnvironmentBefore = snapshotEnvironment(process.env);
+  const hostEnvironmentBefore = hostProcess === process ? processEnvironmentBefore :
+    snapshotEnvironment(hostProcess.env);
+  process.env.DATABASE_URL = roleUrl(options.singleRoleMigrations ? roles.owner : roles.runtime);
+  if (options.singleRoleMigrations) delete process.env.MIGRATION_DATABASE_URL;
+  else process.env.MIGRATION_DATABASE_URL = roleUrl(roles.owner);
   hostProcess.env.DATABASE_URL = process.env.DATABASE_URL;
   hostProcess.env.NODE_ENV = 'test';
   hostProcess.env.AUTH_ACCESS_SECRET = process.env.AUTH_ACCESS_SECRET;
@@ -106,15 +131,20 @@ async function createDatabaseFixture(options = {}) {
     // reads instead of silently changing only Jest's facade.
     runtimeProcess: hostProcess,
     async cleanup() {
-      await db.close(); await runtimePool.end(); await ownerPool.end(); await database.cleanup();
-      const cleanupAdmin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });
-      await cleanupAdmin.connect();
-      try { for (const role of Object.values(roles)) await cleanupAdmin.query(`DROP ROLE ${quote(role)}`); }
-      finally { await cleanupAdmin.end(); }
-      delete process.env.DATABASE_URL; delete process.env.MIGRATION_DATABASE_URL;
-      delete hostProcess.env.DATABASE_URL; delete hostProcess.env.MIGRATION_DATABASE_URL;
-      delete hostProcess.env.AUTH_ACCESS_SECRET;
-      delete hostProcess.env.NORTHSTAR_PART14B_TEST_ADAPTER;
+      try {
+        await db.close(); await runtimePool.end(); await ownerPool.end(); await database.cleanup();
+        const cleanupAdmin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });
+        await cleanupAdmin.connect();
+        try { for (const role of Object.values(roles)) await cleanupAdmin.query(`DROP ROLE ${quote(role)}`); }
+        finally { await cleanupAdmin.end(); }
+      } finally {
+        // This fixture borrows the Jest facade and the native Node process.
+        // Restore the caller's exact presence/value for every borrowed key so
+        // a later mounted suite cannot inherit a deleted authentication secret
+        // or stale database authority from an earlier suite.
+        restoreEnvironment(process.env, processEnvironmentBefore);
+        if (hostProcess !== process) restoreEnvironment(hostProcess.env, hostEnvironmentBefore);
+      }
     },
     async createExecution(options = {}) {
       sequence += 1;

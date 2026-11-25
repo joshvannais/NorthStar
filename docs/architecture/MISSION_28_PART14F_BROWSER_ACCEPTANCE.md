@@ -1,6 +1,6 @@
 # Mission 28 Part 14F — genuine browser acceptance
 
-Status: **Implementation candidate only. Not independently accepted or released.**
+Status: **Released and terminally accepted.**
 
 Part 14F exercises the paid Automation Center and its isolated fictional-demo
 counterpart through the real canonical local server, a fresh disposable
@@ -139,6 +139,43 @@ physical Safari/device evidence, manual assistive-technology review, founder
 visual approval, private-production acceptance, provider/live evidence,
 professional review, or a production performance claim.
 
+## Independent acceptance and terminal release
+
+Exact source `eedce86851a017ac8ecc0c08b6f63788b4dae88e`, tree
+`20cb0a9b103fc927ed2e19eabd0b2410343fe09e`, passed the fifth complete fresh
+full-history isolated root audit with P0=P1=P2=P3=0. Immutable report
+`m28-part14f-root-audit-eedce-v5.json` has SHA-256
+`28E2BF55BD634D3521F9AAFA7C33D0A3C4197DCE6305D542BDD871C374998E9F`.
+Root independently reproduced 65 Mission 28 suites/1,002 tests, 167 supporting
+passes with three intentional skips, one impacted-navigation pass with ten
+unrelated skips, syntax 66, JSON 64, references 522, exact PostgreSQL 285/285
+through 289/no290, Chrome 8/8, WebKit 8/8, native positive 8/8 and corrected
+arm-first canceled gesture 4/4. The prior exact-eada P2 was valid, corrected by
+the same sole writer, independently verified and resolved before exact-head
+review completed with no findings or unresolved threads. Empty CI status and
+workflow lists are not claimed green. Six baseline-reproduced legacy
+full-parity failures are not claimed passing.
+
+PR #613 normally squash-merged to exact main
+`6b29a739d6df1660847aa7d70559a98979dc8021`, with the accepted tree unchanged.
+The sole automatic deployment `8762dcc6-e838-419e-8c2d-70a5b8e5dcda`
+reached `SUCCESS`; instance `b22069d1-e75e-4339-820f-0ee9cfa48774` is
+`RUNNING` on image
+`sha256:9cfd5e82dd3853bb3515a6966944802e74dfcf46e6f8c38fa04955d27af92a63`.
+Canonical startup, both-domain health and six routes, exact paid/demo Automation
+Center HTML and nine assets, unauthorized paid 401/no-store, read-only fictional
+demo 200/no-store/zero effects, invalid query 400 and zero production POSTs were
+passively verified. Fresh direct production read-only reconciliation proved
+285/285 exact migration names/checksums through 289/no290 with no extra,
+duplicate, mismatch or pending rows. Temporary SSH material was removed and a
+fresh remote key listing was empty.
+
+Fresh backup `9819cdb8-09ae-4eb0-b286-2db427ab4892`, named
+`pre-m28-part14f-eedce868-20261125`, external identity
+`vs_1795581896622_wsn1hz24t8l57y3o`, was confirmed before the predecessor was
+removed, leaving one retained backup. Restore is unexercised and backup workflow
+status unavailable.
+
 ## Effect and release boundary
 
 All sources are local synthetic or fictional `example.test` data. The matrix
@@ -147,8 +184,9 @@ external effects, financial effects and money effects. It performs no
 production read or write. No migration is added; source remains 285 migrations
 through immutable migration 289 with no 290.
 
-This candidate is writer evidence. Independent whole-head acceptance, PR,
-merge, deployment and production verification remain Part 14G and are not
-claimed. Physical Safari/devices, manual assistive technology, founder visual
-approval and provider/live/private-production evidence remain unavailable and
-unclaimed.
+Part 14F is released. Its browser automation does not establish physical
+Safari/devices, manual assistive-technology review, founder visual approval,
+authenticated private-production paid browser acceptance, provider/live
+evidence or professional review; all remain unavailable and unclaimed. Part
+14G's final cumulative audit and release procedure remains a separate slice and
+is not pre-accepted by the Part 14F release.

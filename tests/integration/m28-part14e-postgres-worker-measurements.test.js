@@ -6,10 +6,17 @@ const request = require('supertest');
 const canonical = require('../../src/automation/canonicalJson');
 const policyContract = require('../../docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json');
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
+const NodeModule = require('node:module');
 
 const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const ORIGIN = 'http://northstar.test';
 const HIGH_VOLUME_SESSIONS = 24;
+const hostProcess = process.env.JEST_WORKER_ID ?
+  Reflect.apply(NodeModule._load, NodeModule, ['node:process', null, false]) : process;
+const callerAuthEnvironment = Object.freeze({
+  present: Object.prototype.hasOwnProperty.call(hostProcess.env, 'AUTH_ACCESS_SECRET'),
+  value: hostProcess.env.AUTH_ACCESS_SECRET,
+});
 const PREVIEW = Object.freeze({
   templateId: 'owner-work-review',
   name: 'Review recorded owner work',
@@ -80,10 +87,21 @@ realPostgres('Mission 28 Part 14E fresh PostgreSQL, mounted routes, worker resta
   }, 300000);
 
   afterAll(async () => {
-    if (fixture) await fixture.cleanup();
-    // A single machine observation is useful diagnostic evidence only. No
-    // duration in this record is a production benchmark, capacity promise or SLA.
-    process.stdout.write(`M28_PART14E_MEASUREMENT=${JSON.stringify(measurement)}\n`);
+    try {
+      if (fixture) await fixture.cleanup();
+    } finally {
+      // This suite runs before retained PostgreSQL suites in the cumulative
+      // gate. Its fixture must return the native host authentication state to
+      // the exact caller-owned presence and value rather than deleting it.
+      expect(Object.prototype.hasOwnProperty.call(hostProcess.env, 'AUTH_ACCESS_SECRET'))
+        .toBe(callerAuthEnvironment.present);
+      if (callerAuthEnvironment.present) {
+        expect(hostProcess.env.AUTH_ACCESS_SECRET).toBe(callerAuthEnvironment.value);
+      }
+      // A single machine observation is useful diagnostic evidence only. No
+      // duration in this record is a production benchmark, capacity promise or SLA.
+      process.stdout.write(`M28_PART14E_MEASUREMENT=${JSON.stringify(measurement)}\n`);
+    }
   }, 180000);
 
   test('applies every source migration with separated runtime and migration roles', async () => {

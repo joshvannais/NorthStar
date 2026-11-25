@@ -64,6 +64,14 @@ proves that populated policy data clears on lost read authority and that a
 restored exact owner membership recovers the same tenant-private projection by
 explicit refresh.
 
+Every one of those sixteen slots also repeats the first template and the
+bounded custom setup through an ordinary mouse pointer on desktop or an
+ordinary touch gesture on mobile. The resulting receipt records the input
+class and both preview outcomes. A separate root-authored pointer/touch
+reproducer executed by the writer passed 8/8 cases with exactly eight action
+POSTs and zero page errors; its result SHA-256 is
+`769E53ACCF03C3BC64B335A81EA6C7ECAE5D1164CB994EBC80B7265AA6F6D86A`.
+
 The demo journey uses only buttons rendered from exact allowed actions. It
 exercises source change/correction, pause/resume, safeguard/recovery, virtual
 time, deterministic provider-fixture steps when available, terminal stop and
@@ -75,24 +83,27 @@ recovery with saved fictional authority unchanged.
 
 Writer execution passed on exact Node 22.23.3 and Playwright Core 1.62.1. The
 Chrome matrix passed 8/8 paid/demo layout-theme cases with all four paid and
-all four demo workflow slots executed and 1,492 same-origin requests and 1,492
+all four demo workflow slots executed and 1,508 same-origin requests and 1,508
 responses. Playwright WebKit 26.5 revision 2336 passed 8/8 cases with all four
-paid and all four demo workflow slots executed and 948 same-origin requests
-and 948 responses. Every slot exercised all four catalog templates plus valid,
-invalid and corrected custom setup submissions. Each engine captured eight
-screenshots and recorded zero page errors, zero unexpected console errors,
-zero external-origin requests and twenty expected browser console messages:
+paid and all four demo workflow slots executed and 964 same-origin requests
+and 964 responses. Every slot exercised all four catalog templates plus valid,
+invalid and corrected custom setup submissions through the keyboard, followed
+by a genuine pointer or touch template preview and custom preview. Each engine
+captured eight screenshots and recorded zero page errors, zero unexpected
+console errors, zero external-origin requests and twenty expected browser
+console messages:
 eight deliberate bounded-input 400 responses and four each of the deliberately
 exercised fail-closed 403, 409 and 503 responses. No request or response
 interception was installed. The shared styles changed by Part 14F are bound to
 an explicit Part 14F version in the common paid/demo Automation Center
 document; every slot reloaded and traversed history with that versioned asset
-set, so a warm public cache cannot retain the prior target geometry on this
-surface. The external writer result ledgers are bound by
+set, including the version-bound Automation Center page script, so a warm
+public cache cannot retain the prior target geometry or activation path on
+this surface. The external writer result ledgers are bound by
 SHA-256
-`BD692D00B61A3BB9EB7310FBA21E07A25979436850E673C53DF78C03177303AC`
+`6222CBCA57E5671F3A05381D3245FAC7F2B2D7B09395EC9B819BD25D9B0793F8`
 for Chrome and
-`84A0B854E55C5BC6AF355959806CEC46E964D16D97C740C247A43F54C094015A`
+`B7280BD81277E196EC895C1FB2B836B197F591868CFF01D323227A5AB5113860`
 for WebKit.
 
 The rendered acceptance exposed and corrected three shared accessibility
@@ -101,7 +112,15 @@ open/close controls were shorter than 44 pixels, and compact-demo scenario
 selectors could become narrower than 44 pixels at the mobile layout. These
 browser runs also exposed and corrected the canonical preview validation
 adapter's status mapping so an invalid bounded setup remains a truthful 400,
-not an internal error. These writer results are browser-automation evidence only. They cannot constitute
+not an internal error. Genuine WebKit runs then exposed intermittent omission
+of the compatibility `click` after an otherwise completed pointer or touch
+release. The shared page now accepts a completed primary pointer/touch release
+as the same semantic activation while retaining the ordinary `click` path for
+keyboard and assistive technology, and suppresses only that gesture's follow-on
+compatibility click. A broader mouse-event fallback was rejected because the
+delayed compatibility mouse sequence produced a duplicate request and exact
+409; it is not present in the final source. These writer results are
+browser-automation evidence only. They cannot constitute
 physical Safari/device evidence, manual assistive-technology review, founder
 visual approval, private-production acceptance, provider/live evidence,
 professional review, or a production performance claim.

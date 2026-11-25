@@ -88,7 +88,7 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
   test('executes each applicable workflow in every engine-surface-layout-theme slot', () => {
     expect(browser).not.toContain("mode.name === 'desktop-light'");
     expect(browser).toContain('workflowReceipts = { preview: await keyboardAndPreview(page)');
-    expect(browser).toContain('workflowReceipts = { demo: await demoWorkflows(page)');
+    expect(browser).toContain('workflowReceipts = { demo: await demoWorkflows(page, mode)');
     expect(browser).toContain('finalStatus: second.summaryHidden');
     expect(browser).toContain("'provider_step', 'provider_step', 'stop', 'reset_automation'");
   });
@@ -100,6 +100,19 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
     expect(browser).toContain("await page.locator('#setupDailyLimit').fill('26')");
     expect(browser).toContain('invalidClearedPriorPreview: true');
     expect(browser).toContain('customRecovery: true');
+  });
+  test('keeps genuine primary pointer and touch activation alongside keyboard activation', () => {
+    expect(page).toContain("button.addEventListener('pointerup', finish)");
+    expect(page).toContain("button.addEventListener('touchend', finish");
+    expect(page).toContain("button.addEventListener('click', function (event)");
+    expect(page).toContain('if (directHandled && event.detail !== 0)');
+    expect(page).not.toContain("button.addEventListener('mouseup', finish)");
+    expect(browser).toContain('submitPreviewWithPointerOrTouch');
+    expect(browser).toContain('if (mode.isMobile) await button.tap()');
+    expect(browser).toContain('else await button.click()');
+    expect(browser).toContain("input: mode.isMobile ? 'touch' : 'pointer'");
+    expect(html).toContain('/js/automation-center-page.js?v=m28-part14f-pointer-20261125');
+    expect(browser).not.toMatch(/force\s*:/);
   });
   test('seeds and verifies meaningful tenant-private paid content before clearing it', () => {
     expect(browser).toContain('canonical_automation_store_policy_v1');

@@ -172,6 +172,44 @@
     populateSelect('setupChannel', contract.CHANNEL_LABELS);
     populateSelect('setupTiming', contract.TIMING_LABELS);
   }
+  function bindButtonActivation(button, activate) {
+    // Keep the semantic click path for keyboards and assistive technology, and
+    // also accept the completed primary pointer/touch gesture itself. WebKit
+    // can omit the synthesized follow-on click after a genuine release. The
+    // per-gesture flags ensure a pointer/touch release plus click invokes the
+    // bounded action once, never twice.
+    var directStarted = false;
+    var directHandled = false;
+    function primary(event) {
+      return (!event || event.isPrimary !== false) &&
+        (!event || typeof event.button !== 'number' || event.button === 0);
+    }
+    function start(event) {
+      if (!primary(event)) return;
+      directStarted = true;
+      directHandled = false;
+    }
+    function finish(event) {
+      if (!directStarted || directHandled || button.disabled || !primary(event)) return;
+      directHandled = true;
+      activate(event);
+    }
+    function cancel() { directStarted = false; directHandled = false; }
+    button.addEventListener('pointerdown', start);
+    button.addEventListener('pointerup', finish);
+    button.addEventListener('pointercancel', cancel);
+    button.addEventListener('touchstart', start, { passive: true });
+    button.addEventListener('touchend', finish, { passive: true });
+    button.addEventListener('touchcancel', cancel, { passive: true });
+    button.addEventListener('click', function (event) {
+      // A real compatibility click has a non-zero detail. Keyboard and
+      // assistive-technology clicks use detail 0 and must remain available
+      // even when WebKit omitted the prior gesture's compatibility click.
+      if (directHandled && event.detail !== 0) { cancel(); return; }
+      cancel();
+      if (!button.disabled) activate(event);
+    });
+  }
   function previewInput(template) {
     return {
       templateId: template ? template.id : element('setupTemplateId').value,
@@ -240,7 +278,7 @@
       card.appendChild(node('h3', '', template.name));
       card.appendChild(node('p', '', template.description));
       var button = node('button', 'btn btn-secondary', 'Preview this setup'); button.type = 'button';
-      button.addEventListener('click', function () { requestPreview(previewInput(template), button); });
+      bindButtonActivation(button, function () { requestPreview(previewInput(template), button); });
       card.appendChild(button); target.appendChild(card);
     });
   }
@@ -491,9 +529,11 @@
     if (demoMode && typeof document.querySelectorAll === 'function') {
       var buttons = document.querySelectorAll('[data-automation-demo-action]');
       for (var index = 0; index < buttons.length; index += 1) {
-        buttons[index].addEventListener('click', function (event) {
-          performDemoAction(event.currentTarget.getAttribute('data-automation-demo-action'));
-        });
+        (function (button) {
+          bindButtonActivation(button, function () {
+            performDemoAction(button.getAttribute('data-automation-demo-action'));
+          });
+        })(buttons[index]);
       }
     }
     load();

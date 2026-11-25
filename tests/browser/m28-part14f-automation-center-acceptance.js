@@ -144,6 +144,18 @@ async function submitPreviewWithKeyboard(page, button, expectedStatus) {
   assert.equal(response.status(), expectedStatus);
   return response;
 }
+async function submitPreviewWithPointerOrTouch(page, button, mode, expectedStatus) {
+  await button.waitFor({ state: 'visible' });
+  assert.equal(await button.isEnabled(), true);
+  await button.scrollIntoViewIfNeeded();
+  const pending = page.waitForResponse(response =>
+    response.request().method() === 'POST' && /automation-center\/preview$/.test(new URL(response.url()).pathname));
+  if (mode.isMobile) await button.tap();
+  else await button.click();
+  const response = await pending;
+  assert.equal(response.status(), expectedStatus);
+  return response;
+}
 async function assertPreviewReady(page) {
   await page.locator('#automationPreview').waitFor({ state: 'visible' });
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'automationPreview');
@@ -201,12 +213,22 @@ async function keyboardAndPreview(page) {
   return { skipLinkMovedFocusToMain: true, templates, customValid: true,
     invalidBoundedInputStatus: 400, invalidClearedPriorPreview: true, customRecovery: true };
 }
-async function action(page, actionName) {
+async function pointerAndTouchPreview(page, mode) {
+  const templateButton = page.locator('#automationTemplates .automation-template')
+    .first().getByRole('button', { name: 'Preview this setup' });
+  await submitPreviewWithPointerOrTouch(page, templateButton, mode, 200);
+  await assertPreviewReady(page);
+  await submitPreviewWithPointerOrTouch(page, page.locator('#setupPreview'), mode, 200);
+  await assertPreviewReady(page);
+  return { input: mode.isMobile ? 'touch' : 'pointer', templatePreview: true, customPreview: true };
+}
+async function action(page, actionName, mode) {
   const button = page.locator(`[data-automation-demo-action="${actionName}"]`);
   assert.equal(await button.isEnabled(), true, `${actionName} should be available`);
   const pending = page.waitForResponse(response => response.request().method() === 'POST' &&
     new URL(response.url()).pathname === '/api/demo/automation-center/actions');
-  await button.click();
+  if (mode && mode.isMobile) await button.tap();
+  else await button.click();
   const response = await pending;
   assert.ok([200, 201].includes(response.status()), `${actionName}: ${response.status()}`);
   await settled(page);
@@ -215,21 +237,22 @@ async function action(page, actionName) {
   assert.ok(Object.values(body.demo.zeroEffects).every(value => value === 0));
   return body;
 }
-async function reset(page) {
+async function reset(page, mode) {
   if (await page.locator('[data-automation-demo-action="reset_automation"]').isEnabled()) {
-    await action(page, 'reset_automation');
+    await action(page, 'reset_automation', mode);
   }
 }
-async function demoWorkflows(page) {
+async function demoWorkflows(page, mode) {
   const preview = await keyboardAndPreview(page);
+  const pointerOrTouch = await pointerAndTouchPreview(page, mode);
   const executed = [];
-  const run = async name => { await action(page, name); executed.push(name); };
-  await reset(page); await run('source_change'); await run('source_correct');
-  await reset(page); await run('pause'); await run('resume');
-  await reset(page); await run('suppress'); await run('recover');
-  await reset(page); await run('advance_time');
-  await reset(page); await run('provider_step'); await run('provider_step');
-  await reset(page); await run('stop');
+  const run = async name => { await action(page, name, mode); executed.push(name); };
+  await reset(page, mode); await run('source_change'); await run('source_correct');
+  await reset(page, mode); await run('pause'); await run('resume');
+  await reset(page, mode); await run('suppress'); await run('recover');
+  await reset(page, mode); await run('advance_time');
+  await reset(page, mode); await run('provider_step'); await run('provider_step');
+  await reset(page, mode); await run('stop');
   assert.match(await page.locator('#stopState').innerText(), /^stopped$/i);
   const nonResetControlsDisabled = await page.locator('[data-automation-demo-action]:not([data-automation-demo-action="reset_automation"])')
     .evaluateAll(buttons => buttons.every(button => button.disabled));
@@ -238,14 +261,14 @@ async function demoWorkflows(page) {
   await run('reset_automation');
   assert.deepEqual(executed, ['source_change', 'source_correct', 'pause', 'resume', 'suppress',
     'recover', 'advance_time', 'provider_step', 'provider_step', 'stop', 'reset_automation']);
-  return { preview, executed, stoppedControlsDisabled: true, resetRecovered: true };
+  return { preview, pointerOrTouch, executed, stoppedControlsDisabled: true, resetRecovered: true };
 }
 async function staleConflict(context, origin) {
   const first = await context.newPage(), stale = await context.newPage();
   observe(first, 'demo-stale-current', origin); observe(stale, 'demo-stale-old', origin);
   await first.goto(`${origin}/demo/automation`, { waitUntil: 'networkidle' }); await settled(first);
   await stale.goto(`${origin}/demo/automation`, { waitUntil: 'networkidle' }); await settled(stale);
-  await action(first, 'source_change');
+  await action(first, 'source_change', { isMobile: false });
   const conflict = stale.waitForResponse(response => response.request().method() === 'POST' &&
     new URL(response.url()).pathname === '/api/demo/automation-center/actions');
   await stale.locator('[data-automation-demo-action="source_change"]').click();
@@ -340,11 +363,12 @@ async function paidAuthorityLossAndRecovery(page) {
         let workflowReceipts;
         if (surface === 'paid') {
           workflowReceipts = { preview: await keyboardAndPreview(page),
+            pointerOrTouch: await pointerAndTouchPreview(page, mode),
             authority: await paidAuthorityLossAndRecovery(page) };
         } else {
-          workflowReceipts = { demo: await demoWorkflows(page), delayed: await delayedRead(page),
+          workflowReceipts = { demo: await demoWorkflows(page, mode), delayed: await delayedRead(page),
             database: await databaseErrorAndRecovery(page), conflict: await staleConflict(context, origin) };
-          await page.reload({ waitUntil: 'networkidle' }); await settled(page); await reset(page);
+          await page.reload({ waitUntil: 'networkidle' }); await settled(page); await reset(page, mode);
           workflowReceipts.conflictRecovery = { reloadedCurrentRevision: true, resetRecovered: true };
         }
         await page.goto(`${origin}${route}#automationEvidence`, { waitUntil: 'networkidle' }); await settled(page);

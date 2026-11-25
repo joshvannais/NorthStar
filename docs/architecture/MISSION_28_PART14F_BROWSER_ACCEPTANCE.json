@@ -34,6 +34,7 @@
   "renderedAcceptance": {
     "directReloadBackForwardDeepLinks": "passed_writer_actual_browser_no_interception",
     "keyboardAndFocus": "passed_writer_actual_browser_no_interception",
+    "pointerAndTouch": "passed_writer_actual_browser_no_interception",
     "screenReaderSemantics": "passed_writer_actual_browser_no_interception",
     "responsiveDesktopMobile": "passed_writer_actual_browser_no_interception",
     "lightDark": "passed_writer_actual_browser_no_interception",
@@ -55,13 +56,17 @@
       "catalogTemplatesPerSlot": 4,
       "customSetupSlots": 8,
       "invalidCustomValidationSlots": 8,
-      "requests": 1492,
-      "responses": 1492,
+      "pointerDesktopSlots": 4,
+      "touchMobileSlots": 4,
+      "pointerTouchTemplateSlots": 8,
+      "pointerTouchCustomSlots": 8,
+      "requests": 1508,
+      "responses": 1508,
       "pageErrors": 0,
       "unexpectedConsoleErrors": 0,
       "expectedFailClosedHttpConsoleMessages": 20,
       "screenshots": 8,
-      "resultSha256": "BD692D00B61A3BB9EB7310FBA21E07A25979436850E673C53DF78C03177303AC"
+      "resultSha256": "6222CBCA57E5671F3A05381D3245FAC7F2B2D7B09395EC9B819BD25D9B0793F8"
     },
     "playwrightWebkit": {
       "browserRevision": 2336,
@@ -73,13 +78,24 @@
       "catalogTemplatesPerSlot": 4,
       "customSetupSlots": 8,
       "invalidCustomValidationSlots": 8,
-      "requests": 948,
-      "responses": 948,
+      "pointerDesktopSlots": 4,
+      "touchMobileSlots": 4,
+      "pointerTouchTemplateSlots": 8,
+      "pointerTouchCustomSlots": 8,
+      "requests": 964,
+      "responses": 964,
       "pageErrors": 0,
       "unexpectedConsoleErrors": 0,
       "expectedFailClosedHttpConsoleMessages": 20,
       "screenshots": 8,
-      "resultSha256": "84A0B854E55C5BC6AF355959806CEC46E964D16D97C740C247A43F54C094015A"
+      "resultSha256": "B7280BD81277E196EC895C1FB2B836B197F591868CFF01D323227A5AB5113860"
+    },
+    "nativePointerTouchProbe": {
+      "pass": true,
+      "cases": 8,
+      "posts": 8,
+      "pageErrors": 0,
+      "resultSha256": "769E53ACCF03C3BC64B335A81EA6C7ECAE5D1164CB994EBC80B7265AA6F6D86A"
     },
     "expectedFailClosedStatuses": [400, 403, 409, 503],
     "requestInterception": false,

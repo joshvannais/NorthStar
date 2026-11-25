@@ -1,0 +1,97 @@
+{
+  "contractVersion": "mission28.part14f.browser-acceptance.v1",
+  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "base": {
+    "part": "14E",
+    "acceptedSourceHead": "d63b9ff59f6af6aae63e6eeaa2f9683354245eea",
+    "acceptedTree": "bf795536a331b940519c33e05115ce2f93c47daa",
+    "pullRequest": 612,
+    "mergedMain": "1c7eea4fd98773ed07b91bc632b10ca6f1ff03e3",
+    "deploymentId": "d9a02817-9850-4d80-a399-a47e47b1d0ec",
+    "deploymentInstance": "203f21f2-f1d8-485c-a840-9c992614973f",
+    "imageSha256": "sha256:dfa302420bc877542997d3295567a4361769d46364d9772edf597358013564aa",
+    "productionMigrations": "285_of_285_through_289_no_290",
+    "backupId": "e1c505fc-9f5b-4ac4-b4ef-7c6568773030",
+    "backupName": "pre-m28-part14e-d63b9ff5-20261125",
+    "backupExternalId": "vs_1795566457688_tsr7y98iee96hi9w"
+  },
+  "scope": {
+    "part": "14F",
+    "actualCanonicalServer": true,
+    "freshDisposablePostgreSQL": true,
+    "realPaidOwnerSessionAndCsrf": true,
+    "isolatedFictionalDemo": true,
+    "engines": ["chrome", "playwright_webkit"],
+    "layouts": ["desktop", "mobile"],
+    "themes": ["light", "dark"],
+    "requestInterception": false,
+    "responseInterception": false,
+    "routeFulfillment": false,
+    "migrationAdded": false,
+    "sourceMigrations": "285_through_289_no_290",
+    "releaseIncluded": false
+  },
+  "renderedAcceptance": {
+    "directReloadBackForwardDeepLinks": "passed_writer_actual_browser_no_interception",
+    "keyboardAndFocus": "passed_writer_actual_browser_no_interception",
+    "screenReaderSemantics": "passed_writer_actual_browser_no_interception",
+    "responsiveDesktopMobile": "passed_writer_actual_browser_no_interception",
+    "lightDark": "passed_writer_actual_browser_no_interception",
+    "paidNoEffectPreview": "passed_writer_actual_browser_no_interception",
+    "demoResetSourceChangeCorrectionPauseResumeSafeguardRecoveryStop": "passed_writer_actual_browser_no_interception",
+    "delayedRead": "passed_writer_actual_database_lock_no_interception",
+    "staleConflict": "passed_writer_actual_two_page_revision_conflict_no_interception",
+    "databaseErrorAndRecovery": "passed_writer_actual_pool_outage_recovery_no_interception",
+    "paidAuthorityLossAndRecovery": "passed_writer_actual_membership_change_no_interception"
+  },
+  "writerExecution": {
+    "node": "22.23.3",
+    "playwrightCore": "1.62.1",
+    "chrome": {
+      "pass": true,
+      "cases": 8,
+      "requests": 1074,
+      "responses": 1074,
+      "pageErrors": 0,
+      "unexpectedConsoleErrors": 0,
+      "expectedFailClosedHttpConsoleMessages": 3,
+      "screenshots": 8,
+      "resultSha256": "183730AE7811F26008A82FD787C0826DD9CCCF9E032FA5B84258492EB05CFB90"
+    },
+    "playwrightWebkit": {
+      "browserRevision": 2336,
+      "browserVersion": "26.5",
+      "pass": true,
+      "cases": 8,
+      "requests": 554,
+      "responses": 554,
+      "pageErrors": 0,
+      "unexpectedConsoleErrors": 0,
+      "expectedFailClosedHttpConsoleMessages": 3,
+      "screenshots": 8,
+      "resultSha256": "2E94FCB95BCD5C5E20275E3F5830D82CCA061EF7DB6989C8893993BEC7C56EA5"
+    },
+    "expectedFailClosedStatuses": [403, 409, 503],
+    "requestInterception": false,
+    "responseInterception": false,
+    "externalOriginRequests": 0
+  },
+  "effectBoundary": {
+    "realRecipients": 0,
+    "realProviderCalls": 0,
+    "externalEffects": 0,
+    "financialEffects": 0,
+    "moneyEffects": 0,
+    "productionDataMutated": false,
+    "privateProductionRead": false
+  },
+  "evidenceBoundary": {
+    "writerEvidenceIndependent": false,
+    "rootIndependentBrowserAcceptance": "pending",
+    "part14G": "not_implemented",
+    "physicalSafariDevices": "unavailable_unclaimed",
+    "manualAssistiveTechnology": "unavailable_unclaimed",
+    "founderVisualApproval": "separate_unavailable_unclaimed",
+    "providerLivePrivateProductionMoneyProfessionalReview": "unavailable_unclaimed"
+  }
+}

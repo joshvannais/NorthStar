@@ -8,13 +8,13 @@ const ROOT = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
 
 describe('Mission 28 Part 14E PostgreSQL, worker and measurement contract', () => {
-  test('publishes a bounded candidate without strengthening local evidence', () => {
+  test('records the exact terminal release without strengthening local evidence', () => {
     const artifact = JSON.parse(read(
       'docs/architecture/MISSION_28_PART14E_POSTGRES_WORKER_MEASUREMENTS.json'
     ));
     expect(artifact).toMatchObject({
       contractVersion: 'mission28.part14e.postgres-worker-measurements.v1',
-      status: 'implementation_candidate_not_independently_accepted_not_released',
+      status: 'released_terminally_accepted',
       base: {
         acceptedSourceHead: 'fd917d5459033e0af78fb65e1f368c31d33ef68c',
         acceptedTree: '7210b21b9aa42fbe67d01846ca87cc6d64aad656',
@@ -24,7 +24,7 @@ describe('Mission 28 Part 14E PostgreSQL, worker and measurement contract', () =
       scope: { part: '14E', sourceMigrationCount: 285, latestMigration: 289,
         migrationSha256: '47C7AA1BC02C4DBC0CE03F3C57A014B16080070792E503F5616DF97B1DD52B08',
         nextMigrationAbsent: 290, genuineBrowserAcceptanceIncluded: false,
-        releaseIncluded: false },
+        releaseIncluded: true },
       runtimeReadAuthority: { directCanonicalTableAccessForRuntimeRole: false,
         publicExecute: false, callerOrPooledTenantContextTrusted: false,
         nullMissingOrNonOwnerAdminRole: '42501_fail_closed',
@@ -38,7 +38,7 @@ describe('Mission 28 Part 14E PostgreSQL, worker and measurement contract', () =
         financialEffects: 0, moneyEffects: 0, productionDataMutated: false },
     });
     expect(artifact.postgresEvidence.productionEvidence)
-      .toBe('unavailable_pending_normal_release_and_migration');
+      .toBe('read_only_285_of_285_through_289_no_290');
     for (const key of ['highVolumeMountedMilliseconds', 'databasePoolRestartMilliseconds',
       'degradedFailureMilliseconds', 'degradedRecoveryMilliseconds',
       'housekeepingWorkerMilliseconds']) {
@@ -46,6 +46,12 @@ describe('Mission 28 Part 14E PostgreSQL, worker and measurement contract', () =
       expect(artifact.functionalMeasurement[key]).toBeGreaterThanOrEqual(0);
     }
     expect(artifact.evidenceBoundary.writerEvidenceIndependent).toBe(false);
+    expect(artifact.evidenceBoundary).toMatchObject({
+      independentAudit: 'complete_fresh_root_audit_P0_P1_P2_P3_zero',
+      pullRequest: 612,
+      mergedMain: '1c7eea4fd98773ed07b91bc632b10ca6f1ff03e3',
+      deploymentId: 'd9a02817-9850-4d80-a399-a47e47b1d0ec',
+    });
   });
 
   test('adds one private capability-checked read entry while storage remains withheld', () => {

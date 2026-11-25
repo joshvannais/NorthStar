@@ -408,7 +408,7 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
 
   test('keeps roadmap and 66-row ledger exact with Part 13E candidate only', () => {
     const roadmap = read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'); const ledger = read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md');
-    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.'); expect(value).toContain('Parts 14F–14G remain planned and unimplemented.'); }
+    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–14E are released. Part 14F is the sole implementation candidate.'); expect(value).toContain('Part 14G remains planned and unimplemented.'); }
     expect(roadmap).toContain('Released Part 13D baseline: accepted source `997ba10385f259f4298bed6447d083bcb83796e4`');
     for (const value of [roadmap, ledger]) {
       expect(value).toContain('fresh independent audit P0=P1=P2=P3=0 under exact Node 22.23.3 with focused 20/20, cumulative 58/58 suites and 827/827 tests, migration/history 2/2 suites and 40/40 tests, syntax 58/58, JSON 57/57, and migrations 283 through 287/no288');
@@ -417,10 +417,10 @@ describe('Mission 28 Part 13E privacy lifecycle boundary', () => {
     }
     expect(roadmap).toContain('Released Part 14C artifacts:');
     expect(roadmap).toContain('Released Part 14D artifacts:');
-    expect(roadmap).toContain('Current Part 14E candidate artifacts:');
+    expect(roadmap).toContain('Released Part 14E artifacts:');
     expect(ledger).toContain('| 58 | 13D | Provider outage/quota/degradation/circuit-breaker/fallback | **Released** |');
-    expect(ledger).toContain('| 59 | 13E | Privacy-safe observability, retention, deletion and lifecycle | **Released** |'); expect(ledger).toContain('| 60 | 14A | Paid Automation Center | **Released** |'); expect(ledger).toContain('| 61 | 14B | Complete rendered state and fail-closed clearing contract | **Released** |'); expect(ledger).toContain('| 62 | 14C | Isolated fictional paid-application demo parity | **Released** |'); expect(ledger).toContain('| 63 | 14D | Exhaustive semantic, structural, transport and effect matrices | **Released** |'); expect(ledger).toContain('| 64 | 14E | Fresh PostgreSQL, mounted modules, worker/restart and measurements | **Implementation candidate** |');
+    expect(ledger).toContain('| 59 | 13E | Privacy-safe observability, retention, deletion and lifecycle | **Released** |'); expect(ledger).toContain('| 60 | 14A | Paid Automation Center | **Released** |'); expect(ledger).toContain('| 61 | 14B | Complete rendered state and fail-closed clearing contract | **Released** |'); expect(ledger).toContain('| 62 | 14C | Isolated fictional paid-application demo parity | **Released** |'); expect(ledger).toContain('| 63 | 14D | Exhaustive semantic, structural, transport and effect matrices | **Released** |'); expect(ledger).toContain('| 64 | 14E | Fresh PostgreSQL, mounted modules, worker/restart and measurements | **Released** |'); expect(ledger).toContain('| 65 | 14F | Chrome and Playwright WebKit rendered acceptance | **Implementation candidate** |');
     const rows = ledger.split(/\r?\n/).filter(line => /^\| \d{2} \|/.test(line));
-    expect(rows).toHaveLength(66); expect(rows.filter(line => line.includes('**Released**'))).toHaveLength(63); expect(rows.filter(line => line.includes('**Implementation candidate**'))).toHaveLength(1);
+    expect(rows).toHaveLength(66); expect(rows.filter(line => line.includes('**Released**'))).toHaveLength(64); expect(rows.filter(line => line.includes('**Implementation candidate**'))).toHaveLength(1);
   });
 });

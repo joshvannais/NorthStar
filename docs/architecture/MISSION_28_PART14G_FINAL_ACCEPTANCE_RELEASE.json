@@ -1,0 +1,99 @@
+{
+  "contractVersion": "mission28.part14g.final-acceptance-release.v1",
+  "status": "implementation_candidate_pending_independent_audit_and_release",
+  "authority": {
+    "sourceSha256": "DDBA5CA7523A1684330E136313F4416584D142A63167310EEABEC1EBFBB010B4",
+    "canonicalBodySha256": "109589DA2242EE6AA7FDD4C2DED3E3440B909B26452DEFCD39BC2502C1ADAAF5",
+    "parts": 14,
+    "slices": 66,
+    "part14Order": ["14A", "14B", "14C", "14D", "14E", "14F", "14G"]
+  },
+  "releasedBaseline": {
+    "part": "14F",
+    "acceptedSourceHead": "eedce86851a017ac8ecc0c08b6f63788b4dae88e",
+    "acceptedTree": "20cb0a9b103fc927ed2e19eabd0b2410343fe09e",
+    "rootAuditReport": "m28-part14f-root-audit-eedce-v5.json",
+    "rootAuditReportSha256": "28E2BF55BD634D3521F9AAFA7C33D0A3C4197DCE6305D542BDD871C374998E9F",
+    "severityCounts": { "P0": 0, "P1": 0, "P2": 0, "P3": 0 },
+    "pullRequest": 613,
+    "mergedMain": "6b29a739d6df1660847aa7d70559a98979dc8021",
+    "mergedTree": "20cb0a9b103fc927ed2e19eabd0b2410343fe09e",
+    "deploymentId": "8762dcc6-e838-419e-8c2d-70a5b8e5dcda",
+    "deploymentStatus": "SUCCESS",
+    "instanceId": "b22069d1-e75e-4339-820f-0ee9cfa48774",
+    "instanceStatus": "RUNNING",
+    "imageSha256": "sha256:9cfd5e82dd3853bb3515a6966944802e74dfcf46e6f8c38fa04955d27af92a63",
+    "productionMigrations": "285_of_285_through_289_no_290",
+    "backupId": "9819cdb8-09ae-4eb0-b286-2db427ab4892",
+    "backupName": "pre-m28-part14f-eedce868-20261125",
+    "backupExternalId": "vs_1795581896622_wsn1hz24t8l57y3o",
+    "retainedBackupCount": 1,
+    "restoreExercised": false
+  },
+  "sliceInventory": {
+    "releasedCount": 65,
+    "releasedThrough": "14F",
+    "implementationCandidateCount": 1,
+    "implementationCandidate": "14G",
+    "plannedUnimplementedCount": 0,
+    "all66Accepted": false,
+    "missionReleased": false
+  },
+  "candidateScope": {
+    "part": "14G",
+    "evidenceAndInventoryReconciliation": true,
+    "exactReleaseProcedure": true,
+    "runtimeChanges": false,
+    "schemaChanges": false,
+    "dependencyChanges": false,
+    "deploymentConfigurationChanges": false,
+    "migrationAdded": false,
+    "sourceMigrations": "285_through_289_no_290",
+    "migration289RawSha256": "47C7AA1BC02C4DBC0CE03F3C57A014B16080070792E503F5616DF97B1DD52B08"
+  },
+  "requiredProcedure": [
+    "verify_exact_full_history_clean_frozen_identity_and_scope",
+    "complete_fresh_isolated_exact_head_whole_scope_audit_with_p0_p3",
+    "same_writer_correction_and_complete_reaudit_after_every_sha_change",
+    "accept_one_exact_clean_zero_finding_source_identity",
+    "normal_exact_head_review_with_truthful_ci_status",
+    "confirm_fresh_named_backup_then_rotate_older_backups",
+    "normal_expected_head_merge_and_exact_tree_match",
+    "observe_exactly_one_automatic_deployment_and_bind_image_instance",
+    "verify_startup_migrations_health_routes_assets_and_zero_effects_read_only",
+    "remove_temporary_credentials_and_write_source_linked_final_ledger"
+  ],
+  "pendingEvidence": {
+    "part14GIndependentAudit": "pending",
+    "part14GAcceptedSourceHead": null,
+    "part14GPullRequest": null,
+    "part14GMergedMain": null,
+    "part14GDeployment": null,
+    "part14GProductionAcceptance": "pending",
+    "part14GTerminallyAccepted": false
+  },
+  "canaryBoundary": {
+    "liveCanaryAuthorized": false,
+    "separateAuthorizationRequiredFields": [
+      "tenant", "recipient", "content", "channel", "provider", "limit",
+      "stop", "rollback", "observation", "privacy", "cleanup"
+    ]
+  },
+  "unavailable": [
+    "production_provider_accounts_credentials_senders_callbacks_templates_deliverability",
+    "professional_legal_privacy_consent_collections_debt_consumer_tax_accounting_security_review",
+    "external_collection_legal_remedies_or_automatic_money_effects",
+    "private_production_customer_data_real_recipients_messages_or_provider_mutation",
+    "first_paying_customer_live_money_validation",
+    "hosted_ci_load_or_production_performance_sla",
+    "exercised_disaster_restore",
+    "physical_safari_devices",
+    "manual_assistive_technology_review",
+    "founder_page_by_page_visual_approval"
+  ],
+  "historicalLimitations": {
+    "legacyFullParityFailures": 6,
+    "legacyFullParityStatus": "baseline_reproduced_not_claimed_green",
+    "mission31PublicGuidedSimulation": "separate"
+  }
+}

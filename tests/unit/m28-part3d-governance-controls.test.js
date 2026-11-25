@@ -833,7 +833,7 @@ describe('Mission 28 Part 3D governance controls', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–14E are released. Part 14F is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–14F are released. Part 14G is the sole implementation candidate.');
       expect(document).toContain('3cd41fe5379d92fe629c62e0ebc3a51d8886c3cc');
       expect(document).toContain(BASE);
       expect(document).toContain('b745a483-1031-4020-9ab2-38c0044e599d');
@@ -844,7 +844,7 @@ describe('Mission 28 Part 3D governance controls', () => {
     expect(ledger).toContain('| 13 | 4A | Closed trigger catalog over accepted Missions 20–27 facts | **Released** |');
     expect(ledger).toContain('| 14 | 4B | Durable tenant-scoped source snapshot and correction lineage | **Released** |');
     expect(ledger).toContain('| 15 | 4C | Evaluation-time and pre-effect currentness revalidation | **Released** |');
-    expect(ledger).toContain('independent audit/PR/merge/deployment/production unavailable');
+    expect(ledger).toContain("Part 14G's fresh independent whole-head audit");
   });
 
   test('keeps runtime database provider effect migration and founder boundaries unavailable', () => {

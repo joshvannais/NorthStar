@@ -46,10 +46,11 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
       productionMigrations: '285_of_285_through_289_no_290',
     });
   });
-  test('keeps the frozen Part 14F scope and Part 14G boundary', () => {
+  test('keeps the frozen Part 14F scope and advances only the Part 14F release', () => {
     expect(roadmap).toContain('Genuine paid and isolated-demo Chrome plus Playwright WebKit desktop/mobile acceptance');
-    expect(artifact.scope).toMatchObject({ part: '14F', releaseIncluded: false, migrationAdded: false });
-    expect(artifact.evidenceBoundary.part14G).toBe('not_implemented');
+    expect(artifact.scope).toMatchObject({ part: '14F', releaseIncluded: true, migrationAdded: false });
+    expect(artifact.status).toBe('released_terminally_accepted');
+    expect(artifact.evidenceBoundary.part14G).toBe('implementation_candidate_not_accepted_or_released');
   });
   test.each(['chrome', 'webkit', 'desktop', 'mobile', 'light', 'dark'])(
     'declares the %s matrix axis', value => expect(JSON.stringify(artifact.scope)).toContain(value));
@@ -189,6 +190,22 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
     expect(artifact.writerExecution.chrome.resultSha256).toMatch(/^[A-F0-9]{64}$/);
     expect(artifact.writerExecution.playwrightWebkit.resultSha256).toMatch(/^[A-F0-9]{64}$/);
     expect(artifact.evidenceBoundary.writerEvidenceIndependent).toBe(false);
-    expect(artifact.evidenceBoundary.rootIndependentBrowserAcceptance).toBe('pending');
+    expect(artifact.evidenceBoundary.rootIndependentBrowserAcceptance).toBe('accepted');
+  });
+  test('binds the exact independent audit and terminal release identities', () => {
+    expect(artifact.independentAudit).toMatchObject({
+      acceptedSourceHead: 'eedce86851a017ac8ecc0c08b6f63788b4dae88e',
+      acceptedTree: '20cb0a9b103fc927ed2e19eabd0b2410343fe09e',
+      reportSha256: '28E2BF55BD634D3521F9AAFA7C33D0A3C4197DCE6305D542BDD871C374998E9F',
+      severityCounts: { P0: 0, P1: 0, P2: 0, P3: 0 },
+      mission28Suites: 65, mission28Tests: 1002,
+    });
+    expect(artifact.terminalRelease).toMatchObject({
+      pullRequest: 613, mergedMain: '6b29a739d6df1660847aa7d70559a98979dc8021',
+      deploymentId: '8762dcc6-e838-419e-8c2d-70a5b8e5dcda', deploymentStatus: 'SUCCESS',
+      instanceStatus: 'RUNNING', productionMigrations: '285_of_285_through_289_no_290',
+      backupId: '9819cdb8-09ae-4eb0-b286-2db427ab4892', retainedBackupCount: 1,
+      restoreExercised: false,
+    });
   });
 });

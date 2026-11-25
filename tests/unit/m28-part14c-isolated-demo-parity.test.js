@@ -173,7 +173,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     });
     expect(Object.values(artifact.effectBoundary).every(value => value === false)).toBe(true);
     expect(read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'))
-      .toContain('Parts 1A–14E are released. Part 14F is the sole implementation candidate.');
+      .toContain('Parts 1A–14F are released. Part 14G is the sole implementation candidate.');
     expect(read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md')).toContain('Part 14B audit / release');
   });
 

@@ -266,11 +266,11 @@ describe('Mission 28 Part 10A appointment communication boundary', () => {
   test('roadmap and ledger record Part9D released Part10A candidate and Part10B plus planned', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–14E are released. Part 14F is the sole implementation candidate.'); expect(document).toContain('Part 14G remains planned and unimplemented.');
+      expect(document).toContain('Parts 1A–14F are released. Part 14G is the sole implementation candidate.'); expect(document).toContain('Part 14G is the sole implementation candidate.');
       expect(document).toContain('3bf5403d-0b8a-46be-965d-ec2814dc4484'); expect(document).toContain('sha256:adb66d539e6dfe1b32dd6b83a0fef63582c39795cbd85fe7fe001499c4871596');
       expect(document).toMatch(/(?:bounded read-only production migration reconciliation|production reconciled) 283\/283.*287\/no288/i);
     }
     expect(ledger).toContain('| 40 | 9D | Explicitly reviewed customer re-engagement boundary | **Released** |'); expect(ledger).toContain('| 41 | 10A | Exact appointment confirmation and reminder | **Released** |'); expect(ledger).toContain('| 42 | 10B | Exact dispatch/on-the-way/delay/cancellation communication | **Released** |'); expect(ledger).toContain('| 43 | 10C | Exact customer-safe work-state communication | **Released** |');
-    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(1); expect(markdown).toContain('No migration 288');
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(0); expect(markdown).toContain('No migration 288');
   });
 });

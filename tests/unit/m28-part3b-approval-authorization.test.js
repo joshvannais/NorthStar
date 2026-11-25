@@ -754,7 +754,7 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–14E are released. Part 14F is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–14F are released. Part 14G is the sole implementation candidate.');
       expect(document).toContain('Part 14G');
       expect(document).toContain('05a541792adac121f8c51b2cf200c0d18fcfbbf1');
       expect(document).toContain('1e62336afe2c9e65cccbe1629a62b86855da3ff8');
@@ -775,7 +775,7 @@ describe('Mission 28 Part 3B per-run approval and standing authorization', () =>
     expect(roadmap).toContain('Released Part 4D artifacts');
     expect(roadmap).toContain('Released Part 5A artifacts');
     expect(roadmap).toContain('Released Part 5D artifacts');
-    expect(ledger).toContain('independent audit/PR/merge/deployment/production unavailable');
+    expect(ledger).toContain("Part 14G's fresh independent whole-head audit");
   });
 
   test('keeps released migration lineage and recognizes the current Part 14E migration 289', () => {

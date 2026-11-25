@@ -183,7 +183,7 @@ describe('Mission 28 Part 14D exhaustive semantic and structural matrices', () =
         retainedBackupsAfterRotation: 1 },
     });
     expect(read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md')).toContain(
-      '| Mission 28 released baseline | Part 14E source `d63b9ff59f6af6aae63e6eeaa2f9683354245eea`; main `1c7eea4fd98773ed07b91bc632b10ca6f1ff03e3`; tree `bf795536a331b940519c33e05115ce2f93c47daa` |'
+      '| Mission 28 released baseline | Part 14F source `eedce86851a017ac8ecc0c08b6f63788b4dae88e`; main `6b29a739d6df1660847aa7d70559a98979dc8021`; tree `20cb0a9b103fc927ed2e19eabd0b2410343fe09e` |'
     );
   });
 

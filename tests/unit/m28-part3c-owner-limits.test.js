@@ -775,7 +775,7 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–14E are released. Part 14F is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–14F are released. Part 14G is the sole implementation candidate.');
       expect(document).toContain('56a39854325826982283d78dffed4e039c61335b');
       expect(document).toContain('d88a0fe294619fa982bc1541affc8052031cc406');
       expect(document).toContain('81bc25de-eb77-413e-8745-97882bdd7c09');
@@ -798,7 +798,7 @@ describe('Mission 28 Part 3C owner limits and mandatory constraints', () => {
     expect(roadmap).toContain('Released Part 4D artifacts');
     expect(roadmap).toContain('Released Part 5A artifacts');
     expect(roadmap).toContain('Released Part 5D artifacts');
-    expect(ledger).toContain('independent audit/PR/merge/deployment/production unavailable');
+    expect(ledger).toContain("Part 14G's fresh independent whole-head audit");
   });
 
   test('keeps runtime database provider effect and migration boundaries unavailable', () => {

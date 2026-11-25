@@ -105,5 +105,4 @@ Every matrix records zero real recipients, provider calls, paid-demo
 cross-adoption, external effects, financial effects and money effects. Live or
 sandbox providers, private-production customer evidence, professional review,
 genuine Chrome/WebKit acceptance, physical devices, manual assistive
-technology, founder visual approval, independent Part 14D audit, PR, merge,
-deployment and production acceptance remain unavailable and unclaimed.
+technology and founder visual approval remain unavailable and unclaimed.

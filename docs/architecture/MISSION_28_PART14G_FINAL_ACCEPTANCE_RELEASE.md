@@ -90,6 +90,25 @@ public guided simulation remains separate.
     may slice 66 and Mission 28 be called released under the exact evidence
     earned. Keep every unavailable boundary explicit.
 
+## Retained cumulative gate corrections
+
+The first independent Part 14G audit rejected candidate `69fb5f669bd6783d130d79e16cae6fabe1aa3fc2`
+with two P2 retained-test findings. The Part 8A PostgreSQL suite still asserted
+the historical 283-migration/287-latest inventory, so it now binds the current
+285-migration/289-latest inventory while separately proving immutable migration
+287's exact source and ledger checksum, FORCE RLS, owner-only recorder, and
+zero-effect behavior. The shared mounted PostgreSQL fixture also deleted the
+native host's caller-owned authentication secret during cleanup; it now
+snapshots and restores the exact prior presence/value of every borrowed
+environment key. The Part 14E gate asserts that restoration before the ordered
+retained Part 8A suite exercises its genuine authenticated route.
+
+These are test-evidence corrections only. They do not change product runtime,
+authentication authority, schema, migrations, dependencies, effects, or
+deployment configuration. The replacement Part 14G source remains an
+implementation candidate until another complete fresh isolated exact-head
+whole-scope audit reruns all applicable PostgreSQL and browser gates.
+
 ## Canary and evidence boundaries
 
 No live canary is authorized. A live provider, real recipient,

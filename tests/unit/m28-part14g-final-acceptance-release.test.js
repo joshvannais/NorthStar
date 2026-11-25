@@ -106,6 +106,29 @@ describe('Mission 28 Part 14G final acceptance and release candidate', () => {
       .digest('hex').toUpperCase()).toBe('47C7AA1BC02C4DBC0CE03F3C57A014B16080070792E503F5616DF97B1DD52B08');
   });
 
+  test('records the retained PostgreSQL gate corrections without strengthening acceptance', () => {
+    expect(artifact.retainedGateCorrections).toMatchObject({
+      rejectedCandidate: '69fb5f669bd6783d130d79e16cae6fabe1aa3fc2',
+      independentAuditReportSha256: 'B68E3E96366EA5FA0631C4113B0A4B812E6FE95A3EEFF9DC711586997A78FCBE',
+      migrationHistoryAssertion: {
+        inheritedFailureReproducedOnReleasedBaseline: true,
+        currentInventory: '285_through_289_no_290',
+        migration287SourceAndLedgerChecksumPreserved: true,
+        migration287ForcedRlsOwnerOnlyNoEffectChecksPreserved: true,
+      },
+      fixtureEnvironmentIsolation: {
+        callerOwnedPresenceAndValueRestored: true,
+        orderedPart14EThenPart8ARegressionRequired: true,
+        productionAuthenticationChanged: false,
+      },
+      replacementIndependentAudit: 'pending',
+    });
+    expect(narrative).toContain('test-evidence corrections only');
+    expect(narrative).toContain('another complete fresh isolated exact-head');
+    expect(artifact.pendingEvidence.part14GIndependentAudit).toBe('pending');
+    expect(artifact.pendingEvidence.part14GTerminallyAccepted).toBe(false);
+  });
+
   test('forbids live canaries and preserves every unavailable verdict', () => {
     expect(artifact.canaryBoundary.liveCanaryAuthorized).toBe(false);
     expect(artifact.canaryBoundary.separateAuthorizationRequiredFields).toEqual([

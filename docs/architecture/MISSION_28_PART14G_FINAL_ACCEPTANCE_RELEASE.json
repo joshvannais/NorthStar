@@ -51,6 +51,23 @@
     "sourceMigrations": "285_through_289_no_290",
     "migration289RawSha256": "47C7AA1BC02C4DBC0CE03F3C57A014B16080070792E503F5616DF97B1DD52B08"
   },
+  "retainedGateCorrections": {
+    "rejectedCandidate": "69fb5f669bd6783d130d79e16cae6fabe1aa3fc2",
+    "independentAuditReport": "m28-part14g-root-audit-69fb-v1.json",
+    "independentAuditReportSha256": "B68E3E96366EA5FA0631C4113B0A4B812E6FE95A3EEFF9DC711586997A78FCBE",
+    "migrationHistoryAssertion": {
+      "inheritedFailureReproducedOnReleasedBaseline": true,
+      "currentInventory": "285_through_289_no_290",
+      "migration287SourceAndLedgerChecksumPreserved": true,
+      "migration287ForcedRlsOwnerOnlyNoEffectChecksPreserved": true
+    },
+    "fixtureEnvironmentIsolation": {
+      "callerOwnedPresenceAndValueRestored": true,
+      "orderedPart14EThenPart8ARegressionRequired": true,
+      "productionAuthenticationChanged": false
+    },
+    "replacementIndependentAudit": "pending"
+  },
   "requiredProcedure": [
     "verify_exact_full_history_clean_frozen_identity_and_scope",
     "complete_fresh_isolated_exact_head_whole_scope_audit_with_p0_p3",

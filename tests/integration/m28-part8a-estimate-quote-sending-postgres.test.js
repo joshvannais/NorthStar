@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const request = require('supertest');
 const { createEstimateReviewFixture } = require('../helpers/m24-estimate-review-fixture');
 const commercial = require('../../src/estimating/commercialContract');
@@ -12,6 +14,8 @@ const realPostgres = process.env.M19_PG_ADMIN_URL ? describe : describe.skip;
 const copy = value => JSON.parse(JSON.stringify(value));
 const hash = value => `sha256:${crypto.createHash('sha256').update(value).digest('hex')}`;
 const uuid = number => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
+const MIGRATION_287 = '287_canonical_automation_estimate_quote_resolution_v1.sql';
+const MIGRATION_287_SHA256 = '7dabf7bccb82d02727c48207034f75df5abc17f762436ee2d9775b5932d68f33';
 
 realPostgres('Mission 28 Part 8A PostgreSQL exact approved estimate no-effect resolution through migration 287', () => {
   let f; let actor; let estimate; let customer; let version; let terms; let approval; let transactionId; let unitId; let authorizationBinding;
@@ -114,8 +118,12 @@ realPostgres('Mission 28 Part 8A PostgreSQL exact approved estimate no-effect re
   beforeAll(async()=>{f=await createEstimateReviewFixture();actor=f.actors.owner;estimate=f.estimateGraphs[0].ids.estimate;customer=f.estimateGraphs[0].ids.customer;await issueCurrentVersion();await seedActionAuthority();},300000);
   afterAll(async()=>{if(f)await f.cleanup();},180000);
 
-  test('migration287 is exact, immutable, forced-RLS and owner-only',async()=>{
-    expect((await f.ownerPool.query('SELECT max(substring(filename,1,3)::integer) latest,count(*)::integer total FROM public._migrations')).rows[0]).toEqual({latest:287,total:283});
+  test('current migration history preserves exact migration287, forced-RLS and owner-only',async()=>{
+    expect((await f.ownerPool.query('SELECT max(substring(filename,1,3)::integer) latest,count(*)::integer total FROM public._migrations')).rows[0]).toEqual({latest:289,total:285});
+    expect(crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname, '../../migrations', MIGRATION_287))).digest('hex'))
+      .toBe(MIGRATION_287_SHA256);
+    expect((await f.ownerPool.query('SELECT filename,rtrim(checksum) checksum FROM public._migrations WHERE filename=$1',[MIGRATION_287])).rows[0])
+      .toEqual({filename:MIGRATION_287,checksum:MIGRATION_287_SHA256});
     expect((await f.ownerPool.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='canonical_automation_estimate_quote_resolutions_v1'")).rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true});
     expect((await f.ownerPool.query("SELECT has_function_privilege('public','canonical_automation_record_estimate_quote_resolution_v1(text,jsonb)','EXECUTE') allowed")).rows[0].allowed).toBe(false);
   });

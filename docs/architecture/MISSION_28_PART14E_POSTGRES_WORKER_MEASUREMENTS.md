@@ -1,6 +1,6 @@
 # Mission 28 Part 14E — PostgreSQL, mounted worker and measurements
 
-Status: **Implementation candidate only. Not independently accepted or released.**
+Status: **Released and terminally accepted.**
 
 Part 14E exercises the mounted paid and isolated-demo automation paths against
 a fresh disposable PostgreSQL instance through every source migration. It uses
@@ -100,12 +100,39 @@ fail-closed degraded response, 522.038 ms to reinitialize and recover, and
 28.144 ms to drain 26 expired fictional sessions through the housekeeping
 worker. These machine-specific durations are descriptive only.
 
+## Terminal release evidence
+
+Root's third complete fresh full-history whole-scope audit accepted source
+`d63b9ff59f6af6aae63e6eeaa2f9683354245eea`, tree
+`bf795536a331b940519c33e05115ce2f93c47daa`, with P0=P1=P2=P3=0. Its report
+is `m28-part14e-root-audit-d63b-v3.json`, SHA-256
+`E73DFDCE2F19F2611093B9E10EB4A906C685D3813A6CA5462F6C74A74A74DB82`.
+Exact Node 22.23.3 passed 64 Mission 28 suites/974 tests, supporting 167 passes
+and three intentional skips, impacted navigation one pass and ten unrelated
+skips, syntax 67, JSON 63 and references 522. Fresh actual PostgreSQL passed
+all 285 migrations through 289/no290, the three authority adversarials, six
+mounted Part 14E cases and 75 retained Parts 6A–6F cases.
+
+PR #612 normally merged with an expected-head guard to main
+`1c7eea4fd98773ed07b91bc632b10ca6f1ff03e3`, exact accepted tree. The sole
+automatic deployment `d9a02817-9850-4d80-a399-a47e47b1d0ec` succeeded with
+running instance `203f21f2-f1d8-485c-a840-9c992614973f` and image
+`sha256:dfa302420bc877542997d3295567a4361769d46364d9772edf597358013564aa`.
+Canonical startup, both domains, bounded routes/assets and zero-effect demo
+boundaries passed. Fresh direct authenticated read-only production evidence
+proved PostgreSQL 18.6 and exact 285/285 names/checksums through 289 with no
+290 and zero extra, duplicate, mismatched or pending migrations. No
+authenticated private-production paid API was exercised.
+
+The fresh retained backup is `e1c505fc-9f5b-4ac4-b4ef-7c6568773030`, named
+`pre-m28-part14e-d63b9ff5-20261125`, external identity
+`vs_1795566457688_tsr7y98iee96hi9w`. The prior backup was removed only after
+this exact replacement was confirmed, leaving one retained backup. Restore
+remains unexercised and workflow status unavailable.
+
 ## Evidence boundary
 
-This candidate is writer evidence, not independent acceptance. Migration 289
-is pending a normal release and is not claimed in production. Genuine Chrome
-and Playwright WebKit work remains Part 14F. Final independent audit, PR,
-merge, deployment and production acceptance remain Part 14G. Physical Safari,
-manual assistive technology, founder visual approval, provider/live/private
-production evidence, professional review and money effects remain unavailable
-and unclaimed.
+Genuine Chrome and Playwright WebKit work remains separate Part 14F evidence.
+Physical Safari, manual assistive technology, founder visual approval,
+provider/live/private-production evidence, professional review and money
+effects remain unavailable and unclaimed.

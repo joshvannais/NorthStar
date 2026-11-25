@@ -9,7 +9,7 @@ const automationRuntime = require('../automation/runtimeEngine');
 const { readAutomationCenter } = require('../automationCenter/repository');
 
 function centerError(status, code, message) {
-  return Object.assign(new Error(message || code), { status, code });
+  return Object.assign(new Error(message || code), { status, statusCode: status, code });
 }
 function ownerOrAdmin(req, _res, next) {
   if (!['owner', 'admin'].includes(req.userRole)) return next(centerError(403, 'AUTOMATION_CENTER_RESTRICTED'));

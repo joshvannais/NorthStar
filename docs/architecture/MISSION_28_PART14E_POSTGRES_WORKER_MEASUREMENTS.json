@@ -1,6 +1,6 @@
 {
   "contractVersion": "mission28.part14e.postgres-worker-measurements.v1",
-  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "status": "released_terminally_accepted",
   "base": {
     "part": "14D",
     "acceptedSourceHead": "fd917d5459033e0af78fb65e1f368c31d33ef68c",
@@ -31,7 +31,7 @@
     "latestMigration": 289,
     "nextMigrationAbsent": 290,
     "genuineBrowserAcceptanceIncluded": false,
-    "releaseIncluded": false
+    "releaseIncluded": true
   },
   "runtimeReadAuthority": {
     "entry": "public.canonical_automation_center_v1_read(uuid,uuid,text,uuid)",
@@ -58,7 +58,7 @@
     "nullRoleMemberViewerOrOwner": "42501_fail_closed",
     "crossTenantRetarget": "42501_fail_closed",
     "directStorageRead": "42501_denied",
-    "productionEvidence": "unavailable_pending_normal_release_and_migration"
+    "productionEvidence": "read_only_285_of_285_through_289_no_290"
   },
   "workerAndFixtureEvidence": {
     "canonicalQueueWorker": "PostgreSQL_contracts_for_transaction_schedule_lease_retry_control_recovery_only_no_external_adapter",
@@ -98,7 +98,15 @@
   },
   "evidenceBoundary": {
     "writerEvidenceIndependent": false,
-    "part14F": "genuine_Chrome_and_Playwright_WebKit_acceptance_unavailable",
+    "independentAudit": "complete_fresh_root_audit_P0_P1_P2_P3_zero",
+    "auditReport": "m28-part14e-root-audit-d63b-v3.json",
+    "auditReportSha256": "E73DFDCE2F19F2611093B9E10EB4A906C685D3813A6CA5462F6C74A74A74DB82",
+    "pullRequest": 612,
+    "mergedMain": "1c7eea4fd98773ed07b91bc632b10ca6f1ff03e3",
+    "deploymentId": "d9a02817-9850-4d80-a399-a47e47b1d0ec",
+    "deploymentInstance": "203f21f2-f1d8-485c-a840-9c992614973f",
+    "imageSha256": "sha256:dfa302420bc877542997d3295567a4361769d46364d9772edf597358013564aa",
+    "part14F": "separate_implementation_candidate_not_part14E_evidence",
     "part14G": "final_independent_audit_PR_merge_deployment_and_production_acceptance_unavailable",
     "founderVisualApproval": "separate_unavailable_unclaimed",
     "providerLivePrivateProductionMoneyProfessionalReview": "unavailable_unclaimed"

@@ -172,6 +172,118 @@
     populateSelect('setupChannel', contract.CHANNEL_LABELS);
     populateSelect('setupTiming', contract.TIMING_LABELS);
   }
+  function bindButtonActivation(button, activate) {
+    // Keep the semantic click path for keyboards and assistive technology, and
+    // also accept the completed primary pointer/touch gesture itself. WebKit
+    // can omit the synthesized follow-on click after a genuine release. The
+    // per-gesture flags ensure a pointer/touch release plus click invokes the
+    // bounded action once, never twice.
+    var directStarted = false;
+    var directHandled = false;
+    var activeFamily = null;
+    var activePointerId = null;
+    var activeTouchId = null;
+    var guarded = false;
+    function family(event) { return event && event.type.indexOf('touch') === 0 ? 'touch' : 'pointer'; }
+    function primary(event) {
+      return (!event || event.isPrimary !== false) &&
+        (!event || typeof event.button !== 'number' || event.button === 0);
+    }
+    function touchFrom(event) {
+      var list = event && (event.changedTouches || event.touches);
+      return list && list.length ? list[0] : null;
+    }
+    function sameGesture(event) {
+      if (family(event) !== activeFamily) return false;
+      if (activeFamily === 'touch') {
+        var touch = touchFrom(event);
+        return Boolean(touch) && touch.identifier === activeTouchId;
+      }
+      return event.pointerId === activePointerId;
+    }
+    function releaseTarget(event) {
+      var touch = touchFrom(event);
+      var x = touch ? touch.clientX : event.clientX;
+      var y = touch ? touch.clientY : event.clientY;
+      if (typeof x !== 'number' || typeof y !== 'number' ||
+          typeof document.elementFromPoint !== 'function') return event.target;
+      return document.elementFromPoint(x, y);
+    }
+    function releaseInside(event) {
+      var target = releaseTarget(event);
+      return Boolean(target) && (target === button || button.contains(target));
+    }
+    function clearGuards() {
+      if (!guarded) return;
+      guarded = false;
+      document.removeEventListener('pointerdown', guardStart, true);
+      document.removeEventListener('pointerup', guardEnd, true);
+      document.removeEventListener('pointercancel', guardCancel, true);
+      document.removeEventListener('touchstart', guardStart, true);
+      document.removeEventListener('touchend', guardEnd, true);
+      document.removeEventListener('touchcancel', guardCancel, true);
+    }
+    function cancel() {
+      clearGuards();
+      directStarted = false;
+      directHandled = false;
+      activeFamily = null;
+      activePointerId = null;
+      activeTouchId = null;
+    }
+    function guardStart(event) {
+      if (event.target !== button && !button.contains(event.target)) cancel();
+    }
+    function guardEnd(event) {
+      if (sameGesture(event) && !releaseInside(event)) cancel();
+    }
+    function guardCancel(event) {
+      if (sameGesture(event)) cancel();
+    }
+    function installGuards() {
+      if (guarded) return;
+      guarded = true;
+      document.addEventListener('pointerdown', guardStart, true);
+      document.addEventListener('pointerup', guardEnd, true);
+      document.addEventListener('pointercancel', guardCancel, true);
+      document.addEventListener('touchstart', guardStart, true);
+      document.addEventListener('touchend', guardEnd, true);
+      document.addEventListener('touchcancel', guardCancel, true);
+    }
+    function start(event) {
+      if (!primary(event)) return;
+      cancel();
+      directStarted = true;
+      directHandled = false;
+      activeFamily = family(event);
+      if (activeFamily === 'touch') {
+        var touch = touchFrom(event);
+        activeTouchId = touch ? touch.identifier : null;
+      } else activePointerId = event.pointerId;
+      installGuards();
+    }
+    function finish(event) {
+      if (!directStarted || directHandled || button.disabled || !primary(event) ||
+          !sameGesture(event) || !releaseInside(event)) return;
+      directHandled = true;
+      clearGuards();
+      activate(event);
+    }
+    button.addEventListener('pointerdown', start);
+    button.addEventListener('pointerup', finish);
+    button.addEventListener('pointercancel', cancel);
+    button.addEventListener('touchstart', start, { passive: true });
+    button.addEventListener('touchend', finish, { passive: true });
+    button.addEventListener('touchcancel', cancel, { passive: true });
+    button.addEventListener('click', function (event) {
+      // A real compatibility click has a non-zero detail. Keyboard and
+      // assistive-technology clicks use detail 0 and must remain available
+      // even when WebKit omitted the prior gesture's compatibility click.
+      if (directHandled && event.detail !== 0) { cancel(); return; }
+      cancel();
+      if (!button.disabled) activate(event);
+    });
+  }
   function previewInput(template) {
     return {
       templateId: template ? template.id : element('setupTemplateId').value,
@@ -240,7 +352,7 @@
       card.appendChild(node('h3', '', template.name));
       card.appendChild(node('p', '', template.description));
       var button = node('button', 'btn btn-secondary', 'Preview this setup'); button.type = 'button';
-      button.addEventListener('click', function () { requestPreview(previewInput(template), button); });
+      bindButtonActivation(button, function () { requestPreview(previewInput(template), button); });
       card.appendChild(button); target.appendChild(card);
     });
   }
@@ -491,9 +603,11 @@
     if (demoMode && typeof document.querySelectorAll === 'function') {
       var buttons = document.querySelectorAll('[data-automation-demo-action]');
       for (var index = 0; index < buttons.length; index += 1) {
-        buttons[index].addEventListener('click', function (event) {
-          performDemoAction(event.currentTarget.getAttribute('data-automation-demo-action'));
-        });
+        (function (button) {
+          bindButtonActivation(button, function () {
+            performDemoAction(button.getAttribute('data-automation-demo-action'));
+          });
+        })(buttons[index]);
       }
     }
     load();

@@ -215,12 +215,12 @@ describe('Mission 28 Part 11C reminder material', () => {
 
   test('freezes docs-tests-only scope with migration287 latest and no288', () => {
     expect(contract.runtimeBoundary).toMatchObject({newMigration: false, newTableFunctionRouteOrUi: false, materialRecordCreated: false, nextMigrationAbsent: '288'});
-    const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations).toHaveLength(284); expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql'); expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
+    const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations).toHaveLength(285); expect(migrations.at(-1)).toBe('289_automation_center_runtime_read_authority_v1.sql'); expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.filter(name => name.startsWith('289_'))).toEqual(['289_automation_center_runtime_read_authority_v1.sql']); expect(migrations.some(name => name.startsWith('290_'))).toBe(false);
   });
 
   test('roadmap and ledger record Part11B released Part11C candidate and later slices planned', () => {
     const roadmap = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'), 'utf8'); const ledger = fs.readFileSync(path.join(ROOT, 'docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md'), 'utf8');
-    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.'); expect(value).toContain('914f5d4424a300d8ab3649141ecab6b5a32bb625'); expect(value).toContain('fa5e57be-777b-4970-ab03-8f1c2040171d'); expect(value).toContain('sha256:02753e2605eadc2cdf8a00fae0a51c42b7f86f947086c0ab0318861e376f537d'); }
-    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(62); expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1); expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(3);
+    for (const value of [roadmap, ledger]) { expect(value).toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.'); expect(value).toContain('914f5d4424a300d8ab3649141ecab6b5a32bb625'); expect(value).toContain('fa5e57be-777b-4970-ab03-8f1c2040171d'); expect(value).toContain('sha256:02753e2605eadc2cdf8a00fae0a51c42b7f86f947086c0ab0318861e376f537d'); }
+    expect((ledger.match(/\| \*\*Released\*\* \|/g) || []).length).toBe(63); expect((ledger.match(/\| \*\*Implementation candidate\*\* \|/g) || []).length).toBe(1); expect((ledger.match(/\| Planned \/ unimplemented \|/g) || []).length).toBe(2);
   });
 });

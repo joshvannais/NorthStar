@@ -273,17 +273,17 @@ describe('Mission 28 Part 10B dispatch communication boundary', () => {
 
   test('freezes docs-tests-only boundary with migration287 latest and no288', () => {
     expect(contract.runtimeBoundary).toMatchObject({newMigration: false, newTableFunctionRouteOrUi: false, mountedSchedulerWorkerQueueOrPolicyExecutor: false, providerAdapterCallbackOrInboundReceiver: false, scheduleAssignmentDispatchRouteAppointmentOrLocationMutation: false, nextMigrationAbsent: '288'});
-    const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql'); expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
+    const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations.at(-1)).toBe('289_automation_center_runtime_read_authority_v1.sql'); expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.filter(name => name.startsWith('289_'))).toEqual(['289_automation_center_runtime_read_authority_v1.sql']); expect(migrations.some(name => name.startsWith('290_'))).toBe(false);
   });
 
   test('roadmap and ledger record Part10A released Part10B candidate and Part10C plus planned', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.'); expect(document).toContain('Parts 14E–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.'); expect(document).toContain('Parts 14F–14G remain planned and unimplemented.');
       expect(document).toContain('23aec085-588a-4593-9220-afdff6e62bdc'); expect(document).toContain('sha256:55303e99920f1d102ac2333c29ec66f5f1d2c91b837c05d25b34f21a894dc913');
       expect(document).toMatch(/(?:bounded read-only production migration reconciliation|production reconciled) 283\/283.*287\/no288/i);
     }
     expect(ledger).toContain('| 41 | 10A | Exact appointment confirmation and reminder | **Released** |'); expect(ledger).toContain('| 42 | 10B | Exact dispatch/on-the-way/delay/cancellation communication | **Released** |'); expect(ledger).toContain('| 43 | 10C | Exact customer-safe work-state communication | **Released** |');
-    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(3); expect(markdown).toContain('No migration 288');
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(2); expect(markdown).toContain('No migration 288');
   });
 });

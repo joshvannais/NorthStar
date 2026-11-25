@@ -622,119 +622,22 @@ async function readAutomationCenter(pool, input) {
     await client.query("SET LOCAL statement_timeout='5s'");
     await client.query("SET LOCAL lock_timeout='2s'");
     await client.query("SET LOCAL idle_in_transaction_session_timeout='5s'");
-    await client.query("SELECT set_config('northstar.automation_tenant_id',$1,true)", [input.organizationId]);
-    const evaluatedAt = (await client.query('SELECT statement_timestamp() evaluated_at')).rows[0].evaluated_at;
-    const policies = (await client.query(`
-      WITH latest_policy AS (
-        SELECT DISTINCT ON (policy_id) policy_id,version,canonical_digest,document,expires_at,recorded_at
-        FROM public.canonical_automation_policy_versions_v1
-        WHERE organization_id=$1 ORDER BY policy_id,version DESC
-      )
-      SELECT p.policy_id,p.version,p.expires_at,p.recorded_at,
-        p.document#>>'{trigger,sourceClassId}' source_class_id,
-        p.document#>>'{action,familyId}' action_family,
-        p.document#>>'{channel,channelId}' channel_id,
-        lifecycle.to_state lifecycle_state,lifecycle.currentness_marker lifecycle_currentness,
-        control.control_state
-      FROM latest_policy p
-      LEFT JOIN LATERAL (
-        SELECT to_state,currentness_marker FROM public.canonical_automation_lifecycle_events_v1
-        WHERE organization_id=$1 AND policy_id=p.policy_id AND policy_version=p.version
-        ORDER BY lifecycle_sequence DESC LIMIT 1
-      ) lifecycle ON TRUE
-      LEFT JOIN public.canonical_automation_delivery_control_heads_v1 control
-        ON control.organization_id=$1 AND control.target_kind='policy_version'
-        AND control.policy_id=p.policy_id AND control.policy_version=p.version
-      ORDER BY p.recorded_at DESC,p.policy_id LIMIT ${MAX_ROWS + 1}`, [input.organizationId])).rows;
-    const runs = (await client.query(`
-      SELECT binding.run_id,binding.policy_id,binding.policy_version,binding.recorded_at,
-        latest.record_type latest_record_type,latest.currentness_marker,latest.recorded_at latest_recorded_at,
-        latest.document#>>'{payload,resultState}' eligibility_state,
-        latest.document#>>'{payload,authorityState}' approval_state,
-        latest.document#>>'{payload,scheduleState}' schedule_record_state,
-        latest.document#>>'{payload,unitState}' unit_state,
-        latest.document#>>'{payload,suppressionCode}' suppression_code,
-        latest.document#>>'{payload,blocksEffect}' suppression_blocks_effect,
-        latest.document#>>'{payload,cancellationState}' cancellation_state,
-        latest.document#>>'{payload,authenticated}' reply_authenticated,
-        latest.document#>>'{payload,suppressionRequired}' suppression_required,
-        latest.document#>>'{payload,reconciliationState}' reconciliation_state,
-        latest.document#>>'{payload,terminalState}' terminal_state,
-        run_policy.expires_at policy_expires_at,
-        policy_lifecycle.to_state policy_lifecycle_state,
-        policy_lifecycle.currentness_marker policy_lifecycle_currentness,
-        schedule.schedule_id,schedule.transaction_id schedule_transaction_id,
-        schedule.expires_at schedule_expires_at,schedule.schedule_count,
-        units.action_unit_count,retry.state retry_state,
-        retry.next_attempt_at retry_next_attempt_at,retry.updated_at retry_updated_at,
-        lease.lease_id,lease.lease_acquired_at,lease.lease_expires_at,
-        recovery.transaction_id recovery_transaction_id,recovery.policy_id recovery_policy_id,
-        recovery.policy_version recovery_policy_version,
-        recovery.result_state recovery_state,recovery.recorded_at recovery_recorded_at,
-        tenant_control.control_state tenant_control_state,
-        policy_control.control_state policy_control_state,
-        action_control.control_state action_control_state,
-        action_control.execution_phase action_execution_phase,
-        action_control.updated_at action_control_updated_at
-      FROM public.canonical_automation_historical_run_bindings_v1 binding
-      JOIN public.canonical_automation_policy_versions_v1 run_policy
-        ON run_policy.organization_id=$1 AND run_policy.policy_id=binding.policy_id
-        AND run_policy.version=binding.policy_version
-      LEFT JOIN LATERAL (
-        SELECT to_state,currentness_marker FROM public.canonical_automation_lifecycle_events_v1
-        WHERE organization_id=$1 AND policy_id=binding.policy_id AND policy_version=binding.policy_version
-        ORDER BY lifecycle_sequence DESC LIMIT 1
-      ) policy_lifecycle ON TRUE
-      LEFT JOIN LATERAL (
-        SELECT record_type,currentness_marker,recorded_at,document FROM public.canonical_automation_records_v1
-        WHERE organization_id=$1 AND run_id=binding.run_id ORDER BY causal_ordinal DESC LIMIT 1
-      ) latest ON TRUE
-      LEFT JOIN LATERAL (
-        SELECT schedule_id,transaction_id,expires_at,count(*) OVER() schedule_count FROM public.canonical_automation_action_schedules_v1
-        WHERE organization_id=$1 AND run_id=binding.run_id ORDER BY recorded_at DESC LIMIT 1
-      ) schedule ON TRUE
-      LEFT JOIN LATERAL (
-        SELECT count(*)::integer action_unit_count FROM public.canonical_automation_action_units_v1
-        WHERE organization_id=$1 AND run_id=binding.run_id
-      ) units ON TRUE
-      LEFT JOIN public.canonical_automation_delivery_retry_heads_v1 retry
-        ON retry.organization_id=$1 AND retry.schedule_id=schedule.schedule_id
-      LEFT JOIN public.canonical_automation_delivery_lease_heads_v1 lease
-        ON lease.organization_id=$1 AND lease.schedule_id=schedule.schedule_id
-      LEFT JOIN LATERAL (
-        SELECT transaction_id,policy_id,policy_version,result_state,recorded_at
-        FROM public.canonical_automation_recovery_assessments_v1
-        WHERE organization_id=$1 AND run_id=binding.run_id
-        ORDER BY recorded_at DESC,recovery_id DESC LIMIT 1
-      ) recovery ON TRUE
-      LEFT JOIN public.canonical_automation_delivery_control_heads_v1 tenant_control
-        ON tenant_control.organization_id=$1 AND tenant_control.target_kind='tenant'
-        AND tenant_control.target_key=$1::text
-      LEFT JOIN public.canonical_automation_delivery_control_heads_v1 policy_control
-        ON policy_control.organization_id=$1 AND policy_control.target_kind='policy_version'
-        AND policy_control.target_key=binding.policy_id::text||':'||binding.policy_version::text
-      LEFT JOIN public.canonical_automation_delivery_control_heads_v1 action_control
-        ON action_control.organization_id=$1 AND action_control.target_kind='action_schedule'
-        AND action_control.target_key=schedule.schedule_id::text
-      WHERE binding.organization_id=$1
-      ORDER BY COALESCE(latest.recorded_at,binding.recorded_at) DESC,binding.run_id LIMIT ${MAX_ROWS + 1}`, [input.organizationId])).rows;
-    const records = (await client.query(`
-      SELECT record_id,run_id,record_type,currentness_marker,authority_class,recorded_at
-      FROM public.canonical_automation_records_v1 WHERE organization_id=$1
-      ORDER BY recorded_at DESC,record_id LIMIT ${MAX_ROWS + 1}`, [input.organizationId])).rows;
-    const documents = (await client.query(`
-      SELECT estimate_quote_resolution_id,run_id,result_state,recorded_at
-      FROM public.canonical_automation_estimate_quote_resolutions_v1 WHERE organization_id=$1
-      ORDER BY recorded_at DESC,estimate_quote_resolution_id LIMIT ${MAX_ROWS + 1}`, [input.organizationId])).rows;
-    const channels = (await client.query(`
-      SELECT DISTINCT ON (requested_channel_id) requested_channel_id,capability_state,result_state,recorded_at
-      FROM public.canonical_automation_channel_resolutions_v1 WHERE organization_id=$1
-      ORDER BY requested_channel_id,recorded_at DESC LIMIT ${MAX_ROWS + 1}`, [input.organizationId])).rows;
-    const stopControl = (await client.query(`
-      SELECT control_state,control_sequence,queued_count,leased_count,uncertain_count,permanent_stop_count,updated_at
-      FROM public.canonical_automation_delivery_control_heads_v1
-      WHERE organization_id=$1 AND target_kind='tenant' AND target_key=$1::text LIMIT 2`, [input.organizationId])).rows;
-    const snapshot = buildSnapshot(input, { evaluatedAt, policies, runs, records, documents, channels, stopControl });
+    const projection = (await client.query(
+      `SELECT public.canonical_automation_center_v1_read($1,$2,$3,$4) snapshot`,
+      [input.organizationId,input.actorUserId,input.actorAccessRole,input.authSessionId]
+    )).rows[0].snapshot;
+    if (!projection || typeof projection !== 'object' || Array.isArray(projection)) {
+      throw centerError(503, 'AUTOMATION_CENTER_UNAVAILABLE');
+    }
+    const snapshot = buildSnapshot(input, {
+      evaluatedAt: projection.evaluatedAt,
+      policies: projection.policies,
+      runs: projection.runs,
+      records: projection.records,
+      documents: projection.documents,
+      channels: projection.channels,
+      stopControl: projection.stopControl,
+    });
     await client.query('COMMIT');
     return snapshot;
   } catch (error) {

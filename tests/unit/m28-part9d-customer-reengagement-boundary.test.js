@@ -233,17 +233,17 @@ describe('Mission 28 Part 9D customer re-engagement boundary', () => {
   test('freezes docs-tests-only zero-effect boundary with migration287 latest and no288', () => {
     expect(Object.values(contract.privacyAndEffects).every(value => value === 0)).toBe(true);
     expect(contract.runtimeBoundary).toMatchObject({newMigration: false, newTableFunctionRouteOrUi: false, mountedSchedulerWorkerQueueOrPolicyExecutor: false, providerAdapterCallbackOrInboundReceiver: false, externalEffectOrUpstreamMutation: false, nextMigrationAbsent: '288'});
-    const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql'); expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
+    const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort(); expect(migrations.at(-1)).toBe('289_automation_center_runtime_read_authority_v1.sql'); expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.filter(name => name.startsWith('289_'))).toEqual(['289_automation_center_runtime_read_authority_v1.sql']); expect(migrations.some(name => name.startsWith('290_'))).toBe(false);
   });
 
   test('roadmap and ledger record Part9C released Part9D candidate and Part10+ planned', () => {
     const roadmap = fs.readFileSync(ROADMAP, 'utf8'); const ledger = fs.readFileSync(LEDGER, 'utf8'); const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.'); expect(document).toContain('Parts 14E–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.'); expect(document).toContain('Parts 14F–14G remain planned and unimplemented.');
       expect(document).toContain('6fa2248f-ff14-4bae-8815-10842b4a9d3d'); expect(document).toContain('sha256:b72b28a34816a3f278c5056b93aa094537fe48dd1567bcb5e3bfbd4c26e3cabf');
       expect(document).toMatch(/(?:bounded read-only production migration reconciliation|production reconciled) 283\/283.*287\/no288/i);
     }
     expect(ledger).toContain('| 39 | 9C | Exact-current estimate/quote follow-up | **Released** |'); expect(ledger).toContain('| 40 | 9D | Explicitly reviewed customer re-engagement boundary | **Released** |');
-    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(3); expect(markdown).toContain('No migration 288');
+    expect((ledger.match(/\*\*Implementation candidate\*\*/g) || [])).toHaveLength(1); expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(2); expect(markdown).toContain('No migration 288');
   });
 });

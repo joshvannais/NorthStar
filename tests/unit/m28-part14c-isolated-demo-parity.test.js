@@ -173,7 +173,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     });
     expect(Object.values(artifact.effectBoundary).every(value => value === false)).toBe(true);
     expect(read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md'))
-      .toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.');
+      .toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.');
     expect(read('docs/roadmap/MISSION_28_ACCEPTANCE_LEDGER.md')).toContain('Part 14B audit / release');
   });
 
@@ -1059,7 +1059,7 @@ describe('Mission 28 Part 14C shared isolated runtime', () => {
     expect(migration).toContain('ADD CONSTRAINT demo_command_center_mutations_operation_check');
     expect(migration).not.toMatch(/\b(?:UPDATE|DELETE|TRUNCATE)\b/);
     expect(new Set(acceptedOperations).size).toBe(24);
-    expect(fs.readdirSync(path.join(ROOT, 'migrations')).some(name => /^289_/.test(name))).toBe(false);
+    expect(fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^289_/.test(name))).toEqual(['289_automation_center_runtime_read_authority_v1.sql']); expect(fs.readdirSync(path.join(ROOT, 'migrations')).some(name => /^290_/.test(name))).toBe(false);
     expect(read('tests/integration/m28-part14c-isolated-demo-parity-postgres.test.js'))
       .toContain("operation='automation_action'");
   });

@@ -1,6 +1,6 @@
 {
   "contractVersion": "mission28.part14d.exhaustive-contract-matrices.v1",
-  "status": "implementation_candidate_not_independently_accepted_not_released",
+  "status": "released",
   "base": {
     "part": "14C",
     "acceptedSourceHead": "b4da799f85333058ccca4cd3fd3c3908537b911f",
@@ -28,6 +28,30 @@
     "postgreSQLMountedWorkerRestartMeasurementsIncluded": false,
     "genuineBrowserAcceptanceIncluded": false,
     "releaseIncluded": false
+  },
+  "release": {
+    "acceptedSourceHead": "fd917d5459033e0af78fb65e1f368c31d33ef68c",
+    "acceptedTree": "7210b21b9aa42fbe67d01846ca87cc6d64aad656",
+    "auditFindings": { "P0": 0, "P1": 0, "P2": 0, "P3": 0 },
+    "auditReport": "m28-part14d-root-audit-fd917-v2.json",
+    "auditReportSha256": "29F76CEB1B2AA7C1B4A94466D48701822EFF3B6E8A95028F3ABA5F85D343F1D5",
+    "node": "22.23.3",
+    "mission28Suites": 63,
+    "mission28Tests": 971,
+    "pullRequest": 611,
+    "mergedMain": "cb2c68aac404bc055352c78853e8b3ce0d90982c",
+    "deploymentId": "2f26683f-aaee-42ad-9cf5-2c4c4891cdbf",
+    "deploymentInstance": "146d8f4f-b22c-4851-a9e5-20c0ab7fbc50",
+    "imageSha256": "sha256:08c89f00176da1d132be0a4c5faaa4b962a9dcde9962897e72c6359ceedbbda4",
+    "productionMigrations": "284_of_284_through_288_no_289",
+    "backupId": "f42b41cb-596c-45a9-ad51-f83eb793e3ac",
+    "backupName": "pre-m28-part14d-fd917d54-20261124",
+    "backupExternalId": "vs_1795560282694_zfgwta2goxdxzgv5",
+    "backupRotation": {
+      "priorFreshBackupId": "0f3f9bf0-6eeb-43fa-b269-38e227ad0ec1",
+      "priorFreshRemovedOnlyAfterReplacementConfirmed": true,
+      "retainedBackupsAfterRotation": 1
+    }
   },
   "matrices": {
     "semanticAuthority": {

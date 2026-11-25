@@ -308,8 +308,8 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
     expect(Object.values(contract.privacyAndEffects).every(value => value === 0)).toBe(true);
     expect(contract.runtimeBoundary).toMatchObject({newMigration: false, newTableFunctionRouteOrUi: false, mountedSchedulerWorkerQueueOrPolicyExecutor: false, providerAdapterCallbackOrInboundReceiver: false, recipientMessageDeliveryViewRevokeResendOrRecovery: false, nextMigrationAbsent: '288'});
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort();
-    expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql');
-    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('289_automation_center_runtime_read_authority_v1.sql');
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.filter(name => name.startsWith('289_'))).toEqual(['289_automation_center_runtime_read_authority_v1.sql']); expect(migrations.some(name => name.startsWith('290_'))).toBe(false);
   });
 
   test('roadmap and ledger record Part8C released, Part8D candidate only and Part9A+ planned', () => {
@@ -317,8 +317,8 @@ describe('Mission 28 Part 8D delivery acknowledgement, recovery and exact labels
     const ledger = fs.readFileSync(LEDGER, 'utf8');
     const markdown = fs.readFileSync(CONTRACT_MD, 'utf8');
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.');
-      expect(document).toContain('Parts 14E–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.');
+      expect(document).toContain('Parts 14F–14G remain planned and unimplemented.');
       expect(document).toContain('927313ac-0e60-4552-8130-023fe266d327');
       expect(document).toContain('sha256:95251721696f9cd2afb33c6d07d7fbaf52f1e51600ef9c4e3d35e1da66fb2b6c');
     }

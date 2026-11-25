@@ -450,21 +450,15 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     }))).toThrow(/could not be resolved safely/i);
   });
 
-  test('repository enters exact tenant RLS context in a read-only transaction', async () => {
+  test('repository uses the capability-checked database entry in a read-only transaction', async () => {
     const calls = [];
-    const rows = [
-      [{ evaluated_at: new Date('2026-11-20T20:00:00Z') }], [], [], [], [], [], [],
-    ];
     const client = {
       query: jest.fn(async (sql, params) => {
         calls.push({ sql: String(sql), params });
-        if (/^SELECT statement_timestamp/.test(String(sql))) return { rows: rows.shift() };
-        if (/^\s*WITH latest_policy/.test(String(sql))) return { rows: rows.shift() };
-        if (/^\s*SELECT binding\.run_id/.test(String(sql))) return { rows: rows.shift() };
-        if (/^\s*SELECT record_id/.test(String(sql))) return { rows: rows.shift() };
-        if (/^\s*SELECT estimate_quote_resolution_id/.test(String(sql))) return { rows: rows.shift() };
-        if (/^\s*SELECT DISTINCT ON/.test(String(sql))) return { rows: rows.shift() };
-        if (/^\s*SELECT control_state/.test(String(sql))) return { rows: rows.shift() };
+        if (/canonical_automation_center_v1_read/.test(String(sql))) return { rows: [{ snapshot: {
+          evaluatedAt: '2026-11-20T20:00:00.000000Z', policies: [], runs: [], records: [],
+          documents: [], channels: [], stopControl: [],
+        } }] };
         return { rows: [] };
       }),
       release: jest.fn(),
@@ -472,26 +466,9 @@ describe('Mission 28 Part 14A tenant-private projection', () => {
     const result = await readAutomationCenter({ connect: async () => client }, input());
     expect(result.status.id).toBe('ready_to_set_up');
     expect(calls[0].sql).toBe('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-    const tenant = calls.find(call => call.sql.includes("set_config('northstar.automation_tenant_id'"));
-    expect(tenant.params).toEqual([uuid(28)]);
-    const runRead = calls.find(call => call.sql.includes('SELECT binding.run_id'));
-    expect(runRead.sql).toMatch(/run_policy\.expires_at policy_expires_at/);
-    expect(runRead.sql).toMatch(/run_policy\.policy_id=binding\.policy_id[\s\S]*run_policy\.version=binding\.policy_version/);
-    expect(runRead.sql).toMatch(/policy_lifecycle\.to_state policy_lifecycle_state/);
-    expect(runRead.sql).toMatch(/policy_id=binding\.policy_id AND policy_version=binding\.policy_version[\s\S]*ORDER BY lifecycle_sequence DESC LIMIT 1/);
-    expect(runRead.sql).toMatch(/tenant_control\.control_state tenant_control_state/);
-    expect(runRead.sql).toMatch(/tenant_control\.target_kind='tenant'[\s\S]*tenant_control\.target_key=\$1::text/);
-    expect(runRead.sql).toMatch(/policy_control\.target_kind='policy_version'[\s\S]*binding\.policy_id::text\|\|':'\|\|binding\.policy_version::text/);
-    expect(runRead.sql).toMatch(/action_control\.target_kind='action_schedule'[\s\S]*action_control\.target_key=schedule\.schedule_id::text/);
-    expect(runRead.sql).toMatch(/schedule\.transaction_id schedule_transaction_id/);
-    expect(runRead.sql).toMatch(/action_control\.updated_at action_control_updated_at/);
-    expect(runRead.sql).toMatch(/recovery\.transaction_id recovery_transaction_id[\s\S]*recovery\.policy_id recovery_policy_id[\s\S]*recovery\.policy_version recovery_policy_version/);
-    expect(runRead.sql).toMatch(/SELECT transaction_id,policy_id,policy_version,result_state,recorded_at[\s\S]*canonical_automation_recovery_assessments_v1/);
-    expect(runRead.sql).toMatch(/count\(\*\) OVER\(\) schedule_count[\s\S]*organization_id=\$1 AND run_id=binding\.run_id/);
-    expect(runRead.sql).toMatch(/count\(\*\)::integer action_unit_count[\s\S]*organization_id=\$1 AND run_id=binding\.run_id/);
-    expect(runRead.sql).toMatch(/\{payload,cancellationState\}.*cancellation_state/);
-    expect(runRead.sql).toMatch(/\{payload,blocksEffect\}.*suppression_blocks_effect/);
-    expect(runRead.sql).toMatch(/\{payload,authenticated\}.*reply_authenticated/);
+    const entry = calls.find(call => call.sql.includes('canonical_automation_center_v1_read'));
+    expect(entry.params).toEqual([uuid(28), uuid(1), 'owner', uuid(2)]);
+    expect(calls.some(call => call.sql.includes('canonical_automation_policy_versions_v1'))).toBe(false);
     expect(calls.some(call => call.sql === 'COMMIT')).toBe(true);
     expect(client.release).toHaveBeenCalledWith(false);
   });

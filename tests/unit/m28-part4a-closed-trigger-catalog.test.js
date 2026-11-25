@@ -355,7 +355,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     const roadmap = read(ROADMAP_PATH);
     const ledger = read(LEDGER_PATH);
     for (const document of [roadmap, ledger]) {
-      expect(document).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.');
+      expect(document).toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.');
       expect(document).toContain('797be4a33bb2128ae2efd79b5347ef43f94da0f6');
       expect(document).toContain('041971bb190998e1444087482941686c4166573d');
       expect(document).toContain('7e0ef15f-1275-4578-aade-70b8c8277bef');
@@ -394,9 +394,9 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(rows[39]).toMatchObject({ id: '9D', state: '**Released**' });
     expect(rows[40]).toMatchObject({ id: '10A', state: '**Released**' });
     expect(rows[41]).toMatchObject({ id: '10B', state: '**Released**' });
-  expect(rows[42]).toMatchObject({ id: '10C', state: '**Released**' }); expect(rows[43]).toMatchObject({ id: '10D', state: '**Released**' }); expect(rows[44]).toMatchObject({ id: '11A', state: '**Released**' }); expect(rows[45]).toMatchObject({ id: '11B', state: '**Released**' }); expect(rows[46]).toMatchObject({ id: '11C', state: '**Released**' }); expect(rows[47]).toMatchObject({ id: '11D', state: '**Released**' }); expect(rows[48]).toMatchObject({ id: '11E', state: '**Released**' }); expect(rows[49]).toMatchObject({ id: '11F', state: '**Released**' }); expect(rows[50]).toMatchObject({ id: '12A', state: '**Released**' }); expect(rows[51]).toMatchObject({ id: '12B', state: '**Released**' }); expect(rows[52]).toMatchObject({ id: '12C', state: '**Released**' }); expect(rows[53]).toMatchObject({ id: '12D', state: '**Released**' }); expect(rows[54]).toMatchObject({ id: '13A', state: '**Released**' }); expect(rows[55]).toMatchObject({ id: '13B', state: '**Released**' }); expect(rows[56]).toMatchObject({ id: '13C', state: '**Released**' }); expect(rows[57]).toMatchObject({ id: '13D', state: '**Released**' }); expect(rows[58]).toMatchObject({ id: '13E', state: '**Released**' }); expect(rows[59]).toMatchObject({ id: '14A', state: '**Released**' }); expect(rows[60]).toMatchObject({ id: '14B', state: '**Released**' }); expect(rows[61]).toMatchObject({ id: '14C', state: '**Released**' }); expect(rows[62]).toMatchObject({ id: '14D', state: '**Implementation candidate**' });
-    expect(rows.slice(63).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
-    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(3);
+  expect(rows[42]).toMatchObject({ id: '10C', state: '**Released**' }); expect(rows[43]).toMatchObject({ id: '10D', state: '**Released**' }); expect(rows[44]).toMatchObject({ id: '11A', state: '**Released**' }); expect(rows[45]).toMatchObject({ id: '11B', state: '**Released**' }); expect(rows[46]).toMatchObject({ id: '11C', state: '**Released**' }); expect(rows[47]).toMatchObject({ id: '11D', state: '**Released**' }); expect(rows[48]).toMatchObject({ id: '11E', state: '**Released**' }); expect(rows[49]).toMatchObject({ id: '11F', state: '**Released**' }); expect(rows[50]).toMatchObject({ id: '12A', state: '**Released**' }); expect(rows[51]).toMatchObject({ id: '12B', state: '**Released**' }); expect(rows[52]).toMatchObject({ id: '12C', state: '**Released**' }); expect(rows[53]).toMatchObject({ id: '12D', state: '**Released**' }); expect(rows[54]).toMatchObject({ id: '13A', state: '**Released**' }); expect(rows[55]).toMatchObject({ id: '13B', state: '**Released**' }); expect(rows[56]).toMatchObject({ id: '13C', state: '**Released**' }); expect(rows[57]).toMatchObject({ id: '13D', state: '**Released**' }); expect(rows[58]).toMatchObject({ id: '13E', state: '**Released**' }); expect(rows[59]).toMatchObject({ id: '14A', state: '**Released**' }); expect(rows[60]).toMatchObject({ id: '14B', state: '**Released**' }); expect(rows[61]).toMatchObject({ id: '14C', state: '**Released**' }); expect(rows[62]).toMatchObject({ id: '14D', state: '**Released**' }); expect(rows[63]).toMatchObject({ id: '14E', state: '**Implementation candidate**' });
+    expect(rows.slice(64).every(row => row.state === 'Planned / unimplemented' && row.evidence === 'None')).toBe(true);
+    expect((ledger.match(/Planned \/ unimplemented/g) || [])).toHaveLength(2);
   });
 
   test('keeps runtime, migrations and later Part 4 authority outside the slice', () => {
@@ -408,7 +408,7 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
       part5Plus: 'rule evaluation scheduling execution providers recipients and effects remain planned and unimplemented',
     });
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name));
-    expect(migrations).toHaveLength(284);
+    expect(migrations).toHaveLength(285);
     expect(migrations.some(name => name.startsWith('273_'))).toBe(true);
     expect(migrations.filter(name => name.startsWith('274_'))).toEqual(['274_canonical_automation_trigger_snapshots_v1.sql']);
     expect(migrations.filter(name => name.startsWith('278_'))).toEqual(['278_canonical_automation_retry_reconciliation_v1.sql']);
@@ -416,6 +416,6 @@ describe('Mission 28 Part 4A closed trigger catalog', () => {
     expect(migrations.filter(name => name.startsWith('280_'))).toEqual(['280_canonical_automation_recovery_authority_v1.sql']);
     expect(migrations.filter(name => name.startsWith('281_'))).toEqual(['281_canonical_automation_sender_recipient_authority_v1.sql']);
     expect(migrations.filter(name => name.startsWith('282_'))).toEqual(['282_canonical_automation_communication_permission_v1.sql']);
-    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.filter(name => name.startsWith('289_'))).toEqual(['289_automation_center_runtime_read_authority_v1.sql']); expect(migrations.some(name => name.startsWith('290_'))).toBe(false);
   });
 });

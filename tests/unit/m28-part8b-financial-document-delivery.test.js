@@ -150,8 +150,8 @@ describe('Mission 28 Part 8B financial-document delivery authority', () => {
 
   test('keeps current migration inventory through the isolated-demo action admission', () => {
     const migrations = fs.readdirSync(path.join(ROOT, 'migrations')).filter(name => /^\d+_/.test(name)).sort();
-    expect(migrations.at(-1)).toBe('288_demo_automation_center_action_v1.sql');
-    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.some(name => name.startsWith('289_'))).toBe(false);
+    expect(migrations.at(-1)).toBe('289_automation_center_runtime_read_authority_v1.sql');
+    expect(migrations.filter(name => name.startsWith('288_'))).toEqual(['288_demo_automation_center_action_v1.sql']); expect(migrations.filter(name => name.startsWith('289_'))).toEqual(['289_automation_center_runtime_read_authority_v1.sql']); expect(migrations.some(name => name.startsWith('290_'))).toBe(false);
     const diffSensitive = ['src/routes','public','src/server.js'];
     expect(contract.runtimeBoundary.mountedRuntimeConsumer).toBe(false);
     expect(diffSensitive).toHaveLength(3);
@@ -161,8 +161,8 @@ describe('Mission 28 Part 8B financial-document delivery authority', () => {
     const roadmap=fs.readFileSync(ROADMAP,'utf8'); const ledger=fs.readFileSync(LEDGER,'utf8');
     const markdown=fs.readFileSync(CONTRACT_MD,'utf8');
     for (const document of [roadmap,ledger]) {
-      expect(document).toContain('Parts 1A–14C are released. Part 14D is the sole implementation candidate.');
-      expect(document).toContain('Parts 14E–14G remain planned and unimplemented.');
+      expect(document).toContain('Parts 1A–14D are released. Part 14E is the sole implementation candidate.');
+      expect(document).toContain('Parts 14F–14G remain planned and unimplemented.');
       expect(document).toContain('60fd4934-d7cc-4f1f-8366-894e6fd03393');
       expect(document).toContain('287');
       expect(document).toMatch(/no\s?288|migration 288 is absent|288_demo_automation_center_action_v1/);

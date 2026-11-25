@@ -100,6 +100,11 @@ async function createDatabaseFixture(options = {}) {
   const actors = {}, profiles = {};
   let sequence = 0;
   const fixture = { ownerPool, runtimePool, actors, profiles, org, otherOrg, db, roles,
+    // Test-only access to the genuine process environment captured by mounted
+    // CommonJS modules. Jest supplies an isolated process facade, so mounted
+    // outage/restart acceptance must change the same environment the server
+    // reads instead of silently changing only Jest's facade.
+    runtimeProcess: hostProcess,
     async cleanup() {
       await db.close(); await runtimePool.end(); await ownerPool.end(); await database.cleanup();
       const cleanupAdmin = new Client({ connectionString: process.env.M19_PG_ADMIN_URL });

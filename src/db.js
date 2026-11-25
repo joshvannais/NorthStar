@@ -1045,6 +1045,15 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
           'public.canonical_automation_store_historical_run_binding_v1(text),' ||
           'public.canonical_automation_storage_snapshot_v1(uuid,uuid) FROM %I', runtime_role
         );
+        IF pg_catalog.to_regprocedure(
+          'public.canonical_automation_center_v1_read(uuid,uuid,text,uuid)'
+        ) IS NOT NULL THEN
+          EXECUTE pg_catalog.format(
+            'GRANT EXECUTE ON FUNCTION ' ||
+            'public.canonical_automation_center_v1_read(uuid,uuid,text,uuid) TO %I',
+            runtime_role
+          );
+        END IF;
       END IF;
       IF pg_catalog.to_regclass('public.canonical_forecast_settings_revisions_v1') IS NOT NULL THEN
         EXECUTE pg_catalog.format(
@@ -7474,6 +7483,19 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
          AND NOT has_function_privilege($1,'public.canonical_automation_store_historical_run_binding_v1(text)','EXECUTE')
          AND NOT has_function_privilege($1,'public.canonical_automation_storage_snapshot_v1(uuid,uuid)','EXECUTE')
        )) AS automation_authority_private,
+        (to_regprocedure('public.canonical_automation_center_v1_read(uuid,uuid,text,uuid)') IS NULL OR (
+          has_function_privilege($1,
+            'public.canonical_automation_center_v1_read(uuid,uuid,text,uuid)','EXECUTE')
+          AND NOT EXISTS (
+            SELECT 1 FROM pg_proc function_value
+            CROSS JOIN LATERAL aclexplode(COALESCE(function_value.proacl,
+              acldefault('f',function_value.proowner))) privilege_value
+            WHERE function_value.oid=to_regprocedure(
+              'public.canonical_automation_center_v1_read(uuid,uuid,text,uuid)')
+              AND privilege_value.grantee=0
+              AND privilege_value.privilege_type='EXECUTE'
+          )
+        )) AS automation_center_entry_execute,
        (to_regclass('public.polaris_provider_requests') IS NULL OR (
          NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'SELECT')
          AND NOT has_table_privilege($1, 'public.polaris_provider_monthly_usage', 'INSERT')
@@ -7678,6 +7700,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
       !runtimePrivileges.material_helpers_withheld ||
       !runtimePrivileges.demand_schedule_v1_private ||
       !runtimePrivileges.automation_authority_private ||
+       !runtimePrivileges.automation_center_entry_execute ||
       !runtimePrivileges.polaris_provider_usage_guarded ||
       !runtimePrivileges.table_ddl_withheld || !runtimePrivileges.ledger_withheld ||
       !runtimePrivileges.ledger_sequence_withheld) {

@@ -5,6 +5,7 @@
 // and ordinary browser networking. It never installs a request/response route
 // or substitutes a browser response.
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -21,6 +22,8 @@ fs.mkdirSync(outputRoot, { recursive: true });
 
 const { createDatabaseFixture } = require('../helpers/m23-part9b-overview-fixture');
 const { resolveBrowserRuntime } = require('../helpers/playwright-runtime');
+const canonical = require('../../src/automation/canonicalJson');
+const policyContract = require('../../docs/architecture/MISSION_28_PART2A_CANONICAL_AUTOMATION_POLICY.json');
 const result = {
   contract: 'mission28.part14f.automation-center-browser-acceptance.v1',
   engine, pass: false, requestInterception: false, responseInterception: false,
@@ -41,7 +44,7 @@ function observe(page, label, origin) {
   page.on('console', message => {
     if (message.type() !== 'error') return;
     var value = `${label}: ${message.text()}`;
-    if (/Failed to load resource:[\s\S]*\b(?:403|409|503)\b/.test(value)) {
+    if (/Failed to load resource:[\s\S]*\b(?:400|403|409|503)\b/.test(value)) {
       result.expectedConsoleErrors.push(value); return;
     }
     result.consoleErrors.push(value);
@@ -61,6 +64,23 @@ async function settled(page) {
   await page.locator('#automationMain').waitFor();
   await page.waitForFunction(() => document.querySelector('#automationMain')?.getAttribute('aria-busy') === 'false');
   await page.waitForFunction(() => document.querySelector('#automationStatus')?.dataset.state !== 'loading');
+}
+function paidPolicy(tenantId) {
+  const policy = JSON.parse(JSON.stringify(policyContract.canonicalExamples[0]));
+  policy.tenantId = tenantId;
+  policy.policyId = crypto.randomUUID();
+  delete policy.canonicalDigest;
+  policy.canonicalDigest = canonical.digest(policyContract.canonicalization.namespace, policy);
+  return policy;
+}
+async function seedPaidAutomationEvidence() {
+  const policy = paidPolicy(fixture.actors.owner.organizationId);
+  const stored = (await fixture.ownerPool.query(
+    'SELECT public.canonical_automation_store_policy_v1($1) result',
+    [canonical.canonicalize(policy)]
+  )).rows[0].result;
+  assert.equal(stored.state, 'stored');
+  assert.equal(stored.canonicalDigest, policy.canonicalDigest);
 }
 async function renderedAudit(page, mode) {
   const audit = await page.evaluate(() => {
@@ -84,6 +104,9 @@ async function renderedAudit(page, mode) {
       statusRole: document.querySelector('#automationStatus')?.getAttribute('role'),
       statusLive: document.querySelector('#automationStatus')?.getAttribute('aria-live'),
       pageTheme: document.documentElement.dataset.theme,
+      styleUrls: Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(link => {
+        var url = new URL(link.href); return url.pathname + url.search;
+      }),
       summaryHidden: document.querySelector('#automationSummary')?.hidden,
       automationText: document.querySelector('#automationMain')?.innerText || '',
     };
@@ -96,6 +119,9 @@ async function renderedAudit(page, mode) {
   assert.equal(audit.statusRole, 'status');
   assert.equal(audit.statusLive, 'polite');
   assert.equal(audit.pageTheme, mode.theme);
+  ['/css/demo-runtime.css', '/css/style.css', '/css/site-professionalism.css'].forEach(function (asset) {
+    assert.ok(audit.styleUrls.includes(asset + '?v=m28-part14f-browser-20261125'), asset + ' version');
+  });
   assert.equal(audit.summaryHidden, false);
   assert.equal(audit.headings[0]?.level, 1);
   assert.doesNotMatch(audit.automationText,
@@ -104,6 +130,25 @@ async function renderedAudit(page, mode) {
   assert.match(aria, /heading "Automation Center" \[level=1\]/);
   assert.match(aria, /heading "Choose what you want NorthStar to prepare" \[level=2\]/);
   return { ...audit, ariaLines: aria.split(/\r?\n/).length };
+}
+async function submitPreviewWithKeyboard(page, button, expectedStatus) {
+  await button.waitFor({ state: 'visible' });
+  assert.equal(await button.isEnabled(), true);
+  await button.scrollIntoViewIfNeeded();
+  await button.focus();
+  assert.equal(await button.evaluate(node => node === document.activeElement), true);
+  const pending = page.waitForResponse(response =>
+    response.request().method() === 'POST' && /automation-center\/preview$/.test(new URL(response.url()).pathname));
+  await page.keyboard.press('Enter');
+  const response = await pending;
+  assert.equal(response.status(), expectedStatus);
+  return response;
+}
+async function assertPreviewReady(page) {
+  await page.locator('#automationPreview').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'automationPreview');
+  assert.match(await page.locator('#previewBoundary').innerText(), /not saved or active/i);
+  assert.match(await page.locator('#automationStatus').innerText(), /Nothing was saved, activated, queued, sent, or charged/i);
 }
 async function keyboardAndPreview(page) {
   const skip = page.locator('.automation-skip');
@@ -115,16 +160,46 @@ async function keyboardAndPreview(page) {
   const disclosure = page.locator('#customSetupDisclosure summary');
   await disclosure.focus(); await page.keyboard.press('Enter');
   assert.equal(await page.locator('#customSetupDisclosure').getAttribute('open'), '');
-  const previewResponse = page.waitForResponse(response =>
-    response.request().method() === 'POST' && /automation-center\/preview$/.test(new URL(response.url()).pathname));
-  await page.getByRole('button', { name: 'Preview this setup' }).first().click();
-  const response = await previewResponse;
-  assert.equal(response.status(), 200);
-  await page.locator('#automationPreview').waitFor({ state: 'visible' });
-  assert.equal(await page.evaluate(() => document.activeElement?.id), 'automationPreview');
-  assert.match(await page.locator('#previewBoundary').innerText(), /not saved or active/i);
-  assert.match(await page.locator('#automationStatus').innerText(), /Nothing was saved, activated, queued, sent, or charged/i);
-  return { skipLinkMovedFocusToMain: true, previewFocused: true, noEffectBoundaryRendered: true };
+  const cards = page.locator('#automationTemplates .automation-template');
+  assert.equal(await cards.count(), 4);
+  const templates = [];
+  for (let index = 0; index < await cards.count(); index += 1) {
+    const card = cards.nth(index);
+    const name = (await card.getByRole('heading', { level: 3 }).innerText()).trim();
+    await submitPreviewWithKeyboard(page, card.getByRole('button', { name: 'Preview this setup' }), 200);
+    await assertPreviewReady(page);
+    templates.push({ name, previewFocused: true, noEffectBoundaryRendered: true });
+  }
+
+  await page.locator('#setupName').fill('Bounded owner work review');
+  await page.locator('#setupSource').selectOption('mission23_work_execution');
+  await page.locator('#setupAction').selectOption('internal_read_digest_task');
+  await page.locator('#setupRecipient').selectOption('tenant_owner');
+  await page.locator('#setupChannel').selectOption('in_app_passive');
+  await page.locator('#setupTiming').selectOption('review_now');
+  await page.locator('#setupDailyLimit').fill('3');
+  await submitPreviewWithKeyboard(page, page.locator('#setupPreview'), 200);
+  await assertPreviewReady(page);
+  assert.match(await page.locator('#previewSummary').innerText(), /work progress and completion/i);
+  assert.match(await page.locator('#previewDetails').innerText(), /At most 3 items per day/i);
+  const validSummary = await page.locator('#previewSummary').innerText();
+
+  await page.locator('#setupDailyLimit').fill('26');
+  await submitPreviewWithKeyboard(page, page.locator('#setupPreview'), 400);
+  await page.waitForFunction(() => document.querySelector('#automationStatus')?.dataset.state === 'validation');
+  assert.equal(await page.locator('#automationPreview').isHidden(), true);
+  assert.equal(await page.locator('#previewSummary').innerText(), '');
+  assert.equal(await page.locator('#previewDetails').locator('dt,dd').count(), 0);
+  assert.equal(await page.locator('#previewStops').locator('li').count(), 0);
+  assert.equal(await page.locator('#previewBoundary').innerText(), '');
+  assert.equal((await page.locator('#automationMain').innerText()).includes(validSummary), false);
+
+  await page.locator('#setupDailyLimit').fill('2');
+  await submitPreviewWithKeyboard(page, page.locator('#setupPreview'), 200);
+  await assertPreviewReady(page);
+  assert.match(await page.locator('#previewDetails').innerText(), /At most 2 items per day/i);
+  return { skipLinkMovedFocusToMain: true, templates, customValid: true,
+    invalidBoundedInputStatus: 400, invalidClearedPriorPreview: true, customRecovery: true };
 }
 async function action(page, actionName) {
   const button = page.locator(`[data-automation-demo-action="${actionName}"]`);
@@ -212,6 +287,8 @@ async function databaseErrorAndRecovery(page) {
   return { unavailableClearedPriorSummary: true, explicitPoolRecoveryRendered: true };
 }
 async function paidAuthorityLossAndRecovery(page) {
+  assert.equal(await page.locator('#summaryPolicies').innerText(), '1');
+  assert.equal(await page.locator('#automationPolicies article').count(), 1);
   await fixture.ownerPool.query("UPDATE organization_memberships SET role='member' WHERE id=$1",
     [fixture.actors.owner.actorUserId]);
   try {
@@ -220,18 +297,23 @@ async function paidAuthorityLossAndRecovery(page) {
     await page.locator('#automationRefresh').click(); await denied;
     await page.waitForFunction(() => document.querySelector('#automationStatus')?.dataset.state === 'error');
     assert.equal(await page.locator('#automationSummary').isHidden(), true);
+    assert.equal(await page.locator('#automationPolicies article').count(), 0);
   } finally {
     await fixture.ownerPool.query("UPDATE organization_memberships SET role='owner' WHERE id=$1",
       [fixture.actors.owner.actorUserId]);
   }
   await page.locator('#automationRefresh').click(); await settled(page);
   assert.equal(await page.locator('#automationSummary').isVisible(), true);
-  return { forbiddenClearedPriorTenantData: true, restoredOwnerRecovered: true };
+  assert.equal(await page.locator('#summaryPolicies').innerText(), '1');
+  assert.equal(await page.locator('#automationPolicies article').count(), 1);
+  return { populatedPolicyBeforeLoss: true, forbiddenClearedPriorTenantData: true,
+    restoredOwnerRecovered: true, populatedPolicyRecovered: true };
 }
 
 (async () => {
   try {
     fixture = await createDatabaseFixture();
+    await seedPaidAutomationEvidence();
     server = fixture.app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
     const origin = `http://127.0.0.1:${server.address().port}`;
     const runtime = resolveBrowserRuntime(engine);
@@ -276,7 +358,8 @@ async function paidAuthorityLossAndRecovery(page) {
         const shot = path.join(outputRoot, `${label}.png`); await page.screenshot({ path: shot, fullPage: true });
         result.screenshots.push(shot);
         result.cases.push({ label, direct: true, reload: true, backForward: true, deepLink: true,
-          responsive: true, theme: mode.theme, accessibility: true, ariaLines: second.ariaLines,
+          responsive: true, theme: mode.theme, accessibility: true, warmCacheAssetVersioning: true,
+          ariaLines: second.ariaLines,
           firstStatus: first.summaryHidden ? 'hidden' : 'rendered', finalStatus: second.summaryHidden ? 'hidden' : 'rendered',
           workflowReceipts });
         await context.close();

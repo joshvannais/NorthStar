@@ -52,10 +52,17 @@ engine/surface/layout/theme slots executes its full applicable workflow; no
 stateful journey is restricted to a preferred layout or theme.
 
 The keyboard journey reaches the skip link, transfers focus to main, opens the
-custom disclosure, prepares a real no-effect preview, and confirms focus moves
-to the result. The paid flow uses the real owner session and CSRF boundary. A
-real isolated membership downgrade proves prior paid data clears on lost read
-authority and a restored exact owner membership recovers by explicit refresh.
+custom disclosure, activates every one of the four catalog templates through
+an ordinarily focused button, and confirms each no-effect result receives
+focus. It then fills every bounded custom field, submits a valid preview,
+submits an out-of-range daily limit, proves the prior preview is exhaustively
+cleared on the exact 400 validation response, and explicitly recovers with a
+corrected valid preview. The paid flow uses the real owner session and CSRF
+boundary. A tenant policy stored through the accepted canonical function makes
+the paid positive control non-empty. A real isolated membership downgrade
+proves that populated policy data clears on lost read authority and that a
+restored exact owner membership recovers the same tenant-private projection by
+explicit refresh.
 
 The demo journey uses only buttons rendered from exact allowed actions. It
 exercises source change/correction, pause/resume, safeguard/recovery, virtual
@@ -68,25 +75,33 @@ recovery with saved fictional authority unchanged.
 
 Writer execution passed on exact Node 22.23.3 and Playwright Core 1.62.1. The
 Chrome matrix passed 8/8 paid/demo layout-theme cases with all four paid and
-all four demo workflow slots executed and 1,444 same-origin requests and 1,444
+all four demo workflow slots executed and 1,492 same-origin requests and 1,492
 responses. Playwright WebKit 26.5 revision 2336 passed 8/8 cases with all four
-paid and all four demo workflow slots executed and 900 same-origin requests
-and 900 responses. Each engine captured eight screenshots and recorded zero
-page errors, zero unexpected console errors, zero external-origin requests and
-twelve expected browser console messages: four each from the deliberately
-exercised fail-closed 403, 409 and 503 HTTP responses. No request or response
-interception was installed. The external writer result ledgers are bound by
+paid and all four demo workflow slots executed and 948 same-origin requests
+and 948 responses. Every slot exercised all four catalog templates plus valid,
+invalid and corrected custom setup submissions. Each engine captured eight
+screenshots and recorded zero page errors, zero unexpected console errors,
+zero external-origin requests and twenty expected browser console messages:
+eight deliberate bounded-input 400 responses and four each of the deliberately
+exercised fail-closed 403, 409 and 503 responses. No request or response
+interception was installed. The shared styles changed by Part 14F are bound to
+an explicit Part 14F version in the common paid/demo Automation Center
+document; every slot reloaded and traversed history with that versioned asset
+set, so a warm public cache cannot retain the prior target geometry on this
+surface. The external writer result ledgers are bound by
 SHA-256
-`A07301B02E8E3AEE5652432A4B0CB5095A70ABE2B9D169DDCE93C6AC88FBC009`
+`BD692D00B61A3BB9EB7310FBA21E07A25979436850E673C53DF78C03177303AC`
 for Chrome and
-`A814B411C1235033019B077FF0ED1492E1CC10365FFBCB6CB063D56A7B215A4B`
+`84A0B854E55C5BC6AF355959806CEC46E964D16D97C740C247A43F54C094015A`
 for WebKit.
 
 The rendered acceptance exposed and corrected three shared accessibility
 defects before the final green runs: the theme switch and mobile navigation
 open/close controls were shorter than 44 pixels, and compact-demo scenario
 selectors could become narrower than 44 pixels at the mobile layout. These
-writer results are browser-automation evidence only. They cannot constitute
+browser runs also exposed and corrected the canonical preview validation
+adapter's status mapping so an invalid bounded setup remains a truthful 400,
+not an internal error. These writer results are browser-automation evidence only. They cannot constitute
 physical Safari/device evidence, manual assistive-technology review, founder
 visual approval, private-production acceptance, provider/live evidence,
 professional review, or a production performance claim.

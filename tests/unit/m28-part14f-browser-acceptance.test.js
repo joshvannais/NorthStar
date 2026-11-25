@@ -2,7 +2,11 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const express = require('express');
+const request = require('supertest');
 const artifact = require('../../docs/architecture/MISSION_28_PART14F_BROWSER_ACCEPTANCE.json');
+const { errorHandler } = require('../../src/middleware/errorHandler');
+const { createAutomationCenterRouter } = require('../../src/routes/automationCenter');
 const root = path.resolve(__dirname, '../..');
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8');
 const browser = read('tests/browser/m28-part14f-automation-center-acceptance.js');
@@ -11,6 +15,29 @@ const html = read('public/dashboard/automation.html');
 const roadmap = read('docs/roadmap/MISSION_28_BUSINESS_AUTOMATION.md');
 
 describe('Mission 28 Part 14F genuine browser acceptance', () => {
+  test('canonical error middleware preserves bounded preview validation as 400', async () => {
+    const app = express(); app.use(express.json());
+    app.use('/api/v1/automation-center', createAutomationCenterRouter({
+      tenantAuth: (req, _res, next) => {
+        req.user = { id: '00000000-0000-4000-8000-000000000001' };
+        req.userRole = 'owner'; req.tenantContext = {
+          organizationId: '00000000-0000-4000-8000-000000000028',
+          userId: '00000000-0000-4000-8000-000000000001', role: 'owner',
+        };
+        req.orgId = req.tenantContext.organizationId;
+        req.authSession = { id: '00000000-0000-4000-8000-000000000002' };
+        req.requestId = 'part14f-preview-validation'; next();
+      },
+      mutationAuth: (_req, _res, next) => next(), throttle: (_req, _res, next) => next(),
+    }));
+    app.use(errorHandler);
+    const response = await request(app).post('/api/v1/automation-center/preview').send({
+      templateId: 'custom', name: 'Bounded owner work review',
+      sourceClassId: 'mission23_work_execution', actionFamily: 'internal_read_digest_task',
+      recipientClass: 'tenant_owner', channelId: 'in_app_passive', timing: 'review_now', dailyLimit: 26,
+    }).expect(400);
+    expect(response.body.error).toMatchObject({ code: 'AUTOMATION_CENTER_PREVIEW_INVALID' });
+  });
   test('binds the exact released Part 14E baseline', () => {
     expect(artifact.base).toMatchObject({
       acceptedSourceHead: 'd63b9ff59f6af6aae63e6eeaa2f9683354245eea',
@@ -65,6 +92,21 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
     expect(browser).toContain('finalStatus: second.summaryHidden');
     expect(browser).toContain("'provider_step', 'provider_step', 'stop', 'reset_automation'");
   });
+  test('uses ordinary keyboard activation for every template and the bounded custom setup', () => {
+    expect(browser).toContain("assert.equal(await cards.count(), 4)");
+    expect(browser).toContain("await page.keyboard.press('Enter')");
+    expect(browser).not.toContain("getByRole('button', { name: 'Preview this setup' }).first().click()");
+    expect(browser).toContain("await page.locator('#setupName').fill('Bounded owner work review')");
+    expect(browser).toContain("await page.locator('#setupDailyLimit').fill('26')");
+    expect(browser).toContain('invalidClearedPriorPreview: true');
+    expect(browser).toContain('customRecovery: true');
+  });
+  test('seeds and verifies meaningful tenant-private paid content before clearing it', () => {
+    expect(browser).toContain('canonical_automation_store_policy_v1');
+    expect(browser).toContain("assert.equal(await page.locator('#summaryPolicies').innerText(), '1')");
+    expect(browser).toContain("assert.equal(await page.locator('#automationPolicies article').count(), 0)");
+    expect(browser).toContain('populatedPolicyRecovered: true');
+  });
   test('shared navigation controls retain the 44px rendered target minimum', () => {
     const style = read('public/css/style.css');
     const professionalism = read('public/css/site-professionalism.css');
@@ -73,6 +115,13 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
     expect(style).toMatch(/\.mobile-menu-close\s*\{[\s\S]*?min-width:\s*44px;[\s\S]*?min-height:\s*44px;/);
     expect(professionalism).toMatch(/\.northstar-theme-switch\s*\{[\s\S]*?height:\s*44px\s*!important;/);
     expect(demo).toMatch(/@media\(max-width:600px\)[\s\S]*?\.compact-demo \.northstar-demo-scenario-field\s*\{\s*grid-template-columns:minmax\(0,1fr\);/);
+  });
+  test('version-binds every changed shared stylesheet through the paid and demo automation document', () => {
+    for (const asset of ['demo-runtime.css', 'style.css', 'site-professionalism.css']) {
+      expect(html).toContain(`/css/${asset}?v=m28-part14f-browser-20261125`);
+    }
+    expect(browser).toContain('warmCacheAssetVersioning: true');
+    expect(browser).toContain("asset + '?v=m28-part14f-browser-20261125'");
   });
   test('executes the complete bounded demo control families through rendered buttons', () => {
     for (const action of ['source_change', 'source_correct', 'pause', 'resume', 'suppress', 'recover',

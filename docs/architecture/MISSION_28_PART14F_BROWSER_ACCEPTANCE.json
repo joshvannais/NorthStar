@@ -50,26 +50,30 @@
     "chrome": {
       "pass": true,
       "cases": 8,
-      "requests": 1074,
-      "responses": 1074,
+      "paidWorkflowSlots": 4,
+      "demoWorkflowSlots": 4,
+      "requests": 1444,
+      "responses": 1444,
       "pageErrors": 0,
       "unexpectedConsoleErrors": 0,
-      "expectedFailClosedHttpConsoleMessages": 3,
+      "expectedFailClosedHttpConsoleMessages": 12,
       "screenshots": 8,
-      "resultSha256": "183730AE7811F26008A82FD787C0826DD9CCCF9E032FA5B84258492EB05CFB90"
+      "resultSha256": "A07301B02E8E3AEE5652432A4B0CB5095A70ABE2B9D169DDCE93C6AC88FBC009"
     },
     "playwrightWebkit": {
       "browserRevision": 2336,
       "browserVersion": "26.5",
       "pass": true,
       "cases": 8,
-      "requests": 554,
-      "responses": 554,
+      "paidWorkflowSlots": 4,
+      "demoWorkflowSlots": 4,
+      "requests": 900,
+      "responses": 900,
       "pageErrors": 0,
       "unexpectedConsoleErrors": 0,
-      "expectedFailClosedHttpConsoleMessages": 3,
+      "expectedFailClosedHttpConsoleMessages": 12,
       "screenshots": 8,
-      "resultSha256": "2E94FCB95BCD5C5E20275E3F5830D82CCA061EF7DB6989C8893993BEC7C56EA5"
+      "resultSha256": "A814B411C1235033019B077FF0ED1492E1CC10365FFBCB6CB063D56A7B215A4B"
     },
     "expectedFailClosedStatuses": [403, 409, 503],
     "requestInterception": false,

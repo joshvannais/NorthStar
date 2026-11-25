@@ -47,7 +47,9 @@ entered directly with a fragment deep link, reloaded, navigated away from and
 returned to with browser history. It validates a single main landmark,
 heading order, live status semantics, named controls, unique IDs, 44-pixel
 interactive targets, no horizontal overflow, owner-readable primary copy and
-an inspectable accessibility snapshot.
+an inspectable accessibility snapshot. Every one of the sixteen
+engine/surface/layout/theme slots executes its full applicable workflow; no
+stateful journey is restricted to a preferred layout or theme.
 
 The keyboard journey reaches the skip link, transfers focus to main, opens the
 custom disclosure, prepares a real no-effect preview, and confirms focus moves
@@ -65,17 +67,19 @@ produces a fail-closed error, followed by explicit pool reinitialization and
 recovery with saved fictional authority unchanged.
 
 Writer execution passed on exact Node 22.23.3 and Playwright Core 1.62.1. The
-Chrome matrix passed 8/8 paid/demo layout-theme cases with 1,074 same-origin
-requests and 1,074 responses. Playwright WebKit 26.5 revision 2336 passed 8/8
-cases with 554 same-origin requests and 554 responses. Each engine captured
-eight screenshots and recorded zero page errors, zero unexpected console
-errors, zero external-origin requests and three expected browser console
-messages from the deliberately exercised fail-closed 403, 409 and 503 HTTP
-responses. No request or response interception was installed. The external
-writer result ledgers are bound by SHA-256
-`183730AE7811F26008A82FD787C0826DD9CCCF9E032FA5B84258492EB05CFB90`
+Chrome matrix passed 8/8 paid/demo layout-theme cases with all four paid and
+all four demo workflow slots executed and 1,444 same-origin requests and 1,444
+responses. Playwright WebKit 26.5 revision 2336 passed 8/8 cases with all four
+paid and all four demo workflow slots executed and 900 same-origin requests
+and 900 responses. Each engine captured eight screenshots and recorded zero
+page errors, zero unexpected console errors, zero external-origin requests and
+twelve expected browser console messages: four each from the deliberately
+exercised fail-closed 403, 409 and 503 HTTP responses. No request or response
+interception was installed. The external writer result ledgers are bound by
+SHA-256
+`A07301B02E8E3AEE5652432A4B0CB5095A70ABE2B9D169DDCE93C6AC88FBC009`
 for Chrome and
-`2E94FCB95BCD5C5E20275E3F5830D82CCA061EF7DB6989C8893993BEC7C56EA5`
+`A814B411C1235033019B077FF0ED1492E1CC10365FFBCB6CB063D56A7B215A4B`
 for WebKit.
 
 The rendered acceptance exposed and corrected three shared accessibility

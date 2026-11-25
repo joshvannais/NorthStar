@@ -124,6 +124,7 @@ async function keyboardAndPreview(page) {
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'automationPreview');
   assert.match(await page.locator('#previewBoundary').innerText(), /not saved or active/i);
   assert.match(await page.locator('#automationStatus').innerText(), /Nothing was saved, activated, queued, sent, or charged/i);
+  return { skipLinkMovedFocusToMain: true, previewFocused: true, noEffectBoundaryRendered: true };
 }
 async function action(page, actionName) {
   const button = page.locator(`[data-automation-demo-action="${actionName}"]`);
@@ -145,25 +146,24 @@ async function reset(page) {
   }
 }
 async function demoWorkflows(page) {
-  await keyboardAndPreview(page);
-  await reset(page); await action(page, 'source_change'); await action(page, 'source_correct');
-  await reset(page); await action(page, 'pause'); await action(page, 'resume');
-  await reset(page); await action(page, 'suppress'); await action(page, 'recover');
-  await reset(page); await action(page, 'advance_time');
-  await reset(page);
-  if (await page.locator('[data-automation-demo-action="provider_step"]').isEnabled()) {
-    await action(page, 'provider_step');
-    if (await page.locator('[data-automation-demo-action="provider_step"]').isEnabled()) {
-      await action(page, 'provider_step');
-    }
-  }
-  await reset(page); await action(page, 'stop');
+  const preview = await keyboardAndPreview(page);
+  const executed = [];
+  const run = async name => { await action(page, name); executed.push(name); };
+  await reset(page); await run('source_change'); await run('source_correct');
+  await reset(page); await run('pause'); await run('resume');
+  await reset(page); await run('suppress'); await run('recover');
+  await reset(page); await run('advance_time');
+  await reset(page); await run('provider_step'); await run('provider_step');
+  await reset(page); await run('stop');
   assert.match(await page.locator('#stopState').innerText(), /^stopped$/i);
   const nonResetControlsDisabled = await page.locator('[data-automation-demo-action]:not([data-automation-demo-action="reset_automation"])')
     .evaluateAll(buttons => buttons.every(button => button.disabled));
   assert.equal(nonResetControlsDisabled, true);
   assert.equal(await page.locator('[data-automation-demo-action="reset_automation"]').isEnabled(), true);
-  await action(page, 'reset_automation');
+  await run('reset_automation');
+  assert.deepEqual(executed, ['source_change', 'source_correct', 'pause', 'resume', 'suppress',
+    'recover', 'advance_time', 'provider_step', 'provider_step', 'stop', 'reset_automation']);
+  return { preview, executed, stoppedControlsDisabled: true, resetRecovered: true };
 }
 async function staleConflict(context, origin) {
   const first = await context.newPage(), stale = await context.newPage();
@@ -179,6 +179,7 @@ async function staleConflict(context, origin) {
   assert.equal(await stale.locator('#automationSummary').isHidden(), true);
   assert.equal(await stale.locator('#automationDemoControls').isHidden(), true);
   await first.close(); await stale.close();
+  return { conflictStatus: 409, staleSummaryCleared: true, staleControlsCleared: true };
 }
 async function delayedRead(page) {
   heldLock = await fixture.ownerPool.connect(); await heldLock.query('BEGIN');
@@ -190,6 +191,7 @@ async function delayedRead(page) {
   await heldLock.query('ROLLBACK'); heldLock.release(); heldLock = null;
   await click; await settled(page);
   assert.equal(await page.locator('#automationSummary').isVisible(), true);
+  return { loadingClearedPriorSummary: true, recoveredAfterLockRelease: true };
 }
 async function databaseErrorAndRecovery(page) {
   const saved = fixture.runtimeProcess.env.DATABASE_URL;
@@ -207,6 +209,7 @@ async function databaseErrorAndRecovery(page) {
   }
   await page.locator('#automationRefresh').click(); await settled(page);
   assert.equal(await page.locator('#automationSummary').isVisible(), true);
+  return { unavailableClearedPriorSummary: true, explicitPoolRecoveryRendered: true };
 }
 async function paidAuthorityLossAndRecovery(page) {
   await fixture.ownerPool.query("UPDATE organization_memberships SET role='member' WHERE id=$1",
@@ -223,6 +226,7 @@ async function paidAuthorityLossAndRecovery(page) {
   }
   await page.locator('#automationRefresh').click(); await settled(page);
   assert.equal(await page.locator('#automationSummary').isVisible(), true);
+  return { forbiddenClearedPriorTenantData: true, restoredOwnerRecovered: true };
 }
 
 (async () => {
@@ -251,6 +255,17 @@ async function paidAuthorityLossAndRecovery(page) {
         await page.goto(`${origin}${route}#automationEvidence`, { waitUntil: 'networkidle' }); await settled(page);
         assert.equal(new URL(page.url()).hash, '#automationEvidence');
         const first = await renderedAudit(page, mode);
+        let workflowReceipts;
+        if (surface === 'paid') {
+          workflowReceipts = { preview: await keyboardAndPreview(page),
+            authority: await paidAuthorityLossAndRecovery(page) };
+        } else {
+          workflowReceipts = { demo: await demoWorkflows(page), delayed: await delayedRead(page),
+            database: await databaseErrorAndRecovery(page), conflict: await staleConflict(context, origin) };
+          await page.reload({ waitUntil: 'networkidle' }); await settled(page); await reset(page);
+          workflowReceipts.conflictRecovery = { reloadedCurrentRevision: true, resetRecovered: true };
+        }
+        await page.goto(`${origin}${route}#automationEvidence`, { waitUntil: 'networkidle' }); await settled(page);
         await page.reload({ waitUntil: 'networkidle' }); await settled(page);
         await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' }); await settled(page);
         await page.goBack({ waitUntil: 'networkidle' }); await settled(page);
@@ -260,17 +275,10 @@ async function paidAuthorityLossAndRecovery(page) {
         const second = await renderedAudit(page, mode);
         const shot = path.join(outputRoot, `${label}.png`); await page.screenshot({ path: shot, fullPage: true });
         result.screenshots.push(shot);
-        if (mode.name === 'desktop-light') {
-          if (surface === 'paid') {
-            await keyboardAndPreview(page); await paidAuthorityLossAndRecovery(page);
-          } else {
-            await demoWorkflows(page); await delayedRead(page); await databaseErrorAndRecovery(page);
-            await staleConflict(context, origin);
-          }
-        }
         result.cases.push({ label, direct: true, reload: true, backForward: true, deepLink: true,
           responsive: true, theme: mode.theme, accessibility: true, ariaLines: second.ariaLines,
-          firstStatus: first.summaryHidden ? 'hidden' : 'rendered' });
+          firstStatus: first.summaryHidden ? 'hidden' : 'rendered', finalStatus: second.summaryHidden ? 'hidden' : 'rendered',
+          workflowReceipts });
         await context.close();
       }
     }

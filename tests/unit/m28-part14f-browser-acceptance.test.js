@@ -58,6 +58,13 @@ describe('Mission 28 Part 14F genuine browser acceptance', () => {
     expect(browser).toContain('isMobile: Boolean(mode.isMobile)');
     expect(browser).toContain('hasTouch: Boolean(mode.isMobile)');
   });
+  test('executes each applicable workflow in every engine-surface-layout-theme slot', () => {
+    expect(browser).not.toContain("mode.name === 'desktop-light'");
+    expect(browser).toContain('workflowReceipts = { preview: await keyboardAndPreview(page)');
+    expect(browser).toContain('workflowReceipts = { demo: await demoWorkflows(page)');
+    expect(browser).toContain('finalStatus: second.summaryHidden');
+    expect(browser).toContain("'provider_step', 'provider_step', 'stop', 'reset_automation'");
+  });
   test('shared navigation controls retain the 44px rendered target minimum', () => {
     const style = read('public/css/style.css');
     const professionalism = read('public/css/site-professionalism.css');

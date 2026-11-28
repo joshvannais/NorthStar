@@ -1,0 +1,1408 @@
+{
+  "contract": "northstar.mission29.part1a.authority-inventory.v1",
+  "status": "writer_candidate_independent_audit_and_release_pending",
+  "scope": {
+    "mission": 29,
+    "parts": 8,
+    "slices": 44,
+    "partSliceCounts": [
+      6,
+      7,
+      5,
+      5,
+      5,
+      4,
+      6,
+      6
+    ],
+    "exactOrder": [
+      "1A",
+      "1B",
+      "1C",
+      "1D",
+      "1E",
+      "1F",
+      "2A",
+      "2B",
+      "2C",
+      "2D",
+      "2E",
+      "2F",
+      "2G",
+      "3A",
+      "3B",
+      "3C",
+      "3D",
+      "3E",
+      "4A",
+      "4B",
+      "4C",
+      "4D",
+      "4E",
+      "5A",
+      "5B",
+      "5C",
+      "5D",
+      "5E",
+      "6A",
+      "6B",
+      "6C",
+      "6D",
+      "7A",
+      "7B",
+      "7C",
+      "7D",
+      "7E",
+      "7F",
+      "8A",
+      "8B",
+      "8C",
+      "8D",
+      "8E",
+      "8F"
+    ],
+    "currentSlice": "1A",
+    "nextSliceAfterTerminalAcceptance": "1B",
+    "runtimeChanges": 0
+  },
+  "authority": {
+    "userApproval": "Proceed",
+    "approvalRecordedAt": "2026-11-28T12:17:41.714Z",
+    "originalSourcePath": "docs/roadmap/MISSION_29_APPROVED_SOURCE.md",
+    "originalSourceRawSha256": "636841534E6F6AC88E37FD2E10D86E4B54EF3F8D53CF78CC963648C3CD21C391",
+    "repositorySourceRule": "Complete approved original bytes copied unchanged; raw Git blob must equal original SHA256. Proposal status/request wording is historical provenance superseded by explicit approval reconciliation.",
+    "externalFrozenAuthoritySha256": "EA40A986756C3057D8250FDB5A7283134F98502CC2A773FCBA1A059260AE4A7F",
+    "originalEightPhases": [
+      "Multi-Location Architecture",
+      "Permissions and Roles",
+      "Regional Intelligence",
+      "Franchise Support",
+      "Enterprise Reporting",
+      "White Label Support",
+      "Enterprise API",
+      "Validation"
+    ],
+    "completeApprovedSourceRetained": true,
+    "noSliceScopeOrOrderChanged": true,
+    "sourceWhitespaceDisposition": {
+      "requiredExactBytes": true,
+      "approvedOriginalTrailingBlankLine": true,
+      "defaultDiffCheck": "single blank-at-EOF observation in the unchanged approved source",
+      "otherFourFiles": "normal whitespace check required",
+      "sourceSpecificCheck": "per-command blank-at-eof exclusion only; no config mutation"
+    }
+  },
+  "baseline": {
+    "commit": "94781a2e77e129a1383479ff97e334c399d28b92",
+    "tree": "ea0a17ab51a160da5dc713118fa4d807b9e72a62",
+    "priorAcceptedMission": 28,
+    "priorAcceptedParts": 14,
+    "priorAcceptedSlices": 66,
+    "priorReleasePr": "https://github.com/joshvannais/NorthStar/pull/614",
+    "sourceMigrations": 285,
+    "latestMigration": "289_automation_center_runtime_read_authority_v1.sql",
+    "nextMigrationAbsent": 290,
+    "migration289RawSha256": "47C7AA1BC02C4DBC0CE03F3C57A014B16080070792E503F5616DF97B1DD52B08",
+    "externalReleaseCheckpointSha256": "70B776943EA6F0B0F8366B3927FDFF1E8E4BB6EC60D8997F6AF68EAC00106617",
+    "historicalSourceArtifacts": "Earlier Mission 28 documents capture pre-release candidate state. Subsequent terminal acceptance is evidenced by PR614; 1A overwrites neither."
+  },
+  "inspection": {
+    "mode": "static source/import/route/schema/document inventory at exact baseline; writer evidence only",
+    "mountedScope": "production composition, paid account/workforce/Business Profile/canonical operational/learning/forecast/financial/automation/integration routes, shared navigation, isolated demo consumers",
+    "notFreshEvidence": [
+      "no disposable PostgreSQL execution",
+      "no mounted HTTP/browser execution",
+      "no private production inspection",
+      "no hosted CI query",
+      "no provider/sandbox/live call",
+      "no founder visual approval"
+    ],
+    "negativeClaimBoundary": "Future Mission 29 deltas are not delivered by this docs-only slice. An unmounted router, profile label, worker-region string or Enterprise rate-limit label does not establish an enterprise feature/access grant. This is not an exhaustive runtime/security acceptance campaign."
+  },
+  "inventory": [
+    {
+      "id": "production-composition",
+      "current": "The configured production command enters the source-controlled startup shell, which selects productionChild; that child loads src/server.js. Server registration, not a standalone route filename, determines the inspected mount graph.",
+      "refs": [
+        "production-command",
+        "production-launch",
+        "production-child",
+        "account-mount",
+        "api-mount"
+      ],
+      "delta": "Preserve canonical composition and route precedence. 1A changes no startup, server, route or deployment bytes.",
+      "slices": [
+        "1A",
+        "1F",
+        "8C",
+        "8F"
+      ]
+    },
+    {
+      "id": "organization-and-company",
+      "current": "Organizations and versioned canonical_business_profiles already provide tenant authority. Profile reads and versioned writes take organizationId; the schema has one active Business Profile per organization. Organization/company authority is an implemented baseline feature.",
+      "refs": [
+        "organization-schema",
+        "organization-profile",
+        "organization-write",
+        "business-profile-mount"
+      ],
+      "delta": "1B must define enterprise relationships while preserving company/tenant authority. No parent-company access or record adoption is established by 1A.",
+      "slices": [
+        "1B",
+        "1C",
+        "1D"
+      ]
+    },
+    {
+      "id": "actor-session-membership",
+      "current": "The account repository reloads durable session, user, organization and exact membership identities. The browser context is frozen from that authority. Existing membership schema includes a unique-user constraint; current request context contains organizationId rather than an enterprise location/region selector.",
+      "refs": [
+        "membership-schema",
+        "membership-unique",
+        "session-repository",
+        "cookie-claims",
+        "tenant-context",
+        "session-auth"
+      ],
+      "delta": "1C/2C must reconcile existing identity/constraint compatibility before defining added scopes. A UI label or supplied header cannot grant them. 1A makes no membership or schema change.",
+      "slices": [
+        "1C",
+        "2C",
+        "2F"
+      ]
+    },
+    {
+      "id": "locations-and-offices",
+      "current": "Business Profile already validates headquarters/additionalOffices. Workforce profileReferences derives headquarters and office IDs from the active profile; canonicalLocation validates against those references. Workforce schema and asset projections carry home_location_id/homeLocationId. These references do not establish enterprise location lifecycle or access grants.",
+      "refs": [
+        "location-profile",
+        "workforce-location",
+        "workforce-location-match",
+        "workforce-schema",
+        "asset-location",
+        "office-ui"
+      ],
+      "delta": "1B–1F must preserve existing IDs/history and define explicit enterprise identity, lifecycle and request context. 1A introduces no registry, remapping or automatic adoption.",
+      "slices": [
+        "1B",
+        "1C",
+        "1D",
+        "1E",
+        "1F"
+      ]
+    },
+    {
+      "id": "workforce-and-work-profiles",
+      "current": "Mounted workforce reads require tenant access and team/read permission. Access changes have an owner-gated route. Work-profile routes have their own tenant authentication. Workforce operational role, crew role, home location and access role remain distinct.",
+      "refs": [
+        "workforce-mount",
+        "workforce-read",
+        "workforce-access",
+        "work-profile",
+        "workforce-schema"
+      ],
+      "delta": "Enterprise roles/delegation must not turn operational labels into capabilities or expose another worker/location. Preserve workforce ownership and individual accounts.",
+      "slices": [
+        "1C",
+        "2A",
+        "2B",
+        "2C",
+        "2G"
+      ]
+    },
+    {
+      "id": "permissions-and-entitlements",
+      "current": "Canonical browser access roles are owner/admin/member/viewer; migration020 also constrains durable access roles to those four while preserving separate workforce operational roles. hasPermission and navigationForRole use the server matrix. Account mutation policy separately evaluates subscription state. Rate-limit tier labels are availability controls, not a complete commercial entitlement catalogue.",
+      "refs": [
+        "fixed-roles",
+        "canonical-role-schema",
+        "permission-check",
+        "navigation-permission",
+        "subscription",
+        "account-policy",
+        "availability-limit"
+      ],
+      "delta": "2A–2G must define versioned scoped capabilities/custom roles/assurance without rewriting earlier fixed matrices or deriving access from a plan label. Commercial prices, seats and allowances remain unsettled.",
+      "slices": [
+        "2A",
+        "2B",
+        "2C",
+        "2D",
+        "2E",
+        "2F",
+        "2G"
+      ]
+    },
+    {
+      "id": "operations-and-canonical-records",
+      "current": "Server mounts Command Center, Today and operational overview. Command Center builds the workspace from organization/actor/session and scheduling authority. Today derives actor/worker/day server-side. Operational overview passes organization/actor/role/session to the canonical read. CanonicalPolaris requestContext is organization-bound.",
+      "refs": [
+        "operational-mount",
+        "command-center",
+        "today",
+        "operational-overview",
+        "canonical-context",
+        "operator-context"
+      ],
+      "delta": "Enterprise context must extend compatible consumers deliberately while retaining scheduling/work/estimate authority. Regional/franchise groupings do not create operation authority.",
+      "slices": [
+        "1F",
+        "3B",
+        "3D",
+        "4B",
+        "8C"
+      ]
+    },
+    {
+      "id": "learning-and-forecasting",
+      "current": "Existing learning and forecast drilldown routers are canonical consumers. Forecast drilldown passes tenant/actor/role/session to the canonical PostgreSQL read; learning derives organization context from tenantContext.",
+      "refs": [
+        "learning",
+        "forecast-mount",
+        "forecast"
+      ],
+      "delta": "Parts 3/5 consume accepted learning/forecast evidence. 1A delivers no regional aggregation, cross-company learning pool, new forecast formula or causality claim.",
+      "slices": [
+        "3B",
+        "3C",
+        "3E",
+        "5A",
+        "5B"
+      ]
+    },
+    {
+      "id": "financial-and-enterprise-reporting",
+      "current": "Invoice/receivable reporting is already mounted. Its router applies onboarded account authentication, owner/admin role, exact read input and tenant/actor-keyed throttle. Existing financial reports are not absent merely because Mission 29 enterprise reporting is planned.",
+      "refs": [
+        "financial-mount",
+        "financial-reporting"
+      ],
+      "delta": "3B/5A–5E must define authorized enterprise coverage/aggregation without rewriting financial truth, mixing currencies/units or converting unavailable coverage into zero.",
+      "slices": [
+        "3B",
+        "5A",
+        "5B",
+        "5C",
+        "5D",
+        "5E"
+      ]
+    },
+    {
+      "id": "automation-and-approval-boundaries",
+      "current": "Automation Center supplies current organization, actor, access role and session to its read. Owner/admin and automation permission gates are distinct. Its preview route is explicitly pure and does not save a policy or cause an external effect.",
+      "refs": [
+        "automation-center"
+      ],
+      "delta": "2D/7D thresholds, delegation and API handoffs cannot bypass accepted currentness, approval, stop or effect boundaries. 1A adds no action authority.",
+      "slices": [
+        "2D",
+        "2F",
+        "7D",
+        "8C"
+      ]
+    },
+    {
+      "id": "integrations-and-governance",
+      "current": "Canonical integration status/catalogue reads are mounted and tenant/permission gated. organizationAuthority resolves provider/external identity to one active organization-owned binding. Existing registry/catalogue/status code does not prove every enterprise connector live.",
+      "refs": [
+        "integration-mount",
+        "integration-status",
+        "integration-owner",
+        "integration-catalogue"
+      ],
+      "delta": "7E governs enterprise integration grants/scope/revocation over accepted authorities. 1A inspects no provider account or credential and performs no connector, domain or sender change.",
+      "slices": [
+        "2F",
+        "6C",
+        "7B",
+        "7E"
+      ]
+    },
+    {
+      "id": "canonical-versus-historical-public-api",
+      "current": "Versioned canonical business APIs are mounted. Historical publicApi.js still exists but the inspected production import/registration graph does not load it. Compatibility and retirement routers precede remaining apiRoutes. Current browser auth rejects user Bearer credentials; old router comments are not active enterprise machine API evidence.",
+      "refs": [
+        "canonical-mount",
+        "legacy-public-api",
+        "retirement-mount",
+        "legacy-retirement",
+        "api-mount",
+        "session-auth"
+      ],
+      "delta": "7A–7F must define exact enterprise principal/API contracts while retaining current canonical routes. Do not activate a file-era router or revive legacy demo API-key behavior as a shortcut.",
+      "slices": [
+        "7A",
+        "7B",
+        "7C",
+        "7D",
+        "7E",
+        "7F"
+      ]
+    },
+    {
+      "id": "ui-branding-and-scope",
+      "current": "Shared route/navigation contracts render the NorthStar shell, load the account session and use server-projected navigation. Business Profile records company.logo and office fields. Those fields do not constitute shared white-label administration or an authorized region/location switcher.",
+      "refs": [
+        "shared-routes",
+        "navigation-brand",
+        "navigation-session",
+        "company-logo",
+        "office-ui"
+      ],
+      "delta": "1E/6A–6D must define scoped context/branding lifecycle and shared rendering explicitly. 1A adds no DNS, certificate, sender, branding takeover or UI behavior.",
+      "slices": [
+        "1E",
+        "6A",
+        "6B",
+        "6C",
+        "6D"
+      ]
+    },
+    {
+      "id": "demo-and-future-enterprise-deltas",
+      "current": "Demo routes mount through apiRoutes and share established page files/modules with paid surfaces. Demo repository contracts carry tenant/session/generation identities. 1A records future enterprise boundaries without implementing organization hierarchy, regional/franchise governance, custom roles or SSO assurance.",
+      "refs": [
+        "shared-page-mount",
+        "demo-mount",
+        "demo-automation",
+        "demo-repository"
+      ],
+      "delta": "Preserve isolated fictional data/shared engines and existing tenant behavior. All 43 later slices remain not started. Mission 31 guided simulation and Mission 33 operator administration remain separate.",
+      "slices": [
+        "1B",
+        "2E",
+        "3A",
+        "4A",
+        "6A",
+        "7A",
+        "8D"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "production-command",
+      "path": "Dockerfile",
+      "line": 208,
+      "anchor": "CMD [\"/usr/bin/setpriv\"",
+      "rawGitBlobSha256": "BBB420182E01F52A580D47C9B67A1A285A70B3477C153B24B5890D0C9A5A9CA9",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/Dockerfile#L208",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "production-launch",
+      "path": "scripts/start-production.sh",
+      "line": 497,
+      "anchor": "child=\"$CANONICAL_ROOT/src/productionChild.js\"",
+      "rawGitBlobSha256": "97D388EFA5355D97F04C24F91E7F7BC45C2E546402A96F67A45F0AEA0826D4E9",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/scripts/start-production.sh#L497",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "production-child",
+      "path": "src/productionChild.js",
+      "line": 233,
+      "anchor": "const server = require(expectedServer);",
+      "rawGitBlobSha256": "BDE339E4553040677E39BC117E92D95EBC5D05D7E68E9856F9FB72559A8ABD03",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/productionChild.js#L233",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "account-mount",
+      "path": "src/server.js",
+      "line": 475,
+      "anchor": "app.use('/api/auth', createAuthRouter({",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L475",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "workforce-mount",
+      "path": "src/server.js",
+      "line": 480,
+      "anchor": "app.use('/api/workforce', createWorkforceRouter());",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L480",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "operational-mount",
+      "path": "src/server.js",
+      "line": 505,
+      "anchor": "app.use('/api/v1/command-center', createCommandCenterRouter());",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L505",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "forecast-mount",
+      "path": "src/server.js",
+      "line": 525,
+      "anchor": "app.use('/api/v1/forecast/drilldowns', createForecastDrilldownsRouter());",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L525",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "financial-mount",
+      "path": "src/server.js",
+      "line": 557,
+      "anchor": "app.use('/api/v1/customer-financial/reporting',",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L557",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "canonical-mount",
+      "path": "src/server.js",
+      "line": 586,
+      "anchor": "app.use('/api/v1/canonical', createCanonicalRouter({",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L586",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "business-profile-mount",
+      "path": "src/server.js",
+      "line": 597,
+      "anchor": "app.use('/api/v1/business-profile', businessProfileRoutes);",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L597",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "integration-mount",
+      "path": "src/server.js",
+      "line": 600,
+      "anchor": "app.use('/api/v1/integrations', createIntegrationStatusRouter());",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L600",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "retirement-mount",
+      "path": "src/server.js",
+      "line": 603,
+      "anchor": "app.use('/api/v1', createLegacyAuthorityRetirementRouter());",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L603",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "api-mount",
+      "path": "src/server.js",
+      "line": 637,
+      "anchor": "app.use('/api', apiRoutes);",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L637",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "organization-schema",
+      "path": "migrations/005_canonical_organization_authority.sql",
+      "line": 7,
+      "anchor": "CREATE TABLE IF NOT EXISTS canonical_business_profiles",
+      "rawGitBlobSha256": "B45C61D2DA94D6ABA753D3D2BBD1EBF657AF4626FF1BCBABD2E45434E0E529F6",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/migrations/005_canonical_organization_authority.sql#L7",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "organization-profile",
+      "path": "src/services/organizationAuthority.js",
+      "line": 154,
+      "anchor": "async function getActiveBusinessProfile(pool, organizationId)",
+      "rawGitBlobSha256": "1279C99C30E7E38174780B8748738C17424C00797A3F62A63367071502DD14AC",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/services/organizationAuthority.js#L154",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "organization-write",
+      "path": "src/services/organizationAuthority.js",
+      "line": 192,
+      "anchor": "async function putBusinessProfile(pool, input)",
+      "rawGitBlobSha256": "1279C99C30E7E38174780B8748738C17424C00797A3F62A63367071502DD14AC",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/services/organizationAuthority.js#L192",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "membership-schema",
+      "path": "migrations/010_account_session_authority.sql",
+      "line": 105,
+      "anchor": "CREATE TABLE IF NOT EXISTS organization_memberships",
+      "rawGitBlobSha256": "0087278B1FB0062BA88A4DD7E4699E2E5C4C98D78E822193E2E7C0BFF5C9CA48",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/migrations/010_account_session_authority.sql#L105",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "membership-unique",
+      "path": "migrations/010_account_session_authority.sql",
+      "line": 115,
+      "anchor": "CONSTRAINT organization_memberships_user_unique UNIQUE (user_id)",
+      "rawGitBlobSha256": "0087278B1FB0062BA88A4DD7E4699E2E5C4C98D78E822193E2E7C0BFF5C9CA48",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/migrations/010_account_session_authority.sql#L115",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "session-repository",
+      "path": "src/accounts/repository.js",
+      "line": 280,
+      "anchor": "async sessionAuthority(sessionId, userId)",
+      "rawGitBlobSha256": "763F42960A4825C0BAEB7941F2893EF5A9310451A3C717D862A17661C82690E8",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/accounts/repository.js#L280",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "cookie-claims",
+      "path": "src/auth/credentials.js",
+      "line": 40,
+      "anchor": "function signAccess(userId, sessionId)",
+      "rawGitBlobSha256": "29F20EC728FEEDBAF6C553CCB2C7C6DC708DF16E821A61A5D1F499AF9AC9F8E7",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/auth/credentials.js#L40",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "tenant-context",
+      "path": "src/auth/middleware.js",
+      "line": 31,
+      "anchor": "function attachTenantContext(req, authority, session)",
+      "rawGitBlobSha256": "411ACFC7BEE1BD9EC9D1AB7CEF1A85454C6CE8610D83BEAE0F4D1CC3AE8DC2A0",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/auth/middleware.js#L31",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "session-auth",
+      "path": "src/auth/middleware.js",
+      "line": 122,
+      "anchor": "async function requireSession(req, res, next)",
+      "rawGitBlobSha256": "411ACFC7BEE1BD9EC9D1AB7CEF1A85454C6CE8610D83BEAE0F4D1CC3AE8DC2A0",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/auth/middleware.js#L122",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "account-policy",
+      "path": "src/auth/middleware.js",
+      "line": 160,
+      "anchor": "const requireAccountMutation = afterSession(",
+      "rawGitBlobSha256": "411ACFC7BEE1BD9EC9D1AB7CEF1A85454C6CE8610D83BEAE0F4D1CC3AE8DC2A0",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/auth/middleware.js#L160",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "fixed-roles",
+      "path": "src/auth/permissions.js",
+      "line": 9,
+      "anchor": "const CANONICAL_ACCESS_ROLES = Object.freeze(['owner', 'admin', 'member', 'viewer']);",
+      "rawGitBlobSha256": "F01E3292C929230455D6508D7A2496643D581BE9867779144E9C38CDEBCB6DB0",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/auth/permissions.js#L9",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "permission-check",
+      "path": "src/auth/permissions.js",
+      "line": 97,
+      "anchor": "function hasPermission(role, resource, action)",
+      "rawGitBlobSha256": "F01E3292C929230455D6508D7A2496643D581BE9867779144E9C38CDEBCB6DB0",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/auth/permissions.js#L97",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "navigation-permission",
+      "path": "src/auth/permissions.js",
+      "line": 105,
+      "anchor": "function navigationForRole(role)",
+      "rawGitBlobSha256": "F01E3292C929230455D6508D7A2496643D581BE9867779144E9C38CDEBCB6DB0",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/auth/permissions.js#L105",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "location-profile",
+      "path": "src/services/businessProfileAdapter.js",
+      "line": 341,
+      "anchor": "function validateHeadquarters(headquarters, errors)",
+      "rawGitBlobSha256": "42552C65CACAE2BCD411BD1B68F47DD9FB233723512C4C5DDD5CE0229A5DCD0A",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/services/businessProfileAdapter.js#L341",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "workforce-location",
+      "path": "src/workforce/repository.js",
+      "line": 81,
+      "anchor": "async profileReferences(client, organizationId)",
+      "rawGitBlobSha256": "6F9ECC92BE8997BE7F6D46B183ACDB8A6805C20F40C28ACF9397D0F50BFB0B54",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/workforce/repository.js#L81",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "workforce-location-match",
+      "path": "src/workforce/repository.js",
+      "line": 128,
+      "anchor": "canonicalLocation(references, locationId)",
+      "rawGitBlobSha256": "6F9ECC92BE8997BE7F6D46B183ACDB8A6805C20F40C28ACF9397D0F50BFB0B54",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/workforce/repository.js#L128",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "workforce-read",
+      "path": "src/routes/workforce.js",
+      "line": 83,
+      "anchor": "router.get('/', requireTenantAccess, requirePermission('team', 'read')",
+      "rawGitBlobSha256": "13E763F7BB9B09AC610BDD67DC7E7AF6CF9744522385F67520B2B99BC4DD46EB",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/workforce.js#L83",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "workforce-access",
+      "path": "src/routes/workforce.js",
+      "line": 125,
+      "anchor": "router.patch('/members/:membershipId/access'",
+      "rawGitBlobSha256": "13E763F7BB9B09AC610BDD67DC7E7AF6CF9744522385F67520B2B99BC4DD46EB",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/workforce.js#L125",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "work-profile",
+      "path": "src/routes/workProfile.js",
+      "line": 10,
+      "anchor": "function createWorkProfileRouter()",
+      "rawGitBlobSha256": "C182BCF0D6B850F3A05A670A4A644EC1CBFC5A0AE1530326DF7880C0FDD71734",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/workProfile.js#L10",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "workforce-schema",
+      "path": "migrations/015_workforce_authority.sql",
+      "line": 21,
+      "anchor": "home_location_id VARCHAR(64)",
+      "rawGitBlobSha256": "DC3B9B205AC835D958E16C414B832D2E94D634229F9215CB26950B4F82B4A22D",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/migrations/015_workforce_authority.sql#L21",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "asset-location",
+      "path": "src/assets/repository.js",
+      "line": 187,
+      "anchor": "homeLocationId: row.home_location_id",
+      "rawGitBlobSha256": "B1D1E09B8CB02EFB50271E05EE34970DB3BA010E1E1F121558F4CF833BDC77D4",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/assets/repository.js#L187",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "subscription",
+      "path": "src/accounts/subscriptionPolicy.js",
+      "line": 16,
+      "anchor": "function projectSubscription(authority)",
+      "rawGitBlobSha256": "51D05D0EE80D1F332CA160104F20273CE8478EB3AFDC8F288AB53A8DC8CD166C",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/accounts/subscriptionPolicy.js#L16",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "availability-limit",
+      "path": "src/middleware/rateLimit.js",
+      "line": 61,
+      "anchor": "function getLimitConfig(group, plan = 'starter')",
+      "rawGitBlobSha256": "A99400033D8E4E8BF605BDAAC6D64FACAC570D36F8CCD86E1F50A2F8DB02F9AA",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/middleware/rateLimit.js#L61",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "command-center",
+      "path": "src/routes/commandCenter.js",
+      "line": 74,
+      "anchor": "router.get('/workspace', auth, permission('dashboard', 'read')",
+      "rawGitBlobSha256": "3C9DF86A36A61DFF439014680F4DBB71F9054D9AC8673F152D8839D68A228147",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/commandCenter.js#L74",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "today",
+      "path": "src/routes/today.js",
+      "line": 24,
+      "anchor": "function createTodayRouter(options = {})",
+      "rawGitBlobSha256": "78A8FC89A2B5077340B6D8B2CB77A34DDB44EE3D8C426520F077D1E89FED09D3",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/today.js#L24",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "operational-overview",
+      "path": "src/routes/operationalOverview.js",
+      "line": 11,
+      "anchor": "function createOperationalOverviewRouter(options = {})",
+      "rawGitBlobSha256": "77E57B16A9FA5101D7257E82F77BDBFF1B1EC76C9FC8C21713BAE5FADB870FFB",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/operationalOverview.js#L11",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "canonical-context",
+      "path": "src/routes/canonicalPolaris.js",
+      "line": 105,
+      "anchor": "function requestContext(req)",
+      "rawGitBlobSha256": "0B8B1DB98A6A0815D9697D17C70FC49914A2EF673BFAF5FAC126626F9AE0D89B",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/canonicalPolaris.js#L105",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "operator-context",
+      "path": "src/scheduling/operatorDirectory.js",
+      "line": 20,
+      "anchor": "function actorInput(req)",
+      "rawGitBlobSha256": "C6F920998EA98BC5D24490EE2AC16A0ED9C6AAB6013C0CDA119C56C192424687",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/scheduling/operatorDirectory.js#L20",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "learning",
+      "path": "src/routes/learning.js",
+      "line": 153,
+      "anchor": "function createLearningRouter(options = {})",
+      "rawGitBlobSha256": "0CAE879A32B8FD619CC30A3862CA4A8FECDE671C5F510A51C41C2157AB693AA8",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/learning.js#L153",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "forecast",
+      "path": "src/routes/forecastDrilldowns.js",
+      "line": 263,
+      "anchor": "router.get('/:originId', auth, permission, throttle",
+      "rawGitBlobSha256": "629235C5E57C60BAAD996614CAE1EB0ABB7BEED30EFD53545914C881337B7409",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/forecastDrilldowns.js#L263",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "financial-reporting",
+      "path": "src/routes/customerFinancialReporting.js",
+      "line": 95,
+      "anchor": "function createCustomerFinancialReportingRouter(options = {})",
+      "rawGitBlobSha256": "A2092F0FF192923E22DB6A743A5FAF45E199D08E7F7789394B35B7D9BD075879",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/customerFinancialReporting.js#L95",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "automation-center",
+      "path": "src/routes/automationCenter.js",
+      "line": 24,
+      "anchor": "function createAutomationCenterRouter(options = {})",
+      "rawGitBlobSha256": "7A572F0D2454B0C2E81DD23925FC89127EB05FDBA77C0BCD4F6F85FB0AD92195",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/automationCenter.js#L24",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "integration-status",
+      "path": "src/routes/integrationStatus.js",
+      "line": 14,
+      "anchor": "function createIntegrationStatusRouter(options = {})",
+      "rawGitBlobSha256": "76BDC606B65FCF9889EC7E1EE4338EC019E2854BF0050BC6CADCAE6B53BF59AB",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/integrationStatus.js#L14",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "integration-owner",
+      "path": "src/services/organizationAuthority.js",
+      "line": 334,
+      "anchor": "async function resolveIntegrationOwner(pool, provider, externalIntegrationId)",
+      "rawGitBlobSha256": "1279C99C30E7E38174780B8748738C17424C00797A3F62A63367071502DD14AC",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/services/organizationAuthority.js#L334",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "integration-catalogue",
+      "path": "src/integrations/catalogue.js",
+      "line": 296,
+      "anchor": "async function readIntegrationCatalogue(pool, organizationId, options = {})",
+      "rawGitBlobSha256": "A4475FCBB4F8545D591688DFBB6505852DE3779249CBFB78DBDA362560F5B620",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/integrations/catalogue.js#L296",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "legacy-public-api",
+      "path": "src/routes/publicApi.js",
+      "line": 28,
+      "anchor": "const router = express.Router();",
+      "rawGitBlobSha256": "2117C185E0A4F3B631F1EE090F132CA51843F04C18E1F881A61A748CA2EDAA79",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/publicApi.js#L28",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "legacy-retirement",
+      "path": "src/routes/legacyAuthorityRetirement.js",
+      "line": 46,
+      "anchor": "const retiredAuthority =",
+      "rawGitBlobSha256": "E66E514126DD4C30F1449DC4A05D33F239A5AA56C653F13AD3D86105233C27CF",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/legacyAuthorityRetirement.js#L46",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "shared-page-mount",
+      "path": "src/server.js",
+      "line": 383,
+      "anchor": "const demoPageFiles = Object.freeze({",
+      "rawGitBlobSha256": "F9648EFFB7302EB4F67F2FA3BA6DA5AC58B65DD00F46E60FEED4E5529CBF1D90",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/server.js#L383",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "shared-routes",
+      "path": "public/js/command-center-contract.js",
+      "line": 32,
+      "anchor": "var PAID_ROUTES = Object.freeze",
+      "rawGitBlobSha256": "1E2538E5435ADC7D3CC0C77454513426C7778C5A2AB178002ED33B6A4771A7DA",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/public/js/command-center-contract.js#L32",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "navigation-brand",
+      "path": "public/js/nav-component.js",
+      "line": 98,
+      "anchor": "class=\"mobile-logo\"",
+      "rawGitBlobSha256": "469D7F31746A0D411A10F5A244A9C846A3EF0BD606633D81F771F1ACE5E2202A",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/public/js/nav-component.js#L98",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "navigation-session",
+      "path": "public/js/nav-component.js",
+      "line": 275,
+      "anchor": "return window.NorthStarAccountSession.load().then(function(account)",
+      "rawGitBlobSha256": "469D7F31746A0D411A10F5A244A9C846A3EF0BD606633D81F771F1ACE5E2202A",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/public/js/nav-component.js#L275",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "company-logo",
+      "path": "public/dashboard/business-profile.html",
+      "line": 2476,
+      "anchor": "setVal('company-logo', company.logo);",
+      "rawGitBlobSha256": "5E0A73A229B022A900AB1860882A088186452945AC94BACC7EF63F76A2E31D30",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/public/dashboard/business-profile.html#L2476",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "office-ui",
+      "path": "public/dashboard/business-profile.html",
+      "line": 2489,
+      "anchor": "renderAdditionalOffices(headquarters.additionalOffices);",
+      "rawGitBlobSha256": "5E0A73A229B022A900AB1860882A088186452945AC94BACC7EF63F76A2E31D30",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/public/dashboard/business-profile.html#L2489",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "demo-mount",
+      "path": "src/routes/api.js",
+      "line": 132,
+      "anchor": "router.use('/demo', demoRouter);",
+      "rawGitBlobSha256": "D428678C4ACEFCA7F443646F5EC79DE0FFECCCA108D376EF3891711F51B01D71",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/api.js#L132",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "demo-automation",
+      "path": "src/routes/demo.js",
+      "line": 334,
+      "anchor": "router.get('/automation-center',",
+      "rawGitBlobSha256": "F6AC4C3FE1E4A8C5FF6021444E21A0264964BD8BD4409EF7522406FEF78C0E87",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/routes/demo.js#L334",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "demo-repository",
+      "path": "src/commandCenter/demoRepository.js",
+      "line": 140,
+      "anchor": "workspaceGeneration: record.state.generation",
+      "rawGitBlobSha256": "5B25247B3D6C8062F6B113D872C7E53E216702849F2B32A0EC77971F5CCFBDF2",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/src/commandCenter/demoRepository.js#L140",
+      "tier": "baseline_source_inspection"
+    },
+    {
+      "id": "canonical-role-schema",
+      "path": "migrations/020_canonical_workforce_access_roles.sql",
+      "line": 41,
+      "anchor": "ALTER TABLE organization_memberships ADD CONSTRAINT organization_memberships_role_check CHECK (",
+      "rawGitBlobSha256": "DFB81E5A90FBC8D80F5AC63459BA894A4BD9635B2D75B0120E17B87090B02217",
+      "url": "https://github.com/joshvannais/NorthStar/blob/94781a2e77e129a1383479ff97e334c399d28b92/migrations/020_canonical_workforce_access_roles.sql#L41",
+      "tier": "baseline_source_inspection"
+    }
+  ],
+  "protectedPaths": {
+    "allowedNewPaths": [
+      "docs/roadmap/MISSION_29_APPROVED_SOURCE.md",
+      "docs/roadmap/MISSION_29_ENTERPRISE_PLATFORM.md",
+      "docs/roadmap/MISSION_29_ACCEPTANCE_LEDGER.md",
+      "docs/architecture/MISSION_29_PART1A_AUTHORITY_INVENTORY.md",
+      "docs/architecture/MISSION_29_PART1A_AUTHORITY_INVENTORY.json"
+    ],
+    "baselineGitObjects": {
+      "src": "62978cb653a49a051d31648d07fbaf6ea96e4824",
+      "public": "a72b1fbd7269a78a769d316ee88a11760e83e8c4",
+      "migrations": "2db3bcf0fc5d74a6eb8abc1100a4a14fbc359f78",
+      "data": "3681a315904c5ce48a53c7c6672c06ab705481ba",
+      "config": "04531e0122304f526813c6f3aba685503a45e499",
+      "scripts": "4d4835aa4d38437b0ff122b9a3b13e84db27eeea",
+      "tests": "9c4a87665c18e6c4677247e817d6f420745bf87a",
+      "test": "42a1efe9fa4c046f8a9f66ceca6f58a25b6fd1ea",
+      "package.json": "ac129f6a9a12940d46cf02d291c57a0988a1b747",
+      "package-lock.json": "bf7a8425a245e57e4b720bec5d24e425069a568b",
+      "Dockerfile": "72a0f149902c23e1372edbc748f3073d102a7d6b",
+      "railway.toml": "1bbc11931e04aa64fc83100ef230ddc884bd419d"
+    },
+    "trackedDataWorktreePreInspectionSha256": "84C94F5EE3A0336A052369DDB93E4233DA00B746E8780B528BAC81380418DE34",
+    "trackedDataFileCount": 11,
+    "forbiddenChanges": [
+      "runtime/src/server",
+      "public/UI/assets",
+      "schema/migrations",
+      "data/fixtures",
+      "dependencies/package-lock",
+      "deployment/configuration",
+      "existing Mission28 roadmap/contracts/tests"
+    ],
+    "noHistoricalMigrationBytesChanged": true
+  },
+  "acceptance": {
+    "slice1A": [
+      "Preserve complete approved source and explicit approval reconciliation",
+      "Exact 8 parts/44 unique ordered slices with 1A candidate/43 not started",
+      "Source-linked mounted inventory separates implemented baseline, historical unmounted source, future enterprise deltas, separately authorized provider actions",
+      "Check all source paths, symbols, raw blob hashes, anchors, links and JSON",
+      "Protect all existing source/data bytes outside permitted new docs",
+      "Fresh independent full-history whole-scope exact-head audit with zero P0-P3 before publication/release",
+      "Normal exact-head review, confirmed backup/standing rotation, guarded merge, one automatic deployment, bounded read-only release verification and truthful source-linked ledger before terminal 1A"
+    ],
+    "writerEvidenceIsIndependent": false,
+    "zeroFindingsClaimed": false,
+    "sourceAccepted": false,
+    "terminallyReleased": false
+  },
+  "crossMissionOwnership": {
+    "20": "company/Business Profile/workforce identity and policies",
+    "21": "knowledge and vendor-neutral integration/asset contracts",
+    "22": "scheduling/dispatch/assignment/Today authority",
+    "23": "operations/field execution/evidence",
+    "24": "estimating/commercial/pricing truth",
+    "25": "tenant-private learning/outcomes",
+    "26": "forecasting/predictive intelligence",
+    "27": "financial lifecycle/payment/reporting truth",
+    "28": "bounded automation and human control",
+    "29": "enterprise administration inside customer tenants",
+    "30": "OS-wide integration/readiness",
+    "31": "separate public guided simulation",
+    "33": "NorthStar operator administration; no implied tenant-data backdoor"
+  },
+  "deferredDecisions": [
+    "explicit enterprise/company/location/franchise relationship and disclosure model before dependent 1B/4A implementation",
+    "actual identity-provider/protocol configuration and live federation",
+    "commercial names/prices/seats/location allowances",
+    "custom-domain/DNS/certificate and sender identity provisioning",
+    "enterprise API expansion beyond accepted use cases",
+    "real external connector or webhook delivery"
+  ],
+  "unclaimed": [
+    "all 43 later Mission 29 slices",
+    "six older baseline-reproduced full-parity failures not claimed passing",
+    "hosted CI not newly queried or claimed green",
+    "physical Safari/devices/manual AT",
+    "founder page-by-page visual approval",
+    "provider sandbox/live/private authenticated production evidence",
+    "real recipients/messages/live money/automatic financial effects",
+    "legal/professional conclusions",
+    "production performance/SLA",
+    "disaster restore"
+  ],
+  "sliceLedger": [
+    {
+      "id": "1A",
+      "title": "Authority, current inventory and acceptance contract",
+      "acceptanceBoundary": "Audit exact live main and the mounted organization, tenant, location, workforce, membership, entitlement and operational consumers. Record existing behavior, gaps, protected paths and source-linked evidence. Publish the complete approved Mission29 plan and acceptance ledger through the normal source lane. No runtime change in this slice.",
+      "status": "writer_candidate",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "1B",
+      "title": "Canonical organization/location identity contracts",
+      "acceptanceBoundary": "Define immutable identities, explicit relationships, duplicate/unknown handling and provenance while preserving Mission20's company and Business Profile authorities. Any additive persistence includes complete compatibility, migration and rollback disposition. No automatic adoption or reassignment of old records.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "1C",
+      "title": "Authenticated enterprise context",
+      "acceptanceBoundary": "Resolve exact active actor/session/membership and selectable location context on the server. Test foreign actors, forged locations, stale context, revoked membership, omitted scope and simultaneous sessions. Existing single-location accounts retain their established behavior.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "1D",
+      "title": "Location lifecycle and historical scope",
+      "acceptanceBoundary": "Define reviewed creation, activation, deactivation, naming and correction behavior with optimistic concurrency and immutable history. Record relocation/transfer as an explicit governed transition; do not silently move historical jobs, customers or financial ownership.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "1E",
+      "title": "Mounted location selection and navigation",
+      "acceptanceBoundary": "Add a coherent accessible location context to relevant existing company surfaces. Show current scope, loading, unavailable, empty and recovery states. Scope switching cannot leak cached records or alter an unrelated active workflow.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "1F",
+      "title": "Architecture persistence and boundary validation",
+      "acceptanceBoundary": "Prove repository reload, restart, concurrent changes, forced tenant/location isolation, rollback and upgrade compatibility with actual disposable PostgreSQL and mounted HTTP consumers. Reconcile every applicable existing consumer before Part2.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "2A",
+      "title": "Versioned enterprise capability contract",
+      "acceptanceBoundary": "Inventory exact accepted operations and define explicit capability/operation/scope mappings. Preserve earlier fixed matrices and vocabulary; no fuzzy aliases, wildcard grants or silent elevation of an existing role.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "2B",
+      "title": "Custom-role definitions and lifecycle",
+      "acceptanceBoundary": "Persist versioned bounded role definitions, review state and active/revoked state. Prevent unknown capabilities, privilege escalation, self-elevation and role-definition races; previous versions remain attributable.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "2C",
+      "title": "Scoped assignment and membership resolution",
+      "acceptanceBoundary": "Implement actor-specific role assignments and location/region/record scopes with exact current membership checks. Test grant, expiry, revocation, cross-session and concurrent assignment behavior. Delegated assignments never expand their granting authority.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "2D",
+      "title": "Delegation and approval governance",
+      "acceptanceBoundary": "Define explicit bounded delegation, approval thresholds, separation of duties and self-approval restrictions for operations whose existing contracts support them. A threshold or enterprise role cannot waive an upstream approval or effect gate. Unsupported combinations deny.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "2E",
+      "title": "SSO/MFA assurance policy and adapter boundary",
+      "acceptanceBoundary": "Implement provider-independent assurance requirements, exact session evidence, expiry, step-up and local controlled adapter tests. Preserve existing safe access and recovery. Actual identity-provider account setup or live federation remains separately authorized and unclaimed until demonstrated.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "2F",
+      "title": "Revocation, ownership recovery and audit",
+      "acceptanceBoundary": "Make grants, revocations, ownership-sensitive changes and bounded recovery attributable and concurrency-safe. Define stale-session and in-flight-operation behavior; never claim cancellation or external effect reversal without evidence.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "2G",
+      "title": "Permissions administration experience and complete gate",
+      "acceptanceBoundary": "Provide accessible role/assignment/policy review with clear consequences, denied states, evidence and recovery. Validate actual mounted enforcement, real SQL isolation and negative capability matrices across the whole Part2 scope.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "3A",
+      "title": "Region definitions and authorized membership",
+      "acceptanceBoundary": "Version region/location mappings with explicit effective state, overlap rules and authorized visibility. A regional grouping is not a new tenant or access grant.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "3B",
+      "title": "Canonical regional read model",
+      "acceptanceBoundary": "Aggregate only records the actor may read. Pin source versions and expose coverage, partial/unavailable states, time zones, units, currencies and cutoff rules. Avoid double counting overlapping regions or repeated source records.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "3C",
+      "title": "Regional explanations and comparisons",
+      "acceptanceBoundary": "Reuse Mission25/26 learning and forecasting evidence without recalculating or asserting unsupported causality. Separate actuals, forecasts, assumptions and stale/insufficient evidence; retain authorized location drilldown.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "3D",
+      "title": "Regional workspace and navigation",
+      "acceptanceBoundary": "Render accessible comparison, filters, source explanations and location handoffs with honest loading, empty, partial, denied, stale and recovery states. Never reveal inaccessible locations through counts or errors.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "3E",
+      "title": "Regional correctness and isolation gate",
+      "acceptanceBoundary": "Execute independent aggregation counterexamples, overlap/missing-data cases, time-zone boundaries, permission revocation, mounted HTTP and actual PostgreSQL checks. No cross-company learning or data pooling is implied.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "4A",
+      "title": "Franchise relationship and authority model",
+      "acceptanceBoundary": "Define network, franchisor, franchisee, company and location relationships as explicit versioned records. Do not infer legal ownership, contractual rights or access from a business relationship or brand.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "4B",
+      "title": "Participation and delegated visibility",
+      "acceptanceBoundary": "Implement exact governed participation, membership and capability scopes. Each company's authorization remains required for its records; absence or revocation denies reads, reports and operations.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "4C",
+      "title": "Shared configuration proposals and adoption",
+      "acceptanceBoundary": "Permit bounded authorized templates or policy proposals with provenance, version pinning and explicit local adoption. A network proposal never silently changes a franchisee's pricing, finance, workforce, automation or communications.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "4D",
+      "title": "Change, revocation and offboarding",
+      "acceptanceBoundary": "Preserve historical evidence and isolate current access when participation or delegation changes. Test stale sessions, partial revocation, concurrent administration and safe recovery without destructive data transfer or deletion.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "4E",
+      "title": "Franchise administration and whole-part gate",
+      "acceptanceBoundary": "Provide company-scoped administration, explanations and audit history. Validate all boundaries through mounted consumers, actual SQL and adversarial multi-company fixtures; no network-wide private-data access by default.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "5A",
+      "title": "Reporting definitions and evidence contract",
+      "acceptanceBoundary": "Inventory canonical measures and define scope, coverage, date/cutoff, time zone, currency, freshness, lineage and uncertainty for each report. Preserve Mission24–27 calculation and financial truth.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "5B",
+      "title": "Bounded report queries and comparisons",
+      "acceptanceBoundary": "Implement permission-filtered queries, grouping, pagination and location/region comparisons with deterministic limits. Prove duplicate suppression, partial coverage and stable source identity under concurrent updates.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "5C",
+      "title": "Saved report definitions",
+      "acceptanceBoundary": "Version authorized report settings and scope references without persisting a broad access grant or treating an old snapshot as current. Re-evaluate permissions whenever a saved report is opened.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "5D",
+      "title": "Explicit exports and disclosure controls",
+      "acceptanceBoundary": "Add bounded user-requested exports with exact scope, attribution and current permission checks. Preserve spreadsheet/content safety and sensitive-data minimization. No automatic external email, scheduled recipient or provider delivery is introduced.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "5E",
+      "title": "Enterprise reporting experience and gate",
+      "acceptanceBoundary": "Provide accessible reports, source drilldown and export feedback with partial/unavailable/denied/recovery states. Independently verify calculations, real SQL, mounted HTTP, cache isolation and readable output across authorized roles.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "6A",
+      "title": "Scoped branding configuration and assets",
+      "acceptanceBoundary": "Persist versioned authorized display branding and validate uploaded/referenced assets with safe type, size, URL and rendering boundaries. Never allow script/style injection, foreign-tenant assets or credential-bearing URLs.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "6B",
+      "title": "Shared branded rendering and fallback",
+      "acceptanceBoundary": "Apply branding consistently through the shared shell and applicable existing surfaces. Preserve accessible contrast, responsive layouts, system/error states, safe fallback and canonical tenant context; no parallel product logic.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "6C",
+      "title": "Domain and communications identity boundaries",
+      "acceptanceBoundary": "Define explicit domain/brand claims, verification state, account recovery and disclosure ownership. Domain/DNS/certificate provisioning and sender/provider changes remain separately authorized operations; unverified branding cannot authorize a domain or recipient identity.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "6D",
+      "title": "White-label acceptance and recovery gate",
+      "acceptanceBoundary": "Verify cross-tenant isolation, unsafe content denial, cache/version transitions, branding rollback and full light/dark desktop/mobile renders. Legal/disclosure content and founder visual approval remain separate.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "7A",
+      "title": "Versioned API and capability inventory",
+      "acceptanceBoundary": "Define the exact initial API surface from accepted enterprise use cases and canonical resources. Record methods, schemas, errors, pagination, versioning, scope and exclusions. Do not invent new operational effects merely to fill an API catalogue.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "7B",
+      "title": "Principal, credential and session authority",
+      "acceptanceBoundary": "Define bounded machine/user principals and locally test issuance/rotation/revocation semantics without exposing secrets or creating production credentials. Enforce exact tenant, actor, grant, audience, expiry and capability scope; possession alone cannot broaden access.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "7C",
+      "title": "Authorized read and report endpoints",
+      "acceptanceBoundary": "Mount bounded canonical read/report operations with pagination, current permission checks, cache controls, error minimization and deterministic limits. Test field-level and record-level disclosure, foreign identifiers and scope omission.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "7D",
+      "title": "Explicit mutation handoffs and idempotency",
+      "acceptanceBoundary": "Expose only already-authorized canonical mutations whose existing acceptance contracts are satisfied. Preserve actor attribution, currentness, approval, concurrency, idempotency and recovery. External provider, money and destructive effects remain unavailable without separate authority.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "7E",
+      "title": "Integration governance and extension contracts",
+      "acceptanceBoundary": "Govern connector identity, granted scope, source mapping, provenance, freshness, revocation and observed outcomes. Local controlled adapters prove contracts only; no real connector/provider calls, background synchronization or outbound webhook delivery is enabled by this slice.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "7F",
+      "title": "API documentation and whole-part acceptance",
+      "acceptanceBoundary": "Deliver exact examples, schemas and failure/recovery semantics plus actual mounted HTTP/SQL tests, adversarial authorization, bounded-load and compatibility checks. Publish provider-readiness gaps truthfully rather than describing adapters as live integrations.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "8A",
+      "title": "Complete authority and inventory reconciliation",
+      "acceptanceBoundary": "Reconcile all44 planned slice identities, accepted sources, migrations, mounted consumers, documentation and unclaimed gates against exact main. Identify every unfinished or inconsistent accepted requirement.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "8B",
+      "title": "Actual PostgreSQL, isolation and concurrency campaign",
+      "acceptanceBoundary": "Run the complete applicable enterprise and retained regression corpus in fresh disposable role-separated databases. Prove persistence/restart, RLS, role revocation, shared-scope denial, optimistic concurrency, idempotency and recovery with non-vacuous adversarials.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "8C",
+      "title": "Mounted journeys, failure and recovery",
+      "acceptanceBoundary": "Exercise end-to-end company/location/role/region/franchise/report/branding/API journeys through actual consumers, including partial evidence, stale authority, outages, denied actions and recovery. No private production writes are used as test fixtures.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "8D",
+      "title": "Shared rendering, accessibility and demo parity",
+      "acceptanceBoundary": "Validate genuine Chrome and Playwright WebKit, desktop/mobile, light/dark, keyboard/focus and native pointer/touch behavior where relevant. Use shared engines with isolated fictional sources; retain Mission31's separate public guided-simulation scope. Physical devices/manual AT/founder approval remain distinct.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "8E",
+      "title": "Security, bounded performance and operational readiness",
+      "acceptanceBoundary": "Audit sensitive-data exposure, privilege boundaries, resource limits, migration compatibility, operational observability and documented recovery. Report exact environment and limits; local load tests are not production SLA or disaster-restore evidence.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    },
+    {
+      "id": "8F",
+      "title": "Final independent audit and release ledger",
+      "acceptanceBoundary": "Complete a fresh isolated full-history whole-scope exact-head audit with zero P0–P3, same-writer additive corrections and full new audit after any SHA change. Complete normal exact-head GitHub review, guarded normal merge, required fresh backup/standing rotation, one automatic deployment, exact commit/image/startup and authorized read-only production reconciliation/health/render checks. Publish the truthful final source-linked ledger and all separate unavailable evidence.",
+      "status": "not_started",
+      "acceptedSource": null,
+      "pr": null,
+      "release": null
+    }
+  ]
+}

@@ -5211,6 +5211,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
   `);
 
   await require('./equipment/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
+  await require('./enterprise/locationDatabaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./fieldEvidence/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./progress/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
   await require('./completion/databaseAuthority').grantAndVerify(client, authority.runtimeRole);
@@ -5312,6 +5313,7 @@ async function grantAndVerifyRuntimeAuthority(client, authority) {
            AND relation.relname NOT LIKE 'canonical_customer_financial_billable_%'
            AND relation.relname NOT LIKE 'canonical_customer_financial_invoice_%'
            AND relation.relname NOT LIKE 'canonical_automation_%'
+           AND relation.relname <> 'canonical_enterprise_location_revisions_v1'
            AND relation.relname NOT LIKE 'canonical_customer_estimate_proposal_%'
            AND relation.relname NOT LIKE 'canonical_customer_estimate_multi_option_%'
            AND relation.relname NOT LIKE 'canonical_estimate_decision%'
@@ -7841,6 +7843,8 @@ REVIEWED_MIGRATION_TIMEOUT_FILES.add('235_canonical_forecast_pipeline_scenarios.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('236_canonical_forecast_revenue_cash_outlook.sql');
 // The founder Part 6 read projection briefly fences its two existing human-review writers.
 REVIEWED_MIGRATION_TIMEOUT_FILES.add('238_canonical_forecast_customer_opportunity_outlook.sql');
+// The additive location ledger also bounds its complete startup/ACL lane.
+REVIEWED_MIGRATION_TIMEOUT_FILES.add('290_enterprise_location_lifecycle_v1.sql');
 
 function reviewedMigrationTimeoutValues(file, inherited) {
   if (!REVIEWED_MIGRATION_TIMEOUT_FILES.has(file)) return null;

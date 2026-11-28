@@ -81,13 +81,13 @@ actualPostgres('Mission 29 Part 1C actual PostgreSQL and mounted browser-session
     for (const [key, prior] of borrowed) { if (prior.present) process.env[key] = prior.value; else delete process.env[key]; }
   }, 180000);
 
-  test('uses all 285 exact migrations through 289 with a separate non-owner runtime role', async () => {
+  test('uses all 286 exact migrations through 290 with a separate non-owner runtime role', async () => {
     const history = (await ownerPool.query('SELECT filename,checksum FROM public._migrations ORDER BY filename')).rows;
     const source = db.loadMigrations(path.resolve(__dirname, '../../migrations'));
-    expect(history).toHaveLength(285);
+    expect(history).toHaveLength(286);
     expect(history.map(item => item.filename)).toEqual(source.map(item => item.file));
     expect(history.map(item => item.checksum)).toEqual(source.map(item => item.digest));
-    expect(history.at(-1).filename).toBe('289_automation_center_runtime_read_authority_v1.sql');
+    expect(history.at(-1).filename).toBe('290_enterprise_location_lifecycle_v1.sql');
     const identity = (await db.getPool().query(`SELECT current_user AS role, rolsuper, rolbypassrls
       FROM pg_roles WHERE rolname=current_user`)).rows[0];
     expect(identity).toEqual({ role: roles.runtime, rolsuper: false, rolbypassrls: false });
@@ -220,7 +220,7 @@ actualPostgres('Mission 29 Part 1C actual PostgreSQL and mounted browser-session
       expect((await repository.read(principal)).binding).toBe(context.binding);
     } finally { await fresh.end(); }
     expect((await ownerPool.query("SELECT count(*)::int AS n FROM pg_constraint WHERE conname='organization_memberships_user_unique'")).rows[0].n).toBe(1);
-    expect((await ownerPool.query("SELECT count(*)::int AS n FROM public._migrations WHERE filename LIKE '290_%'")).rows[0].n).toBe(0);
+    expect((await ownerPool.query("SELECT count(*)::int AS n FROM public._migrations WHERE filename LIKE '291_%'")).rows[0].n).toBe(0);
   });
 
   test('returns a private unavailable response on a real disconnected context pool and recovers on the current pool', async () => {

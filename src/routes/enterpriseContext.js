@@ -13,7 +13,7 @@ function createEnterpriseContextRouter(options = {}) {
     res.vary('Cookie');
     next();
   });
-  const handle = select => async (req, res) => {
+  const handle = (select, canonical = false) => async (req, res) => {
     try {
       if (req.originalUrl.includes('?') || (select && req.body === undefined)) {
         throw new EnterpriseContextError(400, 'enterprise_selection_invalid');
@@ -22,7 +22,7 @@ function createEnterpriseContextRouter(options = {}) {
         actorUserId: req.tenantContext.userId, sessionId: req.authSession.id,
         organizationId: req.tenantContext.organizationId,
       };
-      const value = await repository.read(principal, select ? req.body : undefined);
+      const value = await repository.read(principal, select ? req.body : undefined, canonical);
       return res.json({ success: true, data: value, requestId: req.requestId || 'unavailable' });
     } catch (error) {
       const known = error instanceof EnterpriseContextError;
@@ -35,6 +35,7 @@ function createEnterpriseContextRouter(options = {}) {
   };
   router.get('/', requireSession, requireVerifiedAccount, handle(false));
   router.post('/resolve', requireSession, requireVerifiedAccount, handle(true));
+  router.post('/resolve-canonical', requireSession, requireVerifiedAccount, handle(true, true));
   return router;
 }
 

@@ -2,11 +2,12 @@
 
 const db = require('../db');
 const { EnterpriseContextError, validatePrincipal, projectContext, resolveSelection } = require('./context');
+const { requestedLocation, projectCanonicalContext, resolveCanonicalContext } = require('./canonicalLocationContext');
 
 class EnterpriseContextRepository {
   constructor(pool) { this.pool = pool || null; }
 
-  async read(principal, selection) {
+  async read(principal, selection, canonicalSelection = false) {
     validatePrincipal(principal);
     const pool = this.pool || (db.isAvailable() ? db.getPool() : null);
     if (!pool) throw new EnterpriseContextError(503, 'enterprise_context_unavailable');
@@ -45,7 +46,14 @@ class EnterpriseContextRepository {
       );
       if (result.rows.length !== 1) throw new EnterpriseContextError(403, 'enterprise_membership_required');
       const context = projectContext(result.rows[0], principal);
-      const value = selection === undefined ? context : resolveSelection(context, selection);
+      const target = canonicalSelection ? requestedLocation(selection, principal.organizationId).reference.id : null;
+      const catalogue = (await client.query(
+        'SELECT public.canonical_enterprise_location_v1_read($1,$2,$3,$4,$5,$6,$7) result',
+        [principal.organizationId, principal.actorUserId, context.actor.role, principal.sessionId, target, 'context', null]
+      )).rows[0].result;
+      const augmented = Object.freeze({ ...context, canonicalContext: projectCanonicalContext(context, catalogue) });
+      const value = canonicalSelection ? resolveCanonicalContext(context, catalogue, selection) :
+        selection === undefined ? augmented : Object.freeze({ ...resolveSelection(context, selection), canonicalContext: augmented.canonicalContext });
       await client.query('COMMIT');
       return value;
     } catch (error) {

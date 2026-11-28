@@ -1,0 +1,320 @@
+{
+  "contract": "northstar.mission29.part1d.location-lifecycle-history.v1",
+  "status": "writer_candidate_independent_exact_head_audit_and_release_pending",
+  "scope": {
+    "currentSlice": "1D",
+    "approvedParts": 8,
+    "approvedSlices": 44,
+    "acceptedSlices": 3,
+    "laterNotStarted": 40,
+    "nextAfterTerminalAcceptance": "1E",
+    "base": "f5308017b6adde5d660c83ea5677975093d85683",
+    "baseTree": "d16756d669b6d64b42e278731983efd257c0a3af",
+    "approvedSourceRawSha256": "636841534E6F6AC88E37FD2E10D86E4B54EF3F8D53CF78CC963648C3CD21C391"
+  },
+  "implementation": {
+    "contract": "src/enterprise/locationContract.js",
+    "repository": "src/enterprise/locationRepository.js",
+    "sql": "migrations/290_enterprise_location_lifecycle_v1.sql",
+    "readiness": "src/enterprise/locationDatabaseAuthority.js",
+    "rawBoundary": "src/enterprise/locationHttpBoundary.js",
+    "router": "src/routes/enterpriseLocations.js",
+    "composition": "src/server.js",
+    "startup": "src/db.js",
+    "canonicalContext": "src/enterprise/canonicalLocationContext.js",
+    "contextRepository": "src/enterprise/contextRepository.js",
+    "contextRouter": "src/routes/enterpriseContext.js",
+    "unitTests": "tests/unit/m29-part1d-location-lifecycle.test.js",
+    "postgresHttpTests": "tests/integration/m29-part1d-location-lifecycle-postgres.test.js"
+  },
+  "markers": {
+    "lifecycle": "northstar.enterprise.location-lifecycle.v1",
+    "review": "northstar.enterprise.location-review.v1",
+    "canonicalContext": "northstar.enterprise.canonical-location-context.v1",
+    "legacyContextUnchanged": "northstar.enterprise.context.v1"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/enterprise/locations",
+      "permission": "current verified owner/admin and settings.read",
+      "result": "at most 1000 heads; total/truncated"
+    },
+    {
+      "method": "GET",
+      "path": "/api/enterprise/locations/:locationId/history",
+      "permission": "current verified owner/admin and settings.read",
+      "result": "at most 100 revisions; total/nextBeforeRevision",
+      "query": "only one positive int32 beforeRevision"
+    },
+    {
+      "method": "POST",
+      "path": "/api/enterprise/locations/preview",
+      "permission": "current owner/admin, settings.update, onboarding, CSRF, active/trialing write subscription",
+      "durableWrite": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/enterprise/locations/commit",
+      "permission": "same authority freshly SQL revalidated, exact confirmed review",
+      "idempotency": "exactly one canonical UUID Idempotency-Key header",
+      "result": "201 new; 200 identical receipt replay"
+    },
+    {
+      "method": "POST",
+      "path": "/api/enterprise/context/resolve-canonical",
+      "permission": "current verified cookie account, fixed settings.read, existing CSRF",
+      "result": "fresh explicit active canonical selection in response only",
+      "persistedSelection": false
+    }
+  ],
+  "rawBoundary": {
+    "precedesGlobalJson": true,
+    "sharedParserOrCorsExpansion": false,
+    "caseAndTrailingSlashAliasesOwned": true,
+    "maximumRawBytes": 32768,
+    "mediaType": "application/json; UTF-8 only; compression denied",
+    "invalidUtf8AndDuplicateJsonKeys": "deny",
+    "queryStrings": "deny except exact history cursor",
+    "response": "no-store; add Cookie preserving Origin; bounded private errors"
+  },
+  "body": {
+    "exactCoreFields": [
+      "contract",
+      "action",
+      "locationId",
+      "expected",
+      "change",
+      "reason",
+      "profilePin"
+    ],
+    "commitAdditionalField": "review",
+    "creationExpected": {
+      "id": null,
+      "revision": 0,
+      "digest": null
+    },
+    "nonemptyPin": [
+      "id",
+      "revision",
+      "digest"
+    ],
+    "profilePin": [
+      "id",
+      "version",
+      "hash"
+    ],
+    "review": {
+      "contract": "northstar.enterprise.location-review.v1",
+      "digest": "exact fresh plan comparison",
+      "confirmed": true
+    },
+    "uuid": "canonical lower-case 36-character UUID",
+    "revision": "positive int32",
+    "digest": "lower-case 64-hex",
+    "nameCodepoints": 160,
+    "reasonCodepoints": 2000,
+    "addressCodepoints": 500,
+    "nullableAddressMeaning": "explicitly undeclared",
+    "malformedOrExtraAuthority": "deny"
+  },
+  "actions": [
+    {
+      "action": "create",
+      "change": [
+        "name",
+        "address"
+      ],
+      "result": "new explicitly declared same-company identity, inactive"
+    },
+    {
+      "action": "activate",
+      "change": [],
+      "from": "inactive",
+      "to": "active"
+    },
+    {
+      "action": "deactivate",
+      "change": [],
+      "from": "active",
+      "to": "inactive"
+    },
+    {
+      "action": "rename",
+      "change": [
+        "name"
+      ],
+      "result": "changed label, same identity/state"
+    },
+    {
+      "action": "relocate",
+      "change": [
+        "address"
+      ],
+      "result": "changed nonempty declared address, same identity; active/inactive only"
+    },
+    {
+      "action": "correct",
+      "change": [
+        "name",
+        "address",
+        "correctedRevision"
+      ],
+      "result": "new correction referencing exact same-company/location historical pin"
+    },
+    {
+      "action": "transfer",
+      "change": [
+        "target"
+      ],
+      "target": [
+        "locationId",
+        "pin"
+      ],
+      "result": "exact current active same-company target, terminal transferred source"
+    }
+  ],
+  "terminalTransfer": {
+    "allNewMutationsDenied": true,
+    "identicalCommittedReceiptRecoveryAllowedAfterCurrentWriteAuthority": true,
+    "crossCompanySupported": false,
+    "legalOwnershipInferred": false,
+    "accessGranted": false,
+    "historicalJobsCustomersWorkforceFinancialOwnershipMoved": false
+  },
+  "authority": {
+    "trustedSource": [
+      "current auth_sessions",
+      "current users",
+      "current organization_memberships",
+      "organizations.id",
+      "organization_onboarding",
+      "active canonical_business_profiles",
+      "current subscriptions"
+    ],
+    "mutationLocks": [
+      "company advisory transaction fence",
+      "organization FOR UPDATE",
+      "unchanged canonical_travel_write_authority",
+      "active Business Profile FOR SHARE"
+    ],
+    "revisionBinding": "exact microsecond actor/member/session revisions and profile pin",
+    "clientGraphPreviewReceiptGucIsGrant": false,
+    "fixedRolesAndMembershipConstraintUnchanged": true,
+    "entitlementPermissionScopeDistinct": true,
+    "readPremiumGateAdded": false
+  },
+  "persistence": {
+    "migration": "290_enterprise_location_lifecycle_v1.sql",
+    "sourceMigrations": 286,
+    "inheritedMigrationBytesUnchanged": 285,
+    "through": 290,
+    "nextAbsent": 291,
+    "newTables": [
+      "public.canonical_enterprise_location_revisions_v1"
+    ],
+    "columns": 26,
+    "foreignKeys": 4,
+    "checks": 13,
+    "indexes": 6,
+    "forceRls": true,
+    "immutableStatementTrigger": "BEFORE UPDATE OR DELETE OR TRUNCATE",
+    "publicAndRuntimeTableDml": "denied",
+    "runtimeExecuteOnly": [
+      "canonical_enterprise_location_v1_read",
+      "canonical_enterprise_location_v1_preview",
+      "canonical_enterprise_location_v1_commit"
+    ],
+    "privateHelperExecute": "denied",
+    "readiness": "exact source bodies/signatures/owners/search paths/security/volatility, columns/defaults, CHECK/FK/index/policy/trigger/RLS/ACL definitions",
+    "defaultLegacyLocations": "zero; no backfill/adoption/remapping",
+    "historicalRecordWrites": false
+  },
+  "concurrency": {
+    "writeIsolation": "SERIALIZABLE",
+    "readsAndPreview": "REPEATABLE READ READ ONLY",
+    "organizationOrdinal": "server-assigned positive int32, unique company/organization_revision, included in receipt digest",
+    "invisibleDependentAppend": "ordinal uniqueness forces full rollback/fresh-snapshot retry",
+    "staleActiveProfile": "FOR SHARE detects replacement after snapshot and forces retry",
+    "retry": "one after full rollback for 40001/40P01/23505; same request key",
+    "idempotency": "company + actor + exact body; identical current-authorized recovery only",
+    "statementTimeoutMs": 10000,
+    "lockTimeoutMs": 2000,
+    "idleTransactionTimeoutMs": 10000,
+    "cancellationOrReversalClaimed": false
+  },
+  "context": {
+    "legacyResolveUnchanged": true,
+    "canonicalDiscoveryField": "canonicalContext",
+    "choices": "active canonical identities, exact current pin, session/current-source binding, stored revision provenance",
+    "discoveryMaximum": 1000,
+    "completeCounts": true,
+    "explicitTargetLookupBeyondFirstPage": true,
+    "selectedLocationDefault": null,
+    "foreignStaleInactiveMissingOrCrossSession": "deny",
+    "callerProvenanceTrusted": false,
+    "persistentOrSharedSelection": false,
+    "legacyKeysReclassified": false,
+    "existingOperationalConsumersBroadened": false
+  },
+  "migrationAndRecovery": {
+    "registryDelta": "290 only in existing bounded migration registry; all prior entries retained",
+    "tighterCallerTimeoutsPreserved": true,
+    "startupFailure": "fail closed",
+    "oldSourceThrough289AfterApplied290": "reject missing applied migration without deleting history",
+    "testedRecovery": "restore current 286-source runner",
+    "downMigrationOrDataDeletion": false,
+    "oldImageRollbackGuarantee": false,
+    "productionRollbackOrDisasterRestoreExercised": false
+  },
+  "historical1CRelease": {
+    "source": "61b6169f267a6740018ab7994341490c4f0a4e52",
+    "tree": "d16756d669b6d64b42e278731983efd257c0a3af",
+    "main": "f5308017b6adde5d660c83ea5677975093d85683",
+    "pr": "https://github.com/joshvannais/NorthStar/pull/617",
+    "deployment": "d65e33ac-96f4-4853-adcc-0d9396defd13",
+    "image": "sha256:83cc4b4e2e18df87e41e2dd3fb6b53fec8762d52230f5aaca9be2f4aca4648fd",
+    "rootAuditSha256": "EA0DB5317105A1EC159BAC30C1C7DAFB773E3C5473BF1193EDE761C92527C6D2",
+    "rootReleaseSha256": "7EAF3F36E5D1415FA9B3A5D5D4C030F032FB5DCC0173781335172E0CC8BD8B2D",
+    "finalLedgerSha256": "448AA78401D668480653EF1BCBB1EDB4369EC2D7162C1106C8CE2707786B1E47",
+    "productionMigrations": "285/285 through289/no290",
+    "fresh1DProductionProof": false
+  },
+  "validation": {
+    "independent": false,
+    "engine": "identity-checked disposable loopback PostgreSQL17 with separate migration/runtime NOSUPERUSER/NOBYPASSRLS roles",
+    "sqlOrRepositoryMocks": false,
+    "actualModuleAdversarials": true,
+    "mountedRawCookieAndCanonicalHttp": true,
+    "all286NamesChecksums": true,
+    "blockedTargetProfileAndRevocationRaces": true,
+    "realCatalogDriftAndMigrationTimeouts": true,
+    "upgradeAndMissing290Recovery": true,
+    "localFixtureCleanup": "generated databases/roles removed; cluster stopped per run",
+    "retained1CInventoryAssertionOnly": "286/290/no291 with complete equality; scenarios retained",
+    "legacyParitySixFailures": "baseline-reproduced separately, not claimed passing",
+    "sourceFreezeAndLogHashes": "outside source; delivered to independent root auditor",
+    "providerOrPrivateProductionOrBrowserFounderProof": false
+  },
+  "laterAndExcluded": [
+    "1E UI/location navigation",
+    "Part2 custom roles/scoped assignments/SSO",
+    "regions/franchise/legal ownership",
+    "enterprise reports/branding/machine API",
+    "Missions21-28/30/31/33 ownership changes",
+    "legacy record adoption or ownership reassignment",
+    "provider sandbox/live/private-production",
+    "real recipients/messages/money/automatic financial effects",
+    "physical devices/manual AT/founder visual approval",
+    "professional/legal/SLA/restore conclusions"
+  ],
+  "requiredReleaseGates": [
+    "new complete fresh isolated full-history whole-scope exact-head root audit zeroP0-P3 after every SHA change",
+    "normal exact-head GitHub review",
+    "required confirmed backup and standing rotation retaining newest confirmed copy",
+    "guarded normal merge",
+    "exactly one automatic deployment",
+    "authorized bounded read-only source/image/migration/startup/health/render/key-cleanup verification",
+    "truthful source-linked terminal ledger"
+  ]
+}

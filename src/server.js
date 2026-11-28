@@ -216,6 +216,8 @@ const { createProductionTransactionalEmail } = require('./email/transactional');
 const { AccountEmailOutboxWorker } = require('./email/outbox');
 const accountRoutes = require('./routes/account');
 const { createEnterpriseContextRouter } = require('./routes/enterpriseContext');
+const { createEnterpriseLocationsRouter } = require('./routes/enterpriseLocations');
+const { locationBodyBoundary } = require('./enterprise/locationHttpBoundary');
 const { createMapPreferencesRouter } = require('./routes/mapPreferences');
 const { WorkforceService } = require('./workforce/service');
 const { createWorkforceRouter } = require('./routes/workforce');
@@ -300,6 +302,7 @@ app.use(estimateDecisionBodyBoundary);
 // Mission 23 Part 2 field-execution mutations own exact, bounded,
 // unambiguous bytes before the broader application parser consumes them.
 app.use(executionBodyBoundary);
+app.use(locationBodyBoundary);
 app.use(equipmentBodyBoundary);
 app.use(customerEstimateDeliveryBodyBoundary);
 // The exact Part 12 reporting reads accept no request body. Reject framed bytes
@@ -479,6 +482,7 @@ app.use('/api/auth', createAuthRouter({
 app.use('/api/account/map-preferences', createMapPreferencesRouter());
 app.use('/api/account', accountRoutes);
 app.use('/api/enterprise/context', createEnterpriseContextRouter());
+app.use('/api/enterprise/locations', createEnterpriseLocationsRouter());
 app.use('/api/workforce', createWorkforceRouter());
 app.use('/api/work-profiles', createWorkProfileRouter());
 // The normalized catalogue owns only /api/assets. It must precede the broad

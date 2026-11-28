@@ -1,0 +1,161 @@
+{
+  "contract": "northstar.mission29.part1c.authenticated-enterprise-context.v1",
+  "status": "writer_candidate_independent_exact_head_audit_and_release_pending",
+  "scope": {
+    "currentSlice": "1C",
+    "approvedParts": 8,
+    "approvedSlices": 44,
+    "acceptedSlices": 2,
+    "laterNotStarted": 41,
+    "nextAfterTerminalAcceptance": "1D",
+    "base": "bf4ba06f2b5700be715d2366aa43c7a2bf5ca794",
+    "baseTree": "01e5b1ae7a84b5b5d9be22b1447fc179169d29d8",
+    "approvedSourceRawSha256": "636841534E6F6AC88E37FD2E10D86E4B54EF3F8D53CF78CC963648C3CD21C391"
+  },
+  "implementation": {
+    "projection": "src/enterprise/context.js",
+    "repository": "src/enterprise/contextRepository.js",
+    "router": "src/routes/enterpriseContext.js",
+    "composition": "src/server.js",
+    "identityContractUnchanged": "src/enterprise/identityContract.js",
+    "apiContract": "northstar.enterprise.context.v1",
+    "unitTests": "tests/unit/m29-part1c-authenticated-enterprise-context.test.js",
+    "postgresHttpTests": "tests/integration/m29-part1c-authenticated-enterprise-context-postgres.test.js"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/enterprise/context",
+      "purpose": "Fresh current-account and selectable legacy-office discovery",
+      "selection": "none; selectedLocation is null even with one headquarters",
+      "query": "any query string denies"
+    },
+    {
+      "method": "POST",
+      "path": "/api/enterprise/context/resolve",
+      "purpose": "Read-only explicit selection in the response, without persistent state",
+      "parsedObjectFields": ["contract", "binding", "location"],
+      "query": "any query string denies",
+      "csrf": "existing browser cookie/header validation"
+    }
+  ],
+  "authentication": {
+    "transport": "existing verified browser cookie session; user Bearer unsupported",
+    "trustedPrincipal": ["actorUserId", "sessionId", "organizationId"],
+    "principalSource": "unchanged cookie middleware context; exact identities rechecked in fresh SQL",
+    "role": "current canonical membership role with existing settings-read permission",
+    "premiumGateAdded": false,
+    "declarationsOrAssociationsGrantAccess": false
+  },
+  "serverSources": [
+    "public.auth_sessions",
+    "public.users",
+    "public.organization_memberships",
+    "public.organizations",
+    "public.canonical_business_profiles active row"
+  ],
+  "currentness": {
+    "transaction": "new REPEATABLE READ READ ONLY transaction per request; one coherent source SELECT",
+    "checks": [
+      "exact active session/actor/company/membership joins",
+      "user/company agreement and active verified user",
+      "active membership and null revocation flags",
+      "canonical fixed role and existing settings-read permission",
+      "database-clock access and refresh expiry",
+      "active profile and exact validated profile/key source"
+    ],
+    "binding": "SHA256 comparison of current identities, role, microsecond actor/membership/session revisions, credential hash, profile pin and actual location keys/labels",
+    "bindingIsBearerOrAuthorization": false,
+    "bindingIsCachedCurrentness": false,
+    "observedAt": "database-clock observation during read, not authority duration or exact response-delivery watermark",
+    "concurrentRevocation": "committed before the source snapshot denies; later committed changes can follow the coherent observation and must be re-resolved on the next request",
+    "cancellationOrReversalClaimed": false,
+    "rawSessionOrCredentialReturned": false
+  },
+  "locationContract": {
+    "kind": "legacy_location_reference",
+    "source": "headquarters plus exact active Business Profile headquarters.additionalOffices keys",
+    "profilePin": ["id", "version", "hash"],
+    "declaration": "server observation using source profile ID, current actor ID and DB observation time; not original profile authorship or a durable write",
+    "callerProvenance": "syntactically validated but not trusted or returned as server authority",
+    "selection": "exact explicit company/key/pin plus current session-bound comparison; no default/wildcard/foreign resolution",
+    "ambiguity": "malformed, duplicate and case-ambiguous current source keys deny",
+    "allocationOrAdoption": false,
+    "canonicalLocationRegistryAdded": false,
+    "operationAccessGrant": false,
+    "persistedOrSharedPreference": false,
+    "existingHomeLocationIdsUnchanged": true,
+    "internalResourceBoundIsCommercialAllowance": false
+  },
+  "responses": {
+    "cacheControl": "no-store",
+    "vary": "add Cookie while preserving upstream fields including Origin",
+    "errorReflection": "bounded code and fixed message; no foreign IDs, raw SQL or credentials",
+    "statusCodes": {
+      "400": "invalid parsed selection/contract/binding or query string",
+      "401": "existing missing/invalid/inactive cookie session or invalid internal principal",
+      "403": "verified current membership/account or fixed role unavailable",
+      "409": "current binding changed or requested location unavailable",
+      "503": "current source or PostgreSQL authority unavailable"
+    }
+  },
+  "compatibility": {
+    "existingAuthMiddlewareUnchanged": true,
+    "uniqueUserMembershipConstraintUnchanged": true,
+    "existingSessionJoinsUnchanged": true,
+    "fixedPermissionsAndEntitlementsUnchanged": true,
+    "companyBusinessProfileAndLegacyHistoryUnchanged": true,
+    "singleHeadquartersSupportedWithoutImplicitSelection": true,
+    "existingOperationalConsumersBroadened": false,
+    "approvedSourceAndHistorical1A1BSnapshotsUnchanged": true
+  },
+  "persistence": {
+    "added": false,
+    "migrations": 0,
+    "sourceMigrations": 285,
+    "through": 289,
+    "nextAbsent": 290,
+    "oldSqlBytesUnchanged": true,
+    "rollout": "additive server context read surface; no data conversion, backfill or reassignment",
+    "rollbackDisposition": "no schema/data reversal needed for the additive surface; source rollback remains root-owned and unexercised"
+  },
+  "historical1BRelease": {
+    "source": "502fbaad0ca967137dbea5e73a826228e3428ec2",
+    "tree": "01e5b1ae7a84b5b5d9be22b1447fc179169d29d8",
+    "main": "bf4ba06f2b5700be715d2366aa43c7a2bf5ca794",
+    "pr": "https://github.com/joshvannais/NorthStar/pull/616",
+    "rootAuditSha256": "D81CCF15A953FF5B41EFB6B3B2FC753555C956F1EF28545F4BAB15540476FCD5",
+    "rootReleaseCheckpointSha256": "10748338FD6F6F6AE45CF51896C997D8AC56EF7863A1B7E5649D8103FD7F8C8D",
+    "finalLedgerSha256": "83BBB77A180D18975690AA43A51DFC11F4584B7CEF82121D3DB732741F93FD70",
+    "fresh 1CProductionEvidence": false
+  },
+  "validation": {
+    "independent": false,
+    "unit": "actual modules; positive and adversarial identity, currentness, provenance and selection checks",
+    "postgresHttp": "fresh identity-checked loopback PG, separate migration/runtime roles, all 285 exact checksums, real repository/cookie middleware/router/canonical server mount",
+    "sqlOrRepositoryMocks": false,
+    "campaign": [
+      "foreign actor and forged actor/session pair",
+      "unknown/foreign/omitted scope and stale profile pins",
+      "microsecond revisions and source profile transition",
+      "revoked membership and revocation after cookie middleware before repository read",
+      "session expiry and revocation",
+      "simultaneous sessions with independent explicit selections",
+      "real disconnected-pool failure/recovery and new-connection reload",
+      "single-location account/auth compatibility and old constraints",
+      "canonical allowed-Origin CORS/Vary composition",
+      "independent per-test fixtures, randomized/parallel/open-handle verification"
+    ],
+    "transportGuardMeaning": "no attempted fetch in the canonical-server local test, not provider/live readiness"
+  },
+  "unclaimed": [
+    "independent 1C acceptance or terminal release",
+    "1D lifecycle/persistence and 1E UI",
+    "Part 2 custom/scoped roles or SSO and all later enterprise slices",
+    "fresh1C private production, provider, hosted CI or browser-render campaign",
+    "six older baseline full-parity failures not claimed passing",
+    "physical devices, manual AT or founder visual approval",
+    "real recipients/messages/money or automatic financial effects",
+    "legal/professional conclusions, production SLA or disaster restore"
+  ]
+}

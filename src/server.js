@@ -215,6 +215,7 @@ const { AccountService } = require('./accounts/service');
 const { createProductionTransactionalEmail } = require('./email/transactional');
 const { AccountEmailOutboxWorker } = require('./email/outbox');
 const accountRoutes = require('./routes/account');
+const { createEnterpriseContextRouter } = require('./routes/enterpriseContext');
 const { createMapPreferencesRouter } = require('./routes/mapPreferences');
 const { WorkforceService } = require('./workforce/service');
 const { createWorkforceRouter } = require('./routes/workforce');
@@ -477,6 +478,7 @@ app.use('/api/auth', createAuthRouter({
 }));
 app.use('/api/account/map-preferences', createMapPreferencesRouter());
 app.use('/api/account', accountRoutes);
+app.use('/api/enterprise/context', createEnterpriseContextRouter());
 app.use('/api/workforce', createWorkforceRouter());
 app.use('/api/work-profiles', createWorkProfileRouter());
 // The normalized catalogue owns only /api/assets. It must precede the broad

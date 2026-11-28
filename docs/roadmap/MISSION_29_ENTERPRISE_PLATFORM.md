@@ -1,6 +1,6 @@
 # Mission 29 — Enterprise Platform
 
-Status: **Approved frozen scope: 8 parts/44 slices. Slice 1A is the sole writer candidate; independent audit and release pending. All 43 later slices are not started.**
+Status: **Approved frozen scope: 8 parts/44 slices. Slice 1A is terminally released; 1B is the sole writer candidate with independent audit/release pending. All 42 later slices are not started.**
 
 ## Approval and immutable source
 
@@ -8,7 +8,7 @@ The user approved the complete delivery proposal with **“Proceed”** followin
 
 The [complete approved original source](MISSION_29_APPROVED_SOURCE.md) is retained without abridgement. Its original proposal/status/approval-request wording is historical provenance, superseded only by this approval reconciliation. All 44 definitions, counts, ordering, invariants, exclusions and acceptance discipline remain unchanged.
 
-The approved original includes a trailing blank line. Its exact bytes and raw Git hash are preserved intentionally; the default whitespace checker reports that single blank-at-EOF provenance exception. The other four new files use the normal whitespace gate. No repository/global whitespace configuration is changed.
+The approved original includes a trailing blank line. Slice 1A intentionally preserved its exact bytes and raw Git hash; that historical five-file addition had one source-only blank-at-EOF diagnostic, while its other four files passed the normal whitespace gate. The approved source is unchanged in 1B, and the current 1B delta uses normal whitespace validation. No repository/global whitespace configuration is changed.
 
 - Approved original raw SHA256 and required raw Git blob SHA256: 636841534E6F6AC88E37FD2E10D86E4B54EF3F8D53CF78CC963648C3CD21C391.
 - External reconciled frozen authority SHA256: EA40A986756C3057D8250FDB5A7283134F98502CC2A773FCBA1A059260AE4A7F.
@@ -28,9 +28,13 @@ The approved original includes a trailing blank line. Its exact bytes and raw Gi
 
 ## Current implementation and inherited release
 
-Slice 1A adds only the approved source, this roadmap, the [complete ledger](MISSION_29_ACCEPTANCE_LEDGER.md) and [source inventory/acceptance contract](../architecture/MISSION_29_PART1A_AUTHORITY_INVENTORY.md) with its [JSON record](../architecture/MISSION_29_PART1A_AUTHORITY_INVENTORY.json). It changes no runtime, UI, route, schema, migration, data, dependency or deployment behavior. Documents alone do not establish independent acceptance or terminal release.
+Slice 1A is terminally accepted through [PR615](https://github.com/joshvannais/NorthStar/pull/615): accepted source 7250aee6ac7587c23e90e511888aee86b96b0ad7, tree cbf8b66959b01ca769ec625503f6490046710d96, normal guarded main 1eb713a8c532aaac1e04e1828933a199277afe8f. Exact-head review and the fresh independent complete five-file source audit had no findings. The root audit SHA256 is AB0D86A5B16207195B9B0A6646FD1E6B79EE438E27D10D789B2F7ADFA469B2DE; terminal release checkpoint SHA256 is 4DBAD99BBD50254BFFF00E85B6CC8B688C96680A03B7FE83138322D9959447DB; final source-linked ledger SHA256 is 3FC5A6815F07CF99D0B3F2989FB765442ECBA4AEA5D079E79929F29AC9FFBCC5. Its sole automatic deployment, fresh read-only 285/285 migration reconciliation, public health/render checks and temporary-key cleanup passed. Those are historical 1A facts, not fresh 1B runtime proof. Empty hosted checks were not green CI.
 
-Inherited baseline: [94781a2e77e129a1383479ff97e334c399d28b92](https://github.com/joshvannais/NorthStar/commit/94781a2e77e129a1383479ff97e334c399d28b92), tree ea0a17ab51a160da5dc713118fa4d807b9e72a62. [PR614](https://github.com/joshvannais/NorthStar/pull/614) records terminal Mission 28 14-part/66-slice release. Earlier Mission 28 source artifacts captured their pre-release candidate; 1A links subsequent acceptance without rewriting those historical documents. Source retains 285 migrations through 289/no 290; 1A adds none.
+The complete [44-row ledger](MISSION_29_ACCEPTANCE_LEDGER.md) records 1A released, 1B candidate and 42 later slices unstarted. The [1A inventory](../architecture/MISSION_29_PART1A_AUTHORITY_INVENTORY.md) and its [JSON](../architecture/MISSION_29_PART1A_AUTHORITY_INVENTORY.json) remain unchanged source snapshots. Subsequent terminal acceptance is recorded by PR615 rather than rewriting that historical evidence.
+
+Active 1B introduces the [pure typed identity/relationship contract](../architecture/MISSION_29_PART1B_ORGANIZATION_LOCATION_IDENTITY.md), its [machine-readable contract](../architecture/MISSION_29_PART1B_ORGANIZATION_LOCATION_IDENTITY.json), the actual internal module and direct positive/adversarial tests. It preserves existing company IDs and legacy office keys, creates no access grants or implicit adoption, and adds no persistence, migration, HTTP mounting, authenticated context, lifecycle write, UI or provider behavior. Source remains 285 migrations through 289/no 290. Slice 1B has not yet been independently accepted or released.
+
+Mission 28 inherited acceptance remains source-linked in [PR614](https://github.com/joshvannais/NorthStar/pull/614); its earlier source artifacts correctly retain pre-release provenance.
 
 ## Operating boundaries
 
@@ -38,4 +42,4 @@ One implementation writer and a separate independent auditor/release owner proce
 
 Entitlement, current actor permission and record scope remain distinct. Organizations, offices, worker locations, brands and franchise relationships confer no implicit cross-company access. Existing canonical authorities and individual-account security remain intact. No provider/recipient/money/destructive-production/secret/TLS/legal/founder-approval authority is added. Physical/manual/provider/private-production/professional/restore evidence remains separate.
 
-After terminal 1A acceptance, the next slice is **1B — Canonical organization/location identity contracts**. It has not started.
+After terminal 1B acceptance, the next slice is **1C — Authenticated enterprise context**. It has not started.

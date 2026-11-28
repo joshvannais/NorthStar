@@ -1,0 +1,192 @@
+{
+  "contract": "northstar.mission29.part1b.organization-location-identity.v1",
+  "status": "writer_candidate_independent_exact_head_audit_and_release_pending",
+  "scope": {
+    "currentSlice": "1B",
+    "approvedParts": 8,
+    "approvedSlices": 44,
+    "acceptedSlices": 1,
+    "laterNotStarted": 42,
+    "nextAfterTerminalAcceptance": "1C",
+    "base": "1eb713a8c532aaac1e04e1828933a199277afe8f",
+    "baseTree": "cbf8b66959b01ca769ec625503f6490046710d96",
+    "approvedSourceRawSha256": "636841534E6F6AC88E37FD2E10D86E4B54EF3F8D53CF78CC963648C3CD21C391"
+  },
+  "implementation": {
+    "module": "src/enterprise/identityContract.js",
+    "tests": "tests/unit/m29-part1b-organization-location-identity.test.js",
+    "apiContract": "northstar.enterprise.identity.v1",
+    "exports": [
+      "CONTRACT",
+      "LIMITS",
+      "normalizeIdentity",
+      "normalizeRelationship",
+      "normalizeIdentityGraph",
+      "matchLegacyLocationSnapshot"
+    ],
+    "integration": "pure internal module; no production imports, HTTP mounts, repository, identity allocator, environment reads or external effects"
+  },
+  "identityShapes": {
+    "enterprise_group_identity": [
+      "kind",
+      "id",
+      "provenance"
+    ],
+    "company_reference": [
+      "kind",
+      "organizationId",
+      "provenance"
+    ],
+    "location_identity": [
+      "kind",
+      "organizationId",
+      "id",
+      "provenance"
+    ],
+    "legacy_location_reference": [
+      "kind",
+      "organizationId",
+      "locationKey",
+      "profilePin",
+      "provenance"
+    ]
+  },
+  "relationshipShapes": {
+    "enterprise_company_association": [
+      "kind",
+      "id",
+      "enterpriseGroupId",
+      "organizationId",
+      "provenance"
+    ],
+    "company_location_reference": [
+      "kind",
+      "id",
+      "organizationId",
+      "locationId",
+      "provenance"
+    ]
+  },
+  "semantics": {
+    "companyAuthority": "company_reference preserves the existing organizations.id as organizationId. It does not allocate or replace a company or attest durable existence.",
+    "enterpriseIdentity": "enterprise_group_identity is a separate typed namespace; its ID is not an alias of organizations.id, a parent-owner record, or a tenant grant.",
+    "locationIdentity": "location_identity is identified by its explicit organizationId and id together. The same UUID text in another company scope is a different typed identity.",
+    "legacyIdentity": "legacy_location_reference preserves organizationId, the exact existing office/headquarters key and a pinned profile snapshot. It is never a canonical location allocation, mapping or automatic adoption.",
+    "association": "Relationships declare explicit metadata references only. They confer no legal/common ownership, franchise participation, active membership, permission, reporting visibility or data transfer. This grammar selects no enterprise-owner or franchise policy.",
+    "provenance": "declarationId, declaredByActorId, declaredAt are copied declaration metadata; identity validation does not verify the actor, issuer, source authenticity, currentness or authority.",
+    "immutability": "All returned records, nested provenance/profile pins, graph arrays and graph are copied and frozen. This is in-process contract immutability, not a durable uniqueness/versioning or persistence guarantee.",
+    "literalIdentifiers": "UUIDs are primitive canonical lower-case hyphenated text, without coercion, case-folding, trimming or UUID allocation. UUID syntax alone never proves database existence; even a nil value is only a literal ID and never a wildcard.",
+    "closedShapes": "Only exact own enumerable data fields are accepted. Unknown/missing/null/undefined fields where a value is required, accessors, symbols, hidden fields, inherited records and unsupported kinds deny; no authority defaults.",
+    "determinism": "Graph results sort identities by typed composite key and relationships by ID using deterministic string comparison. Input records/arrays are not mutated."
+  },
+  "graphRules": [
+    "An explicit contract marker and dense identities/relationships arrays are required; undefined does not become an empty graph.",
+    "An explicitly empty graph is valid reference data and adopts nothing.",
+    "Typed identity keys are unique within a batch, even for identical repeated declarations; conflicting declarations are not merged.",
+    "Location and legacy references require an explicitly declared matching company reference.",
+    "Each relationship endpoint must exist in the correct typed namespace; a same-ID company cannot satisfy a group or location reference.",
+    "Relationship IDs are unique across kinds; duplicate endpoint pairs also deny even with different IDs.",
+    "Every canonical location requires an explicit matching company_location_reference; identity scope does not silently create an edge.",
+    "Legacy references cannot satisfy canonical location edges and never produce one.",
+    "Distinct associations remain metadata and do not determine ownership/cardinality permissions. Group hierarchy, regions, franchises and access-grant relationship kinds are unsupported."
+  ],
+  "legacySnapshot": {
+    "shape": [
+      "organizationId",
+      "profilePin",
+      "locationKeys"
+    ],
+    "profilePinShape": [
+      "id",
+      "version",
+      "hash"
+    ],
+    "version": "Exact org-profile-v positive decimal text up to 100 characters, not coerced through Number; large accepted historical version text is preserved.",
+    "digest": "Exact canonical lower-case 64-hex profile digest.",
+    "key": "Existing Business Profile stable-key syntax: [A-Za-z0-9][A-Za-z0-9._:-]{0,63}; case and punctuation preserved.",
+    "matching": "Supplied company scope and all three pin fields must match exactly. The legacy key must exist exactly in the explicit source-key list.",
+    "ambiguity": "Duplicate keys and case-ambiguous keys in the supplied snapshot deny rather than being folded into a new identity.",
+    "boundary": "Matching validates equality/existence inside the supplied snapshot only. It does not query active Business Profile, verify freshness, authorize a session or certify an authentic source. Future authenticated consumers must resolve current trusted server authority separately."
+  },
+  "batchBounds": {
+    "identities": 1000,
+    "relationships": 2000,
+    "meaning": "Per-invocation resource bounds only; not plan, seat, company, location or commercial allowances."
+  },
+  "compatibility": {
+    "companyAuthorityUnchanged": true,
+    "fixedAccessRolesUnchanged": true,
+    "uniqueUserMembershipConstraintUnchanged": true,
+    "sessionMembershipJoinsUnchanged": true,
+    "legacyOfficeAndHomeLocationIdsUnchanged": true,
+    "implicitAdoption": false,
+    "existingMountedBehaviorUnchanged": true,
+    "approvedSourceAndHistorical1AInventoryUnchanged": true
+  },
+  "persistence": {
+    "added": false,
+    "migrations": 0,
+    "sourceMigrations": 285,
+    "latestMigration": 289,
+    "nextAbsent": 290,
+    "existingMigrationBytesUnchanged": true,
+    "reason": "No durable repository is needed to define these pure contracts. No schema, data/backfill, membership migration or old-record reassignment occurs.",
+    "rollout": "Additive module and tests with no existing runtime caller. No persistence upgrade or data conversion is required.",
+    "rollback": "No schema or data rollback operation is introduced or exercised; normal release rollback disposition remains owned by root. Durable existence, transaction concurrency and live persistence are not claimed."
+  },
+  "historical1ARelease": {
+    "source": "7250aee6ac7587c23e90e511888aee86b96b0ad7",
+    "tree": "cbf8b66959b01ca769ec625503f6490046710d96",
+    "main": "1eb713a8c532aaac1e04e1828933a199277afe8f",
+    "pr": "https://github.com/joshvannais/NorthStar/pull/615",
+    "rootReleaseCheckpointSha256": "4DBAD99BBD50254BFFF00E85B6CC8B688C96680A03B7FE83138322D9959447DB",
+    "rootAuditSha256": "AB0D86A5B16207195B9B0A6646FD1E6B79EE438E27D10D789B2F7ADFA469B2DE",
+    "finalLedgerSha256": "3FC5A6815F07CF99D0B3F2989FB765442ECBA4AEA5D079E79929F29AC9FFBCC5",
+    "evidenceBoundary": "Previously earned 1A release facts from the root source-linked ledger; not fresh 1B production/runtime proof."
+  },
+  "validation": {
+    "tier": "direct actual pure-module tests; no mocked repository or copied validator",
+    "cases": [
+      "explicit valid identities/relationships and empty graph",
+      "same-ID different-kind confusion and explicit typed separation",
+      "company-scoped location identity without bare-ID cross-company fallback",
+      "duplicate identities, relationship IDs, pairs and unknown/missing endpoints",
+      "missing/null/undefined required fields and extra authority/adoption keys",
+      "deep copied frozen output and deterministic JSON roundtrip",
+      "declaration provenance, counterfeit assurance fields and getters without invocation",
+      "exact legacy key/company/profile pin matching, ambiguous/unknown keys and large version text",
+      "dense bounded arrays without implicit product entitlements"
+    ],
+    "noNewRuntimeTestClaim": [
+      "actual PostgreSQL",
+      "mounted HTTP/browser",
+      "current private production",
+      "provider/sandbox/live",
+      "hosted CI",
+      "founder visual approval"
+    ]
+  },
+  "outOfScope": [
+    "1C authenticated enterprise context",
+    "1D persistence and lifecycle writes",
+    "1E UI context switch",
+    "Part 2 custom roles, delegation, SSO/MFA policy",
+    "Parts 3/4 regional and franchise authority",
+    "Parts 5/6 enterprise reporting and white label",
+    "Part 7 enterprise machine/API access",
+    "Mission 30 OS integration",
+    "Mission 31 separate guided simulation",
+    "Mission 33 NorthStar operator administration"
+  ],
+  "unclaimed": [
+    "independent 1B source acceptance or zero P0-P3",
+    "terminal 1B release",
+    "six older baseline-reproduced full-parity failures not claimed passing",
+    "physical Safari/devices/manual AT",
+    "provider/live/private authenticated production evidence",
+    "real recipients/messages/money/automatic financial effects",
+    "legal/professional conclusions",
+    "production performance/SLA",
+    "disaster restore"
+  ]
+}
